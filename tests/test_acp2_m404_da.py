@@ -146,10 +146,32 @@ def _step_document(result, *, task_ref: str, entry: str = "test") -> dict:
     }
 
 
+def _m404_args(tmp_path: Path, *extra: str, name: str = "out"):
+    """Arguments for an isolated M404 instance, never the host run root."""
+    return M.build_parser().parse_args(
+        [
+            "--out",
+            str(tmp_path / name),
+            "--run-root",
+            str(tmp_path / "runs"),
+            *extra,
+        ]
+    )
+
+
 @pytest.fixture()
 def run(tmp_path):
     """An M404 instance with constructed (not executed) step documents."""
-    args = M.build_parser().parse_args(["--out", str(tmp_path / "out"), "--phase", "evaluate"])
+    args = M.build_parser().parse_args(
+        [
+            "--out",
+            str(tmp_path / "out"),
+            "--run-root",
+            str(tmp_path / "runs"),
+            "--phase",
+            "evaluate",
+        ]
+    )
     instance = M.M404(args)
     instance.steps = {
         "endpoint_prep": {
@@ -481,12 +503,10 @@ def test_amendment_a_frame_rule_has_no_fallback_pick():
 
 
 def test_reference_level_variant_is_an_explicit_deviation(tmp_path):
-    frozen = M.M404(M.build_parser().parse_args(["--out", str(tmp_path / "frozen")]))
+    frozen = M.M404(_m404_args(tmp_path, name="frozen"))
     assert frozen.level_mode == "frozen"
     assert (frozen.method, frozen.basis) == (M.FROZEN_METHOD, M.FROZEN_BASIS)
-    reference = M.M404(
-        M.build_parser().parse_args(["--out", str(tmp_path / "ref"), "--level", "reference"])
-    )
+    reference = M.M404(_m404_args(tmp_path, "--level", "reference", name="ref"))
     assert reference.level_mode == "reference"
     assert (reference.method, reference.basis) == (M.REFERENCE_METHOD, M.REFERENCE_BASIS)
     # The criteria definition is level-independent: only the protocol deviation moves.
@@ -548,12 +568,22 @@ def test_h4_never_closes_on_the_local_row_alone(run, tmp_path):
 # ── readers (Node) ────────────────────────────────────────────────────────
 
 
-def test_rph_decision_and_headless_workbench_read_the_same_view():
+def test_rph_decision_and_headless_workbench_read_the_same_view(tmp_path):
     node = shutil.which("node")
     if node is None:
-        pytest.skip("node is not available")
-    run_args = M.build_parser().parse_args(["--out", "/tmp/acp2-m404-views-test"])
-    instance = M.M404(run_args)
+        pytest.skip("NOT_VERIFIED: node is not available")
+    rph_readers = (
+        REPO / "rph" / "packages" / "dsh-bundle" / "dist" / "skills" / "supervisor.js",
+        REPO / "rph" / "packages" / "research" / "dist" / "index.js",
+    )
+    if not any(path.is_file() for path in rph_readers):
+        pytest.skip(
+            "NOT_VERIFIED: the generated RPH decision reader is not built in this "
+            "checkout (run `pnpm --dir rph build`); the committed headless "
+            "Workbench projection is covered independently and this assertion "
+            "runs whenever an RPH dist reader is present"
+        )
+    instance = M.M404(_m404_args(tmp_path, name="views"))
     view = {
         "research": {"research_id": "r", "round": 0},
         "task_ref": {"task_id": "t", "attempt": 1, "release": {"release_id": "rel"}},

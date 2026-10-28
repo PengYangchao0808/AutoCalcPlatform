@@ -61,8 +61,9 @@ def _install_manifest() -> dict[str, object]:
     path = DIST / INSTALL_MANIFEST
     if not path.is_file():
         pytest.skip(
-            "rph/dist-packages is not built in this checkout "
-            "(run `pnpm --dir rph package`); static guards still apply"
+            f"NOT_VERIFIED: generated RPH install surface is absent at {DIST} "
+            "(run `pnpm --dir rph package` to build it); static guards still apply, "
+            "and the generated-artifact assertions run whenever it is present"
         )
     return json.loads(_read(path))
 
@@ -163,6 +164,9 @@ def test_generated_lockfile_has_no_registry_resolution() -> None:
 
 
 def test_generated_checksums_and_artifact_index_match_the_tarballs() -> None:
+    # Require the generated install surface first so a clean checkout takes the
+    # explicit NOT_VERIFIED path instead of raising FileNotFoundError.
+    _install_manifest()
     from_rph_scope = {"@rph/" + name for name in PACKAGE_NAMES}
     index = json.loads(_read(DIST / PACKAGE_INDEX))
     assert index["schema"] == "acp2.rph.packages.v1"

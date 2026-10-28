@@ -279,7 +279,7 @@
       "owner": "B",
       "parent": "M1-01",
       "receipt": "tests/test_acp_services_isolation.py",
-      "receipt_sha256": "65751b386dffa0698aad824490c8779d97e70a275e3d0caa7b8ce279f1b9582f",
+      "receipt_sha256": "a047fd27331b0f22571f7a35fcb60332dfe1b46e46080ba6a97c20b0ac9cb358",
       "required_observations": {
         "isolation": "present",
         "wire_id_allowlist": "present"
@@ -813,7 +813,7 @@
       "status": "CLOSED"
     }
   ],
-  "coverage_sha256": "bb42d310b172f9922614988886a5fd00867f398695ea79f0e9be62b77691e4ee",
+  "coverage_sha256": "5bb7dc216c81b015e91ff7e11c403f0b8fb888690d693bc31011fe1c3cf1dc7c",
   "deferred_rows": [
     {
       "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
@@ -1901,7 +1901,7 @@
   "h_index": {
     "execution_index": {
       "path": "docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md",
-      "sha256": "8e7b5820bca8bdb3b9284641a0fb145e3cf8739d3a452c0c6ab24e9376cfcf04",
+      "sha256": "99b91df171349723fcfe21d91c006e34b78105e4b58da02562bbd3666b73f7f8",
       "status": "REFERENCED"
     },
     "handoff_h7": {
@@ -1912,7 +1912,7 @@
       "handoff_version": 1,
       "path": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
       "release_ready": false,
-      "sha256": "4707c023c79fb98108a98dc924e1db8c6ab162cf3b0d880df4ccf81602ce5524"
+      "sha256": "e918dc1cf77716cfa46e05c0bd3dd4b463cfdcd8a4c1634e232d3bc2588ba79c"
     }
   },
   "h_rows": [
@@ -1933,7 +1933,7 @@
       ],
       "notes": "Baseline/boundary row PASS in handoff-H7 and reproduced by the M0-01 ledger and B26 registration.",
       "receipt": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
-      "receipt_sha256": "4707c023c79fb98108a98dc924e1db8c6ab162cf3b0d880df4ccf81602ce5524",
+      "receipt_sha256": "e918dc1cf77716cfa46e05c0bd3dd4b463cfdcd8a4c1634e232d3bc2588ba79c",
       "required": true,
       "required_observations": {
         "handoff_H0": "present",
@@ -1963,7 +1963,7 @@
       ],
       "notes": "Contracts are consumable: the contract manifest, consumer scanners and real consumers are green.",
       "receipt": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
-      "receipt_sha256": "4707c023c79fb98108a98dc924e1db8c6ab162cf3b0d880df4ccf81602ce5524",
+      "receipt_sha256": "e918dc1cf77716cfa46e05c0bd3dd4b463cfdcd8a4c1634e232d3bc2588ba79c",
       "required": true,
       "required_observations": {
         "consumer_gates": "present",
@@ -2222,7 +2222,7 @@
   "schema": "acp2.release.evidence-coverage.v1",
   "source": {
     "h7_handoff": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
-    "h7_handoff_sha256": "4707c023c79fb98108a98dc924e1db8c6ab162cf3b0d880df4ccf81602ce5524",
+    "h7_handoff_sha256": "e918dc1cf77716cfa46e05c0bd3dd4b463cfdcd8a4c1634e232d3bc2588ba79c",
     "h_index": "docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md",
     "plan": "reports/acp2_delivery_gap_audit_20261026/EXECUTION_PLAN.md",
     "plan_graph": "reports/acp2_delivery_gap_audit_20261026/plan-graph.json",
@@ -2410,7 +2410,7 @@
       "notes": "MCP idempotency now routes through CommandIdentity; prepare key v2 and lookup-only auto_ keys are covered by the process/backends tests. Revocation is re-tested on the remote path by M4-03.",
       "owner": "B + C-RPH",
       "receipt": "tests/test_acp2_runtime_mcp_process.py",
-      "receipt_sha256": "b75523fc274e7f628f88c33c235337fc56a2731879b74ba66a46c52aec2aa55b",
+      "receipt_sha256": "8ac78c5b2f0e5cb717abb3a59e7a87bf7f25a4a96bd97b0280c9460e572ccb38",
       "required_observations": {
         "auto_lookup_only": "present",
         "mcp_idempotency": "present",
@@ -3063,7 +3063,7 @@
       "notes": "Production assembly for pure-analysis third-party plugins only. worker-hosted third-party COMPUTE stays a separate DEFERRED/NOT_VERIFIED row (see deferred_rows) and is never closed by this pure-analysis evidence.",
       "owner": "B + A",
       "receipt": "tests/test_acp2_science_plugin_production.py",
-      "receipt_sha256": "f955dfaa2a4f58f6d920b6704a24941f8e4c25fff1a5feef29a4a52f65bbaaef",
+      "receipt_sha256": "aa78b848d525a7cca0e5cc59e04c96b739cc2168cdb4b11d28089d0b1a1fa86c",
       "required_observations": {
         "computed_distribution_digest": "present",
         "pure_analysis_plugin": "present",

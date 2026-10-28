@@ -2,9 +2,9 @@
   "schema": "acp2.contracts.manifest.v1",
   "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
   "created_at": "2026-10-22T00:00:00Z",
-  "contract_version": "1.3.0",
-  "contract_digest": "070400e7720d401ca2f71bf8fd60f7bdf03140588392cff4dd3f9fa67bc77a6c",
-  "contract_digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\" for delivered contracts excluding manifest.json and runtime/baseline-lock.json (self-referential files).",
+  "contract_version": "1.7.0",
+  "contract_digest": "f3c1832d1d20b8b2c7c464da9a42c9a4f3c3b5f0d98a0e43f2de9aa2f95f8ae7",
+  "contract_digest_rule": "sha256 over sorted lines '<path> <sha256>\\n' for delivered contracts excluding manifest.json, runtime/baseline-lock.json and release/bom.current.json (self-referential files; the BOM embeds this aggregate digest).",
   "baseline": {
     "delivery_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
     "code_candidate_revision": "bb309134c7b2bb21d8a8bfcb5589516a5b0cf798",
@@ -164,191 +164,272 @@
   ],
   "contracts": [
     {
-      "id": "manifest",
-      "path": "docs/reference/next-change/acp2-contracts/manifest.json",
-      "owner": "B",
-      "status": "delivered",
-      "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
-      "sha256": "573716d38bba28bc6ece676f03d127da12dd34f30d9ebfc4638a4c3197460a83",
-      "delivered_by": "B00"
-    },
-    {
-      "id": "baseline-lock",
-      "path": "docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json",
-      "owner": "B",
-      "status": "delivered",
-      "sha256": "4564a6da918e26c2cf3d0047bb31f87ddf76690b944891319c814720e94e86cf",
-      "delivered_by": "B00"
-    },
-    {
-      "id": "lint-baseline",
-      "path": "docs/reference/next-change/acp2-contracts/runtime/lint-baseline.json",
-      "owner": "B",
-      "status": "delivered",
-      "sha256": "6b86427a6897ba0b882497bc9ca514b4d3854df9c83706a2e539b603f8f00d0a",
-      "delivered_by": "B00"
-    },
-    {
-      "id": "dependencies",
-      "path": "docs/reference/next-change/acp2-contracts/runtime/dependencies.json",
-      "owner": "B",
-      "status": "delivered",
-      "sha256": "a13ad82056d274ef4647851e5f3eae7d14163d7035448d89103ef67ad08f13be",
       "delivered_by": "B00",
+      "id": "manifest",
+      "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
+      "owner": "B",
+      "path": "docs/reference/next-change/acp2-contracts/manifest.json",
+      "sha256": "1e0cf06f36880b6e20160563a79f2949708adac8ab3a69081239db21dc3a3fea",
+      "status": "delivered"
+    },
+    {
+      "delivered_by": "B00",
+      "id": "baseline-lock",
+      "owner": "B",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json",
+      "sha256": "4564a6da918e26c2cf3d0047bb31f87ddf76690b944891319c814720e94e86cf",
+      "status": "delivered"
+    },
+    {
+      "delivered_by": "B00",
+      "id": "lint-baseline",
+      "owner": "B",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/lint-baseline.json",
+      "sha256": "6b86427a6897ba0b882497bc9ca514b4d3854df9c83706a2e539b603f8f00d0a",
+      "status": "delivered"
+    },
+    {
+      "delivered_by": "B00",
+      "id": "dependencies",
+      "owner": "B",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/dependencies.json",
+      "sha256": "a13ad82056d274ef4647851e5f3eae7d14163d7035448d89103ef67ad08f13be",
+      "status": "delivered",
       "updated_by": "B23"
     },
     {
-      "id": "final-debug-patch",
-      "path": "docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/",
-      "owner": "B",
-      "status": "delivered",
-      "sha256": "f008a100c24bc8e8719bc1b7141c1ac4cefb305d43dafb9ba63615d449db9d24",
+      "delivered_by": "B00",
       "digest_target": "docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/manifest.json",
-      "delivered_by": "B00"
+      "id": "final-debug-patch",
+      "owner": "B",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/",
+      "sha256": "f008a100c24bc8e8719bc1b7141c1ac4cefb305d43dafb9ba63615d449db9d24",
+      "status": "delivered"
     },
     {
+      "delivered_by": "B01",
       "id": "shared-change-request-template",
+      "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/shared-change-request.template.md",
-      "owner": "B",
-      "status": "delivered",
-      "delivered_by": "B01",
-      "sha256": "47fcb7e9a6da573cc858698403db98a43d303395b035068ccdf714c3e478014c"
+      "sha256": "47fcb7e9a6da573cc858698403db98a43d303395b035068ccdf714c3e478014c",
+      "status": "delivered"
     },
     {
+      "delivered_by": "B01",
       "id": "acceptance-harness",
+      "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/acceptance-harness.v1.md",
-      "owner": "B",
-      "status": "delivered",
-      "delivered_by": "B01",
-      "sha256": "93536b91c026fa67660551d7232d5bd8cb1c3401e72b7472694c45f1a5a2f026"
+      "sha256": "93536b91c026fa67660551d7232d5bd8cb1c3401e72b7472694c45f1a5a2f026",
+      "status": "delivered"
     },
     {
+      "delivered_by": "B01",
       "id": "acceptance-result-schema",
+      "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/acceptance-result.schema.json",
-      "owner": "B",
-      "status": "delivered",
-      "delivered_by": "B01",
-      "sha256": "81f653beae49024004075dfb535d6359becda9ad4f7026042645e596d8cf901e"
+      "sha256": "81f653beae49024004075dfb535d6359becda9ad4f7026042645e596d8cf901e",
+      "status": "delivered"
     },
     {
+      "delivered_by": "B03",
       "id": "application-api",
+      "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
-      "owner": "B",
+      "sha256": "d55f470aab72c2ee3ceed652fd51f16489bff764cc49a0bc1461f8c1333588f0",
       "status": "delivered",
-      "delivered_by": "B03",
-      "sha256": "843132f171507e97f40d3a267b1db1071e36e2360acb8f771d6fef806f119792",
       "updated_by": "B16"
     },
     {
+      "delivered_by": "B03",
       "id": "entry-call-table",
+      "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/entry-call-table.v1.md",
-      "owner": "B",
+      "sha256": "b6b9e3e2fb61be8bf6f95515ba6b5e175eaadcc80bfa0e590396666153d340bc",
       "status": "delivered",
-      "delivered_by": "B03",
-      "sha256": "1835f5ce852b0acb1e4851d157d59d3947d59a09e426cf16878e564277ce5138",
       "updated_by": "B06"
     },
     {
+      "delivered_by": "B03",
       "id": "p2-research-operations",
+      "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
-      "owner": "B",
+      "sha256": "32525b7bd1866ad0d3f2c73162733dd4e44f49d1eec26dbeba14b4ca55696227",
       "status": "delivered",
-      "delivered_by": "B03",
-      "sha256": "10f2ad63c4fdb6471bb8c56fd025a9460eb054b7afc17db7b1f2e57e7904fa04",
       "updated_by": "B16"
     },
     {
+      "delivered_by": "B03",
       "id": "mcp-launch-schema",
+      "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.schema.json",
-      "owner": "B",
+      "sha256": "76a3c538a51c66e0cdc231c1f08c99e1e6d9452bb985df39382c507026a0ac13",
       "status": "delivered",
-      "delivered_by": "B03",
-      "sha256": "92fd0cca55ec4869b1e10c1149d8860729b897d935d4b6c058c8be34cafd4984",
       "updated_by": "B06"
     },
     {
+      "delivered_by": "B03",
       "id": "mcp-launch-template",
-      "path": "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.template.json",
       "owner": "B",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.template.json",
+      "sha256": "22413124505ee37b41a4d3bf8ca6841315d379bc1ff40bdb122d3669bda354ae",
       "status": "delivered",
-      "delivered_by": "B03",
-      "sha256": "27c681198b1d8036f3e6267eccc6ba0d8a35ba4abad911ebd1665ca29dffeb76",
       "updated_by": "B06"
     },
     {
+      "delivered_by": "B03",
       "id": "canonical-digest-vectors",
+      "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/canonical-digest-vectors.v1.json",
-      "owner": "B",
-      "status": "delivered",
-      "delivered_by": "B03",
-      "sha256": "ce889df114c3138b60cb23ee7dcf3b53cf4246343b5c7a3a3e2549b2c6c87358"
+      "sha256": "ce889df114c3138b60cb23ee7dcf3b53cf4246343b5c7a3a3e2549b2c6c87358",
+      "status": "delivered"
     },
     {
+      "delivered_by": "B03",
       "id": "science-binding",
+      "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/science-binding.v1.json",
-      "owner": "B",
-      "status": "delivered",
-      "delivered_by": "B03",
-      "sha256": "b0a7be86adfcee6e9b62dd00b885a9d8a4cd5b815be0324e8b636a264faa2040"
+      "sha256": "b0a7be86adfcee6e9b62dd00b885a9d8a4cd5b815be0324e8b636a264faa2040",
+      "status": "delivered"
     },
     {
+      "delivered_by": "B03",
       "id": "control-and-data",
-      "path": "docs/reference/next-change/acp2-contracts/runtime/control-and-data.v1.json",
       "owner": "B",
-      "status": "delivered",
-      "delivered_by": "B03",
-      "sha256": "af0a55436c1f38146edd59d1a9cca91973c12fdd9ac525fa35cbb75d2f86319e"
+      "path": "docs/reference/next-change/acp2-contracts/runtime/control-and-data.v1.json",
+      "sha256": "ee5f130d0da9281c051bcf77e17bccf9304db2761e536607b1fb095ba2035298",
+      "status": "delivered"
     },
     {
-      "id": "admission-approval",
-      "path": "docs/reference/next-change/acp2-contracts/runtime/admission-approval.v1.json",
-      "owner": "B",
-      "status": "delivered",
       "delivered_by": "B03",
+      "id": "admission-approval",
+      "owner": "B",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/admission-approval.v1.json",
       "sha256": "0708c6bb4048ad8544c2c480a0e5c4e36312b5a0c0155f22f4f10afaa45cfa62",
+      "status": "delivered",
       "updated_by": "B16"
     },
     {
-      "id": "controller-topology",
-      "path": "docs/reference/next-change/acp2-contracts/runtime/controller-topology.v1.json",
-      "owner": "B",
-      "status": "delivered",
       "delivered_by": "B04a",
-      "sha256": "90932780ff6867541879c4b6acba3ea59523500f1f1b0fe57120b2d96993ad27"
+      "id": "controller-topology",
+      "owner": "B",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/controller-topology.v1.json",
+      "sha256": "90932780ff6867541879c4b6acba3ea59523500f1f1b0fe57120b2d96993ad27",
+      "status": "delivered"
     },
     {
+      "delivered_by": "B03",
       "id": "fallback-deferral",
+      "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/fallback-deferral.json",
-      "owner": "B",
-      "status": "delivered",
-      "delivered_by": "B03",
-      "sha256": "40be4642bf9d22f510df238bd3a92ba571e9d75edb2beef39cee38a7c26aed50"
+      "sha256": "40be4642bf9d22f510df238bd3a92ba571e9d75edb2beef39cee38a7c26aed50",
+      "status": "delivered"
     },
     {
-      "id": "samples",
-      "path": "docs/reference/next-change/acp2-contracts/runtime/samples/",
-      "owner": "B",
-      "status": "delivered",
+      "delivered_by": "B03",
       "digest_target": "docs/reference/next-change/acp2-contracts/runtime/samples/manifest.json",
-      "delivered_by": "B03",
-      "sha256": "d37dcfab39f2181e4ca9533267eac156fc84ca8772e6831a9a8d9108a1fc852e"
+      "id": "samples",
+      "owner": "B",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/samples/",
+      "sha256": "bbaf406cbe4f88fcb2fd46f0edfb3c2dd6cb7cf9b782a755f2cb1fdb84f2ef3a",
+      "status": "delivered"
     },
     {
-      "id": "cross-track-requests",
-      "path": "docs/reference/next-change/acp2-contracts/runtime/cross-track-requests.v1.json",
-      "owner": "B",
-      "status": "delivered",
       "delivered_by": "B06",
-      "sha256": "9980acb26e43c99304eb303f8e8c583b59cc60361008131c5313d2eac3f1add4"
+      "id": "cross-track-requests",
+      "owner": "B",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/cross-track-requests.v1.json",
+      "sha256": "9980acb26e43c99304eb303f8e8c583b59cc60361008131c5313d2eac3f1add4",
+      "status": "delivered"
     },
     {
+      "delivered_by": "B19",
       "id": "events-recovery",
-      "path": "docs/reference/next-change/acp2-contracts/runtime/events-recovery.v1.json",
-      "owner": "B",
-      "status": "delivered",
       "note": "B19a freezes cross-research event identity, opaque cursor/max_age reset, task/attempt/revision/project scope, payload version, replay/duplicate/out-of-order/terminal/revocation/RPH-exit rules.",
+      "owner": "B",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/events-recovery.v1.json",
       "sha256": "9e517dbc6cee04f60d1b1e493ce26ba8737c59bfd1031416ccb626952b4b169b",
-      "delivered_by": "B19"
+      "status": "delivered"
+    },
+    {
+      "delivered_by": "B26",
+      "id": "release-scope",
+      "note": "M0-01b: single authority for IN_SCOPE/DEFERRED/OUT_OF_SCOPE, the G01–G26 index and the H0–H7 mapping. Registered by B; only the M5-02 release stage may flip it to delivered.",
+      "owner": "B",
+      "path": "docs/reference/next-change/acp2-contracts/release/scope.json",
+      "sha256": "180509e071b4e33fe7de05105e704b87c26ba6c1735c6528e47b716f38dae110",
+      "status": "delivered"
+    },
+    {
+      "delivered_by": "B26",
+      "id": "release-evidence-coverage-schema",
+      "note": "M0-01b: acp2.release.evidence-coverage.v1 schema for tasks, a/b/c/d checkpoints, G01–G26 gaps and H0–H7 required rows. Registered by B; M5-02 freezes the ledger against it.",
+      "owner": "B",
+      "path": "docs/reference/next-change/acp2-contracts/release/evidence-coverage.schema.json",
+      "sha256": "39e191053691020c42a472c39d2a9b43879bb24010775c998706053582a72b94",
+      "status": "delivered"
+    },
+    {
+      "delivered_by": "B26",
+      "id": "release-bom-schema",
+      "note": "M0-01b/M0-03a: acp2.release.bom.v1 skeleton (source revision, artifacts with URI+sha256+size, toolchain locks, coverage digest reference). Registered by B.",
+      "owner": "B",
+      "path": "docs/reference/next-change/acp2-contracts/release/bom.schema.json",
+      "sha256": "1db78ac355bdfac6aeab30bf561c7a94544330babf694ae4991c98fcc9df6aba",
+      "status": "delivered"
+    },
+    {
+      "delivered_by": "M0-07",
+      "id": "trusted-usage-receipts",
+      "note": "M0-07/G26: trusted usage settlement — producer capability authority, two receipt contexts, settlement wiring, migrations 025/026, negative vectors.",
+      "owner": "B",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/trusted-usage-receipts.v1.md",
+      "sha256": "f78ac012793d44f6755b75aa7458d551e3e8f970b26bf514d74f3d7e37a7285e",
+      "status": "delivered"
+    },
+    {
+      "delivered_by": "M0-12",
+      "id": "decision-freeze-identity",
+      "note": "M0-11 frozen identity/field/migration decisions with the mechanical client inventory digest embedded.",
+      "owner": "INT",
+      "path": "docs/reference/next-change/acp2-contracts/decision-freeze/identity.v1.json",
+      "sha256": "961b827ec8a5de939233771feaa7641f657cc38a62e132445687140ab0cd68d5",
+      "status": "delivered"
+    },
+    {
+      "delivered_by": "M0-12",
+      "id": "decision-freeze-integration",
+      "note": "M0-12 frozen extension-negotiation/branch/CI/hygiene/registration decisions; M1-01 consumes only this file.",
+      "owner": "INT",
+      "path": "docs/reference/next-change/acp2-contracts/decision-freeze/integration.v1.json",
+      "sha256": "9ba4731a564a30c651e016e4525b61f4f9289af7c285f7a44cbec242f8c33b30",
+      "status": "delivered"
+    },
+    {
+      "delivered_by": "M1-02",
+      "id": "research-session",
+      "note": "M1-02: research-session identity, planning/model-receipt namespaces, submit intent, crash-point recovery matrix.",
+      "owner": "B",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/research-session.v1.md",
+      "sha256": "80b23340bd92c41dd0c918de274b93473ead20fcce149354a433000a40fc5c21",
+      "status": "delivered"
+    },
+    {
+      "delivered_by": "B26",
+      "id": "release-bom-current",
+      "note": "M5-02 clean-candidate BOM: 27 artifacts with URI+sha256+size, toolchain/DSH locks, contract digest and coverage canonical digest. Self-referential: excluded from contract_digest because it embeds that aggregate digest.",
+      "owner": "B",
+      "path": "docs/reference/next-change/acp2-contracts/release/bom.current.json",
+      "sha256": "0822c99e0703a033561b45da80098529b8792bb62e8b5d029644749ca86b96aa",
+      "status": "delivered"
+    },
+    {
+      "delivered_by": "B26",
+      "id": "release-evidence-coverage-current",
+      "note": "M5-02 final coverage ledger: 39 tasks / 32 checkpoints / 26 gaps / 8 H rows + 3 DEFERRED rows, each with a receipt+sha256, candidate, reuse and required_observations. Delivery status lives only here, never in the BOM.",
+      "owner": "B",
+      "path": "docs/reference/next-change/acp2-contracts/release/evidence-coverage.current.json",
+      "sha256": "8a85e0a40449e50a85df608d892d0c9997629df831f40bd9c025a72a12cd0c61",
+      "status": "delivered"
     }
   ],
   "deferred_capabilities": [
@@ -474,10 +555,10 @@
     "scripts/acceptance/validate_acp2_contracts.py"
   ],
   "digest_rules": {
-    "manifest_self": "sha256 of canonical compact JSON (json.dumps(sort_keys=True, separators=(\",\", \":\"), ensure_ascii=False)) of this manifest with contracts[id=\"manifest\"].sha256 set to \"\".",
     "delivered_contracts": "sha256 of the file bytes; for a directory contract the digest is over its digest_target (runtime/samples/manifest.json), and that file itself lists every sample sha256.",
     "final_debug_bundle": "sha256 of runtime/final-debug-patch/manifest.json.",
-    "merged_contract_digest": "contract_digest = sha256 over sorted lines '<repo-root-relative path> <sha256>\\n' for every contract with status=delivered, excluding the two self-referential files manifest.json and runtime/baseline-lock.json. Recompute at every stage freeze; the validator enforces it."
+    "manifest_self": "sha256 of canonical compact JSON (json.dumps(sort_keys=True, separators=(\",\", \":\"), ensure_ascii=False)) of this manifest with contracts[id=\"manifest\"].sha256 set to \"\".",
+    "merged_contract_digest": "sha256 over sorted lines '<path> <sha256>\\n' for delivered contracts excluding manifest.json, runtime/baseline-lock.json and release/bom.current.json (self-referential files; the BOM embeds this aggregate digest)."
   },
   "drift": [
     {
@@ -705,44 +786,64 @@
   },
   "contract_version_history": [
     {
-      "version": "1.0.0",
+      "note": "initial freeze",
       "stage": "B00",
-      "note": "initial freeze"
+      "version": "1.0.0"
     },
     {
-      "version": "1.0.0",
+      "note": "additive delivery of planned contracts; no already-delivered wire field changed, so the version is NOT bumped",
       "stage": "B03",
-      "note": "additive delivery of planned contracts; no already-delivered wire field changed, so the version is NOT bumped"
+      "version": "1.0.0"
     },
     {
-      "version": "1.0.0",
+      "note": "delivers controller-topology.v1.json and the shared change-request template; no already-delivered wire field changed, so contract_version stays 1.0.0",
       "stage": "B04a",
-      "note": "delivers controller-topology.v1.json and the shared change-request template; no already-delivered wire field changed, so contract_version stays 1.0.0"
+      "version": "1.0.0"
     },
     {
-      "version": "1.1.0",
+      "note": "additive B-req-01 fields in application-api, entry-call-table and mcp-launch refresh, and the cross-track-requests ledger; no field removed or renamed",
       "stage": "B06",
-      "note": "additive B-req-01 fields in application-api, entry-call-table and mcp-launch refresh, and the cross-track-requests ledger; no field removed or renamed"
+      "version": "1.1.0"
     },
     {
-      "version": "1.1.0",
+      "note": "additive approval HTTP operations/events in application-api, p2-research-operations and admission-approval; no delivered field removed or renamed, so contract_version stays 1.1.0",
       "stage": "B16",
-      "note": "additive approval HTTP operations/events in application-api, p2-research-operations and admission-approval; no delivered field removed or renamed, so contract_version stays 1.1.0"
+      "version": "1.1.0"
     },
     {
-      "version": "1.2.0",
+      "note": "B18a delivers A schema id/version/digest references in science-binding and adds the bounded step-DAG, evidence-manifest and research-resource sections; no already-delivered wire field was removed or renamed.",
       "stage": "B18",
-      "note": "B18a delivers A schema id/version/digest references in science-binding and adds the bounded step-DAG, evidence-manifest and research-resource sections; no already-delivered wire field was removed or renamed."
+      "version": "1.2.0"
     },
     {
-      "version": "1.3.0",
+      "note": "B19a delivers the cross-research events/recovery contract (event ID, opaque cursor + max_age reset, task/attempt/revision/project scope, payload version, replay/duplicate/out-of-order/terminal/revocation/RPH-exit rules) and its B19a-to-C handoff; no already-delivered wire field was removed or renamed.",
       "stage": "B19",
-      "note": "B19a delivers the cross-research events/recovery contract (event ID, opaque cursor + max_age reset, task/attempt/revision/project scope, payload version, replay/duplicate/out-of-order/terminal/revocation/RPH-exit rules) and its B19a-to-C handoff; no already-delivered wire field was removed or renamed."
+      "version": "1.3.0"
     },
     {
-      "version": "1.3.0",
+      "note": "additive cross_track_edges and p4_sync in runtime/dependencies.json; no delivered field removed or renamed, so contract_version stays 1.3.0",
       "stage": "B23",
-      "note": "additive cross_track_edges and p4_sync in runtime/dependencies.json; no delivered field removed or renamed, so contract_version stays 1.3.0"
+      "version": "1.3.0"
+    },
+    {
+      "note": "M0-01b registers release/scope.json, release/evidence-coverage.schema.json and release/bom.schema.json as planned contracts owned by B (no delivered wire field changed). contract_version is bumped anyway because the release namespace is a new consumer-visible contract family: the coverage validator keys on the planned ids and M5-02 freezes the same files at the B26 release stage.",
+      "stage": "M0-01",
+      "version": "1.4.0"
+    },
+    {
+      "note": "registers the decision-freeze identity/integration contracts (owner INT) and the application-api 1.3.0 prepare field table; additive, no delivered wire field removed",
+      "stage": "M0-12",
+      "version": "1.5.0"
+    },
+    {
+      "note": "M1-01 contract unification (application-api 1.4.0, control-and-data 1.2.0, launch tables, implementation_status vocabulary) and the M1-02 research-session contract registration",
+      "stage": "M1-02",
+      "version": "1.6.0"
+    },
+    {
+      "note": "M5-02 final release registration: release/scope.json, the evidence-coverage and BOM schemas flip from planned to delivered, and the generated bom.current.json / evidence-coverage.current.json instances register as delivered B26 contracts. contract_version is bumped because the release namespace is now a delivered consumer-visible contract family. The BOM instance itself is excluded from contract_digest (it embeds the aggregate digest); both release schemas and the coverage instance stay inside it.",
+      "stage": "B26",
+      "version": "1.7.0"
     }
   ],
   "b01_deliverables": [

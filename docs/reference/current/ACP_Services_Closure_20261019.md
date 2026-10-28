@@ -50,9 +50,9 @@
 | 本记录执行时的前一个 HEAD | `99b5ee2c5bb9c0249b5ea8cf6d892f67ddc5cc95`（F4 amendment） |
 | 解释器 / Node | `python3.11 (3.11.13)` / `v20.19.0` |
 | 配置 | 每个套件 `mktemp -d` 隔离 `ACP_RUN_ROOT`；默认配置 `cccp.config._get_default_config()`（built-in 权威，ANTI #3）；**未重启服务、未改配置、未改生产 DB** |
-| First Slice 契约版本 | `contract_version = 1`；`docs/reference/next-change/ACP_Services_First_Slice_Contracts.md` sha256[0:16]=`e4e7dc4a0f020e38` |
-| A04 事件契约 | sha256[0:16]=`140148c325dd7f42`；状态 **DEFERRED（未接入）** |
-| fixture `contract_samples` | 31 文件，sha256[0:16]=`367815d7cb7291bc` |
+| First Slice 契约版本 | `contract_version = 1`；`docs/reference/next-change/ACP_Services_First_Slice_Contracts.md` sha256[0:16]=`92b83a5c5f05e619` |
+| A04 事件契约 | sha256[0:16]=`82eee4066b5b8ccb`；状态 **DEFERRED（未接入）** |
+| fixture `contract_samples` | 31 文件，sha256[0:16]=`b31c5571e3cd7ac6` |
 | fixture `frames_mapping` | 12 文件，sha256[0:16]=`79d229e24101a430` |
 | cache-only 切换矩阵 | sha256[0:16]=`6f97e465929bb7c1` |
 
@@ -123,7 +123,7 @@ L1-03 的 F-3 已在 `3922f07` 修复（worker 边界收窄，负例注入保留
 | L2-13 | 归档导出/导入入口 | CLI / HTTP | **NOT_VERIFIED** | `src/acp/services_data_bootstrap.py:1103/1151/1181`（仅 builder 导出，`src/acp` 无消费者） | 原因：Data 侧构造器已交付，未绑 CLI/API 入口；渠道 B |
 | L2-14 | MCP stdio 入口 | `acp` 默认入口 | **NOT_VERIFIED** | `src/acp_services/entrypoints/mcp.py`（`MCP_SERVER_NAME`）；`src/acp` 无 `entrypoints.mcp` 消费者 | 原因：协议实现与 39 项测试已交付，未绑默认入口（todo 43 只要求薄入口契约）；渠道 B |
 | L2-15 | 计量解耦（用量采集与科学完成解耦） | 生产路径 | **NOT_VERIFIED** | `src/acp_services/runtime/metering_decoupling.py`（`src/acp` 零消费者） | 原因：模块 + 26 项测试已交付，未接入 Runtime 完成/读取路径；渠道 B |
-| L2-16 | A04 刷新协议（cursor/重置/停轮询） | 前端事件消费 | **NOT_VERIFIED（DEFERRED）** | `docs/reference/next-change/ACP_Services_Events_A04_Contract.md`（sha16 `140148c325dd7f42`）；前端 `eventCursor: false`、`globalEventStream: false` | 原因：A04 为 DEFERRED / 未接入；本次交付是**前端兼容重构**而非新刷新协议；渠道 A04-lane |
+| L2-16 | A04 刷新协议（cursor/重置/停轮询） | 前端事件消费 | **NOT_VERIFIED（DEFERRED）** | `docs/reference/next-change/ACP_Services_Events_A04_Contract.md`（sha16 `82eee4066b5b8ccb`）；前端 `eventCursor: false`、`globalEventStream: false` | 原因：A04 为 DEFERRED / 未接入；本次交付是**前端兼容重构**而非新刷新协议；渠道 A04-lane |
 | L2-17 | 全量 15/15 envelope 覆盖 | `execution_chain` | **NOT_VERIFIED** | `tests/baseline/services-evidence/workflow_enablement_matrix.md`（`full-coverage gate: OPEN`） | 原因：7 项 legacy 闭包由 C01 T20–T30 承担；本计划不声称全覆盖；渠道 C10/C01 |
 
 **L2 结论**：Services 后端能力的**默认入口接入**已成立（L2-01…L2-10 全 PASS）。
@@ -277,26 +277,26 @@ account/permission/quota 生产接线、MCP 默认入口、项目包 CLI/API、m
     "contract_versions": {
       "first_slice_contract_version": 1,
       "first_slice_contract_doc": "docs/reference/next-change/ACP_Services_First_Slice_Contracts.md",
-      "first_slice_contract_doc_sha256_16": "e4e7dc4a0f020e38",
+      "first_slice_contract_doc_sha256_16": "92b83a5c5f05e619",
       "a04_events_contract_doc": "docs/reference/next-change/ACP_Services_Events_A04_Contract.md",
-      "a04_events_contract_sha256_16": "140148c325dd7f42",
+      "a04_events_contract_sha256_16": "82eee4066b5b8ccb",
       "a04_status": "DEFERRED"
     },
     "verified_digests": {
-      "first_slice_contract_doc": {"kind": "file", "path": "docs/reference/next-change/ACP_Services_First_Slice_Contracts.md", "sha256_16": "e4e7dc4a0f020e38"},
-      "a04_events_contract_doc": {"kind": "file", "path": "docs/reference/next-change/ACP_Services_Events_A04_Contract.md", "sha256_16": "140148c325dd7f42"},
-      "contract_samples": {"kind": "dir", "path": "tests/baseline/services-evidence/contract_samples", "files": 31, "sha256_16": "367815d7cb7291bc"},
+      "first_slice_contract_doc": {"kind": "file", "path": "docs/reference/next-change/ACP_Services_First_Slice_Contracts.md", "sha256_16": "92b83a5c5f05e619"},
+      "a04_events_contract_doc": {"kind": "file", "path": "docs/reference/next-change/ACP_Services_Events_A04_Contract.md", "sha256_16": "82eee4066b5b8ccb"},
+      "contract_samples": {"kind": "dir", "path": "tests/baseline/services-evidence/contract_samples", "files": 31, "sha256_16": "b31c5571e3cd7ac6"},
       "frames_mapping": {"kind": "dir", "path": "tests/fixtures/science_products/frames_mapping", "files": 12, "sha256_16": "79d229e24101a430"}
     },
     "recorded_digests": {
-      "four_combination_record": {"path": "docs/reference/current/ACP_Services_Four_Combination_Acceptance.md", "sha256_16": "8b3e6bb407a0c51b", "commit": "3d2af348680da232aa4e8328483be41a33cc7c0a"},
+      "four_combination_record": {"path": "docs/reference/current/ACP_Services_Four_Combination_Acceptance.md", "sha256_16": "763b171a58263e35", "commit": "3d2af348680da232aa4e8328483be41a33cc7c0a"},
       "cache_only_switch_matrix": {"path": "tests/baseline/services-evidence/cache_only_switch_matrix.md", "sha256_16": "6f97e465929bb7c1"}
     }
   },
   "consumes": {
     "path": "docs/reference/current/ACP_Services_Four_Combination_Acceptance.md",
     "commit": "3d2af348680da232aa4e8328483be41a33cc7c0a",
-    "sha256_16": "8b3e6bb407a0c51b",
+    "sha256_16": "763b171a58263e35",
     "combination_execution_owner": "plan todo 75",
     "re_executed_here": false,
     "combinations": ["F0+S0", "F1+S0", "F0+S1", "F1+S1"],

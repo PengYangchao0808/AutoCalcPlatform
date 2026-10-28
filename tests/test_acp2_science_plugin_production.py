@@ -674,7 +674,13 @@ def test_clean_environment_install_is_offline_and_discovery_is_metadata_only(
     assert enabled["module_imported_after_scan"] is False
     assert enabled["module_imported_after_enable"] is False
 
-    assert "--no-isolation" in m205_environment["build_argv"]
+    # ``python -m build`` spells this ``--no-isolation``; the supported
+    # offline fallback ``pip wheel`` spells the same guarantee
+    # ``--no-build-isolation``.  The helper must disable build isolation
+    # either way and must never reach an index.
+    build_argv = m205_environment["build_argv"]
+    assert "--no-isolation" in build_argv or "--no-build-isolation" in build_argv, build_argv
+    assert "--no-index" in build_argv
     assert "--no-deps" in m205_environment["install_argv"]
     assert "--no-index" in m205_environment["install_argv"]
 
