@@ -1,0 +1,68 @@
+{
+  "console": [
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "type": "error"
+    }
+  ],
+  "console_error_count": 1,
+  "label": "chromium-schema-form",
+  "page_errors": [],
+  "requests_failed": [],
+  "response_statuses": [
+    200,
+    404
+  ],
+  "responses": [
+    {
+      "method": "GET",
+      "status": 404,
+      "url": ":60557/api/v2/science/capabilities?project_id=demo-project"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": ":60557/api/v2/research/approvals?limit=50"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": ":60557/api/v1/workflow-catalog"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": ":60557/api/v1/status"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": ":60557/api/v1/projects"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": ":60557/api/v1/maintenance/disk-usage"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": ":60557/api/v2/task-view?group_by=molecule&sort=created_desc&group_limit=200&max_total=200&offset=0&include_facets=true"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": ":60557/api/v1/method-catalog"
+    },
+    {
+      "method": "GET",
+      "status": 200,
+      "url": ":60557/api/v2/science/capability-forms?project_id=adc02a9b-736c-47f7-9e15-9dc1d18c4608"
+    },
+    {
+      "method": "POST",
+      "status": 200,
+      "url": ":60557/api/v2/science/preflight?project_id=adc02a9b-736c-47f7-9e15-9dc1d18c4608"
+    }
+  ]
+}

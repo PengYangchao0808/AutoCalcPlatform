@@ -1,0 +1,25 @@
+{
+  "repo_root": "/ACPServer/acp2-remediation-integration",
+  "base_url": "http://127.0.0.1:50517",
+  "project_id": "uncategorized",
+  "capability_id": "acp2_external_native_singlepoint",
+  "subset_version": "acp2.ui-subset.v1",
+  "subset_digest": "sha256:870d59473be275fa52785896cdb7e09d03aa15855a8a29dc69b90839fbf08b06",
+  "form_digest": "sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0",
+  "expected_title": "Native single-point record validator",
+  "expected_workflow": "singlepoint",
+  "expected_edits": [
+    "task.charge",
+    "task.structure.source"
+  ],
+  "structure_text": "# ACP2 external native singlepoint record v1\nschema acp2.native.singlepoint.v1\ncharge 0\nmultiplicity 1\natoms 3\natom O 0.000000000 0.000000000 0.117300000\natom H 0.000000000 0.757200000 -0.469200000\natom H 0.000000000 -0.757200000 -0.469200000\nenergy_hartree -76.0266320000\n",
+  "numeric_edit": "2",
+  "numeric_restore": 0,
+  "approval_hint": "An approved plan is required before submit",
+  "store_module": "frontend/js/client/resource-store.js",
+  "experience_module": "frontend/js/workbench/contracts/experience_contract.js",
+  "subset_module": "frontend/js/workbench/contracts/ui_subset.js",
+  "science_module": "frontend/js/client/science-query.js",
+  "feature_module": "frontend/js/workbench/features/capability-form.js",
+  "now": "2026-10-28T00:00:00.000Z"
+}

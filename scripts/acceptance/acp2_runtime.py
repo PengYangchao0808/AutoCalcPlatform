@@ -197,6 +197,10 @@ EXPERIENCE_REQUIRED_OBSERVATIONS: dict[str, dict[str, str]] = {
     "fault-boundaries-live": _observations(denial="present"),
     "da-research-live": _observations(model="present", qc="present", artifact="present"),
     "plugin-discovery-live": _observations(controller="absent"),
+    # M4-05: the row is executed for real — a real Controller serves the
+    # third-party capability form to a real Chromium, which renders it and shows
+    # the real preflight ViewModel.  No scientific artifact is prepared, so the
+    # artifact observation stays absent.
     "schema-form-live": _observations(browser="present"),
     "plugin-upgrade-live": _observations(artifact="present"),
     "cross-domain-live": _observations(model="present", qc="present", artifact="present"),
