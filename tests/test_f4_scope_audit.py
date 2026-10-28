@@ -2662,6 +2662,9 @@ MIGRATION_STATION_PREFIXES = (
     # M2-05: the third-party science plugin composition root (installed/enable
     # facts -> registry injection); exact file only, same rule as above.
     "src/acp/services_science_plugins_bootstrap.py",
+    # M5-03 F2: the four-distribution mutual-exclusion guard checked at the
+    # CLI/server/MCP entries (exact file only).
+    "src/acp/install_guard.py",
     # todo 36/37: the whole ``init_wizard`` package is the single ``acp init``
     # station (unified answers/plan/persist + pure node validation); the
     # package-wide module-level-paramiko ban below is the added tooth.
