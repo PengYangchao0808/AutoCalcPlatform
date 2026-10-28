@@ -104,7 +104,7 @@
       "owner": "INT + B + C-RPH",
       "parent": "M0-02",
       "receipt": ".github/workflows/ci.yml",
-      "receipt_sha256": "746025f9bb075224a406e7e4fc8a1708d04c0793653862c933cee1cbce1448ec",
+      "receipt_sha256": "64d04b8dca6e7dd3ef2eff53513f0083c026f96ec0d9342697e4afcd14a1237b",
       "required_observations": {
         "contract_lane": "present",
         "dsh_declaration": "present",
@@ -813,7 +813,7 @@
       "status": "CLOSED"
     }
   ],
-  "coverage_sha256": "75a330e90598aa620113be0baf5eef642d4d3dcd094692ad16b162ec3c2eebdb",
+  "coverage_sha256": "bb42d310b172f9922614988886a5fd00867f398695ea79f0e9be62b77691e4ee",
   "deferred_rows": [
     {
       "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",

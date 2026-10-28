@@ -305,10 +305,10 @@
       "id": "static-assets-workbench",
       "kind": "static-asset-bundle",
       "name": "static-assets.manifest.json",
-      "notes": "122 files / 4225129 bytes rebuilt from the installed acp_web-0.3.0-py3-none-any.whl; embedded manifest equals this copy",
+      "notes": "122 files / 4225129 bytes rebuilt from the installed acp_web-0.3.0-py3-none-any.whl; embedded manifest equals this copy. Repo copy regenerated after the CI-lane fixes (module_tests excluded from the shipped asset set).",
       "retrievable": true,
-      "sha256": "9526f658f9b97078d81c78d2149d87f25696864ae47ce9dfb8ed133ead30c49b",
-      "size_bytes": 26683,
+      "sha256": "34ada6eec004bb51b2381e43918544ed5607bb7e0f0726f6c0d79521c98b571d",
+      "size_bytes": 16543,
       "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/static-assets/static-assets.manifest.json",
       "version": "0.3.0"
     },
@@ -385,8 +385,8 @@
       "name": "coverage-receipts.tar.gz",
       "notes": "Every receipt referenced by the evidence-coverage ledger, laid out by repository-relative path (54 files / 1302166 bytes); extracted copy under /ACPServer/acp2-artifacts/remediation/m5-03/evidence/receipts",
       "retrievable": true,
-      "sha256": "53eb03cb6e93738633b8bead650adcadad94bc8bf05de59c450e959fceb7458e",
-      "size_bytes": 278301,
+      "sha256": "be28991e63259eca572346bc25acaab7704b0a14f09588c1ea47ddd278dc7c59",
+      "size_bytes": 282697,
       "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/evidence/coverage-receipts.tar.gz",
       "version": "0.3.0"
     },
@@ -398,7 +398,7 @@
       "name": "coverage-receipts-manifest.json",
       "notes": "SHA-256 manifest of the coverage receipts shipped in the store",
       "retrievable": true,
-      "sha256": "b07a44bd0efe6813800b31f411f6eb4c0ce80e82b62aaaa2e479309e33ed1213",
+      "sha256": "2ca8a2446a95f088612e9235b4e39f1333576753e90dc379b8143f91a31028a5",
       "size_bytes": 10435,
       "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/evidence/coverage-receipts-manifest.json",
       "version": "0.3.0"
@@ -406,12 +406,12 @@
   ],
   "bom_version": 1,
   "evidence": {
-    "contract_digest": "f05c180c19b4a8c7030f02418d496808cf726de7edb58b7773a181a58778ce8f",
+    "contract_digest": "2bb2cdca36c2e8414e0ef5acd791cb64380118f663cd420748ad0c4f72b779cc",
     "contract_version": "1.7.0",
     "coverage_gap_rows": 26,
     "coverage_path": "docs/reference/next-change/acp2-contracts/release/evidence-coverage.current.json",
     "coverage_scope_rows": 39,
-    "coverage_sha256": "75a330e90598aa620113be0baf5eef642d4d3dcd094692ad16b162ec3c2eebdb",
+    "coverage_sha256": "bb42d310b172f9922614988886a5fd00867f398695ea79f0e9be62b77691e4ee",
     "reuse_rule": "exact",
     "reused_from": [
       "reports/acp2_remediation_20261026/m5-01/summary.json",

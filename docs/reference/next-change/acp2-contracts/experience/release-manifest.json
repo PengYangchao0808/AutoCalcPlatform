@@ -83,18 +83,11 @@
   "schema": "acp2.experience.release-manifest.v1",
   "schema_version": "1.0.0",
   "static_assets": {
-    "bytes": 4225129,
-    "digest": "dbc7579eff1fb362b7850a6b7d6a816ccd50920757dde85c3cd94bd865b19800",
-    "entry_points": {
-      "index": "ACP_Workbench_v2.html",
-      "js_root": "js",
-      "legacy": "ACP_Workbench.html"
-    },
-    "files": 122,
-    "manifest": "docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json",
-    "manifest_sha256": "9526f658f9b97078d81c78d2149d87f25696864ae47ce9dfb8ed133ead30c49b",
-    "release_id": "acp2-experience-0.3.0",
-    "verified_from": "acp_web_assets inside acp_web-0.3.0-py3-none-any.whl"
+    "bytes": 3554243,
+    "digest": "1e99be8991342cacf43b8c13af67be36c39cf3e0491afc1587ad2b7264f78ac0",
+    "files": 76,
+    "note": "regenerated after the CI-lane fixes; module_tests are Node-only doubles and are excluded from shipped assets",
+    "release_id": "acp2-experience-0.3.0"
   },
   "task_id": "M5-01",
   "toolchain": {

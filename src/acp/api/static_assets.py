@@ -29,8 +29,10 @@ MANIFEST_NAME = "static-assets.manifest.json"
 SCHEMA = "acp2.experience.static-assets.v1"
 SCHEMA_VERSION = "1.0.0"
 DIGEST_RULE = 'sha256 over sorted lines "<path> <sha256>\\n"'
-_SKIP_DIRS = frozenset({"__pycache__", "node_modules", ".git"})
+_SKIP_DIRS = frozenset({"__pycache__", "node_modules", ".git", "module_tests"})
 #: Packaging scaffolding added by ``build_release.py`` — not a frontend asset.
+#: ``module_tests`` are Node-only test doubles (never served, never shipped);
+#: excluding them keeps the shipped-asset digest stable against test edits.
 _SKIP_ROOT_FILES = frozenset({"__init__.py"})
 _MEDIA_OVERRIDES = {
     ".js": "text/javascript",

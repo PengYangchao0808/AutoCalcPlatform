@@ -254,7 +254,7 @@ def test_committed_static_manifest_equals_a_fresh_frontend_build() -> None:
     )
     assert rebuilt == committed, "static-assets.manifest.json is stale against frontend/"
     assert committed["schema"] == "acp2.experience.static-assets.v1"
-    assert committed["counts"]["files"] == len(committed["files"]) == 122
+    assert committed["counts"]["files"] == len(committed["files"]) == 76  # module_tests excluded (Node-only doubles)
     assert committed["entry_points"]["index"] == "ACP_Workbench_v2.html"
 
 
