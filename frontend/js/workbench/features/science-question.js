@@ -194,7 +194,10 @@ window.ACPScienceQuestion = (function () {
     error: null,
     discovered: false,
     phase: "idle",
-    projectId: DEMO_PROJECT_ID,
+    // M5-03 F6: no project is bound until the operator selects one. The
+    // previous default ("demo-project") made every page load probe a project
+    // that does not exist and log a stable 403 before any user action.
+    projectId: null,
     questions: [],
     question: null,
     defaults: { values: {}, sources: {} },
@@ -255,7 +258,38 @@ window.ACPScienceQuestion = (function () {
   }
 
   function scope() {
-    return { projectId: state.projectId || DEMO_PROJECT_ID, permission: "read" };
+    return { projectId: state.projectId, permission: "read" };
+  }
+
+  function hasProject() {
+    return !!(state.projectId && String(state.projectId).trim());
+  }
+
+  /** Bind the project the panel works for. Selection is the only trigger for
+   * automatic discovery: an unbound panel never probes ``demo-project``. */
+  function setProject(projectId) {
+    var next = projectId == null || projectId === "" ? null : String(projectId);
+    if (next === state.projectId) return getState();
+    state.projectId = next;
+    invalidatePreflight();
+    if (!next) {
+      state.discovered = false;
+      state.questions = [];
+      state.question = null;
+      state.defaults = { values: {}, sources: {}, originSources: {} };
+      state.phase = "idle";
+      state.status = "";
+      state.demo = false;
+      render();
+      return getState();
+    }
+    render();
+    discover().catch(function (error) {
+      if (typeof console !== "undefined" && console.warn) {
+        console.warn("science-question discover failed:", error);
+      }
+    });
+    return getState();
   }
 
   function tr(key, fallback, vars) {
@@ -458,6 +492,17 @@ window.ACPScienceQuestion = (function () {
   }
 
   function discover() {
+    // M5-03 F6: never probe a synthetic project. Without a bound project the
+    // panel stays idle (no request, no console error); fixture mode is an
+    // explicit demo switch and may load its embedded catalog.
+    if (!hasProject() && state.fixtureMode !== true) {
+      state.phase = "idle";
+      state.discovered = false;
+      state.error = null;
+      state.status = tr("manual.select_project_first", "请先在左侧选择项目，再发现能力");
+      render();
+      return Promise.resolve(getState());
+    }
     state.phase = "discovering";
     state.error = null;
     state.status = tr("manual.discover_running", "能力发现中…");
@@ -1201,6 +1246,11 @@ window.ACPScienceQuestion = (function () {
       }
     }
     return (
+      (!hasProject()
+        ? '<div class="science-question-note" id="sq-no-project-note">' +
+          escapeHtml(tr("manual.select_project_first", "请先在左侧选择项目，再发现能力")) +
+          "</div>"
+        : "") +
       '<div class="science-question-note" id="sq-no-model-note">' +
       escapeHtml(tr("manual.no_model_note", "本入口不依赖模型配置")) + "</div>" +
       '<div class="science-question-row" id="sq-row-question">' +
@@ -1342,7 +1392,7 @@ window.ACPScienceQuestion = (function () {
       };
     }
     render();
-    if (options.autoDiscover !== false) {
+    if (options.autoDiscover !== false && hasProject()) {
       discover().catch(function (error) {
         if (typeof console !== "undefined" && console.warn) {
           console.warn("science-question discover failed:", error);
@@ -1372,6 +1422,7 @@ window.ACPScienceQuestion = (function () {
     init: init,
     mount: mount,
     discover: discover,
+    setProject: setProject,
     selectQuestion: selectQuestion,
     setValue: setValue,
     setStructure: setStructure,

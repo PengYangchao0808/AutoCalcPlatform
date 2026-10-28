@@ -4,10 +4,12 @@
 M5-01 owns the single bill of materials: the three Python roles plus the root
 ``acp`` distribution, the RPH tarball set *with its self-contained offline
 install surface*, the packaged Workbench static assets, the third-party plugin
-wheels M4-05 exercised, the contract corpus, the NMR model assets and the
-release documents. Every component is copied into ``--store`` and referenced
-from ``bom.current.json`` by URI + sha256 + size, so a clean host can install
-from the store alone (``scripts/acceptance/acp2_m501_install.py``).
+wheels M4-05 exercised, the contract corpus, the NMR model assets, the release
+documents, **the offline third-party dependency wheelhouse (x86_64 + ARM64)**
+and **every evidence-coverage receipt** (M5-03 findings F1/F7).  Every component
+is copied into ``--store`` and referenced from ``bom.current.json`` by URI +
+sha256 + size, so a clean host can install from the store alone
+(``scripts/acceptance/acp2_m501_install.py``).
 
 Nothing here runs QC or a model: scientific software is only version-probed.
 """
@@ -56,15 +58,18 @@ DEFAULT_RELEASE_OVERLAY = (
     "docs/reference/next-change/acp2-contracts/manifest.json",
     "docs/reference/next-change/acp2-contracts/experience/release-manifest.json",
     "docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json",
-    "scripts/release/",
-    "scripts/acceptance/validate_acp2_gap_coverage.py",
-    "scripts/acceptance/validate_acp2_contracts.py",
-    "tests/test_acp2_gap_coverage.py",
-    "tests/test_acp2_runtime_contracts.py",
-    "tests/test_acp2_runtime_acceptance_harness.py",
-    "tests/test_acp2_m501_release_artifacts.py",
-    "tests/test_acp2_m502_coverage_signoff.py",
+    "scripts/",
+    # M5-03 remediation overlay: the operator-found product defects (F2/F3/F4/
+    # F6) are part of the release deliverable built from the frozen coverage
+    # candidate, exactly like the BOM/contract files around them.
+    "src/acp/install_guard.py",
+    "src/acp/cli.py",
+    "src/acp/api/server.py",
+    "src/acp/scheduler/remote/",
+    "frontend/",
+    "tests/",
     "reports/acp2_remediation_20261026/m5-02/",
+    "reports/acp2_remediation_20261026/m5-03/",
 )
 CONTRACTS = REPO / "docs" / "reference" / "next-change" / "acp2-contracts"
 EXPERIENCE = CONTRACTS / "experience"
@@ -95,6 +100,18 @@ RPH_SURFACE_FILES = (
     "README.md",
     "verify-install.mjs",
 )
+#: M5-03 F1: the artifact store must install offline on the operator's ARM64
+#: Linux host even when the release is built on x86_64.  Both manylinux2014
+#: tag sets (glibc >= 2.17) are collected so the same wheelhouse serves both
+#: machines; platform-specific wheels are tagged per platform in the manifest.
+WHEELHOUSE_PYTHON = "3.11"
+WHEELHOUSE_PLATFORMS = ("manylinux2014_x86_64", "manylinux2014_aarch64")
+WHEELHOUSE_SCHEMA = "acp2.release.python-wheelhouse.v1"
+RECEIPTS_SCHEMA = "acp2.release.coverage-receipts.v1"
+#: Dependencies the root/role runtime sets intentionally share; a wheelhouse
+#: missing any of them for either platform is a build failure (F1 was exactly
+#: this gap: the store had no third-party wheels at all).
+_WHEELHOUSE_ACPS = {"acp", "cccp", "acp-worker", "acp-web"}
 
 
 def now() -> str:
@@ -211,13 +228,285 @@ def _copy_file(source: Path, target: Path) -> Path:
     return target
 
 
+def _normalized_distribution_name(name: str) -> str:
+    """PEP 503 normalisation (``python_multipart`` == ``python-multipart``)."""
+    return name.strip().lower().replace("_", "-").replace(".", "-")
+
+
+def _requirement_name(requirement: str) -> str:
+    """The distribution name of one ``Requires-Dist``/requirements line."""
+    token = requirement.split(";", 1)[0].strip()
+    name = re.split(r"[<>=!~\[ (]", token, maxsplit=1)[0]
+    return _normalized_distribution_name(name)
+
+
+def _wheel_distribution_name(filename: str) -> str:
+    """Distribution name from a wheel filename (``numpy-2.4.6-cp311-...whl``)."""
+    return _normalized_distribution_name(filename.split("-", 1)[0])
+
+
+def _wheel_requirements(wheel: Path, extras: tuple[str, ...] = ()) -> list[str]:
+    """Runtime ``Requires-Dist`` entries of one built wheel, minus ACP dists.
+
+    The wheelhouse is derived from the wheels that are actually shipped, so the
+    dependency set has one authority (the wheel metadata) and no second list to
+    drift from ``pyproject.toml``/``requirements-role.txt``.
+    """
+    with zipfile.ZipFile(wheel) as archive:
+        metadata = next(name for name in archive.namelist() if name.endswith(".dist-info/METADATA"))
+        lines = archive.read(metadata).decode("utf-8").splitlines()
+    requirements: list[str] = []
+    for line in lines:
+        if not line.startswith("Requires-Dist:"):
+            continue
+        specification = line.split(":", 1)[1].strip()
+        requirement, _, marker = specification.partition(";")
+        marker = marker.strip()
+        if marker:
+            extra = re.search(r'extra\s*==\s*["\']([^"\']+)["\']', marker)
+            if extra is None or extra.group(1) not in extras:
+                continue
+        name = _requirement_name(requirement)
+        if name in _WHEELHOUSE_ACPS:
+            continue
+        requirements.append(requirement.strip())
+    return requirements
+
+
+def _wheelhouse_requirements(root_wheel: Path, role_wheels: list[Path]) -> list[str]:
+    """The union of the runtime requirements of the four release distributions."""
+    requirements: list[str] = []
+    for wheel in [root_wheel, *role_wheels]:
+        extras: tuple[str, ...] = ("api", "remote") if wheel.name.startswith("acp-") else ()
+        for requirement in _wheel_requirements(wheel, extras):
+            if requirement not in requirements:
+                requirements.append(requirement)
+    if not requirements:
+        raise RuntimeError("the built wheels declared no runtime requirements")
+    return requirements
+
+
+def build_wheelhouse(
+    store: Path,
+    *,
+    root_wheel: Path,
+    role_wheels: list[Path],
+    build_python: Path,
+    log_dir: Path,
+) -> dict[str, Any]:
+    """Download every runtime dependency for x86_64 **and** aarch64 (M5-03 F1).
+
+    The operator host is ARM64 Linux while the release is built on x86_64, so a
+    single-platform wheelhouse would leave the offline install broken exactly
+    as the operator found it.  Both manylinux2014 tag sets are collected (glibc
+    >= 2.17) and every direct requirement must resolve on both platforms; the
+    manifest records per-file platform coverage and SHA-256 so the installer can
+    verify the directory before installing with ``--no-index``.
+    """
+    requirements = _wheelhouse_requirements(root_wheel, role_wheels)
+    wheelhouse = store / "python" / "wheelhouse"
+    if wheelhouse.exists():
+        shutil.rmtree(wheelhouse)
+    wheelhouse.mkdir(parents=True)
+    platform_files: dict[str, set[str]] = {tag: set() for tag in WHEELHOUSE_PLATFORMS}
+    covered: dict[str, set[str]] = {tag: set() for tag in WHEELHOUSE_PLATFORMS}
+    staged: dict[str, Path] = {}
+    abi = f"cp{WHEELHOUSE_PYTHON.replace('.', '')}"
+    for platform_tag in WHEELHOUSE_PLATFORMS:
+        staging = store / "python" / f".wheelhouse-{platform_tag}"
+        if staging.exists():
+            shutil.rmtree(staging)
+        staging.mkdir(parents=True)
+        _run(
+            [
+                str(build_python),
+                "-m",
+                "pip",
+                "download",
+                "--disable-pip-version-check",
+                "--no-input",
+                "--dest",
+                str(staging),
+                "--only-binary=:all:",
+                "--python-version",
+                WHEELHOUSE_PYTHON.replace(".", ""),
+                "--implementation",
+                "cp",
+                "--abi",
+                abi,
+                "--platform",
+                platform_tag,
+                *requirements,
+            ],
+            cwd=store,
+            log=log_dir / f"wheelhouse-{platform_tag}.log",
+        )
+        downloaded = sorted(staging.glob("*.whl"))
+        if not downloaded:
+            raise RuntimeError(f"pip download produced no wheels for {platform_tag}")
+        for path in downloaded:
+            target = wheelhouse / path.name
+            if target.is_file():
+                if sha256(target) != sha256(path):
+                    raise RuntimeError(
+                        f"wheelhouse name collision with different bytes: {path.name}"
+                    )
+            else:
+                shutil.copy2(path, target)
+            staged.setdefault(path.name, target)
+            platform_files[platform_tag].add(path.name)
+            covered[platform_tag].add(_wheel_distribution_name(path.name))
+        missing = sorted(
+            requirement
+            for requirement in requirements
+            if _requirement_name(requirement) not in covered[platform_tag]
+        )
+        if missing:
+            raise RuntimeError(
+                f"wheelhouse cannot satisfy {platform_tag}: missing wheels for {missing}"
+            )
+        shutil.rmtree(staging)
+    records = [
+        {
+            "name": name,
+            "sha256": sha256(path),
+            "size_bytes": path.stat().st_size,
+            "platforms": sorted(tag for tag in WHEELHOUSE_PLATFORMS if name in platform_files[tag]),
+        }
+        for name, path in sorted(staged.items())
+    ]
+    checksum_lines = "".join(f"{record['sha256']}  {record['name']}\n" for record in records)
+    (wheelhouse / "SHA256SUMS").write_text(checksum_lines, encoding="utf-8")
+    manifest = {
+        "schema": WHEELHOUSE_SCHEMA,
+        "generated_at": now(),
+        "python": WHEELHOUSE_PYTHON,
+        "abi": abi,
+        "platforms": list(WHEELHOUSE_PLATFORMS),
+        "directory": str(wheelhouse),
+        "requirements": requirements,
+        "wheels": records,
+        "coverage": {
+            tag: {
+                "files": len(platform_files[tag]),
+                "direct_requirements": len(
+                    [r for r in requirements if _requirement_name(r) in covered[tag]]
+                ),
+            }
+            for tag in WHEELHOUSE_PLATFORMS
+        },
+        "install_argv": "--no-index --find-links <store>/python/wheelhouse",
+        "notes": (
+            "Third-party runtime dependency wheelhouse for the root acp and role "
+            "distributions. Both manylinux2014 (glibc >= 2.17) tag sets are "
+            "collected so the same store installs offline on x86_64 and ARM64."
+        ),
+    }
+    manifest_path = store / "python" / "wheelhouse-manifest.json"
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return {
+        "manifest": str(manifest_path),
+        "manifest_sha256": sha256(manifest_path),
+        "directory": str(wheelhouse),
+        "wheels": len(records),
+        "bytes": sum(record["size_bytes"] for record in records),
+        "platforms": list(WHEELHOUSE_PLATFORMS),
+        "platform_wheels": {tag: len(platform_files[tag]) for tag in WHEELHOUSE_PLATFORMS},
+        "requirements": requirements,
+        "checksums_sha256": sha256(wheelhouse / "SHA256SUMS"),
+    }
+
+
+def _coverage_receipt_paths(coverage: dict[str, Any]) -> list[str]:
+    """Every receipt file referenced by the evidence-coverage ledger."""
+    paths = {
+        str(row["receipt"])
+        for section in ("tasks", "checkpoints", "gaps", "h_rows", "deferred_rows")
+        for row in coverage.get(section) or []
+        if row.get("receipt")
+    }
+    return sorted(paths)
+
+
+def build_receipts(store: Path, coverage: dict[str, Any]) -> dict[str, Any]:
+    """Ship every coverage receipt inside the store (M5-03 finding F7).
+
+    The PASS rows of the coverage ledger reference ``reports/...`` files that
+    used to live only in the implementation checkout, so an independent
+    operator could not verify a digest from the delivered store.  The bundle
+    keeps the repository-relative layout, ships a deterministic tarball plus an
+    extracted directory, and records every digest in a manifest.
+    """
+    receipts = _coverage_receipt_paths(coverage)
+    if not receipts:
+        raise RuntimeError("the coverage ledger references no receipts")
+    pairs = [
+        (section, row)
+        for section in ("tasks", "checkpoints", "gaps", "h_rows", "deferred_rows")
+        for row in coverage.get(section) or []
+    ]
+    recorded = {
+        str(row["receipt"]): row["receipt_sha256"] for _section, row in pairs if row.get("receipt")
+    }
+    members: list[tuple[Path, str]] = []
+    files: list[dict[str, Any]] = []
+    for relative in receipts:
+        source = REPO / relative
+        if not source.is_file():
+            raise RuntimeError(f"coverage receipt is missing from the worktree: {relative}")
+        digest = sha256(source)
+        if recorded.get(relative) != digest:
+            raise RuntimeError(f"coverage receipt sha256 mismatch: {relative}")
+        members.append((source, relative))
+        files.append({"path": relative, "sha256": digest, "size_bytes": source.stat().st_size})
+    out = store / "evidence"
+    if out.exists():
+        shutil.rmtree(out)
+    out.mkdir(parents=True)
+    tar_path = _tar_bundle(out / "coverage-receipts.tar.gz", members)
+    extracted = out / "receipts"
+    for source, relative in members:
+        target = extracted / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+    manifest = {
+        "schema": RECEIPTS_SCHEMA,
+        "generated_at": now(),
+        "coverage_sha256": coverage["coverage_sha256"],
+        "layout": "repository-relative paths under receipts/",
+        "receipts": files,
+        "total_bytes": sum(entry["size_bytes"] for entry in files),
+    }
+    manifest_path = out / "coverage-receipts-manifest.json"
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return {
+        "tar": str(tar_path),
+        "directory": str(extracted),
+        "manifest": str(manifest_path),
+        "manifest_sha256": sha256(manifest_path),
+        "receipts": len(files),
+        "bytes": manifest["total_bytes"],
+        "tar_sha256": sha256(tar_path),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Component builders
 # ---------------------------------------------------------------------------
 
 
 def build_python(
-    source: Path, store: Path, log_dir: Path, *, clean: bool, build_python: Path
+    source: Path,
+    store: Path,
+    log_dir: Path,
+    *,
+    clean: bool,
+    build_python: Path,
+    allow_dirty: bool = False,
 ) -> dict[str, Any]:
     """Three disjoint roles plus the mutually exclusive root distribution."""
     python_dir = store / "python"
@@ -227,7 +516,10 @@ def build_python(
         if directory.exists():
             shutil.rmtree(directory)
         directory.mkdir(parents=True)
-    allow = [] if clean else ["--allow-dirty"]
+    # A materialized candidate worktree is physically dirty with exactly the
+    # declared release overlay; the BOM separately records that overlay, so the
+    # build tool must accept it while a non-overlay dirty tree stays refused.
+    allow = [] if (clean and not allow_dirty) else ["--allow-dirty"]
     facts: dict[str, Any] = {}
     for role, output in (("all", roles_dir), ("root", root_dir)):
         _run(
@@ -622,6 +914,8 @@ def build_bom(
     plugin_facts: dict[str, Any],
     rph: dict[str, Any],
     static: dict[str, Any],
+    wheelhouse: dict[str, Any],
+    receipts: dict[str, Any],
     toolchain: dict[str, Any],
     bundles: dict[str, Path],
     generated_at: str,
@@ -756,6 +1050,65 @@ def build_bom(
             notes="docs/reference/current + packaging/README.md release documentation",
         )
     )
+    artifacts.append(
+        _artifact(
+            artifact_id="python-wheelhouse",
+            kind="document",
+            name=Path(wheelhouse["manifest"]).name,
+            version=version,
+            path=Path(wheelhouse["manifest"]),
+            built_at=generated_at,
+            build_script=Path(__file__).resolve(),
+            notes=(
+                "Offline third-party dependency wheelhouse index (M5-03 F1): "
+                f"{wheelhouse['wheels']} wheels / {wheelhouse['bytes']} bytes under "
+                f"{wheelhouse['directory']}; platforms "
+                f"{', '.join(wheelhouse['platforms'])}; install with "
+                "'--no-index --find-links <store>/python/wheelhouse'"
+            ),
+        )
+    )
+    artifacts.append(
+        _artifact(
+            artifact_id="python-wheelhouse-checksums",
+            kind="document",
+            name="wheelhouse-SHA256SUMS",
+            version=version,
+            path=Path(wheelhouse["directory"]) / "SHA256SUMS",
+            built_at=generated_at,
+            build_script=Path(__file__).resolve(),
+            notes="Per-wheel SHA-256 list for the offline dependency wheelhouse",
+        )
+    )
+    artifacts.append(
+        _artifact(
+            artifact_id="evidence-receipts",
+            kind="document",
+            name=Path(receipts["tar"]).name,
+            version=version,
+            path=Path(receipts["tar"]),
+            built_at=generated_at,
+            build_script=Path(__file__).resolve(),
+            notes=(
+                "Every receipt referenced by the evidence-coverage ledger, laid out "
+                f"by repository-relative path ({receipts['receipts']} files / "
+                f"{receipts['bytes']} bytes); extracted copy under "
+                f"{receipts['directory']}"
+            ),
+        )
+    )
+    artifacts.append(
+        _artifact(
+            artifact_id="evidence-receipts-manifest",
+            kind="document",
+            name=Path(receipts["manifest"]).name,
+            version=version,
+            path=Path(receipts["manifest"]),
+            built_at=generated_at,
+            build_script=Path(__file__).resolve(),
+            notes="SHA-256 manifest of the coverage receipts shipped in the store",
+        )
+    )
     coverage = json.loads(COVERAGE.read_text(encoding="utf-8"))
     limitations = [
         (
@@ -799,6 +1152,16 @@ def build_bom(
             "evidence."
         ),
         ("persistent_tag is a proposal only: no tag, commit or push was performed by this task."),
+        (
+            "The offline dependency wheelhouse targets CPython 3.11 on manylinux2014 "
+            "(glibc >= 2.17) x86_64 and aarch64. Other interpreters/older glibc need "
+            "a wheelhouse rebuild; the manifest records the covered platforms."
+        ),
+        (
+            "Coverage receipts ship both as coverage-receipts.tar.gz and as an "
+            "extracted receipts/ tree; walk_bom --verify hashes the extracted files "
+            "against the ledger and checks tar membership, so neither copy can drift."
+        ),
     ]
     return {
         "schema": BOM_SCHEMA,
@@ -907,8 +1270,17 @@ def _source_facts(
     }
 
 
-def _temporary_clean_worktree(source: Path, revision: str) -> tuple[Path, Any]:
-    """Materialize the committed candidate in a throwaway clean worktree."""
+def _temporary_clean_worktree(
+    source: Path, revision: str, overlay_paths: list[str]
+) -> tuple[Path, Any]:
+    """Materialize the committed candidate + the declared release overlay.
+
+    The overlay is the release deliverable itself (BOM/contracts/report files
+    *and*, for an M5-03 remediation build, the fixed product sources).  Build
+    from the committed candidate and copy exactly those paths in, so the
+    wheels contain the overlay bytes while unrelated worktree dirt can never
+    leak into the release.
+    """
 
     root = Path(tempfile.mkdtemp(prefix="acp2-bom-clean-", dir="/tmp/opencode"))
     directory = root / "worktree"
@@ -925,6 +1297,27 @@ def _temporary_clean_worktree(source: Path, revision: str) -> tuple[Path, Any]:
             + (completed.stderr or completed.stdout)[-2000:]
         )
 
+    for relative in overlay_paths:
+        origin = source / relative
+        target = directory / relative
+        if origin.is_dir():
+            if target.exists():
+                shutil.rmtree(target)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(
+                origin,
+                target,
+                ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".git"),
+            )
+        elif origin.is_file():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(origin, target)
+        else:  # deleted in the release worktree: the candidate must not keep it
+            if target.is_dir():
+                shutil.rmtree(target)
+            elif target.exists():
+                target.unlink()
+
     def cleanup() -> None:
         subprocess.run(
             ["git", "-C", str(source), "worktree", "remove", "--force", str(directory)],
@@ -935,6 +1328,98 @@ def _temporary_clean_worktree(source: Path, revision: str) -> tuple[Path, Any]:
         shutil.rmtree(root, ignore_errors=True)
 
     return directory, cleanup
+
+
+def _coverage_candidate() -> str:
+    """The single committed candidate the coverage ledger judges.
+
+    The BOM must be built from this revision, not merely from ``HEAD``: the
+    ledger rows freeze ``candidate`` and ``walk_bom --verify`` refuses drift.
+    Later documentation-only commits are therefore part of the declared
+    release overlay, never a new candidate.
+    """
+    coverage = json.loads(COVERAGE.read_text(encoding="utf-8"))
+    candidates = {
+        row["candidate"]
+        for section in ("tasks", "checkpoints", "gaps", "h_rows", "deferred_rows")
+        for row in coverage.get(section) or []
+        if row.get("candidate")
+    }
+    if len(candidates) != 1:
+        raise RuntimeError(
+            f"evidence-coverage must reference exactly one candidate, got {sorted(candidates)}"
+        )
+    return candidates.pop()
+
+
+def _overlay_drift(source: Path, candidate: str, head: str, overlay: tuple[str, ...]) -> list[str]:
+    """Paths changed after the candidate that are *not* declared overlay."""
+    if candidate == head:
+        return []
+    completed = subprocess.run(
+        ["git", "-C", str(source), "diff", "--name-only", f"{candidate}..{head}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(
+            f"cannot compare coverage candidate {candidate} with HEAD {head}: "
+            + (completed.stderr or "")[-1000:]
+        )
+    changed = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+    return [
+        path
+        for path in changed
+        if not any(path == prefix or path.startswith(prefix) for prefix in overlay)
+    ]
+
+
+def _git_head(path: Path) -> str:
+    completed = subprocess.run(
+        ["git", "-C", str(path), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(f"{path} is not a git checkout: " + (completed.stderr or "")[-1000:])
+    return completed.stdout.strip()
+
+
+def _register_bom_digest(bom_path: Path) -> dict[str, Any]:
+    """Refresh the B26 ``release-bom-current`` registration for a new BOM.
+
+    Rebuilding the BOM necessarily changes its digest; ``walk_bom --verify``
+    refuses a stale registration, so the builder refreshes the mechanical
+    digest entries (BOM sha + manifest self sha).  No contract status, version
+    or coverage judgment is touched.  The stored contract bundle still predates
+    this update by design (documented in the BOM limitations).
+    """
+    import walk_bom  # sibling release tool; single implementation of the rule
+
+    manifest = json.loads(CONTRACT_MANIFEST.read_text(encoding="utf-8"))
+    bom_sha = sha256(bom_path)
+    changed = False
+    for entry in manifest["contracts"]:
+        if entry["id"] == "release-bom-current" and entry.get("sha256") != bom_sha:
+            entry["sha256"] = bom_sha
+            changed = True
+    self_sha = walk_bom.manifest_self_digest(manifest)
+    for entry in manifest["contracts"]:
+        if entry["id"] == "manifest" and entry.get("sha256") != self_sha:
+            entry["sha256"] = self_sha
+            changed = True
+    if changed:
+        CONTRACT_MANIFEST.write_text(
+            json.dumps(manifest, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+    return {
+        "bom_sha256": bom_sha,
+        "manifest_self_sha256": self_sha,
+        "changed": changed,
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -985,33 +1470,52 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     source = args.source.resolve()
     overlay = tuple(item.strip() for item in args.release_overlay.split(",") if item.strip())
-    python_source = args.python_source.resolve() if args.python_source else source
+    candidate = _coverage_candidate()
+    head = _git_head(source)
+    if candidate != head:
+        ancestor = subprocess.run(
+            ["git", "-C", str(source), "merge-base", "--is-ancestor", candidate, head],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if ancestor.returncode != 0:
+            raise RuntimeError(
+                f"evidence-coverage candidate {candidate} is not an ancestor of HEAD {head}"
+            )
+        drift = _overlay_drift(source, candidate, head, overlay)
+        if drift:
+            raise RuntimeError(
+                "commits after the coverage candidate change non-overlay paths; the BOM "
+                "cannot claim that candidate: " + ", ".join(sorted(drift)[:12])
+            )
     cleanup = None
-    if args.python_source is None:
+    if args.python_source is not None:
+        python_source = args.python_source.resolve()
+    else:
         preliminary = _source_facts(
             source, overlay, allow_dirty=args.allow_dirty, overlay_source=source
         )
-        if preliminary["release_overlay"]:
-            # The release-ledger overlay makes the main checkout physically
-            # dirty; build the wheels from a throwaway worktree at the same
-            # committed candidate instead of weakening the clean check.
-            python_source, cleanup = _temporary_clean_worktree(source, preliminary["revision"])
+        if candidate != head or preliminary["release_overlay"]:
+            # The coverage ledger freezes the committed candidate and the
+            # release overlay (BOM/contracts/report files plus, for M5-03, the
+            # fixed product sources) carries the deliverable bytes; build from
+            # a throwaway worktree at that candidate instead of weakening the
+            # clean check.
+            python_source, cleanup = _temporary_clean_worktree(
+                source, candidate, preliminary["release_overlay"]
+            )
             atexit.register(cleanup)
+        else:
+            python_source = source
     store = args.store.resolve()
     log_dir = store / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
-    if python_source != source:
-
-        def _head(path: Path) -> str:
-            return subprocess.run(
-                ["git", "-C", str(path), "rev-parse", "HEAD"],
-                capture_output=True,
-                text=True,
-                check=True,
-            ).stdout.strip()
-
-        if _head(python_source) != _head(source):
-            raise RuntimeError("--python-source must be the same committed revision as --source")
+    if _git_head(python_source) != candidate:
+        raise RuntimeError(
+            f"--python-source must be at the coverage candidate {candidate}, "
+            f"got {_git_head(python_source)}"
+        )
     version = build_release.release_version(python_source)
     source_facts = _source_facts(
         python_source, overlay, allow_dirty=args.allow_dirty, overlay_source=source
@@ -1051,9 +1555,21 @@ def main(argv: list[str] | None = None) -> int:
             log_dir,
             clean=bool(source_facts["clean"]),
             build_python=build_python_python,
+            allow_dirty=python_source != source,
         )
     plugin_facts = build_plugins(store, log_dir, build_python_python)
     rph = package_rph(store, log_dir, repackage=not args.skip_rph_package)
+    root_wheel = next((store / "python" / "root").glob("acp-*.whl"))
+    role_wheels = sorted((store / "python" / "roles").glob("*.whl"))
+    wheelhouse = build_wheelhouse(
+        store,
+        root_wheel=root_wheel,
+        role_wheels=role_wheels,
+        build_python=build_python_python,
+        log_dir=log_dir,
+    )
+    coverage_ledger = json.loads(COVERAGE.read_text(encoding="utf-8"))
+    receipts = build_receipts(store, coverage_ledger)
     web_wheel = next((store / "python" / "roles").glob("acp_web-*.whl"))
     static, _ = build_static_assets(store, web_wheel, version=version)
     toolchain = _toolchain()
@@ -1102,6 +1618,8 @@ def main(argv: list[str] | None = None) -> int:
         plugin_facts=plugin_facts,
         rph=rph,
         static=static,
+        wheelhouse=wheelhouse,
+        receipts=receipts,
         toolchain=toolchain,
         bundles=bundles,
         generated_at=generated_at,
@@ -1113,6 +1631,7 @@ def main(argv: list[str] | None = None) -> int:
     bom_text = json.dumps(bom, indent=2, sort_keys=True) + "\n"
     args.bom_out.parent.mkdir(parents=True, exist_ok=True)
     args.bom_out.write_text(bom_text, encoding="utf-8")
+    registration = _register_bom_digest(args.bom_out)
     stored_bom = _copy_file(args.bom_out, store / "bom" / "bom.current.json")
     receipt = {
         "schema": RECEIPT_SCHEMA,
@@ -1122,6 +1641,7 @@ def main(argv: list[str] | None = None) -> int:
         "bom": str(args.bom_out),
         "bom_sha256": sha256(args.bom_out),
         "stored_bom": str(stored_bom),
+        "bom_registration": registration,
         "version": version,
         "source": source_facts,
         "python": python_facts,
@@ -1132,6 +1652,8 @@ def main(argv: list[str] | None = None) -> int:
             "repackage": rph["repackage"],
         },
         "static_assets": static,
+        "wheelhouse": wheelhouse,
+        "receipts": receipts,
         "components": len(bom["artifacts"]),
         "component_kinds": sorted({entry["kind"] for entry in bom["artifacts"]}),
     }

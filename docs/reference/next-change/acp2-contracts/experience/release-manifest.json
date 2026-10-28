@@ -11,7 +11,7 @@
     "vendored": false,
     "version": "0.2.1-rc.2"
   },
-  "generated_at": "2026-10-28T03:21:22Z",
+  "generated_at": "2026-10-28T05:43:09Z",
   "install_surface": {
     "checksums": "SHA256SUMS",
     "directory": "rph/install-surface",
@@ -83,16 +83,16 @@
   "schema": "acp2.experience.release-manifest.v1",
   "schema_version": "1.0.0",
   "static_assets": {
-    "bytes": 4215619,
-    "digest": "1d5c28c721119515b4bf600c0689b6fe80cc406fa665a39f3c9a74607997aab9",
+    "bytes": 4225129,
+    "digest": "dbc7579eff1fb362b7850a6b7d6a816ccd50920757dde85c3cd94bd865b19800",
     "entry_points": {
       "index": "ACP_Workbench_v2.html",
       "js_root": "js",
       "legacy": "ACP_Workbench.html"
     },
-    "files": 121,
+    "files": 122,
     "manifest": "docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json",
-    "manifest_sha256": "2988b492542be16857b3e22d5cf79ad9a76f8bc9a7ee59ac6a5bc3271bc3470c",
+    "manifest_sha256": "9526f658f9b97078d81c78d2149d87f25696864ae47ce9dfb8ed133ead30c49b",
     "release_id": "acp2-experience-0.3.0",
     "verified_from": "acp_web_assets inside acp_web-0.3.0-py3-none-any.whl"
   },

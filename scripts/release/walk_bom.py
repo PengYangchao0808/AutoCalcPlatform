@@ -110,6 +110,30 @@ def _repo_relative(root: Path, value: Any, label: str) -> Path:
     return target
 
 
+def _bundle_relative(root: Path, value: Any, label: str) -> Path:
+    """Resolve a store-relative receipt path (never escapes the bundle)."""
+    if not isinstance(value, str) or not value:
+        fail(f"{label} must be a non-empty repo-relative path")
+    path = Path(value)
+    if path.is_absolute():
+        fail(f"{label} must be repo-relative, got {value}")
+    target = (root / path).resolve()
+    if not target.is_relative_to(root.resolve()):
+        fail(f"{label} escapes the receipts bundle: {value}")
+    if not target.is_file():
+        fail(f"{label} does not exist in the receipts bundle: {value}")
+    return target
+
+
+def _receipt_paths(coverage: dict[str, Any]) -> set[str]:
+    return {
+        str(row["receipt"])
+        for section in ("tasks", "checkpoints", "gaps", "h_rows", "deferred_rows")
+        for row in coverage.get(section) or []
+        if row.get("receipt")
+    }
+
+
 def _check_artifact(
     root: Path,
     entry: dict[str, Any],
@@ -163,6 +187,7 @@ def _check_coverage_rows(
     coverage: dict[str, Any],
     *,
     candidate: str,
+    receipts_root: Path | None = None,
 ) -> tuple[dict[str, int], list[str], int]:
     rows: list[tuple[str, dict[str, Any]]] = []
     for kind in ("tasks", "checkpoints", "gaps", "h_rows"):
@@ -213,7 +238,12 @@ def _check_coverage_rows(
             if result == "PASS" or reuse != "rerun_required":
                 fail(f"{label} has no receipt but is not a rerun_required NOT_VERIFIED row")
         else:
-            target = _repo_relative(root, receipt, f"{label}.receipt")
+            base = receipts_root if receipts_root is not None else root
+            target = (
+                _bundle_relative(base, receipt, f"{label}.receipt")
+                if receipts_root is not None
+                else _repo_relative(base, receipt, f"{label}.receipt")
+            )
             recorded = row.get("receipt_sha256")
             if not isinstance(recorded, str) or not HEX64.match(recorded):
                 fail(f"{label}.receipt_sha256 must be a full 64-hex SHA-256")
@@ -368,7 +398,45 @@ def verify(
     if coverage_schema_errors:
         fail(f"coverage violates its schema: {coverage_schema_errors[0]}")
 
-    counts, open_rows, receipts = _check_coverage_rows(root, coverage, candidate=revision)
+    receipts_root: Path | None = None
+    receipts_entry = next(
+        (entry for entry in artifacts if entry.get("id") == "evidence-receipts"), None
+    )
+    if receipts_entry is not None:
+        bundle = Path(receipts_entry["uri"])
+        receipts_root = bundle.parent / "receipts"
+        if not receipts_root.is_dir():
+            fail(f"evidence receipts are not extracted next to the bundle: {receipts_root}")
+        referenced = _receipt_paths(coverage)
+        manifest_entry = next(
+            (entry for entry in artifacts if entry.get("id") == "evidence-receipts-manifest"),
+            None,
+        )
+        if manifest_entry is not None:
+            bundle_manifest = load_json(
+                Path(manifest_entry["uri"]), "coverage-receipts-manifest.json"
+            )
+            listed = {str(item.get("path")) for item in bundle_manifest.get("receipts") or []}
+            if listed != referenced:
+                fail(
+                    "coverage-receipts manifest does not list exactly the ledger receipts: "
+                    f"{sorted(listed ^ referenced)[:6]}"
+                )
+            if bundle_manifest.get("coverage_sha256") != coverage.get("coverage_sha256"):
+                fail("coverage-receipts manifest does not bind the ledger digest")
+        if not dry_run:
+            with tarfile.open(bundle) as archive:
+                members = set(archive.getnames())
+            missing = referenced - members
+            if missing:
+                fail(
+                    "coverage receipts tarball is missing ledger receipts: "
+                    + ", ".join(sorted(missing)[:6])
+                )
+
+    counts, open_rows, receipts = _check_coverage_rows(
+        root, coverage, candidate=revision, receipts_root=receipts_root
+    )
     if evidence.get("coverage_scope_rows") != counts["tasks"]:
         fail("BOM coverage_scope_rows does not match the ledger")
     if evidence.get("coverage_gap_rows") != counts["gaps"]:
@@ -453,6 +521,7 @@ def verify(
         "coverage_sha256": evidence["coverage_sha256"],
         "coverage_counts": counts,
         "receipts_verified": receipts,
+        "receipts_source": "store" if receipts_root is not None else "repository",
         "contract_version": manifest.get("contract_version"),
         "contract_digest": manifest.get("contract_digest"),
         "open_rows": open_rows,
@@ -519,7 +588,10 @@ def main(argv: list[str] | None = None) -> int:
         "coverage: {tasks} tasks / {checkpoints} checkpoints / {gaps} gaps / "
         "{h_rows} H rows / {deferred_rows} deferred rows".format(**report["coverage_counts"])
     )
-    print(f"receipts: {report['receipts_verified']} digests verified")
+    print(
+        f"receipts: {report['receipts_verified']} digests verified "
+        f"(source: {report['receipts_source']})"
+    )
     print(
         f"contracts: {report['contract_version']} digest {report['contract_digest'][:12]} "
         f"(B26 registrations 5)"

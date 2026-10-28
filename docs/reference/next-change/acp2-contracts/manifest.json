@@ -224,7 +224,7 @@
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/manifest.json",
-      "sha256": "b00a06f0ba38656ee07ae0b4ab7fc1628280fa749cb19b9e10af3915b5ef8fca",
+      "sha256": "fcc3bde1c1e1553918186c02597e73bd7b3d3440e4f4910bcc619e0c6cbcca0e",
       "status": "delivered"
     },
     {
@@ -474,7 +474,7 @@
       "note": "M5-02 clean-candidate BOM: 27 artifacts with URI+sha256+size, toolchain/DSH locks, contract digest and coverage canonical digest. Self-referential: excluded from contract_digest because it embeds that aggregate digest.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/release/bom.current.json",
-      "sha256": "538f573b523a6511057be0954fb80ef58e96cf86bcabf71f5317d0f9a7a8cf60",
+      "sha256": "16b609c965194ed75444c002f229aea1c38bf331ba089f18b8e1f22a3cc91403",
       "status": "delivered"
     },
     {

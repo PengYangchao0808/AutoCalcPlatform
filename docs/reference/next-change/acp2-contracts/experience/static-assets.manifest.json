@@ -1,12 +1,12 @@
 {
   "counts": {
-    "bytes": 4215619,
+    "bytes": 4225129,
     "css": 10,
-    "files": 121,
+    "files": 122,
     "html": 3,
-    "js": 106
+    "js": 107
   },
-  "digest": "1d5c28c721119515b4bf600c0689b6fe80cc406fa665a39f3c9a74607997aab9",
+  "digest": "dbc7579eff1fb362b7850a6b7d6a816ccd50920757dde85c3cd94bd865b19800",
   "digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\"",
   "entry_points": {
     "index": "ACP_Workbench_v2.html",
@@ -227,20 +227,26 @@
     {
       "media_type": "text/javascript",
       "path": "js/module_tests/acp2_manual.test.js",
-      "sha256": "89eb774a05e1970a4a8d77956770b5555c291d563a834b9975dc2610d18335bd",
-      "size_bytes": 28401
+      "sha256": "ddc91748c9a0456cbdae9102842e1ab2f4e11e1c9e5d111a20ad3473fadf6995",
+      "size_bytes": 28736
     },
     {
       "media_type": "text/javascript",
       "path": "js/module_tests/acp2_preflight_concurrency.test.js",
-      "sha256": "7369c707172005ae5c9890d72a94b744b92844fd819bd70ded8d9d9b52ebdc6a",
-      "size_bytes": 11408
+      "sha256": "e9c3ba3282a42d1c5a8c7c3c2584c944ca35ce6ebbd8431f5f87aa3bea5b65dc",
+      "size_bytes": 11502
     },
     {
       "media_type": "text/javascript",
       "path": "js/module_tests/acp2_question_reaction.test.js",
-      "sha256": "3b456874e17bf64ece3e8de45b04f7c7db988cc067536646c33f48a8f8856e4c",
-      "size_bytes": 42361
+      "sha256": "99f1ad8bfa556c37202636c2f003eceab437f7c8480aa6a22f7c9e93fcd67f46",
+      "size_bytes": 42491
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/module_tests/acp2_science_project_binding.test.js",
+      "sha256": "5db2255a3a57b1ec77ec98d22746f9affea641760a15db20916127684e78a87d",
+      "size_bytes": 6451
     },
     {
       "media_type": "text/javascript",
@@ -545,8 +551,8 @@
     {
       "media_type": "text/javascript",
       "path": "js/workbench/bootstrap.js",
-      "sha256": "25eae5b9bb59f7b8d1b73b9d204462489ec9a9789ffdc3f0c705df5c231d6a66",
-      "size_bytes": 34465
+      "sha256": "79c323d650cb8134a39eca2eeffec2df638adf06a56544173114ed885fdc5081",
+      "size_bytes": 34779
     },
     {
       "media_type": "text/javascript",
@@ -695,8 +701,8 @@
     {
       "media_type": "text/javascript",
       "path": "js/workbench/features/science-question.js",
-      "sha256": "856b6c8deb431b3a0ec6ec415d7a96790235cbed2f082cbe5392a5a3e1805594",
-      "size_bytes": 59738
+      "sha256": "520b8137200e615f0835649be1867ea3828893c763f61bdaff51b4c3fe047f77",
+      "size_bytes": 61741
     },
     {
       "media_type": "text/javascript",
@@ -737,8 +743,8 @@
     {
       "media_type": "text/javascript",
       "path": "js/workbench/i18n.js",
-      "sha256": "6ec3daa8c262e733123bc218cd35a7b66a5264faf8cca99f549bd9c9111c0112",
-      "size_bytes": 192348
+      "sha256": "cc943bdfbf9291e00562a7c3ba2d0e3fb6f8c00c7a4fcd79a3b0426ce908a7ca",
+      "size_bytes": 192531
     }
   ],
   "package_version": "0.3.0",

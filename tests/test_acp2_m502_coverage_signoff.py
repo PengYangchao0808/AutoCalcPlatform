@@ -185,6 +185,9 @@ def test_walk_bom_dry_run_traverses_every_receipt(walker) -> None:
         "deferred_rows": 3,
     }
     assert report["receipts_verified"] == 39 + 32 + 26 + 8 + 3
+    assert report["receipts_source"] == "store", (
+        "M5-03 F7: coverage receipts must be verified from the delivered store"
+    )
     assert report["contract_version"] == "1.7.0"
     assert set(report["required_open_rows"]) == {
         "G01",

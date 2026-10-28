@@ -42,9 +42,15 @@ COVERAGE_PATH = CONTRACTS / "release" / "evidence-coverage.current.json"
 CONTRACT_MANIFEST = CONTRACTS / "manifest.json"
 STATIC_MANIFEST = CONTRACTS / "experience" / "static-assets.manifest.json"
 EXPERIENCE_MANIFEST = CONTRACTS / "experience" / "release-manifest.json"
-STORE = (
-    Path(os.environ.get("ACP2_ARTIFACT_STORE", "/ACPServer/acp2-artifacts/remediation")) / "m5-02"
-)
+
+
+def _store() -> Path:
+    """The durable store the live BOM points at (single source: the BOM)."""
+    bom = _bom()
+    uri = next(entry["uri"] for entry in bom["artifacts"] if entry["kind"] == "python-wheel")
+    return Path(uri).parents[2]
+
+
 CHECKER = ROOT / "scripts" / "acceptance" / "check_release_artifacts.py"
 INSTALLER = ROOT / "scripts" / "acceptance" / "acp2_m501_install.py"
 BUILDER = ROOT / "scripts" / "release" / "build_release_bom.py"
@@ -149,7 +155,11 @@ def test_bom_covers_every_required_component_class() -> None:
     assert len(by_kind["plugin-wheel"]) >= 1
     assert len(by_kind["contract-bundle"]) == 1
     assert len(by_kind["science-asset"]) == 1
-    assert len(by_kind["document"]) == 1
+    documents = {entry["id"] for entry in by_kind["document"]}
+    # M5-03 F1/F7: the store also ships the offline dependency wheelhouse and
+    # every coverage receipt, all as document components (the BOM schema's
+    # frozen kind set is not extended).
+    assert {"docs-release", "python-wheelhouse", "evidence-receipts"} <= documents
     toolchain = bom["toolchain"]
     assert toolchain["python"] and toolchain["node"] and toolchain["pnpm"] and toolchain["ruff"]
     assert toolchain["dsh"]["lock_sha256"]
@@ -194,15 +204,16 @@ def test_bom_carries_no_secret() -> None:
 
 def test_bom_artifact_uris_are_retrievable_from_the_store() -> None:
     bom = _bom()
-    if not STORE.is_dir():
-        pytest.skip(f"artifact store {STORE} is not present on this host")
+    store = _store()
+    if not store.is_dir():
+        pytest.skip(f"artifact store {store} is not present on this host")
     seen: set[str] = set()
     for entry in bom["artifacts"]:
         assert entry["id"] not in seen, f"duplicate artifact id {entry['id']}"
         seen.add(entry["id"])
         path = Path(entry["uri"])
         assert path.is_file(), f"{entry['id']} is not retrievable at {path}"
-        assert path.resolve().is_relative_to(STORE.resolve()), (
+        assert path.resolve().is_relative_to(store.resolve()), (
             f"{entry['id']} points outside the durable store: {path}"
         )
         assert _sha256(path) == entry["sha256"], f"digest drift for {entry['id']}"
@@ -221,7 +232,7 @@ def test_bom_build_script_is_recorded_by_digest() -> None:
     }
     for entry in bom["artifacts"]:
         assert len(entry["build_script_sha256"]) == 64
-    if STORE.is_dir():
+    if _store().is_dir():
         assert _sha256(BUILD_RELEASE) in recorded, (
             "every Python artifact must record the build script digest of the build "
             "that produced it; rebuild the BOM after touching scripts/build_release.py"
@@ -243,7 +254,7 @@ def test_committed_static_manifest_equals_a_fresh_frontend_build() -> None:
     )
     assert rebuilt == committed, "static-assets.manifest.json is stale against frontend/"
     assert committed["schema"] == "acp2.experience.static-assets.v1"
-    assert committed["counts"]["files"] == len(committed["files"]) == 121
+    assert committed["counts"]["files"] == len(committed["files"]) == 122
     assert committed["entry_points"]["index"] == "ACP_Workbench_v2.html"
 
 
@@ -358,10 +369,158 @@ def test_install_entry_is_store_only_and_enforces_mutual_exclusion() -> None:
         "verify_manifest",
         '"mcp"',
         '"serve"',
+        # M5-03 F1/F2/F3/F4: offline wheelhouse, real runtime refusal, --version
+        # and the no-[remote] doctor row are part of the install entry.
+        "--no-index",
+        "wheelhouse",
+        "verify_wheelhouse",
+        "offline_pip_env",
+        "mixed_install_probe",
+        "no_remote_doctor_probe",
+        "MUTUAL_EXCLUSION_CODE",
     ):
         assert marker in source, f"install entry must cover {marker}"
     assert "PYTHONPATH" in source, "the entry must prove the source tree is off sys.path"
     assert "install-receipt.json" in source
+
+
+def test_install_guard_refuses_a_mixed_root_and_roles_install(monkeypatch, capsys) -> None:
+    """F2: the real product refuses coexistence at all three entry points."""
+    from argparse import Namespace
+
+    import acp.install_guard as guard
+    from acp.api.server import create_app
+    from acp.cli import _dispatch_mcp, main
+
+    mixed = {"acp", "cccp", "acp-worker", "acp-web"}
+    monkeypatch.setattr(guard, "installed_distribution_names", lambda: set(mixed))
+
+    refusal = guard.check_install()
+    assert isinstance(refusal, guard.MutuallyExclusiveDistributions)
+    assert refusal.code == "mutually_exclusive_distributions"
+    assert refusal.exit_code == 78
+    assert "mutually_exclusive_distributions" in str(refusal)
+    assert "upgrade path" in str(refusal), "the message explains the maintainability break"
+    with pytest.raises(guard.MutuallyExclusiveDistributions):
+        guard.ensure_exclusive_install()
+
+    assert guard.cli_guard() == 78
+    assert "mutually_exclusive_distributions" in capsys.readouterr().err
+
+    # CLI entry: refuses before argparse/--version.
+    assert main(["--version"]) == 78
+    assert "mutually_exclusive_distributions" in capsys.readouterr().err
+
+    # MCP stdio entry: refuses before requiring --controller.
+    assert _dispatch_mcp(Namespace(mcp_command="serve")) == 78
+    assert "mutually_exclusive_distributions" in capsys.readouterr().err
+
+    # ASGI entry: create_app raises the typed refusal before touching run_root.
+    with pytest.raises(guard.MutuallyExclusiveDistributions):
+        create_app()
+
+
+def test_install_guard_allows_each_release_set_alone(monkeypatch) -> None:
+    import acp.install_guard as guard
+
+    for names in ({"acp"}, {"cccp", "acp-worker", "acp-web"}):
+        monkeypatch.setattr(guard, "installed_distribution_names", lambda n=names: set(n))
+        assert guard.check_install() is None
+        assert guard.cli_guard() is None
+
+
+def test_cli_exposes_version_and_exits_zero(capsys) -> None:
+    """F3: ``acp --version`` prints the four-location version and exits 0."""
+    from acp.cli import main
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--version"])
+    assert excinfo.value.code == 0
+    assert "acp 0.3.0" in capsys.readouterr().out
+
+
+def test_doctor_reports_missing_paramiko_instead_of_crashing(monkeypatch, tmp_path, capsys) -> None:
+    """F4: a root install without ``[remote]`` reports NOT_VERIFIED, no traceback."""
+    from argparse import Namespace
+
+    import acp.cli as cli
+
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("ACP_RUN_ROOT", str(tmp_path / "runs"))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli, "_paramiko_available", lambda: False)
+
+    exit_code = cli._handle_doctor(Namespace(node=None, log_level="INFO"))
+    output = capsys.readouterr().out
+    assert exit_code in (0, 1)
+    assert "NOT_VERIFIED" in output, output
+    assert "paramiko" in output, output
+    assert "ModuleNotFoundError" not in output
+    assert "Traceback" not in output
+
+
+def test_sftp_module_imports_without_paramiko() -> None:
+    """F4: the SFTP module's paramiko import is controlled, not unconditional."""
+    code = """
+import sys, importlib.abc
+
+class Block(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == "paramiko":
+            raise ModuleNotFoundError("No module named 'paramiko'")
+        return None
+
+sys.meta_path.insert(0, Block())
+import acp.scheduler.remote as remote
+import acp.scheduler.remote.sftp as sftp
+assert sftp.paramiko is None
+assert "RemoteExecutionConfig" in remote.__all__
+assert "FileStager" not in remote.__all__
+print("ok")
+"""
+    env = {key: value for key, value in os.environ.items() if key not in ("PYTHONPATH",)}
+    env["PYTHONPATH"] = str(ROOT / "src")
+    completed = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr[-2000:]
+    assert "ok" in completed.stdout
+
+
+def test_wheelhouse_ships_both_platforms_and_every_requirement() -> None:
+    bom = _bom()
+    entry = next((item for item in bom["artifacts"] if item["id"] == "python-wheelhouse"), None)
+    assert entry is not None, "the BOM must ship the offline dependency wheelhouse (F1)"
+    manifest = _load(Path(entry["uri"]))
+    assert manifest["schema"] == "acp2.release.python-wheelhouse.v1"
+    assert {"manylinux2014_x86_64", "manylinux2014_aarch64"} <= set(manifest["platforms"])
+    for tag in manifest["platforms"]:
+        covered = manifest["coverage"][tag]["direct_requirements"]
+        assert covered == len(manifest["requirements"]), (tag, manifest["coverage"][tag])
+    assert any("aarch64" in name for name in (item["name"] for item in manifest["wheels"]))
+    assert any("x86_64" in name for name in (item["name"] for item in manifest["wheels"]))
+
+
+def test_coverage_receipts_are_shipped_in_the_store() -> None:
+    bom = _bom()
+    entry = next((item for item in bom["artifacts"] if item["id"] == "evidence-receipts"), None)
+    assert entry is not None, "coverage receipts must travel with the store (F7)"
+    bundle = Path(entry["uri"])
+    receipts = bundle.parent / "receipts"
+    manifest = _load(bundle.parent / "coverage-receipts-manifest.json")
+    assert len(manifest["receipts"]) >= 39
+    for item in manifest["receipts"]:
+        path = receipts / item["path"]
+        assert path.is_file(), item["path"]
+        assert _sha256(path) == item["sha256"]
 
 
 def test_public_tool_allowlist_matches_the_receipt_constant() -> None:
@@ -389,8 +548,9 @@ def _node_available() -> bool:
 @pytest.mark.slow
 def test_clean_room_install_from_the_store(tmp_path: Path) -> None:
     """Install every component from the durable store and prove it starts."""
-    if not STORE.is_dir():
-        pytest.skip(f"artifact store {STORE} is not present on this host")
+    store = _store()
+    if not store.is_dir():
+        pytest.skip(f"artifact store {store} is not present on this host")
     if shutil.which("pnpm") is None and not _node_available():
         pytest.skip("pnpm/node are not available for the RPH offline install")
     work = tmp_path / "install"
@@ -400,7 +560,7 @@ def test_clean_room_install_from_the_store(tmp_path: Path) -> None:
             sys.executable,
             str(INSTALLER),
             "--store",
-            str(STORE),
+            str(store),
             "--work",
             str(work),
             "--out",

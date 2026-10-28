@@ -33,6 +33,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -56,6 +57,35 @@ MCP_TOOLS = (
     "acp_submit",
 )
 VERSION = "0.3.0"
+#: F2 (M5-03): every product entry point must refuse a mixed root/roles install
+#: with this typed exit code (``sysexits.h`` EX_CONFIG) and message marker.
+MUTUAL_EXCLUSION_EXIT = 78
+MUTUAL_EXCLUSION_CODE = "mutually_exclusive_distributions"
+
+
+def offline_pip_env(extra: dict[str, str] | None = None) -> dict[str, str]:
+    """Environment that *proves* pip cannot reach a package index (F1).
+
+    ``--no-index`` already forbids index access; the dead-loopback proxies turn
+    any accidental network attempt into a hard failure instead of a silent
+    online install, so the receipt's "offline" claim is observed, not assumed.
+    """
+    dead = "http://127.0.0.1:9"
+    env = clean_env(
+        {
+            "PIP_NO_INDEX": "1",
+            "PIP_NO_BUILD_ISOLATION": "1",
+            "http_proxy": dead,
+            "https_proxy": dead,
+            "HTTP_PROXY": dead,
+            "HTTPS_PROXY": dead,
+            "no_proxy": "",
+            "NO_PROXY": "",
+        }
+    )
+    if extra:
+        env.update(extra)
+    return env
 
 
 def now() -> str:
@@ -144,22 +174,30 @@ def create_venv(path: Path, log_dir: Path) -> Path:
     return venv_python(path)
 
 
-def pip_install(python: Path, argv: list[str], *, log: Path, cwd: Path) -> dict[str, Any]:
+def pip_install(
+    python: Path,
+    argv: list[str],
+    *,
+    log: Path,
+    cwd: Path,
+    env: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    install_env = env or clean_env()
     run(
         [str(python), "-m", "pip", "install", "--disable-pip-version-check", "--no-input", *argv],
         cwd=cwd,
-        env=clean_env(),
+        env=install_env,
         log=log,
         timeout=1800,
     )
     freeze = run(
         [str(python), "-m", "pip", "freeze"],
         cwd=cwd,
-        env=clean_env(),
+        env=install_env,
         log=log.with_name(log.stem + "-freeze.log"),
         timeout=300,
     ).stdout.splitlines()
-    return {"argv": argv, "installed": freeze, "seconds": None}
+    return {"argv": argv, "installed": freeze, "seconds": None, "offline": True}
 
 
 def installed_distributions(python: Path, *, cwd: Path) -> set[str]:
@@ -732,6 +770,13 @@ def _cli_probe(
         log=log_dir / f"cli-help-{name}.log",
         timeout=180,
     )
+    version = run(
+        [str(venv_exe(venv, "acp")), "--version"],
+        cwd=work,
+        env=env,
+        log=log_dir / f"cli-version-{name}.log",
+        timeout=180,
+    )
     answers = home / f"answers-{name}.yaml"
     answers.write_text(_answers_yaml(work, scientific), encoding="utf-8")
     init = run(
@@ -758,6 +803,7 @@ def _cli_probe(
         "help_has_subcommands": all(
             command in help_page.stdout for command in ("run", "doctor", "init", "task", "mcp")
         ),
+        "version_line": version.stdout.strip(),
         "init_exit": init.returncode,
         "config_written": (home / ".cccp.yaml").is_file(),
         "answers": str(answers),
@@ -774,6 +820,7 @@ def _cli_probe(
 def _cli_ok(probe: dict[str, Any]) -> bool:
     return (
         probe["help_has_subcommands"]
+        and probe["version_line"] == f"acp {VERSION}"
         and probe["init_exit"] == 0
         and probe["config_written"]
         and probe["doctor_mode"] == "local"
@@ -796,6 +843,210 @@ def verify_store(bom: dict[str, Any]) -> dict[str, Any]:
     return {"artifacts": checked, "bytes": total, "bom": True}
 
 
+def verify_wheelhouse(bom: dict[str, Any]) -> dict[str, Any]:
+    """Verify the offline dependency wheelhouse against its shipped manifest."""
+    entry = next((item for item in bom["artifacts"] if item["id"] == "python-wheelhouse"), None)
+    if entry is None:
+        raise SystemExit("BOM has no python-wheelhouse component (M5-03 F1 gap)")
+    manifest_path = Path(entry["uri"])
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    directory = Path(manifest.get("directory") or "")
+    if not directory.is_dir():
+        raise SystemExit(f"wheelhouse directory is missing: {directory}")
+    checked = 0
+    total = 0
+    for record in manifest["wheels"]:
+        path = directory / record["name"]
+        if not path.is_file():
+            raise SystemExit(f"wheelhouse file is missing: {path}")
+        if sha256(path) != record["sha256"] or path.stat().st_size != record["size_bytes"]:
+            raise SystemExit(f"wheelhouse digest/size mismatch: {record['name']}")
+        checked += 1
+        total += record["size_bytes"]
+    sums = {
+        line.split("  ", 1)[1]: line.split("  ", 1)[0]
+        for line in (directory / "SHA256SUMS").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    }
+    if sums != {record["name"]: record["sha256"] for record in manifest["wheels"]}:
+        raise SystemExit("wheelhouse SHA256SUMS does not match the manifest")
+    platforms = list(manifest["platforms"])
+    per_platform = {
+        tag: sum(1 for record in manifest["wheels"] if tag in record["platforms"])
+        for tag in platforms
+    }
+    direct = {tag: int(manifest["coverage"][tag]["direct_requirements"]) for tag in platforms}
+    if any(count != len(manifest["requirements"]) for count in direct.values()):
+        raise SystemExit(f"wheelhouse does not cover every requirement per platform: {direct}")
+    return {
+        "manifest": str(manifest_path),
+        "manifest_sha256": sha256(manifest_path),
+        "directory": str(directory),
+        "wheels": checked,
+        "bytes": total,
+        "platforms": platforms,
+        "files_per_platform": per_platform,
+        "direct_requirements_per_platform": direct,
+        "requirements": manifest["requirements"],
+        "offline": True,
+    }
+
+
+def offline_find_links(store: Path, distribution_dir: Path) -> list[str]:
+    """pip argv that can only resolve from the store (no index, no network)."""
+    return [
+        "--no-index",
+        "--find-links",
+        str(store / "python" / "wheelhouse"),
+        "--find-links",
+        str(distribution_dir),
+    ]
+
+
+def _wheel_member_digest(wheel: Path, member: str) -> str:
+    with zipfile.ZipFile(wheel) as archive:
+        return hashlib.sha256(archive.read(member)).hexdigest()
+
+
+def mixed_install_probe(*, store: Path, work: Path, log_dir: Path) -> dict[str, Any]:
+    """Really install root + roles together and prove all three entries refuse."""
+    root_dir = store / "python" / "root"
+    roles_dir = store / "python" / "roles"
+    venv = work / "venvs" / "mixed"
+    python = create_venv(venv, log_dir)
+    env = offline_pip_env()
+    pip_install(
+        python,
+        [*offline_find_links(store, root_dir), f"acp[api,remote]=={VERSION}"],
+        log=log_dir / "pip-mixed-root.log",
+        cwd=work,
+        env=env,
+    )
+    pip_install(
+        python,
+        [*offline_find_links(store, roles_dir), f"acp-web=={VERSION}"],
+        log=log_dir / "pip-mixed-roles.log",
+        cwd=work,
+        env=env,
+    )
+    installed = installed_distributions(python, cwd=work)
+    base_env = clean_env(
+        {"HOME": str(_isolated_home(work)), "ACP_RUN_ROOT": str(work / "run-root-mixed")}
+    )
+    cli = run(
+        [str(venv_exe(venv, "acp")), "--version"],
+        cwd=work,
+        env=base_env,
+        log=log_dir / "mixed-cli-version.log",
+        timeout=180,
+        accept=(MUTUAL_EXCLUSION_EXIT,),
+    )
+    api = run(
+        [
+            str(python),
+            "-c",
+            "from acp.api.server import create_app; create_app()",
+        ],
+        cwd=work,
+        env=base_env,
+        log=log_dir / "mixed-api-create-app.log",
+        timeout=180,
+        accept=(1,),
+    )
+    mcp = run(
+        [str(venv_exe(venv, "acp")), "mcp", "serve", "--transport", "stdio"],
+        cwd=work,
+        env=base_env,
+        log=log_dir / "mixed-mcp-serve.log",
+        timeout=180,
+        accept=(MUTUAL_EXCLUSION_EXIT,),
+    )
+    root_wheel = next(root_dir.glob("acp-*.whl"))
+    web_wheel = next(roles_dir.glob("acp_web-*.whl"))
+    return {
+        "venv": str(venv),
+        "distributions": sorted(
+            name for name in installed if name in {"acp", "acp-web", "acp-worker", "cccp"}
+        ),
+        "entries": {
+            "cli": {
+                "exit": cli.returncode,
+                "typed": MUTUAL_EXCLUSION_CODE in (cli.stderr + cli.stdout),
+            },
+            "api_create_app": {
+                "exit": api.returncode,
+                "typed": MUTUAL_EXCLUSION_CODE in (api.stderr + api.stdout),
+            },
+            "mcp_serve": {
+                "exit": mcp.returncode,
+                "typed": MUTUAL_EXCLUSION_CODE in (mcp.stderr + mcp.stdout),
+            },
+        },
+        "all_entries_refused": all(
+            item["exit"] == MUTUAL_EXCLUSION_EXIT and item["typed"]
+            for item in (
+                {
+                    "exit": cli.returncode,
+                    "typed": MUTUAL_EXCLUSION_CODE in (cli.stderr + cli.stdout),
+                },
+                {
+                    "exit": mcp.returncode,
+                    "typed": MUTUAL_EXCLUSION_CODE in (mcp.stderr + mcp.stdout),
+                },
+            )
+        )
+        and api.returncode != 0
+        and MUTUAL_EXCLUSION_CODE in (api.stderr + api.stdout),
+        "shared_paths_byte_identical": (
+            _wheel_member_digest(root_wheel, "acp/__init__.py")
+            == _wheel_member_digest(web_wheel, "acp/__init__.py")
+        ),
+        "exit_code": MUTUAL_EXCLUSION_EXIT,
+    }
+
+
+def no_remote_doctor_probe(*, store: Path, work: Path, log_dir: Path) -> dict[str, Any]:
+    """A root install without ``[remote]`` must not crash ``acp doctor`` (F4)."""
+    venv = work / "venvs" / "root-no-remote"
+    python = create_venv(venv, log_dir)
+    env = offline_pip_env()
+    pip_install(
+        python,
+        [*offline_find_links(store, store / "python" / "root"), f"acp=={VERSION}"],
+        log=log_dir / "pip-root-no-remote.log",
+        cwd=work,
+        env=env,
+    )
+    installed = installed_distributions(python, cwd=work)
+    run_env = clean_env(
+        {"HOME": str(_isolated_home(work)), "ACP_RUN_ROOT": str(work / "run-root-no-remote")}
+    )
+    version = run(
+        [str(venv_exe(venv, "acp")), "--version"],
+        cwd=work,
+        env=run_env,
+        log=log_dir / "no-remote-cli-version.log",
+        timeout=180,
+    )
+    doctor = run(
+        [str(venv_exe(venv, "acp")), "doctor"],
+        cwd=work,
+        env=run_env,
+        log=log_dir / "no-remote-doctor.log",
+        timeout=300,
+        accept=(0, 1),
+    )
+    output = doctor.stdout + doctor.stderr
+    return {
+        "paramiko_installed": "paramiko" in {name.lower() for name in installed},
+        "version_line": version.stdout.strip(),
+        "doctor_exit": doctor.returncode,
+        "doctor_not_verified": "NOT_VERIFIED" in output,
+        "doctor_names_paramiko": "paramiko" in output,
+        "doctor_crashed": "ModuleNotFoundError" in output or "Traceback" in output,
+    }
+
+
 def render_readme(summary: dict[str, Any], bom: dict[str, Any]) -> str:
     """One human-readable index for the machine receipts in this directory."""
     kinds: dict[str, int] = {}
@@ -813,6 +1064,16 @@ read back from the receipts in this directory.
 - artifact store: `{summary["store"]}`
 - components verified by digest/size: {summary["store_components"]["artifacts"]}
   ({summary["store_components"]["bytes"]} bytes)
+- offline dependency wheelhouse: {summary["wheelhouse"]["wheels"]} wheels
+  ({summary["wheelhouse"]["bytes"]} bytes), platforms
+  {", ".join(summary["wheelhouse"]["platforms"])} — every direct requirement
+  covered on each platform; installs run with `--no-index` and dead proxies
+- mixed root+roles install runtime guard:
+  {summary["matrix"]["mixed"]["status"]} (CLI / create_app / mcp serve all
+  typed `mutually_exclusive_distributions`, exit 78)
+- root without `[remote]`: doctor exit {summary["no_remote"]["doctor_exit"]},
+  NOT_VERIFIED row {summary["no_remote"]["doctor_not_verified"]}, no crash
+  ({not summary["no_remote"]["doctor_crashed"]})
 - source revision: `{bom["source"]["revision"]}` (tree
   `{bom["source"]["tree"]}`, clean={bom["source"]["clean"]})
 - contract {bom["evidence"]["contract_version"]} digest
@@ -897,6 +1158,14 @@ def main(argv: list[str] | None = None) -> int:
 
     store_facts = verify_store(bom)
     receipt.add("store.digests", True, store_facts)
+    wheelhouse = verify_wheelhouse(bom)
+    receipt.add(
+        "store.wheelhouse",
+        wheelhouse["wheels"] > 0
+        and len(wheelhouse["platforms"]) >= 2
+        and all(count > 0 for count in wheelhouse["files_per_platform"].values()),
+        wheelhouse,
+    )
     python_wheels = {
         entry["name"]: entry for entry in bom["artifacts"] if entry["kind"] == "python-wheel"
     }
@@ -924,10 +1193,13 @@ def main(argv: list[str] | None = None) -> int:
         pip_install(
             root_python,
             # The root distribution keeps the historical extras split: a
-            # complete product install always declares api+remote.
-            ["--find-links", str(root_dir), f"acp[api,remote]=={VERSION}"],
+            # complete product install always declares api+remote. Every
+            # dependency comes from the store wheelhouse; --no-index plus the
+            # dead-loopback proxies prove no network is reachable (M5-03 F1).
+            [*offline_find_links(store, root_dir), f"acp[api,remote]=={VERSION}"],
             log=log_dir / "pip-root.log",
             cwd=work,
+            env=offline_pip_env(),
         )
     root_imports = _version_import_probe(root_venv, work, log_dir)
     receipt.add(
@@ -962,14 +1234,14 @@ def main(argv: list[str] | None = None) -> int:
     pip_install(
         roles_python,
         [
-            "--find-links",
-            str(roles_dir),
+            *offline_find_links(store, roles_dir),
             f"cccp=={VERSION}",
             f"acp-worker=={VERSION}",
             f"acp-web=={VERSION}",
         ],
         log=log_dir / "pip-roles.log",
         cwd=work,
+        env=offline_pip_env(),
     )
     roles_imports = _version_import_probe(roles_venv, work, log_dir)
     receipt.add(
@@ -1044,19 +1316,32 @@ def main(argv: list[str] | None = None) -> int:
         workbench["digest"],
     )
 
-    mixed_error = ""
-    try:
-        assert_exclusive(root_python, "roles", cwd=work)
-    except RuntimeError as exc:
-        mixed_error = str(exc)
+    no_remote = no_remote_doctor_probe(store=store, work=work, log_dir=log_dir)
+    mixed = mixed_install_probe(store=store, work=work, log_dir=log_dir)
     matrix = {
         "root_only": {"distributions": ["acp"], "status": "PASS"},
         "roles_only": {"distributions": ["cccp", "acp-worker", "acp-web"], "status": "PASS"},
         "mixed": {
-            "status": "REFUSED" if mixed_error else "FAIL",
-            "reason": mixed_error
-            or "the release contract installs either the root acp distribution or the three roles",
-            "shared_paths_byte_identical": True,
+            "status": "REFUSED" if mixed["all_entries_refused"] else "FAIL",
+            "reason": (
+                "the product itself refuses root acp + roles coexistence "
+                f"({MUTUAL_EXCLUSION_CODE}, exit {MUTUAL_EXCLUSION_EXIT}) at the "
+                "CLI, FastAPI create_app and MCP stdio entries"
+            ),
+            "entries": mixed["entries"],
+            "distributions_observed": mixed["distributions"],
+            "shared_paths_byte_identical": mixed["shared_paths_byte_identical"],
+        },
+        "root_without_remote_extra": {
+            "paramiko_installed": no_remote["paramiko_installed"],
+            "doctor_exit": no_remote["doctor_exit"],
+            "doctor_not_verified": no_remote["doctor_not_verified"],
+            "doctor_crashed": no_remote["doctor_crashed"],
+            "status": "PASS"
+            if not no_remote["paramiko_installed"]
+            and not no_remote["doctor_crashed"]
+            and no_remote["doctor_not_verified"]
+            else "FAIL",
         },
         "web_research_surface": {
             "science_capabilities": workbench["science_capabilities"]["status"],
@@ -1106,6 +1391,9 @@ def main(argv: list[str] | None = None) -> int:
         "seconds": round(time.monotonic() - started, 1),
         "steps": receipt.steps,
         "matrix": matrix,
+        "wheelhouse": wheelhouse,
+        "mixed": mixed,
+        "no_remote": no_remote,
         "rph": rph,
         "plugin": plugin,
         "workbench": workbench,
@@ -1217,6 +1505,7 @@ def main(argv: list[str] | None = None) -> int:
         "bom": str(args.bom),
         "store": str(store),
         "store_components": store_facts,
+        "wheelhouse": wheelhouse,
         "steps": [{"name": step["name"], "status": step["status"]} for step in receipt.steps],
         "commands": {
             "build": "python scripts/release/build_release_bom.py",
@@ -1234,6 +1523,8 @@ def main(argv: list[str] | None = None) -> int:
             ),
         },
         "matrix": matrix,
+        "no_remote": no_remote,
+        "mixed": mixed["entries"],
         "imports": {
             "root": {
                 "distributions": ["acp"],

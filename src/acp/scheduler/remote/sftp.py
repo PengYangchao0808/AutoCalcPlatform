@@ -21,13 +21,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import paramiko
+try:  # optional ``remote`` extra: importing this module must not crash a root install
+    import paramiko
+except ImportError:  # pragma: no cover - exercised without ``pip install acp[remote]``
+    paramiko = None  # type: ignore[assignment]
 
 from acp.scheduler.remote.config import RemoteNode
-from acp.scheduler.remote.ssh import SSHConnectionPool
 
-if TYPE_CHECKING:  # pragma: no cover - typing only
+if TYPE_CHECKING:  # pragma: no cover - typing only (ssh.py needs the optional extra)
     from acp.scheduler.jobs import JobRecord
+    from acp.scheduler.remote.ssh import SSHConnectionPool
 
 logger = logging.getLogger(__name__)
 

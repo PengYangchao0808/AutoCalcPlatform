@@ -152,6 +152,11 @@ function setup(harness, routes, options) {
   const catalog = options.catalog ? () => options.catalog : undefined;
   const Q = W.ACPScienceQuestion;
   const initOptions = { science: W.ACPClient.science, wizardEndpoints: W.ACPClient.wizardEndpoints, submit, buildJobBody };
+  // M5-03 F6: a bound project is explicit input; live discovery never falls
+  // back to a synthetic "demo-project". Fixture bodies carry demo-project ids,
+  // so fixture mode binds that id explicitly (it is never a live default).
+  initOptions.projectId =
+    options.projectId || (options.fixtureMode ? "demo-project" : "proj-m503");
   if (catalog) initOptions.catalog = catalog;
   if (options.researchCommands) initOptions.researchCommands = options.researchCommands;
   if (options.researchApproval) initOptions.researchApproval = options.researchApproval;
@@ -437,7 +442,7 @@ module.exports.register = async function (h) {
   await test("task detail references the SAME job_id/attempt as submit", async () => {
     const submitResponse = { job_id: "manual_test_task", attempt: 2 };
     const viewBody = clone(QFIX.view);
-    viewBody.project_id = "demo-project";
+    viewBody.project_id = "proj-m503";
     viewBody.task_ref = { job_id: "manual_test_task", attempt: 2 };
     const h0 = setup(h, routeSet({
       capabilities: { body: QFIX.capabilities },

@@ -341,9 +341,17 @@ def create_app(
     Reads ``ACP_RUN_ROOT`` / ``ACP_HOST`` / ``ACP_PORT`` / ``ACP_MAX_RUNNING`` /
     ``ACP_POLL_INTERVAL`` env vars (set by ``acp run serve``) so the
     configuration survives uvicorn's module re-import under ``--reload``.
+
+    Raises:
+        MutuallyExclusiveDistributions: the root ``acp`` distribution and the
+            role distributions are installed together (M5-03 finding F2).
     """
     from acp.core.paths import check_run_root_safety, resolve_run_root
+    from acp.install_guard import ensure_exclusive_install
 
+    # F2 (M5-03): the API process is a product entry point; refuse a mixed
+    # root/roles install before any run_root is claimed or a thread starts.
+    ensure_exclusive_install()
     _maybe_configure_structured_logging()
     _verify_packaged_static_assets()
 

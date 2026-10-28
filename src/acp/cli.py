@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import logging
 import os
@@ -2443,6 +2444,12 @@ def _configure_mcp_logging(level: str) -> None:
 
 
 def _handle_mcp_serve(args: argparse.Namespace) -> int:
+    from acp.install_guard import cli_guard
+
+    # F2 (M5-03): the MCP adapter is a product entry point of its own.
+    refusal = cli_guard()
+    if refusal is not None:
+        return refusal
     controller = (
         args.controller
         or os.environ.get("ACP_CONTROLLER_URL")
@@ -3761,10 +3768,18 @@ def _normalize_string_choices(parser: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level ACP argument parser."""
+    from acp import __version__ as acp_version
+
     parser = argparse.ArgumentParser(
         prog="acp",
         description="Auto-Calc Platform (ACP) — Computational chemistry workflows",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {acp_version}",
+        help="Print the installed ACP version and exit",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -5589,13 +5604,15 @@ def _is_local_deployment(cfg: Mapping[str, Any]) -> bool:
     return usage == "local" or tier in {"local-single", "standalone", "local"}
 
 
-def _run_local_doctor(cfg: Mapping[str, Any]) -> int:
+def _run_local_doctor(cfg: Mapping[str, Any], *, remote_note: str | None = None) -> int:
     """Report local capability (PASS/FAIL/NOT_VERIFIED) for a local tier."""
     from acp.core.paths import check_run_root_safety, resolve_run_root
 
     deployment = cfg.get("deployment")
     deployment_map = deployment if isinstance(deployment, Mapping) else {}
     checks = _doctor_software_checks(cfg)
+    if remote_note:
+        checks.append(("remote", "NOT_VERIFIED", remote_note))
     root: Path | None = None
     try:
         root = resolve_run_root(None)
@@ -5642,6 +5659,36 @@ def _run_local_doctor(cfg: Mapping[str, Any]) -> int:
     return 1 if failures else 0
 
 
+def _paramiko_available() -> bool:
+    """Whether the optional ``remote`` extra (paramiko) is importable.
+
+    ``acp doctor`` is a deployment self-check, not a remote operation: a root
+    ``acp`` install without ``[remote]`` must still report local capability
+    instead of crashing on an optional dependency (M5-03 finding F4).
+    """
+    return importlib.util.find_spec("paramiko") is not None
+
+
+def _doctor_without_paramiko(args: argparse.Namespace, cfg: Mapping[str, Any]) -> int:
+    """Report remote capability as NOT_VERIFIED when paramiko is absent."""
+    note = "paramiko 未安装（安装 acp[remote] 后可检查远程节点）"
+    cluster = cfg.get("cluster") or {}
+    nodes = cluster.get("nodes") if isinstance(cluster, Mapping) else None
+    if args.node is not None or nodes:
+        print(f"remote: NOT_VERIFIED — {note}")
+        print("Doctor finished: remote checks NOT_VERIFIED (no failure)")
+        return 0
+    if _is_local_deployment(cfg):
+        print(
+            "No remote nodes configured — running local capability checks "
+            "(local/standalone deployment)."
+        )
+        return _run_local_doctor(cfg, remote_note=note)
+    print(f"remote: NOT_VERIFIED — {note}")
+    print("No remote nodes configured (cluster.nodes is empty).")
+    return 1
+
+
 def _handle_doctor(args: argparse.Namespace) -> int:
     """``acp doctor`` — deployment self-check for remote nodes and local tiers.
 
@@ -5653,9 +5700,6 @@ def _handle_doctor(args: argparse.Namespace) -> int:
     """
     logging.basicConfig(level=getattr(logging, str(args.log_level).upper(), logging.INFO))
 
-    from acp.scheduler.remote.config import RemoteExecutionConfig
-    from acp.scheduler.remote.node_manager import doctor_node
-    from acp.scheduler.remote.ssh import SSHConnectionPool
     from cccp.config import load_config
 
     try:
@@ -5663,6 +5707,13 @@ def _handle_doctor(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(f"FAIL config — {exc}")
         return 1
+    if not _paramiko_available():
+        return _doctor_without_paramiko(args, cfg)
+
+    from acp.scheduler.remote.config import RemoteExecutionConfig
+    from acp.scheduler.remote.node_manager import doctor_node
+    from acp.scheduler.remote.ssh import SSHConnectionPool
+
     cluster = cfg.get("cluster") or {}
     remote_cfg = RemoteExecutionConfig.from_config_dict(cluster)
     if not remote_cfg.nodes:
@@ -5842,6 +5893,12 @@ def main(argv: list[str] | None = None) -> int:
     Returns:
         Exit code.
     """
+    from acp.install_guard import cli_guard
+
+    # F2 (M5-03): refuse a mixed root/roles install before any subcommand runs.
+    refusal = cli_guard()
+    if refusal is not None:
+        return refusal
     argv_values = list(sys.argv[1:] if argv is None else argv)
     if (
         len(argv_values) > 1
