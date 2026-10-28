@@ -123,7 +123,7 @@
           },
           {
             "path": "tests/fixtures/acp2/science/external_plugin/cccp_science_plugin.json",
-            "sha256": "1eeccacd3d8840007cd2f85a8d4b4f53de8c8eff52e2c83662e231175a352c5f"
+            "sha256": "529cf4a8c532b6c05197fc2e9b1b9764fd27414d8000fdc6c6a681d99b21239b"
           }
         ],
         "commands": [
@@ -278,7 +278,7 @@
           },
           {
             "path": "tests/fixtures/acp2/science/plugin_upgrade/artifacts/v1-task-result.json",
-            "sha256": "9ace5db8b63ab00f9ce93b8e7db59ed4fa5ffb7c1ea299a6d2019cf511c8e3ee"
+            "sha256": "23cf6412f47219ec17bcbd93a966135faf15743958eeaf656996b028db9b4ab4"
           }
         ],
         "commands": [
@@ -342,7 +342,7 @@
           },
           {
             "path": "tests/fixtures/acp2/science/plugin_upgrade/artifacts/v1-task-result.json",
-            "sha256": "9ace5db8b63ab00f9ce93b8e7db59ed4fa5ffb7c1ea299a6d2019cf511c8e3ee"
+            "sha256": "23cf6412f47219ec17bcbd93a966135faf15743958eeaf656996b028db9b4ab4"
           },
           {
             "path": "tests/fixtures/acp2/science/plugin_upgrade/constructed.json",
@@ -555,7 +555,7 @@
           "artifacts": [
             {
               "path": "tests/fixtures/acp2/science/plugin_upgrade/artifacts/v1-task-result.json",
-              "sha256": "9ace5db8b63ab00f9ce93b8e7db59ed4fa5ffb7c1ea299a6d2019cf511c8e3ee"
+              "sha256": "23cf6412f47219ec17bcbd93a966135faf15743958eeaf656996b028db9b4ab4"
             }
           ],
           "commands": [
@@ -633,7 +633,7 @@
           "artifacts": [
             {
               "path": "tests/fixtures/acp2/science/plugin_upgrade/artifacts/v1-task-result.json",
-              "sha256": "9ace5db8b63ab00f9ce93b8e7db59ed4fa5ffb7c1ea299a6d2019cf511c8e3ee"
+              "sha256": "23cf6412f47219ec17bcbd93a966135faf15743958eeaf656996b028db9b4ab4"
             },
             {
               "path": "tests/_acp2_upgrade_plugin_probe.py",
@@ -682,7 +682,7 @@
           "artifacts": [
             {
               "path": "tests/fixtures/acp2/science/plugin_upgrade/artifacts/v1-task-result.json",
-              "sha256": "9ace5db8b63ab00f9ce93b8e7db59ed4fa5ffb7c1ea299a6d2019cf511c8e3ee"
+              "sha256": "23cf6412f47219ec17bcbd93a966135faf15743958eeaf656996b028db9b4ab4"
             },
             {
               "path": "tests/test_acp2_science_plugin_gate.py",

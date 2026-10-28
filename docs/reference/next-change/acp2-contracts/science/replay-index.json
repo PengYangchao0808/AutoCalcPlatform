@@ -1,27 +1,9 @@
 {
-  "schema": "acp2.science.replay-index.v1",
-  "generated_by": "A-29",
-  "generated_at": "2026-10-23T05:39:50Z",
-  "worktree": "/opt/acp2-dev/A",
-  "interpreter": "/usr/bin/python3",
   "entries": [
     {
-      "entry_id": "full-science-gate",
-      "row_ids": [
-        "H1",
-        "H2",
-        "H3",
-        "H4",
-        "H5",
-        "H6",
-        "A-27b",
-        "A-28"
-      ],
       "command": "/usr/bin/python3 -m pytest tests/test_acp2_science_*.py tests/test_architecture_invariants.py tests/test_cccp_isolation.py tests/test_recovery_fixtures_smoke.py tests/test_packaging_assets.py -q",
       "cwd": "/opt/acp2-dev/A",
-      "interpreter": "/usr/bin/python3",
-      "expected_exit_code": 0,
-      "expected_result": "PASS",
+      "entry_id": "full-science-gate",
       "evidence_records": [
         "docs/reference/next-change/acp2-contracts/science/handoff-H1.json",
         "docs/reference/next-change/acp2-contracts/science/handoff-H2.json",
@@ -45,19 +27,25 @@
         "docs/reference/next-change/acp2-contracts/science/task-binding.schema.json",
         "/opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/gate.stdout.log",
         "/opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/gate.exit-code"
+      ],
+      "expected_exit_code": 0,
+      "expected_result": "PASS",
+      "interpreter": "/usr/bin/python3",
+      "row_ids": [
+        "H1",
+        "H2",
+        "H3",
+        "H4",
+        "H5",
+        "H6",
+        "A-27b",
+        "A-28"
       ]
     },
     {
-      "entry_id": "installed-package-wheel-probe",
-      "row_ids": [
-        "A-27b",
-        "A-28"
-      ],
       "command": "/usr/bin/python3 -m pytest tests/test_acp2_science_installed_package.py -q",
       "cwd": "/opt/acp2-dev/A",
-      "interpreter": "/usr/bin/python3",
-      "expected_exit_code": 0,
-      "expected_result": "PASS",
+      "entry_id": "installed-package-wheel-probe",
       "evidence_records": [
         "tests/test_acp2_science_installed_package.py",
         "/opt/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z/result.json",
@@ -65,24 +53,19 @@
         "/opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/a27b-wheel-probe.stderr.log",
         "/opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/a27b-wheel-probe.exit-code",
         "/opt/acp2-evidence/a-science-20261022/A/A-28/digest-fix-20261023T053334Z/wheel/cccp-0.2.0-py3-none-any.whl"
+      ],
+      "expected_exit_code": 0,
+      "expected_result": "PASS",
+      "interpreter": "/usr/bin/python3",
+      "row_ids": [
+        "A-27b",
+        "A-28"
       ]
     },
     {
-      "entry_id": "handoff-revision-and-digest-table",
-      "row_ids": [
-        "H0",
-        "H1",
-        "H2",
-        "H3",
-        "H4",
-        "H5",
-        "H6"
-      ],
       "command": "/usr/bin/python3 /opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/verify_revisions.py",
       "cwd": "/opt/acp2-dev/A",
-      "interpreter": "/usr/bin/python3",
-      "expected_exit_code": 0,
-      "expected_result": "PASS",
+      "entry_id": "handoff-revision-and-digest-table",
       "evidence_records": [
         "docs/reference/next-change/acp2-contracts/science/baseline.md",
         "docs/reference/next-change/acp2-contracts/science/handoff-H1.json",
@@ -93,84 +76,90 @@
         "docs/reference/next-change/acp2-contracts/science/handoff-H6.json",
         "/opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/verify-revisions.stdout.log",
         "/opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/verify-revisions.exit-code"
+      ],
+      "expected_exit_code": 0,
+      "expected_result": "PASS",
+      "interpreter": "/usr/bin/python3",
+      "row_ids": [
+        "H0",
+        "H1",
+        "H2",
+        "H3",
+        "H4",
+        "H5",
+        "H6"
       ]
     },
     {
-      "entry_id": "reverse-import-scan",
-      "row_ids": [
-        "H0"
-      ],
       "command": "/usr/bin/python3 /opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/scan_reverse_imports.py",
       "cwd": "/opt/acp2-dev/A",
-      "interpreter": "/usr/bin/python3",
-      "expected_exit_code": 0,
-      "expected_result": "PASS",
+      "entry_id": "reverse-import-scan",
       "evidence_records": [
         "/opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/reverse-imports.stdout.log",
         "/opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/reverse-imports.exit-code"
+      ],
+      "expected_exit_code": 0,
+      "expected_result": "PASS",
+      "interpreter": "/usr/bin/python3",
+      "row_ids": [
+        "H0"
       ]
     },
     {
-      "entry_id": "architecture-guards-and-workflows",
-      "row_ids": [
-        "H0"
-      ],
       "command": "/usr/bin/python3 -m pytest tests/test_architecture_invariants.py::test_unique_primitive_definitions tests/test_architecture_invariants.py::test_current_active_workflow_ids_are_exact_and_ordered tests/test_acp2_science_p1_gate.py -q",
       "cwd": "/opt/acp2-dev/A",
-      "interpreter": "/usr/bin/python3",
-      "expected_exit_code": 0,
-      "expected_result": "PASS",
+      "entry_id": "architecture-guards-and-workflows",
       "evidence_records": [
         "tests/test_architecture_invariants.py",
         "tests/test_acp2_science_p1_gate.py",
         "/opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/h3.stdout.log"
+      ],
+      "expected_exit_code": 0,
+      "expected_result": "PASS",
+      "interpreter": "/usr/bin/python3",
+      "row_ids": [
+        "H0"
       ]
     },
     {
-      "entry_id": "compatibility-and-assets",
-      "row_ids": [
-        "H0",
-        "H5"
-      ],
       "command": "/usr/bin/python3 -m pytest tests/test_packaging_assets.py tests/test_recovery_fixtures_smoke.py tests/test_cccp_isolation.py -q",
       "cwd": "/opt/acp2-dev/A",
-      "interpreter": "/usr/bin/python3",
-      "expected_exit_code": 0,
-      "expected_result": "PASS",
+      "entry_id": "compatibility-and-assets",
       "evidence_records": [
         "tests/test_packaging_assets.py",
         "tests/test_recovery_fixtures_smoke.py",
         "tests/test_cccp_isolation.py",
         "/opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/h5.stdout.log"
+      ],
+      "expected_exit_code": 0,
+      "expected_result": "PASS",
+      "interpreter": "/usr/bin/python3",
+      "row_ids": [
+        "H0",
+        "H5"
       ]
     },
     {
-      "entry_id": "h7-validator-and-adversarial-probes",
-      "row_ids": [
-        "H0",
-        "B25a-release-candidate"
-      ],
       "command": "/usr/bin/python3 -m pytest tests/test_acp2_science_h7_gate.py -q",
       "cwd": "/opt/acp2-dev/A",
-      "interpreter": "/usr/bin/python3",
-      "expected_exit_code": 0,
-      "expected_result": "PASS",
+      "entry_id": "h7-validator-and-adversarial-probes",
       "evidence_records": [
         "docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
         "tests/test_acp2_science_h7_gate.py",
         "docs/reference/next-change/acp2-contracts/science/replay-index.json"
+      ],
+      "expected_exit_code": 0,
+      "expected_result": "PASS",
+      "interpreter": "/usr/bin/python3",
+      "row_ids": [
+        "H0",
+        "B25a-release-candidate"
       ]
     },
     {
-      "entry_id": "sdk-documented-examples",
-      "row_ids": [
-        "A-28"
-      ],
       "command": "/usr/bin/python3 -m pytest tests/test_acp2_science_installed_package.py -k documented_examples -q",
       "cwd": "/opt/acp2-dev/A",
-      "interpreter": "/usr/bin/python3",
-      "expected_exit_code": 0,
-      "expected_result": "PASS",
+      "entry_id": "sdk-documented-examples",
       "evidence_records": [
         "docs/reference/next-change/acp2-contracts/science/examples/singlepoint_public_api.py",
         "docs/reference/next-change/acp2-contracts/science/examples/compile_recipe.py",
@@ -180,40 +169,54 @@
         "/opt/acp2-evidence/a-science-20261022/A/A-28/digest-fix-20261023T053334Z/harness-absent/result.json",
         "/opt/acp2-evidence/a-science-20261022/A/A-28/digest-fix-20261023T053334Z/harness-present/result.json",
         "/opt/acp2-evidence/a-science-20261022/A/A-28/digest-fix-20261023T053334Z/wheel/cccp-0.2.0-py3-none-any.whl"
+      ],
+      "expected_exit_code": 0,
+      "expected_result": "PASS",
+      "interpreter": "/usr/bin/python3",
+      "row_ids": [
+        "A-28"
       ]
     },
     {
-      "entry_id": "b25a-absence-check",
-      "row_ids": [
-        "B25a-release-candidate"
-      ],
       "command": "/usr/bin/python3 /opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/check_b25a_absent.py",
       "cwd": "/opt/acp2-dev/A",
-      "interpreter": "/usr/bin/python3",
-      "expected_exit_code": 0,
-      "expected_result": "PASS",
+      "entry_id": "b25a-absence-check",
       "evidence_records": [
         "/opt/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z/result.json",
         "/opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/a27b-wheel-probe.stdout.log",
         "/opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/a27b-wheel-probe.stderr.log",
         "/opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/a27b-wheel-probe.exit-code",
         "/opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/b25a-absence.stdout.log"
+      ],
+      "expected_exit_code": 0,
+      "expected_result": "PASS",
+      "interpreter": "/usr/bin/python3",
+      "row_ids": [
+        "B25a-release-candidate"
       ]
     },
     {
-      "entry_id": "manual-qa",
-      "row_ids": [
-        "H0"
-      ],
       "command": "/usr/bin/python3 -m pytest tests/test_acp2_science_h7_gate.py -q",
       "cwd": "/opt/acp2-dev/A",
-      "interpreter": "/usr/bin/python3",
-      "expected_exit_code": 0,
-      "expected_result": "PASS",
+      "entry_id": "manual-qa",
       "evidence_records": [
         "/opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/manual-qa-happy.log",
         "/opt/acp2-evidence/a-science-20261022/A/A-29/a29-20261023T053950Z/logs/manual-qa-failure.log"
+      ],
+      "expected_exit_code": 0,
+      "expected_result": "PASS",
+      "interpreter": "/usr/bin/python3",
+      "row_ids": [
+        "H0"
       ]
     }
-  ]
+  ],
+  "generated_at": "2026-10-23T05:39:50Z",
+  "generated_by": "A-29",
+  "harness_revision": {
+    "value": "837a1199ad121e1fc5e860c7de7227a50b76df00c8434bf168445b56d2cc2f69"
+  },
+  "interpreter": "/usr/bin/python3",
+  "schema": "acp2.science.replay-index.v1",
+  "worktree": "/opt/acp2-dev/A"
 }
