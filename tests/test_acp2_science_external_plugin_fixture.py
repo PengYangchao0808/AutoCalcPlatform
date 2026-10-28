@@ -170,7 +170,7 @@ def test_fixture_builds_with_the_platform_build_tool(built_wheel: dict[str, obje
     assert isinstance(wheel, Path) and isinstance(argv, list)
     assert wheel.is_file()
     assert wheel.name == WHEEL_FILENAME
-    assert "--no-isolation" in argv
+    assert "--no-isolation" in argv or "--no-build-isolation" in argv
     assert "build" in argv or "--no-index" in argv
 
 

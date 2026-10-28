@@ -108,6 +108,16 @@ def _stop(proc: subprocess.Popen[bytes]) -> None:
         proc.wait(timeout=10)
 
 
+@pytest.fixture(autouse=True)
+def _local_capabilities(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep capability validation hermetic (no cluster config on CI runners)."""
+    import acp.scheduler.capabilities as capabilities
+    import acp.scheduler.manager as manager_module
+
+    monkeypatch.setattr(capabilities, "local_satisfies", lambda required: True)
+    monkeypatch.setattr(manager_module, "local_satisfies", lambda required: True)
+
+
 def _manager(run_root: Path) -> JobManager:
     return JobManager(run_root=run_root, poll_interval=3600, reconnect_local_workers=True)
 

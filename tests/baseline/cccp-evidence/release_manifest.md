@@ -1,7 +1,7 @@
 # C08-s1b (T39 / C39b) — Full-release build spec, final change request & multi-wheel ownership (tracked)
 
 - **Owner:** C 路科学负责人 · **Plan:** `.omo/plans/acp-parallel-plan-3-cccp.md` todo 39 (C08-s1b / C39b)
-- **Base (fresh snapshot):** HEAD `b64dec651ea28446940f24034770e5ac08f58ab4`;
+- **Base (fresh snapshot):** HEAD `f1bb44ce23d2591d5593a4d8bfd332c82de1c2de`;
   worktree `pyproject.toml` sha256 `0c24617eb1a6ef5970e159fccf89a211e42183ddbbf356d105be4097ff274829`
   (git blob `25404ebd884066268a428948de8eb7d4cab23d22`; last commit touching it `f5f7064`).
   Shared dirty worktree — only T39 files staged by this task.

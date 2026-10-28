@@ -1,6 +1,6 @@
 ### 0. frozen input snapshot
-b64dec651ea28446940f24034770e5ac08f58ab4
-0c24617eb1a6ef5970e159fccf89a211e42183ddbbf356d105be4097ff274829  /ACPServer/AutoCalcPlatform/pyproject.toml
+f1bb44ce23d2591d5593a4d8bfd332c82de1c2de
+0c24617eb1a6ef5970e159fccf89a211e42183ddbbf356d105be4097ff274829  <repo>/pyproject.toml
 25404ebd884066268a428948de8eb7d4cab23d22
 
 ### 1. apply the requested patches in a throwaway git repo
@@ -15,7 +15,7 @@ removing build/bdist.linux-x86_64/wheel
 WARNING Support for `[tool.setuptools]` in `pyproject.toml` is still *beta*.
 Successfully built cccp-0.2.0-py3-none-any.whl
 总用量 43496
--rw-r--r--. 1 xieningke xieningke 44539846 10月 19 12:33 cccp-0.2.0-py3-none-any.whl
+-rw-r--r--. 1 <user> <user> 44539846 10月 19 12:33 cccp-0.2.0-py3-none-any.whl
 2f673bb135d2a6d184f53bff584dcbd9dd9c0d09f10abb2ad3a417353b65dc52  /tmp/opencode/t39-proof/dist-cccp/cccp-0.2.0-py3-none-any.whl
 
 ### 3. acp wheel (M2 ownership: no cccp/)
@@ -23,7 +23,7 @@ removing build/bdist.linux-x86_64/wheel
 WARNING Support for `[tool.setuptools]` in `pyproject.toml` is still *beta*.
 Successfully built acp-0.2.0-py3-none-any.whl
 总用量 1452
--rw-r--r--. 1 xieningke xieningke 1486160 10月 19 12:33 acp-0.2.0-py3-none-any.whl
+-rw-r--r--. 1 <user> <user> 1486160 10月 19 12:33 acp-0.2.0-py3-none-any.whl
 d2eb6eb9d3bc6fe0782dc6eb10750e0fa96ac6ed6f81de08b0ba7b2f7254aab0  /tmp/opencode/t39-proof/dist-acp/acp-0.2.0-py3-none-any.whl
 
 ### 4. namelist assertions

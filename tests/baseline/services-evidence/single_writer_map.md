@@ -1,6 +1,6 @@
 # Single-writer map — 共享文件单写者（B00-3 / todo 3，镜像并行索引 §5）
 
-**Created:** 2026-10-18，基线 HEAD `26ee295f911ae2c0dff0d3d7b01dd4779e5c87f9`。
+**Created:** 2026-10-18，基线 HEAD `5184f1452de1fdad73e2a78b5739daa6e671eb61`。
 **Authority:** 本表是 `docs/reference/next-change/ACP_Architecture_Progress_and_Parallel_Index_20261018.md` §5「单写者与交接规则」的**逐行镜像**。
 **Rule:** 本表行与 §5 行**必须 diff 一致**（同一行、同一写者）；由 `tests/test_services_first_slice_contracts.py` 比对守护。修改 §5 必须同步本表；修改本表必须同步 §5（且 §5 属 B 集成写者范围）。
 

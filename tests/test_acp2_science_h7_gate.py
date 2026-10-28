@@ -757,7 +757,7 @@ def test_flipped_unexecuted_b25a_pass_is_rejected() -> None:
     row["result"] = "PASS"
     row["gap"] = None
     row["revision_kind"] = "commit"
-    row["revision"] = "98fdc2eec026f6a181648c9d2a0c7e4a1b41f4c9"
+    row["revision"] = "4f123256dfd2e8d1a2486d422261405bc95efce0"
     row["evidence"]["executed"] = False
     row["evidence"]["commands"] = []
     with pytest.raises(H7RowStatusError) as error:

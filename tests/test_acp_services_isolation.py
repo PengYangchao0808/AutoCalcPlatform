@@ -428,7 +428,7 @@ def _packaging_include() -> list[str]:
     try:
         import tomllib
     except ModuleNotFoundError:  # pragma: no cover - Python 3.10
-        tomllib = None
+        import tomli as tomllib
     if tomllib is not None:
         data = tomllib.loads(text)
         return list(data["tool"]["setuptools"]["packages"]["find"]["include"])

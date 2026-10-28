@@ -1,6 +1,6 @@
 # Handoff registry — 跨路交接登记表（B00-3 / todo 3，与 C-T5 共同维护）
 
-**Created:** 2026-10-18，基线 HEAD `26ee295f911ae2c0dff0d3d7b01dd4779e5c87f9`。
+**Created:** 2026-10-18，基线 HEAD `5184f1452de1fdad73e2a78b5739daa6e671eb61`。
 **Owner of this file:** B 路集成写者（见 `single_writer_map.md` 第 4/7 行）；A/C 引用**同一版本**的本表，不各自复制。
 **含义:** 每次跨路交接（文件/契约/符号从一路交给另一路）在此登记。每片交接须能回溯：谁提供、谁消费、基于哪个基线、前置、验收方式、补丁是否已交付、是否已在消费者分支集成。
 
@@ -35,18 +35,18 @@
 
 | owner | 可修改范围 | provider | consumer | base_commit | prerequisites | acceptance | applied_commit | 状态 |
 |---|---|---|---|---|---|---|---|---|
-| A | `frontend/**`、Node 与前端专属测试 | A | B/C 提供接口与 fixture | `26ee295f911ae2c0dff0d3d7b01dd4779e5c87f9` | A00 前端基线地图（`docs/reference/current/ACP_Frontend_Baseline_Map_20261018.md`） | B 以黑盒浏览器场景执行；C 判定科学等价，A 源码写权不转移 | n/a | pending |
-| B | `src/acp_services/**`、scheduler/api、平台 planning/recovery、部署/config/CLI/init | B | A 消费；C 提供科学入口 | `26ee295f911ae2c0dff0d3d7b01dd4779e5c87f9` | 首片契约冻结（本表 + `ACP_Services_First_Slice_Contracts.md`） | B 保持现有 `src/acp` 兼容路径并通过定向测试 | n/a | pending |
-| C | `src/cccp/**`、登记移交的旧 acp 科学专属文件 | C | B/C 先固定逐文件或逐符号边界 | `26ee295f911ae2c0dff0d3d7b01dd4779e5c87f9` | C00 闭包地图（渠道 `docs/reference/next-change/ACP_Parallel_Plan_3_CCCP_20261018.md` C00/C01） | C 提取唯一实现与旧 shim 后由 B 应用接线 | n/a | pending |
-| B | 混合的 workflows/catalog/executor/results 等旧文件 | B 为接入写者 | C 提交符号迁移补丁与调用替换 | `26ee295f911ae2c0dff0d3d7b01dd4779e5c87f9` | C 提交具体符号迁移补丁；登记移交后才转移文件写权 | 禁止双方整文件搬迁；逐符号边界由 `migration_ledger.md` 守护 | n/a | pending |
-| C | 科学 schema、黄金 fixture、数值/单位/模式身份 | C | B/A 审阅可执行性与可显示性 | `26ee295f911ae2c0dff0d3d7b01dd4779e5c87f9` | cccp 任务契约（`cccp/calculation/requests.py`+`results.py`） | 平台 manifest/frames adapter 由 B 写并消费 C 的同一组 fixture | n/a | pending |
-| B | 平台 API/事件/prepare/envelope schema | B | A/C 共同审阅 | `26ee295f911ae2c0dff0d3d7b01dd4779e5c87f9` | 先固定正常/空/部分/错误/旧版本样例（见 `contract_samples/`） | 消费者对提供方发布的同一组 fixture 做契约测试 | n/a | pending |
-| B | `pyproject.toml`、`requirements-node.txt`、根 README/AGENTS、主方案、全局架构门、共享集成测试 | B 为集成写者 | A/C 提交精确修改需求 | `26ee295f911ae2c0dff0d3d7b01dd4779e5c87f9` | 科学/QC 门修订由 C 提供证据 | 各专属清单由所属路维护；B 只集成不越权改科学语义 | n/a | pending |
+| A | `frontend/**`、Node 与前端专属测试 | A | B/C 提供接口与 fixture | `5184f1452de1fdad73e2a78b5739daa6e671eb61` | A00 前端基线地图（`docs/reference/current/ACP_Frontend_Baseline_Map_20261018.md`） | B 以黑盒浏览器场景执行；C 判定科学等价，A 源码写权不转移 | n/a | pending |
+| B | `src/acp_services/**`、scheduler/api、平台 planning/recovery、部署/config/CLI/init | B | A 消费；C 提供科学入口 | `5184f1452de1fdad73e2a78b5739daa6e671eb61` | 首片契约冻结（本表 + `ACP_Services_First_Slice_Contracts.md`） | B 保持现有 `src/acp` 兼容路径并通过定向测试 | n/a | pending |
+| C | `src/cccp/**`、登记移交的旧 acp 科学专属文件 | C | B/C 先固定逐文件或逐符号边界 | `5184f1452de1fdad73e2a78b5739daa6e671eb61` | C00 闭包地图（渠道 `docs/reference/next-change/ACP_Parallel_Plan_3_CCCP_20261018.md` C00/C01） | C 提取唯一实现与旧 shim 后由 B 应用接线 | n/a | pending |
+| B | 混合的 workflows/catalog/executor/results 等旧文件 | B 为接入写者 | C 提交符号迁移补丁与调用替换 | `5184f1452de1fdad73e2a78b5739daa6e671eb61` | C 提交具体符号迁移补丁；登记移交后才转移文件写权 | 禁止双方整文件搬迁；逐符号边界由 `migration_ledger.md` 守护 | n/a | pending |
+| C | 科学 schema、黄金 fixture、数值/单位/模式身份 | C | B/A 审阅可执行性与可显示性 | `5184f1452de1fdad73e2a78b5739daa6e671eb61` | cccp 任务契约（`cccp/calculation/requests.py`+`results.py`） | 平台 manifest/frames adapter 由 B 写并消费 C 的同一组 fixture | n/a | pending |
+| B | 平台 API/事件/prepare/envelope schema | B | A/C 共同审阅 | `5184f1452de1fdad73e2a78b5739daa6e671eb61` | 先固定正常/空/部分/错误/旧版本样例（见 `contract_samples/`） | 消费者对提供方发布的同一组 fixture 做契约测试 | n/a | pending |
+| B | `pyproject.toml`、`requirements-node.txt`、根 README/AGENTS、主方案、全局架构门、共享集成测试 | B 为集成写者 | A/C 提交精确修改需求 | `5184f1452de1fdad73e2a78b5739daa6e671eb61` | 科学/QC 门修订由 C 提供证据 | 各专属清单由所属路维护；B 只集成不越权改科学语义 | n/a | pending |
 | B | 组件 manifest（`docs/reference/next-change/ACP_Services_Component_Manifest.md`） | B | A/C 引用 | `7074692` | 主方案 §27 模块归属 | manifest 状态枚举与 §27.1 对齐；候选不进 pyproject | `7074692` | delivered |
-| B | 首片契约 + 逐符号台账 + 单写者表（本目录） | B | A/C 消费同一版本 | `26ee295f911ae2c0dff0d3d7b01dd4779e5c87f9` | B00-3 验收；X2 六交付物冻结 | checker `tests/test_services_first_slice_contracts.py` PASS | n/a | pending |
+| B | 首片契约 + 逐符号台账 + 单写者表（本目录） | B | A/C 消费同一版本 | `5184f1452de1fdad73e2a78b5739daa6e671eb61` | B00-3 验收；X2 六交付物冻结 | checker `tests/test_services_first_slice_contracts.py` PASS | n/a | pending |
 | B | 现有 `acp.backends` re-export shim → `cccp.backends` 移交（前序计划样板） | B（历史） | 全 acp 消费者 | `2a23b93` | 前序迁移计划收口 | `test_architecture_invariants.py` 依赖方向门 | `66222f7` | integrated |
 | C | C01 逐工作流闭包（HN-01，8 工作流）+ C00 闭包地图 | C（HN-01 `ffcf1b8`；`tests/baseline/cccp-evidence/handoffs/HN-01-b06-closure.md`） | B（B06-3 todo 32 应用接线） | `ffcf1b8` | 计划三 C01（HN-01 delivered） | `tests/test_services_chain_switch.py`（能力表 8 integrated / 7 legacy；唯一调度器 + 按 attempt 冻结）+ 定向回归 PASS；真实科学 envelope 启用归 todo 34 | `f7a3321` | integrated |
-| A | A00 前端基线接管地图 | A | B/C 引用 | `26ee295f911ae2c0dff0d3d7b01dd4779e5c87f9` | 无 | 地图被 `ACP_Frontend_Baseline_Map_20261018.md` 引用 | `f410ac9d`（地图基线） | delivered |
+| A | A00 前端基线接管地图 | A | B/C 引用 | `5184f1452de1fdad73e2a78b5739daa6e671eb61` | 无 | 地图被 `ACP_Frontend_Baseline_Map_20261018.md` 引用 | `f410ac9d`（地图基线） | delivered |
 | B | 科学产品 → 帧 adapter（`src/acp/results/frames_adapter.py`、`tests/fixtures/science_products/frames_mapping/`；消费 C 的 HN-02） | C（HN-02 映射表 + 五态 fixture，`4d2c6f8d`） | B（adapter）+ A（显示） | `48b3d2f` | C-T13/HN-02 状态 A「契约可消费」；`src/acp/results/frames.py` 只读（ANTI #21） | B 经 TrajectoryFrame.to_node 与 TrajectoryAnnotation.to_annotation 投影并通过 HN-02 normal/empty/partial/corrupt/old 五态 fixture；固定输入经 Data 发布与读取 | 随 B28b 应用提交 | integrated |
 | B | `src/acp_services/store/**`、`src/acp_services/runtime/method_flags.py`、旧 `acp` 转发路径（store/migrations/naming/molecule_groups/storage layout+record/jobs types、catalog flag 转发） | B | A/C 消费（旧 import 路径不变，identity 转发） | `c874676b`（本切片起点；lane C 并发提交 `29b2e8f`） | todo 72 注入登记表（schema/store、migrations、参数转换行）；todo 6/11/25/31 已交付 | `tests/test_services_migration_equivalence.py`（隔离 DB 持久化/CAS + 参数转换 parity + identity + AST 隔离）+ 定向回归套件 PASS；`JobStorePort`/`MigrationsPort` 注入已删 | `1688a5a`（refactor(services): migrate injected store/migrations in-package） | integrated |
 | B | `src/acp_services/runtime/{plan_contracts,step_result,step_requirements}.py`、旧 `acp/calculations/{contracts,step_result,step_requirements}.py` 转发路径、`acp_services/runtime/recovery.py` 默认门 | B | A/C 消费（旧 import 路径不变，identity 转发） | `d45c1dd`（本切片起点） | todo 72 注入登记表（plan/step requirements 行）；todo 27/31 已交付；todo 78 需要 Services-native 步骤门 | `tests/test_services_migration_equivalence.py`（plan 闭包 identity + evaluate_prerequisite/validate_plan parity + AST 隔离）+ 678 定向回归 PASS；`ServicesPorts.step_requirements` 注入已删 | `0286b2b`（refactor(services): migrate plan/step-requirements closure in-package） | integrated |

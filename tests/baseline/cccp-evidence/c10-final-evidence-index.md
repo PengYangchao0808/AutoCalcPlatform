@@ -2,7 +2,7 @@
 
 - **owner:** C 路科学负责人（渠道 `docs/reference/next-change/ACP_Parallel_Plan_3_CCCP_20261018.md`）
 - **plan:** `.omo/plans/acp-parallel-plan-3-cccp.md` todo 51（C10-s4）
-- **base snapshot:** HEAD `355d96f66fcdaca2fc53d17c5e3eeca0319358ca`（T54 候选提交；本汇总在 T54 之后执行，评审 R4 §3.1）
+- **base snapshot:** HEAD `c7b0b4f89ad815be27ebf287764aa0870703dcb9`（T54 候选提交；本汇总在 T54 之后执行，评审 R4 §3.1）
 - **tracked_path:** `tests/baseline/cccp-evidence/c10-final-evidence-index.md`（C直写，`write_registry.md` §4.9）
 - **evidence root:** `.omo/evidence/acp-parallel-plan-3-cccp/`（gitignored）+ `tests/baseline/cccp-evidence/`（tracked）
 - **规则**: 仅汇总已可用证据；仍等待跨路应用/集成的项目**显式保持未关闭**；本汇总不构成 B 发布的额外等待项（发布前终验消费 T54；生产部署/发布后核对归 B-T76/F5）。
@@ -231,7 +231,7 @@
 
 | 项 | 值 |
 |---|---|
-| 候选提交 | `355d96f66fcdaca2fc53d17c5e3eeca0319358ca` |
+| 候选提交 | `c7b0b4f89ad815be27ebf287764aa0870703dcb9` |
 | 构建配置 sha256 | M2 cccp `8ee89c0c…`；M2 acp `e1bd2faf…`；M1 live `4d40cf84…`（= candidate blob） |
 | 产物 sha256 | M2 cccp `c66cc7c7…`；M2 acp `b1bc512f…`；M1 `bd2acb50…`（仅绑定本候选株，禁拼接） |
 | 运行环境 | /usr/bin/python3.11 · build 1.6.1 · setuptools 65.5.1 · 3 venv 离线 `--no-index` |

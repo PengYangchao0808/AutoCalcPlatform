@@ -1,6 +1,6 @@
 # acp_services public allowlist — 公开符号与依赖方向（B00-3 / todo 3）
 
-**Created:** 2026-10-18，基线 HEAD `26ee295f911ae2c0dff0d3d7b01dd4779e5c87f9`。
+**Created:** 2026-10-18，基线 HEAD `5184f1452de1fdad73e2a78b5739daa6e671eb61`。
 **Owner:** B 路（`src/acp_services/**` 单写者，见 `single_writer_map.md` 第 2 行）。
 **Scope:** `src/acp_services/`（尚未创建；本表是**冻结目标面**，不是实现）。首片只允许下列公开面。
 

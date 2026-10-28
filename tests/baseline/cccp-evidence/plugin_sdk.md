@@ -4,7 +4,7 @@
 - **Main plan:** `docs/reference/next-change/ACP_Parallel_Plan_3_CCCP_20261018.md` §C09 (关联 §31.1, OS-09, M1/M4)
 - **Extends:** C09-s1 / T44 (`tests/baseline/cccp-evidence/plugin_pilot_spec.md`, commit `637d8d3`)
 - **Write authority:** `C直写` — `src/cccp/plugin/**` (registered in `write_registry.md` §4.8); this spec + tests are C-owned tracked evidence.
-- **Base snapshot HEAD at spec time:** `e0acc29bd335542b39c1f43fac75941932a4258b` (shared dirty worktree; only this slice's files are staged in the T45 commit).
+- **Base snapshot HEAD at spec time:** `3cfd43975d735ef7500dc05553139f2332d08197` (shared dirty worktree; only this slice's files are staged in the T45 commit).
 - **Status:** SDK surface + example plugin + 7-class contract suite + deprecation policy delivered. External distribution entry-point discovery/installation remains out of scope (T46 only consumes the digest fields).
 
 ## 1. Invariants (unchanged from T44, now SDK-enforced)
