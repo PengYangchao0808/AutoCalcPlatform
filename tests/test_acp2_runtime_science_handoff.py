@@ -26,8 +26,8 @@ import pytest
 _REPO = Path(__file__).resolve().parents[1]
 _B20B = _REPO / "reports" / "acp2_implementation" / "bb45a46" / "B" / "B20b"
 _B20 = _REPO / "reports" / "acp2_implementation" / "bb45a46" / "B" / "B20"
-_A_ROOT = Path("/ACPServer/acp2-development/A")
-_C_ROOT = Path("/ACPServer/acp2-development/C")
+_A_ROOT = Path("<acp2-dev>/A")
+_C_ROOT = Path("<acp2-dev>/C")
 
 _CLAIM_STATUSES = {"supported", "refuted", "inconclusive", "not_evaluated"}
 _REQUIRED_TOP_LEVEL = (
@@ -259,7 +259,7 @@ def test_a_and_c_references_are_attached_by_reference_not_fabricated() -> None:
     assert c_ref["digest"] is None
     for expected in c_ref["expected_artifacts"]:
         assert expected["path"].startswith(
-            "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/da-research-live/b/"
+            "reports/acp2_implementation/bb45a46/C/da-research-live/b/"
         )
         assert expected["schema"].startswith(("acp2.experience.", "acp2.acceptance."))
     assert c_ref["does_not_overwrite_b_task_truth"] is True

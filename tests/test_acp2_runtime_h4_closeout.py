@@ -32,7 +32,7 @@ RERUN = EVIDENCE / "rerun-index.json"
 REUSABLE = EVIDENCE / "reusable-research-records.json"
 RECEIPT = EVIDENCE / "h4-receipt.md"
 CANDIDATE_FILES = EVIDENCE / "candidate-files.sha256"
-OVERLAY = Path("/ACPServer/acp2-development/data/b/b20-candidate")
+OVERLAY = Path("/opt/acp2-dev/data/b/b20-candidate")
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
@@ -176,7 +176,7 @@ def test_closeout_input_set_excludes_its_own_digest() -> None:
     closeout = _load(CLOSEOUT)
     input_set = _load(INPUT_SET)
 
-    closeout_path = str(CLOSEOUT)
+    closeout_path = str(CLOSEOUT.relative_to(REPO))
     entry_paths = {entry["path"] for entry in input_set["entries"]}
     assert closeout_path not in entry_paths
     assert closeout["self_exclusion"]["closeout_self_in_input_set"] is False
@@ -223,13 +223,15 @@ def test_final_reference_digest_and_index_chain() -> None:
 
     assert index["closeout"]["final_reference_digest"] == stored
     assert index["closeout"]["closeout_input_digest"] == input_set["closeout_input_digest"]
-    assert index["closeout"]["path"] == str(CLOSEOUT)
+    assert index["closeout"]["path"] == str(CLOSEOUT.relative_to(REPO))
     assert index["h4_status"] == "OPEN"
     assert index["closed"] is False
     assert index["mechanism_proven"] is False
 
-    assert str(FINAL_INDEX) not in {entry["path"] for entry in input_set["entries"]}
-    assert str(EVIDENCE / "h4-final-index.json") not in {
+    assert str(FINAL_INDEX.relative_to(REPO)) not in {
+        entry["path"] for entry in input_set["entries"]
+    }
+    assert str((EVIDENCE / "h4-final-index.json").relative_to(REPO)) not in {
         entry["path"] for entry in input_set["entries"]
     }
 
@@ -247,6 +249,10 @@ def test_run_spec_values_are_exact_and_do_not_fail_evidence_phase() -> None:
     assert spec["verdict"]["evidence_phase_failed_by_elapsed_time"] is False
 
 
+@pytest.mark.skipif(
+    not OVERLAY.is_dir(),
+    reason="B20 candidate worktree is external evidence (not part of a clean checkout)",
+)
 def test_candidate_freeze_is_verified_and_immutable() -> None:
     candidate = _load(CANDIDATE)
     assert candidate["schema"] == "acp2.b20c.p2-candidate.v1"
@@ -308,7 +314,7 @@ def test_rerun_commands_are_exact_and_placeholder_free() -> None:
 
     exec_command = next(c for c in rerun["commands"] if c["phase"] == "B20a-exec")
     assert exec_command["argv"] == [
-        "/ACPServer/acp2-development/venvs/b/bin/python",
+        "/opt/acp2-dev/venvs/b/bin/python",
         "scripts/acceptance/acp2_runtime.py",
         "--scenario",
         "da-runtime",
@@ -317,9 +323,9 @@ def test_rerun_commands_are_exact_and_placeholder_free() -> None:
         "--controller",
         "http://127.0.0.1:18781",
         "--fixture",
-        "/ACPServer/acp2-development/data/b/fixtures/da/da-run.json",
+        "/opt/acp2-dev/data/b/fixtures/da/da-run.json",
         "--out",
-        "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20",
+        "reports/acp2_implementation/bb45a46/B/B20",
         "--timeout",
         "14400",
     ]

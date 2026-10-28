@@ -21,9 +21,9 @@ RESULT_VALUES = {"PASS", "FAIL", "NOT_VERIFIED"}
 #: declare the external reference and its status instead of pointing at a
 #: repo-relative file that a clean checkout cannot contain.
 EXTERNAL_EVIDENCE_ROOTS = (
-    Path("/ACPServer/acp2-development/A"),
-    Path("/ACPServer/acp2-development/C"),
-    Path("/ACPServer/acp2-development/evidence/C"),
+    Path("/opt/acp2-dev/A"),
+    Path("/opt/acp2-dev/C"),
+    Path("/opt/acp2-dev/evidence/C"),
     REPO_ROOT / "reports/acp2_implementation/bb45a46/C",
 )
 EXTERNAL_EVIDENCE_STATUS = "NOT_VERIFIED(external_evidence_not_in_repo)"
@@ -212,16 +212,9 @@ def test_source_and_client_revisions_are_distinguished() -> None:
     assert source["raw_receipt_shas_need_not_match"] is True
     assert index["client_revision"]["value"] == "39d4aeb20451c984e20d27e12270a15070adce12"
     assert "absent" in index["client_revision"]["status"]
-    # The index is a frozen historical record of candidate bb45a46: its
-    # harness_revision is the digest that candidate shipped.  M0-03 changes
-    # acp2_runtime.py (required observations), so the recorded digest is pinned
-    # as history instead of being re-derived from the current working tree.
-    assert index["harness_revision"]["value"] == (
-        "b5499a1ce889392b16f7724b556636a1cfa283d664ab1d890ca366c49fea5e8f"
+    assert index["harness_revision"]["value"] == _sha256(
+        REPO_ROOT / "scripts/acceptance/acp2_runtime.py"
     )
-    live_harness_digest = _sha256(REPO_ROOT / "scripts/acceptance/acp2_runtime.py")
-    assert live_harness_digest != index["harness_revision"]["value"]
-    assert len(live_harness_digest) == 64
     assert index["evidence_revision"]["value"]
     assert index["c35"]["disposition"] in {"c35_absent", "C35_INPUT_CYCLE"}
     assert index["c35"]["disposition"] == "c35_absent"
