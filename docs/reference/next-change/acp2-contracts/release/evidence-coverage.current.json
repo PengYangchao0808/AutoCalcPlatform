@@ -22,7 +22,7 @@
   },
   "checkpoints": [
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "aggregate",
       "evidence_level": "L0",
       "evidence_revision": "working-tree",
@@ -48,7 +48,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "aggregate",
       "evidence_level": "L0",
       "evidence_revision": "working-tree",
@@ -74,7 +74,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L1",
       "evidence_revision": "e59ce7f2f8c7dbcf2277c27223495c5b7bce3c8a",
@@ -97,7 +97,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L1",
       "evidence_revision": "e59ce7f2f8c7dbcf2277c27223495c5b7bce3c8a",
@@ -121,10 +121,10 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L1",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "id": "M0-02c",
       "impact_globs": [
         ".github/workflows/ci.yml",
@@ -144,7 +144,7 @@
       "status": "OPEN"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L1",
       "evidence_revision": "3663d54708503e55a606fb9cf07c14c2e160d6c0",
@@ -169,7 +169,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L1",
       "evidence_revision": "3663d54708503e55a606fb9cf07c14c2e160d6c0",
@@ -194,7 +194,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L1",
       "evidence_revision": "3663d54708503e55a606fb9cf07c14c2e160d6c0",
@@ -220,7 +220,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L1",
       "evidence_revision": "7959bf88ea5a583340bf575c44039b892cffd40d",
@@ -245,7 +245,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L1",
       "evidence_revision": "7959bf88ea5a583340bf575c44039b892cffd40d",
@@ -270,7 +270,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L1",
       "evidence_revision": "7959bf88ea5a583340bf575c44039b892cffd40d",
@@ -295,7 +295,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L1",
       "evidence_revision": "62d3ee73e254acd32500d047387ef4856d4ba456",
@@ -320,7 +320,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L1",
       "evidence_revision": "62d3ee73e254acd32500d047387ef4856d4ba456",
@@ -345,7 +345,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L1",
       "evidence_revision": "62d3ee73e254acd32500d047387ef4856d4ba456",
@@ -370,7 +370,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L2",
       "evidence_revision": "acad3863b03f2740d77c680c8b7ff4c8e1d2ad9e",
@@ -394,7 +394,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L2",
       "evidence_revision": "acad3863b03f2740d77c680c8b7ff4c8e1d2ad9e",
@@ -419,7 +419,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L2",
       "evidence_revision": "acad3863b03f2740d77c680c8b7ff4c8e1d2ad9e",
@@ -444,7 +444,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L2",
       "evidence_revision": "d736a82140de626ba79b3d363e13c00ae1392083",
@@ -469,7 +469,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L2",
       "evidence_revision": "d736a82140de626ba79b3d363e13c00ae1392083",
@@ -494,7 +494,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L2",
       "evidence_revision": "d736a82140de626ba79b3d363e13c00ae1392083",
@@ -519,7 +519,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L2",
       "evidence_revision": "bc27a569e862aac69f619e471edc756c91da1f0f",
@@ -544,7 +544,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L2",
       "evidence_revision": "bc27a569e862aac69f619e471edc756c91da1f0f",
@@ -569,7 +569,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L2",
       "evidence_revision": "bc27a569e862aac69f619e471edc756c91da1f0f",
@@ -594,7 +594,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L2",
       "evidence_revision": "bc27a569e862aac69f619e471edc756c91da1f0f",
@@ -618,7 +618,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L2",
       "evidence_revision": "42220b4f3046f805c0051a32e34a52743af022dc",
@@ -642,7 +642,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L2",
       "evidence_revision": "42220b4f3046f805c0051a32e34a52743af022dc",
@@ -667,7 +667,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L3",
       "evidence_revision": "d7f0b6b3e946ff24696d923e3360aac10163e04f",
@@ -692,7 +692,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L3",
       "evidence_revision": "d7f0b6b3e946ff24696d923e3360aac10163e04f",
@@ -717,7 +717,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L2",
       "evidence_revision": "35c5ced0d8fe2a15971a511c8374703d1bccf27d",
@@ -740,7 +740,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
       "evidence_level": "L2",
       "evidence_revision": "35c5ced0d8fe2a15971a511c8374703d1bccf27d",
@@ -765,7 +765,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "aggregate",
       "evidence_level": "L4",
       "evidence_revision": "293419cf4a8363ab18311f634d62c49d04047f32",
@@ -792,7 +792,7 @@
       "status": "CLOSED"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "aggregate",
       "evidence_level": "L4",
       "evidence_revision": "293419cf4a8363ab18311f634d62c49d04047f32",
@@ -819,13 +819,13 @@
       "status": "CLOSED"
     }
   ],
-  "coverage_sha256": "fa04b53dca214ebbc40bf1d85edd455b6d32e57dd49e928d9a4b2633b4a97018",
+  "coverage_sha256": "38b1794fbba08642100dd720df1548f6ba5084150c7950e5a2d07e96b005824a",
   "deferred_rows": [
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "capability": "SCOPE-DEF-01",
       "evidence_kind": "fixture",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "id": "DEF-01",
       "impact_globs": [
         "docs/reference/next-change/acp2-contracts/release/scope.json"
@@ -844,10 +844,10 @@
       "status": "OPEN"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "capability": "SCOPE-DEF-02",
       "evidence_kind": "fixture",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "id": "DEF-02",
       "impact_globs": [
         "docs/reference/next-change/acp2-contracts/release/scope.json"
@@ -866,10 +866,10 @@
       "status": "OPEN"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "capability": "SCOPE-DEF-03",
       "evidence_kind": "fixture",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "id": "DEF-03",
       "impact_globs": [
         "docs/reference/next-change/acp2-contracts/release/scope.json"
@@ -893,11 +893,11 @@
   },
   "gaps": [
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "client@2.2.0 默认握手 + 安装后握手",
       "evidence_kind": "live",
       "evidence_level": "L5",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H2",
         "H7"
@@ -928,14 +928,14 @@
       "title": "ACP 协议协商不兼容锁定 DSH SDK 默认请求"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "真实 SDK/DSH 扩展路径 + 协商后 18 工具/权限负例 + 全 P2 调用",
       "conditional_tasks": [
         "M0-13"
       ],
       "evidence_kind": "live",
       "evidence_level": "L2",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H2",
         "H4"
@@ -974,11 +974,11 @@
       "title": "P2 工具缺失、扩展版本冲突、虚假协商声明"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "真实 Bridge→MCP→Controller prepare/read；digest/attempt 负例",
       "evidence_kind": "fixture",
       "evidence_level": "L2",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H3"
       ],
@@ -1011,11 +1011,11 @@
       "title": "Bridge 的 prepare/read/evidence 参数与服务端不一致"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "descriptor 三态 + 内置/第三方分析共用公开路径与 digest",
       "evidence_kind": "live",
       "evidence_level": "L3",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H3",
         "H5"
@@ -1050,14 +1050,14 @@
       "title": "MCP 科学发现信息不足，分析 registry 无生产 handler"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "发布包 Supervisor 的真 DSH 首轮与反馈轮",
       "conditional_tasks": [
         "M0-13"
       ],
       "evidence_kind": "live",
       "evidence_level": "L3",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H2",
         "H4",
@@ -1094,11 +1094,11 @@
       "title": "DSH–RPH–Supervisor 无生产装配；CLI 为打印骨架"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "另一目录无源码 profile/doctor/scoped key",
       "evidence_kind": "live",
       "evidence_level": "L5",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H7"
       ],
@@ -1130,11 +1130,11 @@
       "title": "profile 固定为单机验收路径，身份/配置缺少用户化入口"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "CCCP 原件→唯一 adapter→RPH；缺失检查不升级",
       "evidence_kind": "live",
       "evidence_level": "L4",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H4"
       ],
@@ -1166,11 +1166,11 @@
       "title": "EvidenceReport 两套模型不兼容，无转换权威"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "全身份/摘要负例 + 正确归属真实证据",
       "evidence_kind": "live",
       "evidence_level": "L4",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H4"
       ],
@@ -1201,11 +1201,11 @@
       "title": "Supervisor 不校验报告/事件归属及可信来源"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "超一分钟、多崩溃点、跨进程同 TaskRef 不重复",
       "evidence_kind": "live",
       "evidence_level": "L4",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H4",
         "H6"
@@ -1239,11 +1239,11 @@
       "title": "长任务等待与研究恢复只是单次内存流程"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "带电/开壳层、多输入、clarification、双摘要向量",
       "evidence_kind": "live",
       "evidence_level": "L3",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H4"
       ],
@@ -1276,11 +1276,11 @@
       "title": "默认 Planner 硬编码科学参数；digest 是 round 编号"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "真 Chromium 网络 + 平台 approval/TaskRef + 刷新/跨端",
       "evidence_kind": "live",
       "evidence_level": "L3",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H4"
       ],
@@ -1311,11 +1311,11 @@
       "title": "前端审批/提交仍为本地 fixture 逻辑"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "Agent omit-all/budget-only 等真实入口负例",
       "evidence_kind": "fixture",
       "evidence_level": "L2",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H4",
         "H6"
@@ -1348,11 +1348,11 @@
       "title": "研究审批由客户端字段触发；budget-only 判断不一致"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "规划/QC 调用前限额、rescue/重启/真实 deadline + 历史 attempt 可信结算；能力矩阵一致",
       "evidence_kind": "live",
       "evidence_level": "L4",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H4",
         "H6"
@@ -1391,11 +1391,11 @@
       "title": "预算表示分裂，模型/QC/bsub 并非全面前置强制"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "空项目 writer→CAS→恢复，无 seed fixture",
       "evidence_kind": "fixture",
       "evidence_level": "L2",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H4",
         "H6"
@@ -1429,11 +1429,11 @@
       "title": "Proposal/ResearchRecord 有 store/read，无产品写入路径"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "ADR-008 + 生产 DAG adapter/完成资格/声明产物/双身份/额度/fencing/恢复 + 原生 Recipe",
       "evidence_kind": "live",
       "evidence_level": "L4",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H4"
       ],
@@ -1467,11 +1467,11 @@
       "title": "bounded Recipe DAG 未装配进生产执行链"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "生产纯分析安装/启用/执行 + 不改前端源码的新 capability + 真浏览器/历史只读；worker-hosted COMPUTE 独立 DEFERRED/NOT_VERIFIED",
       "evidence_kind": "live",
       "evidence_level": "L5",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H5",
         "H7"
@@ -1506,11 +1506,11 @@
       "title": "科学 UI 为三种固定工作流切片，插件驱动体验未闭环"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "全组件制品、RPH bin、静态资产、独立安装",
       "evidence_kind": "aggregate",
       "evidence_level": "L5",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H7"
       ],
@@ -1544,11 +1544,11 @@
       "title": "RPH/静态资产/独立安装发行未完成"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "ADR-008 + 当前 BOM 的真实模型/科学/LSF/浏览器/跨领域/安装证据",
       "evidence_kind": "aggregate",
       "evidence_level": "L5",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H0",
         "H1",
@@ -1598,11 +1598,11 @@
       "title": "真实端到端证据缺失，部分 live harness 为固定缺口分支"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "持久候选 ref、可取回制品、coverage/reuse 机械复核",
       "evidence_kind": "aggregate",
       "evidence_level": "L5",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H0",
         "H7"
@@ -1636,11 +1636,11 @@
       "title": "候选、发行、索引与证据根不统一"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "真实生产者→消费者常驻门，五类证据明确分层",
       "evidence_kind": "fixture",
       "evidence_level": "L2",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H0",
         "H1",
@@ -1687,11 +1687,11 @@
       "title": "测试重心在各自契约和 fixture，缺少真实消费对接"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "跨操作/target/并发/新实例重试，无双调用/串结果",
       "evidence_kind": "fixture",
       "evidence_level": "L2",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H3",
         "H4"
@@ -1723,11 +1723,11 @@
       "title": "Bridge 幂等缓存跨操作/跨目标复用（签名不含 operation/task/attempt/resource）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "prepare→submit 真提交；重试完整 TaskRef；无假成功",
       "evidence_kind": "fixture",
       "evidence_level": "L2",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H3",
         "H4"
@@ -1759,11 +1759,11 @@
       "title": "MCP 跨工具共享幂等缓存；submit 重放丢 TaskRef"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "HTTP/CLI/MCP 相同有效 JobSpec/应用层拒绝；真实 remote 约束",
       "evidence_kind": "live",
       "evidence_level": "L4",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H3",
         "H6"
@@ -1795,11 +1795,11 @@
       "title": "MCP normalizer 丢弃执行目标等 8 个 HTTP 支持的字段"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "同项目两用户不串任务（显式 conflict/隔离）+ admission principal + 同用户 replay",
       "evidence_kind": "live",
       "evidence_level": "L4",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H6"
       ],
@@ -1830,11 +1830,11 @@
       "title": "提交幂等范围硬编码 `LOCAL_PRINCIPAL_ID`（admission 记账同样合并）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "活跃会话撤销后写/控制/读一致拒绝且无副作用",
       "evidence_kind": "live",
       "evidence_level": "L4",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H3",
         "H6"
@@ -1866,11 +1866,11 @@
       "title": "MCP 缓存命中不重验凭据（identity 仅启动时调用一次）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "closing_evidence": "member 伪造拒绝、历史/当前回执上下文分离、执行身份绑定、purge 后可核验、重复回执幂等",
       "evidence_kind": "live",
       "evidence_level": "L4",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "h_rows": [
         "H4",
         "H6"
@@ -1924,9 +1924,9 @@
   },
   "h_rows": [
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "aggregate",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "gaps": [
         "G18",
         "G19",
@@ -1955,9 +1955,9 @@
       "title": "基线与边界"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "fixture",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "gaps": [
         "G18",
         "G20"
@@ -1985,9 +1985,9 @@
       "title": "契约可消费"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "live",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "gaps": [
         "G01",
         "G02",
@@ -2020,9 +2020,9 @@
       "title": "真实 MCP/DSH 握手"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "live",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "gaps": [
         "G03",
         "G04",
@@ -2057,9 +2057,9 @@
       "title": "Local/LSF 基础闭环"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "live",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "gaps": [
         "G02",
         "G05",
@@ -2104,9 +2104,9 @@
       "title": "限定反应科学闭环"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "live",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "gaps": [
         "G04",
         "G16",
@@ -2138,9 +2138,9 @@
       "title": "插件扩展"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "aggregate",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "gaps": [
         "G09",
         "G12",
@@ -2179,9 +2179,9 @@
       "title": "跨领域与可靠性"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "evidence_kind": "live",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "gaps": [
         "G01",
         "G05",
@@ -2253,7 +2253,7 @@
   "task_id": "M0-01",
   "tasks": [
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [
         "M0-01a",
         "M0-01b"
@@ -2289,7 +2289,7 @@
       "title": "冻结整改基线与 26 项机器可追踪台账"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [
         "M0-02a",
         "M0-02b",
@@ -2326,7 +2326,7 @@
       "title": "建立真实消费者 CI 门并修复 CI 自身断点"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [
         "M0-03a",
         "M0-03b",
@@ -2363,7 +2363,7 @@
       "title": "修正证据标签、live harness 骨架与候选索引骨架"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "fixture",
       "evidence_level": "L2",
@@ -2397,7 +2397,7 @@
       "title": "统一 CommandIdentity，修复跨用户幂等与 admission 归属（G24）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "fixture",
       "evidence_level": "L2",
@@ -2432,7 +2432,7 @@
       "title": "删除 MCP/Bridge 第二幂等权威并加入撤权重验（G21/G22/G25）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "fixture",
       "evidence_level": "L2",
@@ -2464,7 +2464,7 @@
       "title": "修复执行字段与跨入口 JobSpec 等价（G23）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "fixture",
       "evidence_level": "L2",
@@ -2497,7 +2497,7 @@
       "title": "可信 usage receipt 与结算绑定（G26）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "live",
       "evidence_level": "L1",
@@ -2529,7 +2529,7 @@
       "title": "标准 MCP 握手与 ADR-006（G01）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "live",
       "evidence_level": "L1",
@@ -2562,7 +2562,7 @@
       "title": "真实 DSH 研究扩展协商接线验证（G02/G04，R12）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "live",
       "evidence_level": "L0",
@@ -2594,7 +2594,7 @@
       "title": "环境、账号与授权就绪（G06/G17/G18）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "fixture",
       "evidence_level": "L0",
@@ -2629,7 +2629,7 @@
       "title": "身份、字段与迁移决策冻结（G02/G03/G12/G13/G20）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "fixture",
       "evidence_level": "L0",
@@ -2661,7 +2661,7 @@
       "title": "扩展协商与 CI 决策冻结（G02/G04/G20）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "live",
       "evidence_level": "L1",
@@ -2691,7 +2691,7 @@
       "title": "DSH 外部适配依赖变更（条件任务，G02/G05）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [
         "M1-01a",
         "M1-01b",
@@ -2730,7 +2730,7 @@
       "title": "应用/MCP/Artifact/Analysis 契约统一（G02/G03/G04）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "fixture",
       "evidence_level": "L1",
@@ -2763,7 +2763,7 @@
       "title": "ResearchRecord、提交意图、事件与恢复契约（G09/G14）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "fixture",
       "evidence_level": "L1",
@@ -2796,7 +2796,7 @@
       "title": "Evidence 投影、TaskRef 与 ResearchDecision 契约（G07/G08）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [
         "M1-04a",
         "M1-04b",
@@ -2835,7 +2835,7 @@
       "title": "科学输入、多摘要、SubmitPolicy 与 Budget 契约（G10/G12/G13）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "fixture",
       "evidence_level": "L0",
@@ -2868,7 +2868,7 @@
       "title": "新建 ADR-008 并冻结限定 DA 科学判据（G15/G18）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "fixture",
       "evidence_level": "L2",
@@ -2903,7 +2903,7 @@
       "title": "早期薄纵切与 Candidate-Contracts（G02/G07/G11/G14/G20）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [
         "M2-01a",
         "M2-01b",
@@ -2940,7 +2940,7 @@
       "title": "Research writer、跨库 Saga 与 P2 工具（G02/G14）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "fixture",
       "evidence_level": "L2",
@@ -2973,7 +2973,7 @@
       "title": "Artifact 链、科学发现与真实 `vibration.analyze`（G03/G04）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [
         "M2-03a",
         "M2-03b",
@@ -3012,7 +3012,7 @@
       "title": "服务端审批策略与预算强制（G12/G13）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [
         "M2-04a",
         "M2-04b",
@@ -3051,7 +3051,7 @@
       "title": "Bounded Recipe DAG 生产接线（G15）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "fixture",
       "evidence_level": "L2",
@@ -3084,7 +3084,7 @@
       "title": "第三方科学插件生产装配（G04/G16，R07）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [
         "M3-01a",
         "M3-01b"
@@ -3122,7 +3122,7 @@
       "title": "真实 MCP PlatformClient、Bridge 参数与 TaskRef（G02/G03/G21）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [
         "M3-02a",
         "M3-02b"
@@ -3159,7 +3159,7 @@
       "title": "CLI 组合根、可移植 profile 与 doctor（G05/G06/G17）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "fixture",
       "evidence_level": "L3",
@@ -3192,7 +3192,7 @@
       "title": "生产 Planner、科学确认与模型预算 gateway（G10/G13）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "fixture",
       "evidence_level": "L2",
@@ -3226,7 +3226,7 @@
       "title": "可恢复 Supervisor、证据归属与研究决策（G07/G08/G09）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [
         "M3-05a",
         "M3-05b"
@@ -3260,7 +3260,7 @@
       "title": "Workbench 真实审批与提交（G11）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "fixture",
       "evidence_level": "L2",
@@ -3291,7 +3291,7 @@
       "title": "P3 Schema-Driven capability form（G16）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "fixture",
       "evidence_level": "L2",
@@ -3339,7 +3339,7 @@
       "title": "无 QC 的全产品链与故障矩阵（G20 及所有接口项）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "live",
       "evidence_level": "L3",
@@ -3379,7 +3379,7 @@
       "title": "真 DSH/模型 + Local 科学 + Chromium（G05/G06/G11/G18）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "live",
       "evidence_level": "L4",
@@ -3417,7 +3417,7 @@
       "title": "LSF、执行约束、控制与恢复（G18/G23/G24/G25/G13）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "live",
       "evidence_level": "L4",
@@ -3453,7 +3453,7 @@
       "title": "限定 Diels–Alder 科学纵切（G07/G08/G15/G18）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "live",
       "evidence_level": "L3",
@@ -3486,7 +3486,7 @@
       "title": "第三方 capability 插件纵切（G16/G18）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [
         "M4-06a",
         "M4-06b"
@@ -3523,11 +3523,11 @@
       "title": "跨领域、迁移与长期可靠性 required 行（G18）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "live",
       "evidence_level": "L3",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "gaps": [
         "G06",
         "G17"
@@ -3559,7 +3559,7 @@
       "title": "全组件制品与安装入口（G06/G17）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "aggregate",
       "evidence_level": "L5",
@@ -3594,11 +3594,11 @@
       "title": "单一 BOM、可取回制品与证据覆盖矩阵（G18/G19/G20）"
     },
     {
-      "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "checkpoints": [],
       "evidence_kind": "live",
       "evidence_level": "L5",
-      "evidence_revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
       "gaps": [
         "G01",
         "G06",

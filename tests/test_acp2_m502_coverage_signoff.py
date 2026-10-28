@@ -60,7 +60,9 @@ def test_bom_is_the_clean_m5_02_candidate(bom) -> None:
     assert bom["schema"] == "acp2.release.bom.v1"
     assert bom["task_id"] == "M5-02"
     assert bom["source"]["clean"] is True
-    assert bom["source"]["revision"].startswith("f6b6153")
+    # M5-03 candidate bump (2026-10-28): the operator's F1-F7 fixes moved the
+    # candidate from f6b6153 to the commit that carries them.
+    assert bom["source"]["revision"].startswith("5f3b867")
     assert bom["source"]["persistent_tag"].startswith("acp2-remediation-m5-02-candidate")
     assert bom["source"]["release_overlay"]
     assert bom["evidence"]["reuse_rule"] == "exact"
