@@ -152,7 +152,7 @@
       "NOT_APPLICABLE"
     ]
   },
-  "contract_digest": "1abc2ebff6438e7ffb8ae972edb657dbb94463fb1a60a14cfc2e0046f7b7f48a",
+  "contract_digest": "f05c180c19b4a8c7030f02418d496808cf726de7edb58b7773a181a58778ce8f",
   "contract_digest_rule": "sha256 over sorted lines '<path> <sha256>\\n' for delivered contracts excluding manifest.json, runtime/baseline-lock.json and release/bom.current.json (self-referential files; the BOM embeds this aggregate digest).",
   "contract_version": "1.7.0",
   "contract_version_history": [
@@ -224,7 +224,7 @@
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/manifest.json",
-      "sha256": "f7163da69190ef40b162280d70a3d72741a1dc9764f8dbaabedc7d2ffe6ad610",
+      "sha256": "6e2535132a403a77a025d4bcf5b4208c590476dfba5ae66af27fa7bba39b4da3",
       "status": "delivered"
     },
     {
@@ -474,7 +474,7 @@
       "note": "M5-02 clean-candidate BOM: 27 artifacts with URI+sha256+size, toolchain/DSH locks, contract digest and coverage canonical digest. Self-referential: excluded from contract_digest because it embeds that aggregate digest.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/release/bom.current.json",
-      "sha256": "1a0fb8e1ef9d826d9674925e0c556b6c25d4667da16a070bce59fde2a8d16910",
+      "sha256": "4bc5210573f6201c32d2d38f60ab020884e5fd9d10fa3d94f3808906b9332817",
       "status": "delivered"
     },
     {
@@ -483,7 +483,7 @@
       "note": "M5-02 final coverage ledger: 39 tasks / 32 checkpoints / 26 gaps / 8 H rows + 3 DEFERRED rows, each with a receipt+sha256, candidate, reuse and required_observations. Delivery status lives only here, never in the BOM.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/release/evidence-coverage.current.json",
-      "sha256": "7057965b24b5665c4f63f403522572f2d899f33b3995bae9e026fb943f79640d",
+      "sha256": "74d07f521c9c33f664e3a0a624d8d44ceb4cc52073157250c8bf811c9f315ae3",
       "status": "delivered"
     }
   ],

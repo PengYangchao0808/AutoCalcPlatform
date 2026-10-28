@@ -11,7 +11,7 @@
     "vendored": false,
     "version": "0.2.1-rc.2"
   },
-  "generated_at": "2026-10-28T05:54:44Z",
+  "generated_at": "2026-10-28T09:16:55Z",
   "install_surface": {
     "checksums": "SHA256SUMS",
     "directory": "rph/install-surface",

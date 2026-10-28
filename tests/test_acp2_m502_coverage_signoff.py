@@ -107,8 +107,11 @@ def test_the_documented_final_judgements_are_recorded(coverage) -> None:
     assert "NOT_VERIFIED" in tasks["M3-03"]["notes"]
     assert tasks["M4-04"]["result"] == "PASS"
     assert "claim_status=refuted" in tasks["M4-04"]["notes"]
-    assert tasks["M5-03"]["status"] == "OPEN"
-    assert tasks["M5-03"]["reuse"] == "rerun_required"
+    # M5-03 closed by the independent operator's round-2 receipt (2026-10-28).
+    assert tasks["M5-03"]["status"] == "CLOSED"
+    assert tasks["M5-03"]["result"] == "PASS"
+    assert tasks["M5-03"]["reuse"] == "exact"
+    assert "round 2" in tasks["M5-03"]["notes"]
 
     assert (h_rows["H4"]["status"], h_rows["H4"]["result"]) == ("OPEN", "NOT_VERIFIED")
     assert (h_rows["H6"]["status"], h_rows["H6"]["result"]) == ("CLOSED", "PASS")
@@ -127,7 +130,12 @@ def test_the_documented_final_judgements_are_recorded(coverage) -> None:
     assert gaps["G15"]["required_observations"]["bounded_recipe_public_entry"] == "absent"
     assert (gaps["G20"]["status"], gaps["G20"]["result"]) == ("CLOSED", "PASS")
     assert gaps["G18"]["status"] == "OPEN"
-    assert gaps["G01"]["status"] == "OPEN"
+    # Closed with the M5-03 operator receipt (round 2); G16's note records
+    # the worker-hosted COMPUTE split into DEF-01.
+    for gap_id in ("G01", "G06", "G16", "G17", "G19"):
+        assert gaps[gap_id]["status"] == "CLOSED"
+        assert gaps[gap_id]["result"] == "PASS"
+    assert "worker-hosted third-party COMPUTE was SPLIT OUT" in gaps["G16"]["notes"]
 
     deferred = {row["capability"]: row for row in coverage["deferred_rows"]}
     assert set(deferred) == {"SCOPE-DEF-01", "SCOPE-DEF-02", "SCOPE-DEF-03"}
@@ -191,22 +199,17 @@ def test_walk_bom_dry_run_traverses_every_receipt(walker) -> None:
         "M5-03 F7: coverage receipts must be verified from the delivered store"
     )
     assert report["contract_version"] == "1.7.0"
+    # Post-M5-03 sign-off: the operator-closed rows left the open set.
     assert set(report["required_open_rows"]) == {
-        "G01",
         "G05",
-        "G06",
         "G10",
         "G13",
         "G15",
-        "G16",
-        "G17",
         "G18",
-        "G19",
         "H3",
         "H4",
         "H7",
         "M3-03",
-        "M5-03",
     }
 
 

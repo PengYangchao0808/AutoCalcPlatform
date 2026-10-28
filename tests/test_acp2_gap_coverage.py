@@ -184,9 +184,9 @@ def test_final_ledger_rows_are_terminal_and_evidence_backed(coverage, bom) -> No
     assert summary["checkpoints_total"] == 32
     assert summary["gaps_total"] == 26
     assert summary["h_rows_total"] == 8
-    assert summary["tasks_open"] == 2
+    assert summary["tasks_open"] == 1
     assert summary["checkpoints_open"] == 1
-    assert summary["gaps_open"] == 10
+    assert summary["gaps_open"] == 5
     assert summary["h_rows_open"] == 3
     assert summary["full_release_status"] == "NOT_VERIFIED"
     assert coverage["candidate_full"]["allowed"] is False
@@ -203,23 +203,19 @@ def test_final_ledger_rows_are_terminal_and_evidence_backed(coverage, bom) -> No
 
 def test_open_rows_are_the_documented_final_state(coverage) -> None:
     tasks = {row["id"]: row for row in coverage["tasks"]}
+    # Post-M5-03 sign-off (2026-10-28): only the credential-bound task stays
+    # open; the five gaps it blocked are closed with the operator's receipt.
     assert {row["id"] for row in coverage["tasks"] if row["status"] == "OPEN"} == {
         "M3-03",
-        "M5-03",
     }
     checkpoints = {row["id"]: row for row in coverage["checkpoints"]}
     assert {row["id"] for row in coverage["checkpoints"] if row["status"] == "OPEN"} == {"M0-02c"}
     assert {row["id"] for row in coverage["gaps"] if row["status"] == "OPEN"} == {
-        "G01",
         "G05",
-        "G06",
         "G10",
         "G13",
         "G15",
-        "G16",
-        "G17",
         "G18",
-        "G19",
     }
     assert {row["id"] for row in coverage["h_rows"] if row["status"] == "OPEN"} == {
         "H3",
@@ -231,7 +227,10 @@ def test_open_rows_are_the_documented_final_state(coverage) -> None:
     assert tasks["M0-13"]["result"] == "NOT_VERIFIED"
     assert checkpoints["M0-02c"]["result"] == "NOT_VERIFIED"
     assert tasks["M3-03"]["reuse"] == "rerun_required"
-    assert tasks["M5-03"]["reuse"] == "rerun_required"
+    # M5-03 re-ran for real under this candidate (operator round 2), so its
+    # reuse verdict is exact — the rerun_required pin was the pre-sign-off
+    # state and is still enforced by the negative test below.
+    assert tasks["M5-03"]["reuse"] == "exact"
     assert tasks["M4-04"]["result"] == "PASS"
     assert "refuted" in tasks["M4-04"]["notes"]
     h4 = next(row for row in coverage["h_rows"] if row["id"] == "H4")
