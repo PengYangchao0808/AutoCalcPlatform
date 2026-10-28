@@ -78,7 +78,10 @@ PLANNED_RELEASE_CONTRACTS = (
 #: Ledger instances are not contracts: they are the frozen snapshot a validator
 #: checks, so they stay outside the manifest registry.  The allowlist is explicit
 #: and verified to exist, so an unregistered contract file cannot hide here.
-RELEASE_INSTANCE_ALLOWLIST = ("evidence-coverage.current.json",)
+#: M5-01 adds the generated BOM instance next to the coverage ledger; its schema
+#: is the registered ``release-bom-schema`` contract, and manifest registration
+#: of the instance itself stays M5-02.
+RELEASE_INSTANCE_ALLOWLIST = ("evidence-coverage.current.json", "bom.current.json")
 
 #: Structural anchors M5-02 cannot drop without a schema version bump.
 BOM_REQUIRED_FIELDS = frozenset(

@@ -1,0 +1,6 @@
+ACP 2.0 Research Package Hub — @rph/research
+
+This package is part of the ACP 2.0 Research Package Hub (RPH),
+distributed as a private tarball under the MIT license (see LICENSE).
+No third-party source code is vendored in this package; the DeepSeek
+Harness itself is installed externally and is not redistributed here.

@@ -1,0 +1,29 @@
+{
+  "generated_at": "2026-10-28T02:36:04Z",
+  "rph": {
+    "bin": "/ACPServer/acp2-runs/remediation/m5-01-install/rph-install/node_modules/.bin/rph",
+    "bin_version": "rph 0.0.0",
+    "doctor_checks": 9,
+    "doctor_mode": "static",
+    "doctor_schema": "acp2.rph.doctor.v1",
+    "doctor_status": "ok",
+    "installed_at": "/ACPServer/acp2-runs/remediation/m5-01-install/rph-install",
+    "packages_present": {
+      "bridge": true,
+      "cli": true,
+      "dsh-bundle": true,
+      "research": true
+    },
+    "pnpm_install_exit": 0,
+    "surface": "/ACPServer/acp2-artifacts/remediation/m5-01/rph/install-surface",
+    "verify_exit": 0,
+    "verify_stdout_tail": [
+      "  @rph/bridge -> /ACPServer/acp2-runs/remediation/m5-01-install/rph-install/node_modules/.pnpm/@rph+bridge@file+rph-bridge-0.0.0.tgz/node_modules/@rph/bridge/dist/index.js",
+      "  @rph/dsh-bundle -> /ACPServer/acp2-runs/remediation/m5-01-install/rph-install/node_modules/.pnpm/@rph+dsh-bundle@file+rph-dsh-bundle-0.0.0.tgz/node_modules/@rph/dsh-bundle/dist/src/index.js",
+      "  @rph/cli -> /ACPServer/acp2-runs/remediation/m5-01-install/rph-install/node_modules/.pnpm/@rph+cli@file+rph-cli-0.0.0.tgz/node_modules/@rph/cli/dist/index.js",
+      "  bin: rph 0.0.0 (from an unrelated cwd)",
+      "  doctor: schema acp2.rph.doctor.v1, 9 checks"
+    ]
+  },
+  "schema": "acp2.m5-01.rph-install.v1"
+}

@@ -287,11 +287,14 @@ def test_release_contracts_are_registered_as_planned_and_owned_by_b() -> None:
     assert manifest["contract_version"] == "1.6.0"
     assert manifest["contract_version_history"][-1]["stage"] == "M1-02"
     release_files = {path.name for path in RELEASE.iterdir() if path.is_file()}
+    # M5-01 adds the generated BOM instance (schema registered as
+    # release-bom-schema; the instance itself is M5-02's registration).
     assert release_files == {
         "scope.json",
         "evidence-coverage.schema.json",
         "evidence-coverage.current.json",
         "bom.schema.json",
+        "bom.current.json",
     }
 
 

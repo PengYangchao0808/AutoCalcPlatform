@@ -150,6 +150,8 @@ export function buildPackageIndex(packages) {
       file: entry.file,
       size: entry.size,
       sha256: entry.sha256,
+      license: entry.license ?? null,
+      bin: entry.bin ?? null,
     })),
   };
 }

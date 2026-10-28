@@ -78,6 +78,30 @@ def unknown_field_envelope(exc: RequestValidationError) -> dict[str, Any] | None
     }
 
 
+def _verify_packaged_static_assets() -> dict[str, Any] | None:
+    """Fail closed when the packaged Workbench assets drifted from the manifest.
+
+    Only the packaged ``acp_web_assets`` tree carries a manifest (the checkout
+    ``frontend/`` is a source tree, not a release artifact); an installed
+    release therefore cannot serve JS/CSS that differ from the verified bytes.
+    """
+    from acp.api.static_assets import MANIFEST_NAME, StaticAssetDigestError, verify_manifest
+
+    if not (_FRONTEND_DIR / MANIFEST_NAME).is_file():
+        return None
+    try:
+        manifest = verify_manifest(_FRONTEND_DIR)
+    except StaticAssetDigestError as exc:
+        raise RuntimeError(f"packaged Workbench assets failed digest verification: {exc}") from exc
+    logger.info(
+        "Packaged Workbench assets verified against %s (release_id=%s, files=%s)",
+        MANIFEST_NAME,
+        manifest.get("release_id"),
+        manifest.get("counts", {}).get("files"),
+    )
+    return manifest
+
+
 class _RevalidatingStaticFiles(StaticFiles):
     """Frontend JS/CSS: force revalidation so deploys reach open browsers.
 
@@ -321,6 +345,7 @@ def create_app(
     from acp.core.paths import check_run_root_safety, resolve_run_root
 
     _maybe_configure_structured_logging()
+    _verify_packaged_static_assets()
 
     run_root_path = resolve_run_root(run_root or os.environ.get("ACP_RUN_ROOT"))
     eff_host = host or os.environ.get("ACP_HOST", "127.0.0.1")

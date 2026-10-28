@@ -16,12 +16,15 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "build": "tsc -b"
   },
   "dependencies": {
     "@rph/dsh-bundle": "workspace:*"
-  }
+  },
+  "license": "MIT"
 }

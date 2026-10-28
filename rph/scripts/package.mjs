@@ -22,6 +22,7 @@ import { spawnSync } from "node:child_process";
 import {
   copyFileSync,
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -88,10 +89,24 @@ function readWorkspacePackages() {
       console.error(`${manifestPath} has no version`);
       process.exit(1);
     }
+    if (manifest.private !== true) {
+      console.error(`${manifestPath} must stay private (tarball distribution only)`);
+      process.exit(1);
+    }
+    for (const required of ["LICENSE", "NOTICE"]) {
+      if (!existsSync(join(ROOT, "packages", name, required))) {
+        console.error(`${manifestPath} is missing ${required}`);
+        process.exit(1);
+      }
+    }
+    const bin =
+      manifest.bin === undefined ? null : Object.keys(manifest.bin)[0] ?? null;
     return {
       name,
       version: manifest.version,
       file: tarballName(name, manifest.version),
+      license: manifest.license ?? null,
+      bin,
     };
   });
 }
@@ -106,6 +121,45 @@ function assertPackedArtifacts(packages) {
     console.error(`  expected: ${expected.join(", ") || "(none)"}`);
     console.error(`  packed:   ${packed.join(", ") || "(none)"}`);
     process.exit(1);
+  }
+}
+
+/** The tarball itself must carry the license/notice/bin/profile surface. */
+function assertPackedContents(packages) {
+  const required = {
+    "research": [],
+    "bridge": [],
+    "dsh-bundle": ["package/profiles/web.cordis.yml", "package/profiles/headless.cordis.yml"],
+    "cli": ["package/dist/main.js"],
+  };
+  for (const entry of packages) {
+    const path = join(OUT, entry.file);
+    const listed = spawnSync("tar", ["-tzf", path], { encoding: "utf8" });
+    if (listed.status !== 0) {
+      console.error(`could not list ${entry.file}: ${listed.stderr}`);
+      process.exit(1);
+    }
+    const members = new Set(listed.stdout.split("\n").filter(Boolean));
+    const needed = [
+      "package/package.json",
+      "package/LICENSE",
+      "package/NOTICE",
+      ...required[entry.name],
+    ];
+    const missing = needed.filter((name) => !members.has(name));
+    if (missing.length > 0) {
+      console.error(`${entry.file} is missing ${missing.join(", ")}`);
+      process.exit(1);
+    }
+    if (entry.name === "cli") {
+      const manifest = JSON.parse(
+        readFileSync(join(ROOT, "packages", "cli", "package.json"), "utf8"),
+      );
+      if (manifest.bin?.rph !== "./dist/main.js") {
+        console.error("@rph/cli must publish the `rph` bin pointing at ./dist/main.js");
+        process.exit(1);
+      }
+    }
   }
 }
 
@@ -163,6 +217,7 @@ for (const name of PACKAGE_NAMES) {
   );
 }
 assertPackedArtifacts(packages);
+assertPackedContents(packages);
 
 const artifacts = packages.map((entry) => {
   const path = join(OUT, entry.file);

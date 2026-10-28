@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build disjoint CCCP, worker and Web wheels/sdists in temporary staging."""
+"""Build the disjoint role wheels/sdists (and the root distribution) out of tree."""
 
 from __future__ import annotations
 
@@ -17,12 +17,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROLES = ("cccp", "worker", "web")
+#: Root ``acp`` distribution: one wheel that owns cccp + acp + acp_services.
+#: It is an alternative to the three roles, never installed alongside them, so
+#: it is built on its own (``--role root``) and is not part of ``all``.
+ROOT_ROLE = "root"
 PACKAGES = {"cccp": "cccp", "worker": "acp_services", "web": "acp"}
 ARTIFACT_PREFIXES = {
     "cccp": ("cccp-",),
     "worker": ("acp_worker-", "acp-worker-"),
     "web": ("acp_web-", "acp-web-"),
+    "root": ("acp-",),
 }
+ROOT_PACKAGES = ("cccp", "acp", "acp_services")
 SCHEMA = "acp2.release.manifest.v1"
 
 #: Python dependency classification for the separated release roles.
@@ -162,8 +168,49 @@ def _copy_tree(source: Path, target: Path) -> None:
     shutil.copytree(source, target, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".git"))
 
 
+def _static_assets_module(source: Path):
+    """Import the release-owned digest helper from the tree being built."""
+    source_src = str(source / "src")
+    if source_src not in sys.path:
+        sys.path.insert(0, source_src)
+    from acp.api import static_assets
+
+    return static_assets
+
+
+def static_release_id(version: str) -> str:
+    """Stable release id so a rebuild of identical bytes is byte-identical."""
+    return f"acp2-experience-{version}"
+
+
+def stage_root(source: Path, stage: Path) -> None:
+    """Materialize the root ``acp`` distribution (alternative to the roles)."""
+    version = release_version(source)
+    stage.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source / "pyproject.toml", stage / "pyproject.toml")
+    for name in ("README.md", "LICENSE"):
+        shutil.copy2(source / name, stage / name)
+    (stage / "VERSION").write_text(version + "\n", encoding="utf-8")
+    (stage / "MANIFEST.in").write_text(
+        "include VERSION requirements-role.txt\nrecursive-include src *\n", encoding="utf-8"
+    )
+    try:
+        import tomllib
+    except ModuleNotFoundError:  # pragma: no cover - build host Python is 3.11+
+        import tomli as tomllib  # type: ignore[no-redef]
+    project = tomllib.loads((source / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    (stage / "requirements-role.txt").write_text(
+        "\n".join(project["dependencies"]) + "\n", encoding="utf-8"
+    )
+    for package in ROOT_PACKAGES:
+        _copy_tree(source / "src" / package, stage / "src" / package)
+
+
 def stage_role(source: Path, stage: Path, role: str) -> None:
     """Materialize exactly one package owner plus its declared assets."""
+    if role == ROOT_ROLE:
+        stage_root(source, stage)
+        return
     version = release_version(source)
     stage.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source / f"packaging/roles/{role}/pyproject.toml", stage / "pyproject.toml")
@@ -195,6 +242,18 @@ def stage_role(source: Path, stage: Path, role: str) -> None:
         _copy_tree(source / "frontend", assets)
         (assets / "__init__.py").write_text(
             '"""Packaged ACP Workbench assets."""\n', encoding="utf-8"
+        )
+        # Startup digest verification (acp.api.server) needs the manifest to
+        # ship *inside* the packaged tree; the same bytes are committed at
+        # docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json.
+        helper = _static_assets_module(source)
+        helper.write_manifest(
+            assets,
+            helper.build_manifest(
+                assets,
+                release_id=static_release_id(version),
+                package_version=version,
+            ),
         )
 
 
@@ -270,7 +329,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--role", choices=(*ROLES, "all"), default="all")
+    parser.add_argument("--role", choices=(*ROLES, ROOT_ROLE, "all"), default="all")
     parser.add_argument(
         "--allow-dirty",
         action="store_true",
@@ -300,6 +359,8 @@ def main(argv: list[str] | None = None) -> int:
         },
         "roles": {},
     }
+    # ``all`` stays the three disjoint roles: the root distribution is a
+    # mutually exclusive alternative and is built separately.
     for role in ROLES if args.role == "all" else (args.role,):
         with tempfile.TemporaryDirectory(prefix=f"acp-build-{role}-") as directory:
             stage = Path(directory)
