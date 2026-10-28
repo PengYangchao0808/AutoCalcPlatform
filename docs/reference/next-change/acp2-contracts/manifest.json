@@ -152,7 +152,7 @@
       "NOT_APPLICABLE"
     ]
   },
-  "contract_digest": "bbb9429421356b998d1436ccb37e4da5686be6015c49ada004f522047a5d6686",
+  "contract_digest": "0b90072edf99cf68587660e1dd31ea6b1734571c22857e10ae98452e81a3efbb",
   "contract_digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\" for delivered contracts excluding manifest.json and runtime/baseline-lock.json (self-referential files).",
   "contract_version": "1.6.0",
   "contract_version_history": [
@@ -219,7 +219,7 @@
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/manifest.json",
-      "sha256": "4c1c19368794045ec9ead6deb7ff6253977f053eff34ed2c8d2dcb422d7ba229",
+      "sha256": "ed69327cc9fe28acf53491a2b2504eb30a96f0bb1f20c519e36d9d8858cf08f2",
       "status": "delivered"
     },
     {
@@ -439,7 +439,7 @@
       "note": "M0-11 frozen identity/field/migration decisions with the mechanical client inventory digest embedded.",
       "owner": "INT",
       "path": "docs/reference/next-change/acp2-contracts/decision-freeze/identity.v1.json",
-      "sha256": "e5002968e4cdaaec3d5b56b4e9ccd8807b5c8617579a9c3867c9760051a0d4e6",
+      "sha256": "961b827ec8a5de939233771feaa7641f657cc38a62e132445687140ab0cd68d5",
       "status": "delivered"
     },
     {

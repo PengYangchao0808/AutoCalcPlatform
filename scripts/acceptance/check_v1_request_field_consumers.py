@@ -910,11 +910,18 @@ def _resolve_python_expr(
 
 
 def _request_kind_for(keys: Iterable[str], call: ast.Call, path_lines: Mapping[int, str]) -> str:
-    """Pick the v1 request kind a body belongs to (submit vs prepare)."""
+    """Pick the v1 request kind a body belongs to (submit/prepare/analyze/usage)."""
     key_set = set(keys)
     start = getattr(call, "lineno", 0)
     end = getattr(call, "end_lineno", start) or start
-    if any("/prepare" in path_lines.get(line, "") for line in range(start, end + 1)):
+    window = "".join(path_lines.get(line, "") for line in range(start, end + 1))
+    # Route-aware kinds: the analyze and usage endpoints live under the same
+    # /api/v1/jobs prefix, but their bodies belong to their own contracts.
+    if "/analyze" in window:
+        return "analyze"
+    if "/usage" in window:
+        return "usage"
+    if "/prepare" in window:
         return "prepare"
     if "purpose" in key_set and key_set & {"artifact_id", "job_id", "task_ref"}:
         return "prepare"
@@ -934,7 +941,7 @@ def _python_request_dicts(text: str) -> list[tuple[str, str, int, tuple[str, ...
     path_lines = {
         index: line
         for index, line in enumerate(text.splitlines(), start=1)
-        if _JOB_CREATE_PATH in line or "/prepare" in line
+        if _JOB_CREATE_PATH in line or "/prepare" in line or "/analyze" in line or "/usage" in line
     }
     scope_nodes = _python_scopes(tree)
     owned_by_name = {name: nodes for _node, name, nodes in scope_nodes}

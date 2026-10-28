@@ -33,6 +33,141 @@
         "request_kind": "submit"
       },
       {
+        "consumer": "acceptance:_fault_approval_bypass",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "idempotency_key",
+          "plan_digest"
+        ],
+        "kind": "acceptance-python",
+        "line": 1654,
+        "note": "",
+        "path": "scripts/acceptance/acp2_full_chain.py",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "acceptance:_fault_cross_tool_same_key",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "budget",
+          "idempotency_key",
+          "input",
+          "method",
+          "plan_digest",
+          "project_id",
+          "proposal_digest",
+          "proposal_ref",
+          "resources",
+          "workflow"
+        ],
+        "kind": "acceptance-python",
+        "line": 1453,
+        "note": "",
+        "path": "scripts/acceptance/acp2_full_chain.py",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "acceptance:_fault_cross_tool_same_key",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "idempotency_key",
+          "name"
+        ],
+        "kind": "acceptance-python",
+        "line": 1470,
+        "note": "",
+        "path": "scripts/acceptance/acp2_full_chain.py",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "acceptance:_fault_illegal_remote_target",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "execution_mode",
+          "target_node"
+        ],
+        "kind": "acceptance-python",
+        "line": 1551,
+        "note": "",
+        "path": "scripts/acceptance/acp2_full_chain.py",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "acceptance:_fault_illegal_remote_target",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "target_node"
+        ],
+        "kind": "acceptance-python",
+        "line": 1557,
+        "note": "",
+        "path": "scripts/acceptance/acp2_full_chain.py",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "acceptance:_fault_r07_legacy",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "input",
+          "target_node",
+          "workflow"
+        ],
+        "kind": "acceptance-python",
+        "line": 2160,
+        "note": "",
+        "path": "scripts/acceptance/acp2_full_chain.py",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "acceptance:_fault_revoked_approval",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "budget",
+          "idempotency_key",
+          "input",
+          "method",
+          "plan_digest",
+          "project_id",
+          "proposal_digest",
+          "proposal_ref",
+          "resources",
+          "workflow"
+        ],
+        "kind": "acceptance-python",
+        "line": 1538,
+        "note": "",
+        "path": "scripts/acceptance/acp2_full_chain.py",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
         "consumer": "acceptance:_package_install_scheduler_probe",
         "contract_extra_keys": [],
         "disposition": "compliant",
@@ -71,7 +206,7 @@
           "workflow"
         ],
         "kind": "acceptance-python",
-        "line": 10636,
+        "line": 10649,
         "note": "",
         "path": "scripts/acceptance/acp2_runtime.py",
         "rejected_keys": [],
@@ -96,7 +231,7 @@
           "schema_version"
         ],
         "kind": "acceptance-python",
-        "line": 5052,
+        "line": 5065,
         "note": "",
         "path": "scripts/acceptance/acp2_runtime.py",
         "rejected_keys": [],
@@ -120,7 +255,7 @@
           "schema_version"
         ],
         "kind": "acceptance-python",
-        "line": 5164,
+        "line": 5177,
         "note": "",
         "path": "scripts/acceptance/acp2_runtime.py",
         "rejected_keys": [],
@@ -146,11 +281,48 @@
           "source_refs"
         ],
         "kind": "acceptance-python",
-        "line": 5208,
+        "line": 5221,
         "note": "",
         "path": "scripts/acceptance/acp2_runtime.py",
         "rejected_keys": [],
         "request_kind": "prepare"
+      },
+      {
+        "consumer": "acceptance:_run_drill",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "idempotency_key",
+          "input",
+          "name",
+          "workflow"
+        ],
+        "kind": "acceptance-python",
+        "line": 995,
+        "note": "",
+        "path": "scripts/acceptance/acp2_upgrade_pair.py",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "acceptance:_run_drill",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "input",
+          "name",
+          "workflow"
+        ],
+        "kind": "acceptance-python",
+        "line": 1009,
+        "note": "",
+        "path": "scripts/acceptance/acp2_upgrade_pair.py",
+        "rejected_keys": [],
+        "request_kind": "submit"
       },
       {
         "consumer": "acceptance:_run_multitenant_authz",
@@ -163,7 +335,7 @@
           "purpose"
         ],
         "kind": "acceptance-python",
-        "line": 14465,
+        "line": 14478,
         "note": "",
         "path": "scripts/acceptance/acp2_runtime.py",
         "rejected_keys": [],
@@ -181,7 +353,7 @@
           "workflow"
         ],
         "kind": "acceptance-python",
-        "line": 14513,
+        "line": 14526,
         "note": "",
         "path": "scripts/acceptance/acp2_runtime.py",
         "rejected_keys": [],
@@ -198,9 +370,45 @@
           "purpose"
         ],
         "kind": "acceptance-python",
-        "line": 15506,
+        "line": 15519,
         "note": "",
         "path": "scripts/acceptance/acp2_runtime.py",
+        "rejected_keys": [],
+        "request_kind": "prepare"
+      },
+      {
+        "consumer": "acceptance:analyze",
+        "contract_extra_keys": [],
+        "disposition": "other_request_kind",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "analysis_id",
+          "explicit",
+          "input_refs",
+          "parameters"
+        ],
+        "kind": "acceptance-python",
+        "line": 303,
+        "note": "",
+        "path": "scripts/acceptance/acp2_m405.py",
+        "rejected_keys": [],
+        "request_kind": "analyze"
+      },
+      {
+        "consumer": "acceptance:artifact_matrix",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "artifact_id",
+          "purpose"
+        ],
+        "kind": "acceptance-python",
+        "line": 2104,
+        "note": "",
+        "path": "scripts/acceptance/acp2_m406b.py",
         "rejected_keys": [],
         "request_kind": "prepare"
       },
@@ -230,6 +438,140 @@
         "request_kind": "submit"
       },
       {
+        "consumer": "acceptance:leg_execution",
+        "contract_extra_keys": [],
+        "disposition": "other_request_kind",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "analysis_id",
+          "explicit",
+          "input_refs",
+          "parameters"
+        ],
+        "kind": "acceptance-python",
+        "line": 692,
+        "note": "",
+        "path": "scripts/acceptance/acp2_m405.py",
+        "rejected_keys": [],
+        "request_kind": "analyze"
+      },
+      {
+        "consumer": "acceptance:lifecycle",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "artifact_id",
+          "job_id",
+          "purpose"
+        ],
+        "kind": "acceptance-python",
+        "line": 1289,
+        "note": "",
+        "path": "scripts/acceptance/acp2_m403.py",
+        "rejected_keys": [],
+        "request_kind": "prepare"
+      },
+      {
+        "consumer": "acceptance:lifecycle",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "job_id",
+          "purpose",
+          "relative_path"
+        ],
+        "kind": "acceptance-python",
+        "line": 1295,
+        "note": "",
+        "path": "scripts/acceptance/acp2_m403.py",
+        "rejected_keys": [],
+        "request_kind": "prepare"
+      },
+      {
+        "consumer": "acceptance:multiuser",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "execution_mode",
+          "idempotency_key",
+          "input",
+          "method",
+          "name",
+          "project_id",
+          "resources",
+          "target_node",
+          "workflow"
+        ],
+        "kind": "acceptance-python",
+        "line": 2226,
+        "note": "",
+        "path": "scripts/acceptance/acp2_m403.py",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "acceptance:multiuser",
+        "contract_extra_keys": [
+          "seconds"
+        ],
+        "disposition": "other_request_kind",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "seconds"
+        ],
+        "kind": "acceptance-python",
+        "line": 2245,
+        "note": "",
+        "path": "scripts/acceptance/acp2_m403.py",
+        "rejected_keys": [],
+        "request_kind": "usage"
+      },
+      {
+        "consumer": "acceptance:multiuser",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "idempotency_key"
+        ],
+        "kind": "acceptance-python",
+        "line": 2261,
+        "note": "",
+        "path": "scripts/acceptance/acp2_m403.py",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
+        "consumer": "acceptance:run_science_leg",
+        "contract_extra_keys": [],
+        "disposition": "compliant",
+        "entry": "http",
+        "extra_keys": [],
+        "keys": [
+          "input",
+          "method",
+          "name",
+          "project_id",
+          "resources",
+          "workflow"
+        ],
+        "kind": "acceptance-python",
+        "line": 788,
+        "note": "",
+        "path": "scripts/acceptance/acp2_m402.py",
+        "rejected_keys": [],
+        "request_kind": "submit"
+      },
+      {
         "consumer": "cli:_handle_task_execute",
         "contract_extra_keys": [],
         "disposition": "compliant",
@@ -251,7 +593,7 @@
           "workflow"
         ],
         "kind": "acp-cli",
-        "line": 3072,
+        "line": 3077,
         "note": "",
         "path": "src/acp/cli.py",
         "rejected_keys": [],
@@ -798,7 +1140,7 @@
         "request_kind": "preflight"
       }
     ],
-    "digest": "sha256:6118a5b9c46407e936d7c61af99b6b23b01892eea3446e018f5645ad7b20cb3f",
+    "digest": "sha256:65e62e6d0f96bd7c8dba2aaa5c494b4b9776a7c496275e2d5e81866df65abbf1",
     "exclusions": [
       "frontend/js/**/module_tests/** (test doubles, not shipped consumers)",
       "rph/packages/**/dist/** (build output)",
@@ -815,13 +1157,13 @@
     "schema": "acp2.identity.v1.request-field-consumers",
     "summary": {
       "breaking_consumers": [],
-      "consumers": 36,
+      "consumers": 54,
       "counts": {
         "breaking": 0,
-        "compliant": 23,
+        "compliant": 38,
         "contract_divergence": 0,
         "expected_rejection": 10,
-        "other_request_kind": 3
+        "other_request_kind": 6
       }
     }
   },
@@ -920,6 +1262,36 @@
           "request_kind": "submit"
         },
         {
+          "consumer": "acceptance:_fault_approval_bypass",
+          "disposition": "compliant",
+          "path": "scripts/acceptance/acp2_full_chain.py",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "acceptance:_fault_cross_tool_same_key",
+          "disposition": "compliant",
+          "path": "scripts/acceptance/acp2_full_chain.py",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "acceptance:_fault_illegal_remote_target",
+          "disposition": "compliant",
+          "path": "scripts/acceptance/acp2_full_chain.py",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "acceptance:_fault_r07_legacy",
+          "disposition": "compliant",
+          "path": "scripts/acceptance/acp2_full_chain.py",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "acceptance:_fault_revoked_approval",
+          "disposition": "compliant",
+          "path": "scripts/acceptance/acp2_full_chain.py",
+          "request_kind": "submit"
+        },
+        {
           "consumer": "acceptance:_package_install_scheduler_probe",
           "disposition": "compliant",
           "path": "scripts/acceptance/acp2_package_install.py",
@@ -938,6 +1310,12 @@
           "request_kind": "prepare"
         },
         {
+          "consumer": "acceptance:_run_drill",
+          "disposition": "compliant",
+          "path": "scripts/acceptance/acp2_upgrade_pair.py",
+          "request_kind": "submit"
+        },
+        {
           "consumer": "acceptance:_run_multitenant_authz",
           "disposition": "compliant",
           "path": "scripts/acceptance/acp2_runtime.py",
@@ -950,9 +1328,45 @@
           "request_kind": "prepare"
         },
         {
+          "consumer": "acceptance:analyze",
+          "disposition": "other_request_kind",
+          "path": "scripts/acceptance/acp2_m405.py",
+          "request_kind": "analyze"
+        },
+        {
+          "consumer": "acceptance:artifact_matrix",
+          "disposition": "compliant",
+          "path": "scripts/acceptance/acp2_m406b.py",
+          "request_kind": "prepare"
+        },
+        {
           "consumer": "acceptance:injection_and_revocation",
           "disposition": "compliant",
           "path": "scripts/acceptance/acp2_thin_slice.py",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "acceptance:leg_execution",
+          "disposition": "other_request_kind",
+          "path": "scripts/acceptance/acp2_m405.py",
+          "request_kind": "analyze"
+        },
+        {
+          "consumer": "acceptance:lifecycle",
+          "disposition": "compliant",
+          "path": "scripts/acceptance/acp2_m403.py",
+          "request_kind": "prepare"
+        },
+        {
+          "consumer": "acceptance:multiuser",
+          "disposition": "compliant",
+          "path": "scripts/acceptance/acp2_m403.py",
+          "request_kind": "submit"
+        },
+        {
+          "consumer": "acceptance:run_science_leg",
+          "disposition": "compliant",
+          "path": "scripts/acceptance/acp2_m402.py",
           "request_kind": "submit"
         },
         {

@@ -420,7 +420,7 @@ def test_path_frames_split_and_the_barrier_top_is_selected(tmp_path):
 # ── ADR-008 Amendment A: TS-guess route ──────────────────────────────────
 
 
-REFERENCE = REPO / "tests" / "fixtures" / "acp2" / "science" / "diels_alder" / "reference-case"
+REFERENCE = REPO / "tests" / "fixtures" / "acp2" / "platform" / "reference-case"
 
 
 def test_adr_amendment_a_replaces_only_the_step_two_producer():
