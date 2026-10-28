@@ -1,0 +1,61 @@
+{
+  "common": {
+    "opt_max_rescue": 2,
+    "opt_rescue_policy": "adaptive",
+    "optimization_basis": "def2-mTZVPP",
+    "optimization_method": "r2SCAN-3c",
+    "pressure": 1.0,
+    "scale_factor": 0.9905,
+    "scf_orbital_inherit": true,
+    "single_point_basis": "def2-TZVPP",
+    "single_point_method": "wB97M-V",
+    "temperature": 298.15
+  },
+  "orca_summary": {
+    "int": [
+      "TightOpt",
+      "TightSCF",
+      "MaxIter 200"
+    ],
+    "ts": [
+      "TightOpt",
+      "TightSCF",
+      "MaxIter 200",
+      "Trust 0.3",
+      "Calc_Hess",
+      "Recalc_Hess 5"
+    ]
+  },
+  "roles": {
+    "int": {
+      "max_cycles": 200,
+      "max_rescue": 2,
+      "opt_convergence": "Tight",
+      "opt_level": "Tight",
+      "opt_max_rescue": 2,
+      "opt_rescue_policy": "adaptive",
+      "rescue_policy": "adaptive",
+      "scf_convergence": "Tight",
+      "scf_max_iter": 300,
+      "scf_maxiter": 300,
+      "scf_strategy": "normal"
+    },
+    "ts": {
+      "max_cycles": 200,
+      "max_rescue": 2,
+      "opt_convergence": "Tight",
+      "opt_initial_hessian": "calculate",
+      "opt_level": "Tight",
+      "opt_max_rescue": 2,
+      "opt_recalc_hess": 5,
+      "opt_rescue_policy": "adaptive",
+      "opt_trust_radius": 0.3,
+      "rescue_policy": "adaptive",
+      "scf_convergence": "Tight",
+      "scf_max_iter": 300,
+      "scf_maxiter": 300,
+      "scf_strategy": "normal"
+    }
+  },
+  "schema": "batch_optimize_effective_v1"
+}

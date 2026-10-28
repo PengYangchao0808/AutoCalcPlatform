@@ -1,0 +1,32 @@
+{
+  "evidence_kind": "offline_fixture",
+  "live": {
+    "controller_delivered": false,
+    "model_delivered": false,
+    "result": "NOT_VERIFIED(upstream_not_delivered)"
+  },
+  "live_model_calls": 0,
+  "offline_proof": {
+    "all_passed": true,
+    "assertions": 30,
+    "cases": [
+      "happy_path",
+      "no_evidence",
+      "duplicate_terminal",
+      "round_cap",
+      "preflight_failed",
+      "advice_cannot_override_refuted",
+      "wait_never_calls_model"
+    ],
+    "controller_calls": 0,
+    "failed": 0,
+    "generated_at": "2026-10-22T23:12:33Z",
+    "live_model_calls": 0,
+    "presenter": "rph/packages/dsh-bundle/skills/supervisor.ts",
+    "run_id": "research-loop-live-r1",
+    "schema": "acp2.experience.research-loop.offline-proof.v1",
+    "schema_version": "1.0.0"
+  },
+  "run_id": "research-loop-live-r1",
+  "schema": "acp2.experience.research-loop.control.v1"
+}

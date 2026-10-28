@@ -1,0 +1,9 @@
+scenario=experience:research-resume-live scenario_key=research-resume-live
+phase=experience:live evidence_kind=live mode=live subcase=None
+run_id=research-resume-live-20261022T140842Z-116624-846de7 out=/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/harness-selftest/dryrun/research-resume-live
+manifest=none
+validate argv, frozen scenario enum, phase/mode/subcase whitelist and append-only out
+no Controller is started, no model call is made, no DSH/QC process is launched
+scenario body registered=False (T-07 adds the P0 bodies)
+write one acp2.acceptance.v1 receipt with result=NOT_VERIFIED through B's write_result
+validate the receipt with B's validate_receipt and exit 0 (tool check, never PASS)

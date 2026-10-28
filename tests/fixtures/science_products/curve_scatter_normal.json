@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "product_kind": "curve_scatter",
+  "identity": {
+    "product_kind": "curve_scatter",
+    "schema_version": 1,
+    "generator": "cccp.calculation.products.curve.build_curve_scatter_product",
+    "input_digest": "sha256:93d29f739521fe0f28730ecff411d4330a2a052ef55794aefb983b55027eb75f",
+    "algorithm": "curve_scatter",
+    "algorithm_version": "1",
+    "params_digest": ""
+  },
+  "state": "available",
+  "complete": true,
+  "errors": [],
+  "payload": {
+    "reference_frame": {
+      "axes": "cartesian",
+      "origin": "native_input"
+    },
+    "series": [
+      {
+        "series_id": "curve_scatter:series:scan_energy",
+        "x_unit": "angstrom-or-degree",
+        "y_unit": "hartree",
+        "reference_frame": {
+          "axes": "cartesian",
+          "origin": "native_input"
+        },
+        "label": "scan energy",
+        "points": [
+          {
+            "point_id": "curve_scatter:series:scan_energy:point:0",
+            "x": 1.0,
+            "y": -114.5,
+            "source": {
+              "source_kind": "orca_output",
+              "artifact": "RESULT/trajectories/scan.json",
+              "native_index": 0,
+              "location": "trajectory"
+            }
+          },
+          {
+            "point_id": "curve_scatter:series:scan_energy:point:1",
+            "x": 1.5,
+            "y": -114.42,
+            "source": {
+              "source_kind": "orca_output",
+              "artifact": "RESULT/trajectories/scan.json",
+              "native_index": 1,
+              "location": "trajectory"
+            }
+          },
+          {
+            "point_id": "curve_scatter:series:scan_energy:point:2",
+            "x": 2.0,
+            "y": -114.31,
+            "source": {
+              "source_kind": "orca_output",
+              "artifact": "RESULT/trajectories/scan.json",
+              "native_index": 2,
+              "location": "trajectory"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

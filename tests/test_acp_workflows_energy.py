@@ -6,7 +6,7 @@ import json
 import math
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from tests._t24_patch_compat import patch
 
 import numpy as np
 import pytest

@@ -1,0 +1,87 @@
+{
+  "artifacts": [],
+  "assertions": [
+    {
+      "detail": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/approval-budget-live/approval-budget-live-r1/approval/experience_approval-budget-live-experience_fixture-approval-budget-live-r1.json",
+      "name": "child:experience:fixture",
+      "status": "PASS"
+    },
+    {
+      "detail": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/approval-budget-live/approval-budget-live-r1/budget/experience_approval-budget-live-budget-approval-budget-live-r1.json",
+      "name": "child:budget",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "052962eac7782dc2e00253dd5df120badc3bff52",
+    "harness_revision": "9c2523d35a884272807c6857794886eeedd43e728da0d695fd2a26244ddaa433",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "052962eac7782dc2e00253dd5df120badc3bff52",
+  "command": [
+    "/ACPServer/acp2-development/venvs/integration/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "approval-budget-live",
+    "--timeout",
+    "600",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/approval-budget-live/approval-budget-live-r1/aggregate"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "aggregate",
+  "exit_code": 2,
+  "extensions": {
+    "acceptance.required_child_phases": [
+      "budget",
+      "experience:fixture"
+    ],
+    "experience.harness_contract_revision": "9c2523d35a884272807c6857794886eeedd43e728da0d695fd2a26244ddaa433",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/integration/bin/python",
+    "experience.mode": "fixture",
+    "experience.product_import": "/ACPServer/acp2-development/integration/src/acp/__init__.py",
+    "experience.run_id": "approval-budget-live-r1",
+    "experience.scenario_key": "approval-budget-live",
+    "experience.subcase": null,
+    "experience.test_revision": "052962eac7782dc2e00253dd5df120badc3bff52"
+  },
+  "finished_at": "2026-10-23T02:20:23Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "aggregate",
+  "reason": "aggregate_incomplete:child_not_pass",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "approval-budget-live-r1",
+  "scenario": "experience:approval-budget-live",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-23T02:20:22Z",
+  "sub_results": [
+    {
+      "owner": "C",
+      "phase": "experience:fixture",
+      "receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/approval-budget-live/approval-budget-live-r1/approval/experience_approval-budget-live-experience_fixture-approval-budget-live-r1.json",
+      "result": "PASS",
+      "run_id": "approval-budget-live-r1",
+      "scenario": "experience:approval-budget-live"
+    },
+    {
+      "owner": "C",
+      "phase": "budget",
+      "receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/approval-budget-live/approval-budget-live-r1/budget/experience_approval-budget-live-budget-approval-budget-live-r1.json",
+      "result": "NOT_VERIFIED",
+      "run_id": "approval-budget-live-r1",
+      "scenario": "experience:approval-budget-live"
+    }
+  ],
+  "submission_id": null,
+  "usage": null
+}

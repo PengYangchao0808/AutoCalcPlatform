@@ -1,0 +1,26 @@
+{
+  "sample_id": "platform-attribution.positive",
+  "contract": "ADR-003-taskref-evidence-decision.md",
+  "kind": "positive",
+  "payload": {
+    "research": {
+      "principal_id": "principal-alice",
+      "project_id": "proj-m1-03",
+      "research_id": "res-m1-03",
+      "session_id": "ses-m1-03",
+      "round": 0
+    },
+    "task_ref": {
+      "project_id": "proj-m1-03",
+      "task_id": "job-m1-03-static",
+      "attempt": 1,
+      "release": {
+        "release_id": "release-m1-03",
+        "release_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    }
+  },
+  "expected": {
+    "valid": true
+  }
+}

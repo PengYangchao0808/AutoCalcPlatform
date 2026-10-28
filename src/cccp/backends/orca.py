@@ -18,12 +18,13 @@ from cccp.qc.interfaces.orca import ORCAInterface
 from cccp.qc.interfaces.xtb_scan import RelaxedScanResult
 from cccp.qc.keyword_registry import method_family
 from cccp.software import detect_version
+from cccp.utils.constants import BOHR_TO_ANGSTROM
 
 logger = logging.getLogger(__name__)
 
 #: ORCA ``.engrad`` header states ``Eh/bohr``; CODATA-style value shared with
 #: PES2TS ``gradient_evidence.BOHR_ANGSTROM`` for the derived Eh/Å view.
-BOHR_ANGSTROM = 0.529177210903
+BOHR_ANGSTROM = BOHR_TO_ANGSTROM
 
 #: Native unit of the ORCA-printed cartesian gradient (``.engrad`` header).
 ORCA_GRADIENT_UNIT = "hartree/bohr"

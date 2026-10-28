@@ -1,0 +1,16 @@
+{
+  "acquired_at": "2026-10-22T01:12:28.801982+00:00",
+  "attempt": 1,
+  "execution_boot_id": "",
+  "execution_cgroup_device": 0,
+  "execution_cgroup_inode": 0,
+  "execution_cgroup_path": "",
+  "fencing_token": "acceptance-worker-fence",
+  "host": "workstation",
+  "job_id": "real-worker-xtb",
+  "lease_expires_at": "2026-10-22T02:12:28.801982+00:00",
+  "owner": "acceptance-worker",
+  "pid": 39,
+  "pid_starttime": "33555648",
+  "schema": "attempt_execution_claim"
+}

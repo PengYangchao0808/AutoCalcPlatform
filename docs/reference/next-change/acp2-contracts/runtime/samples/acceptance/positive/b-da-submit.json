@@ -1,0 +1,45 @@
+{
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "contract_version": "1.0.0",
+  "owner": "B",
+  "scenario": "da-runtime",
+  "phase": "da-submit",
+  "run_id": "20261022T123500Z-b-da-submit-0001",
+  "candidate_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+  "candidate": {
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
+    "client_revision": null,
+    "harness_revision": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  },
+  "command": [
+    "/usr/bin/python3.11",
+    "-m",
+    "acp",
+    "task",
+    "--controller",
+    "http://127.0.0.1:8765",
+    "plan",
+    "fixtures/da-submit.json"
+  ],
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "started_at": "2026-10-22T12:35:00Z",
+  "finished_at": "2026-10-22T12:35:02Z",
+  "result": "PASS",
+  "scope": "IN_SCOPE",
+  "reason": null,
+  "exit_code": 0,
+  "artifacts": [],
+  "evidence_kind": "live",
+  "job_id": "job-da-0001",
+  "operation_id": null,
+  "attempt": 1,
+  "release_id": "release-da-0001",
+  "submission_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "extensions": {
+    "b.sample": "positive-da-submit",
+    "da.durable_task_ref": true
+  }
+}

@@ -1,0 +1,109 @@
+{
+  "task": "M3-05b",
+  "title": "Workbench real approval and submit (research commands, product mount, full decide/revoke/submit surface)",
+  "owner": "C-Web + B",
+  "branch": "acp2/integration-remediation",
+  "head": "fd8d387 (working tree, not committed)",
+  "date": "2026-10-27",
+  "evidence_kind": "fixture + real-controller-http (no browser, no model, no QC, no LSF)",
+  "command_surface": {
+    "frontend/js/client/research-commands.js": {
+      "init": "init({v1, v2}) — injected page adapters only; the module owns no fetch",
+      "request": "POST /api/v2/research/approvals (proposal/platform doc or proposalDigest + science_projection + plan)",
+      "query": "GET /api/v2/research/approvals?limit&project_id&approval_ref&proposal_ref&status",
+      "fetchApproval": "GET /api/v2/research/approvals/{approval_ref}",
+      "decide": "POST /api/v2/research/approvals/{ref}/approve|reject {expected_revision, reason?, idempotency_key?}",
+      "revoke": "POST /api/v2/research/approvals/{ref}/revoke {expected_revision, reason?, idempotency_key?}",
+      "submit": "POST /api/v1/jobs — caller's ONE normalized body + approved plan/proposal/budget binding",
+      "no_second_body_builder": true,
+      "no_identity_in_payload": true
+    },
+    "frontend/js/client/research-query.js": "unchanged, still read-only (readOnly: true, no decide/submit)",
+    "frontend/js/workbench/compat/api.js": "ACPClient.researchCommands.init({v1: api, v2: apiV2})",
+    "frontend/ACP_Workbench_v2.html": "<script src=\"js/client/research-commands.js\"></script> after research-query.js (loaded before compat/api.js and research-approval.js)"
+  },
+  "approval_state_mapping": {
+    "record_statuses": ["draft", "pending", "approved", "rejected", "revoked", "expired"],
+    "card_fields_from_server": ["status", "revision", "approver_ref", "requester_ref", "task_ref", "science_digest", "plan_digest", "binding_status", "budget", "expires_at"],
+    "validity": {
+      "no record": "not_requested",
+      "draft": "approval_draft",
+      "pending": "approval_not_granted",
+      "rejected": "approval_rejected",
+      "revoked": "approval_revoked",
+      "expired (state or clock)": "approval_expired",
+      "unparseable expires_at": "approval_expiry_invalid",
+      "approved + no science digest": "approval_science_unbound",
+      "approved + no execution digest": "approval_execution_unbound",
+      "approved + science digest != recomputed C plan_definition_digest": "approval_binding_mismatch",
+      "approved + project mismatch": "approval_binding_mismatch",
+      "approved + full binding": "ok"
+    },
+    "chip": "approved but unverifiable renders as invalidated (never green)",
+    "conflict": "HTTP 409 -> typed revision_conflict, silent refresh of the record, reviewRequired=true, the decision is never replayed",
+    "refusals": "403 access_denied / 404 not_found / 400 input_invalid surface as typed notices and leave the record untouched"
+  },
+  "submit_proof": {
+    "accepted_only_with": ["job_id", "attempt >= 1", "task_ref.task_id|job_id"],
+    "accepted": "state.submitted=true, approval refreshed (TaskRef binding), task view invalidated + summary refreshed",
+    "no_task_ref": "submit_unconfirmed (never 'submitted')",
+    "network_failure": "submit_unconfirmed, retryable, never success",
+    "local_refusals": ["approved_plan_digest_mismatch", "approved_proposal_digest_mismatch", "approved_budget_mismatch", "approval_not_granted", "approval_record_required", "submit_body_required"]
+  },
+  "removed_fallbacks": [
+    "local approval lifecycle: requestApproval/decideApproval/revokeApproval created apr-<n> records in module memory",
+    "local dispatch refs: submitPlan returned dsp-<n> and submitted=true without a platform task",
+    "module-local card registry + persistence adapter (server record is now the only authority)",
+    "approvalBindingDigest/bindingMatches/scopeCanonical 4-tuple binding (the platform science_digest is the binding; launch budget is server-enforced)",
+    "silent local 'approved' state on decide; a missing transport now fails closed"
+  ],
+  "parallel_view": {
+    "science_plan": "current C proposal (recipe_digest + 7 science fields + 8 budget counters) + recomputed plan_definition_digest",
+    "execution_plan": "approval.plan_definition (workflow/input/method/resources) + approval.plan_digest",
+    "budgets": "approved launch budget (data-ra-budget=approved) next to the current C budget (data-ra-budget=current)"
+  },
+  "science_question_research_mode": {
+    "mode": "state.research.mode = approval (setResearchApproval) / direct",
+    "body": "researchSubmitBody() == buildNormalizedSubmissionRequest(...) — one payload builder, asserted by test",
+    "submit": "routes through ACPClient.researchCommands.submit with the bound approval; TaskRef-less response => phase unconfirmed"
+  },
+  "tests_added": {
+    "frontend/js/module_tests/research_commands.test.js": "9 tests: transport required, request body/no identity, query/fetch fail-closed, decide/revoke 409+403, submit binding, missing TaskRef, network unconfirmed, changed plan/proposal/budget, no second builder/digest",
+    "frontend/js/module_tests/acp2_approval.test.js": "22 tests: record mapping, state chain, stale 409 no-replay, cross principal/project, model claim, submit proof, unconfirmed, second client cross-read, no local fetch/apr-/dsp-",
+    "frontend/js/module_tests/acp2_manual.test.js": "+2 research-mode tests (same body, unconfirmed)",
+    "tests/test_acp2_m305_research_commands_live.py": "real uvicorn Controller + real Node HTTP adapter: query -> request -> pending -> stale 409 -> approve -> changed-plan refusal -> submit (real job/attempt/TaskRef) -> approval.task_ref -> revoke -> second client, verified again through a fresh ApprovalService"
+  },
+  "verification": [
+    {
+      "command": "set -a; . /ACPServer/acp2-runs/remediation/env.sh; set +a; node frontend/js/module_tests/run_all.js",
+      "result": "462 passed, 0 failed (was 460 before this task; +18 new tests, run_all.js auto-collects)"
+    },
+    {
+      "command": "PYTHONPATH=src python3.11 -m pytest tests/test_frontend_sync_batch.py tests/test_acp2_research_read_routes.py tests/test_acp2_v2_science_routes.py -q",
+      "result": "64 passed"
+    },
+    {
+      "command": "PYTHONPATH=src python3.11 -m pytest tests/test_acp2_m305_research_commands_live.py -q",
+      "result": "1 passed (real uvicorn socket + Node fetch adapter; submitted fake job cancelled at teardown)"
+    },
+    {
+      "command": "PYTHONPATH=src python3.11 -m pytest tests/test_acp2_experience_observations.py tests/test_frontend_integration.py tests/test_frontend_sync_shell.py tests/test_acp2_science_projection.py -q",
+      "result": "109 passed"
+    },
+    {
+      "command": "python3.11 -m ruff check tests/test_acp2_m305_research_commands_live.py && python3.11 -m ruff format --check tests/test_acp2_m305_research_commands_live.py",
+      "result": "All checks passed; already formatted (no src/** change)"
+    },
+    {
+      "command": "scenario guards for scripts/acceptance/acp2_experience_scenario_approval_budget_live.py (adapter anchors, required test phrases, forbidden patterns)",
+      "result": "all 5 anchors present, all 11 required phrases present in the Node log, no fetch/XMLHttpRequest/viewer/child_process in research-approval.js"
+    }
+  ],
+  "leftovers": [
+    "Real browser click-through (Chromium) remains M4-05/M4-02 evidence; this receipt is fixture + real-HTTP, never browser or live model/QC/LSF.",
+    "The product page only enables the card's submit button once a normalized body provider exists (deps.buildSubmitBody or ACPScienceQuestion.researchSubmitBody in approval mode). Binding a proposal/plan to the panel from a product surface (proposal creation UI / P3 form) is M3-06 or later; without it the request/submit buttons stay disabled with a visible reason.",
+    "The approval request from the Workbench needs either the platform Proposal body or its proposal_digest (never a client-computed digest); the read-only research panel currently receives only the C proposal, so request remains an explicitly injected path.",
+    "reports/acp2_implementation/bb45a46/C/approval-budget-live and the budget phase stay NOT_VERIFIED(b16_handoff) as historical receipts; this receipt does not upgrade them.",
+    "AGENTS.md counts (frontend client/module_tests) were intentionally not edited per the task constraints."
+  ]
+}

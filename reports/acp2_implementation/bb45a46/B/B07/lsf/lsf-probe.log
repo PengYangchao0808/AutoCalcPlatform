@@ -1,0 +1,23 @@
+# B07 LSF/SSH read-only probe (acceptance controller config cwd)
+timestamp_utc=2026-10-22T15:17:57Z
+cwd=/ACPServer/acp2-development/data/b/controller-config
+hostname=workstation
+LSF_ENVDIR=<unset>
+LSF_LIBDIR=<unset>
+ACP_LSF_NODE=<unset>
+
+which:bsub=ABSENT
+which:bjobs=ABSENT
+which:bhosts=ABSENT
+which:bqueues=ABSENT
+which:lsid=ABSENT
+which:ssh=/usr/bin/ssh
+version:ssh=OpenSSH_9.9p1, OpenSSL 3.5.8 25 Aug 2026
+
+ssh_version=OpenSSH_9.9p1, OpenSSL 3.5.8 25 Aug 2026
+effective_cluster={"execution_mode": "local", "nodes": []}
+
+# bsub/bjobs/bhosts/bqueues/lsid are absent and LSF_ENVDIR is unset, so no LSF submission, queue query, or remote job is attempted.
+# The acceptance controller config overrides cluster to local/execution_mode=local/nodes=[], so no acceptance LSF test node is selected.
+result=NOT_VERIFIED
+prerequisite=Install and initialize the LSF client environment (LSF_ENVDIR; bsub/bjobs/bhosts/bqueues on PATH) and configure a test cluster node (host, SSH host-key identity and credential, queue, remote Python/software, release root, independent remote work dir) in the acceptance controller config.

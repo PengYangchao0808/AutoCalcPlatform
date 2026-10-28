@@ -1,0 +1,10 @@
+{
+  "candidate_revision": "9184d64a153727b35d743bf59934c13c6d48e27d",
+  "contract_version": "1.1.0",
+  "generated_at": "2026-10-22T14:43:02Z",
+  "runs": [
+    "experience_bridge-contract-experience_fixture-bridge-contract-20261022T144258Z-244917.json"
+  ],
+  "schema": "acp2.acceptance.summary.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema"
+}

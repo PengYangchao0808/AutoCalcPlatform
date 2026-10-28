@@ -1,0 +1,46 @@
+{
+  "attempt": 1,
+  "data_bindings": [
+    {
+      "artifact_digests": {
+        "input.xyz": "sha256:3ba442e949c46e020ea42187f2c0cab7decceed85af97317f3074c8a7017a916"
+      },
+      "binding_id": "local:7698b06589bb30c2:2_H2_H_0_0_0_H_0_0_0.74_singlepoint",
+      "endpoint": "local",
+      "kind": "local",
+      "mapping_version": 1,
+      "project_id": "",
+      "relative_path": "2_H2_H_0_0_0_H_0_0_0.74_singlepoint",
+      "root": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/lab-run-root/uncategorized",
+      "tenant_id": ""
+    }
+  ],
+  "errors": [],
+  "evidence_digests": {
+    "exit_code": "0",
+    "job_status": "completed",
+    "missing_required_facts": "",
+    "normal_reuse": "true",
+    "partial_result": "false",
+    "publish": "true",
+    "publish_policy": "normal",
+    "qualification": "complete",
+    "required_facts": "energy_hartree",
+    "task_result_digest": "sha256:86603fb0ad6d3eec4455e79a40c67a9fa12143d6f8c024d1f05752d8ae7e01e9",
+    "truth_table_row": "b"
+  },
+  "fencing_token": "8f8bfd45b0966b5122d22434df7b9136",
+  "job_id": "20261024_011311_001_b25-scheduler-smoke",
+  "owner": "local:workstation:1837495:1",
+  "plan_identity": "v2:9bc40cd8ffd921c7e9e966978f436614",
+  "receipt_version": 1,
+  "release_digest": "c4b54feb6a0b25ccbf0163b852ec66e0a1f003e778081d079030844871e90cc0",
+  "release_id": "7698b06589bb30c2",
+  "result_digest": "sha256:4aec84f80ddfd27cd88e3b154ca798eb35471bc4d4eff40c1d59dda4aff2c7aa",
+  "state": "completed",
+  "step_identities": [
+    "v2:853c5b2672a754adfa9088420fc0c126"
+  ],
+  "submission_id": "sub_f1a0cb997a3e7af5",
+  "written_at": "2026-10-23T17:13:17.284999+00:00"
+}

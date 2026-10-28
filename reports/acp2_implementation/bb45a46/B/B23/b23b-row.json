@@ -1,0 +1,42 @@
+{
+  "deferred": false,
+  "expected_artifact": {
+    "owner": "C",
+    "path_glob": "reports/acp2_implementation/bb45a46/C/cross-domain-live/**/experience_cross-domain-live-experience_selectivity-*.json",
+    "phase": "experience:selectivity",
+    "required_fields": [
+      "job_id",
+      "attempt",
+      "release_id",
+      "scenario",
+      "phase",
+      "extensions.experience.subcase"
+    ],
+    "scenario": "experience:cross-domain-live",
+    "subcase": "selectivity"
+  },
+  "h6_fed": false,
+  "id": "B23b",
+  "identity": {
+    "phase": "experience:selectivity",
+    "scenario": "experience:cross-domain-live",
+    "scenario_key": "experience:cross-domain-live/selectivity",
+    "subcase": "selectivity"
+  },
+  "kind": "execution_export",
+  "no_selectivity_qc": true,
+  "observed_candidates": [],
+  "owner": "B",
+  "parent_only_pass_accepted": false,
+  "paths": {
+    "path.endo": null,
+    "path.exo": null
+  },
+  "reason": "c_t40a_absent",
+  "result": "NOT_VERIFIED",
+  "run_spec_ref": "run-spec-da-selectivity-001",
+  "schema": "acp2.b23.sub-delivery-row.v1",
+  "scope": "IN_SCOPE",
+  "submission": null,
+  "task_refs": []
+}

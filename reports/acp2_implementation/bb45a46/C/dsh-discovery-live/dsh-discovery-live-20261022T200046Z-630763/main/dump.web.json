@@ -1,0 +1,9 @@
+{
+  "contains_secret_value": false,
+  "contains_token_query": false,
+  "exit_code": 0,
+  "redacted_bytes": 46564,
+  "redacted_path": "dsh-effective-config.web.redacted.yml",
+  "redacted_sha256": "e3f2eac4e4f931b1dbf81e375479355ddf9ac9efc2239ee9e5fac77d16917799",
+  "stderr": ""
+}

@@ -1,0 +1,90 @@
+# B02 ENV-01 probe — 2026-10-22T19:34:24+08:00
+## tools
+python3.11=/usr/bin/python3.11
+git=/usr/bin/git
+curl=/usr/bin/curl
+tar=/usr/bin/tar
+xz=/usr/bin/xz
+sha256sum=/usr/bin/sha256sum
+findmnt=/usr/bin/findmnt
+ss=MISSING
+ssh=/usr/bin/ssh
+/usr/sbin/ss=present
+## python
+Python 3.11.13
+Python 3.9.25
+Python prerequisites OK
+## arch/os
+Linux
+x86_64
+40
+## memory
+               total        used        free      shared  buff/cache   available
+Mem:            62Gi       8.0Gi       7.9Gi        51Mi        47Gi        54Gi
+Swap:           31Gi          0B        31Gi
+## disk/inode data root candidate
+文件系统                         容量  已用  可用 已用% 挂载点
+/dev/mapper/rl_workstation-root   70G   43G   28G   62% /
+文件系统                          Inodes 已用(I)  可用(I) 已用(I)% 挂载点
+/dev/mapper/rl_workstation-root 36700160  743966 35956194       3% /
+## findmnt
+TARGET SOURCE                          FSTYPE OPTIONS
+/      /dev/mapper/rl_workstation-root xfs    rw,relatime,seclabel,attr2,inode64,logbufs=8,logbsize=32k,noquota
+## production service (must remain untouched)
+GET http://127.0.0.1:8765/ -> 200
+## listening ports (all)
+State  Recv-Q Send-Q Local Address:Port  Peer Address:Port
+LISTEN 0      1024         0.0.0.0:56489      0.0.0.0:*   
+LISTEN 0      512        127.0.0.1:32867      0.0.0.0:*   
+LISTEN 0      4096       127.0.0.1:631        0.0.0.0:*   
+LISTEN 0      512        127.0.0.1:33485      0.0.0.0:*   
+LISTEN 0      512        127.0.0.1:36175      0.0.0.0:*   
+LISTEN 0      512        127.0.0.1:36615      0.0.0.0:*   
+LISTEN 0      512        127.0.0.1:35487      0.0.0.0:*   
+LISTEN 0      10           0.0.0.0:55115      0.0.0.0:*   
+LISTEN 0      512        127.0.0.1:38093      0.0.0.0:*   
+LISTEN 0      128        127.0.0.1:6010       0.0.0.0:*   
+LISTEN 0      512        127.0.0.1:37701      0.0.0.0:*   
+LISTEN 0      512        127.0.0.1:40707      0.0.0.0:*   
+LISTEN 0      512        127.0.0.1:40501      0.0.0.0:*   
+LISTEN 0      512        127.0.0.1:40589      0.0.0.0:*   
+LISTEN 0      512        127.0.0.1:42461      0.0.0.0:*   
+LISTEN 0      512        127.0.0.1:41261      0.0.0.0:*   
+LISTEN 0      512        127.0.0.1:44071      0.0.0.0:*   
+LISTEN 0      512        127.0.0.1:45005      0.0.0.0:*   
+LISTEN 0      512        127.0.0.1:43331      0.0.0.0:*   
+LISTEN 0      512        127.0.0.1:43789      0.0.0.0:*   
+LISTEN 0      512        127.0.0.1:43537      0.0.0.0:*   
+LISTEN 0      512        127.0.0.1:45307      0.0.0.0:*   
+LISTEN 0      512        127.0.0.1:45619      0.0.0.0:*   
+LISTEN 0      1024         0.0.0.0:6325       0.0.0.0:*   
+LISTEN 0      1024         0.0.0.0:6324       0.0.0.0:*   
+LISTEN 0      1024         0.0.0.0:6323       0.0.0.0:*   
+LISTEN 0      5            0.0.0.0:8080       0.0.0.0:*   
+LISTEN 0      512          0.0.0.0:4096       0.0.0.0:*   
+LISTEN 0      4096       127.0.0.1:20241      0.0.0.0:*   
+LISTEN 0      1024         0.0.0.0:38455      0.0.0.0:*   
+LISTEN 0      50           0.0.0.0:139        0.0.0.0:*   
+LISTEN 0      128          0.0.0.0:22         0.0.0.0:*   
+LISTEN 0      50           0.0.0.0:445        0.0.0.0:*   
+LISTEN 0      2048         0.0.0.0:8765       0.0.0.0:*   
+LISTEN 0      5            0.0.0.0:9993       0.0.0.0:*   
+LISTEN 0      50              [::]:139           [::]:*   
+LISTEN 0      128             [::]:22            [::]:*   
+LISTEN 0      50              [::]:445           [::]:*   
+LISTEN 0      128            [::1]:6010          [::]:*   
+LISTEN 0      4096           [::1]:631           [::]:*   
+LISTEN 0      5                  *:9993             *:*   
+## target ports
+18765 and 18766 free
+## writability
+data/b writable
+## QC binaries
+orca=/usr/bin/orca
+xtb=MISSING
+crest=MISSING
+censo=MISSING
+shermo=MISSING
+bsub=MISSING
+bjobs=MISSING
+未能启动屏幕阅读器，因为无法连接到桌面。

@@ -1,0 +1,298 @@
+{
+  "browser_env": {
+    "ACP2_BROWSER_PYTHON": "/ACPServer/acp2-development/venvs/browser/bin/python",
+    "chromium_launch_owner": "C T-08 H2 (not a B02 prerequisite)",
+    "chromium_launched": false,
+    "evidence": "browser-extra.log",
+    "extra": "browser (playwright==1.63.0)",
+    "install_command": "/ACPServer/acp2-development/venvs/browser/bin/python -m pip install 'playwright==1.63.0'",
+    "install_state": "already satisfied (playwright 1.63.0 importable)",
+    "playwright_file": "/ACPServer/acp2-development/venvs/browser/lib64/python3.11/site-packages/playwright/__init__.py",
+    "playwright_version": "1.63.0",
+    "python_version": "3.11.13"
+  },
+  "candidate": {
+    "base_commit": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+    "bundle_digest_sha256": {
+      "candidate_snapshot_json": "33861de7d5578a8cfa5b48bcde27e7bd2b25ac3427c4dacb47c4eca921ae872c",
+      "manifest_json": "95b5ee79f5772c436d5da7646693346b1605f1122f5b37d9a2ad672008e8e181",
+      "tracked_changes_patch": "4578405dc1b99d9a884c651a8ea064a6eed311128b9564966200b33e95aa9242"
+    },
+    "candidate_id": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
+    "materialized_commit": "a0185b15c546fbd07919326d581fab13e05000fa",
+    "per_file_verification": {
+      "checked": 1906,
+      "mismatches": 0,
+      "missing": 0,
+      "result": "PASS",
+      "total": 1906
+    },
+    "worktree": "/ACPServer/acp2-development/B",
+    "worktree_status_porcelain_empty": true
+  },
+  "config": {
+    "answers_file": "/ACPServer/acp2-development/data/b/controller-config/answers.json",
+    "doctor": {
+      "exit_code": 0,
+      "scope": "binary path/sanity and run-root/store only; functional scientific execution is NOT VERIFIED here",
+      "summary": "10 PASS / 0 FAIL / 0 NOT_VERIFIED"
+    },
+    "effective_cluster_execution_mode": "local",
+    "effective_cluster_nodes": [],
+    "effective_run_root": "/ACPServer/acp2-development/data/b/run-root",
+    "inherited_from_home": "~/.cccp.yaml still merges first; every executable path is explicitly pinned in the controller config so the effective software set is reviewable. No cluster node or remote_work_dir is inherited (nodes: [] overrides the home single-item list).",
+    "init_route": "acp init --config <dir>/cccp.yaml --answers <answers.json> (non-interactive) + explicit post-edit of cluster.execution_mode/nodes and executable pins",
+    "mode": "0o600",
+    "path": "/ACPServer/acp2-development/data/b/controller-config/cccp.yaml",
+    "redaction_note": "Digest is over the controller config file itself; the file contains only absolute paths and non-secret scalar settings.",
+    "secrets_present": false,
+    "serve_help_exit_code": 0,
+    "sha256": "53e7f9dfafd46586650bf5e898810040fdae15be1bee87df22a9ee4e3f03ab59"
+  },
+  "created_at": "2026-10-22T19:44:00+08:00",
+  "env_handoff": {
+    "ACP2_DA_TIMEOUT": "unset at B02 (B18 provisional, B20a live)",
+    "credential_convention": "references only (env:NAME / file:PATH / provider:KEY); no literal secret",
+    "file": "/ACPServer/acp2-development/data/b/acceptance-env.sh",
+    "mode": "0o600",
+    "required_variables_present": true,
+    "sha256": "d16b1d70f5e840637252a3b34c46057c3b4440aca7428e7b44052118c13ddbf7"
+  },
+  "evidence": {
+    "dir": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B02",
+    "files": [
+      "README.md",
+      "acceptance-env-check.log",
+      "apply-verify.log",
+      "b-runtime.json",
+      "browser-env.json",
+      "browser-extra.log",
+      "cleanup-receipt.log",
+      "config-doctor.log",
+      "env-probe.log",
+      "import-paths.log",
+      "init-config.log",
+      "package-build.log",
+      "package-lifecycle.log",
+      "package-role.log",
+      "pip-freeze.txt",
+      "role-interpreters.json",
+      "summary.json",
+      "venv-install.log"
+    ]
+  },
+  "host": {
+    "machine": "x86_64",
+    "os": "Linux",
+    "python": "3.11.13",
+    "python_executable": "/ACPServer/acp2-development/venvs/b/bin/python",
+    "qc_binaries_present": {
+      "bjobs": null,
+      "bsub": null,
+      "censo": null,
+      "crest": null,
+      "orca_home": "True",
+      "shermo": null,
+      "xtb": null
+    },
+    "release": "5.14.0-687.56.1.el9_8.x86_64",
+    "required_tools": {
+      "curl": "/usr/bin/curl",
+      "findmnt": "/usr/bin/findmnt",
+      "git": "/usr/bin/git",
+      "sha256sum": "/usr/bin/sha256sum",
+      "ssh": "/usr/bin/ssh",
+      "tar": "/usr/bin/tar",
+      "xz": "/usr/bin/xz"
+    },
+    "ss": "/usr/sbin/ss (not on the default PATH; acceptance-env.sh prepends /usr/sbin)"
+  },
+  "limits": {
+    "budget_id": "acp2-plan-b-round-20261022",
+    "cores_total": 40,
+    "disk_free_bytes_on_data_root": 26125516800,
+    "max_jobs": 4,
+    "max_jobs_source": "cluster.local.max_jobs built-in default (no per-round override applied)",
+    "memory_bytes_total": 66796507136,
+    "memory_gib_total": 62.2,
+    "model_budget": "C-owned, not allocated to B",
+    "quota_note": "Machine totals are recorded as the ceiling; no cgroup/ulimit quota is imposed by B02. Tests must not assume they may occupy the whole machine."
+  },
+  "package_smoke": {
+    "artifacts_dir": "/ACPServer/acp2-development/data/b/package-smoke/artifacts",
+    "evidence": [
+      "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B02/package-build.log",
+      "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B02/package-role.log",
+      "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B02/package-lifecycle.log"
+    ],
+    "kind": "P0 minimal smoke (full B25 packaging stays P5)",
+    "rows": [
+      {
+        "row": "cccp wheel + sdist built",
+        "state": "PASS"
+      },
+      {
+        "row": "worker role installed from local wheel",
+        "state": "PASS"
+      },
+      {
+        "row": "web role installed; installed HTML/JS served with ETag 304",
+        "state": "PASS"
+      },
+      {
+        "row": "file ownership / no duplicate cross-role files",
+        "state": "PASS (check_release_artifacts.json result=PASS)"
+      },
+      {
+        "row": "inter-package constraints (cccp env has no acp/acp_services/fastapi; worker env has no acp/fastapi)",
+        "state": "PASS"
+      },
+      {
+        "row": "install 0.2.0 -> upgrade 0.2.1 -> uninstall removes module",
+        "state": "PASS (dist version upgraded; cccp.__version__ stays 0.2.0 by the 4-place constant rule)"
+      },
+      {
+        "row": "assets/notice/static locations",
+        "state": "PASS (model_assets NOTICE.md/LICENSE-DP5/atomic_reps.gz/frag_reps.gz; acp_web_assets HTML/JS)"
+      },
+      {
+        "row": "import without external QC binaries (empty PATH)",
+        "state": "PASS"
+      },
+      {
+        "row": "full B25 release delivery (three roles, signed/verified distribution)",
+        "state": "NOT_VERIFIED (P5)"
+      }
+    ]
+  },
+  "ports": {
+    "busy_listeners_at_probe": [],
+    "chosen": {
+      "controller": 18765,
+      "reserved_alternate": 18766
+    },
+    "free": true,
+    "production_service_8765_http_status": "200",
+    "production_service_touched": false
+  },
+  "role_interpreters": {
+    "assertion_rule": "each module __file__ must start with the role's expected source prefix; a mismatch is FAIL and is never silently accepted",
+    "matrix_version": 1,
+    "roles": {
+      "A": {
+        "candidate_commit": "94c8ea946a4f400202ff337a660a5ce46739d8be",
+        "cwd": "/ACPServer/acp2-development/A",
+        "dependency_digest_rule": "sha256 of `python -m pip freeze` stdout (PYTHONPATH unset)",
+        "dependency_digest_sha256": "f4a9340436bfec7e1f505be4da0e1292bfe776f3e2fa9fab28b5642e4278776c",
+        "expected_source_prefix": "/ACPServer/acp2-development/A/src",
+        "import_source_assertion": "PASS",
+        "interpreter": "/ACPServer/acp2-development/envs/a-python/bin/python",
+        "modules": {
+          "acp": "/ACPServer/acp2-development/A/src/acp/__init__.py",
+          "acp_services": "/ACPServer/acp2-development/A/src/acp_services/__init__.py",
+          "cccp": "/ACPServer/acp2-development/A/src/cccp/__init__.py"
+        },
+        "per_module_match": {
+          "acp": true,
+          "acp_services": true,
+          "cccp": true
+        },
+        "python_version": "3.11.13",
+        "worktree_dirty_paths": 0
+      },
+      "B": {
+        "candidate_commit": "a0185b15c546fbd07919326d581fab13e05000fa",
+        "cwd": "/ACPServer/acp2-development/B",
+        "dependency_digest_rule": "sha256 of `python -m pip freeze` stdout (PYTHONPATH unset)",
+        "dependency_digest_sha256": "5f9561c2f542bff9b8e0df2a58ddc8bdd3fd342b2c6ce11d730bded09bee3c66",
+        "expected_source_prefix": "/ACPServer/acp2-development/B/src",
+        "import_source_assertion": "PASS",
+        "interpreter": "/ACPServer/acp2-development/venvs/b/bin/python",
+        "modules": {
+          "acp": "/ACPServer/acp2-development/B/src/acp/__init__.py",
+          "acp_services": "/ACPServer/acp2-development/B/src/acp_services/__init__.py",
+          "cccp": "/ACPServer/acp2-development/B/src/cccp/__init__.py"
+        },
+        "per_module_match": {
+          "acp": true,
+          "acp_services": true,
+          "cccp": true
+        },
+        "python_version": "3.11.13",
+        "worktree_dirty_paths": 0
+      },
+      "C": {
+        "candidate_commit": "c54823109010b651de3f0cca28da5af54a10fdfb",
+        "cwd": "/ACPServer/acp2-development/C",
+        "dependency_digest_rule": "sha256 of `python -m pip freeze` stdout (PYTHONPATH unset)",
+        "dependency_digest_sha256": "ac76cd7fd12fde80e39021173609de9006892d58c5a8fcb95a5459f78276a5de",
+        "expected_source_prefix": "/ACPServer/acp2-development/C/src",
+        "import_source_assertion": "PASS",
+        "interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+        "modules": {
+          "acp": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+          "acp_services": "/ACPServer/acp2-development/C/src/acp_services/__init__.py",
+          "cccp": "/ACPServer/acp2-development/C/src/cccp/__init__.py"
+        },
+        "per_module_match": {
+          "acp": true,
+          "acp_services": true,
+          "cccp": true
+        },
+        "python_version": "3.11.13",
+        "worktree_dirty_paths": 0
+      },
+      "integration": {
+        "candidate_commit": "75a8f08a06b5528b310b26bd309940e99d9cd9bd",
+        "cwd": "/ACPServer/acp2-development/integration",
+        "dependency_digest_rule": "sha256 of `python -m pip freeze` stdout (PYTHONPATH unset)",
+        "dependency_digest_sha256": "6ba4052f3a7572503740f90b5df7047c0b00d68d8ef84ae271b6c3bc5cbbaadc",
+        "expected_source_prefix": "/ACPServer/acp2-development/integration/src",
+        "import_source_assertion": "PASS",
+        "interpreter": "/ACPServer/acp2-development/venvs/integration/bin/python",
+        "modules": {
+          "acp": "/ACPServer/acp2-development/integration/src/acp/__init__.py",
+          "acp_services": "/ACPServer/acp2-development/integration/src/acp_services/__init__.py",
+          "cccp": "/ACPServer/acp2-development/integration/src/cccp/__init__.py"
+        },
+        "per_module_match": {
+          "acp": true,
+          "acp_services": true,
+          "cccp": true
+        },
+        "python_version": "3.11.13",
+        "worktree_dirty_paths": 0
+      }
+    }
+  },
+  "run_root": {
+    "findmnt": "xfs    /dev/mapper/rl_workstation-root /",
+    "free_bytes": 26125516800,
+    "free_inodes": 35903430,
+    "fstype": "xfs",
+    "native_filesystem": true,
+    "path": "/ACPServer/acp2-development/data/b/run-root",
+    "production_run_root_used": false,
+    "source": "/dev/mapper/rl_workstation-root",
+    "target": "/",
+    "writable": true
+  },
+  "schema": "acp2.b-runtime.v1",
+  "venv": {
+    "editable_install": "pip install -e '/ACPServer/acp2-development/B[dev,api,remote]'",
+    "import_source_assertion": "PASS (all three resolve under /ACPServer/acp2-development/B/src)",
+    "inherited_user_site_hazard": "~/.local/lib/python3.11/site-packages/__editable__.acp-0.2.0.pth points at /ACPServer/AutoCalcPlatform/src (the dirty checkout). The B venv's own site-packages is earlier on sys.path and wins; every test must still assert module __file__.",
+    "installed_package_files": {
+      "acp": "/ACPServer/acp2-development/B/src/acp/__init__.py",
+      "acp_services": "/ACPServer/acp2-development/B/src/acp_services/__init__.py",
+      "cccp": "/ACPServer/acp2-development/B/src/cccp/__init__.py"
+    },
+    "interpreter": "/ACPServer/acp2-development/venvs/b/bin/python",
+    "kind": "python3.11 -m venv --system-site-packages (inherits numpy/rdkit/fastapi/paramiko; B site-packages precedes user site so B sources win)",
+    "pip_freeze_file": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B02/pip-freeze.txt",
+    "pip_freeze_lines": 98,
+    "pip_freeze_sha256": "59b73a6bbb16a08ecfd65748325a08095c5a163d5a97e441149fc1e5bdced4b1",
+    "pip_version": "pip 22.3.1 from /ACPServer/acp2-development/venvs/b/lib64/python3.11/site-packages/pip (python 3.11)",
+    "python_version": "3.11.13"
+  }
+}

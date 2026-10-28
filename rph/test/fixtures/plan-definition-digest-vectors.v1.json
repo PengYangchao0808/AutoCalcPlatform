@@ -1,0 +1,284 @@
+{
+  "schema": "acp2.test.plan-definition-digest-vectors.v1",
+  "note": "Cross-end canonical vectors for D06 plan_definition_digest: the same proposals are hashed by the platform (acp_services.runtime.canonical_digest) and RPH (@rph/research computePlanDefinitionDigest).",
+  "vectors": [
+    {
+      "name": "singlet-neutral",
+      "proposal": {
+        "proposal_id": "prop-m3-03-singlet-neutral",
+        "project_id": "project_m3_03",
+        "recipe_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "science": {
+          "capability_steps": [
+            {
+              "step_index": 0,
+              "capability": "geometry_optimization",
+              "version": "1.0.0",
+              "parameters": {
+                "max_cycles": 100
+              }
+            }
+          ],
+          "initial_inputs": [
+            {
+              "input_id": "in-neutral",
+              "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+              "format": "xyz",
+              "role": "minimum"
+            }
+          ],
+          "method": "r2SCAN-3c",
+          "mapping": "identity",
+          "charge": 0,
+          "multiplicity": 1,
+          "allowed_substitutions": []
+        },
+        "budget": {
+          "model_requests": 1,
+          "input_tokens": 1000,
+          "output_tokens": 500,
+          "task_refs": 1,
+          "recipe_steps": 1,
+          "qc_invocations": 1,
+          "wall_seconds": 600,
+          "queue_seconds": 60
+        }
+      },
+      "digest": "sha256:4ae38de0884ab2f6a932e245fdd4591dfcb7fe52c4d94d74e5121ac1881a3517"
+    },
+    {
+      "name": "charged-doublet-nondefault-method",
+      "proposal": {
+        "proposal_id": "prop-m3-03-charged-doublet-nondefault-method",
+        "project_id": "project_m3_03",
+        "recipe_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "science": {
+          "capability_steps": [
+            {
+              "step_index": 0,
+              "capability": "single_point",
+              "version": "1.0.0",
+              "parameters": {
+                "grid": "defgrid3"
+              }
+            },
+            {
+              "step_index": 1,
+              "capability": "frequency",
+              "version": "1.0.0",
+              "parameters": {}
+            }
+          ],
+          "initial_inputs": [
+            {
+              "input_id": "in-cation",
+              "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+              "format": "xyz",
+              "role": "reactant_complex"
+            }
+          ],
+          "method": "wB97X-D4",
+          "mapping": "atom-map-2",
+          "charge": 1,
+          "multiplicity": 2,
+          "allowed_substitutions": [
+            "method"
+          ]
+        },
+        "budget": {
+          "model_requests": 1,
+          "input_tokens": 1000,
+          "output_tokens": 500,
+          "task_refs": 1,
+          "recipe_steps": 1,
+          "qc_invocations": 1,
+          "wall_seconds": 600,
+          "queue_seconds": 60
+        }
+      },
+      "digest": "sha256:db0cc7e62937dd749e15cc624be32d95cfbc12272af38d949b13f60ae98bfd9d"
+    },
+    {
+      "name": "multi-input-ts",
+      "proposal": {
+        "proposal_id": "prop-m3-03-multi-input-ts",
+        "project_id": "project_m3_03",
+        "recipe_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "science": {
+          "capability_steps": [
+            {
+              "step_index": 0,
+              "capability": "irc",
+              "version": "1.0.0",
+              "parameters": {
+                "direction": "forward"
+              }
+            }
+          ],
+          "initial_inputs": [
+            {
+              "input_id": "in-reactant",
+              "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+              "format": "xyz",
+              "role": "reactant_complex"
+            },
+            {
+              "input_id": "in-ts",
+              "sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+              "format": "xyz",
+              "role": "transition_state"
+            }
+          ],
+          "method": "r2SCAN-3c",
+          "mapping": "identity",
+          "charge": -1,
+          "multiplicity": 2,
+          "allowed_substitutions": []
+        },
+        "budget": {
+          "model_requests": 1,
+          "input_tokens": 1000,
+          "output_tokens": 500,
+          "task_refs": 1,
+          "recipe_steps": 1,
+          "qc_invocations": 1,
+          "wall_seconds": 600,
+          "queue_seconds": 60
+        }
+      },
+      "digest": "sha256:3010cf7ac1f96b4c92c23e1deab449df11136de79689e177824f7a136fa137ed"
+    },
+    {
+      "name": "changed-input-bytes",
+      "proposal": {
+        "proposal_id": "prop-m3-03-changed-input-bytes",
+        "project_id": "project_m3_03",
+        "recipe_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "science": {
+          "capability_steps": [
+            {
+              "step_index": 0,
+              "capability": "geometry_optimization",
+              "version": "1.0.0",
+              "parameters": {
+                "max_cycles": 100
+              }
+            }
+          ],
+          "initial_inputs": [
+            {
+              "input_id": "in-neutral",
+              "sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+              "format": "xyz",
+              "role": "minimum"
+            }
+          ],
+          "method": "r2SCAN-3c",
+          "mapping": "identity",
+          "charge": 0,
+          "multiplicity": 1,
+          "allowed_substitutions": []
+        },
+        "budget": {
+          "model_requests": 1,
+          "input_tokens": 1000,
+          "output_tokens": 500,
+          "task_refs": 1,
+          "recipe_steps": 1,
+          "qc_invocations": 1,
+          "wall_seconds": 600,
+          "queue_seconds": 60
+        }
+      },
+      "digest": "sha256:6f139e3caf819afdebc49b2fda1a92e784ff2734d8b0e3e44493b8de52176495"
+    },
+    {
+      "name": "changed-budget",
+      "proposal": {
+        "proposal_id": "prop-m3-03-changed-budget",
+        "project_id": "project_m3_03",
+        "recipe_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "science": {
+          "capability_steps": [
+            {
+              "step_index": 0,
+              "capability": "geometry_optimization",
+              "version": "1.0.0",
+              "parameters": {
+                "max_cycles": 100
+              }
+            }
+          ],
+          "initial_inputs": [
+            {
+              "input_id": "in-neutral",
+              "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+              "format": "xyz",
+              "role": "minimum"
+            }
+          ],
+          "method": "r2SCAN-3c",
+          "mapping": "identity",
+          "charge": 0,
+          "multiplicity": 1,
+          "allowed_substitutions": []
+        },
+        "budget": {
+          "model_requests": 1,
+          "input_tokens": 1000,
+          "output_tokens": 500,
+          "task_refs": 1,
+          "recipe_steps": 4,
+          "qc_invocations": 1,
+          "wall_seconds": 3600,
+          "queue_seconds": 60
+        }
+      },
+      "digest": "sha256:5edd5382aa90031b41dd1f1e5bd8aa58218a23cdfe27e3633cd63e1fa7e20b49"
+    },
+    {
+      "name": "triplet-anion",
+      "proposal": {
+        "proposal_id": "prop-m3-03-triplet-anion",
+        "project_id": "project_m3_03",
+        "recipe_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "science": {
+          "capability_steps": [
+            {
+              "step_index": 0,
+              "capability": "casscf",
+              "version": "1.0.0",
+              "parameters": {
+                "n_roots": 2
+              }
+            }
+          ],
+          "initial_inputs": [
+            {
+              "input_id": "in-anion",
+              "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+              "format": "xyz",
+              "role": "minimum"
+            }
+          ],
+          "method": "def2-TZVPPD/CASSCF",
+          "mapping": "identity",
+          "charge": -1,
+          "multiplicity": 3,
+          "allowed_substitutions": []
+        },
+        "budget": {
+          "model_requests": 1,
+          "input_tokens": 1000,
+          "output_tokens": 500,
+          "task_refs": 1,
+          "recipe_steps": 1,
+          "qc_invocations": 1,
+          "wall_seconds": 600,
+          "queue_seconds": 60
+        }
+      },
+      "digest": "sha256:a78a41b5f2a36e90b3e0a86adce7357873ce9b119be6aed7d45983521c7a6029"
+    }
+  ]
+}

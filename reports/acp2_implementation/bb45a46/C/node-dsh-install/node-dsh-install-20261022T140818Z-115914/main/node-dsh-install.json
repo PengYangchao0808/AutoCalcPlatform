@@ -1,0 +1,8 @@
+{
+  "archive_sha256": "c0649af18e6a24f6fe5535a3e86b341dd49a8e71117c8b68bde973ef834f16f2",
+  "dsh_revision": "687f282e8625c6b8d11ff58211a90524be2e4317",
+  "dsh_version_rc": 0,
+  "dsh_version_stdout": "0.2.1-rc.2",
+  "node": "v22.19.0",
+  "pnpm": "11.28.5"
+}

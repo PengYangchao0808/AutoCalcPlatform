@@ -1,0 +1,112 @@
+{
+  "authority": "cccp.calculation.tasks.singlepoint:184-239",
+  "complete": true,
+  "content_digest": "sha256:77d1454236a293f7d962e988e442ff0f58d7626c4a8a0306912cd88a9702c8cc",
+  "exit_code": 0,
+  "job_status": "completed",
+  "missing_required_facts": [],
+  "normal_reuse": true,
+  "partial_result": false,
+  "publish": true,
+  "publish_policy": "normal",
+  "qualification": "complete",
+  "receipt_state": "completed",
+  "required_facts": [
+    "energy_hartree"
+  ],
+  "result": {
+    "artifacts": [
+      {
+        "checksum": "sha256:8ef681ceae0fd930ad61dfde38119a294170331660aea686e57d4e5d69e45b5a",
+        "path": "/ACPServer/acp2-development/data/b/run-root-b13/uncategorized/9_ethanol_B13_long_control_fixture_C_0.000_0.000_0.000_C_1.520_0.000_0.000_O_2.050_1.250_0.000_H_-0.__13/sp.inp",
+        "source": "orca",
+        "type": "output"
+      },
+      {
+        "checksum": "sha256:b61ffae1ae5c26d74a1b76377733af52ba2f32b6ad3b53294c94777240451250",
+        "path": "/ACPServer/acp2-development/data/b/run-root-b13/uncategorized/9_ethanol_B13_long_control_fixture_C_0.000_0.000_0.000_C_1.520_0.000_0.000_O_2.050_1.250_0.000_H_-0.__13/sp.out",
+        "source": "orca",
+        "type": "log"
+      }
+    ],
+    "complete": true,
+    "coordinates": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        1.52,
+        0.0,
+        0.0
+      ],
+      [
+        2.05,
+        1.25,
+        0.0
+      ],
+      [
+        -0.5,
+        0.9,
+        0.0
+      ],
+      [
+        -0.5,
+        -0.5,
+        0.8
+      ],
+      [
+        -0.5,
+        -0.5,
+        -0.8
+      ],
+      [
+        1.9,
+        -0.6,
+        0.8
+      ],
+      [
+        1.9,
+        -0.6,
+        -0.8
+      ],
+      [
+        2.95,
+        1.15,
+        0.0
+      ]
+    ],
+    "energy_hartree": -154.808635026786,
+    "errors": [],
+    "frequencies": [],
+    "metadata": {},
+    "payload": {},
+    "provenance": {
+      "backend": "orca",
+      "input_signature": "input.xyz",
+      "method": "wB97M-V",
+      "version": "unknown"
+    },
+    "schema_version": 1,
+    "status": "completed",
+    "symbols": [
+      "C",
+      "C",
+      "O",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H"
+    ],
+    "task": "singlepoint"
+  },
+  "result_digest": "sha256:eb79b94eb673d65ad5fddb479f3522a5a2c00901a7f021878fe586e3e8dfadcc",
+  "schema": "acp_task_result_v1",
+  "status": "completed",
+  "task": "singlepoint",
+  "truth_table_row": "b",
+  "written_at": "2026-10-22T23:34:33.864223+00:00"
+}

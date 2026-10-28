@@ -1,0 +1,46 @@
+{
+  "b03_sha256": "f2126a9d92aa429e1da64e1bb04c56f71b38b57c2ce4fe8110d1289fa6198c2c",
+  "combined": [
+    "acp_analyze",
+    "acp_cancel",
+    "acp_capabilities",
+    "acp_preflight",
+    "acp_prepare_artifact",
+    "acp_read_artifact",
+    "acp_research_approval_decide_v1",
+    "acp_research_approval_query_v1",
+    "acp_research_approval_request_v1",
+    "acp_research_approval_revoke_v1",
+    "acp_research_proposal_create_v1",
+    "acp_research_proposal_read_v1",
+    "acp_research_proposal_update_cas_v1",
+    "acp_research_resume_v1",
+    "acp_research_snapshot_v1",
+    "acp_research_wait_v1",
+    "acp_status",
+    "acp_submit"
+  ],
+  "p1": [
+    "acp_analyze",
+    "acp_cancel",
+    "acp_capabilities",
+    "acp_preflight",
+    "acp_prepare_artifact",
+    "acp_read_artifact",
+    "acp_status",
+    "acp_submit"
+  ],
+  "p2": [
+    "acp_research_approval_decide_v1",
+    "acp_research_approval_query_v1",
+    "acp_research_approval_request_v1",
+    "acp_research_approval_revoke_v1",
+    "acp_research_proposal_create_v1",
+    "acp_research_proposal_read_v1",
+    "acp_research_proposal_update_cas_v1",
+    "acp_research_resume_v1",
+    "acp_research_snapshot_v1",
+    "acp_research_wait_v1"
+  ],
+  "sha256": "d9581b450ab79e7c7c76ea0643abab40d6911c123bcfddfafeef23499c4964a9"
+}

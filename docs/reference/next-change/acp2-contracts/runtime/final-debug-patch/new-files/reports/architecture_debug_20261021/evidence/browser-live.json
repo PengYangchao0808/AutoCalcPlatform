@@ -1,0 +1,62 @@
+{
+  "scope": "current worktree F1/S1 only, temporary service/run root; not a four-cell acceptance",
+  "submission": {
+    "created": true,
+    "job_id": "20261021_190530_001_four-combo-debug-r2-browser",
+    "final_status": "completed",
+    "detail_status": 200,
+    "files_status": 200,
+    "has_state_json": true,
+    "listed": true,
+    "list_status": 200,
+    "missing_detail_status": 404,
+    "ok": true
+  },
+  "browser": {
+    "result": "PASS",
+    "ok": true,
+    "facts": {
+      "workflows": 15,
+      "jobsArray": true,
+      "jobVisible": true
+    },
+    "page_errors": [],
+    "api_responses": [
+      {
+        "url": "http://127.0.0.1:37681/api/v1/status",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:37681/api/v1/projects",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:37681/api/v1/workflow-catalog",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:37681/api/v1/maintenance/disk-usage",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:37681/api/v2/task-view?group_by=molecule&sort=created_desc&group_limit=200&max_total=200&offset=0&include_facets=true",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:37681/api/v1/jobs/20261021_190530_001_four-combo-debug-r2-browser/detail",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:37681/api/v1/jobs/20261021_190530_001_four-combo-debug-r2-browser/files",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:37681/api/v2/task-view?group_by=molecule&sort=created_desc&group_limit=200&max_total=200&offset=0&include_facets=false",
+        "status": 200
+      }
+    ],
+    "failed_requests": [],
+    "chromium": "153.0.8010.12"
+  },
+  "without_legacy_fixtures": "NOT_VERIFIED"
+}

@@ -1,0 +1,64 @@
+{
+ "assertions": [
+  {
+   "name": "approval.fixture_content_no_platform_transport",
+   "status": "PASS"
+  },
+  {
+   "name": "approval.node_suite",
+   "status": "PASS"
+  },
+  {
+   "name": "approval.module_tests_ge_8",
+   "status": "PASS"
+  },
+  {
+   "name": "approval.bind_invalidate_matrix_covered",
+   "status": "PASS"
+  },
+  {
+   "name": "approval.evidence_kind_fixture_content",
+   "status": "PASS"
+  }
+ ],
+ "authoritative_receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/approval-budget-live/approval-budget-live-r1/approval/experience_approval-budget-live-experience_fixture-approval-budget-live-r1.json",
+ "candidate": {
+  "client_revision": "8413db719681ffa08370c00001bb634f4dea274a",
+  "harness_revision": "9c2523d35a884272807c6857794886eeedd43e728da0d695fd2a26244ddaa433",
+  "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+ },
+ "candidate_revision": "8413db719681ffa08370c00001bb634f4dea274a",
+ "command": [
+  "/ACPServer/acp2-development/venvs/integration/bin/python",
+  "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+  "--scenario",
+  "approval-budget-live",
+  "--timeout",
+  "600",
+  "--out",
+  "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/approval-budget-live/approval-budget-live-r1/approval"
+ ],
+ "content_evidence_kind": "fixture",
+ "mirrored_artifacts": {
+  "approval-bind-matrix.json": {
+   "sha256": "17808f32e43610a6337316432a79cdf16394575dae7256105e25684e3f8afb3d",
+   "size_bytes": 1578
+  },
+  "approval-node-tests.log": {
+   "sha256": "077c90d2dd1e53259df93a088ec7049c8ae96fcc37047c9f5383e9146350a44d",
+   "size_bytes": 1442
+  },
+  "approval-source-scan.json": {
+   "sha256": "57fe72c2a5600773aac4dfc4334bf0a18d6067c41a4d85dc0126566064965d53",
+   "size_bytes": 199
+  }
+ },
+ "phase": "experience:fixture",
+ "phase_alias": "approval-budget-live --phase approval -> experience:fixture (evidence_kind=fixture)",
+ "public_evidence_kind": "fixture",
+ "requested_phase": "approval",
+ "result": "PASS",
+ "run_id": "approval-budget-live-r1",
+ "scenario": "experience:approval-budget-live",
+ "schema": "acp2.approval-mirror.v1"
+}

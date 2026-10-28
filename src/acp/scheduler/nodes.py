@@ -35,6 +35,7 @@ from acp.scheduler.capabilities import (
     is_degraded,
     matches_capabilities,
 )
+from acp_services.store.records import ExecutionMode as ExecutionMode
 
 if TYPE_CHECKING:
     from acp.scheduler.remote.config import NodeCapabilities, RemoteNode
@@ -48,12 +49,13 @@ __all__ = [
     "NodeSpec",
     "NodeState",
     "NodeRegistry",
+    "target_error_detail",
+    "target_error_envelope",
+    "target_error_field",
+    "target_error_rule",
     "validate_execution_request",
     "validate_submission_target",
 ]
-
-ExecutionMode = Literal["local", "remote"]
-"""Typed execution-mode preference — never a bare ``str``."""
 
 LOCAL_NODE_NAME = "local"
 
@@ -147,8 +149,10 @@ def _to_node_spec(node: RemoteNode) -> NodeSpec:
 def validate_execution_request(spec: Any) -> None:
     """Reject contradictory ``execution_mode`` / ``target_node`` pairs.
 
-    Fails fast (HTTP 400 at the API layer) rather than silently letting one
-    field win — silent precedence would mask frontend/client bugs.
+    Fails fast (an input rejection at every application entry) rather than
+    silently letting one field win — silent precedence would mask client bugs.
+    The raised error carries the stable ``execution_mode_conflict`` rule so HTTP,
+    MCP and the CLI project the same ``params.rule`` (M0-06).
 
     Raises:
         ExecutionTargetError: On a conflicting combination.
@@ -156,9 +160,79 @@ def validate_execution_request(spec: Any) -> None:
     mode = getattr(spec, "execution_mode", None)
     node = getattr(spec, "target_node", None)
     if mode == "remote" and node == LOCAL_NODE_NAME:
-        raise ExecutionTargetError("execution_mode=remote conflicts with target_node=local")
+        raise ExecutionTargetError(
+            "execution_mode=remote conflicts with target_node=local",
+            code="execution_mode_conflict",
+        )
     if mode == "local" and node not in (None, LOCAL_NODE_NAME):
-        raise ExecutionTargetError(f"execution_mode=local conflicts with target_node={node!r}")
+        raise ExecutionTargetError(
+            f"execution_mode=local conflicts with target_node={node!r}",
+            code="execution_mode_conflict",
+        )
+
+
+def target_error_detail(exc: Exception) -> dict[str, Any]:
+    """Serialize a submission-time target error into the legacy D12 dict.
+
+    Carries the machine-readable ``code`` plus ``missing_software`` /
+    ``missing_tags`` so clients (and the frontend i18n layer) can map errors
+    without parsing free-form English.
+    """
+    return {
+        "code": getattr(exc, "code", None) or "execution_target_error",
+        "message": str(exc),
+        "missing_software": list(getattr(exc, "missing_software", ()) or ()),
+        "missing_tags": list(getattr(exc, "missing_tags", ()) or ()),
+        "local_missing_software": list(getattr(exc, "local_missing_software", ()) or ()),
+        "remote_nodes_configured": getattr(exc, "remote_nodes_configured", None),
+    }
+
+
+def target_error_rule(exc: Exception) -> str:
+    """Return the fine-grained target rule of *exc* (never empty)."""
+    return str(getattr(exc, "code", None) or "execution_target_error")
+
+
+def target_error_field(exc: Exception) -> str:
+    """Return the offending request field of a target error.
+
+    ``execution_mode`` for a contradictory mode/node pair, ``node_tags`` when the
+    rejection is purely tag-driven, ``target_node`` otherwise (unknown, disabled,
+    incapable or no capable node).  Every application entry reports the same
+    field so a client maps one error surface.
+    """
+    rule = target_error_rule(exc)
+    if rule == "execution_mode_conflict":
+        return "execution_mode"
+    missing_tags = tuple(getattr(exc, "missing_tags", ()) or ())
+    missing_software = tuple(getattr(exc, "missing_software", ()) or ())
+    if missing_tags and not missing_software:
+        return "node_tags"
+    return "target_node"
+
+
+def target_error_envelope(exc: Exception) -> dict[str, Any]:
+    """Project a target error onto the **application** error envelope (M0-06).
+
+    The stable code is ``input_invalid`` (the machine_output vocabulary shared by
+    HTTP, MCP and the CLI); the fine-grained scheduler rule survives in
+    ``params["rule"]`` together with the structured capability facts.  Using one
+    envelope is what makes an unknown remote node the *same* rejection at every
+    entry instead of three different shapes.
+    """
+    detail = target_error_detail(exc)
+    rule = target_error_rule(exc)
+    params: dict[str, Any] = {"field": target_error_field(exc), "rule": rule}
+    for key, value in detail.items():
+        if key in {"code", "message"}:
+            continue
+        params[key] = value
+    return {
+        "code": "input_invalid",
+        "message": detail["message"],
+        "retryable": False,
+        "params": params,
+    }
 
 
 def _probed_software_of(registry: Any, name: str) -> frozenset[str] | None:

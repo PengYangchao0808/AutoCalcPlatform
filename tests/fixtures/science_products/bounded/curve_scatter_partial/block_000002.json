@@ -1,0 +1,56 @@
+{
+ "schema_version": 1,
+ "product_kind": "curve_scatter",
+ "identity": {
+  "product_kind": "curve_scatter",
+  "schema_version": 1,
+  "generator": "cccp.calculation.products.curve.build_curve_scatter_product",
+  "input_digest": "sha256:97fdb1a893b662830d6d1f42b03785edbf660ef17320acbc823fefd463bac8cb",
+  "algorithm": "chunk",
+  "algorithm_version": "1",
+  "params_digest": "sha256:d687d8d184d55dd7a044b8f167a7d8a03ca326063c93e2ed251aafc185c2ed46"
+ },
+ "state": "available",
+ "complete": true,
+ "errors": [],
+ "payload": {
+  "reference_frame": {
+   "axes": "cartesian",
+   "origin": "native_input"
+  },
+  "series": [
+   {
+    "series_id": "curve_scatter:series:scan_energy",
+    "x_unit": "angstrom-or-degree",
+    "y_unit": "hartree",
+    "reference_frame": {
+     "axes": "cartesian",
+     "origin": "native_input"
+    },
+    "label": "scan energy",
+    "points": [
+     {
+      "point_id": "curve_scatter:series:scan_energy:point:10",
+      "x": 0.1,
+      "y": -114.49320165,
+      "source": {
+       "source_kind": "curve_point",
+       "artifact": "",
+       "native_index": 10
+      }
+     },
+     {
+      "point_id": "curve_scatter:series:scan_energy:point:11",
+      "x": 0.11,
+      "y": -114.49304397,
+      "source": {
+       "source_kind": "curve_point",
+       "artifact": "",
+       "native_index": 11
+      }
+     }
+    ]
+   }
+  ]
+ }
+}

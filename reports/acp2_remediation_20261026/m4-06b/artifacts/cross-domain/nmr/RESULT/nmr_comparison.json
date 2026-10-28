@@ -1,0 +1,483 @@
+{
+  "assignment": {
+    "paired_peak_count": 5,
+    "peak_count": 5,
+    "unmatched_peaks": [],
+    "unmatched_signals": []
+  },
+  "atom_index_base": 0,
+  "atom_labels": [
+    "C1",
+    "C2",
+    "O1",
+    "H1",
+    "H2",
+    "H3",
+    "H4",
+    "H5",
+    "H6"
+  ],
+  "atom_mapping_digest": "0cdc26aef9b049f9416b4565f513298c3dcb1876f74450f171554dca1079e899",
+  "evidence": {
+    "claims": [
+      {
+        "claim_id": "nmr.atom_mapping",
+        "limitations": [
+          "nmr_comparison_scope"
+        ],
+        "missing_checks": [],
+        "scope": {
+          "applicability": "system_specific",
+          "conditions": "atom_index_base=0; label_scheme=per-element",
+          "not_in_scope": [
+            "atom renumbering after this assignment key"
+          ],
+          "subject": "m406b-nmr-crossdomain-ethanol#atom-mapping"
+        },
+        "source_refs": [
+          {
+            "artifact_path": "shielding_table.json",
+            "digest": {
+              "algorithm": "sha256",
+              "value": "de044ce6b8860152efed85e6846360af4c4d4796f06bf05b4618cd1db2ccb755"
+            },
+            "role": "shielding_table",
+            "units": "ppm"
+          }
+        ],
+        "statement": "The shielding table is bound to the declared structure-order atom mapping and every computed signal label follows it.",
+        "status": "supported",
+        "validator": {
+          "kind": "deterministic",
+          "validator_id": "check.nmr_atom_mapping",
+          "validator_version": "1.0.0"
+        }
+      },
+      {
+        "claim_id": "nmr.experimental_source",
+        "limitations": [
+          "nmr_comparison_scope"
+        ],
+        "missing_checks": [],
+        "scope": {
+          "applicability": "condition_specific",
+          "conditions": "source=experimental_spectrum.json",
+          "not_in_scope": [],
+          "subject": "m406b-nmr-crossdomain-ethanol#experimental-source"
+        },
+        "source_refs": [
+          {
+            "artifact_path": "experimental_spectrum.json",
+            "digest": {
+              "algorithm": "sha256",
+              "value": "316f1d0a7a3c25b999e463c18f5125c15c4c32e13044aff1b10a699ec97fcb69"
+            },
+            "role": "experimental_spectrum",
+            "units": "ppm"
+          }
+        ],
+        "statement": "The experimental peak list used for the comparison is recorded as a digested source artifact.",
+        "status": "supported",
+        "validator": {
+          "kind": "deterministic",
+          "validator_id": "check.nmr_experimental_source",
+          "validator_version": "1.0.0"
+        }
+      },
+      {
+        "claim_id": "nmr.reference_conditions",
+        "limitations": [
+          "nmr_comparison_scope"
+        ],
+        "missing_checks": [],
+        "scope": {
+          "applicability": "condition_specific",
+          "conditions": "mPW1PW91/6-311G(d); solvent=chloroform; reference=goodman-tmsdata; scaling=goodman",
+          "not_in_scope": [],
+          "subject": "m406b-nmr-crossdomain-ethanol#reference-conditions"
+        },
+        "source_refs": [
+          {
+            "artifact_path": "reference_conditions.json",
+            "digest": {
+              "algorithm": "sha256",
+              "value": "02b06749f7f28391bfc2c9ccf41b3ac9dc0a9c6865badab78fc1df2ad04ae24e"
+            },
+            "role": "reference_conditions",
+            "units": null
+          }
+        ],
+        "statement": "Every required nucleus has a declared TMS reference and the solvent/method/basis/scaling conditions in force are recorded.",
+        "status": "supported",
+        "validator": {
+          "kind": "deterministic",
+          "validator_id": "check.nmr_reference_conditions",
+          "validator_version": "1.0.0"
+        }
+      },
+      {
+        "claim_id": "nmr.assignment_coverage",
+        "limitations": [
+          "nmr_comparison_scope"
+        ],
+        "missing_checks": [],
+        "scope": {
+          "applicability": "system_specific",
+          "conditions": "peaks=5; paired=5",
+          "not_in_scope": [],
+          "subject": "m406b-nmr-crossdomain-ethanol#assignment-coverage"
+        },
+        "source_refs": [
+          {
+            "artifact_path": "shielding_table.json",
+            "digest": {
+              "algorithm": "sha256",
+              "value": "de044ce6b8860152efed85e6846360af4c4d4796f06bf05b4618cd1db2ccb755"
+            },
+            "role": "shielding_table",
+            "units": "ppm"
+          },
+          {
+            "artifact_path": "experimental_spectrum.json",
+            "digest": {
+              "algorithm": "sha256",
+              "value": "316f1d0a7a3c25b999e463c18f5125c15c4c32e13044aff1b10a699ec97fcb69"
+            },
+            "role": "experimental_spectrum",
+            "units": "ppm"
+          }
+        ],
+        "statement": "Every experimental peak and every computed signal was paired exactly once.",
+        "status": "supported",
+        "validator": {
+          "kind": "deterministic",
+          "validator_id": "check.nmr_assignment_coverage",
+          "validator_version": "1.0.0"
+        }
+      },
+      {
+        "claim_id": "nmr.calibration",
+        "limitations": [
+          "nmr_comparison_scope"
+        ],
+        "missing_checks": [],
+        "scope": {
+          "applicability": "condition_specific",
+          "conditions": "scaling=goodman",
+          "not_in_scope": [],
+          "subject": "m406b-nmr-crossdomain-ethanol#calibration"
+        },
+        "source_refs": [
+          {
+            "artifact_path": "shielding_table.json",
+            "digest": {
+              "algorithm": "sha256",
+              "value": "de044ce6b8860152efed85e6846360af4c4d4796f06bf05b4618cd1db2ccb755"
+            },
+            "role": "shielding_table",
+            "units": "ppm"
+          },
+          {
+            "artifact_path": "experimental_spectrum.json",
+            "digest": {
+              "algorithm": "sha256",
+              "value": "316f1d0a7a3c25b999e463c18f5125c15c4c32e13044aff1b10a699ec97fcb69"
+            },
+            "role": "experimental_spectrum",
+            "units": "ppm"
+          }
+        ],
+        "statement": "Each computed nucleus has at least two matched pairs and a finite internal-scaling regression.",
+        "status": "supported",
+        "validator": {
+          "kind": "deterministic",
+          "validator_id": "check.nmr_calibration",
+          "validator_version": "1.0.0"
+        }
+      },
+      {
+        "claim_id": "nmr.model_assets",
+        "limitations": [
+          "nmr_comparison_scope"
+        ],
+        "missing_checks": [],
+        "scope": {
+          "applicability": "universal",
+          "conditions": "model_asset_version=sha256:81bfe1982afeba533b77db9ceb8a47abe8bc35480ee4f93e5092c427a084e274",
+          "not_in_scope": [],
+          "subject": "m406b-nmr-crossdomain-ethanol#model-assets"
+        },
+        "source_refs": [
+          {
+            "artifact_path": "model_assets_manifest.json",
+            "digest": {
+              "algorithm": "sha256",
+              "value": "1d0e685b7daba545dbd6d12f2611f1ba668cf22de606aab4d33d71601333dea2"
+            },
+            "role": "model_assets_manifest",
+            "units": null
+          }
+        ],
+        "statement": "The packaged DP5/FCHL model assets are present and their content-addressed version is recorded.",
+        "status": "supported",
+        "validator": {
+          "kind": "deterministic",
+          "validator_id": "check.nmr_model_assets",
+          "validator_version": "1.0.0"
+        }
+      }
+    ],
+    "execution": {
+      "argv": [
+        "cccp.analysis.nmr.comparison.compare_nmr_shielding"
+      ],
+      "exit_code": null,
+      "finished_at": null,
+      "started_at": null,
+      "stderr_path": null,
+      "stdout_path": null,
+      "terminal_state": "completed"
+    },
+    "limitations": [
+      {
+        "description": "This report compares an existing GIAO shielding table with a supplied experimental peak list. It does not re-run shielding calculations, conformer sampling, DP4/DP5 probabilities or a quantitative validation.",
+        "limitation_id": "nmr_comparison_scope"
+      }
+    ],
+    "provenance_digest": {
+      "algorithm": "sha256",
+      "value": "9c098473486703d8204cb166737cdbe6a5396558286320d5d6219c9a5ae97194"
+    },
+    "report_id": "nmr-comparison:m406b-nmr-crossdomain-ethanol",
+    "schema_version": 1,
+    "subject": {
+      "description": "NMR shielding comparison over an existing GIAO shielding table with a supplied experimental peak list",
+      "input_digests": [
+        {
+          "algorithm": "sha256",
+          "value": "de044ce6b8860152efed85e6846360af4c4d4796f06bf05b4618cd1db2ccb755"
+        },
+        {
+          "algorithm": "sha256",
+          "value": "316f1d0a7a3c25b999e463c18f5125c15c4c32e13044aff1b10a699ec97fcb69"
+        },
+        {
+          "algorithm": "sha256",
+          "value": "02b06749f7f28391bfc2c9ccf41b3ac9dc0a9c6865badab78fc1df2ad04ae24e"
+        },
+        {
+          "algorithm": "sha256",
+          "value": "1d0e685b7daba545dbd6d12f2611f1ba668cf22de606aab4d33d71601333dea2"
+        },
+        {
+          "algorithm": "sha256",
+          "value": "802d9487205f38f3b2546176881a1ca241dcf2cbd0a00890c02ef1897c55c932"
+        }
+      ],
+      "science_identity": null,
+      "subject_id": "m406b-nmr-crossdomain-ethanol",
+      "subject_kind": "calculation_result"
+    }
+  },
+  "limitations": [
+    "nmr_comparison_scope"
+  ],
+  "missing_reference_nuclei": [],
+  "model_asset_version": "sha256:81bfe1982afeba533b77db9ceb8a47abe8bc35480ee4f93e5092c427a084e274",
+  "model_assets_available": true,
+  "molecule_id": "m406b-nmr-crossdomain-ethanol",
+  "provenance": {
+    "conditions": {
+      "phase": "solution",
+      "pressure_pa": null,
+      "reference_state": "TMS:goodman-tmsdata",
+      "solvent": "chloroform",
+      "standard_state": null,
+      "temperature_kelvin": 298.15
+    },
+    "derivation": {
+      "algorithm": "nmr_shielding_comparison",
+      "algorithm_version": "1",
+      "input_digest": {
+        "algorithm": "sha256",
+        "value": "bea539d9a62df2818be96e203bc1955df07cba797170fec5ed26d7183090f6ac"
+      },
+      "parameters": {
+        "atom_count": 9,
+        "atom_index_base": 0,
+        "atom_label_scheme": "per-element",
+        "atom_labels": [
+          "C1",
+          "C2",
+          "O1",
+          "H1",
+          "H2",
+          "H3",
+          "H4",
+          "H5",
+          "H6"
+        ],
+        "atom_mapping_digest": "0cdc26aef9b049f9416b4565f513298c3dcb1876f74450f171554dca1079e899",
+        "energy_unit": "not_applicable",
+        "error_model": "goodman-legacy",
+        "experimental_peak_count": 5,
+        "experimental_source_ref": "experimental_spectrum.json",
+        "model_asset_version": "sha256:81bfe1982afeba533b77db9ceb8a47abe8bc35480ee4f93e5092c427a084e274",
+        "model_assets_available": true,
+        "molecule_id": "m406b-nmr-crossdomain-ethanol",
+        "reference_shieldings": [
+          "13C=188.452125",
+          "1H=32.1243166667"
+        ],
+        "reference_source": "goodman-tmsdata",
+        "reference_state": "TMS:goodman-tmsdata",
+        "required_nuclei": [
+          "1H",
+          "13C"
+        ],
+        "scaling_mode": "goodman",
+        "solvent": "chloroform",
+        "solvent_model": "cpcm",
+        "temperature_kelvin": 298.15
+      }
+    },
+    "input": {
+      "artifacts": [
+        {
+          "digest": {
+            "algorithm": "sha256",
+            "value": "de044ce6b8860152efed85e6846360af4c4d4796f06bf05b4618cd1db2ccb755"
+          },
+          "relative_path": "shielding_table.json",
+          "role": "shielding_table",
+          "units": "ppm"
+        },
+        {
+          "digest": {
+            "algorithm": "sha256",
+            "value": "316f1d0a7a3c25b999e463c18f5125c15c4c32e13044aff1b10a699ec97fcb69"
+          },
+          "relative_path": "experimental_spectrum.json",
+          "role": "experimental_spectrum",
+          "units": "ppm"
+        },
+        {
+          "digest": {
+            "algorithm": "sha256",
+            "value": "02b06749f7f28391bfc2c9ccf41b3ac9dc0a9c6865badab78fc1df2ad04ae24e"
+          },
+          "relative_path": "reference_conditions.json",
+          "role": "reference_conditions",
+          "units": null
+        },
+        {
+          "digest": {
+            "algorithm": "sha256",
+            "value": "1d0e685b7daba545dbd6d12f2611f1ba668cf22de606aab4d33d71601333dea2"
+          },
+          "relative_path": "model_assets_manifest.json",
+          "role": "model_assets_manifest",
+          "units": null
+        },
+        {
+          "digest": {
+            "algorithm": "sha256",
+            "value": "802d9487205f38f3b2546176881a1ca241dcf2cbd0a00890c02ef1897c55c932"
+          },
+          "relative_path": "structure.xyz",
+          "role": "structure",
+          "units": "angstrom"
+        }
+      ],
+      "structure_digest": {
+        "algorithm": "sha256",
+        "value": "802d9487205f38f3b2546176881a1ca241dcf2cbd0a00890c02ef1897c55c932"
+      }
+    },
+    "limitations": [
+      "nmr_comparison_scope"
+    ],
+    "provenance_id": "nmr-comparison:m406b-nmr-crossdomain-ethanol",
+    "result_kind": "pure_analysis",
+    "schema_version": 1,
+    "software": {
+      "distribution": "cccp",
+      "executable_path": null,
+      "software_id": "cccp.analysis.nmr.comparison",
+      "software_version": "1"
+    }
+  },
+  "regressions": [
+    {
+      "intercept": -1.1449999759631994e-14,
+      "mae": 3.552713678800501e-15,
+      "mode": "goodman",
+      "nucleus": "13C",
+      "pair_count": 2,
+      "pairs": [
+        {
+          "atom_label": "C1",
+          "calc_ppm": 59.99999999999999,
+          "element": "C",
+          "exp_ppm": 60.0,
+          "residual": 7.105427357601002e-15,
+          "scaled_ppm": 60.00000000000001
+        },
+        {
+          "atom_label": "C2",
+          "calc_ppm": 19.99999999999999,
+          "element": "C",
+          "exp_ppm": 20.0,
+          "residual": 0.0,
+          "scaled_ppm": 20.0
+        }
+      ],
+      "r_squared": 1.0,
+      "residual_convention": "scaled - exp",
+      "slope": 1.0
+    },
+    {
+      "intercept": -3.1311289240529148e-15,
+      "mae": 7.401486830834377e-17,
+      "mode": "goodman",
+      "nucleus": "1H",
+      "pair_count": 3,
+      "pairs": [
+        {
+          "atom_label": "H1",
+          "calc_ppm": 1.1999999999999982,
+          "element": "H",
+          "exp_ppm": 1.2,
+          "residual": -2.220446049250313e-16,
+          "scaled_ppm": 1.1999999999999997
+        },
+        {
+          "atom_label": "H4",
+          "calc_ppm": 3.600000000000002,
+          "element": "H",
+          "exp_ppm": 3.6,
+          "residual": 0.0,
+          "scaled_ppm": 3.6
+        },
+        {
+          "atom_label": "H6",
+          "calc_ppm": 2.5,
+          "element": "H",
+          "exp_ppm": 2.5,
+          "residual": 0.0,
+          "scaled_ppm": 2.5
+        }
+      ],
+      "r_squared": 1.0,
+      "residual_convention": "scaled - exp",
+      "slope": 1.0000000000000013
+    }
+  ],
+  "required_nuclei": [
+    "1H",
+    "13C"
+  ],
+  "schema": "acp2.science.nmr-comparison",
+  "schema_version": 1,
+  "status": "supported"
+}

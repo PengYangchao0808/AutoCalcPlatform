@@ -1,0 +1,1008 @@
+{
+  "all_passed": true,
+  "generated_at": "2026-10-27T22:03:02Z",
+  "scenarios": [
+    {
+      "assessment": {
+        "claim_id": "c-irc-bidirectional-complete",
+        "details": {
+          "task_status": "failed"
+        },
+        "missing_checks": [
+          {
+            "blocking": true,
+            "check_id": "partial_output",
+            "reason": "the IRC task did not report a completed run"
+          }
+        ],
+        "notes": [],
+        "reason": "missing_evidence",
+        "statement": "The IRC result contains a completed forward direction and a completed reverse direction, each with native steps and a final structure.",
+        "status": "inconclusive",
+        "validator": {
+          "kind": "deterministic",
+          "validator_id": "check.irc_bidirectional_completion",
+          "validator_version": "1.0.0"
+        }
+      },
+      "downgrade_rule": "DG-05-single-irc-direction",
+      "duration_seconds": 387.06,
+      "expected": "inconclusive",
+      "passed": true,
+      "real_execution": true,
+      "scenario": "single-irc-direction",
+      "step_status": "failed"
+    },
+    {
+      "criteria": {
+        "DA-C01-ts-single-imaginary-mode": "not_evaluated",
+        "DA-C02-ts-mode-mapping": "not_evaluated",
+        "DA-C03-frequency-evidence": "not_evaluated",
+        "DA-C04-irc-bidirectional": "not_evaluated",
+        "DA-C05-endpoint-association": "not_evaluated",
+        "DA-C06-energy-comparability": "not_evaluated",
+        "DA-C07-reactant-stoichiometry": "not_evaluated"
+      },
+      "downgrade_rule": "DG-01/DG-02",
+      "expected": "not_evaluated",
+      "frequency_evidence_status": "not_evaluated",
+      "passed": true,
+      "questions": {
+        "question.diels_alder.activation_energy.v1": "not_evaluated",
+        "question.diels_alder.path_connectivity.v1": "not_evaluated"
+      },
+      "real_execution": true,
+      "scenario": "missing-frequency",
+      "scenario_result": "PASS"
+    },
+    {
+      "assessment": {
+        "claim_id": "c-ts-connects-intended-endpoints",
+        "claims": [
+          {
+            "claim_id": "c-irc-bidirectional-complete",
+            "details": {
+              "direction_status": null,
+              "forward": {
+                "converged": true,
+                "coordinates": [
+                  [
+                    1.17959439392741,
+                    0.65051964490847,
+                    0.32239406115348
+                  ],
+                  [
+                    0.02787863272903,
+                    1.31899023756319,
+                    -0.37152104908492
+                  ],
+                  [
+                    -1.14949235931821,
+                    0.69075684808982,
+                    -0.32916773085663
+                  ],
+                  [
+                    -1.19600451761639,
+                    -0.61622800656038,
+                    0.40867559696629
+                  ],
+                  [
+                    0.98919740769736,
+                    0.62437297491742,
+                    1.40659686233748
+                  ],
+                  [
+                    2.12199826666773,
+                    1.18761224475457,
+                    0.1837712324528
+                  ],
+                  [
+                    0.17477715996904,
+                    2.24132714460485,
+                    -0.92815333371581
+                  ],
+                  [
+                    -2.02766886441103,
+                    1.06633659677729,
+                    -0.84863252374906
+                  ],
+                  [
+                    -2.17251950799727,
+                    -1.10339890083905,
+                    0.33874913877481
+                  ],
+                  [
+                    -1.00908810953866,
+                    -0.43890807141041,
+                    1.47919317318725
+                  ],
+                  [
+                    -0.07637309249263,
+                    -1.53648864519189,
+                    -0.13308596259412
+                  ],
+                  [
+                    1.289851961088,
+                    -0.80624400394678,
+                    -0.18674776321379
+                  ],
+                  [
+                    -0.01024043268763,
+                    -2.43886742618857,
+                    0.48497054918187
+                  ],
+                  [
+                    -0.36532925976926,
+                    -1.86116331069482,
+                    -1.13865686495203
+                  ],
+                  [
+                    1.65498174471573,
+                    -0.77360089350324,
+                    -1.2191014718474
+                  ],
+                  [
+                    2.04234588748218,
+                    -1.34570673426541,
+                    0.39924428206068
+                  ]
+                ],
+                "direction": "forward",
+                "present": true,
+                "steps": 24,
+                "success": true,
+                "symbols": [
+                  "C",
+                  "C",
+                  "C",
+                  "C",
+                  "H",
+                  "H",
+                  "H",
+                  "H",
+                  "H",
+                  "H",
+                  "C",
+                  "C",
+                  "H",
+                  "H",
+                  "H",
+                  "H"
+                ],
+                "termination_status": null
+              },
+              "reverse": {
+                "converged": true,
+                "coordinates": [
+                  [
+                    1.05433728832484,
+                    1.26748926086568,
+                    0.55896946846121
+                  ],
+                  [
+                    0.01341350846748,
+                    1.48375463544659,
+                    -0.25485502410733
+                  ],
+                  [
+                    -1.27191942359265,
+                    0.79849879973013,
+                    -0.20809845484892
+                  ],
+                  [
+                    -1.62529144000639,
+                    -0.16176422888784,
+                    0.65543984665201
+                  ],
+                  [
+                    1.00233461557575,
+                    0.57094069491808,
+                    1.39000636674009
+                  ],
+                  [
+                    1.99829401983379,
+                    1.78199829083499,
+                    0.41231768921773
+                  ],
+                  [
+                    0.13805481646929,
+                    2.19674334619172,
+                    -1.06816005538799
+                  ],
+                  [
+                    -1.9790896042646,
+                    1.06894200447114,
+                    -0.99081752228265
+                  ],
+                  [
+                    -2.58542150195911,
+                    -0.66118669185098,
+                    0.57758180720676
+                  ],
+                  [
+                    -0.97215344650739,
+                    -0.48379617491846,
+                    1.46040677686539
+                  ],
+                  [
+                    0.36020486325595,
+                    -2.13974070743037,
+                    -0.42847655253503
+                  ],
+                  [
+                    1.53063566194489,
+                    -1.51284749438065,
+                    -0.47631131390547
+                  ],
+                  [
+                    0.05252272406916,
+                    -2.71484030871589,
+                    0.44061895869038
+                  ],
+                  [
+                    -0.34748646024199,
+                    -2.08492382192721,
+                    -1.24993413631363
+                  ],
+                  [
+                    1.82366385992937,
+                    -0.92175102668093,
+                    -1.33847918107468
+                  ],
+                  [
+                    2.23398520825399,
+                    -1.54683827669962,
+                    0.35126313050577
+                  ]
+                ],
+                "direction": "reverse",
+                "present": true,
+                "steps": 47,
+                "success": true,
+                "symbols": [
+                  "C",
+                  "C",
+                  "C",
+                  "C",
+                  "H",
+                  "H",
+                  "H",
+                  "H",
+                  "H",
+                  "H",
+                  "C",
+                  "C",
+                  "H",
+                  "H",
+                  "H",
+                  "H"
+                ],
+                "termination_status": null
+              },
+              "task_complete": true
+            },
+            "missing_checks": [],
+            "notes": [],
+            "reason": "affirmed",
+            "statement": "The IRC result contains a completed forward direction and a completed reverse direction, each with native steps and a final structure.",
+            "status": "supported",
+            "validator": {
+              "kind": "deterministic",
+              "validator_id": "check.irc_bidirectional_completion",
+              "validator_version": "1.0.0"
+            }
+          },
+          {
+            "claim_id": "c-irc-forward-endpoint",
+            "details": {
+              "direction": "forward",
+              "resolution": {
+                "atom_mapping": [],
+                "atom_order_stability": "unresolved",
+                "candidate_matches": [
+                  {
+                    "atom_mapping": [],
+                    "atom_order_stability": "unresolved",
+                    "classification": null,
+                    "connectivity_matches": null,
+                    "endpoint_id": "endpoint.reactants",
+                    "reason": "bond topology mismatch",
+                    "rmsd_angstrom": null,
+                    "species_id": "butadiene+ethene",
+                    "status": "different"
+                  },
+                  {
+                    "atom_mapping": [],
+                    "atom_order_stability": "unresolved",
+                    "classification": null,
+                    "connectivity_matches": null,
+                    "endpoint_id": "endpoint.constructed_mismatch",
+                    "reason": "bond topology mismatch",
+                    "rmsd_angstrom": null,
+                    "species_id": "constructed-not-cyclohexene",
+                    "status": "different"
+                  }
+                ],
+                "classification": null,
+                "connectivity_matches": null,
+                "direction": "forward",
+                "reason": "neither frozen endpoint is reproduced by the final structure",
+                "rmsd_angstrom": null,
+                "status": "different",
+                "target_endpoint_id": null,
+                "target_species_id": null
+              }
+            },
+            "missing_checks": [],
+            "notes": [
+              "The final structure is affirmatively not the frozen endpoint: neither frozen endpoint is reproduced by the final structure."
+            ],
+            "reason": "contradiction",
+            "statement": "The IRC forward direction reaches exactly one frozen reactant/product endpoint with a stable atom mapping.",
+            "status": "refuted",
+            "validator": {
+              "kind": "deterministic",
+              "validator_id": "check.irc_endpoint_identity",
+              "validator_version": "1.0.0"
+            }
+          },
+          {
+            "claim_id": "c-irc-reverse-endpoint",
+            "details": {
+              "direction": "reverse",
+              "resolution": {
+                "atom_mapping": [],
+                "atom_order_stability": "unresolved",
+                "candidate_matches": [
+                  {
+                    "atom_mapping": [],
+                    "atom_order_stability": "unresolved",
+                    "classification": null,
+                    "connectivity_matches": null,
+                    "endpoint_id": "endpoint.reactants",
+                    "reason": "bond topology mismatch",
+                    "rmsd_angstrom": null,
+                    "species_id": "butadiene+ethene",
+                    "status": "different"
+                  },
+                  {
+                    "atom_mapping": [],
+                    "atom_order_stability": "unresolved",
+                    "classification": null,
+                    "connectivity_matches": null,
+                    "endpoint_id": "endpoint.constructed_mismatch",
+                    "reason": "bond topology mismatch",
+                    "rmsd_angstrom": null,
+                    "species_id": "constructed-not-cyclohexene",
+                    "status": "different"
+                  }
+                ],
+                "classification": null,
+                "connectivity_matches": null,
+                "direction": "reverse",
+                "reason": "neither frozen endpoint is reproduced by the final structure",
+                "rmsd_angstrom": null,
+                "status": "different",
+                "target_endpoint_id": null,
+                "target_species_id": null
+              }
+            },
+            "missing_checks": [],
+            "notes": [
+              "The final structure is affirmatively not the frozen endpoint: neither frozen endpoint is reproduced by the final structure."
+            ],
+            "reason": "contradiction",
+            "statement": "The IRC reverse direction reaches exactly one frozen reactant/product endpoint with a stable atom mapping.",
+            "status": "refuted",
+            "validator": {
+              "kind": "deterministic",
+              "validator_id": "check.irc_endpoint_identity",
+              "validator_version": "1.0.0"
+            }
+          },
+          {
+            "claim_id": "c-irc-atom-order-stable",
+            "details": {
+              "forward_symbols": [
+                "C",
+                "C",
+                "C",
+                "C",
+                "H",
+                "H",
+                "H",
+                "H",
+                "H",
+                "H",
+                "C",
+                "C",
+                "H",
+                "H",
+                "H",
+                "H"
+              ],
+              "reverse_symbols": [
+                "C",
+                "C",
+                "C",
+                "C",
+                "H",
+                "H",
+                "H",
+                "H",
+                "H",
+                "H",
+                "C",
+                "C",
+                "H",
+                "H",
+                "H",
+                "H"
+              ]
+            },
+            "missing_checks": [],
+            "notes": [],
+            "reason": "affirmed",
+            "statement": "The forward and reverse IRC endpoints share one stable atom order that maps to the frozen endpoint identities without positional assumptions.",
+            "status": "supported",
+            "validator": {
+              "kind": "deterministic",
+              "validator_id": "check.irc_atom_order_stability",
+              "validator_version": "1.0.0"
+            }
+          },
+          {
+            "claim_id": "c-ts-connects-intended-endpoints",
+            "details": {
+              "completion_status": "supported",
+              "forward_endpoint": {
+                "atom_mapping": [],
+                "atom_order_stability": "unresolved",
+                "candidate_matches": [
+                  {
+                    "atom_mapping": [],
+                    "atom_order_stability": "unresolved",
+                    "classification": null,
+                    "connectivity_matches": null,
+                    "endpoint_id": "endpoint.reactants",
+                    "reason": "bond topology mismatch",
+                    "rmsd_angstrom": null,
+                    "species_id": "butadiene+ethene",
+                    "status": "different"
+                  },
+                  {
+                    "atom_mapping": [],
+                    "atom_order_stability": "unresolved",
+                    "classification": null,
+                    "connectivity_matches": null,
+                    "endpoint_id": "endpoint.constructed_mismatch",
+                    "reason": "bond topology mismatch",
+                    "rmsd_angstrom": null,
+                    "species_id": "constructed-not-cyclohexene",
+                    "status": "different"
+                  }
+                ],
+                "classification": null,
+                "connectivity_matches": null,
+                "direction": "forward",
+                "reason": "neither frozen endpoint is reproduced by the final structure",
+                "rmsd_angstrom": null,
+                "status": "different",
+                "target_endpoint_id": null,
+                "target_species_id": null
+              },
+              "frozen_atom_mapping": [
+                [
+                  0,
+                  0
+                ],
+                [
+                  1,
+                  1
+                ],
+                [
+                  2,
+                  2
+                ],
+                [
+                  3,
+                  3
+                ],
+                [
+                  4,
+                  6
+                ],
+                [
+                  5,
+                  7
+                ],
+                [
+                  6,
+                  8
+                ],
+                [
+                  7,
+                  9
+                ],
+                [
+                  8,
+                  10
+                ],
+                [
+                  9,
+                  11
+                ],
+                [
+                  10,
+                  4
+                ],
+                [
+                  11,
+                  5
+                ],
+                [
+                  12,
+                  12
+                ],
+                [
+                  13,
+                  13
+                ],
+                [
+                  14,
+                  14
+                ],
+                [
+                  15,
+                  15
+                ]
+              ],
+              "reference_reaction_id": "constructed.endpoint-mismatch",
+              "reverse_endpoint": {
+                "atom_mapping": [],
+                "atom_order_stability": "unresolved",
+                "candidate_matches": [
+                  {
+                    "atom_mapping": [],
+                    "atom_order_stability": "unresolved",
+                    "classification": null,
+                    "connectivity_matches": null,
+                    "endpoint_id": "endpoint.reactants",
+                    "reason": "bond topology mismatch",
+                    "rmsd_angstrom": null,
+                    "species_id": "butadiene+ethene",
+                    "status": "different"
+                  },
+                  {
+                    "atom_mapping": [],
+                    "atom_order_stability": "unresolved",
+                    "classification": null,
+                    "connectivity_matches": null,
+                    "endpoint_id": "endpoint.constructed_mismatch",
+                    "reason": "bond topology mismatch",
+                    "rmsd_angstrom": null,
+                    "species_id": "constructed-not-cyclohexene",
+                    "status": "different"
+                  }
+                ],
+                "classification": null,
+                "connectivity_matches": null,
+                "direction": "reverse",
+                "reason": "neither frozen endpoint is reproduced by the final structure",
+                "rmsd_angstrom": null,
+                "status": "different",
+                "target_endpoint_id": null,
+                "target_species_id": null
+              },
+              "ts_candidate_status": null
+            },
+            "missing_checks": [],
+            "notes": [
+              "At least one final endpoint is affirmatively a different species or bond topology than the frozen targets."
+            ],
+            "reason": "contradiction",
+            "statement": "The transition state connects the intended reactant and product (proven connectivity, not a local mode observation).",
+            "status": "refuted",
+            "validator": {
+              "kind": "deterministic",
+              "validator_id": "check.ts_connectivity",
+              "validator_version": "1.0.0"
+            }
+          }
+        ],
+        "direction_assignment": null,
+        "effective_atom_mapping": [],
+        "endpoint_atom_order_mapping": [
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            1
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            3,
+            3
+          ],
+          [
+            4,
+            4
+          ],
+          [
+            5,
+            5
+          ],
+          [
+            6,
+            6
+          ],
+          [
+            7,
+            7
+          ],
+          [
+            8,
+            8
+          ],
+          [
+            9,
+            9
+          ],
+          [
+            10,
+            10
+          ],
+          [
+            11,
+            11
+          ],
+          [
+            12,
+            12
+          ],
+          [
+            13,
+            13
+          ],
+          [
+            14,
+            14
+          ],
+          [
+            15,
+            15
+          ]
+        ],
+        "forward": {
+          "converged": true,
+          "coordinates": [
+            [
+              1.17959439392741,
+              0.65051964490847,
+              0.32239406115348
+            ],
+            [
+              0.02787863272903,
+              1.31899023756319,
+              -0.37152104908492
+            ],
+            [
+              -1.14949235931821,
+              0.69075684808982,
+              -0.32916773085663
+            ],
+            [
+              -1.19600451761639,
+              -0.61622800656038,
+              0.40867559696629
+            ],
+            [
+              0.98919740769736,
+              0.62437297491742,
+              1.40659686233748
+            ],
+            [
+              2.12199826666773,
+              1.18761224475457,
+              0.1837712324528
+            ],
+            [
+              0.17477715996904,
+              2.24132714460485,
+              -0.92815333371581
+            ],
+            [
+              -2.02766886441103,
+              1.06633659677729,
+              -0.84863252374906
+            ],
+            [
+              -2.17251950799727,
+              -1.10339890083905,
+              0.33874913877481
+            ],
+            [
+              -1.00908810953866,
+              -0.43890807141041,
+              1.47919317318725
+            ],
+            [
+              -0.07637309249263,
+              -1.53648864519189,
+              -0.13308596259412
+            ],
+            [
+              1.289851961088,
+              -0.80624400394678,
+              -0.18674776321379
+            ],
+            [
+              -0.01024043268763,
+              -2.43886742618857,
+              0.48497054918187
+            ],
+            [
+              -0.36532925976926,
+              -1.86116331069482,
+              -1.13865686495203
+            ],
+            [
+              1.65498174471573,
+              -0.77360089350324,
+              -1.2191014718474
+            ],
+            [
+              2.04234588748218,
+              -1.34570673426541,
+              0.39924428206068
+            ]
+          ],
+          "direction": "forward",
+          "present": true,
+          "steps": 24,
+          "success": true,
+          "symbols": [
+            "C",
+            "C",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H"
+          ],
+          "termination_status": null
+        },
+        "forward_endpoint": {
+          "atom_mapping": [],
+          "atom_order_stability": "unresolved",
+          "candidate_matches": [
+            {
+              "atom_mapping": [],
+              "atom_order_stability": "unresolved",
+              "classification": null,
+              "connectivity_matches": null,
+              "endpoint_id": "endpoint.reactants",
+              "reason": "bond topology mismatch",
+              "rmsd_angstrom": null,
+              "species_id": "butadiene+ethene",
+              "status": "different"
+            },
+            {
+              "atom_mapping": [],
+              "atom_order_stability": "unresolved",
+              "classification": null,
+              "connectivity_matches": null,
+              "endpoint_id": "endpoint.constructed_mismatch",
+              "reason": "bond topology mismatch",
+              "rmsd_angstrom": null,
+              "species_id": "constructed-not-cyclohexene",
+              "status": "different"
+            }
+          ],
+          "classification": null,
+          "connectivity_matches": null,
+          "direction": "forward",
+          "reason": "neither frozen endpoint is reproduced by the final structure",
+          "rmsd_angstrom": null,
+          "status": "different",
+          "target_endpoint_id": null,
+          "target_species_id": null
+        },
+        "reverse": {
+          "converged": true,
+          "coordinates": [
+            [
+              1.05433728832484,
+              1.26748926086568,
+              0.55896946846121
+            ],
+            [
+              0.01341350846748,
+              1.48375463544659,
+              -0.25485502410733
+            ],
+            [
+              -1.27191942359265,
+              0.79849879973013,
+              -0.20809845484892
+            ],
+            [
+              -1.62529144000639,
+              -0.16176422888784,
+              0.65543984665201
+            ],
+            [
+              1.00233461557575,
+              0.57094069491808,
+              1.39000636674009
+            ],
+            [
+              1.99829401983379,
+              1.78199829083499,
+              0.41231768921773
+            ],
+            [
+              0.13805481646929,
+              2.19674334619172,
+              -1.06816005538799
+            ],
+            [
+              -1.9790896042646,
+              1.06894200447114,
+              -0.99081752228265
+            ],
+            [
+              -2.58542150195911,
+              -0.66118669185098,
+              0.57758180720676
+            ],
+            [
+              -0.97215344650739,
+              -0.48379617491846,
+              1.46040677686539
+            ],
+            [
+              0.36020486325595,
+              -2.13974070743037,
+              -0.42847655253503
+            ],
+            [
+              1.53063566194489,
+              -1.51284749438065,
+              -0.47631131390547
+            ],
+            [
+              0.05252272406916,
+              -2.71484030871589,
+              0.44061895869038
+            ],
+            [
+              -0.34748646024199,
+              -2.08492382192721,
+              -1.24993413631363
+            ],
+            [
+              1.82366385992937,
+              -0.92175102668093,
+              -1.33847918107468
+            ],
+            [
+              2.23398520825399,
+              -1.54683827669962,
+              0.35126313050577
+            ]
+          ],
+          "direction": "reverse",
+          "present": true,
+          "steps": 47,
+          "success": true,
+          "symbols": [
+            "C",
+            "C",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H"
+          ],
+          "termination_status": null
+        },
+        "reverse_endpoint": {
+          "atom_mapping": [],
+          "atom_order_stability": "unresolved",
+          "candidate_matches": [
+            {
+              "atom_mapping": [],
+              "atom_order_stability": "unresolved",
+              "classification": null,
+              "connectivity_matches": null,
+              "endpoint_id": "endpoint.reactants",
+              "reason": "bond topology mismatch",
+              "rmsd_angstrom": null,
+              "species_id": "butadiene+ethene",
+              "status": "different"
+            },
+            {
+              "atom_mapping": [],
+              "atom_order_stability": "unresolved",
+              "classification": null,
+              "connectivity_matches": null,
+              "endpoint_id": "endpoint.constructed_mismatch",
+              "reason": "bond topology mismatch",
+              "rmsd_angstrom": null,
+              "species_id": "constructed-not-cyclohexene",
+              "status": "different"
+            }
+          ],
+          "classification": null,
+          "connectivity_matches": null,
+          "direction": "reverse",
+          "reason": "neither frozen endpoint is reproduced by the final structure",
+          "rmsd_angstrom": null,
+          "status": "different",
+          "target_endpoint_id": null,
+          "target_species_id": null
+        },
+        "status": "refuted",
+        "validator_version": "1.0.0"
+      },
+      "constructed": false,
+      "constructed_endpoint": "product geometry scaled by 1.6 (topology broken)",
+      "expected": "refuted",
+      "passed": true,
+      "real_execution": true,
+      "scenario": "endpoint-mismatch",
+      "statuses": [
+        "supported",
+        "refuted",
+        "refuted",
+        "supported"
+      ]
+    },
+    {
+      "checks": [
+        {
+          "check": "digest_mismatch",
+          "passed": true,
+          "rejected_with": "ScienceCriteriaError: RJ-04-evidence-not-digest-bound: DA-C01-ts-single-imaginary-mode: evidence_digest does not match the evidence payload"
+        },
+        {
+          "check": "status_override_key",
+          "passed": true,
+          "rejected_with": "ScienceCriteriaError: RJ-05-status-override: DA-C01-ts-single-imaginary-mode.evidence: key 'criteria_passed' would let the result override the frozen verdict"
+        },
+        {
+          "check": "unsourced_supported_downgraded",
+          "passed": true
+        }
+      ],
+      "expected": "rejected-or-downgraded",
+      "passed": true,
+      "scenario": "forged-supported-record"
+    }
+  ],
+  "schema": "acp2.m4-04.degradation.v1"
+}

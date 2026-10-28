@@ -1,0 +1,49 @@
+{
+  "alive_after": [],
+  "job_id": "20261028_012350_007_m403-local-wall",
+  "killed_pids": [
+    946839,
+    947607,
+    947999,
+    948008,
+    948010,
+    948012,
+    948013
+  ],
+  "receipt": {
+    "admitted_at": "2026-10-27T17:23:50.800661Z",
+    "attempt": 1,
+    "clock": "wall",
+    "deadline_at": "2026-10-27T17:24:00.811154Z",
+    "decision": "wall-deadline-expired",
+    "job_id": "20261028_012350_007_m403-local-wall",
+    "native": {
+      "confirmed_stopped": true,
+      "killed_pids": [
+        946839,
+        947607,
+        947999,
+        948008,
+        948010,
+        948012,
+        948013
+      ],
+      "lsf_job_id": "",
+      "node": "",
+      "phase": "terminated",
+      "signals": "SIGCONT,SIGTERM,SIGKILL (process group via acp.scheduler.processctl)",
+      "still_alive_pids": [],
+      "surface": "local-process-group"
+    },
+    "observed_at": "2026-10-27T17:24:05.322028Z",
+    "queue_seconds": null,
+    "schema": "acp2.runtime.deadline-receipt.v1",
+    "started_at": "2026-10-27T17:23:50.811154Z",
+    "surface": "local-process-group",
+    "terminal_status": "failed",
+    "verified": true,
+    "wall_seconds": 10
+  },
+  "status": "failed",
+  "wall_seconds": 10
+}

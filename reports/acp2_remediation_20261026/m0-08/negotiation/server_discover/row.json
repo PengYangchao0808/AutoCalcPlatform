@@ -1,0 +1,11 @@
+{
+  "discover_error_code": null,
+  "discover_jsonrpc_code": -32601,
+  "discover_result_present": false,
+  "negotiated": "2025-06-18",
+  "result_shape_problems": [],
+  "row": "server_discover",
+  "status": "PASS",
+  "tool_count": 8,
+  "tools_call_frames": 0
+}

@@ -1,0 +1,35 @@
+{
+  "clarification_fragment": "clarification item",
+  "command": [
+    "/ACPServer/acp2-tools/node-v22.19.0-linux-x64/bin/node",
+    "/ACPServer/acp2-development/C/frontend/js/module_tests/run_all.js",
+    "acp2_question_reaction"
+  ],
+  "cwd": "/ACPServer/acp2-development/C",
+  "deferred_fragment": "DEFERRED",
+  "exit_code": 0,
+  "failed": 0,
+  "filter": "acp2_question_reaction",
+  "min_tests": 10,
+  "negative_fragments": [
+    "duplicate atom map",
+    "missing product",
+    "charge non-conservation"
+  ],
+  "passed": 12,
+  "passing_tests": [
+    "rejects duplicate atom map in the reaction spec",
+    "rejects missing product in the reaction spec",
+    "rejects charge non-conservation in the reaction spec",
+    "net multi-step reaction as a single TS yields a clarification item, not a submit",
+    "CDXML input is marked DEFERRED and never parsed as an empty structure",
+    "P2 input range is frozen to MOL/SDF/SMILES plus structure upload",
+    "atom labels, mapping and stereo are preserved across edits",
+    "charge/spin and solvent/temperature/standard state are visible",
+    "human confirmations and approximations are recorded with the input revision",
+    "net reaction vs elementary step distinction is shown",
+    "no silent identity fill: missing charge/spin/stereo stay unspecified",
+    "science-question submit is blocked while reaction clarifications are open"
+  ],
+  "scenario": "question-reaction-fixtures"
+}

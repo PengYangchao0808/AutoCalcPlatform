@@ -1,0 +1,26 @@
+{
+  "contract": "release",
+  "sample_kind": "partial",
+  "sample_version": 1,
+  "expected_classification": "accepted_partial",
+  "body": {
+    "release": {
+      "release_id": "rel1",
+      "manifest_version": 1,
+      "git_commit": "abc123",
+      "clean": true,
+      "files": [
+        {
+          "path": "src/acp_services/__init__.py",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "size": 10
+        }
+      ],
+      "dependency_lock": "lock1",
+      "asset_manifest": [],
+      "notices": [],
+      "wheel_sha256": null,
+      "legacy_import_window": null
+    }
+  }
+}

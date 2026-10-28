@@ -1,0 +1,26 @@
+Redaction proof (output files only; the input manifest intentionally contains the raw value)
+
+command: grep -R SUPERSECRET /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/harness-selftest/20261022T141500Z-c03a-harness-selftest/redaction/result
+no raw value in result files
+
+command: grep -R '\*\*\*' /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/harness-selftest/20261022T141500Z-c03a-harness-selftest/redaction/result
+/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/harness-selftest/20261022T141500Z-c03a-harness-selftest/redaction/result/manifest.redacted.json:  "api_key": "***",
+/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/harness-selftest/20261022T141500Z-c03a-harness-selftest/redaction/result/manifest.redacted.json:  "credential_sources": "***",
+/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/harness-selftest/20261022T141500Z-c03a-harness-selftest/redaction/result/manifest.redacted.json:    "token": "***"
+/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/harness-selftest/20261022T141500Z-c03a-harness-selftest/redaction/result/experience_baseline-experience_fixture-20261022T141500Z-c03a-harness-selftest.json:      "api_key": "***",
+/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/harness-selftest/20261022T141500Z-c03a-harness-selftest/redaction/result/experience_baseline-experience_fixture-20261022T141500Z-c03a-harness-selftest.json:      "credential_sources": "***",
+/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/harness-selftest/20261022T141500Z-c03a-harness-selftest/redaction/result/experience_baseline-experience_fixture-20261022T141500Z-c03a-harness-selftest.json:        "token": "***"
+
+redacted manifest:
+{
+  "api_key": "***",
+  "candidate_id": "450f2cb8fe1f5b16264b3fe878a021e77f02eba9",
+  "credential_sources": "***",
+  "evidence_root": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46",
+  "model": {
+    "endpoint": "http://127.0.0.1/probe",
+    "token": "***"
+  },
+  "schema": "acp2.experience.manifest-extension.v1",
+  "schema_version": "1.0.0"
+}

@@ -87,3 +87,15 @@ __pycache__/
 
 # --- Local build/presentation artifacts (chrome profile, decks, probes) ---
 /artifacts/
+
+# --- Root-level experiment residue (ORCA SP outputs, runtime pid) ---
+/sp.*
+/lab.pid
+/scan_work/
+
+# --- Local code index DB ---
+/.codegraph/
+
+# --- Release artifacts never enter git (tracked evidence in reports/ is exempt from ignore rules) ---
+*.whl
+*.tar.gz

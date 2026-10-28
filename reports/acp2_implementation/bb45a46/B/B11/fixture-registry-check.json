@@ -1,0 +1,84 @@
+{
+  "arithmetic": {
+    "fx-artifact-local-v1": null,
+    "fx-control-recovery-lsf-v1": true,
+    "fx-da-bounded-dag-v1": null,
+    "fx-local-singlepoint-h2-sto3g-v1": true,
+    "fx-lsf-singlepoint-v1": true,
+    "fx-migration-v1": null,
+    "fx-multi-singlepoint-v1": null,
+    "fx-package-install-v1": null,
+    "fx-plugin-lifecycle-v1": null
+  },
+  "duplicate_expensive_fixture": false,
+  "lsf_row": {
+    "attempt": null,
+    "backend": "lsf",
+    "blocked_prerequisite": "LSF client/queue (bsub/bjobs/bhosts, LSF_ENVDIR) and a configured test node are absent; no remote submission attempted.",
+    "budget": {
+      "cores": 1,
+      "jobs": 1,
+      "memory_mb": 1024,
+      "status": "frozen_unallocated",
+      "walltime_s": 300
+    },
+    "cleanup_seconds": 60,
+    "evidence": "B/B11/",
+    "evidence_owner": "B11",
+    "fixture_id": "fx-lsf-singlepoint-v1",
+    "input": "/ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz",
+    "input_digest": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
+    "input_status": "present",
+    "kind": "lsf-singlepoint",
+    "margin_seconds": 120,
+    "max_prepare_seconds": 120,
+    "max_queue_wait_seconds": 1800,
+    "max_run_seconds": 300,
+    "method": {
+      "charge": 0,
+      "method": "r2SCAN-3c",
+      "multiplicity": 1
+    },
+    "missing_prerequisites": [
+      "ACP_LSF_NODE",
+      "LSF_ENVDIR",
+      "bsub",
+      "bjobs",
+      "bhosts",
+      "bqueues",
+      "ssh_credentials"
+    ],
+    "no_remote_job_attempted": true,
+    "note": "Normal-completion LSF fixture only. B13 uses its own control fixture; this row is not reused for control races.",
+    "release": null,
+    "request_owner": "B",
+    "reusable_by": [
+      "B11",
+      "B14a",
+      "B14b"
+    ],
+    "scenario_timeout_seconds": 2400,
+    "status": "NOT_VERIFIED",
+    "submitted_once": false,
+    "task": null,
+    "task_ref": null,
+    "workflow": "singlepoint"
+  },
+  "lsf_timeout_seconds": 2400,
+  "missing_fields": {
+    "fx-artifact-local-v1": [],
+    "fx-control-recovery-lsf-v1": [],
+    "fx-da-bounded-dag-v1": [],
+    "fx-local-singlepoint-h2-sto3g-v1": [],
+    "fx-lsf-singlepoint-v1": [],
+    "fx-migration-v1": [],
+    "fx-multi-singlepoint-v1": [],
+    "fx-package-install-v1": [],
+    "fx-plugin-lifecycle-v1": []
+  },
+  "registry_sha256": "4f60ca7d302e0bf05bb59f391d2130772a3442837250e5ceab852975d453e202",
+  "rows": 9,
+  "schema": "acp2.b11.fixture-registry-check.v1",
+  "unique": 9,
+  "valid": true
+}

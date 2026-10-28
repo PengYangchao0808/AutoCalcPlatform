@@ -1,0 +1,232 @@
+{
+  "capabilities": {
+    "status": 200,
+    "body": {
+      "schema_version": 1,
+      "task_kinds": [
+        "casscf",
+        "censo_refine",
+        "clustering",
+        "conformer_search",
+        "frequency",
+        "irc",
+        "md_sampling",
+        "nmr_shielding",
+        "optimize",
+        "orca_gradient",
+        "scan",
+        "singlepoint",
+        "thermochemistry",
+        "xtb_constrained_opt",
+        "xtb_path_search"
+      ],
+      "workflows": [
+        "singlepoint",
+        "optimize",
+        "frequency",
+        "scan",
+        "irc",
+        "tsmode",
+        "casscf",
+        "xtb_optimize",
+        "nmr",
+        "Confsearch",
+        "PESsearch",
+        "BatchOptimize",
+        "XtbPathSearch",
+        "OrcaGradient",
+        "XtbConstrainedOpt"
+      ],
+      "backends": [
+        {
+          "name": "censo",
+          "available": false
+        },
+        {
+          "name": "crest",
+          "available": false
+        },
+        {
+          "name": "external",
+          "available": false
+        },
+        {
+          "name": "isostat",
+          "available": false
+        },
+        {
+          "name": "molclus",
+          "available": false
+        },
+        {
+          "name": "orca",
+          "available": true
+        },
+        {
+          "name": "xtb",
+          "available": false
+        }
+      ],
+      "capability_descriptors": null,
+      "limits": {
+        "max_artifact_bytes": 8388608,
+        "max_read_bytes": 1048576,
+        "max_walltime_s": 604800,
+        "max_cores": 64
+      },
+      "tools": [
+        "acp_capabilities",
+        "acp_preflight",
+        "acp_submit",
+        "acp_status",
+        "acp_cancel",
+        "acp_prepare_artifact",
+        "acp_read_artifact",
+        "acp_analyze"
+      ],
+      "protocol_version": "2025-06-18"
+    }
+  },
+  "preflight": {
+    "status": 200,
+    "body": {
+      "schema_version": 1,
+      "feasible": true,
+      "reasons": [],
+      "plan_digest": "sha256:b9fbfbdce7d2f2ec131c0da95fbc1fbb6e390bb0551465cdd331113c23a6c9bc",
+      "plan_summary": {
+        "workflow": "singlepoint",
+        "steps": 1,
+        "project_id": null
+      },
+      "estimate": {},
+      "admission": null,
+      "would_create_task": false,
+      "would_reserve": false
+    }
+  },
+  "missing_operation": [
+    404,
+    {
+      "detail": {
+        "code": "resource_not_ready",
+        "message": "not_prepared: unknown operation 'op_b06_missing'",
+        "params": {
+          "operation_id": "op_b06_missing"
+        },
+        "retryable": true
+      }
+    }
+  ],
+  "submit": {
+    "status": 201,
+    "body": {
+      "job_id": "20261022_223248_001_b06-evidence",
+      "status": "queued",
+      "workflow": "singlepoint",
+      "project_id": "uncategorized",
+      "schema_version": 1,
+      "attempt": 1,
+      "release_id": null,
+      "release_digest": null,
+      "task_ref": {
+        "task_id": "20261022_223248_001_b06-evidence",
+        "job_id": "20261022_223248_001_b06-evidence",
+        "attempt": 1
+      },
+      "operation_ref": null,
+      "plan_digest": null,
+      "proposal_digest": null,
+      "approval_ref": null,
+      "result": "accepted",
+      "idempotency_key": null,
+      "idempotent_replay": false
+    },
+    "elapsed_s": 0.1868
+  },
+  "cancel": {
+    "body": {
+      "id": "20261022_223248_001_b06-evidence",
+      "spec": {
+        "workflow": "singlepoint",
+        "name": "mol_singlepoint",
+        "input": {
+          "xyz_text": "2\nH2\nH 0 0 0\nH 0 0 0.74\n"
+        },
+        "method": {
+          "method": "r2SCAN-3c",
+          "charge": 0,
+          "multiplicity": 1
+        },
+        "resources": {
+          "nproc": 20,
+          "mem": "60GB"
+        },
+        "output_dir": null,
+        "config_path": null,
+        "tags": [],
+        "node_tags": [],
+        "project_id": "uncategorized",
+        "execution_mode": null,
+        "target_node": null,
+        "molecule_name": "mol",
+        "task_name": "singlepoint",
+        "remark": ""
+      },
+      "status": "cancelling",
+      "work_dir": "/ACPServer/acp2-development/data/b/run-root/uncategorized/mol_singlepoint",
+      "project_id": "uncategorized",
+      "project_name": null,
+      "input_hash": "sha256:58435294c9e1402dc0012817d568a67ee81a361b9af07373154d4e973d930ac0",
+      "created_at": "2026-10-22T14:32:48.521867+00:00",
+      "updated_at": "2026-10-22T14:32:48.593349+00:00",
+      "started_at": "2026-10-22T14:32:48.535739+00:00",
+      "completed_at": null,
+      "current_stage": null,
+      "progress": null,
+      "error": null,
+      "pid": null,
+      "exit_code": null,
+      "remote_job_id": null,
+      "group_id": "20261022_223248_001_b06-evidence",
+      "node_id": "local",
+      "host": "workstation",
+      "study_id": null,
+      "study_status": null,
+      "result": {
+        "required_software": [
+          "orca"
+        ],
+        "execution_target": "local",
+        "execution_kind": "local"
+      },
+      "progress_state": null,
+      "stage_index": null,
+      "stage_total": null,
+      "stage_order": [],
+      "stage_progress": null,
+      "stage_detail": null,
+      "latest_event": null,
+      "snapshot_version": null,
+      "live_status": null,
+      "display_method": null,
+      "custom_name": null,
+      "resolved_name": "",
+      "default_name": "",
+      "name_revision": 0,
+      "name_updated_at": null,
+      "attempt": 1,
+      "revision": 3
+    }
+  },
+  "mcp": {
+    "capabilities_isError": false,
+    "preflight_isError": false,
+    "preflight_dry_run": true,
+    "status_isError": false,
+    "read_isError": true,
+    "read_code": "resource_not_ready",
+    "analyze_implicit_code": "input_invalid",
+    "analyze_unsupported_code": "unsupported_capability"
+  }
+}

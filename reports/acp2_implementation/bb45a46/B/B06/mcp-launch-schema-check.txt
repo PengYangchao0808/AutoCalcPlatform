@@ -1,0 +1,1 @@
+PASS: required fields present; initialize advertises acp.research.v1 1.1.0; 8 tools

@@ -1,0 +1,176 @@
+{
+  "actual_orca_resources": [
+    {
+      "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/negative_irc_one_sided/irc.inp",
+      "maxcore": 2000,
+      "pal_nprocs": 16
+    }
+  ],
+  "adr_step_index": 6,
+  "adr_task_kind": "irc",
+  "attempt": 1,
+  "bounded_alternative": null,
+  "complete": false,
+  "duration_seconds": 145.23,
+  "entry": "legacy_task_core",
+  "error": "IRC produced no endpoint geometries",
+  "executed_task_kind": "irc",
+  "level": {
+    "basis": "def2-mTZVPP",
+    "charge": 0,
+    "method": "r2SCAN-3c",
+    "multiplicity": 1
+  },
+  "native_files": [
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/negative_irc_one_sided/irc.out",
+      "path": "irc.out",
+      "sha256": "38b15c322aed98853550f3d75a273ae85a209e2c92c9614a3160c6283c7767c5",
+      "size_bytes": 82062
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/negative_irc_one_sided/irc_IRC_F.xyz",
+      "path": "irc_IRC_F.xyz",
+      "sha256": "ff47bd82f04e6520c8d4ffc835bcf6c512e932ae7e601799b6f8dc4e0db72941",
+      "size_bytes": 1336
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/negative_irc_one_sided/irc_IRC_F_trj.xyz",
+      "path": "irc_IRC_F_trj.xyz",
+      "sha256": "65994c059692d7c20939401c9db3efc9f8e74fedd3f113a792e00ec2a5be8d84",
+      "size_bytes": 3552
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/negative_irc_one_sided/irc.inp",
+      "path": "irc.inp",
+      "sha256": "dcd48fd4834a0675333ab40babab0f9d25eac2d9a92ee75acba36848820bd21d",
+      "size_bytes": 919
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/negative_irc_one_sided/irc.property.txt",
+      "path": "irc.property.txt",
+      "sha256": "0c87e12401a8289f7b0121a2ca6e9e1c77165b91b1c12ff6b0ebbbde01cf6e44",
+      "size_bytes": 197630
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/negative_irc_one_sided/irc.hess",
+      "path": "irc.hess",
+      "sha256": "1ac3bd4d8e2cc5a72ae22a6043fb8a611dbe70bced9219f9a454e444c41cf761",
+      "size_bytes": 107391
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/negative_irc_one_sided/RESULT/irc/irc_forward_path.xyz",
+      "path": "RESULT/irc/irc_forward_path.xyz",
+      "sha256": "0c79edf41600054e261077d6d5f0f643d4253b43f2f3b6c94835f3d69ae78404",
+      "size_bytes": 3436
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/negative_irc_one_sided/RESULT/irc/irc_forward_point_0000.xyz",
+      "path": "RESULT/irc/irc_forward_point_0000.xyz",
+      "sha256": "ce1db961e969c543685d1417798265d3d837b20b22563c966015863bd567c22f",
+      "size_bytes": 859
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/negative_irc_one_sided/RESULT/irc/irc_forward_point_0001.xyz",
+      "path": "RESULT/irc/irc_forward_point_0001.xyz",
+      "sha256": "3cc29a46b26f02ed5bfa0cf40a6bfc3069f32fb98ace06e1a8a587b1d0f28391",
+      "size_bytes": 859
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/negative_irc_one_sided/RESULT/irc/irc_forward_point_0002.xyz",
+      "path": "RESULT/irc/irc_forward_point_0002.xyz",
+      "sha256": "743a3027cfbb24d42db5caec0439bea203faba9bcecf4ac933f2f67ade938e88",
+      "size_bytes": 859
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/negative_irc_one_sided/RESULT/irc/irc_forward_point_0003.xyz",
+      "path": "RESULT/irc/irc_forward_point_0003.xyz",
+      "sha256": "5b5e42527d40bb26af9f50038b1098f4b224768cad2df41bc4d0c179e313ecb2",
+      "size_bytes": 859
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/negative_irc_one_sided/RESULT/trajectories/irc_trajectory.json",
+      "path": "RESULT/trajectories/irc_trajectory.json",
+      "sha256": "8f2b261c2fdc18e8a83a453e232b548f5332ffd43e9a62fc2c4568fe4ca23a3c",
+      "size_bytes": 2082
+    }
+  ],
+  "products": [],
+  "receipt": null,
+  "release_digest": "813583bdcaae20ef900a99180f433b34a7dfa730fb47c1efea5c9435919a061b",
+  "release_id": "2d1ab37a0f988933",
+  "resources": {
+    "cores": 16,
+    "maxcore": 2000,
+    "mem": "32GB",
+    "nproc": 16
+  },
+  "schema": "acp2.m4-04.step.v1",
+  "status": "failed",
+  "step_id": "negative_irc_one_sided",
+  "task_ref": "20261028_940_negative_irc_one_sided",
+  "task_result": {
+    "artifacts": [],
+    "complete": false,
+    "converged": false,
+    "error_kind": "backend_failure",
+    "errors": [
+      "IRC produced no endpoint geometries"
+    ],
+    "frequencies": [],
+    "metadata": {
+      "directions": [
+        "forward"
+      ],
+      "endpoint_count": 0,
+      "path_files": {
+        "forward": "irc/irc_forward_path.xyz"
+      },
+      "trajectory_frame_count": 4,
+      "trajectory_path": "trajectories/irc_trajectory.json"
+    },
+    "payload": {
+      "directions": [
+        {
+          "converged": false,
+          "direction": "forward",
+          "energy_hartree": -234.50151696685,
+          "steps": 4,
+          "success": false,
+          "trajectory_ref": {
+            "path": "irc/irc_forward_path.xyz",
+            "source": "orca",
+            "type": "trajectory"
+          }
+        }
+      ]
+    },
+    "provenance": {
+      "backend": "orca",
+      "input_signature": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/inputs/optimized_ts.xyz",
+      "method": "r2SCAN-3c",
+      "version": "unknown"
+    },
+    "schema_version": 1,
+    "status": "failed",
+    "symbols": [
+      "C",
+      "C",
+      "C",
+      "C",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H",
+      "C",
+      "C",
+      "H",
+      "H",
+      "H",
+      "H"
+    ],
+    "task": "irc"
+  }
+}

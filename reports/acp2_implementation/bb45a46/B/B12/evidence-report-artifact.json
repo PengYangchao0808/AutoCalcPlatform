@@ -1,0 +1,18 @@
+{
+  "a_schema": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+  "claim_status_served": "not_evaluated",
+  "fixture": "fixtures/evidence-report.a-fixture.json (static, B12-labelled)",
+  "platform_interpretation_added": false,
+  "receipt": "artifact-main-20261022T212957Z-677819-c7cfdc67.json",
+  "schema_ref": "acp2.science.evidence.v1",
+  "served_digest": "sha256:4893a4e970b5ea53314af35d7a5087207ddc12c4f9a071ebc6b66d3d05cbba19",
+  "size_bytes": 924,
+  "source_refs": [
+    {
+      "artifact_path": "RESULT/energy/singlepoint_energy.json",
+      "digest": "sha256:3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+      "role": "native_output",
+      "units": "hartree"
+    }
+  ]
+}

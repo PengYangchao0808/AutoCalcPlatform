@@ -1,0 +1,156 @@
+{
+  "already_terminal": [
+    {
+      "job_id": "1",
+      "stat": "DONE"
+    },
+    {
+      "job_id": "103",
+      "stat": "EXIT"
+    },
+    {
+      "job_id": "104",
+      "stat": "EXIT"
+    },
+    {
+      "job_id": "105",
+      "stat": "EXIT"
+    },
+    {
+      "job_id": "106",
+      "stat": "EXIT"
+    },
+    {
+      "job_id": "107",
+      "stat": "EXIT"
+    },
+    {
+      "job_id": "108",
+      "stat": "DONE"
+    },
+    {
+      "job_id": "109",
+      "stat": "DONE"
+    },
+    {
+      "job_id": "2",
+      "stat": "DONE"
+    }
+  ],
+  "errors": [],
+  "final_bjobs": [
+    {
+      "exec_host": "workstation",
+      "from_host": "workstation",
+      "job_id": "1",
+      "job_name": "*d8baf6d9a",
+      "queue": "normal",
+      "raw": "1       xiening DONE  normal     workstation workstation *d8baf6d9a Oct 28 01:15",
+      "stat": "DONE",
+      "submit_time": "Oct 28 01:15",
+      "user": "xiening"
+    },
+    {
+      "exec_host": "workstation",
+      "from_host": "workstation",
+      "job_id": "2",
+      "job_name": "*3e4f15046",
+      "queue": "normal",
+      "raw": "2       xiening DONE  normal     workstation workstation *3e4f15046 Oct 28 01:16",
+      "stat": "DONE",
+      "submit_time": "Oct 28 01:16",
+      "user": "xiening"
+    },
+    {
+      "exec_host": "workstation",
+      "from_host": "workstation",
+      "job_id": "103",
+      "job_name": "*1d5d2f9ce",
+      "queue": "normal",
+      "raw": "103     xiening EXIT  normal     workstation workstation *1d5d2f9ce Oct 28 01:17",
+      "stat": "EXIT",
+      "submit_time": "Oct 28 01:17",
+      "user": "xiening"
+    },
+    {
+      "exec_host": "workstation",
+      "from_host": "workstation",
+      "job_id": "104",
+      "job_name": "*c7be6a797",
+      "queue": "normal",
+      "raw": "104     xiening EXIT  normal     workstation workstation *c7be6a797 Oct 28 01:18",
+      "stat": "EXIT",
+      "submit_time": "Oct 28 01:18",
+      "user": "xiening"
+    },
+    {
+      "exec_host": "-",
+      "from_host": "workstation",
+      "job_id": "105",
+      "job_name": "*10e3a6090",
+      "queue": "normal",
+      "raw": "105     xiening EXIT  normal     workstation    -        *10e3a6090 Oct 28 01:20",
+      "stat": "EXIT",
+      "submit_time": "Oct 28 01:20",
+      "user": "xiening"
+    },
+    {
+      "exec_host": "workstation",
+      "from_host": "workstation",
+      "job_id": "106",
+      "job_name": "*568e7150a",
+      "queue": "normal",
+      "raw": "106     xiening EXIT  normal     workstation workstation *568e7150a Oct 28 01:21",
+      "stat": "EXIT",
+      "submit_time": "Oct 28 01:21",
+      "user": "xiening"
+    },
+    {
+      "exec_host": "workstation",
+      "from_host": "workstation",
+      "job_id": "107",
+      "job_name": "*00a630ac6",
+      "queue": "normal",
+      "raw": "107     xiening EXIT  normal     workstation workstation *00a630ac6 Oct 28 01:24",
+      "stat": "EXIT",
+      "submit_time": "Oct 28 01:24",
+      "user": "xiening"
+    },
+    {
+      "exec_host": "workstation",
+      "from_host": "workstation",
+      "job_id": "108",
+      "job_name": "*a6d486a3c",
+      "queue": "normal",
+      "raw": "108     xiening DONE  normal     workstation workstation *a6d486a3c Oct 28 01:28",
+      "stat": "DONE",
+      "submit_time": "Oct 28 01:28",
+      "user": "xiening"
+    },
+    {
+      "exec_host": "workstation",
+      "from_host": "workstation",
+      "job_id": "109",
+      "job_name": "*eb978fc41",
+      "queue": "normal",
+      "raw": "109     xiening DONE  normal     workstation workstation *eb978fc41 Oct 28 01:29",
+      "stat": "DONE",
+      "submit_time": "Oct 28 01:29",
+      "user": "xiening"
+    }
+  ],
+  "killed": [],
+  "leftovers": [],
+  "schema": "acp2.m403.acceptance.v1",
+  "tracked_lsf_jobs": [
+    "1",
+    "103",
+    "104",
+    "105",
+    "106",
+    "107",
+    "108",
+    "109",
+    "2"
+  ]
+}

@@ -1,0 +1,179 @@
+{
+  "artifacts": [
+    {
+      "path": "evidence-node-suite.log",
+      "sha256": "c2349a8b6f8aeb020d035b8715712d2391522dfdedbf9ab603cdddacfad0d97a",
+      "size_bytes": 1096
+    },
+    {
+      "path": "evidence-browser.log",
+      "sha256": "5ab605270a659bfc77f110df66a760a0dd306074e939567ddc97e229a7564f8d",
+      "size_bytes": 16488
+    },
+    {
+      "path": "evidence-browser-live.png",
+      "sha256": "780cfea67cd8e9688cb8b9a9ad6119755b5993c922d3e8062b196057991f05a2",
+      "size_bytes": 362745
+    },
+    {
+      "path": "evidence-console.json",
+      "sha256": "42197434d18e0dfe24080973dc05d68673ff29b4a3fc2b65a1c7acfacfdcbb39",
+      "size_bytes": 42
+    },
+    {
+      "path": "evidence-network.json",
+      "sha256": "f9a733205f243f3b6e1802cdd3d6d05b05e7451b68fc7aba2b52256ef8389518",
+      "size_bytes": 18196
+    },
+    {
+      "path": "evidence-page.html",
+      "sha256": "94a1a4d492825b6729efb32c39a95b23aab623c98ccf69e6058446b04a5ec2bc",
+      "size_bytes": 112785
+    },
+    {
+      "path": "evidence-panel.png",
+      "sha256": "60ec6a481cc13377716cfb090b19d0256a47de13fa80f935cc210d351f6e3a52",
+      "size_bytes": 22437
+    },
+    {
+      "path": "evidence-browser-live.json",
+      "sha256": "48074f01f4599ae6f57a834eb59a805a36fb7b583c450567ab9ec9506ff658b8",
+      "size_bytes": 1806
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "rc=0 passed=16 failed=0 min=10",
+      "name": "evidence.node_suite",
+      "status": "PASS"
+    },
+    {
+      "detail": "visualization fetch hits=0 () feature fetch hits=0",
+      "name": "evidence.no_fetch",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 error=None port=41579",
+      "name": "evidence.browser.probe_completed",
+      "status": "PASS"
+    },
+    {
+      "detail": "entry_visible=True",
+      "name": "evidence.browser.entry_visible",
+      "status": "PASS"
+    },
+    {
+      "detail": "claim_states=['supported', 'refuted', 'inconclusive', 'not_evaluated']",
+      "name": "evidence.browser.claim_states_distinct",
+      "status": "PASS"
+    },
+    {
+      "detail": "marker=True not_success_colored=True",
+      "name": "evidence.browser.inconclusive_live_not_verified",
+      "status": "PASS"
+    },
+    {
+      "detail": "execution_next_to_claim=True",
+      "name": "evidence.browser.execution_next_to_claim",
+      "status": "PASS"
+    },
+    {
+      "detail": "artifacts=True validator=True method=True missing=True decision=True",
+      "name": "evidence.browser.claim_expansion",
+      "status": "PASS"
+    },
+    {
+      "detail": "save_only=True clicks=1 submit_calls=0",
+      "name": "evidence.browser.energy_save_candidate_only",
+      "status": "PASS"
+    },
+    {
+      "detail": "hide=True switch=True dispose={'before': 29, 'ran': 0, 'ranAfterRegister': 0, 'after': 29, 'disposed': True, 'lateError': None}",
+      "name": "evidence.browser.lifecycle",
+      "status": "PASS"
+    },
+    {
+      "detail": "screenshot_bytes=362745 probe_bytes=362745",
+      "name": "evidence.browser.screenshot_nonempty",
+      "status": "PASS"
+    },
+    {
+      "detail": "console_errors=0 page_errors=0 ",
+      "name": "evidence.browser.zero_console_errors",
+      "status": "PASS"
+    },
+    {
+      "detail": "entries=149",
+      "name": "evidence.browser.network_log",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "712af267423a573d262c4649b8dabbffd53e568d",
+    "harness_revision": "e9e262c0110763e5346e441894526f830c835f3e4206034a8c844cf8abc22aae",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "712af267423a573d262c4649b8dabbffd53e568d",
+  "command": [
+    "/ACPServer/acp2-development/venvs/c/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "evidence-browser-live",
+    "--timeout",
+    "300",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/evidence-browser-live/evidence-browser-live-r1/main/fixture"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "fixture",
+  "exit_code": 0,
+  "extensions": {
+    "experience.evidence_chromium": "153.0.8010.12",
+    "experience.evidence_claim_states": [
+      "supported",
+      "refuted",
+      "inconclusive",
+      "not_evaluated"
+    ],
+    "experience.evidence_console_errors": 0,
+    "experience.evidence_dispose_tick_fires_nothing": true,
+    "experience.evidence_feature_fetch_hits": 0,
+    "experience.evidence_inconclusive_live_not_verified": true,
+    "experience.evidence_min_tests": 10,
+    "experience.evidence_mode": "fixture",
+    "experience.evidence_screenshot_bytes": 362745,
+    "experience.evidence_submit_calls": 0,
+    "experience.evidence_suite_failed": 0,
+    "experience.evidence_suite_passed": 16,
+    "experience.evidence_viz_fetch_hits": 0,
+    "experience.harness_contract_revision": "e9e262c0110763e5346e441894526f830c835f3e4206034a8c844cf8abc22aae",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+    "experience.mode": "fixture",
+    "experience.product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+    "experience.run_id": "evidence-browser-live-r1",
+    "experience.scenario_key": "evidence-browser-live",
+    "experience.subcase": null,
+    "experience.test_revision": "712af267423a573d262c4649b8dabbffd53e568d"
+  },
+  "finished_at": "2026-10-22T21:10:57Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:fixture",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "evidence-browser-live-r1",
+  "scenario": "experience:evidence-browser-live",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T21:10:55Z",
+  "submission_id": null,
+  "usage": null
+}

@@ -1,0 +1,15 @@
+{
+  "constructed": true,
+  "entries": [
+    {
+      "constructed": true,
+      "id": "dsh-optfreq-live",
+      "note": "Constructed registry row proving the A-11b lookup path; the real platform registry is unpublished and this file is never a real registration.",
+      "run_kind": "dsh-optfreq"
+    }
+  ],
+  "note": "CONSTRUCTED FIXTURE — not a platform-issued registry. It exists only to exercise the shared science:validate-artifacts success path in tests. The real registry is owned by the platform and has not been published to track A.",
+  "schema": "acp2.science.platform-registry",
+  "schema_version": 1,
+  "source": "tests/fixtures/acp2/science/optfreq/constructed-platform-registry.json"
+}

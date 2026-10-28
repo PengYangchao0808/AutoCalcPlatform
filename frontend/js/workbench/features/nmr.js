@@ -19,16 +19,24 @@ async function refreshNmrReport(job) {
   var body = document.getElementById("nmr-report-body");
   if (!panel || !body) return;
   var wf = job && job.spec && job.spec.workflow;
-  if (wf !== "nmr") { panel.style.display = "none"; body.innerHTML = ""; nmrPanelDispose(); return; }
+  if (wf !== "nmr") { panel.style.display = "none"; nmrPanelDispose(); body.innerHTML = ""; return; }
   panel.style.display = "block";
+  // D08: release the previous panel's viewer instances BEFORE any report-body
+  // rewrite — the body holds the canvas containers, so wiping it with live
+  // registry entries would leave detached instances behind (e.g. when the
+  // re-fetch finds no report and returns early).
+  var token = nmrPanelDispose();
   body.innerHTML = '<span class="nmr-empty">' + escapeHtml(t("nmr.loading") || "Loading…") + '</span>';
   try {
     var report = await fetchNmrReportJson(job);
+    // Late-response guard (R11): a newer refresh (another job, a re-select, or
+    // a switch away from nmr) bumps nmrPanelState.token; this stale response
+    // must never rewrite the newer canvas/DOM — not on success, empty or error.
+    if (token !== nmrPanelState.token) return;
     if (!report) {
       body.innerHTML = '<span class="nmr-empty">' + escapeHtml(t("nmr.no_report") || "No nmr_report.json yet") + '</span>';
       return;
     }
-    var token = nmrPanelDispose();
     body.innerHTML = "";
     body.appendChild(renderNmrWinner(report));
     if (report.schema_version == null) {
@@ -54,6 +62,7 @@ async function refreshNmrReport(job) {
     nmrLoadStructureViewers(job, candidates, token);
   } catch (e) {
     console.error("NMR report render failed:", e);
+    if (token !== nmrPanelState.token) return;
     body.innerHTML = '<span class="nmr-empty">' + escapeHtml(t("nmr.error") || "Failed to load report") + '</span>';
   }
 }
@@ -339,23 +348,86 @@ var nmrPanelState = {
   viewers: {},
 };
 
+// T12: each candidate canvas holds a bounded ACPVisualization.scene instance
+// (never a raw 3Dmol handle). Model/style/shape/teardown access goes through
+// the instance's restricted API; per-candidate cleanup is instance.dispose().
 if (window.ACPStructureViewer && typeof window.ACPStructureViewer.registerCanvasLoader === "function") {
   window.ACPStructureViewer.registerCanvasLoader("nmr-structure", function(xyzText, styleSpec) {
-    var info = nmrPanelState.viewers[nmrPanelState.loadingCandidate];
-    if (!info || !info.viewer) return false;
-    try { info.viewer.removeAllModels(); } catch (e) {}
-    info.viewer.addModel(xyzText, "xyz");
-    info.viewer.setStyle({}, styleSpec);
+    var index = nmrPanelState.loadingCandidate;
+    var info = nmrPanelState.viewers[index];
+    if (!info || !info.instance) return false;
+    info.instance.removeAllModels();
+    var model = info.instance.addModel(xyzText, "xyz");
+    if (!model) return false;
+    info.instance.setStyle({}, styleSpec);
+    // 3D pick (T40 linkage): bound on the live model token — the instance
+    // rejects click bindings without one. The callback sees a plain atom
+    // snapshot; labels are resolved at click time.
+    model.setClickable({}, true, function(atom) {
+      var current = nmrPanelState.viewers[index];
+      if (!current || !current.labels) return;
+      var label = current.labels[atom.index];
+      if (label) nmrSelectAtom(label, index);
+    });
     return true;
   });
+}
+
+function nmrReleaseViewerInfo(info) {
+  if (!info) return;
+  if (info.framing) disposeViewerFraming(info.framing);
+  if (info.instance) info.instance.dispose();
+}
+
+// D08: loading/empty/error text lives in a dedicated `.nmr-viewer-status`
+// child so the canvas parent is never wiped around a live scene. The helper
+// only creates/updates/removes that one node.
+function nmrSetViewerStatus(container, text) {
+  if (!container) return null;
+  var node = container.querySelector(".nmr-viewer-status");
+  if (!node) {
+    node = document.createElement("div");
+    node.className = "nmr-viewer-status";
+    container.appendChild(node);
+  }
+  node.textContent = text == null ? "" : String(text);
+  return node;
+}
+
+function nmrRemoveViewerStatus(container) {
+  if (!container) return;
+  var node = container.querySelector(".nmr-viewer-status");
+  if (node && node.parentNode === container) container.removeChild(node);
+}
+
+function nmrRemoveViewerCanvas(container) {
+  if (!container) return;
+  var nodes = container.querySelectorAll("canvas");
+  for (var i = 0; i < nodes.length; i++) {
+    if (nodes[i] && nodes[i].parentNode === container) container.removeChild(nodes[i]);
+  }
+}
+
+function nmrDiscardViewer(candIndex, info) {
+  // D08: post-create failure path — release + deregister BEFORE any DOM
+  // teardown, so no detached instance survives in the registry.
+  if (!info) return;
+  nmrReleaseViewerInfo(info);
+  if (nmrPanelState.viewers[candIndex] === info) delete nmrPanelState.viewers[candIndex];
+}
+
+function nmrShowViewerUnavailable(container) {
+  if (!container) return;
+  container.className = "nmr-structure-viewer empty";
+  nmrRemoveViewerCanvas(container);
+  nmrRemoveViewerStatus(container);
+  nmrSetViewerStatus(container, t("nmr.structure.unavailable"));
 }
 
 function nmrPanelDispose() {
   nmrPanelState.token += 1;
   Object.keys(nmrPanelState.viewers).forEach(function(key) {
-    var info = nmrPanelState.viewers[key];
-    if (info && info.framing) disposeViewerFraming(info.framing);
-    if (info && info.viewer) ACPVisualization.mol3d.destroy(info.viewer);
+    nmrReleaseViewerInfo(nmrPanelState.viewers[key]);
   });
   nmrPanelState.viewers = {};
   nmrPanelState.selectedAtom = null;
@@ -425,23 +497,21 @@ function nmrHighlightAtoms(relatedAtoms, activeAtom) {
   nmrPanelState.highlightAtoms = relatedAtoms || {};
   Object.keys(nmrPanelState.viewers).forEach(function(key) {
     var info = nmrPanelState.viewers[key];
-    if (!info || !info.viewer) return;
-    try { info.viewer.removeAllShapes(); } catch (e) { return; }
+    if (!info || !info.instance) return;
+    if (!info.instance.removeAllShapes()) return;
     var labels = info.labels || [];
     var atoms = info.atoms || [];
     labels.forEach(function(label, index) {
       if (relatedAtoms[label] !== true || !atoms[index]) return;
       var highlight = activeAtom != null && label === activeAtom;
-      try {
-        info.viewer.addSphere({
-          center: { x: atoms[index].x, y: atoms[index].y, z: atoms[index].z },
-          radius: 0.38,
-          color: highlight ? "#4ea1ff" : "#f5a623",
-          opacity: 0.85
-        });
-      } catch (e) {}
+      info.instance.addSphere({
+        center: { x: atoms[index].x, y: atoms[index].y, z: atoms[index].z },
+        radius: 0.38,
+        color: highlight ? "#4ea1ff" : "#f5a623",
+        opacity: 0.85
+      });
     });
-    try { info.viewer.render(); } catch (e) {}
+    info.instance.render();
   });
 }
 
@@ -602,7 +672,7 @@ function renderNmrStructure(cand, ordinal) {
     var viewer = document.createElement("div");
     viewer.className = "nmr-structure-viewer empty";
     viewer.setAttribute("data-nmr-structure-viewer", String(cand.index));
-    viewer.textContent = t("nmr.structure.loading");
+    nmrSetViewerStatus(viewer, t("nmr.structure.loading"));
     wrap.appendChild(viewer);
   }
   var chips = document.createElement("div");
@@ -720,26 +790,29 @@ function renderNmrPeaks(report) {
 
 function nmrEnsureViewer(candIndex, container) {
   var info = nmrPanelState.viewers[candIndex];
-  if (info && info.viewer && info.container === container && container.querySelector("canvas")) return info;
+  if (info && info.instance && !info.instance.isDisposed() && info.container === container && container.querySelector("canvas")) return info;
+  if (info) {
+    nmrReleaseViewerInfo(info);
+    delete nmrPanelState.viewers[candIndex];
+  }
   if (!ACPVisualization.mol3d.isAvailable()) return null;
+  // D08: this is the ONLY full container clear, and it runs strictly BEFORE
+  // the scene is created. After creation the canvas parent is never wiped —
+  // success removes just the status node (nmrRemoveViewerStatus).
   container.innerHTML = "";
-  var viewer = ACPVisualization.mol3d.create(container, { backgroundColor: "0x0e1419", antialias: true });
+  var sceneNs = ACPVisualization.scene;
+  var instance = (sceneNs && typeof sceneNs.create === "function")
+    ? sceneNs.create({ container: container, options: { backgroundColor: "0x0e1419", antialias: true } })
+    : null;
+  if (!instance) return null;
   info = {
     container: container,
-    viewer: viewer,
+    instance: instance,
     framing: { epoch: 0, pending: false, settled: false, observer: null },
     labels: [],
     atoms: []
   };
   nmrPanelState.viewers[candIndex] = info;
-  (function(index) {
-    viewer.setClickable({}, true, function(atom) {
-      var current = nmrPanelState.viewers[index];
-      if (!current || !current.labels) return;
-      var label = current.labels[atom.index];
-      if (label) nmrSelectAtom(label, index);
-    });
-  })(candIndex);
   return info;
 }
 
@@ -789,15 +862,17 @@ async function nmrLoadStructureViewers(job, candidates, token) {
 async function nmrLoadCandidateGeometry(job, cand, token) {
   var container = document.querySelector('[data-nmr-structure-viewer="' + cand.index + '"]');
   if (!container) return;
+  nmrSetViewerStatus(container, t("nmr.structure.loading"));
   var xyz = await nmrFetchCandidateGeometry(job, cand);
   if (token !== nmrPanelState.token || !container.isConnected) return;
   var info = null;
   try { info = nmrEnsureViewer(cand.index, container); } catch (e) { info = null; }
   if (!xyz || !info) {
-    container.className = "nmr-structure-viewer empty";
-    container.textContent = t("nmr.structure.unavailable");
+    nmrDiscardViewer(cand.index, info);
+    nmrShowViewerUnavailable(container);
     return;
   }
+  nmrSetViewerStatus(container, t("nmr.structure.loading"));
   nmrPanelState.loadingCandidate = cand.index;
   var sv = window.ACPStructureViewer;
   var result = null;
@@ -810,17 +885,16 @@ async function nmrLoadCandidateGeometry(job, cand, token) {
   }
   nmrPanelState.loadingCandidate = null;
   if (!result || !result.loaded) {
-    container.className = "nmr-structure-viewer empty";
-    container.textContent = t("nmr.structure.unavailable");
+    nmrDiscardViewer(cand.index, info);
+    nmrShowViewerUnavailable(container);
     return;
   }
-  var model = null;
-  try { model = info.viewer.getModel(); } catch (e) { model = null; }
-  info.atoms = model ? model.selectedAtoms({}) : [];
+  var atoms = info.instance.selectedAtoms({});
+  info.atoms = atoms || [];
   info.labels = nmrAtomLabelsFromSymbols(info.atoms.map(function(atom) { return atom.elem; }));
   container.className = "nmr-structure-viewer";
-  container.textContent = "";
-  scheduleViewerFraming(container, info.framing, function() { return info.viewer; });
+  nmrRemoveViewerStatus(container);
+  scheduleViewerFraming(container, info.framing, function() { return info.instance; });
   nmrPanelApplySelection();
 }
 

@@ -23,7 +23,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from acp.catalog import method_levels_to_cli_flags
 from acp.scheduler.jobs import (
     SCAN_CONFIG_FILENAME,
     JobSpec,
@@ -42,6 +41,12 @@ from acp.scheduler.jobs import (
 )
 from acp.scheduler.remote.config import RemoteNode
 from acp.scheduler.resources import resolve_job_resources, with_job_resources
+from acp_services.runtime.execution_chain import (
+    EXECUTION_ENTRY_ENVELOPE,
+    ExecutionLaunch,
+    worker_argv,
+)
+from acp_services.runtime.method_flags import method_levels_to_cli_flags
 from cccp.utils.resource_utils import mem_to_mb
 
 logger = logging.getLogger(__name__)
@@ -64,6 +69,7 @@ __all__ = [
     "build_remote_nmr_cmd_tail",
     "build_remote_scan_config_payload",
     "build_remote_stage_cmd_tail",
+    "build_remote_worker_command",
     "derive_lsf_resources",
     "generate_lsf_script",
 ]
@@ -110,6 +116,9 @@ class LSFScriptSpec:
             before the CLI runs (after the exit-code traps).  Used for
             ``module load`` / environment setup on module-based clusters.
         extra_flags: Additional raw BSUB flags (e.g. ``"-R span[hosts=1]"``).
+        pythonpath_code_root: Add the release root itself to ``PYTHONPATH``.
+            True for an installed-wheel release (packages live at the
+            release root, no ``src`` layer); False for a source checkout.
     """
 
     job_name: str
@@ -123,6 +132,7 @@ class LSFScriptSpec:
     pre_cmds: list[str] = field(default_factory=list)
     extra_flags: str = ""
     mem_total_mb: int | None = None
+    pythonpath_code_root: bool = False
 
 
 # ── Allowed remote workflows ────────────────────────────────────────────
@@ -152,15 +162,26 @@ def build_remote_cli_command(
     input_path: str = "inputs/input.xyz",
     python_executable: str = "python",
     config_path: str | None = None,
+    *,
+    execution: ExecutionLaunch | None = None,
 ) -> list[str]:
-    """Build the ``python -m acp.cli ...`` argv for remote execution.
+    """Build the argv a remote node runs for *spec*.
+
+    When *execution* selects the frozen-envelope entry the argv is the Services
+    worker bootstrap (``python -m acp_services.worker_bootstrap``); otherwise the
+    legacy CLI mapping is built. The two entries are mutually exclusive — the
+    dispatcher freezes the choice on the attempt, and this function emits only
+    the selected one.
 
     Args:
         python_executable: Interpreter to use on the node.
         config_path: Optional path to a job-level YAML config on the remote
             node.
+        execution: The attempt's frozen execution launch (``None`` = legacy).
     """
     py = python_executable or "python"
+    if execution is not None and execution.entry == EXECUTION_ENTRY_ENVELOPE:
+        return worker_argv(py, execution)
     spec = with_job_resources(spec)
     wf = spec.workflow
     if wf not in _ALLOWED_REMOTE_WORKFLOWS:
@@ -312,6 +333,52 @@ def build_remote_cli_command(
             cmd += ["--solvent-model", str(sm)]
 
     return _append_resources_and_return(cmd, wf, inp, method, res, config_path)
+
+
+def build_remote_worker_command(
+    *,
+    envelope_path: str,
+    plan_path: str,
+    work_dir: str,
+    receipt_path: str | None = None,
+    binding_path: str | None = None,
+    python_executable: str = "python",
+    probe_executor: str | None = None,
+) -> list[str]:
+    """Build the Services worker-bootstrap argv for remote execution (B06-6).
+
+    Unlike :func:`build_remote_cli_command` (legacy ``python -m acp.cli``), the
+    frozen-envelope worker runs the synced Services composition root directly:
+    ``python -m acp_services.worker_bootstrap ...``.  The node consumer never
+    hops through the legacy CLI; every dependency is reconstructed from the
+    frozen envelope / plan / storage binding shipped alongside the work dir.
+
+    Args:
+        envelope_path: Remote path to the frozen envelope JSON.
+        plan_path: Remote path to the frozen plan JSON.
+        work_dir: Remote task work dir holding the read-only artifacts.
+        receipt_path: Receipt output path (defaults inside the worker).
+        binding_path: Optional frozen StorageBinding JSON path.
+        python_executable: Interpreter on the node.
+        probe_executor: Worker-independence probe only (``ok``/``fail``).
+    """
+    py = python_executable or "python"
+    launch = ExecutionLaunch(
+        entry=EXECUTION_ENTRY_ENVELOPE,
+        protocol="lsf",
+        closure="integrated",
+        work_dir=str(work_dir),
+        envelope_path=str(envelope_path),
+        plan_path=str(plan_path),
+        binding_path=str(binding_path) if binding_path else None,
+    )
+    return worker_argv(
+        py,
+        launch,
+        work_dir=str(work_dir),
+        receipt_path=str(receipt_path) if receipt_path else None,
+        probe_executor=str(probe_executor) if probe_executor else None,
+    )
 
 
 def _append_resources_and_return(
@@ -552,13 +619,62 @@ def derive_lsf_resources(
     queue: str = _DEFAULT_QUEUE,
     walltime: str = _DEFAULT_WALLTIME,
     extra_flags: str = "",
+    *,
+    walltime_minutes: int | None = None,
 ) -> tuple[int, int, str, str, str]:
-    """Derive LSF resource parameters from a :class:`JobSpec`."""
+    """Derive LSF resource parameters from a :class:`JobSpec`.
+
+    ``walltime_minutes`` (M2-03c) is the approval deadline projected by the one
+    resource resolver (:func:`acp_services.runtime.execution_limits.
+    resolve_resource_limits` → ``lsf_walltime_minutes``).  It only ever narrows
+    ``walltime``: an empty cluster walltime is "not limited" and never becomes a
+    limit, and a deadline wider than the cluster default keeps the default.
+    """
     res = resolve_job_resources(spec)
     nproc = res["nproc"]
     total_mem_mb = mem_to_mb(res["mem"])
     mem_mb_per_core = math.ceil(total_mem_mb / nproc)
+    deadline = _deadline_walltime(walltime_minutes)
+    if deadline is not None:
+        walltime = _tighter_walltime(walltime, deadline)
     return nproc, mem_mb_per_core, queue, walltime, extra_flags
+
+
+def _deadline_walltime(minutes: int | None) -> str | None:
+    """Render the resolver's minute count as an LSF ``-W`` value."""
+    from acp_services.runtime.deadline_wiring import lsf_walltime_string
+
+    return lsf_walltime_string(minutes)
+
+
+def _walltime_minutes(value: str) -> int | None:
+    """Minutes encoded by an LSF ``-W`` value (``HH:MM``/``HH:MM:SS``/minutes)."""
+    text = str(value or "").strip()
+    if not text:
+        return None
+    parts = text.split(":")
+    try:
+        numbers = [int(part) for part in parts]
+    except ValueError:
+        return None
+    if len(numbers) == 1:
+        return max(0, numbers[0])
+    if len(numbers) == 2:
+        return max(0, numbers[0] * 60 + numbers[1])
+    if len(numbers) == 3:
+        return max(0, numbers[0] * 60 + numbers[1])
+    return None
+
+
+def _tighter_walltime(cluster: str, deadline: str) -> str:
+    """The tighter of the cluster walltime and the approval deadline."""
+    configured = _walltime_minutes(cluster)
+    approved = _walltime_minutes(deadline)
+    if configured is None:
+        return deadline
+    if approved is None:
+        return cluster
+    return deadline if approved <= configured else cluster
 
 
 def build_lsf_script_spec(
@@ -568,6 +684,7 @@ def build_lsf_script_spec(
     queue: str = _DEFAULT_QUEUE,
     walltime: str = _DEFAULT_WALLTIME,
     extra_flags: str = "",
+    walltime_minutes: int | None = None,
     input_path: str = "inputs/input.xyz",
     config_path: str | None = None,
     remote_dir_name: str | None = None,
@@ -576,6 +693,7 @@ def build_lsf_script_spec(
     pre_cmds: list[str] | None = None,
     submission_id: str | None = None,
     code_release: str | None = None,
+    execution: ExecutionLaunch | None = None,
 ) -> tuple[LSFScriptSpec, list[str]]:
     """Build both the CLI command and :class:`LSFScriptSpec` for a job.
 
@@ -631,13 +749,19 @@ def build_lsf_script_spec(
         input_path=input_path,
         python_executable=python_executable or node.python_executable,
         config_path=config_path,
+        execution=execution,
     )
     nproc, mem_mb_per_core, queue, walltime, extra_flags = derive_lsf_resources(
-        spec, queue=queue, walltime=walltime, extra_flags=extra_flags
+        spec,
+        queue=queue,
+        walltime=walltime,
+        extra_flags=extra_flags,
+        walltime_minutes=walltime_minutes,
     )
     # Contract A: ``-J acp_<submission_id>`` (attempt-digested) replaces the
     # former ``acp_<job_id>`` name so reconcile can query it unambiguously.
     from acp.scheduler.remote.submission import submission_id_for
+    from acp.scheduler.remote.sync import _is_source_tree, _project_root
 
     lsf_spec = LSFScriptSpec(
         job_name=f"acp_{submission_id or submission_id_for(job_id, 1)}",
@@ -651,6 +775,7 @@ def build_lsf_script_spec(
         pre_cmds=list(pre_cmds or []),
         extra_flags=extra_flags,
         mem_total_mb=mem_to_mb(spec.resources["mem"]),
+        pythonpath_code_root=not _is_source_tree(_project_root()),
     )
     return lsf_spec, cli_command
 
@@ -686,9 +811,11 @@ def generate_lsf_script(s: LSFScriptSpec) -> str:
         lines.append("")
         lines.append("# cluster.pre_cmds (module/environment setup)")
         lines.extend(s.pre_cmds)
+    lines += ["", f'export PYTHONPATH="{s.remote_code_dir}/src:$PYTHONPATH"']
+    if s.pythonpath_code_root:
+        # Installed-wheel release: packages live at the release root.
+        lines.append(f'export PYTHONPATH="{s.remote_code_dir}:$PYTHONPATH"')
     lines += [
-        "",
-        f'export PYTHONPATH="{s.remote_code_dir}/src:$PYTHONPATH"',
         f'cd "{s.remote_job_dir}"',
         cli_str,
         "echo $? > .exit_code",

@@ -1,0 +1,1116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://acp.local/contracts/runtime/mcp-launch.schema.json",
+  "title": "ACP 2.0 MCP launch descriptor (H1 format contract)",
+  "description": "Format contract for launching the ACP MCP stdio entry against one Controller. This is NOT an executable H2 entry: a template instance is never evidence that the server runs. The eight P1 tool names are frozen for protocol 2025-06-18; the declared input tables are versioned per tool (input_schema_version, M1-01b moved acp_submit/acp_prepare_artifact/acp_read_artifact/acp_analyze to 2) and MUST equal the adapter's tools/list schemas. The additive acp.research.v1 extension is negotiated through tools/call acp_capabilities (M0-09/ADR-006 D7), never in the MCP initialize result; the launch descriptor declares the expected extension identity and never forces a negotiated state.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "launch_version",
+    "server",
+    "transport",
+    "protocol_version",
+    "command",
+    "args",
+    "cwd",
+    "env",
+    "controller",
+    "tools",
+    "constraints"
+  ],
+  "properties": {
+    "launch_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Launch descriptor major version."
+    },
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "entrypoint"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "const": "acp"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "entrypoint": {
+          "type": "string",
+          "const": "acp_services.entrypoints.mcp"
+        },
+        "contract_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "contract_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "manifest contract_digest the launch expects; a mismatch with health.contract_digest must abort startup."
+        }
+      }
+    },
+    "transport": {
+      "type": "string",
+      "const": "stdio"
+    },
+    "protocol_version": {
+      "type": "string",
+      "const": "2025-06-18"
+    },
+    "command": {
+      "type": "string",
+      "pattern": "^/",
+      "description": "Absolute interpreter path. No shell string, no relative path."
+    },
+    "args": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "maxItems": 32
+    },
+    "cwd": {
+      "type": "string",
+      "pattern": "^/",
+      "description": "Absolute working directory. Never a task work dir."
+    },
+    "env": {
+      "type": "object",
+      "description": "Explicit environment. Values are absolute paths or URLs; credentials are injected by the launcher, never written into this file.",
+      "additionalProperties": false,
+      "required": [
+        "ACP_RUN_ROOT",
+        "ACP_CONTROLLER_URL",
+        "ACP2_MCP_LOG_LEVEL"
+      ],
+      "properties": {
+        "ACP_RUN_ROOT": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "ACP_CONTROLLER_URL": {
+          "type": "string",
+          "pattern": "^http://(127\\.0\\.0\\.1|localhost):[0-9]{2,5}$",
+          "description": "Loopback HTTP Controller target. The MCP process never starts its own Controller."
+        },
+        "ACP2_MCP_LOG_LEVEL": {
+          "type": "string",
+          "enum": [
+            "DEBUG",
+            "INFO",
+            "WARNING",
+            "ERROR"
+          ]
+        },
+        "ACP2_TOOLS": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "ACP_CONFIG": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "PATH": {
+          "type": "string"
+        }
+      }
+    },
+    "controller": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "transport",
+        "loopback_only"
+      ],
+      "properties": {
+        "transport": {
+          "type": "string",
+          "const": "loopback-http"
+        },
+        "loopback_only": {
+          "type": "boolean",
+          "const": true
+        },
+        "start_controller": {
+          "type": "boolean",
+          "const": false,
+          "description": "The MCP process must never start a Controller or a scheduler."
+        },
+        "shared_db": {
+          "type": "boolean",
+          "const": false,
+          "description": "Two Controllers over one DB are refused before any worker starts."
+        }
+      }
+    },
+    "timeouts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "initialize_s": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60,
+          "default": 10
+        },
+        "tools_call_s": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600,
+          "default": 120
+        },
+        "shutdown_s": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60,
+          "default": 10
+        }
+      }
+    },
+    "stdio": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "framing": {
+          "type": "string",
+          "const": "newline-delimited json-rpc-2.0"
+        },
+        "max_frame_bytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 67108864,
+          "default": 1048576
+        },
+        "stdout_is_channel_only": {
+          "type": "boolean",
+          "const": true
+        },
+        "logs_to": {
+          "type": "string",
+          "const": "stderr"
+        }
+      }
+    },
+    "tools": {
+      "type": "array",
+      "description": "The frozen P1 allowlist. Exactly eight entries, in this order; names and input schemas are part of the contract.",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": {
+        "$ref": "#/$defs/tool"
+      },
+      "x-acp-set-semantics": false
+    },
+    "extensions": {
+      "type": "array",
+      "description": "P2 versioned MCP extensions (see runtime/p2-research-operations.v1.json). Empty for P1.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "version",
+          "negotiated"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "acp.research.v1"
+            ]
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+          },
+          "negotiated": {
+            "type": "boolean",
+            "const": false,
+            "description": "The launch descriptor never forces a negotiated state; negotiation happens in tools/call acp_capabilities."
+          }
+        }
+      }
+    },
+    "constraints": {
+      "$ref": "#/$defs/constraints"
+    },
+    "initialize": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Additive B-req-01 declaration of the versioned extension this launch expects. M0-09 (ADR-006 D7) moved negotiation to tools/call acp_capabilities, so this block is identity metadata only: negotiated is always false and the descriptor never forces a negotiated state.",
+      "properties": {
+        "extensions": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "acp.research.v1": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "version",
+                "negotiated"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "const": "acp.research.v1"
+                },
+                "version": {
+                  "type": "string",
+                  "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+                },
+                "negotiated": {
+                  "type": "boolean",
+                  "const": false,
+                  "description": "A launch descriptor never negotiates: the handshake happens in tools/call acp_capabilities."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "reference": {
+      "description": "Operation/job reference returned by acp_submit.",
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "id"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "job",
+                "operation"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    },
+    "task_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_id",
+        "attempt",
+        "release"
+      ],
+      "properties": {
+        "task_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "release": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "release_id",
+            "release_digest"
+          ],
+          "properties": {
+            "release_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "release_digest": {
+              "$ref": "#/$defs/digest"
+            }
+          }
+        }
+      }
+    },
+    "artifact_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_id",
+        "attempt",
+        "artifact_id",
+        "generation",
+        "digest"
+      ],
+      "properties": {
+        "task_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "artifact_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "size_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "media_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "relative_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cores": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "memory_mb": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4194304
+        },
+        "walltime_s": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 604800
+        },
+        "storage_bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "submit_fields": {
+      "type": "object",
+      "properties": {
+        "workflow": {
+          "type": "string",
+          "enum": [
+            "Confsearch",
+            "PESsearch",
+            "BatchOptimize",
+            "XtbPathSearch",
+            "OrcaGradient",
+            "XtbConstrainedOpt",
+            "irc",
+            "scan",
+            "tsmode",
+            "casscf",
+            "nmr",
+            "singlepoint",
+            "optimize",
+            "frequency",
+            "xtb_optimize"
+          ]
+        },
+        "input": {
+          "type": "object"
+        },
+        "method": {
+          "type": "object"
+        },
+        "resources": {
+          "$ref": "#/$defs/resources"
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "plan_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "proposal_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{8,128}$"
+        }
+      }
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "description",
+        "side_effects",
+        "inputSchema"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": [
+            "acp_capabilities",
+            "acp_preflight",
+            "acp_submit",
+            "acp_status",
+            "acp_cancel",
+            "acp_prepare_artifact",
+            "acp_read_artifact",
+            "acp_analyze"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "const": "1.0.0"
+        },
+        "description": {
+          "type": "string"
+        },
+        "side_effects": {
+          "type": "string",
+          "enum": [
+            "none",
+            "creates_task",
+            "control_intent",
+            "prepare_operation"
+          ]
+        },
+        "required_action": {
+          "type": "string",
+          "enum": [
+            "read",
+            "write",
+            "control"
+          ]
+        },
+        "inputSchema": {
+          "type": "object",
+          "description": "MUST equal $defs.tool_inputs[<name>] verbatim (see the template instance)."
+        },
+        "input_schema_version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Version of this tool's declared input table. M1-01b moved acp_submit/acp_prepare_artifact/acp_read_artifact/acp_analyze to 2 (required key, 17-field prepare table, artifact_ref read, analysis_id/input_refs/explicit analyze)."
+        }
+      }
+    },
+    "tool_inputs": {
+      "acp_capabilities": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {},
+        "description": "No arguments. Read-only discovery."
+      },
+      "acp_preflight": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "workflow",
+          "input"
+        ],
+        "properties": {
+          "workflow": {
+            "type": "string"
+          },
+          "input": {
+            "type": "object"
+          },
+          "method": {
+            "type": "object"
+          },
+          "resources": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "cores": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4096
+              },
+              "memory_mb": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4194304
+              },
+              "walltime_s": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 604800
+              },
+              "storage_bytes": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "project_id": {
+            "type": "string"
+          }
+        },
+        "description": "Zero side effects: no task, no reservation, no metering."
+      },
+      "acp_submit": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "workflow",
+          "input",
+          "idempotency_key"
+        ],
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "enum": [
+              1
+            ],
+            "default": 1,
+            "description": "Contract major version; any other value executes nothing."
+          },
+          "workflow": {
+            "type": "string",
+            "description": "Active workflow id (server-validated)."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name (never the task directory)."
+          },
+          "input": {
+            "type": "object",
+            "description": "Workflow input descriptor."
+          },
+          "method": {
+            "type": "object",
+            "description": "Method/parameter descriptor."
+          },
+          "resources": {
+            "type": "object",
+            "description": "Optional resource request (e.g. cores)."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter tags."
+          },
+          "node_tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Required node capability tags (AND semantics)."
+          },
+          "project_id": {
+            "type": "string",
+            "description": "Requested Workspace hint (never the tenant)."
+          },
+          "execution_mode": {
+            "type": "string",
+            "enum": [
+              "local",
+              "remote"
+            ],
+            "description": "Per-request execution preference."
+          },
+          "target_node": {
+            "type": "string",
+            "description": "Pin one execution target ('local' or a configured remote node)."
+          },
+          "molecule_name": {
+            "type": "string",
+            "description": "v2 task-directory molecule part."
+          },
+          "task_name": {
+            "type": "string",
+            "description": "v2 task-directory task part."
+          },
+          "remark": {
+            "type": "string",
+            "description": "v2 task-directory remark part."
+          },
+          "preflight_fingerprint": {
+            "type": "string",
+            "description": "Optional binding to the plan digest a preflight returned."
+          },
+          "idempotency_key": {
+            "type": "string",
+            "description": "REQUIRED. Client retry key, forwarded unchanged to the Controller ledger. The raw key is a global namespace per action (across projects/users): use a high-entropy UUID or a namespaced key (e.g. '<client>:<project>:<round>:<call>'). A short human key reused by two tenants is a typed conflict (revision_conflict), never a replay. Same key + same verified identity + same request = exactly one operation. Omitting it is refused with input_invalid (rule=idempotency_key_required)."
+          },
+          "extensions": {
+            "type": "object",
+            "description": "Namespaced extension metadata (never used for execution)."
+          },
+          "plan_digest": {
+            "type": "string",
+            "description": "Research-launch switch (sha256:<64 hex>). Its presence makes this a research submit, which requires proposal_ref plus a matching server approval; a bare plan_digest without proposal_ref is denied with 403 approval_required. Omit it, together with proposal_ref/proposal_digest/budget, for a legacy launch."
+          },
+          "proposal_ref": {
+            "type": "string",
+            "description": "Approval-bound proposal reference required for a research launch; must have an approved record for this plan_digest and project (server-verified)."
+          },
+          "proposal_digest": {
+            "type": "string",
+            "description": "Optional research binding (sha256:<64 hex>); when supplied it must equal the approved proposal projection digest."
+          },
+          "budget": {
+            "type": "object",
+            "description": "Optional research budget request; when supplied it must equal the approved budget binding (the effective limits come from the approval, never the client)."
+          }
+        },
+        "description": "Creates at most one task attempt. idempotency_key is required (M1-01b); plan_digest is the research-launch switch and is required whenever proposal_ref/proposal_digest/budget is present."
+      },
+      "acp_status": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reference"
+        ],
+        "properties": {
+          "reference": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "id"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "job",
+                      "operation"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "description": "Authoritative snapshot. Holds no connection state."
+      },
+      "acp_cancel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reference"
+        ],
+        "properties": {
+          "reference": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "id"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "job",
+                      "operation"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            ]
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "description": "Writes one control intent; cancelled only after the execution owner confirms the stop."
+      },
+      "acp_prepare_artifact": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "purpose"
+        ],
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "enum": [
+              1
+            ],
+            "default": 1
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "artifact",
+              "structure-input"
+            ],
+            "description": "Required. artifact = fetch/commit one artifact revision; structure-input = local parse+register with no task."
+          },
+          "task_ref": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "task_id",
+              "attempt",
+              "release"
+            ],
+            "properties": {
+              "task_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+              },
+              "attempt": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "release": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "release_id",
+                  "release_digest"
+                ],
+                "properties": {
+                  "release_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "release_digest": {
+                    "type": "string",
+                    "pattern": "^sha256:[0-9a-f]{64}$"
+                  }
+                }
+              }
+            }
+          },
+          "job_id": {
+            "type": "string",
+            "description": "Must equal the job id in the route path; a mismatch is revision_conflict."
+          },
+          "artifact_id": {
+            "type": "string",
+            "description": "Required when purpose=artifact. Safe artifact token; the Controller derives resource_id from it."
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "generation": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Declared and normalised for CAS-style callers; the prepare route does not act on it."
+          },
+          "relative_path": {
+            "type": "string"
+          },
+          "expected_digest": {
+            "type": "string",
+            "description": "Trusted sha256:<64 hex> expectation; a mismatch is conflict."
+          },
+          "content_digest": {
+            "type": "string",
+            "description": "Fallback spelling of expected_digest (expected_digest wins)."
+          },
+          "expected_size_bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "schema_ref": {
+            "type": "string"
+          },
+          "source_refs": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "evidence_report": {
+            "type": "object"
+          },
+          "media_type": {
+            "type": "string"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "description": "Client retry key for the prepare operation, forwarded unchanged. The server derives the versioned key from (principal, project, client key, epoch). Omitting it is NOT idempotent: a retry may re-prepare."
+          }
+        },
+        "description": "Explicit prepare only (D-IDENT-10 17-field table); never triggered implicitly by a read or a status query and never starts science."
+      },
+      "acp_read_artifact": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "artifact_ref"
+        ],
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "enum": [
+              1
+            ],
+            "default": 1
+          },
+          "artifact_ref": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "task_id",
+              "attempt",
+              "artifact_id",
+              "generation",
+              "digest"
+            ],
+            "properties": {
+              "task_id": {
+                "type": "string"
+              },
+              "attempt": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "artifact_id": {
+                "type": "string"
+              },
+              "generation": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "digest": {
+                "type": "string"
+              },
+              "size_bytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "media_type": {
+                "type": "string"
+              },
+              "relative_path": {
+                "type": "string"
+              }
+            }
+          },
+          "max_bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8388608,
+            "default": 262144
+          },
+          "encoding": {
+            "type": "string",
+            "enum": [
+              "identity",
+              "base64"
+            ],
+            "default": "identity"
+          },
+          "extensions": {
+            "type": "object",
+            "description": "Namespaced extension metadata (never used for execution)."
+          }
+        },
+        "description": "Bounded read of an already-prepared artifact; a miss never fetches, prepares or starts computation."
+      },
+      "acp_analyze": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "analysis_id",
+          "input_refs",
+          "explicit"
+        ],
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "enum": [
+              1
+            ],
+            "default": 1
+          },
+          "analysis_id": {
+            "type": "string"
+          },
+          "input_refs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "task_id",
+                "attempt",
+                "artifact_id",
+                "generation",
+                "digest"
+              ],
+              "properties": {
+                "task_id": {
+                  "type": "string"
+                },
+                "attempt": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "artifact_id": {
+                  "type": "string"
+                },
+                "generation": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "digest": {
+                  "type": "string"
+                },
+                "size_bytes": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "media_type": {
+                  "type": "string"
+                },
+                "relative_path": {
+                  "type": "string"
+                }
+              }
+            },
+            "minItems": 1,
+            "description": "Frozen ArtifactRef inputs (full identity tuple)."
+          },
+          "explicit": {
+            "type": "boolean",
+            "description": "Must be exactly true; there is no implicit analysis."
+          },
+          "parameters": {
+            "type": "object"
+          },
+          "plan_digest": {
+            "type": "string",
+            "description": "Required for vibration.compute (it starts exactly one task)."
+          },
+          "idempotency_key": {
+            "type": "string",
+            "description": "Optional retry key for analysis; omitting it is not idempotent."
+          },
+          "extensions": {
+            "type": "object",
+            "description": "Namespaced extension metadata (never used for execution)."
+          }
+        },
+        "description": "vibration.analyze reads existing evidence (no QC); vibration.compute starts exactly one frequency task and requires plan_digest. explicit=true is mandatory and the capability must be executable."
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "no_side_effect_discovery",
+        "stdout_protocol_only",
+        "no_self_controller",
+        "no_implicit_execution",
+        "no_credential_in_descriptor",
+        "tool_call_state_authority"
+      ],
+      "properties": {
+        "no_side_effect_discovery": {
+          "type": "boolean",
+          "const": true,
+          "description": "initialize, tools/list and ping MUST NOT create, modify or delete any file, task, attempt, reservation or budget fact, MUST NOT start a scheduler/worker, and MUST NOT touch the jobs DB for writing."
+        },
+        "stdout_protocol_only": {
+          "type": "boolean",
+          "const": true
+        },
+        "no_self_controller": {
+          "type": "boolean",
+          "const": true
+        },
+        "no_implicit_execution": {
+          "type": "boolean",
+          "const": true,
+          "description": "No tool may submit a task unless acp_submit/acp_analyze was called explicitly with a plan_digest. No auto-approval. No implicit prepare on read."
+        },
+        "no_credential_in_descriptor": {
+          "type": "boolean",
+          "const": true,
+          "description": "The descriptor contains no password, token, key, cookie or bearer value; credentials are injected by the launcher at process start."
+        },
+        "tool_call_state_authority": {
+          "type": "string",
+          "const": "none",
+          "description": "A tool call derives all state from the Controller; connection-local caches may not become the authority for idempotency, status or approval."
+        },
+        "unknown_field_policy": {
+          "type": "string",
+          "const": "reject"
+        },
+        "max_in_flight": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64,
+          "default": 4
+        }
+      }
+    }
+  }
+}

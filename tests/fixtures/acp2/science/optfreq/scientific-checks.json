@@ -1,0 +1,102 @@
+{
+  "checks": [
+    {
+      "claim_id": "c-optimization-converged",
+      "inconclusive_when": "the run failed without an explicit convergence diagnosis, or convergence and task status conflict",
+      "not_evaluated_when": "no optimize TaskResult, or the result is not an optimize result",
+      "refuted_when": "payload.optimization_status != 'converged', or error_kind == 'not_converged', or rescue_failure_type == 'geometry_not_converged'",
+      "subject": "geometry_optimization_convergence",
+      "supported_when": "TaskResult(optimize).status == 'completed' and payload.optimization_status == 'converged'",
+      "validator_id": "check.optimization_convergence"
+    },
+    {
+      "claim_id": "c-frequency-belongs-to-optimized-structure",
+      "inconclusive_when": "either result carries no usable coordinates",
+      "not_evaluated_when": "either TaskResult is absent or of the wrong task kind",
+      "refuted_when": "atom count, element order or any coordinate differs beyond the frozen tolerance",
+      "subject": "frequency_geometry_membership",
+      "supported_when": "symbols/order agree and every Cartesian component differs by <= coordinate_abs_tolerance_angstrom",
+      "validator_id": "check.frequency_membership"
+    },
+    {
+      "claim_id": "c-frequency-hessian-present",
+      "inconclusive_when": "frequencies are absent, the analysis is missing, or normal-mode vectors are absent/incomplete",
+      "not_evaluated_when": "no frequency TaskResult, or the result is not a frequency result",
+      "refuted_when": "never (absent evidence is inconclusive, not a contradiction)",
+      "subject": "hessian_normal_mode_evidence",
+      "supported_when": "frequencies and parsed normal-mode vectors are present for every non-zero mode with the expected atom count",
+      "validator_id": "check.frequency_evidence"
+    },
+    {
+      "claim_id": "c-method-consistent",
+      "inconclusive_when": "not used for methods",
+      "not_evaluated_when": "a method identity is missing or the tasks are wrong",
+      "refuted_when": "both methods are present and differ",
+      "subject": "same_method",
+      "supported_when": "both Provenance.method values are present and equal",
+      "validator_id": "check.method_consistency"
+    },
+    {
+      "claim_id": "c-electronic-state-consistent",
+      "inconclusive_when": "the state is declared on only one side",
+      "not_evaluated_when": "neither side declares a state (recorded as a limitation, not a passed check)",
+      "refuted_when": "both results declare a state and a common identity field differs",
+      "subject": "same_electronic_state",
+      "supported_when": "both results declare a state and all common identity fields agree",
+      "validator_id": "check.electronic_state_consistency"
+    },
+    {
+      "claim_id": "c-no-imaginary-modes",
+      "inconclusive_when": "the frequency list cannot be classified",
+      "not_evaluated_when": "no frequency result or no frequencies",
+      "refuted_when": "classification is 'first_order_saddle_candidate' or 'higher_order_saddle'",
+      "subject": "imaginary_mode_count",
+      "supported_when": "tsmode.validation.validate_ts_frequencies classifies the list as 'no_imaginary'",
+      "validator_id": "check.stationary_point"
+    },
+    {
+      "claim_id": "c-stationary-point-minimum",
+      "inconclusive_when": "any blocking sub-check is inconclusive",
+      "not_evaluated_when": "a prerequisite result/check is absent",
+      "refuted_when": "any sub-check is refuted (an unconverged optimization is always refuted here)",
+      "subject": "stationary_point_kind",
+      "supported_when": "convergence, structure membership, Hessian evidence, method consistency and no-imaginary-modes are all supported",
+      "validator_id": "check.stationary_point"
+    }
+  ],
+  "constructed": true,
+  "expected_outcomes": {
+    "absent_hessian": "inconclusive",
+    "converged_synthetic_minimum": "supported",
+    "no_optimize_result": "not_evaluated",
+    "unconverged_optimization": "refuted",
+    "wrong_electronic_state": "refuted",
+    "wrong_method": "refuted",
+    "wrong_structure_frequency": "refuted"
+  },
+  "fixture_id": "optfreq-water-wb97xd4-def2svp",
+  "negative_cases": {
+    "absent_hessian": "synthetic/frequency-absent-hessian-result.json",
+    "unconverged_optimization": "synthetic/optimize-unconverged-result.json",
+    "wrong_electronic_state": "synthetic/frequency-wrong-state-result.json",
+    "wrong_method": "synthetic/frequency-wrong-method-result.json",
+    "wrong_structure_frequency": "synthetic/frequency-wrong-structure-result.json"
+  },
+  "note": "Constructed static checks. No optimization or frequency calculation has been executed for this fixture; real artifacts are validated only in A-11b (todo 23).",
+  "schema": "acp2.science.scientific-checks",
+  "schema_version": 1,
+  "thresholds": {
+    "atom_count_tolerance": 0,
+    "claim_statuses": [
+      "supported",
+      "refuted",
+      "inconclusive",
+      "not_evaluated"
+    ],
+    "coordinate_abs_tolerance_angstrom": 0.001,
+    "imaginary_mode_threshold_cm1": 0.0,
+    "low_frequency_threshold_cm1": 50.0,
+    "source_module": "cccp.analysis.research.validators",
+    "validator_version": "1.0.0"
+  }
+}

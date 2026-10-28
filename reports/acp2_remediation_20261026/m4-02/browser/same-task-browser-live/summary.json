@@ -1,0 +1,10 @@
+{
+  "candidate_revision": "980122608540b27ff734745a5542bf3872bf1f66",
+  "contract_version": "1.6.0",
+  "generated_at": "2026-10-27T13:17:23Z",
+  "runs": [
+    "experience_same-task-browser-live-experience_live-same-task-browser-live-20261027T131701Z-2619592-486101.json"
+  ],
+  "schema": "acp2.acceptance.summary.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema"
+}

@@ -1,0 +1,16 @@
+{
+  "bsub": 0,
+  "compute_owner": "none (da-preflight is contract-only)",
+  "http_calls": [
+    "GET /api/health",
+    "GET /api/v1/jobs?limit=1000",
+    "GET /api/v1/jobs?limit=1000"
+  ],
+  "prepare_operations": 0,
+  "qc_invocations": 0,
+  "reservations": 0,
+  "schema": "acp2.runtime.b18-counters.v1",
+  "tasks_after": 0,
+  "tasks_before": 0,
+  "tasks_created": 0
+}

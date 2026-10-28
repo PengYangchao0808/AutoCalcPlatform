@@ -1,0 +1,23 @@
+{
+  "declared": null,
+  "error": null,
+  "guidance": {
+    "client_decides_compatibility": true,
+    "client_declared_versions": [],
+    "id": "acp.negotiation.v1",
+    "negotiation": "server_advertises_supported_version",
+    "requested_version": "2025-11-25",
+    "server_preferred_version": "2025-06-18",
+    "supported_versions": [
+      "2025-06-18"
+    ],
+    "version": "1.0.0"
+  },
+  "negotiated": "2025-06-18",
+  "requested": "2025-11-25",
+  "result_shape_problems": [],
+  "row": "unsupported_version",
+  "status": "PASS",
+  "tool_count": 8,
+  "tools_call_frames": 0
+}

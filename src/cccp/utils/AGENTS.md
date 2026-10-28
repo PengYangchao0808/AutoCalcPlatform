@@ -9,7 +9,7 @@ utils/
 ├── __init__.py           # Re-exports 25 symbols
 ├── file_io.py            # XYZ, GJF, JSON read/write, Gaussian energy extraction (275 lines)
 ├── geometry_tools.py     # GeometryUtils + LogParser (RMSD, rotation, translation) (452 lines)
-├── resource_utils.py     # Memory parsing, executable discovery, ResourceManager (240 lines)
+├── resource_utils.py     # Memory parsing, ORCA maxcore, ResourceManager (239 lines)
 ├── constants.py          # HARTREE_TO_KCAL, element masses, atomic numbers (37 lines)
 ├── keyword_translator.py # Gaussian keyword translation (37 lines)
 └── solvent_map.py        # SOLVENT_ALIASES, orca_smd_solvent (49 lines)
@@ -20,7 +20,7 @@ utils/
 |------|------|-------|
 | XYZ/GJF I/O | `file_io.py` | `read_xyz`, `write_xyz`, `read_gjf` |
 | Geometry ops | `geometry_tools.py` | RMSD, rotation, translation, log parsing |
-| Executable resolution | `resource_utils.py` | `find_executable`, `ResourceManager` — **NOTE: `find_executable`/`resolve_executable_config` are legacy/unwired; use `cccp.software.resolve_executable` instead** |
+| Executable resolution | `cccp/software.py` | **Single resolver `resolve_executable`**. The legacy `find_executable`/`resolve_executable_config` were retired (plan-3 T37); `resource_utils.py` now holds memory/resource helpers only |
 | Unit constants | `constants.py` | `HARTREE_TO_KCAL`, `BOHR_TO_ANGSTROM`, etc. |
 | Gaussian keywords | `keyword_translator.py` | Gaussian-specific but lives in utils/ |
 | Solvent mapping | `solvent_map.py` | `orca_smd_solvent`, `xtb_solvent` |

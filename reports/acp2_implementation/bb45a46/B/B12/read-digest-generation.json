@@ -1,0 +1,10 @@
+{
+  "artifact_id": "singlepoint_energy",
+  "digest_generation_agree": true,
+  "generation": 1,
+  "operation_id": "op_3557c65874904a45a2e748e5685e914e",
+  "requested_digest": "sha256:3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+  "served_digest": "sha256:3c2fd2198aebb524d2e463007a609c830dd5b31e89e0b85869cffe047bf1847d",
+  "size_bytes": 241,
+  "truncated": false
+}

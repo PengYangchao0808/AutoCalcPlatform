@@ -1,0 +1,12 @@
+{
+  "same_block_identity": false,
+  "block_sizes": [
+    3,
+    5
+  ],
+  "spliced_policy_rejected": true,
+  "honest_adoptable": [
+    true,
+    true
+  ]
+}

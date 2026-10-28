@@ -1,0 +1,12 @@
+{
+  "event_replay_frames": [
+    "retry: 3000",
+    "id: 1"
+  ],
+  "job_id": "20261023_214414_001_b26a-disconnect-probe",
+  "job_status": "failed",
+  "phase": "after",
+  "record_status": 200,
+  "schema": "acp2.b26a.disconnect.v1",
+  "status_persisted": true
+}

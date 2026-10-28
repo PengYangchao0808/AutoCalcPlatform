@@ -1,0 +1,93 @@
+{
+  "budget": {
+    "admission_max_cores": 256,
+    "admission_max_memory_mb": 1048576,
+    "measured_step_timings": "recorded in chain/<step>.json",
+    "queue_deadline": "NOT_VERIFIED",
+    "requested_cores": 16,
+    "requested_memory_mb": 32768,
+    "timing_basis": "unmeasured",
+    "walltime_process_termination": "NOT_VERIFIED",
+    "within_admission_limits": true
+  },
+  "claim_status": "refuted",
+  "counts": {
+    "attempt": 9,
+    "qc_invocation": 10,
+    "task_ref": 9
+  },
+  "criteria": {
+    "DA-C01-ts-single-imaginary-mode": "supported",
+    "DA-C02-ts-mode-mapping": "supported",
+    "DA-C03-frequency-evidence": "supported",
+    "DA-C04-irc-bidirectional": "supported",
+    "DA-C05-endpoint-association": "refuted",
+    "DA-C06-energy-comparability": "supported",
+    "DA-C07-reactant-stoichiometry": "supported"
+  },
+  "environment": "Local",
+  "missing": {
+    "incomplete_steps": [],
+    "missing_receipts": [
+      "walltime_process_termination",
+      "terminal_usage_receipt"
+    ]
+  },
+  "reason": "the row is open: missing required receipt(s) walltime_process_termination, terminal_usage_receipt",
+  "receipts": {
+    "attempt_attribution": "per step in chain/<step>.json",
+    "process_group_termination_receipt": "NOT_VERIFIED (M1-04 walltime_process_termination)",
+    "usage_receipt": "not produced (no Controller-side usage collection in this run)"
+  },
+  "required": true,
+  "row_id": "DA-ENV-LOCAL",
+  "scenario_result": "PASS",
+  "state": "open",
+  "steps": {
+    "candidate_frequency": {
+      "duration_seconds": 34.04,
+      "entry": "bounded_recipe_envelope",
+      "status": "completed"
+    },
+    "candidate_path": {
+      "duration_seconds": 272.39,
+      "entry": "platform_workflow_route",
+      "status": "completed"
+    },
+    "endpoint_prep": {
+      "duration_seconds": 257.6,
+      "entry": "legacy_task_core",
+      "status": "completed"
+    },
+    "endpoint_product": {
+      "duration_seconds": 5.67,
+      "entry": "bounded_recipe_envelope",
+      "status": "completed"
+    },
+    "endpoint_reactants": {
+      "duration_seconds": 5.34,
+      "entry": "bounded_recipe_envelope",
+      "status": "completed"
+    },
+    "energy_thermochemistry": {
+      "duration_seconds": 0.0,
+      "entry": "deterministic_analysis",
+      "status": "completed"
+    },
+    "irc": {
+      "duration_seconds": 1451.26,
+      "entry": "legacy_task_core",
+      "status": "completed"
+    },
+    "ts_frequency": {
+      "duration_seconds": 33.98,
+      "entry": "bounded_recipe_envelope",
+      "status": "completed"
+    },
+    "ts_optimize": {
+      "duration_seconds": 211.22,
+      "entry": "route_batch_optimize_ts",
+      "status": "completed"
+    }
+  }
+}

@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="3" skipped="0" tests="3" time="1.329" timestamp="2026-10-22T09:17:28.315575+08:00" hostname="workstation"><testcase classname="tests.test_services_worker_artifact_root" name="test_workers_separate_artifacts_without_changing_frozen_plan[None]" time="0.006"><failure message="FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-xieningke/pytest-4801/test_workers_separate_artifact0/first/scientific-output'">tmp_path = PosixPath('/tmp/pytest-of-xieningke/pytest-4801/test_workers_separate_artifact0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x146a1c69d4d0&gt;
+output = None
+
+    @pytest.mark.parametrize("output", [None, ".", "WORK/03_OPT"])
+    def test_workers_separate_artifacts_without_changing_frozen_plan(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, output: str | None
+    ) -&gt; None:
+        launch = tmp_path / "launch"
+        launch.mkdir()
+        monkeypatch.chdir(launch)
+    
+        def scientific_runner(request, *, context):
+            destination = request.output_dir or Path.cwd()
+            destination.mkdir(parents=True, exist_ok=True)
+            (destination / "scientific-output").write_text(str(context.workdir))
+            return TaskResult(task=request.task, status="completed", complete=True, energy_hartree=-1.0)
+    
+        payload = TaskRequest(
+            task="singlepoint",
+            structure=StructureInput(coordinates=((0.0, 0.0, 0.0),), symbols=("He",)),
+        ).to_dict()
+        if output is not None:
+            payload["output_dir"] = output
+        frozen = dict(payload)
+        with patch("cccp.calculation.run_singlepoint", scientific_runner):
+            for name in ("first", "second"):
+                work = tmp_path / name
+                scope = ExecutionScope(_envelope(), FrozenPlan(payload=payload), work)
+                assert CccpTaskExecutor().execute(scope).state == "completed"
+                target = work / (output or ".") / "scientific-output"
+&gt;               assert target.read_text() == str(work)
+                       ^^^^^^^^^^^^^^^^^^
+
+/tmp/acp-repair-reconstructed/tests/test_services_worker_artifact_root.py:43: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/lib64/python3.11/pathlib.py:1058: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/tmp/pytest-of-xieningke/pytest-4801/test_workers_separate_artifact0/first/scientific-output')
+mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+&gt;       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-xieningke/pytest-4801/test_workers_separate_artifact0/first/scientific-output'
+
+/usr/lib64/python3.11/pathlib.py:1044: FileNotFoundError</failure></testcase><testcase classname="tests.test_services_worker_artifact_root" name="test_workers_separate_artifacts_without_changing_frozen_plan[.]" time="0.004"><failure message="FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-xieningke/pytest-4801/test_workers_separate_artifact1/first/scientific-output'">tmp_path = PosixPath('/tmp/pytest-of-xieningke/pytest-4801/test_workers_separate_artifact1')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x146a1c5a4a10&gt;
+output = '.'
+
+    @pytest.mark.parametrize("output", [None, ".", "WORK/03_OPT"])
+    def test_workers_separate_artifacts_without_changing_frozen_plan(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, output: str | None
+    ) -&gt; None:
+        launch = tmp_path / "launch"
+        launch.mkdir()
+        monkeypatch.chdir(launch)
+    
+        def scientific_runner(request, *, context):
+            destination = request.output_dir or Path.cwd()
+            destination.mkdir(parents=True, exist_ok=True)
+            (destination / "scientific-output").write_text(str(context.workdir))
+            return TaskResult(task=request.task, status="completed", complete=True, energy_hartree=-1.0)
+    
+        payload = TaskRequest(
+            task="singlepoint",
+            structure=StructureInput(coordinates=((0.0, 0.0, 0.0),), symbols=("He",)),
+        ).to_dict()
+        if output is not None:
+            payload["output_dir"] = output
+        frozen = dict(payload)
+        with patch("cccp.calculation.run_singlepoint", scientific_runner):
+            for name in ("first", "second"):
+                work = tmp_path / name
+                scope = ExecutionScope(_envelope(), FrozenPlan(payload=payload), work)
+                assert CccpTaskExecutor().execute(scope).state == "completed"
+                target = work / (output or ".") / "scientific-output"
+&gt;               assert target.read_text() == str(work)
+                       ^^^^^^^^^^^^^^^^^^
+
+/tmp/acp-repair-reconstructed/tests/test_services_worker_artifact_root.py:43: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/lib64/python3.11/pathlib.py:1058: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/tmp/pytest-of-xieningke/pytest-4801/test_workers_separate_artifact1/first/scientific-output')
+mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+&gt;       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-xieningke/pytest-4801/test_workers_separate_artifact1/first/scientific-output'
+
+/usr/lib64/python3.11/pathlib.py:1044: FileNotFoundError</failure></testcase><testcase classname="tests.test_services_worker_artifact_root" name="test_workers_separate_artifacts_without_changing_frozen_plan[WORK/03_OPT]" time="0.004"><failure message="FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-xieningke/pytest-4801/test_workers_separate_artifact2/first/WORK/03_OPT/scientific-output'">tmp_path = PosixPath('/tmp/pytest-of-xieningke/pytest-4801/test_workers_separate_artifact2')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x146a1e3268d0&gt;
+output = 'WORK/03_OPT'
+
+    @pytest.mark.parametrize("output", [None, ".", "WORK/03_OPT"])
+    def test_workers_separate_artifacts_without_changing_frozen_plan(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, output: str | None
+    ) -&gt; None:
+        launch = tmp_path / "launch"
+        launch.mkdir()
+        monkeypatch.chdir(launch)
+    
+        def scientific_runner(request, *, context):
+            destination = request.output_dir or Path.cwd()
+            destination.mkdir(parents=True, exist_ok=True)
+            (destination / "scientific-output").write_text(str(context.workdir))
+            return TaskResult(task=request.task, status="completed", complete=True, energy_hartree=-1.0)
+    
+        payload = TaskRequest(
+            task="singlepoint",
+            structure=StructureInput(coordinates=((0.0, 0.0, 0.0),), symbols=("He",)),
+        ).to_dict()
+        if output is not None:
+            payload["output_dir"] = output
+        frozen = dict(payload)
+        with patch("cccp.calculation.run_singlepoint", scientific_runner):
+            for name in ("first", "second"):
+                work = tmp_path / name
+                scope = ExecutionScope(_envelope(), FrozenPlan(payload=payload), work)
+                assert CccpTaskExecutor().execute(scope).state == "completed"
+                target = work / (output or ".") / "scientific-output"
+&gt;               assert target.read_text() == str(work)
+                       ^^^^^^^^^^^^^^^^^^
+
+/tmp/acp-repair-reconstructed/tests/test_services_worker_artifact_root.py:43: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/lib64/python3.11/pathlib.py:1058: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = PosixPath('/tmp/pytest-of-xieningke/pytest-4801/test_workers_separate_artifact2/first/WORK/03_OPT/scientific-output')
+mode = 'r', buffering = -1, encoding = 'locale', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+&gt;       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-xieningke/pytest-4801/test_workers_separate_artifact2/first/WORK/03_OPT/scientific-output'
+
+/usr/lib64/python3.11/pathlib.py:1044: FileNotFoundError</failure></testcase></testsuite></testsuites>

@@ -1,0 +1,593 @@
+{
+  "budget": {
+    "budget_id": "rb_c1f29b3b1fad344bbc27ce52",
+    "reservation": {
+      "admitted": true,
+      "budget_id": "rb_c1f29b3b1fad344bbc27ce52",
+      "detail": "",
+      "exhausted_unit": null,
+      "reason_code": "budget_admitted",
+      "remaining": {
+        "attempt": 4,
+        "qc_invocation": 8,
+        "task_ref": 3
+      },
+      "requested": {
+        "task_ref": 1
+      },
+      "reservation_id": "rbr-m406b-nmr-h1"
+    },
+    "settlement": {
+      "applied": true,
+      "budget_id": "rb_c1f29b3b1fad344bbc27ce52",
+      "consumed": {
+        "attempt": 0,
+        "bsub": 0,
+        "model_request": 0,
+        "qc_invocation": 1,
+        "recipe_step": 0,
+        "task_ref": 1
+      },
+      "counters": {
+        "attempt": 0,
+        "bsub": 0,
+        "model_request": 0,
+        "qc_invocation": 1,
+        "recipe_step": 0,
+        "task_ref": 1
+      },
+      "duplicate": false,
+      "reason_code": "budget_settled",
+      "receipt_id": "rcpt-m406b-nmr-crossdomain",
+      "remaining": {
+        "attempt": 4,
+        "qc_invocation": 7,
+        "task_ref": 3
+      },
+      "reservation_id": "rbr-m406b-nmr-h1"
+    }
+  },
+  "capability": {
+    "analysis_ids": [
+      "vibration.analyze",
+      "vibration.compute"
+    ],
+    "catalog_sha256": "sha256:d08dcd07c38ae0b080269f395880bec3d6f6430958e6cc8f3c9e0be4181b5959",
+    "descriptor_ids": [
+      "electronic.energy",
+      "geometry.optimize",
+      "vibration.analyze",
+      "vibration.compute"
+    ],
+    "domain_ids": [
+      "electronic.energy",
+      "geometry.optimize",
+      "nmr.compare",
+      "nmr.shielding",
+      "thermochemistry.ensemble",
+      "vibration.analyze",
+      "vibration.compute"
+    ],
+    "domain_version": null,
+    "http_status": 200
+  },
+  "capability_binding": {
+    "capability_id": "nmr.compare",
+    "delegation_target": "cccp.analysis.nmr.comparison.compare_nmr_shielding",
+    "execution_kind": "pure_analysis",
+    "implementation_id": "cccp.analysis.nmr.comparison",
+    "preflight_ready": true,
+    "registry": "domain_registry()",
+    "selection_mode": "BindingSelectionMode.CAPABILITY"
+  },
+  "capability_forms": {
+    "entry_count": 4,
+    "forms_sha256": "sha256:46ccc1dc75afba7633f0ccec2daceca1446f58e1fb72b242e4cb506aea808374",
+    "http_status": 200,
+    "nmr_states": [],
+    "subset_digest": "sha256:870d59473be275fa52785896cdb7e09d03aa15855a8a29dc69b90839fbf08b06",
+    "subset_version": "acp2.ui-subset.v1",
+    "thermo_states": []
+  },
+  "comparison": {
+    "atom_mapping_digest": "0cdc26aef9b049f9416b4565f513298c3dcb1876f74450f171554dca1079e899",
+    "claim_status": "supported",
+    "model_asset_version": "sha256:81bfe1982afeba533b77db9ceb8a47abe8bc35480ee4f93e5092c427a084e274",
+    "model_assets_available": true,
+    "paired_peak_count": 5,
+    "report_id": "nmr-comparison:m406b-nmr-crossdomain-ethanol",
+    "status": "supported"
+  },
+  "declared_boundaries": [
+    "the GIAO shielding table is the A-24 constructed fixture (no ORCA GIAO run)",
+    "the experimental peak list is the A-24 constructed fixture (no spectrum acquired)",
+    "the comparison and the xTB optimisation are real candidate code paths"
+  ],
+  "digest_chain": {
+    "comparison": "sha256:e7428872179de2c55a38a6e6060cf80d5302f0afd8afef3c489f0e37666c3025",
+    "projection": "sha256:3d92d13cebee52c4933c006000e27090b0c5bebcb82000f4b29a039c806575f6",
+    "report": "sha256:d93cd5b90effaab6754fac5f84b294d149d977f70c0521175229c6654fc4764f",
+    "structure": "sha256:802d9487205f38f3b2546176881a1ca241dcf2cbd0a00890c02ef1897c55c932",
+    "task_result": "sha256:9beae8887f057b52b06b2f589cb97e0ef522e4784bf62a11f37bf64e011e0b00",
+    "viewmodel_product": "sha256:a60dd3ccec5c521430299ed2276b39f7b6e5991e961d64e28c22c72cd191cde0",
+    "viewmodel_projection": "sha256:e1cf9fe87bfe428da042608fb453a7b2864aa4efb9cc944473eb70cec8d72bb6"
+  },
+  "domain": "nmr",
+  "evidence_kind": "mixed: native_xtb_optimize + declared_stub_shielding + fixture_experiment",
+  "evidence_view": {
+    "blocking_missing_checks": [],
+    "claims": [
+      {
+        "blocking_missing_checks": [],
+        "claim_id": "nmr.atom_mapping",
+        "source_ref_count": 1,
+        "status": "supported",
+        "validator_id": "check.nmr_atom_mapping",
+        "validator_version": "1.0.0"
+      },
+      {
+        "blocking_missing_checks": [],
+        "claim_id": "nmr.experimental_source",
+        "source_ref_count": 1,
+        "status": "supported",
+        "validator_id": "check.nmr_experimental_source",
+        "validator_version": "1.0.0"
+      },
+      {
+        "blocking_missing_checks": [],
+        "claim_id": "nmr.reference_conditions",
+        "source_ref_count": 1,
+        "status": "supported",
+        "validator_id": "check.nmr_reference_conditions",
+        "validator_version": "1.0.0"
+      },
+      {
+        "blocking_missing_checks": [],
+        "claim_id": "nmr.assignment_coverage",
+        "source_ref_count": 2,
+        "status": "supported",
+        "validator_id": "check.nmr_assignment_coverage",
+        "validator_version": "1.0.0"
+      },
+      {
+        "blocking_missing_checks": [],
+        "claim_id": "nmr.calibration",
+        "source_ref_count": 2,
+        "status": "supported",
+        "validator_id": "check.nmr_calibration",
+        "validator_version": "1.0.0"
+      },
+      {
+        "blocking_missing_checks": [],
+        "claim_id": "nmr.model_assets",
+        "source_ref_count": 1,
+        "status": "supported",
+        "validator_id": "check.nmr_model_assets",
+        "validator_version": "1.0.0"
+      }
+    ],
+    "contract_version": "1.0.0",
+    "evidence_refs": [
+      {
+        "evidence_id": "art-02b06749f7f28391",
+        "kind": "reference_conditions",
+        "relative_path": "reference_conditions.json",
+        "sha256": "sha256:02b06749f7f28391bfc2c9ccf41b3ac9dc0a9c6865badab78fc1df2ad04ae24e"
+      },
+      {
+        "evidence_id": "art-1d0e685b7daba545",
+        "kind": "model_assets_manifest",
+        "relative_path": "model_assets_manifest.json",
+        "sha256": "sha256:1d0e685b7daba545dbd6d12f2611f1ba668cf22de606aab4d33d71601333dea2"
+      },
+      {
+        "evidence_id": "art-316f1d0a7a3c25b9",
+        "kind": "experimental_spectrum",
+        "relative_path": "experimental_spectrum.json",
+        "sha256": "sha256:316f1d0a7a3c25b999e463c18f5125c15c4c32e13044aff1b10a699ec97fcb69"
+      },
+      {
+        "evidence_id": "art-de044ce6b8860152",
+        "kind": "shielding_table",
+        "relative_path": "shielding_table.json",
+        "sha256": "sha256:de044ce6b8860152efed85e6846360af4c4d4796f06bf05b4618cd1db2ccb755"
+      }
+    ],
+    "evidence_status": "complete",
+    "execution_terminal_state": "completed",
+    "limitations": [
+      "This report compares an existing GIAO shielding table with a supplied experimental peak list. It does not re-run shielding calculations, conformer sampling, DP4/DP5 probabilities or a quantitative validation."
+    ],
+    "normal_reuse": false,
+    "overall_claim_status": "supported",
+    "projection_digest": "sha256:3d92d13cebee52c4933c006000e27090b0c5bebcb82000f4b29a039c806575f6",
+    "provenance_digest": "sha256:9c098473486703d8204cb166737cdbe6a5396558286320d5d6219c9a5ae97194",
+    "qualification": "complete",
+    "report": {
+      "digest": "sha256:d93cd5b90effaab6754fac5f84b294d149d977f70c0521175229c6654fc4764f",
+      "report_id": "report-m406b-nmr-crossdomain",
+      "schema_version": 1,
+      "subject_id": "m406b-nmr-crossdomain"
+    },
+    "research": {
+      "principal_id": "principal_m406b_alice",
+      "project_id": "project_m406b_alpha",
+      "research_id": "res-m406b-nmr",
+      "round": 0,
+      "session_id": "ses-m406b-nmr"
+    },
+    "schema": "acp2.runtime.evidence-projection.v1",
+    "task_ref": {
+      "attempt": 1,
+      "job_id": "m406b-nmr-crossdomain",
+      "project_id": "project_m406b_alpha",
+      "release": {
+        "release_digest": "sha256:a9fc2614b92fed53a66ea43933ce92ffbfc09179a0d93d28d3a2d1bea383b8ea",
+        "release_id": "a9fc2614b92fed53"
+      },
+      "task_id": "m406b-nmr-crossdomain"
+    }
+  },
+  "execution": {
+    "artifacts": [
+      {
+        "bytes": 773,
+        "path": "xtbopt.xyz",
+        "sha256": "sha256:802d9487205f38f3b2546176881a1ca241dcf2cbd0a00890c02ef1897c55c932",
+        "type": "output"
+      },
+      {
+        "bytes": 37107,
+        "path": "xtb.log",
+        "sha256": "sha256:5a7c0799625d49516b6140d4be2bb3f07ed9df36d89339190a82af7aaed8c4da",
+        "type": "log"
+      }
+    ],
+    "duration_s": 0.04,
+    "xtb_energy_hartree": -11.391867273602,
+    "xtb_status": "completed"
+  },
+  "input_digests": {
+    "experimental_spectrum.json": "sha256:316f1d0a7a3c25b999e463c18f5125c15c4c32e13044aff1b10a699ec97fcb69",
+    "model_assets_manifest.json": "sha256:1d0e685b7daba545dbd6d12f2611f1ba668cf22de606aab4d33d71601333dea2",
+    "nmr_comparison.json": "sha256:e7428872179de2c55a38a6e6060cf80d5302f0afd8afef3c489f0e37666c3025",
+    "reference_conditions.json": "sha256:02b06749f7f28391bfc2c9ccf41b3ac9dc0a9c6865badab78fc1df2ad04ae24e",
+    "shielding_table.json": "sha256:de044ce6b8860152efed85e6846360af4c4d4796f06bf05b4618cd1db2ccb755",
+    "structure.xyz": "sha256:802d9487205f38f3b2546176881a1ca241dcf2cbd0a00890c02ef1897c55c932"
+  },
+  "product": {
+    "manifest": "RESULT/result_manifest.json",
+    "manifest_sha256": "sha256:6f69e3b1176675b61deb8efd17d45b829b5811e27c2d7db5965363cc68e0750f",
+    "products": [
+      {
+        "id": "nmr_comparison",
+        "kind": "report",
+        "label": "NMR shielding comparison",
+        "path": "nmr_comparison.json"
+      }
+    ]
+  },
+  "project": "project_m406b_alpha",
+  "research_decision": {
+    "basis": "defer because the GIAO shielding table and the experimental spectrum are declared fixtures; the projection itself is complete",
+    "decision": "defer",
+    "evidence": {
+      "blocking_missing_checks": [],
+      "overall_claim_status": "supported",
+      "status": "complete"
+    },
+    "evidence_refs": [
+      {
+        "evidence_id": "art-02b06749f7f28391",
+        "kind": "reference_conditions",
+        "relative_path": "reference_conditions.json",
+        "sha256": "sha256:02b06749f7f28391bfc2c9ccf41b3ac9dc0a9c6865badab78fc1df2ad04ae24e"
+      },
+      {
+        "evidence_id": "art-1d0e685b7daba545",
+        "kind": "model_assets_manifest",
+        "relative_path": "model_assets_manifest.json",
+        "sha256": "sha256:1d0e685b7daba545dbd6d12f2611f1ba668cf22de606aab4d33d71601333dea2"
+      },
+      {
+        "evidence_id": "art-316f1d0a7a3c25b9",
+        "kind": "experimental_spectrum",
+        "relative_path": "experimental_spectrum.json",
+        "sha256": "sha256:316f1d0a7a3c25b999e463c18f5125c15c4c32e13044aff1b10a699ec97fcb69"
+      },
+      {
+        "evidence_id": "art-de044ce6b8860152",
+        "kind": "shielding_table",
+        "relative_path": "shielding_table.json",
+        "sha256": "sha256:de044ce6b8860152efed85e6846360af4c4d4796f06bf05b4618cd1db2ccb755"
+      }
+    ],
+    "project_id": "project_m406b_alpha",
+    "projection_digest": "sha256:3d92d13cebee52c4933c006000e27090b0c5bebcb82000f4b29a039c806575f6",
+    "rationale_codes": [
+      "execution_completed",
+      "evidence_complete",
+      "claim_supported",
+      "digest_bound_evidence"
+    ],
+    "research_id": "res-m406b-nmr",
+    "round": 0,
+    "schema": "acp2.runtime.research-decision.v1",
+    "task_ref": {
+      "attempt": 1,
+      "job_id": "m406b-nmr-crossdomain",
+      "project_id": "project_m406b_alpha",
+      "release": {
+        "release_digest": "sha256:a9fc2614b92fed53a66ea43933ce92ffbfc09179a0d93d28d3a2d1bea383b8ea",
+        "release_id": "a9fc2614b92fed53"
+      },
+      "schema": "acp2.runtime.task-ref.v1",
+      "task_id": "m406b-nmr-crossdomain"
+    }
+  },
+  "row": "cross_domain_nmr",
+  "task_id": "m406b-nmr-crossdomain",
+  "viewmodel": {
+    "annotation_keys": [
+      "frame_index",
+      "geometry_ref",
+      "id",
+      "label",
+      "selected",
+      "status",
+      "type",
+      "x",
+      "y"
+    ],
+    "node_keys": [
+      "energy",
+      "frame_index",
+      "geometry_ref",
+      "id",
+      "label",
+      "metadata",
+      "status",
+      "type",
+      "x"
+    ],
+    "product": {
+      "complete": true,
+      "errors": [],
+      "identity": {
+        "algorithm": "nmr.shielding_table",
+        "algorithm_version": "1",
+        "generator": "cccp.calculation.products.curve.build_curve_scatter_product",
+        "input_digest": "sha256:2c88ad007a121f2b2c6d1501be0545c779e5458022b61e256a0b116d983b7757",
+        "params_digest": "",
+        "product_kind": "curve_scatter",
+        "schema_version": 1
+      },
+      "payload": {
+        "reference_frame": {
+          "axes": "cartesian",
+          "origin": "native_input"
+        },
+        "series": [
+          {
+            "label": "1H isotropic shielding",
+            "points": [
+              {
+                "point_id": "nmr-H1",
+                "x": 3.0,
+                "y": 30.92435521588
+              },
+              {
+                "point_id": "nmr-H2",
+                "x": 4.0,
+                "y": 30.92435521588
+              },
+              {
+                "point_id": "nmr-H3",
+                "x": 5.0,
+                "y": 30.92435521588
+              },
+              {
+                "point_id": "nmr-H4",
+                "x": 6.0,
+                "y": 28.524432314239995
+              },
+              {
+                "point_id": "nmr-H5",
+                "x": 7.0,
+                "y": 28.524432314239995
+              },
+              {
+                "point_id": "nmr-H6",
+                "x": 8.0,
+                "y": 29.624396977491664
+              }
+            ],
+            "reference_frame": {
+              "axes": "cartesian",
+              "origin": "native_input"
+            },
+            "series_id": "nmr.shielding.1H",
+            "x_unit": "atom_index",
+            "y_unit": "ppm"
+          },
+          {
+            "label": "13C isotropic shielding",
+            "points": [
+              {
+                "point_id": "nmr-C1",
+                "x": 0.0,
+                "y": 128.4634321275
+              },
+              {
+                "point_id": "nmr-C2",
+                "x": 1.0,
+                "y": 168.4558940425
+              }
+            ],
+            "reference_frame": {
+              "axes": "cartesian",
+              "origin": "native_input"
+            },
+            "series_id": "nmr.shielding.13C",
+            "x_unit": "atom_index",
+            "y_unit": "ppm"
+          }
+        ]
+      },
+      "product_kind": "curve_scatter",
+      "schema_version": 1,
+      "state": "available"
+    },
+    "product_digest": "sha256:a60dd3ccec5c521430299ed2276b39f7b6e5991e961d64e28c22c72cd191cde0",
+    "projection": {
+      "annotations": [
+        {
+          "frame_index": 3,
+          "geometry_ref": "",
+          "id": "minimum_0",
+          "label": "最低能量",
+          "selected": false,
+          "status": "completed",
+          "type": "minimum",
+          "x": 6.0,
+          "y": 28.524432314239995
+        }
+      ],
+      "migrations": [],
+      "node_type": "frame",
+      "nodes": [
+        {
+          "energy": 30.92435521588,
+          "frame_index": 0,
+          "geometry_ref": "",
+          "id": "nmr-H1",
+          "label": "Point 0",
+          "metadata": {
+            "series_id": "nmr.shielding.1H",
+            "x_unit": "atom_index",
+            "y_unit": "ppm"
+          },
+          "status": "completed",
+          "type": "frame",
+          "x": 3.0
+        },
+        {
+          "energy": 30.92435521588,
+          "frame_index": 1,
+          "geometry_ref": "",
+          "id": "nmr-H2",
+          "label": "Point 1",
+          "metadata": {
+            "series_id": "nmr.shielding.1H",
+            "x_unit": "atom_index",
+            "y_unit": "ppm"
+          },
+          "status": "completed",
+          "type": "frame",
+          "x": 4.0
+        },
+        {
+          "energy": 30.92435521588,
+          "frame_index": 2,
+          "geometry_ref": "",
+          "id": "nmr-H3",
+          "label": "Point 2",
+          "metadata": {
+            "series_id": "nmr.shielding.1H",
+            "x_unit": "atom_index",
+            "y_unit": "ppm"
+          },
+          "status": "completed",
+          "type": "frame",
+          "x": 5.0
+        },
+        {
+          "energy": 28.524432314239995,
+          "frame_index": 3,
+          "geometry_ref": "",
+          "id": "nmr-H4",
+          "label": "Point 3",
+          "metadata": {
+            "series_id": "nmr.shielding.1H",
+            "x_unit": "atom_index",
+            "y_unit": "ppm"
+          },
+          "status": "completed",
+          "type": "frame",
+          "x": 6.0
+        },
+        {
+          "energy": 28.524432314239995,
+          "frame_index": 4,
+          "geometry_ref": "",
+          "id": "nmr-H5",
+          "label": "Point 4",
+          "metadata": {
+            "series_id": "nmr.shielding.1H",
+            "x_unit": "atom_index",
+            "y_unit": "ppm"
+          },
+          "status": "completed",
+          "type": "frame",
+          "x": 7.0
+        },
+        {
+          "energy": 29.624396977491664,
+          "frame_index": 5,
+          "geometry_ref": "",
+          "id": "nmr-H6",
+          "label": "Point 5",
+          "metadata": {
+            "series_id": "nmr.shielding.1H",
+            "x_unit": "atom_index",
+            "y_unit": "ppm"
+          },
+          "status": "completed",
+          "type": "frame",
+          "x": 8.0
+        },
+        {
+          "energy": 128.4634321275,
+          "frame_index": 0,
+          "geometry_ref": "",
+          "id": "nmr-C1",
+          "label": "Point 0",
+          "metadata": {
+            "series_id": "nmr.shielding.13C",
+            "x_unit": "atom_index",
+            "y_unit": "ppm"
+          },
+          "status": "completed",
+          "type": "frame",
+          "x": 0.0
+        },
+        {
+          "energy": 168.4558940425,
+          "frame_index": 1,
+          "geometry_ref": "",
+          "id": "nmr-C2",
+          "label": "Point 1",
+          "metadata": {
+            "series_id": "nmr.shielding.13C",
+            "x_unit": "atom_index",
+            "y_unit": "ppm"
+          },
+          "status": "completed",
+          "type": "frame",
+          "x": 1.0
+        }
+      ],
+      "skipped_points": [],
+      "unavailable": null,
+      "view_type": "scan"
+    },
+    "projection_digest": "sha256:e1cf9fe87bfe428da042608fb453a7b2864aa4efb9cc944473eb70cec8d72bb6",
+    "view_type": "scan"
+  },
+  "worker": {
+    "receipt_state": "completed",
+    "report_digest": "sha256:d93cd5b90effaab6754fac5f84b294d149d977f70c0521175229c6654fc4764f",
+    "report_relative_path": "RESULT/evidence_report.json",
+    "task_result_digest": "sha256:9beae8887f057b52b06b2f589cb97e0ef522e4784bf62a11f37bf64e011e0b00"
+  }
+}

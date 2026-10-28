@@ -1,0 +1,237 @@
+{
+  "artifacts": [
+    {
+      "path": "b23b-row.json",
+      "sha256": "a95216aeadf8940b4629683de1fc05d2bdeabb6572a96c4360183921f2372748",
+      "size_bytes": 1136
+    },
+    {
+      "path": "budget-rows.json",
+      "sha256": "208c3260e9b83423aef97dbe366c5f07e1b53f23165c26141f3bb57d321c7bac",
+      "size_bytes": 2608
+    },
+    {
+      "path": "cross-domain-consistency.json",
+      "sha256": "3a8550f33dc37ea9fabf9a70d10f121e19022938165db5d8352600f326e6249f",
+      "size_bytes": 3269
+    },
+    {
+      "path": "dependency-edges.json",
+      "sha256": "c2f97d5f1c19ed49ed7d89f9057eb55295146a0f87aeaca3229d5999e19ecfb4",
+      "size_bytes": 1491
+    },
+    {
+      "path": "measurements.json",
+      "sha256": "e680668fd487d02df37d7cc5058e63c55cfc9368ea270097020b83e2d160b09d",
+      "size_bytes": 4197
+    },
+    {
+      "path": "multitenant-two-project.json",
+      "sha256": "67cfe1b9edc0af1440e2b40cfd5717a6eee7f325629f50991be1e454917f477f",
+      "size_bytes": 17919
+    },
+    {
+      "path": "p4-sub-delivery-sync.json",
+      "sha256": "8e7277fbc84db9cbab43bcb49fddb6535ef978204cf1bcc6c126287714b6e370",
+      "size_bytes": 2002
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "status=200 identity_mode='api-key'",
+      "name": "b23.identity.api_key",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"alpha\": \"shared-molecule_shared-task\", \"beta\": \"shared-molecule_shared-task\", \"task_name\": \"shared-task\"}",
+      "name": "b23.same_name.identical_task_directory",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"claim\": null, \"detail\": \"idempotency key was already used under a different verified scope\", \"kind\": \"conflict\", \"retryable\": false, \"task_ref\": null}",
+      "name": "b23.idempotency.same_key_cross_project_conflict",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"alpha_claim_task\": \"b23-alpha-shared\", \"beta_claim_same_key\": null}",
+      "name": "b23.idempotency.project_scoped_task_refs",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"v1_cross\": 404, \"v1_missing\": 404, \"v1_reverse\": 404, \"v2_detail\": 404, \"v2_tree\": 404}",
+      "name": "b23.cross_project.read_non_disclosure",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"alice_cancel_beta\": 404, \"bob_cancel_alpha\": 404, \"bob_file_alpha\": 404, \"bob_prepare_alpha\": 404}",
+      "name": "b23.cross_project.control_prepare_denied",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"v1_alice\": [\"project_alpha\"], \"v1_bob\": [\"project_beta\"], \"v2_projects_bob\": [\"project_beta\"], \"v2_view_bob\": [\"project_beta\"]}",
+      "name": "b23.cross_project.list_scoped",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"alpha\": {\"count\": 3, \"error\": null}, \"beta\": {\"count\": 3, \"error\": null}, \"cross_project_subscribe\": 404, \"errors\": []}",
+      "name": "b23.events.parallel_ordered_per_project",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"alpha_admitted\": true, \"beta_admitted\": false, \"beta_exceeded\": [{\"dimension\": \"cores\", \"limit\": 1, \"requested\": 2, \"scope\": \"capacity\"}], \"beta_reason\": \"capacity_cores\", \"capacity\": {\"available\": true, \"concurrency\": 2, \"cores\": 1, \"memory_mb\": 512, \"source\": \"\", \"storage_bytes\": 10000000}, \"occupancy_after_two_requests\": {\"by_state\": {\"reserved\": 1}, \"concurrency\": 1, \"cores\": 1, \"memory_mb\": 0, \"reservations\": 1, \"storage_bytes\": 0}, \"shared_node\": true}",
+      "name": "b23.quota.shared_node_capacity",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"rows\": [\"nmr\", \"thermochemistry\"]}",
+      "name": "b23.cross_domain.unified_semantics",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"missing\": {\"nmr_experimental_spectrum_acquired\": null, \"reason\": \"constructed fixtures reused; no new QC was launched and no spectrum was acquired\", \"thermochemistry_real_qc_energy\": null}, \"units\": [{\"chemical_shift\": \"ppm\", \"isotropic_shielding\": \"ppm\", \"temperature\": \"K\"}, {\"derived_energy_unit\": \"kcal_per_mol\", \"gibbs_energy\": \"hartree\", \"mixing_entropy\": \"kcal/(mol*K)\", \"t_s_mix\": \"kcal/mol\", \"temperature\": \"K\"}]}",
+      "name": "b23.cross_domain.units_and_provenance",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"all_frozen\": false, \"nmr_new_qc_calls\": 0, \"reason\": \"c_t40a_absent\", \"required_domains\": [\"nmr\", \"thermo\", \"selectivity\"], \"selectivity_max_task_refs\": 1, \"selectivity_new_task_refs\": 0, \"thermo_new_qc_calls\": 0}",
+      "name": "b23.budget.three_rows_reconcile",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"candidates\": [], \"reason\": \"c_t40a_absent\", \"result\": \"NOT_VERIFIED\"}",
+      "name": "b23.b23b.c_t40a_absent",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"gating\": {\"B23b_gap\": \"NOT_VERIFIED(c_t40a_absent)\", \"C-T40a\": \"B23a\", \"H6\": \"not_fed\", \"not\": \"B23\"}, \"identity\": {\"phase\": \"experience:selectivity\", \"scenario\": \"experience:cross-domain-live\", \"scenario_key\": \"experience:cross-domain-live/selectivity\", \"subcase\": \"selectivity\"}, \"published_at\": \"2026-10-23T10:33:41Z\", \"published_before_dispatch\": true}",
+      "name": "b23.dependencies.external_edges",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"b23b\": {\"phase\": \"experience:selectivity\", \"scenario\": \"experience:cross-domain-live\", \"scenario_key\": \"experience:cross-domain-live/selectivity\", \"subcase\": \"selectivity\"}, \"cross_domain\": {\"phase\": \"experience:selectivity\", \"scenario\": \"experience:cross-domain-live\", \"scenario_key\": \"experience:cross-domain-live/selectivity\", \"subcase\": \"selectivity\"}, \"extensions\": {\"phase\": \"experience:selectivity\", \"scenario\": \"experience:cross-domain-live\", \"scenario_key\": \"experience:cross-domain-live/selectivity\", \"subcase\": \"selectivity\"}}",
+      "name": "b23.identity.single_registered_identity",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"error\": null, \"file\": 401, \"line_count\": 16, \"permission_changed_after_revocation\": true, \"prepare\": 401, \"read\": 401, \"received_event_before_revocation\": true, \"stream_thread_stopped\": true}",
+      "name": "b23.revocation.key.stops_events_and_artifacts",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"error\": null, \"file\": 401, \"line_count\": 16, \"permission_changed_after_revocation\": true, \"prepare\": 401, \"read\": 401, \"received_event_before_revocation\": true, \"stream_thread_stopped\": true}",
+      "name": "b23.revocation.project.stops_events_and_artifacts",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": null,
+    "harness_revision": "a822ed7ce37f0e2577bf239d7af5eeb327e41a97777919c40ebe5a6a01ef33d2",
+    "server_revision": "1ff72bd45ba6eac7d0e8984b2e0e73c260b26807"
+  },
+  "candidate_revision": "1ff72bd45ba6eac7d0e8984b2e0e73c260b26807",
+  "command": [
+    "/ACPServer/acp2-development/venvs/b/bin/python",
+    "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py",
+    "--scenario",
+    "multitenant",
+    "--phase",
+    "multitenant:two-project",
+    "--controller",
+    "http://127.0.0.1:18784",
+    "--fixture",
+    "/ACPServer/acp2-development/data/b/fixtures/multi-b23.json",
+    "--out",
+    "reports/acp2_implementation/bb45a46/B/B23",
+    "--timeout",
+    "1800"
+  ],
+  "contract_version": "1.3.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "live",
+  "exit_code": 0,
+  "extensions": {
+    "acceptance.operation_class": "control",
+    "acceptance.target": "local",
+    "b23.accounts": {
+      "alice": {
+        "account_id": "acct_2b8456eff88ea5ca",
+        "principal_id": "principal_b23_alice"
+      },
+      "bob": {
+        "account_id": "acct_0b2e7010ddb00f1f",
+        "principal_id": "principal_b23_bob"
+      }
+    },
+    "b23.artifacts": [
+      {
+        "path": "b23b-row.json",
+        "sha256": "a95216aeadf8940b4629683de1fc05d2bdeabb6572a96c4360183921f2372748",
+        "size_bytes": 1136
+      },
+      {
+        "path": "budget-rows.json",
+        "sha256": "208c3260e9b83423aef97dbe366c5f07e1b53f23165c26141f3bb57d321c7bac",
+        "size_bytes": 2608
+      },
+      {
+        "path": "cross-domain-consistency.json",
+        "sha256": "3a8550f33dc37ea9fabf9a70d10f121e19022938165db5d8352600f326e6249f",
+        "size_bytes": 3269
+      },
+      {
+        "path": "dependency-edges.json",
+        "sha256": "c2f97d5f1c19ed49ed7d89f9057eb55295146a0f87aeaca3229d5999e19ecfb4",
+        "size_bytes": 1491
+      },
+      {
+        "path": "measurements.json",
+        "sha256": "e680668fd487d02df37d7cc5058e63c55cfc9368ea270097020b83e2d160b09d",
+        "size_bytes": 4197
+      },
+      {
+        "path": "multitenant-two-project.json",
+        "sha256": "67cfe1b9edc0af1440e2b40cfd5717a6eee7f325629f50991be1e454917f477f",
+        "size_bytes": 17919
+      },
+      {
+        "path": "p4-sub-delivery-sync.json",
+        "sha256": "8e7277fbc84db9cbab43bcb49fddb6535ef978204cf1bcc6c126287714b6e370",
+        "size_bytes": 2002
+      }
+    ],
+    "b23.controller": "http://127.0.0.1:18784",
+    "b23.dependencies": "dependency-edges.json",
+    "b23.fixture": "/ACPServer/acp2-development/data/b/fixtures/multi-b23.json",
+    "b23.identity": {
+      "phase": "experience:selectivity",
+      "scenario": "experience:cross-domain-live",
+      "scenario_key": "experience:cross-domain-live/selectivity",
+      "subcase": "selectivity"
+    },
+    "b23.matrix": "multitenant-two-project.json",
+    "b23.measurements": "measurements.json",
+    "b23.principal_scope": {
+      "alpha": "principal_b23_alice",
+      "beta": "principal_b23_bob"
+    }
+  },
+  "finished_at": "2026-10-23T10:44:44Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "B",
+  "phase": "multitenant:two-project",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "20261023T104437Z-1519129-4a09b392",
+  "scenario": "multitenant",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-23T10:44:37Z",
+  "submission_id": null,
+  "usage": null
+}

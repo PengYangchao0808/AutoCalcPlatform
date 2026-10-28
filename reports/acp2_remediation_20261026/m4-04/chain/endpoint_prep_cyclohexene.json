@@ -1,0 +1,195 @@
+{
+  "adr_step_index": 1,
+  "adr_task_kind": "conformer_search",
+  "attempt": 1,
+  "bounded_alternative": "alt_endpoint_prep_single_conformation",
+  "complete": true,
+  "duration_seconds": 1538.98,
+  "entry": "legacy_task_core",
+  "error": null,
+  "executed_task_kind": "optimize",
+  "level": {
+    "basis": "def2-TZVP",
+    "charge": 0,
+    "method": "wB97X-D4",
+    "multiplicity": 1
+  },
+  "native_files": [
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_cyclohexene/optimize.out",
+      "path": "optimize.out",
+      "sha256": "de4706e477dffab0c344940d559cd0a7982d06ee31e3e20d5aafa04a1e8dac1f",
+      "size_bytes": 867829
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_cyclohexene/optimize.xyz",
+      "path": "optimize.xyz",
+      "sha256": "9765432038945496207b096e238a36abddd0bf49ca765960b7c95c7515c63346",
+      "size_bytes": 1326
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_cyclohexene/optimize_trj.xyz",
+      "path": "optimize_trj.xyz",
+      "sha256": "3337e56e7711354f84246925a73b49ca9584f52ae20f57047f2e67642dfac149",
+      "size_bytes": 21072
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_cyclohexene/optimize.inp",
+      "path": "optimize.inp",
+      "sha256": "715110f5623c8275f8e706f1987b57a570bb0441c576d38f16c6c5083c0c6e36",
+      "size_bytes": 896
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_cyclohexene/optimize.property.txt",
+      "path": "optimize.property.txt",
+      "sha256": "04f32eae5ca3d15f202e00339f7d45393c4edad4eb667d6507b9adaed3c9478f",
+      "size_bytes": 202959
+    }
+  ],
+  "products": [],
+  "receipt": null,
+  "release_digest": "50bc7eae49ab21652222b38a574b40de6ff1084ed40660b8b72400eb450257cf",
+  "release_id": "14ddbc6078bb38af",
+  "schema": "acp2.m4-04.step.v1",
+  "status": "completed",
+  "step_id": "endpoint_prep_cyclohexene",
+  "task_ref": "20261027_940_endpoint_prep_cyclohexene",
+  "task_result": {
+    "artifacts": [
+      {
+        "checksum": "sha256:715110f5623c8275f8e706f1987b57a570bb0441c576d38f16c6c5083c0c6e36",
+        "path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_cyclohexene/optimize.inp",
+        "source": "orca",
+        "type": "output"
+      },
+      {
+        "checksum": "sha256:de4706e477dffab0c344940d559cd0a7982d06ee31e3e20d5aafa04a1e8dac1f",
+        "path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_cyclohexene/optimize.out",
+        "source": "orca",
+        "type": "log"
+      }
+    ],
+    "complete": true,
+    "coordinates": [
+      [
+        1.304628,
+        0.668451,
+        -0.207971
+      ],
+      [
+        -0.03308,
+        1.347836,
+        -0.076199
+      ],
+      [
+        -1.17222,
+        0.692674,
+        0.120958
+      ],
+      [
+        -1.264363,
+        -0.808995,
+        0.195325
+      ],
+      [
+        0.009319,
+        -1.481063,
+        -0.317567
+      ],
+      [
+        1.247705,
+        -0.789147,
+        0.249975
+      ],
+      [
+        2.052442,
+        1.220017,
+        0.371715
+      ],
+      [
+        1.63688,
+        0.722439,
+        -1.253006
+      ],
+      [
+        -0.047964,
+        2.432903,
+        -0.14407
+      ],
+      [
+        -2.096777,
+        1.254091,
+        0.231401
+      ],
+      [
+        -2.132551,
+        -1.149402,
+        -0.378982
+      ],
+      [
+        -1.456295,
+        -1.108339,
+        1.234036
+      ],
+      [
+        0.004885,
+        -2.543876,
+        -0.058837
+      ],
+      [
+        0.035058,
+        -1.418327,
+        -1.411852
+      ],
+      [
+        2.157214,
+        -1.317597,
+        -0.049995
+      ],
+      [
+        1.205119,
+        -0.821666,
+        1.34507
+      ]
+    ],
+    "energy_hartree": -234.865155681686,
+    "errors": [],
+    "frequencies": [],
+    "metadata": {},
+    "payload": {
+      "optimization_status": "converged",
+      "trajectory_ref": {
+        "path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_cyclohexene/optimization_trajectory.json",
+        "source": "optimization_trajectory",
+        "type": "trajectory"
+      }
+    },
+    "provenance": {
+      "backend": "orca",
+      "input_signature": "/ACPServer/acp2-runs/remediation/m4-04/da/inputs/cyclohexene.xyz",
+      "method": "wB97X-D4",
+      "version": "unknown"
+    },
+    "schema_version": 1,
+    "status": "completed",
+    "symbols": [
+      "C",
+      "C",
+      "C",
+      "C",
+      "C",
+      "C",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H"
+    ],
+    "task": "optimize"
+  }
+}

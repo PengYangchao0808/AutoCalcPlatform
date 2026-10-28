@@ -1,0 +1,47 @@
+$ /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/bin/python -c 
+import json, pathlib, sys
+from importlib import metadata
+facts = {"dist_info_license": {}, "model_assets": {}, "missing": []}
+for dist in ("acp-web", "acp-worker"):
+    try:
+        info = metadata.distribution(dist)
+    except metadata.PackageNotFoundError:
+        facts["missing"].append(f"dist:{dist}")
+        continue
+    license_files = [
+        str(path)
+        for path in (info.files or [])
+        if str(path).endswith(("LICENSE", "LICENSE.txt", "LICENSE.md"))
+    ]
+    facts["dist_info_license"][dist] = license_files
+    if not license_files:
+        facts["missing"].append(f"license:{dist}")
+import cccp
+assets = pathlib.Path(cccp.__file__).parent / "analysis/nmr/model_assets"
+for name in ("NOTICE.md", "LICENSE-DP5", "atomic_reps.gz", "frag_reps.gz"):
+    path = assets / name
+    facts["model_assets"][name] = path.is_file()
+    if not path.is_file():
+        facts["missing"].append(f"asset:{name}")
+facts["py_typed"] = (pathlib.Path(cccp.__file__).parent / "py.typed").is_file()
+facts["agents_docs"] = [
+    str(path) for path in (pathlib.Path(cccp.__file__).parent).rglob("AGENTS.md")
+]
+if not facts["agents_docs"]:
+    facts["missing"].append("docs:cccp/AGENTS.md")
+import cccp.plugin.sdk
+facts["sdk"] = hasattr(cccp.plugin.sdk, "PluginOutputSpec") and hasattr(
+    cccp.plugin.sdk, "invoke_capability"
+)
+if not facts["sdk"]:
+    facts["missing"].append("sdk:cccp.plugin.sdk")
+import acp.api.schemas
+facts["schema_module"] = True
+print(json.dumps(facts))
+
+exit=0
+--- stdout ---
+{"dist_info_license": {"acp-web": ["acp_web-0.3.0.dist-info/LICENSE", "acp_web_assets/js/vendor/3Dmol-LICENSE"], "acp-worker": ["acp_worker-0.3.0.dist-info/LICENSE"]}, "model_assets": {"NOTICE.md": true, "LICENSE-DP5": true, "atomic_reps.gz": true, "frag_reps.gz": true}, "missing": [], "py_typed": true, "agents_docs": ["/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/AGENTS.md", "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/backends/AGENTS.md", "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/core/AGENTS.md", "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/io/AGENTS.md", "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/pipeline/AGENTS.md", "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/qc/AGENTS.md", "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/qc/cluster/AGENTS.md", "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/qc/interfaces/AGENTS.md", "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/cccp/utils/AGENTS.md"], "sdk": true, "schema_module": true}
+
+--- stderr ---
+

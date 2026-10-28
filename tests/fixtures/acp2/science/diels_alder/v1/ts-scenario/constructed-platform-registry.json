@@ -1,0 +1,18 @@
+{
+  "constructed": true,
+  "entries": [
+    {
+      "constructed": true,
+      "id": "da-runtime",
+      "note": "constructed da-runtime row; the real platform row is unpublished"
+    },
+    {
+      "constructed": true,
+      "id": "da-research-live",
+      "note": "constructed da-research-live row; the real platform row is unpublished"
+    }
+  ],
+  "note": "CONSTRUCTED FIXTURE \u2014 not a platform-issued registry. It exercises the A-17 lookup path. The real da-runtime/da-research-live registry is unpublished.",
+  "schema": "acp2.science.platform-registry",
+  "schema_version": 1
+}

@@ -1,0 +1,20 @@
+{
+  "products": [
+    {
+      "id": "thermo_report",
+      "kind": "thermo_report",
+      "label": "Thermochemistry report",
+      "path": "thermo.json"
+    },
+    {
+      "id": "thermo_ensemble",
+      "kind": "report",
+      "label": "Ensemble thermochemistry",
+      "path": "thermochemistry_ensemble.json"
+    }
+  ],
+  "status": "completed",
+  "task_id": "m406b-thermo-crossdomain",
+  "version": 2,
+  "workflow": "thermochemistry"
+}

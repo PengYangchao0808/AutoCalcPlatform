@@ -1,0 +1,28 @@
+{
+  "controller_url": "http://127.0.0.1:47435",
+  "task_id": "20261027_211539_001_m402-singlepoint",
+  "attempt": 1,
+  "project_id": "c7e4f5b2-16b3-4701-870b-bd17485c7c10",
+  "release_id": "910ca9d3aff95737",
+  "launch": {
+    "command": "/usr/bin/python3.11",
+    "args": [
+      "-m",
+      "acp.cli",
+      "mcp",
+      "serve",
+      "--controller",
+      "http://127.0.0.1:47435"
+    ],
+    "cwd": "/ACPServer/acp2-remediation-integration",
+    "env": {
+      "PYTHONPATH": "/ACPServer/acp2-remediation-integration/src"
+    },
+    "timeoutMs": 30000
+  },
+  "repo_root": "/ACPServer/acp2-remediation-integration",
+  "workbench_modules": [
+    "frontend/js/client/resource-store.js",
+    "frontend/js/client/job-detail-query.js"
+  ]
+}

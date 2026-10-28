@@ -26,13 +26,16 @@ from acp.scheduler.structure_source_store import (
     RevisionConflictError,
     StructureSourceStore,
 )
+from acp_services.contracts.access import AccessAction
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 _cache_lock = threading.Lock()
-_singletons: dict[str, tuple[StructureSourceStore, StructureSourceIndexer]] = {}
+_singletons: dict[
+    str, tuple[StructureSourceStore, StructureSourceIndexer, _SourceOrganizationPort]
+] = {}
 
 
 class _MetadataPatchBody(BaseModel):
@@ -93,8 +96,138 @@ def _manager(request: Request) -> Any:
     return manager
 
 
-def _get_stores(request: Request) -> tuple[StructureSourceStore, StructureSourceIndexer]:
-    """Lazy-init singleton pair keyed by run_root."""
+def _require_structure_source_access(
+    request: Request,
+    *,
+    action: str,
+    project_id: str | None = None,
+    resource_id: str = "",
+) -> None:
+    """Authorize one structure-source entry before any store/indexer work.
+
+    Running before :func:`_get_stores` guarantees a denial creates no state (the
+    singleton store/indexer is never initialized).  The 403 body shape matches
+    the existing error contract.
+    """
+    from acp_services.workspace.entry_authz import EntryClass, default_entry_authorizer
+
+    authorizer = getattr(request.app.state, "entry_authorizer", None) or default_entry_authorizer()
+    decision = authorizer.authorize(
+        EntryClass.STRUCTURE_SOURCES,
+        project_id=project_id,
+        action=action,
+        resource_id=resource_id or (project_id or ""),
+    )
+    if not decision.allowed:
+        raise HTTPException(status_code=decision.http_status, detail=decision.error_detail())
+
+
+class _SourceOrganizationPort:
+    """Typed entry for structure-source organization writes (todo 84).
+
+    Discovery operations delegate to the todo-11 ``DataResourcePort``
+    (``upsert_sources`` / ``list_sources`` / ``source_uid``); the organization
+    operations (metadata, tags, candidate status/assessment, trash) delegate to
+    the single ``StructureSourceStore`` implementation, so no second writer
+    exists.  Every v2 structure-source **write** routes through this object.
+    """
+
+    def __init__(self, data_port: Any, source_store: StructureSourceStore) -> None:
+        self._data = data_port
+        self._store = source_store
+
+    def upsert_sources(self, request: Any) -> int:
+        return self._data.upsert_sources(request)
+
+    def list_sources(self, job_id: str) -> Any:
+        return self._data.list_sources(job_id)
+
+    def source_uid(self, job_id: str, relative_path: str) -> str:
+        return self._data.source_uid(job_id, relative_path)
+
+    def batch_update_metadata(self, items: list[dict[str, Any]]) -> dict[str, Any]:
+        return self._store.batch_update_metadata(items)
+
+    def trash_uids(self, project_id: str | None) -> list[str]:
+        return self._store.trash_uids(project_id)
+
+    def purge_candidates(
+        self,
+        source_uids: list[str],
+        *,
+        project_id: str | None = None,
+        actor: str = "user",
+    ) -> dict[str, Any]:
+        return self._store.purge_candidates(source_uids, project_id=project_id, actor=actor)
+
+    def set_candidate_status(
+        self,
+        source_uid: str,
+        status: str,
+        *,
+        reason: str = "",
+        scope: str = "project",
+        expected_revision: int,
+        actor: str = "user",
+    ) -> dict[str, Any]:
+        return self._store.set_candidate_status(
+            source_uid,
+            status,
+            reason=reason,
+            scope=scope,
+            expected_revision=expected_revision,
+            actor=actor,
+        )
+
+    def add_assessment(
+        self,
+        source_uid: str,
+        *,
+        conclusion: str,
+        reason_code: str,
+        scope: str,
+        note: str = "",
+        evidence: list[dict[str, Any]] | None = None,
+        attachment_refs: list[str] | None = None,
+        actor: str = "user",
+        version_id: str | None = None,
+    ) -> dict[str, Any]:
+        return self._store.add_assessment(
+            source_uid,
+            conclusion=conclusion,
+            reason_code=reason_code,
+            scope=scope,
+            note=note,
+            evidence=evidence,
+            attachment_refs=attachment_refs,
+            actor=actor,
+            version_id=version_id,
+        )
+
+    def set_custom_name(
+        self, source_uid: str, custom_name: str | None, expected_revision: int
+    ) -> dict[str, Any]:
+        return self._store.set_custom_name(source_uid, custom_name, expected_revision)
+
+    def add_tags(self, source_uid: str, tags: list[str], expected_revision: int) -> dict[str, Any]:
+        return self._store.add_tags(source_uid, tags, expected_revision)
+
+    def remove_tags(
+        self, source_uid: str, tags: list[str], expected_revision: int
+    ) -> dict[str, Any]:
+        return self._store.remove_tags(source_uid, tags, expected_revision)
+
+    def rename_project_tag(self, project_id: str, source_key: str, target_display: str) -> int:
+        return self._store.rename_project_tag(project_id, source_key, target_display)
+
+    def remove_project_tag(self, project_id: str, tag_key: str) -> int:
+        return self._store.remove_project_tag(project_id, tag_key)
+
+
+def _ensure_ports(
+    request: Request,
+) -> tuple[StructureSourceStore, StructureSourceIndexer, _SourceOrganizationPort]:
+    """Lazy-init the singleton store/indexer/port triple keyed by run_root."""
     run_root = getattr(request.app.state, "run_root", "")
     with _cache_lock:
         if run_root in _singletons:
@@ -102,15 +235,40 @@ def _get_stores(request: Request) -> tuple[StructureSourceStore, StructureSource
         db_path = getattr(request.app.state, "db_path", "")
         source_store = StructureSourceStore(db_path)
         manager = _manager(request)
+        from acp.services_data_bootstrap import build_data_resource_port
+
+        data_port = build_data_resource_port(
+            run_root,
+            db_path=db_path,
+            source_store=source_store,
+            cache=getattr(manager, "structure_cache", None),
+        )
         indexer = StructureSourceIndexer(
             store=manager.store,
             source_store=source_store,
             run_root=Path(run_root),
             structure_cache=getattr(manager, "structure_cache", None),
+            data_port=data_port,
         )
         indexer.ensure_started()
-        _singletons[run_root] = (source_store, indexer)
-        return source_store, indexer
+        _singletons[run_root] = (
+            source_store,
+            indexer,
+            _SourceOrganizationPort(data_port, source_store),
+        )
+        return _singletons[run_root]
+
+
+def _get_stores(request: Request) -> tuple[StructureSourceStore, StructureSourceIndexer]:
+    """Lazy-init singleton pair keyed by run_root."""
+    source_store, indexer, _ = _ensure_ports(request)
+    return source_store, indexer
+
+
+def _source_organization_port(request: Request) -> _SourceOrganizationPort:
+    """Return the typed structure-source write entry for this request."""
+    _, _, port = _ensure_ports(request)
+    return port
 
 
 def _parse_tags_param(tags: str | None) -> list[str] | None:
@@ -142,6 +300,11 @@ def get_facets(
     usage_status: str | None = None,
     include_inactive: bool = False,
 ) -> dict[str, Any]:
+    _require_structure_source_access(
+        request,
+        action=AccessAction.READ,
+        project_id=(project_id if not all_projects else None),
+    )
     source_store, indexer = _get_stores(request)
     parsed_tags = _parse_tags_param(tags)
     if source_kind and source_group:
@@ -174,7 +337,8 @@ def get_facets(
 
 @router.post("/structure-sources/batch-metadata")
 def batch_metadata(request: Request, body: _BatchBody) -> dict[str, Any]:
-    source_store, _ = _get_stores(request)
+    _require_structure_source_access(request, action=AccessAction.WRITE, resource_id="batch")
+    port = _source_organization_port(request)
     items = []
     for item in body.items:
         row: dict[str, Any] = {"source_uid": item.source_uid}
@@ -186,7 +350,7 @@ def batch_metadata(request: Request, body: _BatchBody) -> dict[str, Any]:
             row["remove_tags"] = item.remove_tags
         row["expected_revision"] = item.expected_revision or 0
         items.append(row)
-    result = source_store.batch_update_metadata(items)
+    result = port.batch_update_metadata(items)
     succeeded = result.get("succeeded", [])
     failed = [
         {"source_uid": f["source_uid"], "error": f.get("error", "")}
@@ -202,14 +366,13 @@ def batch_metadata(request: Request, body: _BatchBody) -> dict[str, Any]:
 @router.post("/structure-sources/trash/purge")
 def purge_structure_source_trash(request: Request, body: _TrashPurgeBody) -> dict[str, Any]:
     """Purge selected or all project trash entries without deleting source jobs."""
-    source_store, _ = _get_stores(request)
-    source_uids = (
-        source_store.trash_uids(body.project_id)
-        if body.source_uids is None
-        else body.source_uids
+    _require_structure_source_access(
+        request, action=AccessAction.WRITE, project_id=body.project_id, resource_id="trash"
     )
+    port = _source_organization_port(request)
+    source_uids = port.trash_uids(body.project_id) if body.source_uids is None else body.source_uids
     try:
-        return source_store.purge_candidates(
+        return port.purge_candidates(
             source_uids,
             project_id=body.project_id,
             actor=body.actor,
@@ -246,6 +409,11 @@ def list_structure_sources(
     cursor: str | None = None,
     context_workflow: str | None = None,
 ) -> dict[str, Any]:
+    _require_structure_source_access(
+        request,
+        action=AccessAction.READ,
+        project_id=(project_id if not all_projects else None),
+    )
     source_store, indexer = _get_stores(request)
     parsed_tags = _parse_tags_param(tags)
     if source_kind and source_group:
@@ -283,6 +451,7 @@ def list_structure_sources(
 
 @router.get("/structure-sources/{source_uid}")
 def get_structure_source(request: Request, source_uid: str) -> dict[str, Any]:
+    _require_structure_source_access(request, action=AccessAction.READ, resource_id=source_uid)
     source_store, _ = _get_stores(request)
     projection = source_store.get(source_uid)
     if projection is None:
@@ -292,6 +461,7 @@ def get_structure_source(request: Request, source_uid: str) -> dict[str, Any]:
 
 @router.get("/structure-sources/{source_uid}/candidate")
 def get_candidate(request: Request, source_uid: str) -> dict[str, Any]:
+    _require_structure_source_access(request, action=AccessAction.READ, resource_id=source_uid)
     source_store, _ = _get_stores(request)
     try:
         return source_store.get_candidate_detail(source_uid)
@@ -303,9 +473,10 @@ def get_candidate(request: Request, source_uid: str) -> dict[str, Any]:
 def patch_candidate_status(
     request: Request, source_uid: str, body: _CandidateStatusBody
 ) -> dict[str, Any]:
-    source_store, _ = _get_stores(request)
+    _require_structure_source_access(request, action=AccessAction.WRITE, resource_id=source_uid)
+    port = _source_organization_port(request)
     try:
-        return source_store.set_candidate_status(
+        return port.set_candidate_status(
             source_uid,
             body.status,
             expected_revision=body.expected_revision,
@@ -325,9 +496,10 @@ def patch_candidate_status(
 def add_candidate_assessment(
     request: Request, source_uid: str, body: _AssessmentBody
 ) -> dict[str, Any]:
-    source_store, _ = _get_stores(request)
+    _require_structure_source_access(request, action=AccessAction.WRITE, resource_id=source_uid)
+    port = _source_organization_port(request)
     try:
-        return source_store.add_assessment(
+        return port.add_assessment(
             source_uid,
             conclusion=body.conclusion,
             reason_code=body.reason_code,
@@ -345,7 +517,9 @@ def add_candidate_assessment(
 
 @router.patch("/structure-sources/{source_uid}/metadata")
 def patch_metadata(request: Request, source_uid: str, body: _MetadataPatchBody) -> dict[str, Any]:
+    _require_structure_source_access(request, action=AccessAction.WRITE, resource_id=source_uid)
     source_store, _ = _get_stores(request)
+    port = _source_organization_port(request)
     projection = source_store.get(source_uid)
     if projection is None:
         raise HTTPException(status_code=404, detail=f"Source not found: {source_uid}")
@@ -361,19 +535,19 @@ def patch_metadata(request: Request, source_uid: str, body: _MetadataPatchBody) 
 
     try:
         if name_explicit:
-            source_store.set_custom_name(source_uid, body.custom_name, expected)
+            port.set_custom_name(source_uid, body.custom_name, expected)
             current_projection = source_store.get(source_uid)
             if current_projection:
                 expected = current_projection.get("metadata_revision", 0) or 0
 
         if body.add_tags is not None:
-            source_store.add_tags(source_uid, body.add_tags, expected)
+            port.add_tags(source_uid, body.add_tags, expected)
             current_projection = source_store.get(source_uid)
             if current_projection:
                 expected = current_projection.get("metadata_revision", 0) or 0
 
         if body.remove_tags is not None:
-            source_store.remove_tags(source_uid, body.remove_tags, expected)
+            port.remove_tags(source_uid, body.remove_tags, expected)
     except RevisionConflictError as exc:
         raise HTTPException(
             status_code=409,
@@ -395,6 +569,7 @@ def patch_metadata(request: Request, source_uid: str, body: _MetadataPatchBody) 
 
 @router.get("/projects/{project_id}/structure-tags")
 def list_project_tags(request: Request, project_id: str) -> dict[str, Any]:
+    _require_structure_source_access(request, action=AccessAction.READ, project_id=project_id)
     source_store, _ = _get_stores(request)
     tags = source_store.project_tag_counts(project_id)
     return {"tags": tags}
@@ -402,13 +577,15 @@ def list_project_tags(request: Request, project_id: str) -> dict[str, Any]:
 
 @router.post("/projects/{project_id}/structure-tags/rename")
 def rename_project_tag(request: Request, project_id: str, body: _TagRenameBody) -> dict[str, Any]:
-    source_store, _ = _get_stores(request)
-    affected = source_store.rename_project_tag(project_id, body.source, body.target)
+    _require_structure_source_access(request, action=AccessAction.WRITE, project_id=project_id)
+    port = _source_organization_port(request)
+    affected = port.rename_project_tag(project_id, body.source, body.target)
     return {"affected": affected}
 
 
 @router.post("/projects/{project_id}/structure-tags/remove")
 def remove_project_tag(request: Request, project_id: str, body: _TagRemoveBody) -> dict[str, Any]:
-    source_store, _ = _get_stores(request)
-    affected = source_store.remove_project_tag(project_id, body.tag)
+    _require_structure_source_access(request, action=AccessAction.WRITE, project_id=project_id)
+    port = _source_organization_port(request)
+    affected = port.remove_project_tag(project_id, body.tag)
     return {"affected": affected}

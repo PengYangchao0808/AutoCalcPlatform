@@ -1,0 +1,64 @@
+{
+  "artifacts": [
+    {
+      "path": "WORK/04_FREQ/freq.inp",
+      "sha256": "f55b4b9fef8518d4f3a6a513e1e45a1a2ef905569cefba6dc4bfe402a21ea8bb",
+      "source": "orca",
+      "type": "output"
+    },
+    {
+      "path": "WORK/04_FREQ/freq.out",
+      "sha256": "9d9481826c79759bbfbe4fd3e161553ea40cffe5bc25ef230630d70df131e916",
+      "source": "orca",
+      "type": "log"
+    },
+    {
+      "path": "WORK/04_FREQ/normal_modes.json",
+      "sha256": "6bda7b8a296ed70d785b68ebb880dba876413fb7d7d929217176bedd65fb4b8f",
+      "source": "orca",
+      "type": "normal_modes"
+    }
+  ],
+  "attempt": 1,
+  "code_release": "0.2.0",
+  "config_digest": "sha256:d309ab7b53e4ad4e59b32410cf37fbb80f4ed029546d4ee27e98dee8dd204ab1",
+  "coords": [
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.74
+    ]
+  ],
+  "dependency_artifacts": [],
+  "energy": -1.116773191779,
+  "errors": [],
+  "frequencies": [
+    5038.6
+  ],
+  "index": 0,
+  "job_id": "20261023_111946_003_frequency",
+  "kind": "frequency",
+  "metadata": {
+    "n_imaginary": 0
+  },
+  "provenance": {
+    "backend": "orca",
+    "input_signature": "/ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/input.xyz",
+    "method": "HF",
+    "profile": "",
+    "version": "unknown"
+  },
+  "schema_version": 1,
+  "status": "completed",
+  "step_id": "step_0_frequency",
+  "step_identity": "v2:63b46f19e8ae27ee28c8185e0adbe748",
+  "symbols": [
+    "H",
+    "H"
+  ]
+}

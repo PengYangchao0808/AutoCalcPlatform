@@ -1,0 +1,3 @@
+## real env c_accept baseline 60
+c_accept: NOT_VERIFIED(harness_not_delivered): /ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py absent (and C harness absent)
+rc=2

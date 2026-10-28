@@ -1,0 +1,19 @@
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -84,6 +84,16 @@
+ # locked by tests/test_packaging_assets.py).
+ [tool.setuptools.package-data]
+ "acp.nmr" = ["models/*"]
++# --- C08-s0 (T56/C39a) first-batch CCCP asset rule -------------------------
++# T55 relocates the DP5/FCHL artifacts (atomic_reps.gz, frag_reps.gz, *.p,
++# tms_references.txt, LICENSE-DP5, NOTICE.md) from `acp/nmr/models/` to the
++# single CCCP asset location `src/cccp/analysis/nmr/model_assets/`
++# (a data dir with no __init__.py). Keying package-data to the owning CCCP
++# package makes an independently-built `cccp` wheel ship them. The glob
++# matches nothing until the T55 move lands, so this hunk is safe to apply in
++# the same integration batch as T55. T39 removes the stale `acp.nmr` line
++# above once the old directory is gone.
++"cccp.analysis.nmr" = ["model_assets/*"]
+ 
+ [tool.pytest.ini_options]
+ testpaths = ["tests"]

@@ -1,0 +1,32 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______________ test_migration_scope_audit_reaches_migration_files ______________
+
+    def test_migration_scope_audit_reaches_migration_files() -> None:
+        """⑥ The audit actually processes the migration files — no vacuous skip.
+    
+        Key migration files changed since *BASELINE* and several of them do NOT
+        exist at the baseline at all (created by the migration); the checks must
+        still run for them.
+        """
+        changed = _changed_migration_files()
+        expected = {
+            "src/cccp/calculation/errors.py",
+            "src/cccp/backends/orca.py",
+            "src/acp/calculations/contracts.py",
+            "src/acp/calculations/result_publication.py",
+        }
+        assert expected <= changed, f"migration audit scope lost files: {sorted(expected - changed)}"
+        post_baseline = {path for path in expected if not _in_baseline(path)}
+        assert post_baseline, "expected post-baseline files in the audited set (coverage proof)"
+>       assert _migration_audit_issues(changed) == [], "migration stations must be clean"
+E       AssertionError: migration stations must be clean
+E       assert ['  src/acp/c... (unaudited)'] == []
+E         
+E         Left contains one more item: '  src/acp/core/paths.py: changed outside registered migration stations (unaudited)'
+E         Use -v to get more diff
+
+tests/test_f4_scope_audit.py:2817: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_f4_scope_audit.py::test_migration_scope_audit_reaches_migration_files
+1 failed in 1.56s

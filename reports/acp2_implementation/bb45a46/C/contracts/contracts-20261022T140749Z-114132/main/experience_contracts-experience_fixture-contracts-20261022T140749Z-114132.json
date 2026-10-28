@@ -1,0 +1,161 @@
+{
+  "artifacts": [
+    {
+      "path": "contracts-report.json",
+      "sha256": "a0787747da8899c3645a90e77aa7c92a54798a76cc6abedd3f1e76105fd94552",
+      "size_bytes": 2803
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "16 document(s), errors=[]",
+      "name": "contracts.json_parse",
+      "status": "PASS"
+    },
+    {
+      "detail": "39 ref(s), errors=[]",
+      "name": "contracts.refs_resolve",
+      "status": "PASS"
+    },
+    {
+      "detail": "4 schema(s), errors=[]",
+      "name": "contracts.schema_dialect",
+      "status": "PASS"
+    },
+    {
+      "detail": "violations=[]",
+      "name": "contracts.no_secret_property_names",
+      "status": "PASS"
+    },
+    {
+      "detail": "errors=[]",
+      "name": "contracts.t02_t03_required_fields",
+      "status": "PASS"
+    },
+    {
+      "detail": "errors=['schema:missing_required:$:candidate_id']",
+      "name": "contracts.negative.missing_candidate_id",
+      "status": "PASS"
+    },
+    {
+      "detail": "errors=['$/properties/api_key']",
+      "name": "contracts.negative.api_key_property",
+      "status": "PASS"
+    },
+    {
+      "detail": "errors=['schema:enum:$.artifacts[0].availability']",
+      "name": "contracts.negative.unknown_availability",
+      "status": "PASS"
+    },
+    {
+      "detail": "errors=['schema:type:$.round:expected integer']",
+      "name": "contracts.negative.round_string",
+      "status": "PASS"
+    },
+    {
+      "detail": "errors=['schema:type:$.task_refs[0]:expected object']",
+      "name": "contracts.negative.bare_task_refs",
+      "status": "PASS"
+    },
+    {
+      "detail": "errors=[\"task_refs[0].project_id='proj-beta' != 'proj-alpha'\"]",
+      "name": "contracts.negative.wrong_project",
+      "status": "PASS"
+    },
+    {
+      "detail": "errors=['tool_not_in_allowlist']",
+      "name": "contracts.negative.unknown_tool",
+      "status": "PASS"
+    },
+    {
+      "detail": "errors=['payload_identity:approver']",
+      "name": "contracts.negative.illegal_approver",
+      "status": "PASS"
+    },
+    {
+      "detail": "errors=['plan_definition_digest_mismatch:sha256:32bd96dd1c8d2eb962a419590ff91ebf695adef1c587c147185f522be5422d9b != sha256:9999999999999999999999999999999999999999999999999999999999999999']",
+      "name": "contracts.negative.stale_digest",
+      "status": "PASS"
+    },
+    {
+      "detail": "errors=[]",
+      "name": "contracts.positive.proposal",
+      "status": "PASS"
+    },
+    {
+      "detail": "errors=[]",
+      "name": "contracts.positive.research_record",
+      "status": "PASS"
+    },
+    {
+      "detail": "errors=[]",
+      "name": "contracts.positive.view_model",
+      "status": "PASS"
+    },
+    {
+      "detail": "errors=[]",
+      "name": "contracts.positive.unknown_tool_positive",
+      "status": "PASS"
+    },
+    {
+      "detail": "errors=[]",
+      "name": "contracts.positive.illegal_request_positive",
+      "status": "PASS"
+    },
+    {
+      "detail": "errors=[]",
+      "name": "contracts.positive.stale_reference_positive",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+    "harness_revision": "906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+  "command": [
+    "/ACPServer/acp2-development/venvs/c/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "contracts",
+    "--timeout",
+    "300",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/contracts/contracts-20261022T140749Z-114132/main"
+  ],
+  "contract_version": "1.0.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "fixture",
+  "exit_code": 0,
+  "extensions": {
+    "experience.harness_contract_revision": "906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+    "experience.mode": "fixture",
+    "experience.product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+    "experience.run_id": "contracts-20261022T140749Z-114132",
+    "experience.scenario_key": "contracts",
+    "experience.subcase": null,
+    "experience.test_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec"
+  },
+  "finished_at": "2026-10-22T14:07:49Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:fixture",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "contracts-20261022T140749Z-114132",
+  "scenario": "experience:contracts",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T14:07:49Z",
+  "submission_id": null,
+  "usage": null
+}

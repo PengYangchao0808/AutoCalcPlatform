@@ -1,0 +1,41 @@
+{
+  "cas_matrix": {
+    "duplicate_round": true,
+    "event_idempotency": true,
+    "project_mismatch": true,
+    "revision_conflict": true,
+    "round_idempotency": true,
+    "stale_reference": true
+  },
+  "digest_matrix": {
+    "changes_on_input_budget_charge": true,
+    "changes_on_method_mapping": true,
+    "stable_on_appended_refs": true,
+    "stable_on_approval_ref": true,
+    "stable_on_approval_status": true,
+    "stable_on_display_name": true
+  },
+  "evidence_kind": "fixture",
+  "fixture_adapter": "rph/test/research-fixture-client.ts",
+  "live_b18a_rows": {
+    "proposal.live_resource_create": "NOT_VERIFIED(b18a_handoff)",
+    "record.live_cas_conflict": "NOT_VERIFIED(b18a_handoff)",
+    "record.live_project_isolation": "NOT_VERIFIED(b18a_handoff)",
+    "record.live_read_revision": "NOT_VERIFIED(b18a_handoff)",
+    "record.live_resource_create": "NOT_VERIFIED(b18a_handoff)"
+  },
+  "p2_mapping": {
+    "asserted_equal_to_bridge": true,
+    "no_local_db_file_shell": true,
+    "operations": [
+      "proposal.create",
+      "proposal.read",
+      "proposal.update_cas"
+    ]
+  },
+  "research_cases": 16,
+  "store_source": "rph/packages/research/src/store.ts",
+  "test_source": "rph/test/research-store.test.ts",
+  "workspace_failures": 0,
+  "workspace_tests": 57
+}

@@ -1,0 +1,19 @@
+{
+  "replay_after_termination": {
+    "cursor_after": "r1.NToxNzkyNzQ0NTIzLjEyOTcxOQ",
+    "replayed_events": 4,
+    "reset": false,
+    "reset_reason": ""
+  },
+  "schema": "acp2.b19b.cursor-replay.v1",
+  "session_a_cursor": "r1.MToxNzkyNzQ0NTIyLjExNTgxMQ",
+  "snapshot_event_count": 6,
+  "snapshot_event_ids": [
+    "b19:20261023_163522_001_b19-research-recovery:started",
+    "b19:20261023_163522_001_b19-research-recovery:progress:1",
+    "b19:ap_730c1f16a1a64dd8b33d1781cc0702ef:requested",
+    "b19:ap_730c1f16a1a64dd8b33d1781cc0702ef:approved",
+    "b19:ap_730c1f16a1a64dd8b33d1781cc0702ef:bound",
+    "b19:20261023_163522_001_b19-research-recovery:cancelled"
+  ]
+}

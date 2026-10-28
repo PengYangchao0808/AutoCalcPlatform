@@ -1,0 +1,56 @@
+diff --git a/docs/reference/next-change/acp2-contracts/manifest.json b/docs/reference/next-change/acp2-contracts/manifest.json
+index f15a6e4..ab634d9 100644
+--- a/docs/reference/next-change/acp2-contracts/manifest.json
++++ b/docs/reference/next-change/acp2-contracts/manifest.json
+@@ -3,7 +3,7 @@
+   "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+   "created_at": "2026-10-22T00:00:00Z",
+   "contract_version": "1.1.0",
+-  "contract_digest": "d0a338dc934b720253e4ca872b08b8c5b7a10b090c41387e1f4bdc8ecbe011d1",
++  "contract_digest": "5e712587ee6d4a8d3c13800632605817ffc23359a6ac1f3245b7c45c50a81f49",
+   "contract_digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\" for delivered contracts excluding manifest.json and runtime/baseline-lock.json (self-referential files).",
+   "baseline": {
+     "delivery_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+@@ -169,7 +169,7 @@
+       "owner": "B",
+       "status": "delivered",
+       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
+-      "sha256": "8b336a9bef671a5b219b9f2d62f7f6fe9c9f2c917cb0aa4110e542350c4d13b6",
++      "sha256": "5a502c9c83ef6035157750c4463f715db32666a3d88ef5f73a13e9dccbbcc161",
+       "delivered_by": "B00"
+     },
+     {
+@@ -337,7 +337,7 @@
+       "owner": "B",
+       "status": "delivered",
+       "delivered_by": "B06",
+-      "sha256": "89745da73977dcc7ac8fd87d88bd194701f944d2ee4d9a365ac232e710b26d70"
++      "sha256": "2a31b716f1b07ff73fc938d195c6b27fec9004e3d7a1808de4493396b888dd19"
+     }
+   ],
+   "deferred_capabilities": [
+diff --git a/docs/reference/next-change/acp2-contracts/runtime/cross-track-requests.v1.json b/docs/reference/next-change/acp2-contracts/runtime/cross-track-requests.v1.json
+index b8518ed..4c420c5 100644
+--- a/docs/reference/next-change/acp2-contracts/runtime/cross-track-requests.v1.json
++++ b/docs/reference/next-change/acp2-contracts/runtime/cross-track-requests.v1.json
+@@ -61,6 +61,20 @@
+         "docs/reference/next-change/acp2-contracts/experience/requests/B-req-06.md"
+       ],
+       "residual": "Not delivered by B06: this request is repo/CI/release publication scope, not runtime entry binding. Owner remains B25a with B12 consuming the static-asset manifest."
++    },
++    {
++      "request_id": "C-defect-scientific-evidence-token",
++      "from": "C",
++      "owner": "C",
++      "status": "open",
++      "step": "C",
++      "expected": "C-owned frontend/js/workbench/features/scientific-evidence.js must stop colliding with the B addModel token-ceiling guard: line 751 declares a local callback variable named token and calls token.fn(), which the guard's addModel-token regex flags as a token-ceiling bypass. Rename the local callback (or otherwise remove the token.fn() shape) without weakening the guard; the guard stays as-is.",
++      "evidence": [
++        "tests/test_frontend_sync_viewer_framing.py::test_add_model_result_restricted_methods_pin",
++        "frontend/js/workbench/features/scientific-evidence.js:751",
++        "C HEAD e03a9dd9f6897ca0a8d43e69a10b22a20097f05d (same failure: token.fn() name collision)"
++      ],
++      "residual": "Open and C-owned; B did not edit frontend/**. The skill is recorded NOT_VERIFIED for the integration candidate until C fixes it at its own HEAD; this row is the visible cross-track request, not a PASS."
+     }
+   ]
+ }

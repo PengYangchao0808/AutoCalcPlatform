@@ -1,0 +1,13 @@
+{
+  "actions": "read",
+  "identity": "auditor",
+  "read": {
+    "ok": true
+  },
+  "submit": {
+    "code": "http_403",
+    "message": "{\"code\":\"access_denied\",\"message\":\"entry 'scope' needs action 'write' but only ['read'] are available\",\"params\":{\"reason_code\":\"action_not_granted\",\"requested_project\":\"482b0aa0-7569-4fe4-b728-50c818a0eb8a\"},\"retryable\":false}",
+    "ok": false,
+    "status": 403
+  }
+}

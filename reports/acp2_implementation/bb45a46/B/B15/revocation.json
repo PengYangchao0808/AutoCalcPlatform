@@ -1,0 +1,20 @@
+{
+  "account": {
+    "error": null,
+    "line_count": 8,
+    "permission_changed_after_revocation": true,
+    "received_event_before_revocation": true,
+    "stream_thread_stopped": true
+  },
+  "key": {
+    "error": null,
+    "line_count": 8,
+    "permission_changed_after_revocation": true,
+    "received_event_before_revocation": true,
+    "stream_thread_stopped": true
+  },
+  "note": "The already-open scope subscription re-resolves the credential on every poll; a revoked key/account yields permission_changed and stops delivery. The next status read is 401. No process-local cache can bypass the recheck.",
+  "read_after_account_revoke": 401,
+  "read_after_key_revoke": 401,
+  "schema": "acp2.b15.revocation.v1"
+}

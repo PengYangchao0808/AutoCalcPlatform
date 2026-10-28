@@ -1,0 +1,16 @@
+{
+  "approval-budget/approval": {
+    "exit": 0,
+    "result": "PASS",
+    "run": "approval-budget-approval-20261023T050319Z-1204547-eedb842d.json"
+  },
+  "approval-budget/budget": {
+    "exit": 2,
+    "owner": "B17",
+    "reason": "b17_budget_not_implemented",
+    "result": "NOT_VERIFIED",
+    "run": "approval-budget-approval-20261023T050319Z-1204547-eedb842d.json"
+  },
+  "rule": "B16 closes only the approval branch; the budget branch remains B17's until cumulative reservation/settlement lands.",
+  "schema": "acp2.b16.exit-semantics.v1"
+}

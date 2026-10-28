@@ -27,6 +27,7 @@ Author: QCcalc Team
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import logging
 import os
@@ -41,10 +42,14 @@ from acp.scheduler.remote.ssh import SSHConnectionPool
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["CodeSyncer", "SyncResult", "build_sync_file_list"]
+__all__ = ["CodeSyncer", "SyncResult", "build_sync_file_list", "resolve_sync_source"]
 
 # Directories under ``src/acp/`` that are NOT needed on the execution side.
 _ACP_EXCLUDE_DIRS: frozenset[str] = frozenset({"api", "scheduler"})
+
+#: Packages that make up the execution tree.  A source checkout stores them
+#: under ``<root>/src``; an installed wheel places them at ``site-packages``.
+_SYNC_PACKAGES: tuple[str, ...] = ("acp", "acp_services", "cccp")
 
 # Globally excluded patterns (applied everywhere).
 _EXCLUDE_DIR_NAMES: frozenset[str] = frozenset(
@@ -53,9 +58,69 @@ _EXCLUDE_DIR_NAMES: frozenset[str] = frozenset(
 _EXCLUDE_FILE_SUFFIXES: tuple[str, ...] = (".pyc", ".pyo")
 
 
+def _is_source_tree(root: Path) -> bool:
+    """True when *root* is a checkout with the execution packages under ``src``."""
+    return any((root / "src" / name).is_dir() for name in _SYNC_PACKAGES)
+
+
+def _installed_package_root(name: str) -> Path | None:
+    """Return the installed package directory for *name*, or ``None``.
+
+    Mirrors ``acp.calculations.attempt_freeze._installed_package_root`` but is
+    kept local so this module stays importable without the calculation layer.
+    """
+    try:
+        spec = importlib.util.find_spec(name)
+    except (ImportError, AttributeError, ValueError):
+        return None
+    if spec is None:
+        return None
+    for location in spec.submodule_search_locations or ():
+        candidate = Path(location)
+        if candidate.is_dir():
+            return candidate.resolve()
+    origin = spec.origin
+    if origin and origin not in ("built-in", "frozen"):
+        candidate = Path(origin)
+        if candidate.is_file():
+            return candidate.parent.resolve()
+    return None
+
+
+def _installed_package_roots() -> dict[str, Path]:
+    """Return ``package name -> installed root`` for the execution tree."""
+    roots: dict[str, Path] = {}
+    missing: list[str] = []
+    for name in _SYNC_PACKAGES:
+        root = _installed_package_root(name)
+        if root is None:
+            missing.append(name)
+        else:
+            roots[name] = root
+    if missing:
+        raise RuntimeError(
+            "cannot locate the installed execution tree; missing package(s): " + ", ".join(missing)
+        )
+    return roots
+
+
+def _installed_project_root() -> Path:
+    """Return the common installed-package parent (``site-packages``)."""
+    roots = _installed_package_roots()
+    return Path(os.path.commonpath([str(path) for path in roots.values()]))
+
+
+def _project_root_from(module_file: Path) -> Path:
+    """Resolve the project root for *module_file*, source checkout or wheel."""
+    candidate = Path(module_file).resolve().parents[4]
+    if _is_source_tree(candidate):
+        return candidate
+    return _installed_project_root()
+
+
 def _project_root() -> Path:
-    """Return the repository root (parent of ``src/``)."""
-    return Path(__file__).resolve().parents[4]
+    """Return the execution-tree root (source checkout or installed packages)."""
+    return _project_root_from(Path(__file__))
 
 
 def _default_state_dir() -> Path:
@@ -85,39 +150,84 @@ class SyncResult:
         return not self.errors
 
 
+def _sync_entries(project_root: Path) -> list[tuple[str, Path]]:
+    """Return ``(relative posix path, local file)`` for the whole sync set.
+
+    A source checkout keeps its historical keys (``src/acp/...``).  An
+    installed wheel has no ``<root>/src``: the installed package roots are
+    authoritative and their stable package-relative keys (``acp/...``,
+    ``acp_services/...``, ``cccp/...``) are exactly the keys
+    ``local_release_identity`` hashes, so the local freeze identity and the
+    remote release manifest agree.
+    """
+    root = Path(project_root)
+    entries: list[tuple[str, Path]] = []
+
+    if _is_source_tree(root):
+        acp_root = root / "src" / "acp"
+        if acp_root.is_dir():
+            entries.extend(
+                (path.relative_to(root).as_posix(), path)
+                for path in _walk_dir(acp_root, exclude_dirs=_ACP_EXCLUDE_DIRS | _EXCLUDE_DIR_NAMES)
+            )
+        services_root = root / "src" / "acp_services"
+        if services_root.is_dir():
+            entries.extend(
+                (path.relative_to(root).as_posix(), path)
+                for path in _walk_dir(services_root, exclude_dirs=_EXCLUDE_DIR_NAMES)
+            )
+        cs_root = root / "src" / "cccp"
+        if cs_root.is_dir():
+            entries.extend(
+                (path.relative_to(root).as_posix(), path)
+                for path in _walk_dir(cs_root, exclude_dirs=_EXCLUDE_DIR_NAMES)
+            )
+        reqs = root / "requirements-node.txt"
+        if reqs.is_file():
+            entries.append(("requirements-node.txt", reqs))
+        defaults = root / "config" / "defaults.yaml"
+        if defaults.is_file():
+            entries.append(("config/defaults.yaml", defaults))
+    else:
+        for name, package_root in _installed_package_roots().items():
+            exclude = _EXCLUDE_DIR_NAMES | (_ACP_EXCLUDE_DIRS if name == "acp" else frozenset())
+            entries.extend(
+                (f"{name}/{path.relative_to(package_root).as_posix()}", path)
+                for path in _walk_dir(package_root, exclude_dirs=exclude)
+            )
+
+    entries.sort(key=lambda item: item[0])
+    return entries
+
+
 def build_sync_file_list(project_root: Path) -> list[Path]:
     """Collect the full set of local files that should be synced.
 
     Returns absolute paths sorted for deterministic ordering.  This is the
     single authority for the sync/release file set (D03 release manifests
-    build on exactly this list).
+    build on exactly this list).  Use :func:`_sync_entries` when the relative
+    key matters (an installed wheel has package-relative keys).
     """
-    files: list[Path] = []
+    return [path for _relative, path in _sync_entries(project_root)]
 
-    # 1. src/acp/ — excluding api/ and scheduler/
-    acp_root = project_root / "src" / "acp"
-    if acp_root.is_dir():
-        files.extend(_walk_dir(acp_root, exclude_dirs=_ACP_EXCLUDE_DIRS | _EXCLUDE_DIR_NAMES))
 
-    # 2. src/cccp/ — full QC interface library (formerly conformer_search)
-    cs_root = project_root / "src" / "cccp"
-    if cs_root.is_dir():
-        files.extend(_walk_dir(cs_root, exclude_dirs=_EXCLUDE_DIR_NAMES))
+def resolve_sync_source(project_root: Path | str, relative: str) -> Path:
+    """Resolve a manifest key back to the local file it came from.
 
-    # 3. requirements-node.txt — node runtime deps (for bootstrap_node()).
-    reqs = project_root / "requirements-node.txt"
-    if reqs.is_file():
-        files.append(reqs)
-
-    # 4. config/defaults.yaml — default configuration merged by cccp.config
-    #    on the node.  Without this, an old defaults.yaml left behind on a
-    #    node silently diverges from the server (stale executable paths).
-    defaults = project_root / "config" / "defaults.yaml"
-    if defaults.is_file():
-        files.append(defaults)
-
-    files.sort()
-    return files
+    Source checkouts map directly under *project_root*; installed wheels map
+    ``acp/...`` / ``acp_services/...`` / ``cccp/...`` back to the installed
+    package root.
+    """
+    root = Path(project_root)
+    direct = root / relative
+    if direct.is_file():
+        return direct
+    parts = relative.split("/")
+    if len(parts) >= 2 and parts[0] in _SYNC_PACKAGES:
+        package_root = _installed_package_root(parts[0])
+        if package_root is not None:
+            return package_root.joinpath(*parts[1:])
+    return direct
 
 
 # Compat alias — the pre-promotion private name still resolves (phase-1
@@ -138,10 +248,9 @@ def _walk_dir(root: Path, exclude_dirs: frozenset[str]) -> list[Path]:
     return result
 
 
-def _local_to_remote_path(project_root: Path, local_path: Path, remote_code_dir: str) -> str:
-    """Map a local absolute path to its remote destination under *remote_code_dir*."""
-    rel = local_path.relative_to(project_root)
-    return posixpath.join(remote_code_dir, rel.as_posix())
+def _local_to_remote_path(relative: str, remote_code_dir: str) -> str:
+    """Map a sync-relative key to its remote destination under *remote_code_dir*."""
+    return posixpath.join(remote_code_dir, relative)
 
 
 class CodeSyncer:
@@ -203,8 +312,7 @@ class CodeSyncer:
     def check_sync_needed(self, node: RemoteNode) -> bool:
         """Return True if any local file's mtime differs from the last sync."""
         state = self._load_state(node)
-        for local_path in build_sync_file_list(self._project_root):
-            rel = local_path.relative_to(self._project_root).as_posix()
+        for rel, local_path in _sync_entries(self._project_root):
             try:
                 mtime = local_path.stat().st_mtime
             except OSError:
@@ -223,15 +331,14 @@ class CodeSyncer:
         Returns:
             :class:`SyncResult` summarising the operation.
         """
-        all_files = build_sync_file_list(self._project_root)
+        all_files = _sync_entries(self._project_root)
         old_state = {} if force else self._load_state(node)
         new_state: dict[str, float] = {}
 
         result = SyncResult(total=len(all_files), node_name=node.name)
         to_upload: list[tuple[Path, str, str]] = []  # (local, remote, rel)
 
-        for local_path in all_files:
-            rel = local_path.relative_to(self._project_root).as_posix()
+        for rel, local_path in all_files:
             try:
                 mtime = local_path.stat().st_mtime
             except OSError as exc:
@@ -243,9 +350,7 @@ class CodeSyncer:
                 result.skipped += 1
                 continue
 
-            remote_path = _local_to_remote_path(
-                self._project_root, local_path, node.remote_code_dir
-            )
+            remote_path = _local_to_remote_path(rel, node.remote_code_dir)
             to_upload.append((local_path, remote_path, rel))
 
         if not to_upload:

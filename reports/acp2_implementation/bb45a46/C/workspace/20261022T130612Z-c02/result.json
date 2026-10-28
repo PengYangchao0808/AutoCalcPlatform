@@ -1,0 +1,220 @@
+{
+  "schema": "acp2.experience.product-evidence.v1",
+  "scenario": "workspace",
+  "phase": "main",
+  "run_id": "20261022T130612Z-c02",
+  "task": "T-05 / C02",
+  "result": "PASS",
+  "scope": "standalone private rph pnpm workspace scaffold, build/test/check/package gates and negative boundary QA",
+  "candidate": {
+    "c_worktree": "/ACPServer/acp2-development/C",
+    "baseline_commit": "e79473d28bdd3432e13e1f6931d34f1e75574142",
+    "materialized_commit": "450f2cb8fe1f5b16264b3fe878a021e77f02eba9",
+    "tree": "f83f80759b1d5e92efbd0a1bc3232a4d026b4a3a",
+    "tree_equality_note": "C baseline e79473d tree aligned with B frozen candidate 1a1b4b23; rph/ is new in this commit"
+  },
+  "toolchain": {
+    "node": "v22.19.0",
+    "pnpm": "11.28.5",
+    "typescript": "5.7.3"
+  },
+  "checks": [
+    {
+      "name": "install",
+      "argv": [
+        "pnpm",
+        "--dir",
+        "rph",
+        "install"
+      ],
+      "exit": 0,
+      "detail": "lock generated and supply-chain policies passed"
+    },
+    {
+      "name": "install_frozen",
+      "argv": [
+        "pnpm",
+        "--dir",
+        "rph",
+        "install",
+        "--frozen-lockfile"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "build",
+      "argv": [
+        "pnpm",
+        "--dir",
+        "rph",
+        "build"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "test",
+      "argv": [
+        "pnpm",
+        "--dir",
+        "rph",
+        "test"
+      ],
+      "exit": 0,
+      "detail": "12 node:test tests, 12 pass, 0 fail"
+    },
+    {
+      "name": "check",
+      "argv": [
+        "pnpm",
+        "--dir",
+        "rph",
+        "check"
+      ],
+      "exit": 0,
+      "detail": "boundary gate + tsc -b --pretty false"
+    },
+    {
+      "name": "boundary",
+      "argv": [
+        "node",
+        "rph/scripts/check-boundaries.mjs"
+      ],
+      "exit": 0,
+      "detail": "4 packages, 4 source files, no findings"
+    },
+    {
+      "name": "package",
+      "argv": [
+        "pnpm",
+        "--dir",
+        "rph",
+        "package"
+      ],
+      "exit": 0,
+      "detail": "4 tgz artifacts under rph/dist-packages/"
+    },
+    {
+      "name": "root_package_absent",
+      "argv": [
+        "test",
+        "!",
+        "-f",
+        "package.json"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "lockfile_digest",
+      "sha256": "c3fe7afa94c878a05a5a6a27ff640f397b1a97780a64dff15dfc019aa909d716"
+    }
+  ],
+  "negative_checks": [
+    {
+      "name": "child_process_import",
+      "result": "PASS",
+      "exit": 1,
+      "restored_exit": 0,
+      "detail": "[child_process] packages/bridge/src/bad.ts; bad.ts removed"
+    },
+    {
+      "name": "empty_test_set",
+      "result": "PASS",
+      "exit": 1,
+      "restored_exit": 0,
+      "detail": "log contains EMPTY TEST SET"
+    },
+    {
+      "name": "wrong_import_direction",
+      "result": "PASS",
+      "exit": 1,
+      "restored_exit": 0,
+      "detail": "[wrong_import_direction] research -> bridge"
+    }
+  ],
+  "not_verified": [
+    "NOT_VERIFIED(b06_handoff): CI job and static-asset mount are requested in B-req-06; no B delivery consumed",
+    "NOT_VERIFIED(harness_not_delivered): c_accept workspace scenario belongs to C T-06/T-07; this evidence is direct command execution"
+  ],
+  "artifacts": {
+    "argv.json": {
+      "sha256": "3b976b3081e2b3749c8d8e270e0aab5e3b63878f1d6c8aa3701521c2497498a8",
+      "size": 2335
+    },
+    "boundary-matrix.txt": {
+      "sha256": "7eb6cdd44de48757290c535f5f31893bc5dd1576d0fe6d78db5843c0b82f1278",
+      "size": 468
+    },
+    "boundary.log": {
+      "sha256": "7eb6cdd44de48757290c535f5f31893bc5dd1576d0fe6d78db5843c0b82f1278",
+      "size": 468
+    },
+    "build.log": {
+      "sha256": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
+      "size": 9
+    },
+    "check.log": {
+      "sha256": "8dd4d4c8785f85b38f05ad596dd0cab9eb64fa436a2d7ea16608fa6ec9029fbb",
+      "size": 529
+    },
+    "cwd.txt": {
+      "sha256": "ea5dc682c0e541a8188bdd5c3bb625285d3a52b5f2e169018542fd1ae6fb5832",
+      "size": 30
+    },
+    "exit-codes.tsv": {
+      "sha256": "d562faff288428f124b4c88b8c5e4c727b10446abe7e5e6df6162e56aea10545",
+      "size": 226
+    },
+    "install-frozen.log": {
+      "sha256": "f1ae85b677da29b4edb09f446e1dfb9aae0b4421fd73cd0888460077801f3e69",
+      "size": 85
+    },
+    "install.log": {
+      "sha256": "87f5d16abdc843f52fe541496bf72fc87162837d2dc7632902d5eed67d872dc6",
+      "size": 85
+    },
+    "lockfile.sha256": {
+      "sha256": "fa723538c8e608636dcdfaf2b780e0d870ae597e164ad55bd4c948a978283814",
+      "size": 85
+    },
+    "neg-child-process-restored.log": {
+      "sha256": "7eb6cdd44de48757290c535f5f31893bc5dd1576d0fe6d78db5843c0b82f1278",
+      "size": 468
+    },
+    "neg-child-process.log": {
+      "sha256": "6dbce7b39d87033c3414a24286a87c09f9ffdb6cd6bf3e1c3ff533363b71f894",
+      "size": 554
+    },
+    "neg-empty-test-set-restored-build.log": {
+      "sha256": "faeaa94bcf7012d86f91ca647580449f56a263fb7eaf572c54789764f60a9b8f",
+      "size": 9
+    },
+    "neg-empty-test-set.log": {
+      "sha256": "d326dee0782ef334ab61547ba0fbf4f040128800a2fd3b01f86c8c517f7b2b89",
+      "size": 98
+    },
+    "neg-wrong-direction-restored.log": {
+      "sha256": "7eb6cdd44de48757290c535f5f31893bc5dd1576d0fe6d78db5843c0b82f1278",
+      "size": 468
+    },
+    "neg-wrong-direction.log": {
+      "sha256": "397570e247f3fd547319052b220ab005e5e66e27fba64b704bc751627fc4ef75",
+      "size": 578
+    },
+    "negative-exit-codes.tsv": {
+      "sha256": "f6c2dce32534f266107a1a94f95c65571229fc7944d32abe001c1229b19037bd",
+      "size": 120
+    },
+    "package.log": {
+      "sha256": "4f00072d8f4786e09cdf6163d8544f06e11b77569c9a35119973b517a417c177",
+      "size": 1042
+    },
+    "root-package-absent.txt": {
+      "sha256": "b559602f20640f6f92e33fc5f9243aa4ecd53d9239a673abc85e934964df9a3e",
+      "size": 25
+    },
+    "test.log": {
+      "sha256": "9febe20078df0da9e3dfc9bfd6df6ae2a072fbff4355543638dadfd3337b846b",
+      "size": 2278
+    }
+  }
+}

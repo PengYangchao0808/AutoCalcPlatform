@@ -1,0 +1,19 @@
+{
+  "job_id": "20261028_011548_002_m403-race",
+  "lsf_job_id": "2",
+  "pause_http": 200,
+  "paused_lsf_stat": "USUSP",
+  "paused_status": "paused",
+  "race_job_id": "20261028_011705_003_m403-race-2",
+  "race_lsf_absent": true,
+  "race_lsf_job_id": "103",
+  "race_lsf_stat": "EXIT",
+  "race_outcomes": {
+    "cancel": 200,
+    "pause": 200
+  },
+  "race_status": "cancelled",
+  "resumed_lsf_stat": "RUN",
+  "resumed_status": "running",
+  "unpause_http": 200
+}

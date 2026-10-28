@@ -1,0 +1,84 @@
+diff --git a/src/acp/workflows/ensemble.py b/src/acp/workflows/ensemble.py
+index c6c1cfd..7342035 100644
+--- a/src/acp/workflows/ensemble.py
++++ b/src/acp/workflows/ensemble.py
+@@ -45,70 +45,19 @@ from acp.workflows.energy_shared import (
+ from cccp.config import load_config
+ from cccp.utils.file_io import read_xyz_multiframe, write_xyz, write_xyz_multiframe
+ 
++from cccp.analysis.ensemble.assembly import _build_ensemble_from_censo
++from cccp.analysis.ensemble.inputs import (
++    _is_file_input,
++    _is_multiframe_xyz,
++)
++
+ logger = logging.getLogger(__name__)
+ 
+ 
+-def _is_multiframe_xyz(path: Path) -> bool:
+-    if not path.exists() or path.suffix.lower() not in (".xyz",):
+-        return False
+-    try:
+-        coords, _ = read_xyz_multiframe(path)
+-        n_atom_lines = coords.shape[0]
+-        if n_atom_lines == 0:
+-            return False
+-        with open(path) as f:
+-            first_line = f.readline().strip()
+-        try:
+-            atoms_per_frame = int(first_line)
+-        except ValueError:
+-            return False
+-        if atoms_per_frame <= 0:
+-            return False
+-        return n_atom_lines > atoms_per_frame
+-    except (OSError, ValueError, RuntimeError):
+-        return False
+-
+-
+-def _is_file_input(input_source: str) -> bool:
+-    try:
+-        path = Path(input_source)
+-        return path.exists() and path.is_file()
+-    except OSError:
+-        return False
+-
+-
+-def _build_ensemble_from_censo(
+-    result: CensoRunResult,
+-    structure: Structure,
+-) -> StructureEnsemble:
+-    records: list[StructureRecord] = []
+-    weights = result.boltzmann_weights()
+-
+-    for rec in result.records:
+-        conf_struct = Structure(
+-            id=f"{structure.id}_{rec.conf_id.lower()}",
+-            charge=structure.charge,
+-            multiplicity=structure.multiplicity,
+-            symbols=rec.symbols,
+-            coordinates=rec.coordinates,
+-            metadata={"conf_id": rec.conf_id, "frame_index": rec.frame_index},
+-        )
+-        records.append(
+-            StructureRecord(
+-                structure=conf_struct,
+-                energy_hartree=rec.energy,
+-                free_energy_hartree=rec.gtot,
+-                weight=weights.get(rec.conf_id, 0.0),
+-                properties={
+-                    "gsolv": rec.gsolv,
+-                    "grrho": rec.grrho,
+-                    "gtot": rec.gtot,
+-                },
+-            )
+-        )
+ 
+-    records.sort(key=lambda r: r.free_energy_hartree if r.free_energy_hartree is not None else 0.0)
+-    return StructureEnsemble(records=records)
++
++
++
+ 
+ 
+ def _write_ensemble_outputs(

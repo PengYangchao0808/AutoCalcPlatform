@@ -1,0 +1,32 @@
+{
+  "schema": "acp2.controller-start-record.v1",
+  "pid": 81900,
+  "argv": [
+    "/ACPServer/acp2-development/venvs/b/bin/python",
+    "-m",
+    "acp",
+    "run",
+    "serve",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "18765",
+    "--run-root",
+    "/ACPServer/acp2-development/data/b/run-root",
+    "--no-browser",
+    "--log-level",
+    "INFO"
+  ],
+  "cwd": "/ACPServer/acp2-development/data/b/controller-config",
+  "pythonpath": "/ACPServer/AutoCalcPlatform/src",
+  "release": "0d7f6c9f01007c6dde83c7a4a944c279101aa3a3",
+  "release_source": "git rev-parse HEAD of /ACPServer/AutoCalcPlatform (B05 checkout)",
+  "interpreter": "/ACPServer/acp2-development/venvs/b/bin/python",
+  "run_root": "/ACPServer/acp2-development/data/b/run-root",
+  "db_path": "/ACPServer/acp2-development/data/b/run-root/acp_jobs.db",
+  "config": "/ACPServer/acp2-development/data/b/controller-config/cccp.yaml",
+  "port": 18765,
+  "bind_host": "127.0.0.1",
+  "production_port": 8765,
+  "production_touched": false
+}

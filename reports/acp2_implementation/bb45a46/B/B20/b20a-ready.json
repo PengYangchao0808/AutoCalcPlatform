@@ -1,0 +1,264 @@
+{
+  "assertions": [
+    {
+      "detail": "health={'schema_version': 1, 'status': 'ok', 'candidate_revision': 'bc59e04758450321747068e679ca3a8d0efc5ad7', 'contract_version': '1.3.0', 'contract_digest': '7d35beef1c1e777bac9493189023d1d868fd30d2bfc9c47d7854624a34fd97b6', 'contract_digest_scope': 'delivered-contract-set', 'read_only': True, 'started_at': '2026-10-23T09:08:39.010735Z'}",
+      "name": "b20a.controller_health",
+      "status": "PASS"
+    },
+    {
+      "detail": "contracts=['reaction.schema.json', 'recipe.schema.json', 'task-binding.schema.json', 'evidence.schema.json'] errors=[]",
+      "name": "b20a.science_contracts",
+      "status": "PASS"
+    },
+    {
+      "detail": "reaction=/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/examples/reaction-da.json errors=[]",
+      "name": "b20a.input_complete",
+      "status": "PASS"
+    },
+    {
+      "detail": "cases=1 failures=[] rows=[{'case_id': 'missing-atom-mapping', 'fixture': '/ACPServer/acp2-development/data/b/fixtures/da/incomplete-input.json', 'fixture_sha256': 'bac51691ffe85a4274510064eddd65ddf0d844b668d035255bad8e3758669aba', 'expected_error': 'incomplete_scientific_input:atom_mapping_incomplete', 'rejected_before_dispatch': True, 'errors': [\"incomplete_scientific_input:atom_mapping_incomplete:left=['ethene:et_h4'] right=['cyclohexene:cy_h10']\", \"incomplete_scientific_input:unmapped_left:['ethene:et_h4']\", \"incomplete_scientific_input:unmapped_right:['cyclohexene:cy_h10']\"], 'dispatched': False}]",
+      "name": "b20a.incomplete_input_rejected",
+      "status": "PASS"
+    },
+    {
+      "detail": "receipt=/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B18/da-runtime-da-preflight-20261023T080839Z-1375609-088dcea2.json result=PASS",
+      "name": "b20a.b18_da_preflight_consumed",
+      "status": "PASS"
+    },
+    {
+      "detail": "path=reports/acp2_implementation/bb45a46/B/B20/p2-candidate.json errors=[]",
+      "name": "b20a.p2_candidate",
+      "status": "PASS"
+    },
+    {
+      "detail": "path=reports/acp2_implementation/bb45a46/B/B20/run-spec.json errors=[]",
+      "name": "b20a.run_spec",
+      "status": "PASS"
+    },
+    {
+      "detail": "errors=[] observed={'path': '/ACPServer/AutoCalcPlatform/docs/reference/next-change/acp2-contracts/runtime/dependencies.json', 'required_external_edges': [{'consumer': 'B20a-ready', 'external_id': 'A-14'}, {'consumer': 'B20a-ready', 'external_id': 'A-15'}, {'consumer': 'B20a-ready', 'external_id': 'A-16'}, {'consumer': 'B20a-exec', 'external_id': 'C24a'}], 'ready_to_c24a_edges': [{'consumer': 'C/T-34 (C24a)', 'producer': 'B20a-ready', 'artifact': 'DA execution interface/preflight', 'version': '1.0.0', 'digest_or_pending': 'PENDING', 'readiness': 'contract_ready', 'relation': 'AND', 'delivered': True, 'observed': 'B20a-ready consumes A-14..A-16 and B18 da-preflight with zero tasks; C T-34 reads this edge instead of the whole B20a', 'supersedes_c_row': 'C24a:gates_on_B20a_ready'}], 'b20b_depends_on': ['B20a-exec'], 'c24a_readiness': 'contract_ready', 'c24a_delivery_status': 'planned', 'c24a_observed_state': 'blocked: C plan T-34 is [~] and no approved single submission exists'}",
+      "name": "b20a.dependency_edges",
+      "status": "PASS"
+    },
+    {
+      "detail": "tasks_created=0 run_root_dirs_created=[]",
+      "name": "b20a.da_submit_no_side_effects",
+      "status": "PASS"
+    }
+  ],
+  "b18_preflight": {
+    "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B18/da-runtime-da-preflight-20261023T080839Z-1375609-088dcea2.json",
+    "result": "PASS"
+  },
+  "c24a": {
+    "c_evidence_present": false,
+    "c_plan": {
+      "c24a_blocked": true,
+      "c24a_marker": "- [~] 34. T-34 / C24a\uff1a\u9650\u5b9a Diels\u2013Alder \u63d0\u6848\u3001\u5ba1\u6279\u4e0e\u552f\u4e00\u63d0\u4ea4 \u2014 blocked by T-23..T-33 + A-14..A-16 + B20a-ready",
+      "evidence_present": false,
+      "evidence_roots": [
+        "/ACPServer/acp2-development/C/reports/acp2_implementation/bb45a46/C/da-research-live",
+        "/ACPServer/acp2-development/C/.omo/evidence/acp2-plan-c-rph-workbench/task-24-acp2-plan-c-rph-workbench.md"
+      ],
+      "gates_on_b20a_ready": true,
+      "plan": "/ACPServer/AutoCalcPlatform/.omo/plans/acp2-plan-c-rph-workbench.md"
+    },
+    "evidence_roots": [
+      "/ACPServer/acp2-development/C/reports/acp2_implementation/bb45a46/C/da-research-live",
+      "/ACPServer/acp2-development/C/.omo/evidence/acp2-plan-c-rph-workbench/task-24-acp2-plan-c-rph-workbench.md"
+    ],
+    "expected_artifact": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/da-research-live/a/c24a-submission.json",
+    "missing_artifact": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/da-research-live/a/c24a-submission.json",
+    "owner": "C",
+    "plan": "/ACPServer/AutoCalcPlatform/.omo/plans/acp2-plan-c-rph-workbench.md",
+    "plan_todo": "34. T-34 / C24a",
+    "reason": "c24a_absent",
+    "required_fields": [
+      "proposal_digest",
+      "approval_ref",
+      "job_id",
+      "recipe_digest",
+      "budget_basis",
+      "run_spec",
+      "search_capability"
+    ],
+    "status": "c24a_absent"
+  },
+  "consumed": {
+    "A-14": "ReactionSpec input contract",
+    "A-15": "Recipe/DAG contract",
+    "A-16": "EvidenceReport contract",
+    "B18": "da-preflight receipt"
+  },
+  "counters": {
+    "bsub": 0,
+    "compute_owner": "none (da-submit stopped before dispatch: C24a absent)",
+    "http_calls": [
+      "GET /api/health",
+      "GET /api/v1/jobs?limit=1000",
+      "GET /api/v1/jobs?limit=1000"
+    ],
+    "prepare_operations": 0,
+    "qc_invocations": 0,
+    "reservations": 0,
+    "run_root_dirs_after": [
+      "uncategorized"
+    ],
+    "run_root_dirs_before": [
+      "uncategorized"
+    ],
+    "run_root_dirs_created": [],
+    "schema": "acp2.runtime.b20a-counters.v1",
+    "submission_attempted": false,
+    "tasks_after": 0,
+    "tasks_before": 0,
+    "tasks_created": 0
+  },
+  "expectations_errors": [],
+  "incomplete_input": [
+    {
+      "case_id": "missing-atom-mapping",
+      "dispatched": false,
+      "errors": [
+        "incomplete_scientific_input:atom_mapping_incomplete:left=['ethene:et_h4'] right=['cyclohexene:cy_h10']",
+        "incomplete_scientific_input:unmapped_left:['ethene:et_h4']",
+        "incomplete_scientific_input:unmapped_right:['cyclohexene:cy_h10']"
+      ],
+      "expected_error": "incomplete_scientific_input:atom_mapping_incomplete",
+      "fixture": "/ACPServer/acp2-development/data/b/fixtures/da/incomplete-input.json",
+      "fixture_sha256": "bac51691ffe85a4274510064eddd65ddf0d844b668d035255bad8e3758669aba",
+      "rejected_before_dispatch": true
+    }
+  ],
+  "interface": {
+    "explicit_phase_required": "--phase da-submit",
+    "phase": "da-submit",
+    "required_args": [
+      "controller",
+      "fixture",
+      "out",
+      "timeout"
+    ],
+    "scenario": "da-runtime",
+    "submission_attempted": false,
+    "task_created": false
+  },
+  "operation_class": "submit",
+  "p2_candidate": {
+    "candidate_revision": "sha256:143129a243551f9a1227428508f546bc77e4911ea06d166469bf52c17cec8892",
+    "client_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
+    "contract_digest": "7d35beef1c1e777bac9493189023d1d868fd30d2bfc9c47d7854624a34fd97b6",
+    "env_digest": "d487f3af442db1f9d98ba6317157cd715a61002360d375f549f6bf0b4dfde8b6",
+    "errors": [],
+    "harness_revision": "2fc709f77bef5c15dbd3659bf50e3038fe95afc32435e1e9b0ecab3d71cdc884",
+    "path": "reports/acp2_implementation/bb45a46/B/B20/p2-candidate.json",
+    "server_revision": "bc59e04758450321747068e679ca3a8d0efc5ad7"
+  },
+  "phase": "da-submit",
+  "reaction_errors": [],
+  "reaction_path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/examples/reaction-da.json",
+  "result": "PASS",
+  "run_spec": {
+    "document": {
+      "aggregate_budget_seconds": 120,
+      "aggregate_window": "120s reserved after export for the aggregate phase.",
+      "backend": "local",
+      "created_at_utc": "2026-10-23T08:53:00Z",
+      "export_budget_seconds": 900,
+      "export_window": "900s reserved after the science stop point for evidence/export, judged by actual completion rather than elapsed time alone.",
+      "h3_status": "OPEN (Local only; LSF rows NOT_VERIFIED)",
+      "inflight_stop_policy": "At science_deadline_seconds stop starting new science steps. A still-running step is either stopped with confirmed termination or retained by reference and reconciled in the export window; it is never reported complete.",
+      "lsf_choice": "not selected: no bsub/bjobs/bhosts, LSF_ENVDIR or configured test node exists",
+      "payable_task_count": {
+        "agreement": "NOT_VERIFIED(c24a_absent)",
+        "candidate_ts_cap": 3,
+        "scenario_cap": 12,
+        "source": "C plan W9 DA lane: one main chain, candidate TS <= 3, total tasks <= 12, wall clock <= 4h",
+        "this_submission": 1
+      },
+      "per_phase_timing_baseline": {
+        "frequency_seconds_upper_bound": 3,
+        "note": "Measured on the frozen P1 candidate 77ac1de for tiny H2/STO-3G Local steps. The optimize step dominates; the DA slice is larger, so the science window is not derived by scaling these rows alone.",
+        "optimize_seconds_upper_bound": 185,
+        "singlepoint_seconds_upper_bound": 6
+      },
+      "queue_accounting": "Local queue wait is 0s and is included in the same cumulative window. If LSF were selected, queue wait would count against science_deadline_seconds; it does not get a separate budget.",
+      "ready_attempt_started_at": "2026-10-23T08:53:00Z",
+      "representative_timings": [
+        {
+          "backend": "local",
+          "capability": "singlepoint",
+          "evidence": "B/B14b/singlepoint/run.json",
+          "evidence_sha256": "e63e1a5a36449cb503ee58d1f80ecfb037f5c8de165cd451451d8978578466e2",
+          "evidence_written_at_utc": "2026-10-23T03:16:39Z",
+          "result": "PASS",
+          "task_ref": "20261023_111633_001_singlepoint",
+          "task_started_at_utc": "2026-10-23T03:16:33Z",
+          "wall_seconds_upper_bound": 6
+        },
+        {
+          "backend": "local",
+          "capability": "optimize",
+          "evidence": "B/B14b/optimize/run.json",
+          "evidence_sha256": "7050febe6321aa6e1749d80bcc0dc59970c023fac299a30d0de7072f1aa16671",
+          "evidence_written_at_utc": "2026-10-23T03:19:57Z",
+          "result": "PASS",
+          "task_ref": "20261023_111652_002_optimize",
+          "task_started_at_utc": "2026-10-23T03:16:52Z",
+          "wall_seconds_upper_bound": 185
+        },
+        {
+          "backend": "local",
+          "capability": "frequency",
+          "evidence": "B/B14b/frequency/run.json",
+          "evidence_sha256": "76914fa3d8322733531e8d9622a7cb35e76156bcd47f1d4c882c6142ffb8495b",
+          "evidence_written_at_utc": "2026-10-23T03:19:49Z",
+          "result": "PASS",
+          "task_ref": "20261023_111946_003_frequency",
+          "task_started_at_utc": "2026-10-23T03:19:46Z",
+          "wall_seconds_upper_bound": 3
+        }
+      ],
+      "rule": "A valid staged run reads one shared run-spec; a phase never resets started_at. A missing C24a leaves started_at null instead of inventing a science clock.",
+      "schema": "acp2.b20a.run-spec.v1",
+      "science_deadline_seconds": 13380,
+      "started_at": null,
+      "started_at_binding_rule": "Set once at the first C24a-approved submit. Every phase (da-submit, da-evidence, aggregate) reads this same value; the readiness attempt does not start the science clock.",
+      "started_at_status": "NOT_VERIFIED(c24a_absent)",
+      "timeout_env": "ACP2_DA_TIMEOUT=14400",
+      "timeout_rule": "An unset ACP2_DA_TIMEOUT is a usage error and never a silent default.",
+      "total_budget_seconds": 14400
+    },
+    "errors": [],
+    "path": "reports/acp2_implementation/bb45a46/B/B20/run-spec.json"
+  },
+  "schema": "acp2.b20a.ready.v1",
+  "science_contracts": [
+    {
+      "contract": "reaction.schema.json",
+      "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/reaction.schema.json",
+      "sha256": "3321181d6e856fe6b28f246d3e1073c0ebcc1e0bb67ce688b1da09846f9b906d",
+      "size_bytes": 15559
+    },
+    {
+      "contract": "recipe.schema.json",
+      "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/recipe.schema.json",
+      "sha256": "0c63f373b1e48cb255d532c49224056ace56995fd88cb0cecc3cb3dee161088a",
+      "size_bytes": 12521
+    },
+    {
+      "contract": "task-binding.schema.json",
+      "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/task-binding.schema.json",
+      "sha256": "a21155b8708acb5567fa3d90d6ed1ed9b5d1d5c03ca2a8a54f4e4a6c5455a887",
+      "size_bytes": 18004
+    },
+    {
+      "contract": "evidence.schema.json",
+      "path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/evidence.schema.json",
+      "sha256": "74b1aa4d638f5ee0027be06817c2c00bf6d79cdb14a96514ff097783b911cc10",
+      "size_bytes": 14038
+    }
+  ],
+  "target": "local",
+  "zero_side_effects": true
+}

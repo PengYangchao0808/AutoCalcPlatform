@@ -1,0 +1,159 @@
+{
+  "adr_step_index": 1,
+  "adr_task_kind": "conformer_search",
+  "attempt": 1,
+  "bounded_alternative": "alt_endpoint_prep_single_conformation",
+  "complete": true,
+  "duration_seconds": 125.87,
+  "entry": "legacy_task_core",
+  "error": null,
+  "executed_task_kind": "optimize",
+  "level": {
+    "basis": "def2-mTZVPP",
+    "charge": 0,
+    "method": "r2SCAN-3c",
+    "multiplicity": 1
+  },
+  "native_files": [
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/endpoint_prep_butadiene/optimize.out",
+      "path": "optimize.out",
+      "sha256": "53660c475b0bfbda4b6b2ae10b650a815ad4f6a2a93c1c9758326dd952fd780c",
+      "size_bytes": 648604
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/endpoint_prep_butadiene/optimize.xyz",
+      "path": "optimize.xyz",
+      "sha256": "34c2497585190ee4d38f54a601eb0117e8a3432e98fdaea437f042bb0fb82ee7",
+      "size_bytes": 891
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/endpoint_prep_butadiene/optimize_trj.xyz",
+      "path": "optimize_trj.xyz",
+      "sha256": "de88083781dbace4ba676d6287cc165dd1a09e3795fa884213a29010719050d2",
+      "size_bytes": 14053
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/endpoint_prep_butadiene/optimize.inp",
+      "path": "optimize.inp",
+      "sha256": "f38eb337f4405e7ba9a472c79e09bb91bd69cc234f97224c94604bcdb5a6d554",
+      "size_bytes": 581
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/endpoint_prep_butadiene/optimize.property.txt",
+      "path": "optimize.property.txt",
+      "sha256": "793eedf69a3d1de04a94497890c17a62d9953e99bfa0919e49cb51010680c089",
+      "size_bytes": 153158
+    }
+  ],
+  "products": [],
+  "receipt": null,
+  "release_digest": "813583bdcaae20ef900a99180f433b34a7dfa730fb47c1efea5c9435919a061b",
+  "release_id": "2d1ab37a0f988933",
+  "schema": "acp2.m4-04.step.v1",
+  "status": "completed",
+  "step_id": "endpoint_prep_butadiene",
+  "task_ref": "20261028_940_endpoint_prep_butadiene",
+  "task_result": {
+    "artifacts": [
+      {
+        "checksum": "sha256:f38eb337f4405e7ba9a472c79e09bb91bd69cc234f97224c94604bcdb5a6d554",
+        "path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/endpoint_prep_butadiene/optimize.inp",
+        "source": "orca",
+        "type": "output"
+      },
+      {
+        "checksum": "sha256:53660c475b0bfbda4b6b2ae10b650a815ad4f6a2a93c1c9758326dd952fd780c",
+        "path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/endpoint_prep_butadiene/optimize.out",
+        "source": "orca",
+        "type": "log"
+      }
+    ],
+    "complete": true,
+    "coordinates": [
+      [
+        -0.765904,
+        1.064199,
+        -0.0
+      ],
+      [
+        0.015206,
+        -0.021558,
+        -0.0
+      ],
+      [
+        1.464793,
+        0.021558,
+        0.0
+      ],
+      [
+        2.245904,
+        -1.064199,
+        0.0
+      ],
+      [
+        -0.340332,
+        2.064827,
+        -0.0
+      ],
+      [
+        -1.847974,
+        0.986891,
+        0.0
+      ],
+      [
+        1.921134,
+        1.011943,
+        0.0
+      ],
+      [
+        -0.441134,
+        -1.011943,
+        -0.0
+      ],
+      [
+        3.327974,
+        -0.986891,
+        -0.0
+      ],
+      [
+        1.820332,
+        -2.064827,
+        -0.0
+      ]
+    ],
+    "energy_hartree": -155.940064721503,
+    "errors": [],
+    "frequencies": [],
+    "metadata": {},
+    "payload": {
+      "optimization_status": "converged",
+      "trajectory_ref": {
+        "path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/endpoint_prep_butadiene/optimization_trajectory.json",
+        "source": "optimization_trajectory",
+        "type": "trajectory"
+      }
+    },
+    "provenance": {
+      "backend": "orca",
+      "input_signature": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/inputs/butadiene.xyz",
+      "method": "r2SCAN-3c",
+      "version": "unknown"
+    },
+    "schema_version": 1,
+    "status": "completed",
+    "symbols": [
+      "C",
+      "C",
+      "C",
+      "C",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H"
+    ],
+    "task": "optimize"
+  }
+}

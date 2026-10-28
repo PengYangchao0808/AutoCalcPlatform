@@ -1,0 +1,86 @@
+{
+  "artifacts": [],
+  "complete": true,
+  "coordinates": [
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.757,
+      0.586
+    ],
+    [
+      0.0,
+      -0.757,
+      0.586
+    ]
+  ],
+  "energy_hartree": -76.419737,
+  "errors": [],
+  "frequencies": [
+    1642.31,
+    3817.55,
+    3921.08
+  ],
+  "metadata": {},
+  "payload": {
+    "analysis": {
+      "frequencies": [
+        1642.31,
+        3817.55,
+        3921.08
+      ],
+      "ir_intensities": [
+        -1.0,
+        -1.0,
+        -1.0
+      ],
+      "mode_frequencies": {
+        "0": 0.0,
+        "1": 0.0,
+        "2": 0.0,
+        "3": 0.0,
+        "4": 0.0,
+        "5": 0.0,
+        "6": 1642.31,
+        "7": 3817.55,
+        "8": 3921.08
+      },
+      "mode_ir_intensities": {
+        "0": -1.0,
+        "1": -1.0,
+        "2": -1.0,
+        "3": -1.0,
+        "4": -1.0,
+        "5": -1.0,
+        "6": -1.0,
+        "7": -1.0,
+        "8": -1.0
+      }
+    },
+    "electronic_state": {
+      "spin_mode": "auto",
+      "state_id": "s0",
+      "state_status": "not_verified",
+      "target_multiplicity": 1
+    },
+    "n_imaginary": 0
+  },
+  "provenance": {
+    "backend": "orca",
+    "input_signature": "optimized.xyz",
+    "method": "wB97X-D4",
+    "version": "unknown"
+  },
+  "schema_version": 1,
+  "status": "completed",
+  "symbols": [
+    "O",
+    "H",
+    "H"
+  ],
+  "task": "frequency"
+}

@@ -55,6 +55,9 @@ class StructureSourceIndexer:
         fetcher: Optional remote fetcher (not used during backfill).
         page_size: Number of jobs per discovery page.
         sweep_interval: Seconds between incremental sweep passes.
+        data_port: Optional :class:`DataResourcePort`; when given, index writes
+            route through ``upsert_sources`` so production discovery shares the
+            single typed Data write entry (todo-11 / F4-B2).
     """
 
     def __init__(
@@ -67,12 +70,14 @@ class StructureSourceIndexer:
         page_size: int = _SWEEP_PAGE_SIZE,
         sweep_interval: float = 60.0,
         structure_cache: Any = None,
+        data_port: Any = None,
     ) -> None:
         self._store = store
         self._source_store = source_store
         self._run_root = Path(run_root)
         self._fetcher = fetcher
         self._structure_cache = structure_cache
+        self._data_port = data_port
         self._page_size = page_size
         self._sweep_interval = sweep_interval
 
@@ -85,6 +90,29 @@ class StructureSourceIndexer:
         self._started_at: str | None = None
         self._retry_queue: dict[str, int] = {}
         self._max_retries = 3
+
+    def _write_index_entries(
+        self,
+        entries: list[dict[str, Any]],
+        *,
+        discovery_version: int,
+        replace_job_id: str | None = None,
+    ) -> None:
+        """Persist discovery rows through the Data port when one is injected."""
+        if self._data_port is None:
+            self._source_store.upsert_index_entries(
+                entries, discovery_version=discovery_version, replace_job_id=replace_job_id
+            )
+            return
+        from acp_services.data.contracts import SourceUpsert
+
+        self._data_port.upsert_sources(
+            SourceUpsert(
+                entries=[dict(entry) for entry in entries],
+                discovery_version=discovery_version,
+                replace_job_id=replace_job_id,
+            )
+        )
 
     def ensure_started(self) -> None:
         """Start the background indexer thread (idempotent)."""
@@ -262,7 +290,7 @@ class StructureSourceIndexer:
                     if not str(entry.get("path") or "").startswith(".structure_history/"):
                         entry["remote"] = True
             index_rows = self._entries_to_index_rows(entries, record)
-            self._source_store.upsert_index_entries(index_rows, discovery_version=2, replace_job_id=job_id)
+            self._write_index_entries(index_rows, discovery_version=2, replace_job_id=job_id)
             self._source_store.mark_job_indexed(job_id, discovery_version=1)
             self._retry_queue.pop(job_id, None)
         except Exception:
@@ -304,7 +332,7 @@ class StructureSourceIndexer:
             "availability": "pending_sync",
             "produced_at": record.completed_at or "",
         }
-        self._source_store.upsert_index_entries([entry], discovery_version=1)
+        self._write_index_entries([entry], discovery_version=1)
 
     @staticmethod
     def _is_remote(record: Any) -> bool:

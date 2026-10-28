@@ -1,0 +1,7 @@
+VALID acp2.fixture-runs.v1
+rows= 9 unique= 9
+local= registered
+lsf_singlepoint= NOT_VERIFIED timeout= 2400 = 1800 + 300 + 120 + 60 + 120
+control= NOT_VERIFIED
+planned= ['fx-artifact-local-v1', 'fx-multi-singlepoint-v1', 'fx-da-bounded-dag-v1', 'fx-plugin-lifecycle-v1', 'fx-migration-v1', 'fx-package-install-v1']
+duplicate_expensive_fixture=false

@@ -1,0 +1,30 @@
+{
+  "name": "@rph/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "RPH user entry point: research/resume/doctor over the frozen DSH client",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "rph": "./dist/main.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@rph/dsh-bundle": "workspace:*"
+  },
+  "license": "MIT"
+}

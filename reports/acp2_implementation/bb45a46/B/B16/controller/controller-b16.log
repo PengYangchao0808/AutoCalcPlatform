@@ -1,0 +1,23 @@
+INFO:     Started server process [1204376]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18776 (Press CTRL+C to quit)
+ACP Workbench starting at http://127.0.0.1:18776
+  Run root      : /ACPServer/acp2-development/data/b/run-root-b16
+  Poll interval : 1s
+  Docs (Swagger): http://127.0.0.1:18776/docs
+  Reload        : off
+
+INFO:     127.0.0.1:50272 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49666 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49676 - "POST /api/v2/research/approvals HTTP/1.1" 201 Created
+INFO:     127.0.0.1:49678 - "POST /api/v2/research/approvals HTTP/1.1" 201 Created
+INFO:     127.0.0.1:49680 - "GET /api/v2/research/approvals?approval_ref=ap_610f54c9a14b46218e433c954e8970e5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49694 - "POST /api/v2/research/approvals/ap_610f54c9a14b46218e433c954e8970e5/approve HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49700 - "POST /api/v2/research/approvals/ap_610f54c9a14b46218e433c954e8970e5/approve HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49702 - "POST /api/v2/research/approvals/ap_610f54c9a14b46218e433c954e8970e5/approve HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:49712 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1204376]

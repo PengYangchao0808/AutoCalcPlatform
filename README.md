@@ -2,9 +2,300 @@
 
 架构命名与双人协作见[主方案 v1.7 第 37 节](docs/ACP_Architecture_Adjustment_Plan_20261016.md#37-统一命名与双人并行开发计划)：ACR → ACP Services，ACV → ACP Visualization；前端与服务/科学代码分工开发，现有运行入口与导入尚未更名。
 
-v1.6 补充[统一交互初始化与组件装配](docs/ACP_Architecture_Adjustment_Plan_20261016.md#36-统一交互初始化acp-init-与组件装配)：复用现有 `acp init`，逐步支持部署档位/组件选择、配置预览、幂等应用与 doctor 验证；IN-01—06 衔接 M0—M4。现有命令主要配置本地软件与远程节点，完整部署向导尚待实施。
-
 **Auto-Calc Platform (ACP)** 是一个模块化的 Python 计算化学平台，旨在降低量子化学计算的入门门槛，通过 CLI 和 Web 界面让不熟悉计算化学流程的研究人员也能轻松提交任务、查看进度、可视化结果。
+
+首次使用请按 **安装 Python 环境 → 安装 ACP → 准备计算软件 → `acp init` → 启动/验证** 的顺序操作。当前 `acp init` 已提供分步向导、回答文件和计划预览；下面按当前源码说明实际行为。
+
+- [安装（推荐 Conda）](#安装推荐-conda)
+- [`acp init` 详细使用方法](#acp-init-详细使用方法)
+- [初始化后启动和验证](#初始化后启动和验证)
+- [常见问题](#安装与初始化常见问题)
+- [工作流示例](#快速开始) · [配置与数据目录](#配置) · [开发](#开发)
+
+---
+
+## 安装（推荐 Conda）
+
+### 1. 系统与环境准备
+
+以下命令以 **Linux / WSL2 的 Bash** 为例；涉及本地进程控制、systemd 和远程 LSF 的部署请使用 Linux 环境。WSL2 的源码和计算数据建议放在 Linux 文件系统中，例如 `~/src/AutoCalcPlatform` 与 `~/.local/share/acp/runs`。
+
+项目声明 Python **3.10+**，以下统一使用 **Python 3.11**。首次安装 Conda 可使用 [Miniforge 官方安装说明](https://github.com/conda-forge/miniforge#install)；已有 Miniconda / Anaconda 可直接使用。其他平台的 Conda 安装步骤见 [Conda 官方文档](https://docs.conda.io/projects/conda/en/stable/user-guide/install/index.html)。安装完成后重新打开终端，确认 `conda --version` 可用。
+
+先创建独立环境，科学依赖由 conda-forge 安装，ACP 再通过该环境的 pip 安装：
+
+```bash
+conda create -n acp -c conda-forge python=3.11 pip \
+  'numpy>=2.1' 'rdkit>=2022.09.1' 'scipy>=1.10' \
+  'matplotlib>=3.7' 'pyyaml>=6.0' 'openpyxl>=3.1' -y
+conda activate acp
+
+python --version
+python -m pip --version
+```
+
+之后每次打开终端使用 ACP，先执行 `conda activate acp`。`conda init` 用于初始化 shell 的 Conda 支持，`acp init` 用于配置 ACP，两者用途不同。
+
+### 2. 获取源码并安装 ACP
+
+已获取源码时直接进入仓库根目录；首次获取时执行：
+
+```bash
+git clone https://github.com/PengYangchao0808/AutoCalcPlatform.git
+cd AutoCalcPlatform
+
+# 推荐：CLI + Web 界面 + SSH/LSF 远程管理
+python -m pip install -e '.[api,remote]'
+
+# 检查依赖与命令入口
+python -m pip check
+acp --help
+acp init --help
+```
+
+`-e` 表示从当前源码目录安装，修改源码后继续使用同一安装；使用期间请保留该目录。以下安装方式按需求任选，均在仓库根目录、已激活的环境中执行：
+
+| 使用场景 | 安装命令 | 说明 |
+|---|---|---|
+| 本地计算 CLI | `python -m pip install -e .` | 安装科学工作流及 Python 依赖 |
+| CLI + Web | `python -m pip install -e '.[api]'` | 增加 FastAPI、uvicorn 等 |
+| CLI + SSH/LSF | `python -m pip install -e '.[remote]'` | 增加 Paramiko，供节点配置与远程执行使用 |
+| 日常完整使用（推荐） | `python -m pip install -e '.[api,remote]'` | 包含 Web 与远程依赖 |
+| 开发与测试 | `python -m pip install -e '.[dev,api,remote]'` | 增加 pytest、ruff、mypy 等 |
+
+不使用 Conda 时，可用 `python3.11 -m venv .venv`、`source .venv/bin/activate` 创建并激活虚拟环境，再执行上面的 pip 安装命令；pip 会安装科学依赖。
+
+需要读取 Bruker 原始 NMR 数据时，可在所选安装完成后执行 `python -m pip install 'nmrglue>=0.10'`。`nmr` extra 还包含 Open Babel 和 QML；当前项目要求 NumPy ≥ 2.1，而 QML 的现有构建依赖 NumPy < 2，因此不要把 `.[nmr]` 当作通用安装步骤。FCHL/QML 能力需单独核对，缺失时的回退不等同于已验证该能力。
+
+根目录安装方式与独立的 `cccp` / `acp-worker` / `acp-web` 角色发行是两种选择，同一环境请使用其中一种。角色制品构建和安装见 [packaging/README.md](packaging/README.md)。
+
+### 3. 准备外部计算软件
+
+**安装 ACP 或运行 `acp init` 都不会自动安装 ORCA、xTB 等计算程序。** 仅查看帮助、配置或启动界面时可暂时跳过；运行科学任务前，须在实际执行任务的机器上安装对应程序。
+
+| 软件 | 主要用途 | 配置键 |
+|---|---|---|
+| xTB | `xtb_optimize`、xTB-MD、GFN-xTB 计算 | `executables.xtb.path` |
+| CREST | 构象搜索，通常同时需要 xTB | `executables.crest.path` |
+| ORCA | 单点、优化、频率、IRC、CASSCF、NMR 等 | `executables.orca.path` |
+| CENSO | 构象排序与精修，按协议还需其他计算程序 | `executables.censo.path` |
+| ISOSTAT / Molclus | 聚类或相关协议辅助步骤 | `executables.isostat.path` / `executables.molclus.path` |
+| Shermo | 热力学修正 | `executables.shermo.path` |
+| MPI 启动器 | ORCA 并行运行；版本需与 ORCA 匹配 | `executables.orca.mpi_path` |
+
+软件按各自发行说明安装，ORCA/MPI 还需按其安装说明准备运行库环境。`acp init` 可以探测已有程序，并让你填写未找到程序的**可执行文件绝对路径**，例如 `/opt/orca/orca`，不要填写 `/opt/orca` 目录。当前不使用的软件可直接回车跳过。
+
+### 4. 准备数据目录
+
+源码目录、Conda 环境目录和任务数据目录分别管理。运行 `acp init`，在“任务数据保存目录 run_root”中填写绝对路径或 `~/ACP_runs`；配置保存后，新启动的 CLI / Web 服务会自动读取。普通用户不配置时默认使用 `~/.local/share/acp/runs`。也可临时覆盖：
+
+```bash
+mkdir -p "$HOME/.local/share/acp/runs"
+export ACP_RUN_ROOT="$HOME/.local/share/acp/runs"
+```
+
+建议使用本机原生文件系统，避免把大量 QC 中间文件放在 WSL `/mnt/*` 或网络挂载中。`ACP_RUN_ROOT` 会优先于向导配置；需要恢复读取 init 配置时执行 `unset ACP_RUN_ROOT`。
+
+向导将目录保存到 `deployment.params.run_root`。已有 systemd 服务若设置了固定目录，可运行 `bash scripts/install_systemd.sh --run-root '' --run-root-only` 清除服务覆盖并重启；以后修改 init 配置后只需重启服务。填写向导本身不会移动历史数据，切换前应停止服务并迁移已有任务（见后文“数据目录”）。
+
+## `acp init` 详细使用方法
+
+### 命令与配置文件的含义
+
+```bash
+# 推荐：初始化当前用户配置
+acp init
+
+# 创建/更新指定配置；父目录必须已存在且可写
+mkdir -p "$HOME/.config/acp"
+acp init --config "$HOME/.config/acp/workstation.yaml"
+
+# 查看参数；需要排查时增加日志
+acp init --help
+acp init --log-level DEBUG
+```
+
+| 参数 | 含义 |
+|---|---|
+| `--config PATH` | **要创建或更新的目标文件**；默认 `~/.cccp.yaml` |
+| `--answers PATH` | 使用版本化 YAML 回答文件，无交互提示，直接预览并应用 |
+| `--plan` | 预览最终初始化计划，不应用该计划；交互资源步骤的写入边界见下文 |
+| `--log-level LEVEL` | 日志级别，默认 `INFO`，排查可用 `DEBUG` |
+
+`~/.cccp.yaml` 的名称沿用底层配置约定。`acp init --config X` 表示**写入 X**，而 `acp run <workflow> --config X` 表示**加载 X**。保存到自定义文件后，工作流运行时要显式传 `--config X`，或采用自动加载的用户配置 `~/.cccp.yaml` / 项目配置 `./cccp.yaml`。Web 服务和 `acp doctor` 当前没有 `--config` 参数，请使用它们会自动加载的配置位置。
+
+已有配置会按字段更新并保留其他配置项，实际改写前生成 `<配置文件>.bak-<时间戳>` 备份，再原子替换；YAML 注释和原始排版不会保留。文件不存在时可新建；已有文件如果 YAML 解析失败或根节点不是映射，会拒绝覆盖。父目录需提前创建。
+
+### 交互式向导：单机用户推荐流程
+
+先激活环境并执行 `acp init`，按下面顺序选择。菜单输入数字；带默认值的文本问题可回车接受默认值。**数字菜单不能直接回车选择第一项。**
+
+| 步骤 | 出现的内容 | 单机用户怎么选 |
+|---|---|---|
+| 1. 使用方式 | 初始化本机部署 / 连接已有 ACP 服务 | 选 `1` 初始化本机部署 |
+| 2. 部署档位 | Standalone / Lab Server / Hosted | 选 `1` Standalone |
+| 3. 已有资源 | 本地 / 已声明节点 / 声明新集群 | 选 `1` 本地，检查软件表并补路径；返回资源菜单后按 `q` 继续 |
+| 4. 组件组合 | 默认科学核心、本地身份、本地存储；可额外选组件 | 仅 CLI 直接回车；需要 Web 界面填写 `1` |
+| 5. 参数与秘密 | 数据根、外部访问地址、秘密引用 | 数据根填写绝对路径或 `~/ACP_runs`；直接访问填 `-`；无凭据需求时回车跳过 |
+| 6. 计划预览 | 目标文件、差异、组件、外部动作和回退提示 | 核对后选 `1` 应用；选 `2` 取消最终计划 |
+| 7. doctor | 配置和能力报告 | 检查 `FAIL`；完成后回到“使用方式”菜单，按 `q` 退出 |
+
+这里有两个不同的 `q`：**资源菜单的 `q` 表示完成资源配置、继续后续步骤；使用方式菜单的 `q` 才是退出整个向导。** Ctrl-C / EOF 会中止向导，已经保存的修改继续保留。
+
+本地检测显示软件的候选安装、实际解析路径和版本。已配置路径、环境变量、PATH/当前 Python 环境以及常规安装位置都会参与解析；多套安装不应靠猜测选择，请显式固定路径。唯一的常规目录扫描命中会自动保存；缺失程序可手动填写可执行文件路径，不使用时回车跳过。MPI 检测项名为 `mpi`，填写的是 `mpirun` 路径，保存到 `executables.orca.mpi_path`。
+
+**保存时机与预览范围：** 本地软件路径、远程节点声明、远端 `~/.cccp.yaml` 和可选符号链接可能在资源步骤中即时保存或执行。最后“取消”、按 `q` 或交互式 `acp init --plan` 都不会撤销这些已发生的操作。需要只查看配置差异而不执行资源步骤时，使用下面的 **`--answers ... --plan`**。
+
+### 部署档位与组件怎么选
+
+| 档位 | 回答文件 `tier` | 当前要求 |
+|---|---|---|
+| Standalone（推荐起步） | `standalone` 或 `local-single` | 科学核心、本地身份、本地存储；可加 Web 或远程节点 |
+| Lab Server | `lab` | 还需 Web、认证、隔离组件及 `database` 资源引用；应用后有额外 Lab 能力检查 |
+| Hosted | `hosted` | 当前标为 `NOT_VERIFIED`，拒绝启用 |
+
+“本机部署”指在这台机器配置 ACP，也可以连接远端 LSF 节点；部署档位和计算任务是否远程执行是两项选择。个人连接集群计算时，可以使用 Standalone 配置远程节点，无需因此选择 Lab。
+
+当前可选组件如下；程序会自动补充组件依赖。**选择组件用于记录和校验配置，不会自动安装 pip extra、启动服务或开通外部资源。**
+
+| 交互编号 | 组件名 | 用途 |
+|---|---|---|
+| 默认启用 | `science-core`、`local-identity`、`local-storage` | 科学核心、本地单用户身份与存储 |
+| `1` | `web-ui` | Web 界面，仍需安装 `api` extra 并手动启动 |
+| `2` | `mcp-server` | MCP 组件声明 |
+| `3` | `authentication` | 认证能力声明 |
+| `4` | `isolation` | 多用户隔离能力声明 |
+| `5` | `external-iam` | 外部 IAM/OIDC |
+| `6` | `object-store` | 对象存储 |
+| `7` | `usage-metering` | 用量计量 |
+| `8` | `payment` | 支付/账单 |
+
+多个编号用逗号分隔，例如 `1,3,4` 满足 Lab 所需的额外组件选择；Lab 还必须提供已有数据库引用。支付、对象存储、外部 IAM 默认关闭。计划中列出的外部动作不会由最终配置写入自动完成，报告会保留 `NOT_VERIFIED`。
+
+### 配置已有集群或新增远程计算节点
+
+先在管理 ACP 的机器上安装 `remote` extra。远端需准备 SSH 账户、可用的 LSF / Openlava 环境、Python 3.10+ 及计算程序；远端可先创建 Python 3.11 的 Conda 环境。节点初始化会同步代码并通过 pip 安装 [requirements-node.txt](requirements-node.txt) 中的运行依赖，远端需能访问依赖源或已有相应依赖。
+
+在“已有资源”菜单中选择现有节点，可重新探测软件并补填远端路径；禁用或无效的节点会提示先修正配置。新增时选“声明新集群”，按以下顺序填写：
+
+1. 集群类型：`LSF` 或 `Openlava`；当前这个向导没有 Slurm 选项。
+2. 主机地址、节点名称、SSH 端口（默认 `22`）、用户名和密码/SSH 私钥路径。私钥路径是 ACP 管理机上的路径。
+3. 连接测试；未知主机会显示指纹并询问是否接受，已知主机密钥发生变化会中止。
+4. 远端代码目录（默认 `~/acp_code`）、远端任务目录（默认 `~/acp_jobs`）、最大并发任务数（默认 `5`）、LSF 队列（默认 `normal`，请改为实际队列）。
+5. Bootstrap：同步代码并安装节点运行依赖。找不到可用 Python 时，可在重试中填写远端 Conda 环境的解释器绝对路径，例如 `/home/alice/miniforge3/envs/acp/bin/python`。
+6. 软件检测：缺失时填写**远端机器上**的可执行文件路径，可回车跳过。补填会更新远端用户的 `~/.cccp.yaml`，并可选择创建 `~/bin` 符号链接；这些操作会修改远端文件。
+7. 凭据保存与执行模式：密码默认不写 YAML，按提示通过 `ACP_REMOTE_PASSWORD_<节点名规范化值>` 环境变量提供；如果希望经该集群执行，选择“设为 remote”。
+
+Bootstrap 失败可重试或放弃，放弃时节点不保存；已经同步的远端文件或已安装依赖仍可能存在。新增完成会返回资源菜单，可继续添加节点或按 `q` 进入组件选择。配置完成后执行 `acp doctor --node <节点名称>` 检查实际节点。
+
+### 连接已有 ACP 服务
+
+第一步选 `2`“连接已有 ACP 服务”，依次填服务 URL、项目标识（可空）、凭据引用（可空，如 `env:ACP_TOKEN`），再预览和应用。
+
+这一模式只将信息保存到 `deployment.service`，用于记录连接配置；当前向导不会因此创建本地服务器、数据库或集群，也不会将后续普通 `acp run` 命令自动转成远程 API 提交。使用已有服务的 Web 界面时，直接访问其 URL。
+
+### 使用回答文件：可重复、非交互初始化
+
+回答文件是“向导输入”，`--config` 是“生成/更新的配置”，请使用两个不同的文件。下面内容保存为 `init-standalone.yaml`：
+
+```yaml
+version: 1
+usage: local
+tier: standalone
+components:
+  - science-core
+  - local-identity
+  - local-storage
+  - web-ui
+resources:
+  cluster:
+    type: local
+  # 如需固定软件路径，取消以下注释并改成真实的可执行文件路径。
+  # software:
+  #   orca: /opt/orca/orca
+  #   xtb: /opt/xtb/bin/xtb
+  #   mpi: /opt/openmpi/bin/mpirun
+params:
+  public_origin: ""  # 直接访问；反向代理时填浏览器使用的完整 origin
+```
+
+该示例使用运行时默认数据目录或 `ACP_RUN_ROOT`。需要自定义数据根时，可在 `params` 内增加 `run_root: ~/ACP_runs`；初始化会保存绝对路径，运行时自动读取。
+
+```bash
+# 先预览：不写配置、不运行交互资源步骤和节点 bootstrap
+acp init --config "$HOME/.cccp.yaml" --answers init-standalone.yaml --plan
+
+# 核对后应用：无额外确认提示，写配置后运行能力检查
+acp init --config "$HOME/.cccp.yaml" --answers init-standalone.yaml
+```
+
+回答文件模式也不会自动安装计算程序或 bootstrap 节点。`resources.software` 的路径会写入 `executables`，`resources.cluster` 写入 `cluster`；外部资源引用放在 `resources.database` / `resources.https` / `resources.storage`，保存后归入 `deployment.resources`。`params` 和 `secrets` 分别归入 `deployment.params` 和 `deployment.secrets`。
+
+连接已有服务的回答文件示例：
+
+```yaml
+version: 1
+usage: connect
+service:
+  url: https://acp.example.org
+  project: demo
+  credential_ref: env:ACP_TOKEN
+```
+
+需要秘密引用时，本机部署回答文件可增加：
+
+```yaml
+secrets:
+  - name: db_password
+    ref: env:ACP_DB_PASSWORD
+```
+
+`secrets` 支持 `env:NAME`、`file:/绝对路径`、`provider:key`，保存的是引用；不要使用明文 `value`。引用的提供方、凭据和资源仍需在运行环境中配置。
+
+相同回答文件再次应用且目标内容相同时，会提示“无需写入（幂等）”；原子配置写入有并发修改检查。回答文件应用返回 `0` 表示应用与检查未发现 `FAIL`；返回 `1` 可能是输入/档位拒绝，也可能是**配置已经写入但后续检查失败**，请阅读输出确认。交互退出或 Ctrl-C 可以返回 `0`，因此退出码本身不代表完成初始化。
+
+## 初始化后启动和验证
+
+推荐安装 `.[api,remote]` 后，先检查配置，再以前台方式启动 Web：
+
+```bash
+conda activate acp
+acp doctor
+
+# 使用前面设置的 ACP_RUN_ROOT；保持当前终端运行
+acp run serve --host 127.0.0.1 --port 8765
+
+# 或显式指定数据目录（先创建并确保可写）
+# acp run serve --host 127.0.0.1 --port 8765 --run-root /data/acp/runs
+```
+
+浏览器访问 `http://127.0.0.1:8765`。服务运行在另一台机器上时，`127.0.0.1` 指那台机器；可用 SSH 端口转发后访问。`acp init` 保存配置后不会自动启动或重启服务，已有服务需按原部署方式重启，配置和外部访问地址才会重新加载。
+
+`acp doctor` 可检查本地 Standalone 或已配置的远端节点；`acp doctor --node <节点名称>` 检查指定节点。独立的 `doctor` 命令当前会加载远程管理模块，需要 `remote` extra；仅安装核心 CLI 时，可先查看 `acp init` 应用后自带的能力报告。
+
+- `PASS`：该检查项满足条件，例如文件可解析或组件依赖齐全。
+- `FAIL`：有明确错误，例如已固定的软件路径不存在，需要修正。
+- `NOT_VERIFIED`：未配置或尚未验证，例如未安装的可选程序、外部资源动作。
+- Lab 报告还会列出 `UNAVAILABLE`；声明组件和资源引用不代表认证、隔离、数据库或真实 LSF 作业已通过验收。
+
+报告通过后，使用[工作流示例](#快速开始)运行小任务验证科学环境，例如在已安装 xTB 时运行 `acp run xtb_optimize --input molecule.xyz --output /你的计算数据目录/xtb-smoke`（准备真实 XYZ 并替换输出路径）。路径探测和配置检查通过并不代表真实 QC 计算已经验证。
+
+## 安装与初始化常见问题
+
+| 现象 | 排查与处理 |
+|---|---|
+| 找不到 `acp` 或导入了另一套环境 | 先 `conda activate acp`，再用 `command -v acp`、`python -m pip --version` 核对；也可用 `python -m acp init` |
+| `conda activate` 提示先初始化 shell | 执行 `conda init bash`（其他 shell 替换名称），重新打开终端后激活环境 |
+| 缺少 FastAPI / uvicorn / Paramiko | 在仓库根目录执行 `python -m pip install -e '.[api,remote]'` |
+| 按资源菜单 `q` 后没有退出 | 这是进入下一步；完成/取消后在“使用方式”菜单按 `q` 退出 |
+| 最终取消或 `--plan` 后配置仍有变化 | 交互资源步骤可能已保存路径、节点或远端配置；需要纯预览时用 `--answers FILE --plan` |
+| 保存自定义配置后 Web / doctor 不生效 | 它们没有 `--config` 参数；使用运行账户的 `~/.cccp.yaml` 或服务工作目录的 `cccp.yaml`，同时检查环境变量覆盖 |
+| 向导设置的数据目录没有生效 | 重启服务，检查 `--run-root` / `ACP_RUN_ROOT` 覆盖；旧 systemd 配置可用 `bash scripts/install_systemd.sh --run-root '' --run-root-only` 恢复读取 init 配置 |
+| 修改 `~/.cccp.yaml` 后结果仍不符 | 检查当前目录 `cccp.yaml`、显式 `--config`、`CONFSEARCH_*` 和 CLI 覆盖；已有服务需重启 |
+| 提示“目标目录不可写或不存在” | 先创建配置文件父目录，使用当前账户可写的位置；不要为初始化普通用户配置而切换到 root |
+| 软件路径校验失败 | 填可执行文件而非目录，检查存在性与执行权限；远端软件要填远端路径 |
+| Lab 被拒绝或能力未验证 | 核对 `web-ui`、`authentication`、`isolation` 和数据库资源引用，并阅读 Lab 报告；个人部署从 Standalone 开始 |
+| SSH 成功但节点 bootstrap 失败 | 核对远端 Python 版本、pip 依赖源、目录写权限和报错尾部；必要时固定 Conda 环境解释器路径 |
 
 ---
 
@@ -250,47 +541,6 @@ src/
 
 ---
 
-## 安装
-
-### 依赖
-
-- Python 3.10+
-- RDKit >= 2022.09.1
-- NumPy >= 2.1.0
-- PyYAML >= 6.0
-
-### 外部软件（至少一个可用）
-
-| 软件 | 用途 | 路径配置 |
-|------|------|----------|
-| ORCA | 单点能 / 优化 / 频率 | `executables.orca.path` |
-| CREST | 构象搜索 | `executables.crest.path` |
-| xTB | 预优化 / SPH / ENSO | `executables.xtb.path` |
-| ISOSTAT | 构象聚类 | `executables.isostat.path` |
-| Shermo | 热力学修正 | `executables.shermo.path` |
-| CENSO | ensemble 排序筛选 | `executables.censo.path` |
-
-### 安装命令
-
-```bash
-# 安装包（推荐）
-pip install -e .
-
-# 安装 API 依赖（FastAPI + uvicorn + multipart）
-pip install -e '.[api]'
-
-# 安装远程执行依赖（paramiko）
-pip install -e '.[remote]'
-
-# 安装全部
-pip install -e '.[api,remote,dev]'
-
-# 安装开发依赖（pytest + pytest-cov + ruff + mypy）
-pip install -e '.[dev]'
-```
-
----
-
 ## 快速开始
 
 ### ACP 新入口（推荐）
@@ -334,7 +584,7 @@ acp run OrcaGradient --gradient-config request.json --output ./grad_out
 acp run nmr --input "CCO" --spectrum exp_spectrum.txt --output ./nmr_results
 acp run nmr --input "CCO" --spectrum exp_spectrum.txt --nmr-method mPW1PW91 --nmr-basis "6-311G(d)"
 
-# === 初始化向导（交互式配置本地软件与远程计算节点） ===
+# === 初始化向导（详见前文 acp init 详细使用方法） ===
 acp init
 
 # === Web 服务 ===
@@ -408,14 +658,15 @@ acp run serve [--host <host>] [--port <port>] [--reload]
 
 ## 配置
 
-### 配置文件方式（推荐）
+### 配置文件方式
+
+首次配置推荐使用前文的 [`acp init` 向导或回答文件](#acp-init-详细使用方法)。使用自定义配置文件时，初始化与计算命令要指向同一文件：
 
 ```bash
-# 生成配置模板
-acp run singlepoint --input molecule.xyz --save-config my_config.yaml
+# 创建/更新配置（父目录需已存在）
+acp init --config my_config.yaml
 
-# 编辑 my_config.yaml 调整参数
-# 然后用该配置运行
+# 再加载该配置运行计算
 acp run Confsearch --input "CCO" --config my_config.yaml
 ```
 
@@ -434,7 +685,7 @@ acp run Confsearch --input "CCO" --config my_config.yaml
 
 **安装目录 ≠ 数据目录**：所有任务产物（`WORK/`、`RESULT/`、QC 中间文件）与任务索引 `acp_jobs.db` 都落在数据目录 run_root，必须位于**原生文件系统**（WSL 下不要放 `/mnt/*`——9p 网络挂载会让 QC 子进程 I/O 慢约 1000 倍）。
 
-解析优先级：`--run-root` CLI 参数 > `ACP_RUN_ROOT` 环境变量 > 平台默认（root → `/var/lib/acp/runs`；普通用户 → `~/.local/share/acp/runs`）。
+解析优先级：`--run-root` CLI 参数 > `ACP_RUN_ROOT` 环境变量 > `acp init` 保存的 `deployment.params.run_root` > 平台默认（root → `/var/lib/acp/runs`；普通用户 → `~/.local/share/acp/runs`）。向导支持绝对路径和 `~/`，保存时展开为绝对路径；相对配置路径会被拒绝，避免服务工作目录改变后将任务写到错误位置。
 
 ```bash
 # 查看生效的数据目录
@@ -573,6 +824,42 @@ sudo journalctl -u acp -f          # Tail logs
 - **User**: `<user>`
 - **URL**: http://127.0.0.1:8765
 - **Reload reminder**: After any code modification, run `sudo systemctl restart acp`.
+
+HTTPS 反向代理部署需配置浏览器访问的公网地址，避免代理转发后的 HTTP 被同源校验误拒绝。
+运行 `acp init`，在本机部署的“参数与秘密”步骤填写“外部访问地址”；回车保留已有地址，
+输入 `-` 恢复直接访问模式。地址保存到 `~/.cccp.yaml` 的 `deployment.params.public_origin`，
+服务以同一用户启动时自动读取；已运行的服务需重启。迁移后重新运行向导修改地址即可。
+
+自动化初始化可使用 `acp init --answers init-answers.yaml`：
+
+```yaml
+version: 1
+usage: local
+tier: standalone
+params:
+  public_origin: https://acp.example
+```
+
+也可通过部署环境覆盖该配置（适用于容器或已有 systemd 服务）：
+
+```bash
+# 配置现有服务；保留原主 unit，生成独立配置并重启
+bash scripts/install_systemd.sh --origin-only --public-origin https://acp.example
+
+# 迁移后改为新域名或 IP:端口，无需修改代码
+bash scripts/install_systemd.sh --origin-only --public-origin https://new.example:9443
+
+# 改为直接访问 ACP 时恢复请求 Host/scheme 校验
+bash scripts/install_systemd.sh --origin-only --public-origin ''
+```
+
+脚本生成 `/etc/systemd/system/acp.service.d/public-origin.conf`，其中的
+`ACP_PUBLIC_ORIGIN` 是部署配置，不随代码绑定域名。手动或容器启动时可直接设置该环境变量。
+优先级为 `ACP_PUBLIC_ORIGIN` 环境变量 > `acp init` 保存的配置 > 直接按请求 Host/scheme 校验；
+环境变量显式设为空字符串时恢复直接访问。
+配置须为完整的 `http://主机[:端口]` 或 `https://主机[:端口]`，不含业务路径；未设置时保持直接访问方式。
+配置后浏览器写请求仅接受该公网地址；无 Origin 的本地机器调用仍保留。其他域名、协议或端口仍会被拒绝；
+服务不从请求的 `Origin` 或未经信任的 `X-Forwarded-*` 头推断公网地址。
 
 ---
 

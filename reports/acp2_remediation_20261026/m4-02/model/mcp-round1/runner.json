@@ -1,0 +1,288 @@
+{
+  "schema": "acp2.m4-01.full-chain.mcp.v1",
+  "status": "ok",
+  "mode": "resume",
+  "model_adapter": "model-gateway",
+  "evidence_kind": "live",
+  "protocol_version": "2025-06-18",
+  "tools": [
+    "acp_analyze",
+    "acp_cancel",
+    "acp_capabilities",
+    "acp_preflight",
+    "acp_prepare_artifact",
+    "acp_read_artifact",
+    "acp_research_approval_decide_v1",
+    "acp_research_approval_query_v1",
+    "acp_research_approval_request_v1",
+    "acp_research_approval_revoke_v1",
+    "acp_research_proposal_create_v1",
+    "acp_research_proposal_read_v1",
+    "acp_research_proposal_update_cas_v1",
+    "acp_research_resume_v1",
+    "acp_research_snapshot_v1",
+    "acp_research_wait_v1",
+    "acp_status",
+    "acp_submit"
+  ],
+  "proposal": {
+    "proposal_id": "prop-m4-01-rounds",
+    "round": 1,
+    "digests": {
+      "canonical_digest_version": "1.0.0",
+      "science_digest": "sha256:5444684f852645353007615c8cccdd77ad594a2061577b79ea520c20d2f25e49",
+      "plan_digest": "sha256:fa868afe03f7355383c2b3de399978d9d49b12b381d6d961081a427ca50145cb",
+      "proposal_digest": "sha256:b700e796c09a6608a921a2f8a6d4ca9e58533ad30f98215403ff034af21bf08c"
+    },
+    "approval_ref": "ap_033d41d4293e4c58a3eb4247ac2ab344",
+    "research": {
+      "principal_id": "principal_local",
+      "project_id": "eac04e7b-fa5a-4074-a379-1174087d0707",
+      "research_id": "res-dcf760e391c82720be6d4bbd",
+      "session_id": "ses-8266e6f1d20009b433a8e9c4",
+      "round": 1
+    }
+  },
+  "approval": {
+    "approval_ref": "ap_033d41d4293e4c58a3eb4247ac2ab344",
+    "state": "approved",
+    "revision": 2,
+    "binding_status": "full"
+  },
+  "wait": {
+    "first_timed_out": false,
+    "first_events": 2,
+    "cursor_present": true,
+    "cursor_redacted": false,
+    "cursor_roundtrip": true,
+    "replay_timed_out": true,
+    "replay_error": null
+  },
+  "snapshot": {
+    "snapshot_revision": "sha256:26c3025d8963fc6b594cd4a63942a4b32ac2a8511ecb600484707c9a4c9845dc",
+    "refs": [
+      {
+        "ref": "ap_033d41d4293e4c58a3eb4247ac2ab344",
+        "state": "approved"
+      },
+      {
+        "ref": "prop-m4-01-rounds",
+        "state": "stored"
+      }
+    ],
+    "approval_state": "approved"
+  },
+  "task_ref": {
+    "task_id": "20261027_211517_002_fake",
+    "job_id": "20261027_211517_002_fake",
+    "attempt": 1
+  },
+  "task_ref_normalized": {
+    "project_id": "eac04e7b-fa5a-4074-a379-1174087d0707",
+    "task_id": "20261027_211517_002_fake",
+    "job_id": "20261027_211517_002_fake",
+    "attempt": 1,
+    "release": {
+      "release_id": "910ca9d3aff95737",
+      "release_digest": "sha256:adf3bbe51cb52ae473d29ef792aa9f9a6a10b91ed9ab8ff3d7e02de5ace3e057"
+    }
+  },
+  "task_ref_source": "status+declared_release",
+  "prepare": {
+    "passes": [
+      {
+        "pass": 0,
+        "availability": "readable",
+        "operation_reference": "op_fee6d92cc70b46238062f4b6892abf2a",
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+        "read": {
+          "is_error": false,
+          "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+          "body_bytes": 400,
+          "body_sha256": "e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+          "error": null
+        }
+      },
+      {
+        "pass": 1,
+        "availability": "readable",
+        "operation_reference": "op_fee6d92cc70b46238062f4b6892abf2a",
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+        "read": {
+          "is_error": false,
+          "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+          "body_bytes": 400,
+          "body_sha256": "e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+          "error": null
+        }
+      }
+    ],
+    "same_operation": true,
+    "same_digest": true,
+    "same_body": true
+  },
+  "read": {
+    "is_error": false,
+    "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+    "body_bytes": 400,
+    "body_sha256": "e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+    "error": null
+  },
+  "supervisor": {
+    "status": "stopped",
+    "stop_reason": "round_cap",
+    "rounds_completed": 1,
+    "submits": 1,
+    "submit_port_calls": 1,
+    "task_refs": [
+      {
+        "job_id": "20261027_211517_002_fake",
+        "attempt": 1,
+        "release_id": "910ca9d3aff95737",
+        "release_digest": "sha256:adf3bbe51cb52ae473d29ef792aa9f9a6a10b91ed9ab8ff3d7e02de5ace3e057",
+        "project_id": "eac04e7b-fa5a-4074-a379-1174087d0707"
+      }
+    ],
+    "model_invocations": 5,
+    "wait_invocations": 1,
+    "phases": [
+      "understand@0",
+      "hypothesize@0",
+      "critique@0",
+      "plan@0",
+      "approve@0",
+      "wait@0",
+      "evaluate@0",
+      "revise@0",
+      "stop@1"
+    ],
+    "decision": null,
+    "reports": 1
+  },
+  "errors": [],
+  "findings": [],
+  "closed_findings": [
+    {
+      "id": "F7-session-tools-list-order",
+      "status": "closed",
+      "found_by": "M4-01 (reports/acp2_remediation_20261026/m4-01/summary.json)",
+      "closed_by": "M4-02: openMcpSession performs the acp_capabilities negotiation before tools/list (platform-session.ts), so a product-mode session sees the negotiated surface",
+      "detail": "a real product-mode session observes the negotiated 8+10 tool surface on a server that hides the ten P2 tools until negotiation",
+      "evidence": {
+        "session_mode": "product",
+        "handshake_status": "negotiated",
+        "tools_observed": 18,
+        "research_tools_visible": 10
+      }
+    },
+    {
+      "id": "F8-wait-cursor-redacted",
+      "status": "closed",
+      "found_by": "M4-01 (reports/acp2_remediation_20261026/m4-01/summary.json)",
+      "closed_by": "M4-02: machine_output.PASSTHROUGH_FIELD_VALUES carries a server-issued opaque wait cursor through the envelope verbatim",
+      "detail": "the cursor issued by `research.wait` survives the machine envelope and a replayed bounded wait reports timed_out without inventing an event",
+      "evidence": {
+        "cursor_chars": 212,
+        "replay_timed_out": true,
+        "replay_events": 0
+      }
+    }
+  ],
+  "trace_path": "/ACPServer/acp2-remediation-integration/reports/acp2_remediation_20261026/m4-02/model/mcp-round1/mcp-trace.jsonl",
+  "model_calls": [
+    {
+      "phase": "plan",
+      "round": 0,
+      "attempt": 1,
+      "evidence_in_prompt": true,
+      "http_status": 200,
+      "duration_ms": 2065,
+      "receipt_id": "modelrcpt|eac04e7b-fa5a-4074-a379-1174087d0707|res-21b31bc8376ff00357667d9d|ses-f132170eaf25ba84d87f6519|0|2|sha256:e63ce233dbc6622d743f74ebad315fbbde28646a8cf2b5db8cbb36ff42ad5d24",
+      "usage": {
+        "input_tokens": 1349,
+        "output_tokens": 459,
+        "total_tokens": 1808,
+        "source": "provider-reported",
+        "complete": true,
+        "estimate": false
+      },
+      "identity": {
+        "principal_id": "principal_local",
+        "project_id": "eac04e7b-fa5a-4074-a379-1174087d0707",
+        "research_id": "res-21b31bc8376ff00357667d9d",
+        "session_id": "ses-f132170eaf25ba84d87f6519"
+      },
+      "budget": {
+        "budget_id": "rb_3a755d808024281c18d7e6c7",
+        "model_requests": 2,
+        "receipts": 2,
+        "reserved": 0,
+        "settled": 2,
+        "released": 0,
+        "remaining": 18,
+        "limit": 20,
+        "round": 0,
+        "is_planned_identity": true
+      },
+      "refusal": null,
+      "output_chars": 1312,
+      "output_sha256": "5dc02ede4b37f7438886f0991d99c78b056626934370aa13b49d816c99e5ab24",
+      "output_head": "{\"plan_id\":\"plan-eac04e7b-fa5a-4074-a379-1174087d0707-r0\",\"project_id\":\"eac04e7b-fa5a-4074-a379-1174087d0707\",\"round\":0,\"hypothesis\":\"Round 0: M4-01 round 1: does the stub evidence support the hypothesis?\",\"recipe_digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"pla",
+      "output_tail": "0,\"task_refs\":1,\"recipe_steps\":1,\"qc_invocations\":1,\"wall_seconds\":60,\"queue_seconds\":60},\"notes\":[\"m4-02 live plan\"],\"schema\":\"acp2.skill.planner.output.v1\",\"skill\":\"planner\",\"skill_version\":\"1.1.0\"}",
+      "rejected_reason": "planner_output_invalid",
+      "repairable": true,
+      "rejected_issues": [
+        {
+          "path": "$.science.electronic_state",
+          "code": "additional_property",
+          "message": "not allowed"
+        }
+      ],
+      "output_body": "{\"plan_id\":\"plan-eac04e7b-fa5a-4074-a379-1174087d0707-r0\",\"project_id\":\"eac04e7b-fa5a-4074-a379-1174087d0707\",\"round\":0,\"hypothesis\":\"Round 0: M4-01 round 1: does the stub evidence support the hypothesis?\",\"recipe_digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"plan_definition_digest\":\"sha256:5444684f852645353007615c8cccdd77ad594a2061577b79ea520c20d2f25e49\",\"science\":{\"capability_steps\":[{\"step_index\":0,\"capability\":\"singlepoint\",\"version\":\"1.0.0\",\"parameters\":{}}],\"initial_inputs\":[{\"input_id\":\"in-m4-01\",\"sha256\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"format\":\"smiles\",\"role\":\"minimum\"}],\"method\":\"r2SCAN-3c\",\"mapping\":\"canonical\",\"charge\":0,\"multiplicity\":1,\"electronic_state\":null,\"allowed_substitutions\":[]},\"science_inputs\":{\"charge\":0,\"multiplicity\":1,\"electronic_state\":null,\"structure_provenance\":[{\"input_id\":\"in-m4-01\",\"sha256\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"format\":\"smiles\",\"role\":\"minimum\"}],\"constraints\":[]},\"budget\":{\"model_requests\":2,\"input_tokens\":1000,\"output_tokens\":1000,\"task_refs\":1,\"recipe_steps\":1,\"qc_invocations\":1,\"wall_seconds\":60,\"queue_seconds\":60},\"notes\":[\"m4-02 live plan\"],\"schema\":\"acp2.skill.planner.output.v1\",\"skill\":\"planner\",\"skill_version\":\"1.1.0\"}"
+    },
+    {
+      "phase": "plan",
+      "round": 0,
+      "attempt": 2,
+      "evidence_in_prompt": true,
+      "http_status": 200,
+      "duration_ms": 2231,
+      "receipt_id": "modelrcpt|eac04e7b-fa5a-4074-a379-1174087d0707|res-21b31bc8376ff00357667d9d|ses-f132170eaf25ba84d87f6519|0|3|sha256:429d599eaaee3983c066738138dc56591166a7b34df6f3711441f87dfbd1ceef",
+      "usage": {
+        "input_tokens": 1479,
+        "output_tokens": 454,
+        "total_tokens": 1933,
+        "source": "provider-reported",
+        "complete": true,
+        "estimate": false
+      },
+      "identity": {
+        "principal_id": "principal_local",
+        "project_id": "eac04e7b-fa5a-4074-a379-1174087d0707",
+        "research_id": "res-21b31bc8376ff00357667d9d",
+        "session_id": "ses-f132170eaf25ba84d87f6519"
+      },
+      "budget": {
+        "budget_id": "rb_3a755d808024281c18d7e6c7",
+        "model_requests": 3,
+        "receipts": 3,
+        "reserved": 0,
+        "settled": 3,
+        "released": 0,
+        "remaining": 17,
+        "limit": 20,
+        "round": 0,
+        "is_planned_identity": true
+      },
+      "refusal": null,
+      "output_chars": 1288,
+      "output_sha256": "92aed255ffbad9606bd48690620f20c36fa8932f5a30fbc349d703d5489fa061",
+      "output_head": "{\"plan_id\":\"plan-eac04e7b-fa5a-4074-a379-1174087d0707-r0\",\"project_id\":\"eac04e7b-fa5a-4074-a379-1174087d0707\",\"round\":0,\"hypothesis\":\"Round 0: M4-01 round 1: does the stub evidence support the hypothesis?\",\"recipe_digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"pla",
+      "output_tail": "0,\"task_refs\":1,\"recipe_steps\":1,\"qc_invocations\":1,\"wall_seconds\":60,\"queue_seconds\":60},\"notes\":[\"m4-02 live plan\"],\"schema\":\"acp2.skill.planner.output.v1\",\"skill\":\"planner\",\"skill_version\":\"1.1.0\"}"
+    }
+  ],
+  "evidence_feedback": {
+    "provided": true,
+    "report_id": "report-20261027_211510_001_fake-a1"
+  }
+}

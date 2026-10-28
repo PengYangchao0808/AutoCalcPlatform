@@ -1,0 +1,111 @@
+[
+  {
+    "argv": [
+      "git",
+      "show",
+      "--format=fuller",
+      "--no-patch",
+      "abec2bc4f1d302827248d36171973df5bc1bc4dd"
+    ],
+    "exit_code": 0,
+    "stdout": "commit abec2bc4f1d302827248d36171973df5bc1bc4dd\nAuthor:     xieningke <xieningke@localhost>\nAuthorDate: Fri Oct 23 22:07:51 2026 +0800\nCommit:     xieningke <xieningke@localhost>\nCommitDate: Fri Oct 23 22:07:51 2026 +0800\n\n    fix(release): make installed wheels execute scheduler tasks\n",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "git",
+      "for-each-ref",
+      "--contains",
+      "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+      "--format=%(refname)"
+    ],
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "git",
+      "ls-tree",
+      "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+      "src/acp_services/entrypoints/mcp.py"
+    ],
+    "exit_code": 0,
+    "stdout": "100644 blob 581f92e29afaf4d64048dc8b4197c2878b01857f\tsrc/acp_services/entrypoints/mcp.py\n",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "rg",
+      "-n",
+      "cccp_compute_dispatch|BoundedStepDagExecutor",
+      "src"
+    ],
+    "exit_code": 0,
+    "stdout": "src/acp_services/runtime/step_dag.py:10:* **Runtime (`BoundedStepDagExecutor`)** owns the loop, readiness, per-step\nsrc/acp_services/runtime/step_dag.py:47:    \"BoundedStepDagExecutor\",\nsrc/acp_services/runtime/step_dag.py:63:    \"cccp_compute_dispatch\",\nsrc/acp_services/runtime/step_dag.py:69:EXECUTION_LOOP_OWNER = \"acp_services.runtime.step_dag.BoundedStepDagExecutor\"\nsrc/acp_services/runtime/step_dag.py:761:class BoundedStepDagExecutor:\nsrc/acp_services/runtime/step_dag.py:1037:    ) -> BoundedStepDagExecutor:\nsrc/acp_services/runtime/step_dag.py:1074:def cccp_compute_dispatch(\n",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "rg",
+      "-n",
+      "runSupervisor\\(|new Bridge\\(",
+      "rph/packages",
+      "--glob",
+      "*.ts",
+      "--glob",
+      "!**/dist/**"
+    ],
+    "exit_code": 0,
+    "stdout": "rph/packages/dsh-bundle/skills/supervisor.ts:366:export async function runSupervisor(\n",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "rg",
+      "-n",
+      "ACPResearchApproval\\.mount|research/approvals",
+      "frontend",
+      "--glob",
+      "!**/vendor/**"
+    ],
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "rg",
+      "-n",
+      "readOnly",
+      "frontend/js/client/research-query.js"
+    ],
+    "exit_code": 0,
+    "stdout": "264:    readOnly: true,\n",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "rg",
+      "-n",
+      "register_analysis_capability\\(",
+      "src",
+      "tests"
+    ],
+    "exit_code": 0,
+    "stdout": "src/acp_services/runtime/analysis_capabilities.py:109:def register_analysis_capability(capability: AnalysisCapability) -> AnalysisCapability:\n",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "git",
+      "-C",
+      "/ACPServer/acp2-tools/deepseek-harness",
+      "rev-parse",
+      "HEAD"
+    ],
+    "exit_code": 0,
+    "stdout": "687f282e8625c6b8d11ff58211a90524be2e4317\n",
+    "stderr": ""
+  }
+]

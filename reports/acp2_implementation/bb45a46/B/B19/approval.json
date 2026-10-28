@@ -1,0 +1,10 @@
+{
+  "approval_ref": "ap_730c1f16a1a64dd8b33d1781cc0702ef",
+  "approved_replay": false,
+  "plan_digest": "sha256:76704c31ef45ef8f33dc078d1136cb0be894a5f77dda2e49244e4f624d43b569",
+  "project_id": "uncategorized",
+  "proposal_digest": "sha256:198817fab19fb58a6f99d9f520d511d4a88cb6f2e32a1a1135ffb468742de910",
+  "replayed": false,
+  "revision": 2,
+  "state": "approved"
+}

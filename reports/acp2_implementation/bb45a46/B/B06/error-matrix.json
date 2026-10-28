@@ -1,0 +1,36 @@
+[
+  {
+    "case": "preflight_unknown_workflow",
+    "class": "InvalidParameterError",
+    "code": "input_invalid",
+    "retryable": false,
+    "message": "Unsupported workflow 'not-a-workflow'"
+  },
+  {
+    "case": "operation_missing",
+    "class": "NotPreparedError",
+    "code": "resource_not_ready",
+    "retryable": true,
+    "message": "not_prepared: unknown operation 'op_b06_missing'"
+  },
+  {
+    "case": "analyze_implicit",
+    "class": "InvalidParameterError",
+    "code": "input_invalid",
+    "retryable": false,
+    "message": "analyze requires explicit=true"
+  },
+  {
+    "case": "analyze_unsupported",
+    "class": "UnsupportedError",
+    "code": "unsupported_capability",
+    "retryable": false,
+    "message": "analysis capability 'vibration.analyze' is not registered"
+  },
+  {
+    "case": "prepare_project_mismatch",
+    "class": "HTTP",
+    "code": "revision_conflict",
+    "http_status": 409
+  }
+]

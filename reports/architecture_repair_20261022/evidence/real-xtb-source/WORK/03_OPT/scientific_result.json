@@ -1,0 +1,34 @@
+{
+  "artifacts": [
+    {
+      "path": "xtbopt.xyz",
+      "type": "output"
+    },
+    {
+      "path": "xtb.log",
+      "type": "log"
+    }
+  ],
+  "kind": "optimize",
+  "result_id": "v2:5ab1d8cb600d3730964fa77bf5c47d31-step0-optimize",
+  "summary": {
+    "coords": [
+      [
+        0.0,
+        0.0,
+        -0.01848467372883
+      ],
+      [
+        0.0,
+        -0.0,
+        0.75848467372883
+      ]
+    ],
+    "energy_hartree": -0.982686139534,
+    "errors": [],
+    "metadata": {
+      "optimization_status": "converged"
+    },
+    "status": "completed"
+  }
+}

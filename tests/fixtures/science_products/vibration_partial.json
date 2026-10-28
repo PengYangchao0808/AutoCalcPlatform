@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "product_kind": "vibration",
+  "identity": {
+    "product_kind": "vibration",
+    "schema_version": 1,
+    "generator": "cccp.calculation.products.vibration.build_vibration_product",
+    "input_digest": "sha256:d67f81aefaadf20467b4df2e5e69b57526fc01111f7ab37a8c0743c0de6f1f46",
+    "algorithm": "vibration",
+    "algorithm_version": "1",
+    "params_digest": ""
+  },
+  "state": "available",
+  "complete": false,
+  "errors": [],
+  "payload": {
+    "frequency_units": "cm-1",
+    "displacement_units": "dimensionless_orca_normal_mode",
+    "displacement_normalization": "mass_weighted_normalized_not_orthogonal",
+    "atom_order": [
+      "O:0",
+      "H:0",
+      "H:1"
+    ],
+    "topology_source": "orca_freq",
+    "reference_frame": {
+      "axes": "cartesian",
+      "origin": "native_input"
+    },
+    "modes": [
+      {
+        "mode_index": 6,
+        "frequency": -797.72,
+        "imaginary": true,
+        "displacements": [
+          [
+            0.01,
+            -0.02,
+            0.03
+          ],
+          [
+            0.04,
+            -0.05,
+            0.06
+          ],
+          [
+            0.07,
+            -0.08,
+            0.09
+          ]
+        ],
+        "ir_intensity": 66.542
+      },
+      {
+        "mode_index": 7,
+        "missing_reason": "missing_frequency",
+        "displacements": [
+          [
+            0.05,
+            0.06,
+            0.07
+          ],
+          [
+            0.08,
+            0.09,
+            0.1
+          ],
+          [
+            0.11,
+            0.12,
+            0.13
+          ]
+        ]
+      },
+      {
+        "mode_index": 8,
+        "missing_reason": "missing_displacements",
+        "frequency": 1411.55,
+        "imaginary": false
+      }
+    ]
+  }
+}

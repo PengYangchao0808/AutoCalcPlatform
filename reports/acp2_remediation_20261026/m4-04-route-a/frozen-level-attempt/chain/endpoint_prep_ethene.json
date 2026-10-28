@@ -1,0 +1,135 @@
+{
+  "adr_step_index": 1,
+  "adr_task_kind": "conformer_search",
+  "attempt": 1,
+  "bounded_alternative": "alt_endpoint_prep_single_conformation",
+  "complete": true,
+  "duration_seconds": 40.61,
+  "entry": "legacy_task_core",
+  "error": null,
+  "executed_task_kind": "optimize",
+  "level": {
+    "basis": "def2-TZVP",
+    "charge": 0,
+    "method": "wB97X-D4",
+    "multiplicity": 1
+  },
+  "native_files": [
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a/da/endpoint_prep_ethene/optimize.out",
+      "path": "optimize.out",
+      "sha256": "53ea55faca46f2bb4cb7c98819c0da09f5bf59f61ab72e44469bdbb7ef327a8f",
+      "size_bytes": 196733
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a/da/endpoint_prep_ethene/optimize.xyz",
+      "path": "optimize.xyz",
+      "sha256": "44b4190bb2b4d35490fc16a41913819e39e77053389969837a234a7bcaf1f8e7",
+      "size_bytes": 577
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a/da/endpoint_prep_ethene/optimize_trj.xyz",
+      "path": "optimize_trj.xyz",
+      "sha256": "1e8fcb173824a3c0cb62dd1351d920d7ba872388e109e848056403bcdf6a46b2",
+      "size_bytes": 2454
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a/da/endpoint_prep_ethene/optimize.inp",
+      "path": "optimize.inp",
+      "sha256": "b4e9022764462dd66b398c1385a3fbd1d7ba4f269c111007ca9ff53c443729e0",
+      "size_bytes": 386
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a/da/endpoint_prep_ethene/optimize.property.txt",
+      "path": "optimize.property.txt",
+      "sha256": "58a58bbef19dffda357f662fc6fb9cedf0e7d693c5da4293c03b1a09e8f49e89",
+      "size_bytes": 43556
+    }
+  ],
+  "products": [],
+  "receipt": null,
+  "release_digest": "813583bdcaae20ef900a99180f433b34a7dfa730fb47c1efea5c9435919a061b",
+  "release_id": "2d1ab37a0f988933",
+  "schema": "acp2.m4-04.step.v1",
+  "status": "completed",
+  "step_id": "endpoint_prep_ethene",
+  "task_ref": "20261028_940_endpoint_prep_ethene",
+  "task_result": {
+    "artifacts": [
+      {
+        "checksum": "sha256:b4e9022764462dd66b398c1385a3fbd1d7ba4f269c111007ca9ff53c443729e0",
+        "path": "/ACPServer/acp2-runs/remediation/m4-04-route-a/da/endpoint_prep_ethene/optimize.inp",
+        "source": "orca",
+        "type": "output"
+      },
+      {
+        "checksum": "sha256:53ea55faca46f2bb4cb7c98819c0da09f5bf59f61ab72e44469bdbb7ef327a8f",
+        "path": "/ACPServer/acp2-runs/remediation/m4-04-route-a/da/endpoint_prep_ethene/optimize.out",
+        "source": "orca",
+        "type": "log"
+      }
+    ],
+    "complete": true,
+    "coordinates": [
+      [
+        6.007683,
+        1.0,
+        0.0
+      ],
+      [
+        7.332317,
+        1.0,
+        0.0
+      ],
+      [
+        5.438445,
+        1.924244,
+        -0.0
+      ],
+      [
+        5.438444,
+        0.075756,
+        -0.0
+      ],
+      [
+        7.901555,
+        1.924245,
+        -0.0
+      ],
+      [
+        7.901556,
+        0.075755,
+        -0.0
+      ]
+    ],
+    "energy_hartree": -78.65746472846,
+    "errors": [],
+    "frequencies": [],
+    "metadata": {},
+    "payload": {
+      "optimization_status": "converged",
+      "trajectory_ref": {
+        "path": "/ACPServer/acp2-runs/remediation/m4-04-route-a/da/endpoint_prep_ethene/optimization_trajectory.json",
+        "source": "optimization_trajectory",
+        "type": "trajectory"
+      }
+    },
+    "provenance": {
+      "backend": "orca",
+      "input_signature": "/ACPServer/acp2-runs/remediation/m4-04-route-a/da/inputs/ethene.xyz",
+      "method": "wB97X-D4",
+      "version": "unknown"
+    },
+    "schema_version": 1,
+    "status": "completed",
+    "symbols": [
+      "C",
+      "C",
+      "H",
+      "H",
+      "H",
+      "H"
+    ],
+    "task": "optimize"
+  }
+}

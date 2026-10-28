@@ -1,0 +1,89 @@
+{
+  "cross_project": {
+    "bob_cancel_alpha": 404,
+    "bob_file_alpha": 404,
+    "bob_prepare_alpha": 404,
+    "bob_read_alpha": [
+      404,
+      {
+        "detail": "Job not found: b23-alpha-shared"
+      }
+    ],
+    "bob_read_missing": [
+      404,
+      {
+        "detail": "Job not found: b23-does-not-exist"
+      }
+    ],
+    "v2_bob_task_alpha": 404,
+    "v2_bob_tree_alpha": 404
+  },
+  "identity": {
+    "phase": "experience:selectivity",
+    "scenario": "experience:cross-domain-live",
+    "scenario_key": "experience:cross-domain-live/selectivity",
+    "subcase": "selectivity"
+  },
+  "lists": {
+    "v1_alice": [
+      "project_alpha"
+    ],
+    "v1_bob": [
+      "project_beta"
+    ],
+    "v2_projects_alice": [
+      "project_alpha"
+    ],
+    "v2_projects_bob": [
+      "project_beta"
+    ],
+    "v2_view_alice": [
+      "project_alpha"
+    ],
+    "v2_view_bob": [
+      "project_beta"
+    ]
+  },
+  "result": "PASS",
+  "same_name_tasks": [
+    {
+      "conflict": null,
+      "idem_key": "b23-shared-key",
+      "job_id": "b23-alpha-shared",
+      "project_id": "project_alpha",
+      "task_dir_name": "shared-molecule_shared-task",
+      "task_name": "shared-task"
+    },
+    {
+      "conflict": {
+        "claim": null,
+        "detail": "idempotency key was already used under a different verified scope",
+        "kind": "conflict",
+        "retryable": false,
+        "task_ref": null
+      },
+      "idem_key": "b23-shared-key-beta",
+      "job_id": "b23-beta-shared",
+      "project_id": "project_beta",
+      "task_dir_name": "shared-molecule_shared-task",
+      "task_name": "shared-task"
+    },
+    {
+      "conflict": null,
+      "idem_key": "b23-extra-key-alpha",
+      "job_id": "b23-alpha-extra",
+      "project_id": "project_alpha",
+      "task_dir_name": "shared-molecule_extra-task",
+      "task_name": "extra-task"
+    },
+    {
+      "conflict": null,
+      "idem_key": "b23-extra-key-beta",
+      "job_id": "b23-beta-extra",
+      "project_id": "project_beta",
+      "task_dir_name": "shared-molecule_extra-task",
+      "task_name": "extra-task"
+    }
+  ],
+  "schema": "acp2.b23.cross-project-non-disclosure.v1"
+}

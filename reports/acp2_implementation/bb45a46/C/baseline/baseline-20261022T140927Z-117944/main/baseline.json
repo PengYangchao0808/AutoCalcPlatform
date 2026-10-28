@@ -1,0 +1,17 @@
+{
+  "b_tree": "1a1b4b23c554acaf2818db1dcee336b69494a887",
+  "c_tree": "1a1b4b23c554acaf2818db1dcee336b69494a887",
+  "head": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+  "imports": {
+    "acp": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+    "acp_services": "/ACPServer/acp2-development/C/src/acp_services/__init__.py",
+    "cccp": "/ACPServer/acp2-development/C/src/cccp/__init__.py"
+  },
+  "node_suite": {
+    "failed": 0,
+    "passed": 329,
+    "returncode": 0
+  },
+  "source": "/ACPServer/acp2-development/C",
+  "status_porcelain": ""
+}

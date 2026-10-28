@@ -1,0 +1,75 @@
+{
+  "artifact_store_manifest": "/ACPServer/acp2-artifacts/remediation/m0-02a-local-rph/SHA256SUMS",
+  "artifact_store_path": "/ACPServer/acp2-artifacts/remediation/m0-02a-local-rph",
+  "candidate_revision": "c46370639fae48f8dab286b4f3baa63affc26af2",
+  "claim_scope": "local build/test/package verification only; the RPH tarball set is not independently installable yet and is not a release artifact set",
+  "commands": [
+    {
+      "command": "pnpm --dir rph install --frozen-lockfile",
+      "result": "PASS"
+    },
+    {
+      "command": "pnpm --dir rph build",
+      "result": "PASS"
+    },
+    {
+      "command": "pnpm --dir rph test",
+      "failed": 0,
+      "result": "PASS",
+      "tests": 80
+    },
+    {
+      "command": "pnpm --dir rph check",
+      "result": "PASS"
+    },
+    {
+      "artifacts": 4,
+      "command": "pnpm --dir rph package",
+      "result": "PASS"
+    },
+    {
+      "command": "node frontend/js/module_tests/run_all.js",
+      "failed": 0,
+      "result": "PASS",
+      "tests": 444
+    }
+  ],
+  "environment_profile": "/ACPServer/acp2-runs/remediation/env.sh",
+  "generated_on": "2026-10-26T14:42:16.513088+00:00",
+  "limitations": [
+    {
+      "evidence": "reports/acp2_remediation_20261026/rph-package-install-probe.json",
+      "id": "rph_tarballs_not_independently_installable",
+      "statement": "Build/test/package PASS does not prove standalone installation; internal @rph/* dependencies currently resolve to the public registry and fail with 404."
+    }
+  ],
+  "rph_artifacts": [
+    {
+      "name": "rph-bridge-0.0.0.tgz",
+      "sha256": "ae2cdcd3821f19b62e24719a45c688ece381a0494e1897acfc987a00c4839b24",
+      "size_bytes": 19957
+    },
+    {
+      "name": "rph-cli-0.0.0.tgz",
+      "sha256": "85901f8498b941b9b5d91d4224baa8d6fa31c888fb4de07a755787e1e81d8d73",
+      "size_bytes": 2997
+    },
+    {
+      "name": "rph-dsh-bundle-0.0.0.tgz",
+      "sha256": "3c8a8c1728544d821d88e654702b144d169933862ba67582cec59b15251c2c42",
+      "size_bytes": 40113
+    },
+    {
+      "name": "rph-research-0.0.0.tgz",
+      "sha256": "70e0906864d56e60c665b0750140bea352417c3550a1871c7b94a64cd278c21b",
+      "size_bytes": 40094
+    }
+  ],
+  "schema": "acp2.remediation.local_toolchain.v1",
+  "scope": "M0-02a local execution of RPH install/build/test/check/package and frontend module suite",
+  "toolchain": {
+    "node": "v22.19.0",
+    "pnpm": "11.28.5"
+  },
+  "worktree_dirty": true
+}

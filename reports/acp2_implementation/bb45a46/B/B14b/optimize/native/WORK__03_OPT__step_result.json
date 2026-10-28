@@ -1,0 +1,56 @@
+{
+  "artifacts": [
+    {
+      "path": "WORK/03_OPT/optimize.inp",
+      "sha256": "8e4b3fb5b7e0de93e8a2501e0bd68c536269b64014c0aaee4a715db213282884",
+      "source": "orca",
+      "type": "output"
+    },
+    {
+      "path": "WORK/03_OPT/optimize.out",
+      "sha256": "a4f7784444b52aba028b1130fac9994aebe3f6a121c3c70bd6755b7afca68806",
+      "source": "orca",
+      "type": "log"
+    }
+  ],
+  "attempt": 1,
+  "code_release": "0.2.0",
+  "config_digest": "sha256:d309ab7b53e4ad4e59b32410cf37fbb80f4ed029546d4ee27e98dee8dd204ab1",
+  "coords": [
+    [
+      0.0,
+      0.0,
+      0.013863
+    ],
+    [
+      0.0,
+      0.0,
+      0.726137
+    ]
+  ],
+  "dependency_artifacts": [],
+  "energy": -1.11751709882,
+  "errors": [],
+  "frequencies": [],
+  "index": 0,
+  "job_id": "20261023_111652_002_optimize",
+  "kind": "optimize",
+  "metadata": {
+    "optimization_status": "converged"
+  },
+  "provenance": {
+    "backend": "orca",
+    "input_signature": "/ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/input.xyz",
+    "method": "HF",
+    "profile": "",
+    "version": "unknown"
+  },
+  "schema_version": 1,
+  "status": "completed",
+  "step_id": "step_0_optimize",
+  "step_identity": "v2:b40cc5b853f6c8d086eb6dbb9c9198e9",
+  "symbols": [
+    "H",
+    "H"
+  ]
+}

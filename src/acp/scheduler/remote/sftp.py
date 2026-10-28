@@ -21,13 +21,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import paramiko
+try:  # optional ``remote`` extra: importing this module must not crash a root install
+    import paramiko
+except ImportError:  # pragma: no cover - exercised without ``pip install acp[remote]``
+    paramiko = None  # type: ignore[assignment]
 
 from acp.scheduler.remote.config import RemoteNode
-from acp.scheduler.remote.ssh import SSHConnectionPool
 
-if TYPE_CHECKING:  # pragma: no cover - typing only
+if TYPE_CHECKING:  # pragma: no cover - typing only (ssh.py needs the optional extra)
     from acp.scheduler.jobs import JobRecord
+    from acp.scheduler.remote.ssh import SSHConnectionPool
 
 logger = logging.getLogger(__name__)
 
@@ -354,6 +357,77 @@ class FileStager:
         if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
             raise OSError(f"unparseable sha256sum output for {remote_path} on {node.name}: {out!r}")
         return digest
+
+    #: Paths per ``sha256sum`` invocation for batched verification.
+    _SHA256_BATCH = 96
+
+    def remote_sha256_many(
+        self, node: RemoteNode, remote_paths: list[str]
+    ) -> dict[str, str] | None:
+        """Batched ``sha256sum`` over many paths (one SSH command per chunk).
+
+        Release verification used to run one SSH command per file, which costs a
+        full round trip each (~1 s on a real cluster link): a 600-file source
+        release therefore needed ~10 minutes of verification on **every**
+        submission.  One command per chunk keeps the same per-file digest
+        comparison at a fraction of the latency.
+
+        Returns:
+            ``path -> hex digest`` for the paths ``sha256sum`` reported, or
+            ``None`` when the batch could not run (caller falls back to the
+            per-file primitive).  Missing files are simply absent from the map,
+            so the caller's equality check still fails closed.
+        """
+        import shlex
+
+        normalized = [_norm_remote(path) for path in remote_paths]
+        digests: dict[str, str] = {}
+        for start in range(0, len(normalized), self._SHA256_BATCH):
+            chunk = normalized[start : start + self._SHA256_BATCH]
+            command = "sha256sum -- " + " ".join(shlex.quote(path) for path in chunk)
+            try:
+                code, out, err = self._ssh.execute(node, command, timeout=120)
+            except Exception:
+                logger.debug("batched sha256sum failed on %s", node.name, exc_info=True)
+                return None
+            if code != 0 and not out.strip():
+                # A wholly failed command (not "one file is missing", which
+                # still prints the digests it could compute).
+                logger.debug(
+                    "batched sha256sum exited %s on %s: %s", code, node.name, (err or out)[:400]
+                )
+                return None
+            for line in out.splitlines():
+                parts = line.strip().split(None, 1)
+                if len(parts) != 2:
+                    continue
+                digest, name = parts[0].lower(), parts[1].strip()
+                if name.startswith("*"):
+                    name = name[1:]
+                if len(digest) == 64 and all(c in "0123456789abcdef" for c in digest):
+                    digests[name] = digest
+        return digests
+
+    def upload_files(self, node: RemoteNode, items: list[tuple[Path, str]]) -> None:
+        """Upload many files over **one** SFTP session.
+
+        A source release is hundreds of small files; opening one session per file
+        dominated submission latency on a real link.  The chunk size is the
+        caller's; this primitive only removes the per-file session.
+        """
+        if not items:
+            return
+        with self._ssh.sftp_session(node) as sftp:
+            for local_path, remote_path in items:
+                local = Path(local_path)
+                if not local.is_file():
+                    raise FileNotFoundError(f"Local file not found: {local}")
+                target = _norm_remote(remote_path)
+                parent = posixpath.dirname(target)
+                if parent:
+                    _ensure_remote_dir(sftp, parent)
+                sftp.put(str(local), target)
+                logger.debug("Uploaded %s -> %s:%s", local, node.name, target)
 
     def claim_remote_job_dir(self, node: RemoteNode, remote_job_dir: str, record: JobRecord) -> str:
         """Exclusively claim *remote_job_dir* for *record*.

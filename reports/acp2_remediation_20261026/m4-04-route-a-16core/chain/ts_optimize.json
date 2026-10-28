@@ -1,0 +1,356 @@
+{
+  "actual_orca_resources": [
+    {
+      "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/candidate_path/batch/WORK/03_OPT/ts_opt.inp",
+      "maxcore": 2000,
+      "pal_nprocs": 16,
+      "sha256": "906712062257c8866de0539b2c82adc8c51ffaad6ec75a7ab62c12831fc966af"
+    }
+  ],
+  "adr_step_index": 4,
+  "adr_task_kind": "optimize",
+  "attempt": 1,
+  "attempts": [
+    {
+      "attempt": 1,
+      "converged": true,
+      "duration_seconds": 211.22,
+      "max_cycles": 200,
+      "native_success_marker": "batch_optimize_ts",
+      "optimization_status": "converged",
+      "reason": "BatchOptimize opt_freq TS role converged at the reference level (the route's R3 refinement)",
+      "start_sha256": "ce58681a9f393e8b278c15700cf18fbb4e458d38c48341d8aa8ed704fdca918c",
+      "start_structure": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/candidate_path/ts_guess.xyz",
+      "task_ref": "20261028_945_candidate_path_ts",
+      "trust_radius": 0.3
+    }
+  ],
+  "bounded_alternative": null,
+  "complete": true,
+  "converged": true,
+  "duration_seconds": 211.22,
+  "entry": "route_batch_optimize_ts",
+  "error": null,
+  "executed_task_kind": "optimize",
+  "level": {
+    "basis": "def2-mTZVPP",
+    "charge": 0,
+    "method": "r2SCAN-3c",
+    "multiplicity": 1
+  },
+  "native_files": [
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/candidate_path/batch/WORK/03_OPT/ts_opt.inp",
+      "path": "batch/WORK/03_OPT/ts_opt.inp",
+      "sha256": "906712062257c8866de0539b2c82adc8c51ffaad6ec75a7ab62c12831fc966af",
+      "size_bytes": 990
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/candidate_path/batch/WORK/03_OPT/ts_opt.out",
+      "path": "batch/WORK/03_OPT/ts_opt.out",
+      "sha256": "56282bcbe9534962581ca59defef81ea38132bdc134f385221a88e3eb868bf50",
+      "size_bytes": 497459
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/candidate_path/batch/WORK/03_OPT/ts_opt.xyz",
+      "path": "batch/WORK/03_OPT/ts_opt.xyz",
+      "sha256": "649288eb8c570028a8bfe1e9b7b417a5de92221f55852789eef9c32e97b6aef4",
+      "size_bytes": 1343
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/candidate_path/batch/RESULT/trajectories/optimization.json",
+      "path": "batch/RESULT/trajectories/optimization.json",
+      "sha256": "13c6f11aeef376a5d2098c222c5d358b8bef7b542ca00adb116485e93c830334",
+      "size_bytes": 4204
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/candidate_path/batch/RESULT/structures/item_001__TAG_TS__optimized.xyz",
+      "path": "batch/RESULT/structures/item_001__TAG_TS__optimized.xyz",
+      "sha256": "ce58681a9f393e8b278c15700cf18fbb4e458d38c48341d8aa8ed704fdca918c",
+      "size_bytes": 787
+    }
+  ],
+  "products": [],
+  "receipt": null,
+  "release_digest": "813583bdcaae20ef900a99180f433b34a7dfa730fb47c1efea5c9435919a061b",
+  "release_id": "2d1ab37a0f988933",
+  "resources": {
+    "cores": 16,
+    "maxcore": 2000,
+    "mem": "32GB",
+    "nproc": 16
+  },
+  "route_reuse": {
+    "note": "R6 reference-level variant: the BatchOptimize opt_freq TS optimization is consumed as ADR step 4; no redundant second OptTS is run on an already-converged geometry",
+    "optimization": {
+      "attempts": 1,
+      "converged": true,
+      "current_cycle": 11,
+      "cycles": [
+        {
+          "atom_count": 16,
+          "attempt_cycle": 1,
+          "cycle": 1,
+          "energy_hartree": -234.495375256027,
+          "geometry_ref": "cycles/cycle_0001.xyz",
+          "max_displacement": 0.1091508185,
+          "max_gradient": 0.035744398,
+          "rms_displacement": 0.033968311,
+          "rms_gradient": 0.0063910196,
+          "status": "running"
+        },
+        {
+          "atom_count": 16,
+          "attempt_cycle": 2,
+          "cycle": 2,
+          "energy_hartree": -234.487891827805,
+          "geometry_ref": "cycles/cycle_0002.xyz",
+          "max_displacement": 0.1192215301,
+          "max_gradient": 0.028054667,
+          "rms_displacement": 0.033968311,
+          "rms_gradient": 0.0049339628,
+          "status": "running"
+        },
+        {
+          "atom_count": 16,
+          "attempt_cycle": 3,
+          "cycle": 3,
+          "energy_hartree": -234.481003216362,
+          "geometry_ref": "cycles/cycle_0003.xyz",
+          "max_displacement": 0.0889176297,
+          "max_gradient": 0.019780142,
+          "rms_displacement": 0.0226455407,
+          "rms_gradient": 0.0034702631,
+          "status": "running"
+        },
+        {
+          "atom_count": 16,
+          "attempt_cycle": 4,
+          "cycle": 4,
+          "energy_hartree": -234.477273993479,
+          "geometry_ref": "cycles/cycle_0004.xyz",
+          "max_displacement": 0.0662883049,
+          "max_gradient": 0.0138385625,
+          "rms_displacement": 0.0150970271,
+          "rms_gradient": 0.0024502958,
+          "status": "running"
+        },
+        {
+          "atom_count": 16,
+          "attempt_cycle": 5,
+          "cycle": 5,
+          "energy_hartree": -234.475398479391,
+          "geometry_ref": "cycles/cycle_0005.xyz",
+          "max_displacement": 0.049833617,
+          "max_gradient": 0.0100003456,
+          "rms_displacement": 0.0113227703,
+          "rms_gradient": 0.0017879065,
+          "status": "running"
+        },
+        {
+          "atom_count": 16,
+          "attempt_cycle": 6,
+          "cycle": 6,
+          "energy_hartree": -234.474323208296,
+          "geometry_ref": "cycles/cycle_0006.xyz",
+          "max_displacement": 0.0510355104,
+          "max_gradient": 0.0072491141,
+          "rms_displacement": 0.0113227703,
+          "rms_gradient": 0.0013104881,
+          "status": "running"
+        },
+        {
+          "atom_count": 16,
+          "attempt_cycle": 7,
+          "cycle": 7,
+          "energy_hartree": -234.473601350443,
+          "geometry_ref": "cycles/cycle_0007.xyz",
+          "max_displacement": 0.0515916685,
+          "max_gradient": 0.0047966642,
+          "rms_displacement": 0.0113227703,
+          "rms_gradient": 0.0008711113,
+          "status": "running"
+        },
+        {
+          "atom_count": 16,
+          "attempt_cycle": 8,
+          "cycle": 8,
+          "energy_hartree": -234.473158614584,
+          "geometry_ref": "cycles/cycle_0008.xyz",
+          "max_displacement": 0.0505676398,
+          "max_gradient": 0.0025638864,
+          "rms_displacement": 0.0113227703,
+          "rms_gradient": 0.0004765108,
+          "status": "running"
+        },
+        {
+          "atom_count": 16,
+          "attempt_cycle": 9,
+          "cycle": 9,
+          "energy_hartree": -234.472965169668,
+          "geometry_ref": "cycles/cycle_0009.xyz",
+          "max_displacement": 0.0154975872,
+          "max_gradient": 0.0005408457,
+          "rms_displacement": 0.0033835349,
+          "rms_gradient": 0.0001151244,
+          "status": "running"
+        },
+        {
+          "atom_count": 16,
+          "attempt_cycle": 10,
+          "cycle": 10,
+          "energy_hartree": -234.472954327666,
+          "geometry_ref": "cycles/cycle_0010.xyz",
+          "max_displacement": 0.0013964647,
+          "max_gradient": 3.07757e-05,
+          "rms_displacement": 0.000244057,
+          "rms_gradient": 7.6452e-06,
+          "status": "running"
+        },
+        {
+          "atom_count": 16,
+          "attempt_cycle": 11,
+          "cycle": 11,
+          "energy_hartree": -234.472954297727,
+          "geometry_ref": "cycles/cycle_0011.xyz",
+          "max_displacement": 0.0002482146,
+          "max_gradient": 6.2471e-06,
+          "rms_displacement": 0.0001027753,
+          "rms_gradient": 1.1943e-06,
+          "status": "converged"
+        }
+      ],
+      "item_id": "item_001",
+      "schema_version": 1,
+      "source": "ORCA final output",
+      "status": "completed",
+      "thresholds": {
+        "max_displacement": 0.001,
+        "max_gradient": 0.0001,
+        "rms_displacement": 0.0006,
+        "rms_gradient": 3e-05
+      },
+      "updated_at": "2026-10-27T22:35:17+00:00"
+    },
+    "stage": "batch_optimize_ts"
+  },
+  "schema": "acp2.m4-04.step.v1",
+  "status": "completed",
+  "step_id": "ts_optimize",
+  "task_ref": "20261028_945_candidate_path_ts",
+  "task_result": {
+    "artifacts": [],
+    "complete": true,
+    "converged": true,
+    "coordinates": [
+      [
+        1.10762,
+        0.976965,
+        0.451324
+      ],
+      [
+        0.02257,
+        1.408653,
+        -0.27647
+      ],
+      [
+        -1.217247,
+        0.748452,
+        -0.231634
+      ],
+      [
+        -1.423066,
+        -0.369536,
+        0.543505
+      ],
+      [
+        0.975925,
+        0.480148,
+        1.405274
+      ],
+      [
+        2.081219,
+        1.434023,
+        0.298442
+      ],
+      [
+        0.180525,
+        2.142272,
+        -1.064647
+      ],
+      [
+        -1.957617,
+        1.00395,
+        -0.987227
+      ],
+      [
+        -2.352088,
+        -0.926257,
+        0.459092
+      ],
+      [
+        -0.883829,
+        -0.509821,
+        1.472694
+      ],
+      [
+        0.158372,
+        -1.802414,
+        -0.299014
+      ],
+      [
+        1.372034,
+        -1.150881,
+        -0.347599
+      ],
+      [
+        -0.049222,
+        -2.505993,
+        0.501333
+      ],
+      [
+        -0.431289,
+        -1.92604,
+        -1.199717
+      ],
+      [
+        1.742929,
+        -0.759026,
+        -1.28742
+      ],
+      [
+        2.123161,
+        -1.344501,
+        0.412064
+      ]
+    ],
+    "energy_hartree": -234.472954297727,
+    "errors": [],
+    "frequencies": [],
+    "metadata": {},
+    "payload": {
+      "optimization_status": "converged"
+    },
+    "schema_version": 1,
+    "status": "completed",
+    "symbols": [
+      "C",
+      "C",
+      "C",
+      "C",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H",
+      "C",
+      "C",
+      "H",
+      "H",
+      "H",
+      "H"
+    ],
+    "task": "optimize"
+  }
+}

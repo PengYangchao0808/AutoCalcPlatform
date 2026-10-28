@@ -169,4 +169,24 @@ def _atom_count(task_request: Any, task_result: TaskResult) -> int:
     return 0
 
 
-__all__ = ["execute_frequency", "run_frequency"]
+def publish_normal_modes(
+    task_request: Any,
+    task_result: TaskResult,
+    out_dir: Path | None,
+    backend_label: str = "",
+    existing: list[ArtifactRef] | None = None,
+) -> list[ArtifactRef]:
+    """Public publication half of ``normal_modes.json`` (M2-04d seam).
+
+    The bounded-DAG step publication on the Controller side calls this — it is
+    the SAME ``_publish_normal_modes`` implementation the legacy
+    ``execute_frequency`` uses, exposed so a post-worker publication never
+    copies or re-implements the product format, the geometry binding or the
+    atom-count check.
+    """
+    return _publish_normal_modes(
+        task_request, task_result, out_dir, backend_label, list(existing or [])
+    )
+
+
+__all__ = ["execute_frequency", "publish_normal_modes", "run_frequency"]

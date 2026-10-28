@@ -1,0 +1,11 @@
+{
+  "event_lines": 8,
+  "job_ids": [
+    "20261023_031453_001_singlepoint"
+  ],
+  "job_started_events": 1,
+  "result_manifest_sha256": "f13f4a9ed1cc5535cd6d0fe01b726d1c9fc08ee4cb14af50cf9fe1c6dc19adad",
+  "sp_out_sha256": "b083545e1254c6ef5f2a9b91b0b515d77965ca56dce795bffb14435f7a6c43df",
+  "task_count": 1,
+  "task_result_sha256": "128b22494edbe2133f58c8aab08bbbfd2782dca4010e4a807f8d1b4ccfe667d4"
+}

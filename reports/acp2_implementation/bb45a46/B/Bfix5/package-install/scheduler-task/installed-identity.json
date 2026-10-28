@@ -1,0 +1,18 @@
+{
+  "contains_repo_path": false,
+  "file_count": 529,
+  "keys_are_absolute": false,
+  "modules": {
+    "acp": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/acp/__init__.py",
+    "acp_services": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/acp_services/__init__.py",
+    "cccp": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib64/python3.11/site-packages/cccp/__init__.py"
+  },
+  "prefixes": [
+    "acp",
+    "acp_services",
+    "cccp"
+  ],
+  "release_digest": "c4b54feb6a0b25ccbf0163b852ec66e0a1f003e778081d079030844871e90cc0",
+  "release_id": "7698b06589bb30c2",
+  "runner_root": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/Bfix5/package-install/venvs/web/lib/python3.11"
+}

@@ -18,14 +18,24 @@ import sqlite3
 import threading
 import urllib.parse
 from collections import Counter, OrderedDict
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from copy import deepcopy
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, Protocol
 
-from fastapi import APIRouter, Body, File, HTTPException, Query, Request, Response, UploadFile
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+)
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import ValidationError
 from rdkit import Chem
@@ -158,6 +168,7 @@ from acp.api.v1_schemas import (
     StudyPromoteResponse,
     StudyResumeResponse,
     UploadResponse,
+    V1AnalyzeRequest,
     V1EditDiffEntry,
     V1EditDraftResponse,
     V1EditPreviewRequest,
@@ -179,6 +190,8 @@ from acp.api.v1_schemas import (
     V1JobRecordModel,
     V1JobRerunRequest,
     V1JobSpecModel,
+    V1PreflightRequest,
+    V1PrepareRequest,
     V1SamplingFrameResponse,
     V1SoftwareCandidate,
     V1SoftwareDiscoveryResponse,
@@ -254,12 +267,56 @@ from acp.scheduler.store import JobStore
 from acp.scheduler.structure_sources import StructureSourceService
 from acp.scheduler.tasks import resolve_task_names
 from acp.storage.layout import runtime_file
+from acp_services.contracts.access import AccessAction as _AccessAction
+from acp_services.runtime.idempotency import (
+    IdempotencyConflictError,
+    IdempotencyInProgressError,
+    IdempotencyReservationDeniedError,
+)
+from acp_services.runtime.local_admission import AdmissionRefusedError
+from acp_services.workspace.entry_authz import EntryClass as _EntryClass
 
 UTC = timezone.utc  # datetime.UTC is 3.11+; keep the short name on 3.10
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+
+def _job_path_authorization(request: Request) -> None:
+    """Scope every ``/jobs/{job_id}/...`` route to the verified project.
+
+    Endpoint-specific checks still decide the exact action; this router-level
+    gate exists so a newly added job sub-route cannot silently bypass B15's
+    project isolation.  It is inert in the default ``local-single`` mode.
+    """
+    job_id = request.path_params.get("job_id")
+    if not job_id:
+        return
+    resolved = getattr(request.state, "request_identity", None)
+    manager = getattr(request.app.state, "job_manager", None)
+    if resolved is None or manager is None:
+        return
+    record = manager.get(str(job_id))
+    if record is None:
+        return
+    path = request.url.path
+    if request.method in {"GET", "HEAD"}:
+        action = _AccessAction.READ
+    elif path.endswith(("/pause", "/unpause", "/continue", "/cancel", "/rerun")):
+        action = _AccessAction.CONTROL
+    elif request.method == "DELETE":
+        action = _AccessAction.CONTROL
+    else:
+        action = _AccessAction.WRITE
+    decision = resolved.server_identity.authorize_job_project(
+        record.project_id or record.spec.project_id,
+        action=action,
+        job_id=str(job_id),
+    )
+    if not decision.allowed:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+
+
+router = APIRouter(dependencies=[Depends(_job_path_authorization)])
 
 _ENRICHMENT_CACHE_LIMIT: Final = 256
 _ENRICHMENT_CACHE: OrderedDict[tuple[str, int | None, int | None, bool], dict[str, Any]] = (
@@ -269,6 +326,7 @@ _ENRICHMENT_CACHE_LOCK = threading.Lock()
 
 if TYPE_CHECKING:
     from acp.chem.composition import HessianResolution
+    from acp_services.runtime.commands import RuntimeCommands
 
 
 class HessianResolver(Protocol):
@@ -286,6 +344,247 @@ def _manager(request: Request) -> JobManager:
     if manager is None:
         raise HTTPException(status_code=503, detail="Job scheduler not initialized")
     return manager
+
+
+def _commands(request: Request) -> RuntimeCommands:
+    """Return the Runtime command surface for submit/control entries (todo 25).
+
+    Every submit/control/edit/purge endpoint routes through this single owner;
+    the Runtime use cases forward once to the injected composition-root ports.
+    An explicit ``app.state.runtime_commands`` may be injected (test seam /
+    future self-sufficient bootstrap), otherwise it is built over the live
+    manager.
+    """
+    commands = getattr(request.app.state, "runtime_commands", None)
+    if commands is not None:
+        return commands
+    from acp.services_bootstrap import build_runtime_commands
+
+    return build_runtime_commands(_manager(request))
+
+
+def _entry_authorizer(request: Request) -> Any:
+    """Return the per-request entry authorizer.
+
+    An explicit authorizer may be injected on ``app.state.entry_authorizer``
+    (test seam / future identity policy).  Otherwise the trusted ``local-single``
+    authorizer is used: the hook always runs, it is simply inert until an
+    identity/grant policy is configured.
+    """
+    from acp_services.workspace.entry_authz import default_entry_authorizer
+
+    resolved = getattr(request.state, "request_identity", None)
+    if resolved is not None:
+        return resolved.entry_authorizer
+    authorizer = getattr(request.app.state, "entry_authorizer", None)
+    return authorizer if authorizer is not None else default_entry_authorizer()
+
+
+def _job_project_id(request: Request, job_id: str) -> str | None:
+    """Best-effort project id of *job_id* (used only for scope resolution)."""
+    record = _manager(request).get(job_id)
+    if record is None:
+        return None
+    return getattr(record, "project_id", None) or getattr(record.spec, "project_id", None)
+
+
+def _require_entry_access(
+    request: Request,
+    entry_class: str,
+    *,
+    job_id: str = "",
+    project_id: str | None = None,
+    action: str | None = None,
+    resource_id: str = "",
+) -> None:
+    """Authorize one resource entry; raise a 403 on deny.
+
+    Runs at the point of effect (before a download streams, before a publish
+    writes) rather than on a listing page.  A denial raises before the endpoint
+    body executes, so no state is created or mutated.  The 403 body shape
+    (``{"code": ..., "message": ...}``) matches the existing error contract.
+    """
+    authorizer = _entry_authorizer(request)
+    project = (
+        project_id
+        if project_id is not None
+        else (_job_project_id(request, job_id) if job_id else None)
+    )
+    decision = authorizer.authorize(
+        entry_class,
+        job_id=job_id,
+        project_id=project,
+        action=action,
+        resource_id=resource_id,
+    )
+    if not decision.allowed:
+        from acp_services.workspace.entry_authz import EntryReasonCode
+
+        if (
+            job_id
+            and getattr(request.state, "request_identity", None) is not None
+            and str(decision.reason_code)
+            in {
+                EntryReasonCode.NO_GRANT,
+                EntryReasonCode.SCOPE_MISMATCH,
+            }
+        ):
+            # A job outside the verified project must look exactly like an
+            # unknown job; the 403 shape would confirm that the task exists.
+            raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+        raise HTTPException(status_code=decision.http_status, detail=decision.error_detail())
+
+
+def _server_identity(request: Request) -> Any:
+    """Return the Controller-process identity (never a request field).
+
+    The lifespan installs it on ``app.state``; a bare app/test falls back to the
+    process environment.  A project hint is handled by the returned object and
+    can only narrow the verified scope.
+    """
+    resolved = getattr(request.state, "request_identity", None)
+    if resolved is not None:
+        return resolved.server_identity
+    identity = getattr(request.app.state, "server_identity", None)
+    if identity is not None:
+        return identity
+    from acp_services.workspace.server_identity import ServerIdentity
+
+    identity = ServerIdentity.from_environment()
+    request.app.state.server_identity = identity
+    return identity
+
+
+def _command_identity(request: Request, *, project_id: str | None = None) -> Any:
+    """Return the verified :class:`CommandIdentity` of this request (M0-04).
+
+    The authenticated HTTP path projects the credential-resolved principal
+    (B15).  The default ``local-single`` deployment has no per-request identity
+    and projects the Controller's own operator identity instead — that is the
+    only legitimate use of ``LOCAL_PRINCIPAL_ID``.  A request body/header can
+    never supply the principal.
+    """
+    from acp_services.workspace.command_identity import CommandIdentity, EntryClass
+
+    resolved = getattr(request.state, "request_identity", None)
+    if resolved is not None:
+        return CommandIdentity.from_verified_http(
+            resolved, project_id=project_id, entry_class=EntryClass.HTTP
+        )
+    return CommandIdentity.from_server(
+        _server_identity(request),
+        project_id=project_id,
+        entry_class=EntryClass.HTTP,
+    )
+
+
+def _require_submit_access(request: Request, project_hint: str | None) -> str | None:
+    """Authorize a submit before normalization; return the effective project."""
+    decision = _server_identity(request).resolve_submit_project(project_hint)
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "access_denied",
+                "message": decision.detail or "project hint widens the verified scope",
+                "params": {
+                    "reason_code": decision.reason_code,
+                    "requested_project": project_hint,
+                },
+                "retryable": False,
+            },
+        )
+    return decision.project_id
+
+
+def _require_job_scope_access(
+    request: Request,
+    job_id: str,
+    *,
+    action: str = _AccessAction.READ,
+    resource_id: str = "",
+    require_exists: bool = True,
+) -> JobRecord | None:
+    """Authorize a job-scoped control/prepare/read entry.
+
+    A job from another project is reported with the same not-found shape as an
+    unknown job id so task existence never leaks across projects.  Control
+    entries pass ``require_exists=False`` so the command use case keeps owning
+    its own not-found response (and its existing tests stay intact).
+    """
+    record = _manager(request).get(job_id)
+    if record is None:
+        if require_exists:
+            raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+        return None
+    decision = _server_identity(request).authorize_job_project(
+        record.project_id or record.spec.project_id,
+        action=action,
+        job_id=job_id,
+        resource_id=resource_id,
+    )
+    if not decision.allowed:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    return record
+
+
+def _scoped_read_project(request: Request, requested: str | None) -> str | None:
+    """Narrow a read ``project_id`` hint to the verified credential project.
+
+    In the default local-single mode this returns *requested* unchanged.  In
+    API-key mode a key scoped to one project can never read another project's
+    listing: a different hint is a not-found (same shape as an unknown project).
+    """
+    from acp_services.workspace.http_identity import scoped_project
+
+    resolved = getattr(request.state, "request_identity", None)
+    try:
+        return scoped_project(resolved, requested)
+    except PermissionError as exc:
+        raise HTTPException(status_code=404, detail="Project not found") from exc
+
+
+def _require_project_scope(request: Request, project_id: str) -> None:
+    """Deny a project-scoped entry outside the credential's verified project."""
+    resolved = getattr(request.state, "request_identity", None)
+    if resolved is None or resolved.verified_project is None:
+        return
+    if str(project_id) != resolved.verified_project:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+
+def _require_verified_project(request: Request, project_id: str | None) -> None:
+    """Reject a project that contradicts the verified server identity.
+
+    ``_scoped_read_project`` reads ``request.state.request_identity``, which the
+    local-single middleware never sets.  Project-scoped routes therefore need an
+    explicit comparison against ``_server_identity(request).verified_project``.
+    """
+    if project_id is None:
+        return
+    verified = getattr(_server_identity(request), "verified_project", None)
+    if verified is not None and str(project_id) != str(verified):
+        raise HTTPException(status_code=404, detail="Project not found")
+
+
+def _admission_http_error(decision: Any) -> HTTPException:
+    """Map an admission refusal to the stable structured error contract."""
+    reason = str(getattr(decision, "reason_code", "") or "admission_denied")
+    status_code = 429 if reason.startswith(("exceeds_", "capacity_")) else 403
+    return HTTPException(
+        status_code=status_code,
+        detail={
+            "code": reason if reason.startswith("budget_") else "admission_denied",
+            "message": str(getattr(decision, "detail", "") or "resource admission denied"),
+            "params": {
+                "reason_code": reason,
+                "mode": getattr(decision, "mode", None),
+                "enforced": bool(getattr(decision, "enforced", False)),
+                "exceeded": [dict(item) for item in getattr(decision, "exceeded", ()) or ()],
+            },
+            "retryable": False,
+        },
+    )
 
 
 def _apply_auto_tag_rules_on_submit(manager: JobManager, record: Any) -> None:
@@ -557,9 +856,15 @@ def _record_to_v1_model(
     project_name: str | None = None,
     study_id: str | None = None,
     study_status: str | None = None,
+    include_release_facts: bool = False,
 ) -> V1JobRecordModel:
     spec = record.spec
     result = record.result if isinstance(record.result, dict) else {}
+    release_facts: dict[str, str] = {}
+    if include_release_facts:
+        from acp_services.entrypoints.status_projection import attempt_release_facts
+
+        release_facts = attempt_release_facts(record.work_dir)
     return V1JobRecordModel(
         id=record.id,
         spec=V1JobSpecModel(
@@ -601,6 +906,15 @@ def _record_to_v1_model(
         study_status=study_status,
         result=record.result,
         progress_state=_compute_progress_state(record),
+        # D03: the v1 projection must carry the authoritative execution
+        # identity, never schema defaults.  ``name_revision`` stays a separate
+        # organization field and is merged later by ``_enrich_v1_with_names``.
+        attempt=record.attempt,
+        revision=record.revision,
+        release_id=release_facts.get("release_id"),
+        release_digest=release_facts.get("release_digest"),
+        plan_digest=release_facts.get("plan_digest"),
+        submission_id=release_facts.get("submission_id"),
     )
 
 
@@ -1053,9 +1367,12 @@ def get_protocols() -> ProtocolsResponse:
 @router.get("/projects", response_model=ProjectListResponse)
 def list_projects(request: Request) -> ProjectListResponse:
     manager = _manager(request)
-    return ProjectListResponse(
-        projects=[_project_to_model(project) for project in manager.projects.list_projects()]
-    )
+    resolved = getattr(request.state, "request_identity", None)
+    verified = None if resolved is None else resolved.verified_project
+    projects = manager.projects.list_projects()
+    if verified is not None:
+        projects = [project for project in projects if str(project.get("project_id")) == verified]
+    return ProjectListResponse(projects=[_project_to_model(project) for project in projects])
 
 
 @router.post("/projects", response_model=ProjectModel, status_code=201)
@@ -1075,6 +1392,7 @@ def create_project(req: ProjectCreateRequest, request: Request) -> ProjectModel:
 
 @router.get("/projects/{project_id}", response_model=ProjectModel)
 def get_project(project_id: str, request: Request) -> ProjectModel:
+    _require_project_scope(request, project_id)
     manager = _manager(request)
     project = manager.projects.get_project(project_id)
     if project is None:
@@ -1088,6 +1406,7 @@ def update_project(
     req: ProjectUpdateRequest,
     request: Request,
 ) -> ProjectModel:
+    _require_project_scope(request, project_id)
     manager = _manager(request)
     try:
         project = manager.projects.update_project(project_id, **_model_payload(req))
@@ -1104,6 +1423,7 @@ def delete_project(
     request: Request,
     delete_data: bool = Query(default=False),
 ) -> JSONResponse:
+    _require_project_scope(request, project_id)
     manager = _manager(request)
     try:
         deleted = manager.delete_project(project_id, delete_data=delete_data)
@@ -1121,6 +1441,7 @@ def list_project_jobs(
     status: str | None = Query(default=None),
     limit: int = Query(default=200, ge=1, le=1000),
 ) -> V1JobListResponse:
+    _require_project_scope(request, project_id)
     manager = _manager(request)
     project = manager.projects.get_project(project_id)
     if project is None:
@@ -1461,8 +1782,7 @@ def _resolve_batch_structures_input(
         resolved = {
             key: value
             for key, value in item.items()
-            if key
-            not in {"source_id", "source_ref", "allow_disabled_use", "disabled_use_reason"}
+            if key not in {"source_id", "source_ref", "allow_disabled_use", "disabled_use_reason"}
         }
         resolved["xyz"] = str(asset.get("xyz") or "")
         resolved_items.append(resolved)
@@ -1480,14 +1800,10 @@ def _resolve_batch_structures_input(
             "role_evidence": "",
             "candidate_id": asset.get("candidate_id", ""),
             "checksum": source_checksum,
-            "input_xyz_hash": hashlib.sha256(
-                resolved["xyz"].encode("utf-8")
-            ).hexdigest(),
+            "input_xyz_hash": hashlib.sha256(resolved["xyz"].encode("utf-8")).hexdigest(),
             "input_snapshot": {
                 "charge": resolved.get("charge", asset.get("charge")),
-                "multiplicity": resolved.get(
-                    "multiplicity", asset.get("multiplicity")
-                ),
+                "multiplicity": resolved.get("multiplicity", asset.get("multiplicity")),
             },
             "metadata_revision": 0,
         }
@@ -1785,9 +2101,7 @@ def _snapshot_direct_source_input(
         "usage_status": (projection or {}).get("usage_status", "active"),
         "metadata_revision": (projection or {}).get("metadata_revision", 0),
         "disabled_exception": bool(
-            projection
-            and projection.get("usage_status") == "disabled"
-            and allow_disabled
+            projection and projection.get("usage_status") == "disabled" and allow_disabled
         ),
         "exception_reason": exception_reason,
         "input_snapshot": {
@@ -2061,18 +2375,13 @@ def _canonicalize_batch_keywords(method: dict[str, Any]) -> None:
 def _target_validation_detail(exc: Exception) -> dict[str, Any]:
     """Serialize a submission-time target error into the 400 body (D12).
 
-    Carries the machine-readable ``code`` plus ``missing_software`` /
-    ``missing_tags`` so clients (and the frontend i18n layer) can map errors
-    without parsing free-form English.
+    Delegates to :func:`acp.scheduler.nodes.target_error_detail` so the D12 shape
+    has exactly one implementation (M0-06); the application envelope used by the
+    submit entry is :func:`acp.scheduler.nodes.target_error_envelope`.
     """
-    return {
-        "code": getattr(exc, "code", None) or "execution_target_error",
-        "message": str(exc),
-        "missing_software": list(getattr(exc, "missing_software", ()) or ()),
-        "missing_tags": list(getattr(exc, "missing_tags", ()) or ()),
-        "local_missing_software": list(getattr(exc, "local_missing_software", ()) or ()),
-        "remote_nodes_configured": getattr(exc, "remote_nodes_configured", None),
-    }
+    from acp.scheduler.nodes import target_error_detail
+
+    return target_error_detail(exc)
 
 
 def _source_job_id_from_input(inp: dict[str, Any]) -> str:
@@ -2136,9 +2445,7 @@ def _resolve_irc_source_reference(inp: dict[str, Any], manager: Any) -> dict[str
         return inp
     ref = inp.get("source_ref")
     source_id = str(
-        inp.get("source_id")
-        or (ref.get("source_id") if isinstance(ref, dict) else "")
-        or ""
+        inp.get("source_id") or (ref.get("source_id") if isinstance(ref, dict) else "") or ""
     )
     prefix, separator, path = source_id.partition(":")
     if not separator or not prefix.startswith("job_") or not path.startswith("RESULT/"):
@@ -2195,9 +2502,7 @@ def _validate_simple_method_cli(workflow: str, method: dict[str, Any]) -> None:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-def _validate_scan_submission(
-    workflow: str, method: dict[str, Any], inp: dict[str, Any]
-) -> None:
+def _validate_scan_submission(workflow: str, method: dict[str, Any], inp: dict[str, Any]) -> None:
     """Reject invalid ``scan`` submissions with a synchronous 422.
 
     ``scan_method_flags`` is the single coordinate contract the local/remote
@@ -2216,14 +2521,93 @@ def _validate_scan_submission(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+def _submit_idempotency_key(request: Request, req: V1JobCreateRequest) -> str | None:
+    header_key = (request.headers.get("Idempotency-Key") or "").strip()
+    body_key = (req.idempotency_key or "").strip()
+    if header_key and body_key and header_key != body_key:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "input_invalid",
+                "message": "Idempotency-Key header and body idempotency_key disagree",
+                "params": {"field": "idempotency_key"},
+            },
+        )
+    return header_key or body_key or None
+
+
 @router.post("/jobs", response_model=V1JobCreatedResponse, status_code=201)
 def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedResponse:
     manager = _manager(request)
+    resolved_project = _require_submit_access(request, req.project_id)
+    if resolved_project is not None:
+        req.project_id = resolved_project
     if req.workflow not in ALL_WORKFLOWS:
         raise HTTPException(
             status_code=400,
             detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(PUBLIC_WORKFLOWS)}",
         )
+    from acp_services.entrypoints.application_params import (
+        ApplicationParamError,
+        canonical_submit_request,
+        normalize_submit,
+    )
+
+    # M0-06/G23: one exhaustive field policy decides what this request may carry.
+    # An undeclared field or a client-chosen server path is a 422 ``input_invalid``
+    # before any resolution/snapshot/dispatch side effect, and the canonical form
+    # is the same object MCP and the CLI build (so the request digest and the
+    # effective JobSpec cannot drift per entry).
+    request_payload = req.model_dump(exclude_none=True)
+    try:
+        canonical_submit_request(request_payload, entry="http")
+        normalized_submit = normalize_submit(request_payload)
+    except ApplicationParamError as exc:
+        # A field-policy violation is 422 (the frozen extra=forbid answer); every
+        # other shape violation keeps the long-standing 400 (budget/type/required).
+        raise _command_error(
+            _field_policy_status(exc), exc.code, exc.message, params=dict(exc.params)
+        ) from exc
+    fingerprint = normalized_submit.get("preflight_fingerprint")
+    if fingerprint:
+        from acp_services.runtime.canonical_digest import CanonicalDigestError
+
+        try:
+            current = _plan_digest(normalized_submit)
+        except CanonicalDigestError as exc:
+            raise _command_error(
+                400,
+                "input_invalid",
+                str(exc),
+                params={"field": "plan", **exc.params()},
+            ) from exc
+        if fingerprint != current:
+            raise _command_error(
+                400,
+                "preflight_stale",
+                "preflight fingerprint does not match the submitted plan",
+                params={"field": "preflight_fingerprint", "expected": current},
+            )
+    # M1-04b: ONE submit classification decides research vs legacy, approval
+    # requirement and the recorded submit class.  An agent-scoped credential can
+    # never downgrade (omit-all/budget-only/no-proposal are denials), and a legacy
+    # local-single/manual submit is explicitly allowed *and recorded*.
+    classification = _classify_submit(request, req, defer_approval=True)
+    if not classification.allowed:
+        raise _deny_submit(classification)
+    if classification.research:
+        req.project_id = _research_project(manager, req.project_id)
+    logger.info(
+        "submit classified submit_class=%s profile=%s research=%s approval_required=%s",
+        classification.submit_class,
+        classification.profile.name,
+        classification.research,
+        classification.approval_required,
+    )
+    # B16: an approval bound to the frozen plan_digest is checked BEFORE any
+    # resolution/snapshot/dispatch side effect.  A pending/expired/revoked/
+    # changed-plan/other-principal approval never reaches the manager.
+    approval = _enforce_approval(request, req, classification)
     req.method = _expand_method_electronic_state(req.method)
     _validate_simple_method_cli(req.workflow, req.method)
     _validate_scan_submission(req.workflow, req.method, req.input)
@@ -2255,37 +2639,101 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
     )
     task_name = req.task_name or req.workflow
     molecule_name = _resolve_job_molecule_name(req.molecule_name, req.input, manager)
+    # M0-06: the effective JobSpec takes every decision field from the canonical
+    # request (blank optional strings collapse to the single absent value), so the
+    # CLI's equivalent spec is byte-identical instead of differing on "" vs None.
+    # The canonical form is recomputed from the *effective* request (post project
+    # resolution / stage inheritance), which is also the digest material — the
+    # same rule the pre-M0-06 entry hashed.
+    canonical = canonical_submit_request(req.model_dump(exclude_none=True), entry="http")
     spec = JobSpec(
         workflow=req.workflow,
-        name=req.name,
+        name=canonical["name"],
         input=req.input,
         method=req.method,
         resources=req.resources,
-        output_dir=req.output_dir,
-        config_path=req.config_path,
-        tags=req.tags,
-        node_tags=req.node_tags,
+        tags=list(canonical["tags"]),
+        node_tags=list(canonical["node_tags"]),
         project_id=req.project_id,
-        execution_mode=req.execution_mode,
-        target_node=req.target_node,
+        execution_mode=req.execution_mode or None,
+        target_node=req.target_node or None,
         molecule_name=molecule_name,
         task_name=task_name,
-        remark=req.remark,
+        remark=canonical["remark"],
     )
     try:
         validate_execution_request(spec)
-    except ExecutionTargetError as exc:
-        # Same D12 dict shape as the continue endpoint; the conflict check
-        # in nodes.py carries no code, so stamp the stable one here.
-        detail = _target_validation_detail(exc)
-        detail["code"] = getattr(exc, "code", None) or "execution_mode_conflict"
-        raise HTTPException(status_code=400, detail=detail) from exc
-    try:
         validate_submission_target(spec, registry=manager.registry)
     except (ExecutionTargetError, NoCapableNodeError) as exc:
-        raise HTTPException(status_code=400, detail=_target_validation_detail(exc)) from exc
+        # M0-06: one application envelope for every entry — a stable
+        # ``input_invalid`` code plus ``params.field``/``params.rule`` carrying the
+        # fine-grained scheduler decision.  An unknown remote node is therefore the
+        # same rejection at HTTP, MCP and the CLI.
+        from acp.scheduler.nodes import target_error_envelope
+
+        envelope = target_error_envelope(exc)
+        raise _command_error(
+            422,
+            str(envelope["code"]),
+            str(envelope["message"]),
+            params=dict(envelope["params"]),
+            retryable=False,
+        ) from exc
+    idempotency_key = _submit_idempotency_key(request, req)
+    scope_project = str(req.project_id or manager.default_project_id)
+    identity = _command_identity(request, project_id=scope_project)
+    idempotency_context = None
+    if idempotency_key:
+        from acp_services.runtime.idempotency import (
+            ACTION_SUBMIT,
+            IdempotencyContext,
+        )
+
+        idempotency_context = IdempotencyContext(
+            key=idempotency_key,
+            scope_id=identity.idempotency_scope(project_id=scope_project),
+            action=ACTION_SUBMIT,
+            # The digest material is the canonical effective request (M0-06); the
+            # row records its frozen rule version and the payload so a pre-M0-06
+            # row is verified against its own field table instead of being called
+            # tampered.
+            request_payload=canonical,
+            principal_id=identity.principal_id,
+            key_id=identity.key_id,
+        )
+    budget_claim = _budget_claim_from_approval(approval)
     try:
-        record = manager.submit(spec)
+        if idempotency_context is None:
+            record = _commands(request).submit(spec, budget=budget_claim, identity=identity)
+        else:
+            record = _commands(request).submit(
+                spec,
+                idempotency=idempotency_context,
+                budget=budget_claim,
+                identity=identity,
+            )
+    except (AdmissionRefusedError, IdempotencyReservationDeniedError) as exc:
+        raise _admission_http_error(exc.decision) from exc
+    except IdempotencyConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "idempotency_conflict",
+                "message": str(exc) or "idempotency key conflict",
+                "params": {"idempotency_key": idempotency_key},
+                "retryable": False,
+            },
+        ) from exc
+    except IdempotencyInProgressError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "idempotency_in_progress",
+                "message": str(exc) or "idempotent submit is in progress",
+                "params": {"idempotency_key": idempotency_key},
+                "retryable": True,
+            },
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if batch_snapshots:
@@ -2316,11 +2764,51 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         _apply_auto_tag_rules_on_submit(manager, record)
     except Exception:  # noqa: BLE001 — rule errors must never fail submission
         pass
+    attempt = int(getattr(record, "attempt", 1) or 1)
+    release_id = getattr(record, "release_id", None)
+    task_ref: dict[str, Any] = {
+        "task_id": record.id,
+        "job_id": record.id,
+        "attempt": attempt,
+    }
+    if isinstance(release_id, str) and release_id:
+        task_ref["release"] = {
+            "release_id": release_id,
+            "release_digest": getattr(record, "release_digest", None),
+        }
+    approval_ref = None
+    if approval is not None:
+        approval_ref = approval.approval_id
+        # The approval and the execution are different facts: recording the
+        # TaskRef is evidence only (no approval state/revision change).
+        try:
+            _approval_service(request).bind_task_ref(
+                approval.approval_id,
+                task_ref | {"job_id": record.id},
+                actor_principal=str(_server_identity(request).principal.principal_id),
+            )
+        except Exception:  # noqa: BLE001 - a binding write never invalidates a durable submit
+            logger.debug(
+                "approval TaskRef binding failed for %s", approval.approval_id, exc_info=True
+            )
     return V1JobCreatedResponse(
         job_id=record.id,
         status=record.status.value,
         workflow=record.spec.workflow,
         project_id=record.project_id,
+        attempt=attempt,
+        release_id=release_id if isinstance(release_id, str) else None,
+        release_digest=getattr(record, "release_digest", None),
+        task_ref=task_ref,
+        plan_digest=req.plan_digest,
+        proposal_digest=req.proposal_digest,
+        approval_ref=approval_ref,
+        submit_class=classification.submit_class,
+        result="accepted",
+        idempotency_key=idempotency_key,
+        idempotent_replay=bool(getattr(record, "_idempotent_replay", False)),
+        admission=(record.result or {}).get("admission"),
+        identity=_server_identity(request).to_dict(),
     )
 
 
@@ -2334,6 +2822,7 @@ def list_jobs(
 ) -> V1JobListResponse:
     store = _job_store(request)
     manager = _manager(request)
+    project_id = _scoped_read_project(request, project_id)
     if project_id:
         enriched = store.list_enriched(limit=limit, project_id=project_id)
         if status is not None:
@@ -3097,6 +3586,7 @@ def save_job_s2_review(
 
 _PES_REVIEW_PARTIAL_STATUSES = frozenset({"FAILED", "CANCELLED"})
 
+
 def _pes_review_work_dir(request: Request, job_id: str, *, for_write: bool) -> tuple[Path, str]:
     """Resolve (task dir, task status) of a PESsearch job for manual review.
 
@@ -3124,9 +3614,7 @@ def _pes_review_work_dir(request: Request, job_id: str, *, for_write: bool) -> t
         )
     if not record.work_dir:
         raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
-    status = (
-        record.status.value if getattr(record.status, "value", None) else str(record.status)
-    )
+    status = record.status.value if getattr(record.status, "value", None) else str(record.status)
     status_key = str(status).strip().upper()
     active_job = status_key not in {"COMPLETED", "FAILED", "CANCELLED"}
 
@@ -3152,9 +3640,7 @@ def _pes_review_work_dir(request: Request, job_id: str, *, for_write: bool) -> t
             )
         from acp.results.pes_scan_live import collect_pes_scan_live_frames
 
-        if (
-            collect_pes_scan_live_frames(work_dir, include_incomplete=True) is None
-        ):
+        if collect_pes_scan_live_frames(work_dir, include_incomplete=True) is None:
             raise HTTPException(
                 status_code=404,
                 detail=(
@@ -3320,6 +3806,7 @@ def get_pes_review(job_id: str, request: Request) -> PesReviewStateResponse:
 def _notify_structure_sources_updated(request: Request, job_id: str) -> None:
     """Notify structure source indexer of updated candidates/manifest for job."""
     from datetime import datetime, timezone
+
     now = datetime.now(timezone.utc).isoformat()
     try:
         manager = getattr(request.app.state, "job_manager", None)
@@ -3336,6 +3823,7 @@ def _notify_structure_sources_updated(request: Request, job_id: str) -> None:
 
     try:
         from acp.api.v2_structure_sources import _get_stores
+
         _source_store, indexer = _get_stores(request)
         indexer.refresh_job(job_id)
     except Exception as exc:
@@ -3355,9 +3843,7 @@ def restore_pes_review_endpoint(
     remote_ctx = _remote_review_setup(
         request,
         job_id,
-        backup_rel=(
-            f"RESULT/pes_search/{PES_REVIEW_BACKUP_TEMPLATE.format(n=int(req.backup))}"
-        ),
+        backup_rel=(f"RESULT/pes_search/{PES_REVIEW_BACKUP_TEMPLATE.format(n=int(req.backup))}"),
     )
 
     from acp.calculations.pes.review import PesReviewError, RevisionConflictError
@@ -3866,7 +4352,9 @@ def get_structure_viewer_geometry(
         try:
             xyz_text = resolved.read_text(encoding="utf-8")
         except OSError as exc:
-            raise HTTPException(status_code=404, detail=f"Cannot read geometry file: {exc}") from exc
+            raise HTTPException(
+                status_code=404, detail=f"Cannot read geometry file: {exc}"
+            ) from exc
 
     if entry.source.frame_index is not None:
         frame = read_traj_frame_xyz(resolved, entry.source.frame_index)
@@ -4123,9 +4611,7 @@ def get_structure_viewer_vibrations(
                 frequency_cm1=float(m.get("frequency_cm1", 0.0)),
                 imaginary=bool(m.get("imaginary", False)),
                 ir_intensity=(
-                    float(m["ir_intensity"])
-                    if m.get("ir_intensity") is not None
-                    else None
+                    float(m["ir_intensity"]) if m.get("ir_intensity") is not None else None
                 ),
                 vectors=vectors,
             )
@@ -4265,6 +4751,13 @@ def _frame_candidate_work_dir(
     return work_dir, str(record.spec.workflow or "")
 
 
+def _frame_candidate_publication_entry() -> Any:
+    """Production publication entry routing candidate writes through Data."""
+    from acp.services_publication_bootstrap import build_publication_data_port
+
+    return build_publication_data_port()
+
+
 @router.post(
     "/jobs/{job_id}/frame-candidate",
     response_model=V1FrameCandidateResponse,
@@ -4277,6 +4770,14 @@ def save_frame_candidate_endpoint(
 ) -> V1FrameCandidateResponse:
     """Save an energy-viewer frame as a tagged candidate structure."""
     work_dir, workflow = _frame_candidate_work_dir(request, job_id, require_terminal=True)
+    # Publish path: re-verify write authorization before any file is written.
+    _require_entry_access(
+        request,
+        _EntryClass.FRAME_CANDIDATES,
+        job_id=job_id,
+        action=_AccessAction.WRITE,
+        resource_id=req.name or "",
+    )
 
     from acp.results.frame_candidate_geometry import FrameCandidateError
     from acp.results.frame_candidate_store import RevisionConflictError
@@ -4294,6 +4795,7 @@ def save_frame_candidate_endpoint(
             expected_revision=req.expected_revision,
             item_id=req.item_id,
             frame_id=req.frame_id,
+            publication=_frame_candidate_publication_entry(),
         )
     except RevisionConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -4348,6 +4850,7 @@ def list_frame_candidates_endpoint(
 ) -> V1FrameCandidateListResponse:
     """List all saved frame candidates for a job."""
     work_dir, _workflow = _frame_candidate_work_dir(request, job_id, require_terminal=False)
+    _require_entry_access(request, _EntryClass.FRAME_CANDIDATES, job_id=job_id)
 
     from acp.results.frame_candidates import list_frame_candidates
 
@@ -4387,6 +4890,13 @@ def delete_frame_candidate_endpoint(
 ) -> V1FrameCandidateListResponse:
     """Remove a frame candidate (authority + manifest; XYZ kept on disk)."""
     work_dir, _workflow = _frame_candidate_work_dir(request, job_id, require_terminal=False)
+    _require_entry_access(
+        request,
+        _EntryClass.FRAME_CANDIDATES,
+        job_id=job_id,
+        action=_AccessAction.WRITE,
+        resource_id=candidate_id,
+    )
 
     from acp.results.frame_candidate_geometry import FrameCandidateError
     from acp.results.frame_candidate_store import RevisionConflictError
@@ -4511,7 +5021,7 @@ def get_job(job_id: str, request: Request) -> V1JobRecordModel:
     record = manager.get(job_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
-    model = _record_to_v1_model(record)
+    model = _record_to_v1_model(record, include_release_facts=True)
     task_row = manager.tasks.get(job_id)
     if task_row is not None:
         model = _enrich_v1_with_names(model, resolve_task_names(task_row))
@@ -4524,7 +5034,7 @@ def get_job_summary(job_id: str, request: Request) -> V1JobRecordModel:
     record = manager.get(job_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
-    model = _record_to_v1_model(record)
+    model = _record_to_v1_model(record, include_release_facts=True)
     model = _enrich_job_snapshot(record, model, include_event=True)
     task_row = manager.tasks.get(job_id)
     if task_row is not None:
@@ -4707,8 +5217,16 @@ def _overlay_state_on_entries(
             state_detail = state_info.get("detail")
             if isinstance(state_detail, str) and state_detail:
                 detail = state_detail
-            started_at = state_info.get("started_at") if prefer_state else state_info.get("started_at") or started_at
-            completed_at = state_info.get("completed_at") if prefer_state else state_info.get("completed_at") or completed_at
+            started_at = (
+                state_info.get("started_at")
+                if prefer_state
+                else state_info.get("started_at") or started_at
+            )
+            completed_at = (
+                state_info.get("completed_at")
+                if prefer_state
+                else state_info.get("completed_at") or completed_at
+            )
             error = state_info.get("error") if prefer_state else state_info.get("error") or error
         entries.append(
             JobStageEntry(
@@ -4902,7 +5420,7 @@ def get_job_detail(job_id: str, request: Request) -> V1JobDetailResponse:
     record = manager.get(job_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
-    job_model = _record_to_v1_model(record)
+    job_model = _record_to_v1_model(record, include_release_facts=True)
     job_model = _enrich_job_snapshot(record, job_model, include_event=True)
     task_row = manager.tasks.get(job_id)
     if task_row is not None:
@@ -4929,19 +5447,28 @@ def get_job_detail(job_id: str, request: Request) -> V1JobDetailResponse:
 def _structure_result_summary(request: Request, record: JobRecord) -> dict[str, Any]:
     """Keep execution, structure creation and chemical validation independent."""
     from acp.scheduler.job_edit import resolve_previous_outputs
+
     root = _job_read_root(request, record)
     outputs = resolve_previous_outputs(root, job_id=record.id, project_id=record.project_id)
     if _is_remote_job(record) and not (root / "RESULT" / "result_manifest.json").is_file():
-        return {"availability":"pending_sync", "message":"结果目录仍待同步", "structures":[]}
+        return {"availability": "pending_sync", "message": "结果目录仍待同步", "structures": []}
     if _is_remote_job(record):
         from acp.results.manifest import load_result_manifest
         from acp.results.structure_policy import reusable_product
+
         manifest = load_result_manifest(root)
-        expected = [p for p in manifest.products if reusable_product(p.to_dict())] if manifest else []
+        expected = (
+            [p for p in manifest.products if reusable_product(p.to_dict())] if manifest else []
+        )
         if len(outputs) < len(expected):
-            return {"availability":"pending_fetch", "message":"部分结果几何仍待下载；暂不能确定结构总数", "structures":[
-                {k:v for k,v in row.items() if k != "xyz_text"} for row in outputs]}
-    structures = [{k:v for k,v in row.items() if k != "xyz_text"} for row in outputs]
+            return {
+                "availability": "pending_fetch",
+                "message": "部分结果几何仍待下载；暂不能确定结构总数",
+                "structures": [
+                    {k: v for k, v in row.items() if k != "xyz_text"} for row in outputs
+                ],
+            }
+    structures = [{k: v for k, v in row.items() if k != "xyz_text"} for row in outputs]
     count = len(structures)
     if count:
         message = f"保留 {count} 个可复用结构；计算执行状态与结构验证结果分别显示"
@@ -4951,8 +5478,13 @@ def _structure_result_summary(request: Request, record: JobRecord) -> dict[str, 
         message = "当前采用人工选点；可打开完整曲线和轨迹保存帧"
     else:
         message = "没有具备成功证据的自动结构；可从可读轨迹手动保存初猜"
-    return {"availability":"available", "count":count, "message":message,
-            "structures":structures, "input_sources":record.spec.input}
+    return {
+        "availability": "available",
+        "count": count,
+        "message": message,
+        "structures": structures,
+        "input_sources": record.spec.input,
+    }
 
 
 def _read_job_metrics(record: JobRecord) -> JobMetrics | None:
@@ -4990,8 +5522,8 @@ def _read_effective_config(record: JobRecord) -> dict[str, Any] | None:
 
 @router.post("/jobs/{job_id}/cancel", response_model=V1JobRecordModel)
 def cancel_job(job_id: str, request: Request) -> V1JobRecordModel:
-    manager = _manager(request)
-    record = manager.cancel(job_id)
+    _require_job_scope_access(request, job_id, action=_AccessAction.CONTROL, require_exists=False)
+    record = _commands(request).cancel(job_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     return _record_to_v1_model(record)
@@ -5058,13 +5590,15 @@ def _run_job_state_action(action: Callable[[str], JobRecord], job_id: str) -> V1
 @router.post("/jobs/{job_id}/pause", response_model=V1JobRecordModel)
 def pause_job(job_id: str, request: Request) -> V1JobRecordModel:
     """Pause a RUNNING job (SIGSTOP locally, ``bstop`` on LSF) → PAUSED."""
-    return _run_job_state_action(_manager(request).pause_job, job_id)
+    _require_job_scope_access(request, job_id, action=_AccessAction.CONTROL, require_exists=False)
+    return _run_job_state_action(_commands(request).pause, job_id)
 
 
 @router.post("/jobs/{job_id}/unpause", response_model=V1JobRecordModel)
 def unpause_job(job_id: str, request: Request) -> V1JobRecordModel:
     """Revive a PAUSED job in place (SIGCONT locally, ``bresume`` on LSF) → RUNNING."""
-    return _run_job_state_action(_manager(request).unpause_job, job_id)
+    _require_job_scope_access(request, job_id, action=_AccessAction.CONTROL, require_exists=False)
+    return _run_job_state_action(_commands(request).unpause, job_id)
 
 
 @router.post("/jobs/{job_id}/continue", response_model=V1JobRecordModel)
@@ -5079,10 +5613,10 @@ def continue_job(
     unknown/disabled/incapable override → HTTP 400 with the same error
     codes as job creation; ``None`` returns to the source node.
     """
-    manager = _manager(request)
     target_node = body.target_node if body else None
+    _require_job_scope_access(request, job_id, action=_AccessAction.CONTROL, require_exists=False)
     try:
-        record = manager.continue_job(job_id, target_node=target_node)
+        record = _commands(request).continue_job(job_id, target_node=target_node)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}") from exc
     except (ExecutionTargetError, NoCapableNodeError) as exc:
@@ -5105,9 +5639,9 @@ def rerun_job(
     queueing. The optional legacy ``project_id`` body is accepted only when it
     matches the current project.
     """
-    manager = _manager(request)
+    _require_job_scope_access(request, job_id, action=_AccessAction.CONTROL, require_exists=False)
     try:
-        record = manager.rerun_job(job_id, project_id=body.project_id if body else None)
+        record = _commands(request).rerun(job_id, project_id=body.project_id if body else None)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}") from exc
     except ValueError as exc:
@@ -5132,14 +5666,12 @@ def _build_edited_spec(
     """
     workflow = req.workflow or record.spec.workflow
     if req.mode == "in_place" and workflow != record.spec.workflow:
-        raise EditValidationError(
-            "原地重算锁定工作流；请切换为「创建新任务」以更换工作流"
-        )
+        raise EditValidationError("原地重算锁定工作流；请切换为「创建新任务」以更换工作流")
     edit_status = workflow_edit_status(workflow)
     if not edit_status["editable"]:
         raise EditValidationError(
-            edit_status.get("migration_hint") or
-            f"工作流 {workflow} 为 {edit_status['status']}，不支持编辑重算"
+            edit_status.get("migration_hint")
+            or f"工作流 {workflow} 为 {edit_status['status']}，不支持编辑重算"
         )
     from acp.scheduler.edit_parameters import (
         apply_edited_parameters,
@@ -5168,7 +5700,10 @@ def _build_edited_spec(
             ):
                 edited_levels = req.method.get("levels") or {}
             method, inp = apply_edited_parameters(
-                record.spec, method, inp, edited_levels=edited_levels,
+                record.spec,
+                method,
+                inp,
+                edited_levels=edited_levels,
             )
         except ValueError as exc:
             raise EditValidationError(str(exc)) from exc
@@ -5291,9 +5826,7 @@ def _validate_reaction_path_frame_input(
     else:
         input_xyz = str(inp.get("source") or inp.get("xyz_text") or inp.get("xyz") or "")
     if not input_xyz or not frame.xyz or not _same_xyz_geometry(input_xyz, frame.xyz):
-        raise EditValidationError(
-            "所选结构与上游路径帧当前几何不一致；请重新选择该路径帧后提交。"
-        )
+        raise EditValidationError("所选结构与上游路径帧当前几何不一致；请重新选择该路径帧后提交。")
 
     original_input = record.spec.input if isinstance(record.spec.input, dict) else {}
     original_xyzs: list[str] = []
@@ -5306,9 +5839,7 @@ def _validate_reaction_path_frame_input(
                 if isinstance(row, dict)
             )
     scan_request = original_input.get("scan_request")
-    source_input = (
-        scan_request.get("source") if isinstance(scan_request, dict) else original_input
-    )
+    source_input = scan_request.get("source") if isinstance(scan_request, dict) else original_input
     if isinstance(source_input, dict):
         original_xyzs.append(
             str(
@@ -5395,10 +5926,13 @@ def _edit_payload_dict(
 
 def _edit_request_payload(job_id: str, body: V1EditRecalculateRequest) -> dict[str, Any]:
     """Hash supplied patch fields, independently of the mutable source spec."""
-    return {"job_id": job_id, "request": body.model_dump(
-        exclude_unset=True,
-        exclude={"request_id", "expected_source_revision", "preview_fingerprint"},
-    )}
+    return {
+        "job_id": job_id,
+        "request": body.model_dump(
+            exclude_unset=True,
+            exclude={"request_id", "expected_source_revision", "preview_fingerprint"},
+        ),
+    }
 
 
 @router.get("/jobs/{job_id}/edit-draft", response_model=V1EditDraftResponse)
@@ -5415,8 +5949,10 @@ def get_job_edit_draft(job_id: str, request: Request) -> V1EditDraftResponse:
     draft = build_edit_draft(read_record, run_root=manager.run_root)
     if _is_remote_job(record):
         from acp.scheduler.job_edit import resolve_previous_outputs
+
         root = _job_read_root(request, record)
         from acp.results.manifest import load_result_manifest
+
         manifest = load_result_manifest(root)
         cache = _remote_structure_cache(request)
         availability = "available"
@@ -5427,16 +5963,14 @@ def get_job_edit_draft(job_id: str, request: Request) -> V1EditDraftResponse:
         outputs = resolve_previous_outputs(root, job_id=record.id, project_id=record.project_id)
         draft["input_refs"]["previous_outputs"] = outputs
         draft["input_refs"]["last_structure"] = outputs[0] if outputs else None
-        draft["input_refs"]["outputs_availability"] = availability if manifest is not None or outputs else "pending_sync"
-    draft["input_refs"]["reaction_path_sources"] = _reaction_path_sources_for_edit(
-        record, manager
-    )
+        draft["input_refs"]["outputs_availability"] = (
+            availability if manifest is not None or outputs else "pending_sync"
+        )
+    draft["input_refs"]["reaction_path_sources"] = _reaction_path_sources_for_edit(record, manager)
     return V1EditDraftResponse(**draft)
 
 
-def _reaction_path_sources_for_edit(
-    record: JobRecord, manager: JobManager
-) -> list[dict[str, Any]]:
+def _reaction_path_sources_for_edit(record: JobRecord, manager: JobManager) -> list[dict[str, Any]]:
     """Return PESsearch jobs that are direct or recorded structure ancestors."""
     input_spec = record.spec.input if isinstance(record.spec.input, dict) else {}
     source_job_ids: list[str] = []
@@ -5477,9 +6011,7 @@ def _reaction_path_sources_for_edit(
                             add_source(event.get("snapshots") or [])
                             break
             except (OSError, UnicodeDecodeError):
-                logger.debug(
-                    "Could not read edit source lineage for %s", record.id, exc_info=True
-                )
+                logger.debug("Could not read edit source lineage for %s", record.id, exc_info=True)
 
     sources: list[dict[str, Any]] = []
     for source_job_id in source_job_ids:
@@ -5487,9 +6019,7 @@ def _reaction_path_sources_for_edit(
         if source_record is None or str(source_record.spec.workflow or "") != "PESsearch":
             continue
         source_input = (
-            source_record.spec.input
-            if isinstance(source_record.spec.input, dict)
-            else {}
+            source_record.spec.input if isinstance(source_record.spec.input, dict) else {}
         )
         scan_source = source_input.get("scan_request")
         scan_source = scan_source.get("source") if isinstance(scan_source, dict) else None
@@ -5616,8 +6146,8 @@ def submit_job_edit_recalculate(
             raise HTTPException(
                 status_code=422,
                 detail=(
-                    source_status.get("migration_hint") or
-                    f"工作流 {record.spec.workflow} 为 {source_status['status']}；"
+                    source_status.get("migration_hint")
+                    or f"工作流 {record.spec.workflow} 为 {source_status['status']}；"
                     "历史任务仅支持查看与迁移，原地编辑重算已禁用"
                 ),
             )
@@ -5662,7 +6192,7 @@ def submit_job_edit_recalculate(
         payload = _edit_payload_dict(job_id, body, spec)
         payload_hash = compute_payload_hash(payload)
     try:
-        result = manager.edit_recalculate(
+        result = _commands(request).edit_recalculate(
             job_id,
             mode=body.mode,
             new_spec=spec,
@@ -5731,8 +6261,7 @@ def purge_jobs(body: V1JobPurgeRequest, request: Request) -> V1JobPurgeResponse:
             detail="Refusing to purge the whole queue: provide job_ids or at least "
             "one of status / project_id / older_than_days",
         )
-    manager = _manager(request)
-    report = manager.purge_jobs(
+    report = _commands(request).purge(
         job_ids=body.job_ids,
         status=body.status,
         project_id=body.project_id,
@@ -5749,6 +6278,7 @@ async def stream_job_events(
     request: Request,
     after_seq: int = Query(default=0, ge=0),
 ) -> StreamingResponse:
+    _require_entry_access(request, _EntryClass.EVENT_STREAM, job_id=job_id)
     return await legacy_stream_job_events(job_id, request, after_seq=after_seq)
 
 
@@ -5764,6 +6294,7 @@ def get_job_logs(
     work_dir = manager.work_dir_of(job_id)
     if work_dir is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    _require_entry_access(request, _EntryClass.LOG, job_id=job_id)
 
     stdout_path = runtime_file(work_dir, "stdout.log")
     stderr_path = runtime_file(work_dir, "stderr.log")
@@ -5816,6 +6347,7 @@ def get_job_files(
     work_dir = manager.work_dir_of(job_id)
     if work_dir is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    _require_entry_access(request, _EntryClass.DOWNLOAD, job_id=job_id)
     manifest = build_manifest(work_dir, relative_path=path, view=view)
     entries = [
         FileEntry(
@@ -5864,6 +6396,8 @@ def download_job_file(job_id: str, file_path: str, request: Request) -> Response
     work_dir = manager.work_dir_of(job_id)
     if work_dir is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    # Re-verify authorization immediately before the download body is produced.
+    _require_entry_access(request, _EntryClass.DOWNLOAD, job_id=job_id, resource_id=file_path)
     resolved = resolve_safe(work_dir, file_path)
     if resolved is None:
         record = manager.get(job_id)
@@ -6029,6 +6563,7 @@ def list_remote_files(
     """
     fetcher = _remote_fetcher(request)
     record = _get_remote_job_record(job_id, request, project_id=project_id)
+    _require_entry_access(request, _EntryClass.DOWNLOAD, job_id=job_id, resource_id=path or "")
     try:
         files = fetcher.list_files(record, relative_path=path)
         truncated = False
@@ -6066,6 +6601,7 @@ def download_remote_archive(
         )
     fetcher = _remote_fetcher(request)
     record = _get_remote_job_record(job_id, request)
+    _require_entry_access(request, _EntryClass.DOWNLOAD, job_id=job_id)
     include_patterns = _parse_glob_patterns(include)
     exclude_patterns = _parse_glob_patterns(exclude)
 
@@ -6139,6 +6675,13 @@ def preview_remote_file(
                 status_code=400,
                 detail=f"Preview not available for {file_path!r}; use download",
             )
+
+    _require_entry_access(
+        request,
+        _EntryClass.RANGE if mode == "range" else _EntryClass.DOWNLOAD,
+        job_id=job_id,
+        resource_id=file_path,
+    )
 
     try:
         info = fetcher.file_stat(record, file_path)
@@ -6245,6 +6788,7 @@ def remote_file_checksum(
     """Return the SHA-256 checksum of a remote file."""
     fetcher = _remote_fetcher(request)
     record = _get_remote_job_record(job_id, request)
+    _require_entry_access(request, _EntryClass.DOWNLOAD, job_id=job_id, resource_id=file_path)
     try:
         data = fetcher.read_file(record, file_path)
     except FileNotFoundError:
@@ -6265,6 +6809,9 @@ def download_remote_file(
     """Stream a single file from the remote job directory (on-demand)."""
     fetcher = _remote_fetcher(request)
     record = _get_remote_job_record(job_id, request, project_id=project_id)
+    # Re-verify authorization immediately before the download body is produced
+    # (an SFTP rejection is not a Workspace revocation and vice versa).
+    _require_entry_access(request, _EntryClass.DOWNLOAD, job_id=job_id, resource_id=file_path)
     try:
         info = fetcher.file_stat(record, file_path)
     except FileNotFoundError:
@@ -6304,6 +6851,7 @@ def get_remote_log_tail(
         )
     fetcher = _remote_fetcher(request)
     record = _get_remote_job_record(job_id, request, project_id=project_id)
+    _require_entry_access(request, _EntryClass.LOG, job_id=job_id, resource_id=name)
     try:
         tail = fetcher.log_tail(record, name, lines=lines)
     except Exception as exc:
@@ -6329,12 +6877,16 @@ def list_stage_tasks(job_id: str, request: Request) -> StageTaskListResponse:
         for entry in _detail_stages(job_id, record, request):
             task = by_name.get(entry.stage_name)
             if task is not None:
-                models.append(_stage_task_to_model(task).model_copy(update={
-                    "state": entry.status,
-                    "started_at": entry.started_at,
-                    "completed_at": entry.completed_at,
-                    "stderr_summary": entry.error,
-                }))
+                models.append(
+                    _stage_task_to_model(task).model_copy(
+                        update={
+                            "state": entry.status,
+                            "started_at": entry.started_at,
+                            "completed_at": entry.completed_at,
+                            "stderr_summary": entry.error,
+                        }
+                    )
+                )
         if models:
             return StageTaskListResponse(tasks=models)
     return StageTaskListResponse(tasks=[_stage_task_to_model(task) for task in tasks])
@@ -6351,6 +6903,7 @@ def get_stage_task(task_id: str, request: Request) -> StageTaskModel:
 @router.post(
     "/jobs/{job_id}/artifacts/{artifact_id}/run-irc",
     response_model=V1JobCreatedResponse,
+    response_model_exclude_unset=True,
     status_code=202,
 )
 def run_irc_from_artifact(
@@ -6372,9 +6925,7 @@ def run_irc_from_artifact(
     )
 
     try:
-        manifest = load_ts_result_manifest(
-            source_record, getattr(manager, "remote_fetcher", None)
-        )
+        manifest = load_ts_result_manifest(source_record, getattr(manager, "remote_fetcher", None))
     except (
         OSError,
         UnicodeError,
@@ -6430,7 +6981,7 @@ def run_irc_from_artifact(
     )
     try:
         validate_execution_request(irc_spec)
-        record = manager.submit(irc_spec)
+        record = _commands(request).submit(irc_spec)
     except ExecutionTargetError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ValueError as exc:
@@ -7389,6 +7940,1410 @@ def bootstrap_node(
         stderr_tail=_tail(result.stderr),
         error=result.error,
     )
+
+
+# ---------------------------------------------------------------------------
+# Read-only availability surface (B02-5 / plan todo 15)
+# ---------------------------------------------------------------------------
+
+
+def _read_only_reader(request: Request) -> Any:
+    """Build the read-only resource reader from the manager-owned singletons.
+
+    Strictly read-only: it consults the prepared cache index and the
+    ``data_operations`` rows only.  It never fetches over SSH/SFTP and never
+    enqueues a prepare operation — only an explicit prepare command, the
+    terminal-transition background flow and startup recovery may do that.
+    """
+    from acp.services_data_bootstrap import build_read_only_reader
+
+    manager = _manager(request)
+    return build_read_only_reader(
+        job_lookup=manager.get,
+        cache=manager.structure_cache,
+        operations=getattr(manager, "_prepare_operations", None),
+    )
+
+
+def _cache_only_resource_reader(request: Request) -> Any:
+    """Build the per-resource cache-only reader (B02-6 / todo 16).
+
+    Wraps the todo-15 read-only reader with the five per-resource compat
+    adapters and the cache-only switch registry.  Same strict guarantees: zero
+    SSH/SFTP, zero new prepare operations, zero parsing writes.  A cold cache is
+    reported ``not_prepared`` so the caller falls back to the retained legacy
+    GET (the compatibility channel).
+    """
+    from acp.services_data_bootstrap import build_cache_only_resource_reader
+
+    manager = _manager(request)
+    return build_cache_only_resource_reader(
+        job_lookup=manager.get,
+        cache=manager.structure_cache,
+        operations=getattr(manager, "_prepare_operations", None),
+    )
+
+
+def _record_read_attempt(record: Any) -> int | None:
+    """Return the record's authoritative 1-based attempt (``None`` if absent)."""
+    raw = getattr(record, "attempt", None)
+    if raw is None:
+        return None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if value >= 1 else None
+
+
+@router.get("/jobs/{job_id}/availability")
+def get_job_availability(
+    job_id: str,
+    request: Request,
+    resource: str | None = Query(default=None),
+    resource_id: str | None = Query(default=None),
+    relative_path: str = Query(default=""),
+    workflow: str = Query(default=""),
+    expected_revision: int = Query(default=0, ge=0),
+    attempt: int | None = Query(default=None, ge=1),
+) -> dict[str, Any]:
+    """Return a read-only availability snapshot for one job resource.
+
+    Additive read surface: it reports ``availability`` / ``freshness`` /
+    ``basis_revision`` from the prepared cache index and prepare-operation rows
+    and never triggers a fetch or a new prepare operation.  The existing job
+    GETs keep their original behaviour and read root as the per-resource legacy
+    fallback (the compatibility channel).
+
+    ``resource`` names one of the five switch resources
+    (catalog/manifest/frame_candidates/frequency_modes/geometry) and selects
+    the per-resource compat adapter (default relative path + resource id);
+    ``resource_id`` / ``relative_path`` remain supported for callers that
+    already pass explicit values.
+
+    Raises:
+        404: Unknown job id.
+        400: Unknown ``resource`` kind.
+    """
+    from acp_services.data.read_root import AvailabilityRead
+    from acp_services.data.resource_read import RESOURCE_ADAPTERS
+
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    _require_entry_access(
+        request,
+        _EntryClass.CACHE_READ,
+        job_id=job_id,
+        project_id=record.project_id or record.spec.project_id,
+        resource_id=resource_id or resource or "",
+    )
+    resolved_attempt = attempt if attempt is not None else _record_read_attempt(record)
+    resolved_workflow = workflow or str(record.spec.workflow or "")
+
+    if resource is not None:
+        try:
+            adapter = RESOURCE_ADAPTERS[resource]
+        except KeyError as exc:
+            raise HTTPException(
+                status_code=400, detail=f"Unknown resource kind: {resource}"
+            ) from exc
+        resolved_resource = resource_id or adapter.resource_id(resolved_workflow)
+        resolved_path = "" if adapter.is_catalog() else adapter.resolve_relative_path(relative_path)
+    else:
+        resolved_resource = resource_id or f"catalog:{resolved_workflow}"
+        resolved_path = relative_path
+
+    reader = _read_only_reader(request)
+    snapshot = reader.availability(
+        AvailabilityRead(
+            job_id=job_id,
+            resource_id=resolved_resource,
+            workflow=resolved_workflow,
+            relative_path=resolved_path,
+            attempt=resolved_attempt,
+            expected_revision=expected_revision,
+        )
+    )
+    return snapshot.to_dict()
+
+
+def _artifact_error(exc: Any) -> HTTPException:
+    """Map one Data artifact refusal onto the frozen command error.
+
+    One mapping for every route that resolves prepared artifacts (the prepared
+    read and the explicit analysis), so ``attempt_mismatch``/``digest_mismatch``/
+    ``generation_stale``/``not_prepared``/``path_traversal`` mean the same thing
+    at every entry (M2-02).
+    """
+    from acp_services.data.artifacts import (
+        ArtifactAttemptMismatchError,
+        ArtifactDigestMismatchError,
+        ArtifactGenerationMismatchError,
+        ArtifactNotPreparedError,
+        ArtifactPathRefusedError,
+    )
+
+    if isinstance(exc, ArtifactPathRefusedError):
+        return _command_error(
+            400,
+            "input_invalid",
+            str(exc),
+            params={"rule": "path_traversal", **exc.params},
+        )
+    if isinstance(exc, ArtifactGenerationMismatchError):
+        return _command_error(
+            409,
+            "revision_conflict",
+            str(exc),
+            params={"rule": "generation_stale", **exc.params},
+        )
+    if isinstance(exc, ArtifactDigestMismatchError):
+        return _command_error(
+            409,
+            "revision_conflict",
+            str(exc),
+            params={"rule": "digest_mismatch", **exc.params},
+        )
+    if isinstance(exc, ArtifactAttemptMismatchError):
+        return _command_error(
+            409,
+            "revision_conflict",
+            str(exc),
+            params={"rule": "attempt_mismatch", **exc.params},
+        )
+    if isinstance(exc, ArtifactNotPreparedError):
+        reason = str(exc.params.get("reason") or "not_prepared")
+        return _command_error(
+            409,
+            "resource_not_ready",
+            f"not_prepared: {reason}",
+            params={"reason": reason, **exc.params},
+            retryable=True,
+        )
+    return _command_error(
+        int(getattr(exc, "http_status", 500)),
+        "resource_not_ready" if int(getattr(exc, "http_status", 500)) == 409 else "input_invalid",
+        str(exc),
+        params=dict(getattr(exc, "params", {}) or {}),
+    )
+
+
+def _serve_prepared_artifact(
+    request: Request,
+    record: Any,
+    *,
+    job_id: str,
+    artifact_id: str,
+    attempt: int | None,
+    generation: int,
+    digest: str | None,
+    encoding: str,
+    max_bytes: int,
+) -> JSONResponse:
+    """Serve one prepared artifact from the controlled store (no fetch).
+
+    Every refusal is named: a cold/evicted body is ``resource_not_ready`` with
+    a ``not_prepared`` message, a stale generation / corrupt digest / cross-
+    attempt read is ``revision_conflict`` with an explicit rule, and a
+    traversing id is ``input_invalid``.  No branch enqueues, fetches or parses.
+    A requested ``max_bytes`` above the frozen read bound is refused instead of
+    served (``input_invalid``/``max_read_bytes_exceeded``).
+    """
+    from acp_services.data.artifacts import ArtifactError, ArtifactStore, resolve_artifact_read
+    from acp_services.entrypoints.application_params import MAX_READ_BYTES
+
+    if encoding not in {"identity", "base64"}:
+        raise _command_error(
+            400,
+            "input_invalid",
+            f"unsupported encoding {encoding!r}",
+            params={"field": "encoding", "allowed": ["identity", "base64"]},
+        )
+    if not digest:
+        raise _command_error(
+            400,
+            "input_invalid",
+            "an artifact read requires artifact_ref.digest",
+            params={"field": "digest", "rule": "required"},
+        )
+    if int(max_bytes) > MAX_READ_BYTES:
+        raise _command_error(
+            400,
+            "input_invalid",
+            f"max_bytes exceeds the frozen read bound ({MAX_READ_BYTES} bytes)",
+            params={
+                "field": "max_bytes",
+                "rule": "max_read_bytes_exceeded",
+                "limit": MAX_READ_BYTES,
+                "requested": int(max_bytes),
+            },
+        )
+    _require_entry_access(
+        request,
+        _EntryClass.RANGE,
+        job_id=job_id,
+        project_id=record.project_id or record.spec.project_id,
+        action="read",
+        resource_id=artifact_id,
+    )
+    manager = _manager(request)
+    service = getattr(manager, "_prepare_operations", None)
+    if service is None:
+        raise _command_error(
+            503,
+            "backend_unavailable",
+            "prepare service is not available",
+            retryable=True,
+        )
+    resolved_attempt = attempt if attempt is not None else _record_read_attempt(record)
+    authorization = _artifact_authorization_projection(
+        request,
+        record,
+        action=_AccessAction.READ,
+        resource_id=artifact_id,
+    )
+    if not authorization.allowed:
+        raise _command_error(
+            403,
+            "access_denied",
+            "artifact read authorization denied",
+            params={"rule": "permission_revoked"},
+        )
+    store = ArtifactStore(manager.run_root / "artifact-store")
+    try:
+        read = resolve_artifact_read(
+            service,
+            store,
+            job_id=job_id,
+            attempt=int(resolved_attempt or 0),
+            resource_id=artifact_id,
+            generation=int(generation),
+            digest=str(digest),
+            permission_scope="local-single",
+            authorization=authorization,
+            max_bytes=int(max_bytes),
+            encoding=encoding,
+        )
+    except ArtifactError as exc:
+        raise _artifact_error(exc) from exc
+    return JSONResponse(content=read.to_dict())
+
+
+@router.get("/jobs/{job_id}/prepared/{resource}")
+def get_prepared_resource(
+    job_id: str,
+    resource: str,
+    request: Request,
+    relative_path: str = Query(default=""),
+    expected_revision: int = Query(default=0, ge=0),
+    attempt: int | None = Query(default=None, ge=1),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=1 << 20, ge=1),
+    artifact_id: str | None = Query(default=None),
+    digest: str | None = Query(default=None),
+    encoding: str = Query(default="identity"),
+    max_bytes: int | None = Query(default=None, ge=1),
+) -> Response:
+    """Serve a prepared resource cache-only (B02-6 / todo 16 new read path).
+
+    This is the switched **new read path** for the five resources
+    (catalog/manifest/frame_candidates/frequency_modes/geometry).  It reads only
+    the prepared cache index: zero SSH/SFTP, zero new prepare operations, zero
+    parsing writes.  The catalog resource returns its availability snapshot as
+    JSON; the byte resources return the prepared body (bounded to ``limit``).
+
+    When the resource is not prepared (a cold cache) it returns 409
+    ``not_prepared`` — the caller falls back to the retained legacy GET, which
+    is the compatibility channel that keeps F0 clients working.  The legacy GETs
+    are never modified or removed by this switch.
+
+    Raises:
+        404: Unknown job id.
+        400: Unknown ``resource`` kind.
+        409: The resource is not in the prepared cache index (use the legacy GET).
+    """
+    from acp_services.data.resource_read import RESOURCE_ADAPTERS
+
+    if (
+        resource not in RESOURCE_ADAPTERS
+        and resource != "artifact"
+        and artifact_id is None
+        and digest is None
+    ):
+        # Preserve the frozen switch contract: an unknown resource kind is a
+        # 400 before any job lookup.  An artifact read always carries a digest
+        # (or an explicit artifact_id), which is how it is distinguished.
+        raise HTTPException(status_code=400, detail=f"Unknown resource kind: {resource}")
+
+    resolved_artifact = artifact_id or ("" if resource in RESOURCE_ADAPTERS else resource)
+    if resource == "artifact":
+        resolved_artifact = artifact_id or ""
+    # A supplied artifact digest names an artifact read even when the id
+    # collides with one of the five switch resource names (e.g. frequency_modes).
+    if digest is not None and not resolved_artifact:
+        resolved_artifact = artifact_id or resource
+    if resource not in RESOURCE_ADAPTERS or resolved_artifact:
+        if not resolved_artifact:
+            raise _command_error(
+                400,
+                "input_invalid",
+                "artifact read requires artifact_id",
+                params={"field": "artifact_id", "rule": "required"},
+            )
+        record = _require_job_scope_access(
+            request,
+            job_id,
+            action=_AccessAction.READ,
+            resource_id=resolved_artifact,
+        )
+        return _serve_prepared_artifact(
+            request,
+            record,
+            job_id=job_id,
+            artifact_id=resolved_artifact,
+            attempt=attempt,
+            generation=expected_revision or 1,
+            digest=digest,
+            encoding=encoding,
+            max_bytes=262144 if max_bytes is None else max_bytes,
+        )
+
+    record = _require_job_scope_access(
+        request,
+        job_id,
+        action=_AccessAction.READ,
+        resource_id=resource,
+    )
+
+    _require_entry_access(
+        request,
+        _EntryClass.RANGE,
+        job_id=job_id,
+        project_id=record.project_id or record.spec.project_id,
+        resource_id=(f"{resource}:{relative_path}" if relative_path else resource),
+    )
+    resolved_attempt = attempt if attempt is not None else _record_read_attempt(record)
+
+    reader = _cache_only_resource_reader(request)
+    result = reader.serve(
+        resource,
+        job_id=job_id,
+        workflow=str(record.spec.workflow or ""),
+        relative_path=relative_path,
+        expected_revision=expected_revision,
+        attempt=resolved_attempt,
+        offset=offset,
+        limit=limit,
+    )
+    if not result.served:
+        raise HTTPException(
+            status_code=409,
+            detail=f"not_prepared: {result.reason or result.kind}",
+        )
+    if result.data is not None:
+        return Response(content=result.data, media_type="application/octet-stream")
+    assert result.snapshot is not None
+    return JSONResponse(content=result.snapshot.to_dict())
+
+
+# ---------------------------------------------------------------------------
+# B06 additive application-command routes
+# ---------------------------------------------------------------------------
+
+
+def _command_error(
+    status_code: int,
+    code: str,
+    message: str,
+    *,
+    params: dict[str, Any] | None = None,
+    retryable: bool | None = None,
+) -> HTTPException:
+    detail: dict[str, Any] = {"code": code, "message": message}
+    if params:
+        detail["params"] = params
+    if retryable is not None:
+        detail["retryable"] = retryable
+    return HTTPException(status_code=status_code, detail=detail)
+
+
+#: Field-policy rules that answer ``422`` (the frozen v1 ``extra=forbid`` result).
+_FIELD_POLICY_RULES = frozenset({"unknown_field", "unsupported_server_path"})
+
+
+def _field_policy_status(exc: Any) -> int:
+    """Map an :class:`ApplicationParamError` onto its HTTP status.
+
+    ``422`` for the two frozen field-policy rules, ``400`` for every other request
+    shape violation (unchanged pre-M0-06 behaviour).
+    """
+    rule = str((getattr(exc, "params", {}) or {}).get("rule") or "")
+    return 422 if rule in _FIELD_POLICY_RULES else 400
+
+
+def _plan_digest(payload: Mapping[str, Any]) -> str:
+    """Server-computed canonical digest of the frozen scientific plan.
+
+    B16 replaces the pre-canonical ``json.dumps(default=str)`` helper with the
+    single B03 implementation.  Only science-determining fields participate;
+    a display name, project hint or extension never changes the digest.
+    """
+    from acp_services.entrypoints.application_params import normalize_preflight
+    from acp_services.runtime.canonical_digest import (
+        frozen_plan_definition,
+    )
+    from acp_services.runtime.canonical_digest import (
+        plan_digest as canonical_plan_digest,
+    )
+
+    normalized = normalize_preflight(payload)
+    definition = frozen_plan_definition(
+        workflow=str(normalized["workflow"]),
+        input=normalized.get("input") if isinstance(normalized.get("input"), Mapping) else {},
+        method=normalized.get("method") if isinstance(normalized.get("method"), Mapping) else {},
+        resources=(
+            normalized.get("resources") if isinstance(normalized.get("resources"), Mapping) else {}
+        ),
+    )
+    return canonical_plan_digest(definition).digest
+
+
+def _approval_service(request: Request) -> Any:
+    """One approval authority per Controller database (cached on the app)."""
+    from acp_services.runtime.approvals import ApprovalService
+
+    manager = _manager(request)
+    db_path = str(manager.store.db_path)
+    cached = getattr(request.app.state, "approval_service", None)
+    if cached is None or str(getattr(cached, "db_path", "")) != db_path:
+        cached = ApprovalService(manager.store.db_path)
+        request.app.state.approval_service = cached
+    return cached
+
+
+def _submit_probe(req: Any) -> Any:
+    """The M1-04b probe over every research-signalling submit field.
+
+    One probe replaces the two field sets that used to disagree
+    (``_is_research_launch`` vs ``_enforce_approval``): a request carrying only
+    ``budget`` is research-signalling for *both* the project-scope branch and
+    the approval branch.
+    """
+    from acp_services.runtime.submit_policy import SubmitProbe
+
+    payload = {
+        "workflow": getattr(req, "workflow", ""),
+        "proposal_ref": getattr(req, "proposal_ref", None),
+        "proposal_digest": getattr(req, "proposal_digest", None),
+        "plan_digest": getattr(req, "plan_digest", None),
+        "budget": getattr(req, "budget", None),
+    }
+    return SubmitProbe.from_payload(payload)
+
+
+def _classify_submit(
+    request: Request,
+    req: Any,
+    *,
+    approval: Any = None,
+    science_digest: str = "",
+    defer_approval: bool = False,
+) -> Any:
+    """The single submit decision (M1-04b) for this request identity."""
+    from acp_services.runtime.submit_policy import classify_submit
+
+    identity = _command_identity(request, project_id=req.project_id)
+    return classify_submit(
+        _submit_probe(req),
+        identity,
+        approval=approval,
+        science_digest=str(science_digest or ""),
+        approval_science_digest=str(getattr(approval, "science_digest", "") or ""),
+        defer_approval=defer_approval,
+    )
+
+
+def _deny_submit(classification: Any) -> HTTPException:
+    """Render one submit denial in the frozen application error shape."""
+    detail = classification.detail()
+    return _command_error(
+        classification.http_status,
+        str(detail["code"]),
+        str(detail["message"]),
+        params=dict(detail["params"]),
+    )
+
+
+def _proposal_science_digest(request: Request, req: Any) -> str:
+    """Compute the C ``plan_definition_digest`` of the referenced proposal.
+
+    The Proposal is the scientific authority; it is read from the Data boundary
+    and projected with B16's single canonicalization.  A missing/unreadable
+    proposal returns ``""`` (unverifiable) — it is never treated as "matches".
+    """
+    from acp_services.runtime.canonical_digest import (
+        CanonicalDigestError,
+        proposal_plan_definition_digest,
+    )
+
+    proposal_ref = str(getattr(req, "proposal_ref", "") or "")
+    if not proposal_ref:
+        return ""
+    store = getattr(request.app.state, "research_resources", None)
+    if store is None:
+        return ""
+    from acp_services.data.research_resources import (
+        ResearchResourceError,
+        research_resource_key,
+    )
+
+    # The proposal lives in the resolved project; an absent payload claim uses
+    # the same default the approval binding uses (never a client-chosen scope).
+    project = str(getattr(req, "project_id", "") or _manager(request).default_project_id or "")
+    principal = str(_server_identity(request).principal.principal_id)
+    try:
+        record = store.read(
+            research_resource_key(project, "proposal", proposal_ref),
+            principal_id=principal,
+            project_id=project,
+        )
+    except (ResearchResourceError, KeyError, ValueError):
+        return ""
+    document = getattr(record, "document", None)
+    if not isinstance(document, Mapping):
+        return ""
+    # G10 / M1-04a: a research launch never binds a science block whose critical
+    # values are missing.  The single typed validator decides; a missing
+    # charge/multiplicity is a clarification (never an implicit 0/1).
+    science = document.get("science")
+    if isinstance(science, Mapping):
+        _require_typed_science(science)
+    if not {"recipe_digest", "science", "budget"} <= set(document):
+        return ""
+    try:
+        return proposal_plan_definition_digest(document).digest
+    except CanonicalDigestError:
+        return ""
+
+
+def _require_typed_science(science: Mapping[str, Any]) -> None:
+    """Validate a stored Proposal's science block (clarification, not 0/1)."""
+    from acp_services.runtime.science_inputs import normalize_science_inputs
+
+    payload: dict[str, Any] = {
+        key: science[key]
+        for key in ("method", "mapping", "charge", "multiplicity")
+        if key in science
+    }
+    initial_inputs = science.get("initial_inputs")
+    if isinstance(initial_inputs, list):
+        payload["structure_provenance"] = [
+            {
+                "input_id": str(item.get("input_id") or ""),
+                "sha256": str(item.get("sha256") or ""),
+                "format": str(item.get("format") or ""),
+                "role": str(item.get("role") or "minimum"),
+            }
+            for item in initial_inputs
+            if isinstance(item, Mapping)
+        ]
+    verdict = normalize_science_inputs(payload)
+    if verdict.values is not None:
+        return
+    if verdict.clarifications:
+        raise _command_error(
+            400,
+            "input_invalid",
+            "the proposal science is missing critical value(s): "
+            + ", ".join(item.field_name for item in verdict.clarifications),
+            params={
+                "rule": "clarification_required",
+                "fields": [item.field_name for item in verdict.clarifications],
+            },
+        )
+    first = verdict.issues[0]
+    raise _command_error(
+        400,
+        "input_invalid",
+        first.message,
+        params={"rule": first.rule, "field": first.field_name},
+    )
+
+
+def _enforce_approval(request: Request, req: Any, classification: Any = None) -> Any:
+    """Check the frozen plan + approval binding before any submit side effect.
+
+    M1-04b: the classification is the single decision point; this function only
+    performs the digest/approval/scientific-binding work after the class is
+    known.  Returns the authorizing :class:`Approval` (or ``None`` for a legacy
+    submit) and raises the frozen approval/plan error shape.
+    """
+    from acp_services.runtime.approvals import ApprovalError
+    from acp_services.runtime.canonical_digest import (
+        CanonicalDigestError,
+        frozen_plan_definition,
+    )
+    from acp_services.runtime.canonical_digest import (
+        plan_digest as canonical_plan_digest,
+    )
+
+    decision = classification or _classify_submit(request, req)
+    if not decision.research:
+        return None
+    if not decision.allowed:
+        raise _deny_submit(decision)
+    try:
+        definition = frozen_plan_definition(
+            workflow=str(req.workflow),
+            input=req.input,
+            method=req.method,
+            resources=req.resources,
+        )
+        computed = canonical_plan_digest(definition).digest
+    except CanonicalDigestError as exc:
+        raise _command_error(
+            400,
+            "input_invalid",
+            str(exc),
+            params={"field": "plan", **exc.params()},
+        ) from exc
+    if computed != req.plan_digest:
+        raise _command_error(
+            400,
+            "input_invalid",
+            "plan_digest does not match the submitted scientific plan",
+            params={"field": "plan_digest", "rule": "plan_digest_mismatch"},
+        )
+    manager = _manager(request)
+    approval_project = req.project_id or manager.default_project_id
+    principal = str(_server_identity(request).principal.principal_id)
+    try:
+        approval = _approval_service(request).authorize_submission(
+            plan_digest=req.plan_digest,
+            proposal_ref=str(req.proposal_ref),
+            project_id=str(approval_project or ""),
+            requester_principal=principal,
+            proposal_digest=req.proposal_digest,
+            budget=req.budget,
+        )
+    except ApprovalError as exc:
+        raise HTTPException(status_code=exc.http_status, detail=exc.detail()) from exc
+    # D06 (M1-04a): the approval binds the scientific digest *and* the execution
+    # digest.  Only read/project the proposal when the approval actually carries a
+    # science digest, so a legacy execution-only approval keeps its behaviour.
+    science_digest = ""
+    if getattr(approval, "science_digest", ""):
+        science_digest = _proposal_science_digest(request, req)
+    final = _classify_submit(request, req, approval=approval, science_digest=science_digest)
+    if not final.allowed:
+        raise _deny_submit(final)
+    return approval
+
+
+def _budget_claim_from_approval(approval: Any) -> dict[str, Any] | None:
+    """Server-side research budget quote derived from the approved record.
+
+    The client's ``budget`` payload is only compared with the approval digest by
+    B16; the effective limits come from the persisted approval, never from the
+    request.  The budget id is project+proposal (independent of ``run_id``).
+
+    M2-03c: the approved budget is normalized through the one mapping
+    (:mod:`acp_services.runtime.budget_projection`), so a non-empty unknown shape
+    or an unsupported launch unit is a typed 400/422 here — never a 500 inside
+    the ledger and never "no limits".  The resolved deadline projection travels
+    with the claim so the dispatcher has one value for all three surfaces.
+    """
+    if approval is None:
+        return None
+    approved_budget = getattr(approval, "budget", None)
+    if not approved_budget:
+        return None
+    from acp_services.runtime.budget_projection import (
+        BudgetRequestError,
+        budget_request_from_approval,
+    )
+    from acp_services.runtime.research_budget import budget_id_for
+
+    try:
+        request = budget_request_from_approval(approved_budget)
+    except BudgetRequestError as exc:
+        raise _command_error(
+            exc.http_status,
+            "input_invalid",
+            exc.message,
+            params=dict(exc.params),
+        ) from exc
+    return {
+        "budget_id": budget_id_for(str(approval.project_id), str(approval.proposal_ref)),
+        "budget": dict(approved_budget),
+        "approved_budget": dict(approved_budget),
+        "approval_ref": str(approval.approval_id),
+        "project_id": str(approval.project_id),
+        "execution_limits": request.resources.to_dict(),
+    }
+
+
+def _research_project(manager: JobManager, project_id: str | None) -> str | None:
+    """Resolve a research launch project claim server-side.
+
+    A research launch never trusts a payload project claim blindly: an unknown
+    project is ``access_denied`` with ``rule=project_scope_mismatch``.  Legacy
+    (non-research) submissions keep their historical behaviour.
+    """
+    if project_id is None:
+        return None
+    project = manager.projects.get_project(project_id)
+    if project is None:
+        raise _command_error(
+            403,
+            "access_denied",
+            "project_scope_mismatch",
+            params={"rule": "project_scope_mismatch", "path": "project_id"},
+        )
+    return project_id
+
+
+def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str, Any]:
+    """Build the zero-side-effect preflight projection.
+
+    Entry access is authorized by the thin :func:`preflight_request` wrapper;
+    everything after that check lives here unchanged so the B1-3 science
+    preflight can reuse the single implementation.
+
+    M0-06: the same exhaustive field policy and the same execution-target checks
+    as :func:`create_job` run here first, so a typo'd field or an unknown remote
+    node is reported identically before and after a submit.  The response key set
+    stays frozen (B1-3); an infeasible target is projected into ``reasons`` with
+    the application ``input_invalid`` code plus the fine-grained rule.
+    """
+    from acp_services.entrypoints.application_params import (
+        ApplicationParamError,
+        normalize_preflight,
+        validate_request_fields,
+    )
+
+    if req.workflow not in ALL_WORKFLOWS:
+        raise _command_error(
+            400,
+            "input_invalid",
+            f"Unsupported workflow '{req.workflow}'",
+            params={"field": "workflow", "allowed": list(PUBLIC_WORKFLOWS)},
+        )
+    payload = req.model_dump(exclude_none=True)
+    try:
+        validate_request_fields(payload, request_kind="preflight", entry="http")
+        normalize_preflight(payload)
+    except ApplicationParamError as exc:
+        raise _command_error(
+            _field_policy_status(exc), exc.code, exc.message, params=dict(exc.params)
+        ) from exc
+    try:
+        _validate_simple_method_cli(req.workflow, req.method)
+        _validate_scan_submission(req.workflow, req.method, req.input)
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, dict) else {"message": str(exc.detail)}
+        raise _command_error(
+            int(exc.status_code),
+            str(detail.get("code") or "input_invalid"),
+            str(detail.get("message") or exc.detail),
+            params=dict(detail.get("params") or {}),
+        ) from exc
+    manager = _manager(request)
+    project_id = _research_project(manager, req.project_id)
+    spec = JobSpec(
+        workflow=req.workflow,
+        input=req.input,
+        method=req.method,
+        resources=req.resources,
+        project_id=project_id,
+        execution_mode=req.execution_mode,
+        target_node=req.target_node or None,
+        node_tags=list(req.node_tags),
+    )
+    reasons: list[dict[str, Any]] = []
+    feasible = True
+    try:
+        validate_execution_request(spec)
+        # Only a target the client actually chose is validated here: an auto job's
+        # capability resolution stays a submit-time decision (it depends on probe
+        # state, not on the request), while a pinned node / explicit remote is the
+        # same permanent check the submit entry applies.
+        if req.target_node or req.execution_mode == "remote":
+            validate_submission_target(spec, registry=manager.registry)
+    except (ExecutionTargetError, NoCapableNodeError) as exc:
+        from acp.scheduler.nodes import target_error_envelope
+
+        feasible = False
+        envelope = target_error_envelope(exc)
+        params = dict(envelope["params"])
+        reasons.append(
+            {
+                "code": envelope["code"],
+                "message": envelope["message"],
+                "field": params.get("field"),
+                "rule": params.get("rule"),
+                "params": params,
+            }
+        )
+    digest = None
+    if feasible:
+        from acp_services.runtime.canonical_digest import CanonicalDigestError
+
+        try:
+            digest = _plan_digest(payload)
+        except CanonicalDigestError as exc:
+            raise _command_error(
+                400,
+                "input_invalid",
+                str(exc),
+                params={"field": "plan", **exc.params()},
+            ) from exc
+    return {
+        "schema_version": 1,
+        "feasible": feasible,
+        "reasons": reasons,
+        "plan_digest": digest,
+        "plan_summary": {
+            "workflow": req.workflow,
+            "steps": 1,
+            "project_id": project_id,
+        },
+        "estimate": dict(req.resources or {}),
+        "admission": None,
+        "would_create_task": False,
+        "would_reserve": False,
+    }
+
+
+@router.post("/preflight")
+def preflight_request(req: V1PreflightRequest, request: Request) -> dict[str, Any]:
+    """Zero-side-effect feasibility preflight for a would-be submit.
+
+    Runs only the existing synchronous task/method validation.  It creates no
+    task, no attempt, no prepare operation and no reservation, and it never
+    starts science.
+    """
+    _require_entry_access(
+        request,
+        _EntryClass.CACHE_READ,
+        action="read",
+        resource_id="preflight",
+    )
+    return _preflight_projection(req, request)
+
+
+def _artifact_authorization_projection(
+    request: Request, record: Any, *, action: str, resource_id: str
+) -> Any:
+    """Build the inert authorization projection frozen onto an ArtifactRef."""
+    from acp_services.data.artifacts import ArtifactAuthorization
+
+    identity = _server_identity(request)
+    project = record.project_id or record.spec.project_id
+    decision = identity.authorize_job_project(
+        project,
+        action=action,
+        job_id=record.id,
+        resource_id=resource_id,
+    )
+    return ArtifactAuthorization(
+        principal_id=str(getattr(identity.principal, "principal_id", "") or ""),
+        project_id=str(project or ""),
+        scope=str(getattr(record, "permission_scope", "") or "local-single"),
+        action=str(action),
+        allowed=bool(decision.allowed),
+        authorization_version=int(getattr(record, "revision", 0) or 0),
+    )
+
+
+def _operation_response(
+    record: Any,
+    *,
+    purpose: str,
+    authorization: Any = None,
+) -> dict[str, Any]:
+    contract = record.to_contract()
+    operation_ref = {"kind": "operation", "id": record.operation_id}
+    payload = dict(record.payload or {})
+    response: dict[str, Any] = {
+        "schema_version": 1,
+        "purpose": purpose,
+        "operation_ref": operation_ref,
+        "operation_id": record.operation_id,
+        "idempotency_key": record.idempotency_key,
+        "job_id": record.job_id,
+        "attempt": record.attempt,
+        "resource_id": record.resource_id,
+        "resource_kind": record.resource_kind,
+        "state": contract.state.value,
+        "availability": contract.availability.value,
+        "freshness": contract.freshness.value,
+        "basis_revision": contract.basis_revision,
+        "expected_revision": contract.expected_revision,
+        "observed_at": contract.observed_at,
+        "error": contract.error,
+        "bytes": contract.bytes,
+        "sha256": contract.sha256,
+        "updated_at": record.updated_at,
+        "idempotent_replay": False,
+    }
+    artifact_id = str(payload.get("artifact_id") or "")
+    if artifact_id:
+        from acp_services.data.artifacts import operation_to_artifact_ref
+
+        artifact = operation_to_artifact_ref(record, authorization=authorization)
+        if artifact is not None:
+            response["artifact_ref"] = artifact.to_dict()
+            response["resource"] = artifact.to_dict()
+            response["schema"] = artifact.schema
+            response["version"] = artifact.version
+            response["generation"] = artifact.generation
+            response["digest"] = artifact.digest
+            response["size_bytes"] = artifact.size_bytes
+            response["availability"] = artifact.availability.value
+            response["source_schema"] = artifact.source_schema
+            response["source_refs"] = [dict(item) for item in artifact.source_refs]
+        else:
+            response["artifact_ref"] = {
+                "task_id": record.job_id,
+                "attempt": record.attempt,
+                "artifact_id": artifact_id,
+                "generation": record.resource_generation,
+                "digest": record.resource_digest,
+                "relative_path": payload.get("relative_path") or None,
+            }
+    return response
+
+
+@router.post("/jobs/{job_id}/prepare")
+def prepare_artifact(
+    job_id: str,
+    req: V1PrepareRequest,
+    request: Request,
+) -> dict[str, Any]:
+    """Explicitly enqueue one persistent prepare operation.
+
+    The operation is durable (``data_operations`` row) and deduplicated by its
+    frozen content identity.  The route never fetches a remote body itself and
+    never starts science; a later explicit read is cache-only.
+    """
+    from acp_services.data.contracts import ResourceKind
+    from acp_services.data.operations import (
+        PrepareOperationConflictError,
+        PrepareOperationError,
+        PrepareRequest,
+    )
+    from acp_services.entrypoints.application_params import ApplicationParamError, normalize_prepare
+
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise _command_error(
+            404,
+            "resource_not_ready",
+            f"not_prepared: job {job_id!r} does not exist",
+            params={"job_id": job_id},
+            retryable=True,
+        )
+    decision = _server_identity(request).authorize_job_project(
+        record.project_id or record.spec.project_id,
+        action=_AccessAction.WRITE,
+        job_id=job_id,
+        resource_id=req.artifact_id or req.purpose,
+    )
+    if not decision.allowed:
+        raise _command_error(
+            404,
+            "resource_not_ready",
+            f"not_prepared: job {job_id!r} does not exist",
+            params={"job_id": job_id},
+            retryable=True,
+        )
+    _require_entry_access(
+        request,
+        _EntryClass.CACHE_READ,
+        job_id=job_id,
+        project_id=record.project_id or record.spec.project_id,
+        action="write",
+        resource_id=req.artifact_id or req.purpose,
+    )
+    payload = req.model_dump(exclude_none=True)
+    try:
+        normalized = normalize_prepare(payload)
+    except ApplicationParamError as exc:
+        raise _command_error(400, exc.code, exc.message, params=dict(exc.params)) from exc
+    claimed = normalized.get("job_id") or (normalized.get("task_ref") or {}).get("task_id")
+    if claimed and claimed != job_id:
+        raise _command_error(
+            409,
+            "revision_conflict",
+            "prepare target does not match the job in the path",
+            params={"path_job_id": job_id, "claimed_job_id": claimed},
+        )
+    task_ref = normalized.get("task_ref") or {}
+    attempt = int(normalized.get("attempt") or task_ref.get("attempt") or record.attempt or 1)
+    if attempt > int(record.attempt or 0):
+        raise _command_error(
+            400,
+            "input_invalid",
+            f"attempt {attempt} is newer than the current attempt",
+            params={"field": "attempt", "rule": "attempt_not_current"},
+        )
+    purpose = str(normalized["purpose"])
+    artifact_id = str(normalized.get("artifact_id") or "")
+    relative_path = str(normalized.get("relative_path") or "")
+    workflow = str(record.spec.workflow or "")
+    generation = int(normalized.get("generation") or (1 if purpose == "artifact" else 0))
+    expected_digest = ""
+    evidence_report = normalized.get("evidence_report")
+    if purpose == "artifact":
+        from acp_services.data.artifacts import (
+            ArtifactError,
+            ArtifactPathRefusedError,
+            is_safe_artifact_token,
+            normalize_artifact_digest,
+            validate_artifact_relative_path,
+        )
+
+        if not is_safe_artifact_token(artifact_id):
+            raise _command_error(
+                400,
+                "input_invalid",
+                f"unsafe artifact id: {artifact_id!r}",
+                params={"field": "artifact_id", "rule": "path_traversal"},
+            )
+        if relative_path and evidence_report is None:
+            try:
+                relative_path = validate_artifact_relative_path(relative_path)
+            except ArtifactPathRefusedError as exc:
+                raise _command_error(
+                    400,
+                    "input_invalid",
+                    str(exc),
+                    params={"field": "relative_path", "rule": "path_traversal"},
+                ) from exc
+        try:
+            expected_digest = normalize_artifact_digest(
+                str(normalized.get("expected_digest") or normalized.get("content_digest") or "")
+            )
+        except ArtifactError as exc:
+            raise _command_error(
+                400,
+                "input_invalid",
+                str(exc),
+                params={"field": "expected_digest", "rule": "sha256"},
+            ) from exc
+        resource_id = artifact_id
+        resource_kind = ResourceKind.ARTIFACT
+    else:
+        resource_id = f"structure-input:{relative_path or 'input.xyz'}"
+        resource_kind = ResourceKind.INPUT
+    identity = f"{job_id}\x1f{attempt}\x1f{resource_id}".encode()
+    resource_digest = expected_digest or ("sha256:" + hashlib.sha256(identity).hexdigest())
+    service = getattr(manager, "_prepare_operations", None)
+    if service is None:
+        raise _command_error(
+            503,
+            "backend_unavailable",
+            "prepare service is not available",
+            retryable=True,
+        )
+    if purpose == "artifact":
+        # An evicted body must not keep a SUCCEEDED operation replaying forever:
+        # expire the bodyless success so an explicit re-prepare opens a new
+        # dedup epoch and rebuilds the artifact.  A read never does this.
+        from acp_services.data.artifacts import ArtifactStore
+        from acp_services.data.operations import PrepareState
+
+        existing = service.find(
+            job_id=job_id,
+            resource_id=resource_id,
+            attempt=attempt,
+            permission_scope="local-single",
+        )
+        if existing is not None and existing.state is PrepareState.SUCCEEDED:
+            store = ArtifactStore(manager.run_root / "artifact-store")
+            published = store.lookup(
+                job_id=job_id,
+                attempt=existing.attempt,
+                resource_id=resource_id,
+                generation=existing.resource_generation,
+                digest="sha256:" + str(existing.sha256 or ""),
+            )
+            if published is None:
+                service.expire_succeeded_for_resource(
+                    job_id=job_id,
+                    attempt=existing.attempt,
+                    resource_id=resource_id,
+                    permission_scope="local-single",
+                    reason="artifact_body_missing",
+                )
+    artifact_payload: dict[str, Any] = {
+        "purpose": purpose,
+        "workflow": workflow,
+        "job_id": job_id,
+        "attempt": attempt,
+        "artifact_id": artifact_id,
+        "relative_path": relative_path,
+        "generation": generation,
+        "expected_digest": expected_digest,
+        "media_type": str(normalized.get("media_type") or ""),
+        "source_schema": str(normalized.get("schema_ref") or ""),
+        "source_refs": list(normalized.get("source_refs") or []),
+    }
+    if normalized.get("expected_size_bytes") is not None:
+        artifact_payload["expected_size_bytes"] = int(normalized["expected_size_bytes"])
+    if evidence_report is not None:
+        artifact_payload["evidence_report"] = dict(evidence_report)
+    # M0-05: the prepare key is versioned by the server-derived identity.  The
+    # principal/project are resolved here (never from the request body); the
+    # transport permission scope stays the deployment attribute.
+    prepare_project = str(record.project_id or record.spec.project_id or "")
+    prepare_principal = _command_identity(request, project_id=prepare_project or None).principal_id
+    prepare_request = PrepareRequest(
+        job_id=job_id,
+        attempt=attempt,
+        resource_id=resource_id,
+        resource_kind=resource_kind,
+        resource_digest=resource_digest,
+        permission_scope="local-single",
+        resource_generation=generation,
+        payload=artifact_payload,
+        client_idempotency_key=str(normalized.get("idempotency_key") or ""),
+        principal_id=prepare_principal,
+        project_id=prepare_project,
+    )
+    try:
+        operation = service.enqueue(prepare_request)
+    except PrepareOperationConflictError as exc:
+        raise _command_error(
+            409,
+            "revision_conflict",
+            str(exc),
+            params={"rule": "idempotency_key_reuse"},
+        ) from exc
+    except PrepareOperationError as exc:
+        raise _command_error(503, "backend_unavailable", str(exc), retryable=True) from exc
+    if purpose == "artifact" and attempt > 1:
+        try:
+            service.expire_older_attempts(
+                job_id=job_id,
+                attempt=attempt,
+                resource_id=resource_id,
+                permission_scope="local-single",
+            )
+        except PrepareOperationError:
+            pass
+    ensure_worker = getattr(manager, "ensure_prepare_worker", None)
+    if callable(ensure_worker):
+        ensure_worker()
+    authorization = _artifact_authorization_projection(
+        request, record, action=_AccessAction.WRITE, resource_id=resource_id
+    )
+    return _operation_response(operation, purpose=purpose, authorization=authorization)
+
+
+@router.get("/operations/{operation_id}")
+def get_operation(operation_id: str, request: Request) -> dict[str, Any]:
+    """Return one persistent prepare-operation projection (query-only)."""
+    manager = _manager(request)
+    _require_entry_access(
+        request,
+        _EntryClass.CACHE_READ,
+        action="read",
+        resource_id=operation_id,
+    )
+    service = getattr(manager, "_prepare_operations", None)
+    if service is None:
+        raise _command_error(
+            503,
+            "backend_unavailable",
+            "prepare service is not available",
+            retryable=True,
+        )
+    record = service.get(operation_id)
+    if record is None:
+        raise _command_error(
+            404,
+            "resource_not_ready",
+            f"not_prepared: unknown operation {operation_id!r}",
+            params={"operation_id": operation_id},
+            retryable=True,
+        )
+    purpose = str((record.payload or {}).get("purpose") or "artifact")
+    authorization = None
+    job = manager.get(record.job_id)
+    if job is not None:
+        _require_job_scope_access(
+            request,
+            record.job_id,
+            action=_AccessAction.READ,
+            resource_id=record.resource_id,
+        )
+        authorization = _artifact_authorization_projection(
+            request, job, action=_AccessAction.READ, resource_id=record.resource_id
+        )
+    return _operation_response(record, purpose=purpose, authorization=authorization)
+
+
+@router.post("/jobs/{job_id}/analyze")
+def analyze_job(
+    job_id: str,
+    req: V1AnalyzeRequest,
+    request: Request,
+) -> dict[str, Any]:
+    """Registry-gated explicit analysis over prepared artifacts (M2-02).
+
+    The capability registry is the **application-level** one injected by the
+    composition root (``app.state.analysis_registry``) — never the module-level
+    default.  Only ``state=executable`` runs: an unregistered id and a
+    registered-but-not-executable id (``vibration.compute``, which is a compute
+    task) are distinct typed refusals, and neither starts anything.
+
+    A ``vibration.analyze`` handler reads only prepared artifacts of *this* task:
+    each ``input_refs`` entry must be the full ArtifactRef tuple whose
+    ``task_id`` equals the route's job id, and the handler re-verifies the
+    prepare operation + published body digest before parsing.  Nothing here
+    creates a task or calls a submit path.
+    """
+    from acp.api import science_catalog
+    from acp_services.data.artifacts import ArtifactError
+    from acp_services.entrypoints.application_params import (
+        ApplicationParamError,
+        normalize_analyze,
+    )
+    from acp_services.runtime.analysis_capabilities import ANALYSIS_CAPABILITY_IDS
+
+    manager = _manager(request)
+    _require_entry_access(
+        request,
+        _EntryClass.CACHE_READ,
+        job_id=job_id,
+        action="write",
+        resource_id=req.analysis_id,
+    )
+    payload = req.model_dump(exclude_none=True)
+    try:
+        normalized = normalize_analyze(payload)
+    except ApplicationParamError as exc:
+        raise _command_error(400, exc.code, exc.message, params=dict(exc.params)) from exc
+    registry = science_catalog.analysis_registry(request.app.state)
+    # M2-05: the frozen table is the built-in surface; an enabled third-party
+    # capability is registered by the same composition root into the injected
+    # registry.  An id in neither place is the frozen ``unsupported_capability``
+    # refusal, with the full allowed set (built-in ids, then the registered ids).
+    if req.analysis_id not in ANALYSIS_CAPABILITY_IDS and (
+        registry is None or registry.get(req.analysis_id) is None
+    ):
+        allowed = [*ANALYSIS_CAPABILITY_IDS, *(registry.ids() if registry is not None else ())]
+        raise _command_error(
+            422,
+            "unsupported_capability",
+            f"unknown analysis capability {req.analysis_id!r}",
+            params={"field": "analysis_id", "allowed": allowed},
+        )
+    if registry is None:
+        raise _command_error(
+            503,
+            "backend_unavailable",
+            "the application analysis registry is not initialized",
+            params={"rule": "analysis_registry_unavailable"},
+            retryable=True,
+        )
+    capability = registry.get(req.analysis_id)
+    if capability is None or capability.handler is None:
+        # M1-01b freezes two distinct refusals: an id that was never registered is
+        # ``not_registered``; a declared capability without a handler is
+        # ``not_executable``.  Both are 422 unsupported_capability and start
+        # nothing; only state=executable may run.
+        registered = capability is not None
+        rule = (
+            "analysis_capability_not_registered"
+            if not registered
+            else "analysis_capability_not_executable"
+        )
+        raise _command_error(
+            422,
+            "unsupported_capability",
+            (
+                f"analysis capability {req.analysis_id!r} is not registered"
+                if not registered
+                else f"analysis capability {req.analysis_id!r} is not executable"
+            ),
+            params={
+                "analysis_id": req.analysis_id,
+                "registered": registered,
+                "state": (capability.state if capability is not None else "unavailable"),
+                "owner": capability.owner if capability is not None else "A",
+                "rule": rule,
+            },
+        )
+    record = manager.get(job_id)
+    if record is None:
+        raise _command_error(
+            404,
+            "resource_not_ready",
+            f"not_prepared: job {job_id!r} does not exist",
+            params={"job_id": job_id},
+            retryable=True,
+        )
+    # The analysis reads prepared artifacts of the route's task only.  A ref to a
+    # different task is an input error, not a cross-task read that "works".
+    foreign = [
+        index
+        for index, ref in enumerate(normalized["input_refs"])
+        if str(ref.get("task_id")) != str(job_id)
+    ]
+    if foreign:
+        raise _command_error(
+            400,
+            "input_invalid",
+            "input_refs must reference artifacts of the route's task",
+            params={
+                "field": f"input_refs[{foreign[0]}].task_id",
+                "rule": "task_id_mismatch",
+                "expected": job_id,
+            },
+        )
+    from acp.services_analysis_bootstrap import AnalysisInputError
+    from acp.services_science_plugins_bootstrap import PluginAnalysisInputError
+
+    try:
+        result = capability.handler(normalized)
+    except NotImplementedError as exc:
+        raise _command_error(
+            422,
+            "unsupported_capability",
+            f"analysis capability {req.analysis_id!r} is not implemented",
+            params={"analysis_id": req.analysis_id, "owner": "B12"},
+        ) from exc
+    except ArtifactError as exc:
+        raise _artifact_error(exc) from exc
+    except (AnalysisInputError, PluginAnalysisInputError) as exc:
+        raise _command_error(
+            exc.http_status,
+            "resource_not_ready" if exc.http_status == 409 else "input_invalid",
+            str(exc),
+            params=dict(exc.params),
+        ) from exc
+    product = result.get("product") if isinstance(result, Mapping) else None
+    evidence_refs = list(result.get("inputs") or ()) if isinstance(result, Mapping) else []
+    return {
+        "schema_version": 1,
+        "analysis_id": req.analysis_id,
+        # A read-only analysis starts nothing; only vibration.compute starts one
+        # frequency task, and that path is a task submit, never this route.
+        "started": False,
+        "task_ref": None,
+        "operation_ref": None,
+        "result": dict(result) if isinstance(result, Mapping) else {"result": result},
+        "evidence_refs": evidence_refs,
+        "product_digest": (
+            str(product.get("digest") or "") if isinstance(product, Mapping) else ""
+        ),
+    }
 
 
 __all__ = ["router"]

@@ -1,0 +1,165 @@
+{
+  "artifacts": [
+    {
+      "path": "multitenant-authz.json",
+      "sha256": "c9165fa8ab976cb824ed38cb92d190c8c981e47658d790415cdf6932d7e73a82",
+      "size_bytes": 3558
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "api-key",
+      "name": "b15.identity_mode.api_key",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"external_iam\": \"unsupported\", \"oidc\": \"unsupported\"}",
+      "name": "b15.identity_providers.unsupported",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"binding\": \"server-resolved-principal\", \"identity_source\": \"api-key-verified-by-controller\", \"local_single_default\": true, \"multi_user_requires_explicit_api_key\": true, \"permission_ceiling\": [\"control\", \"read\", \"write\"], \"permission_ceiling_rule\": \"bound-actions-intersect-ceiling\", \"shared_launch_allowed\": false, \"tool_arguments_are_identity\": false}",
+      "name": "b15.stdio_identity.ceiling",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"account_id\": \"acct_40296a07d668cf56\", \"actions\": [\"read\", \"write\", \"control\"], \"issuer\": \"local\", \"key_id\": \"d002254cb7e8e0e4\", \"key_project\": \"project_alpha\", \"key_scope\": \"workspace\", \"mode\": \"api-key\", \"multi_tenant_security\": \"api-key-scoped\", \"principal\": {\"deployment_tier\": \"local-single\", \"kind\": \"user\", \"principal_id\": \"principal_b15_alice\", \"roles\": [\"member\"], \"tenant_id\": \"acp-b15-multiuser\"}, \"project_hint_policy\": \"narrow-only\", \"schema_version\": 1, \"subject\": \"principal_b15_alice\", \"verified_project\": \"project_alpha\"}",
+      "name": "b15.principal.alice",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"account_id\": \"acct_40296a07d668cf56\", \"actions\": [\"read\", \"write\", \"control\"], \"issuer\": \"local\", \"key_id\": \"d002254cb7e8e0e4\", \"key_project\": \"project_alpha\", \"key_scope\": \"workspace\", \"mode\": \"api-key\", \"multi_tenant_security\": \"api-key-scoped\", \"principal\": {\"deployment_tier\": \"local-single\", \"kind\": \"user\", \"principal_id\": \"principal_b15_alice\", \"roles\": [\"member\"], \"tenant_id\": \"acp-b15-multiuser\"}, \"project_hint_policy\": \"narrow-only\", \"schema_version\": 1, \"subject\": \"principal_b15_alice\", \"verified_project\": \"project_alpha\"}",
+      "name": "b15.principal.forged_hint_unchanged",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"missing\": 401, \"unknown_key\": 401}",
+      "name": "b15.principal.unauthenticated_non_disclosure",
+      "status": "PASS"
+    },
+    {
+      "detail": "b15-alpha-paused-v1",
+      "name": "b15.read.alpha_own",
+      "status": "PASS"
+    },
+    {
+      "detail": "b15-beta-paused-v1",
+      "name": "b15.read.beta_own",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"cross\": [404, {\"detail\": \"Job not found: b15-alpha-paused-v1\"}], \"missing\": [404, {\"detail\": \"Job not found: b15-does-not-exist\"}]}",
+      "name": "b15.cross_project.read_non_disclosure",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"alice_read_beta\": 404, \"bob_cancel_alpha\": 404, \"bob_prepare_alpha\": 404}",
+      "name": "b15.cross_project.control_prepare_denied",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"alice\": [\"project_alpha\"], \"bob\": [\"project_beta\"]}",
+      "name": "b15.read.list_scoped",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"submit_status\": 403}",
+      "name": "b15.submit.forged_project_denied_principal_unchanged",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"readonly_read\": 200, \"readonly_submit\": 403}",
+      "name": "b15.key.action_ceiling",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"error\": null, \"line_count\": 12, \"permission_changed_after_revocation\": true, \"read_after_revoke\": 401, \"received_event_before_revocation\": true, \"stream_thread_stopped\": true}",
+      "name": "b15.revocation.key.read_and_stream",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"error\": null, \"line_count\": 12, \"permission_changed_after_revocation\": true, \"read_after_revoke\": 401, \"received_event_before_revocation\": true, \"stream_thread_stopped\": true}",
+      "name": "b15.revocation.account.read_and_stream",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": null,
+    "harness_revision": "4dce23bdfaf4bce044910cff290f7f9a61fb9071c0e860e7691ed3c258b4cdb5",
+    "server_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd"
+  },
+  "candidate_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+  "command": [
+    "/tmp/opencode/b26a-fix4/venvs/lab/bin/python",
+    "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py",
+    "--scenario",
+    "multitenant",
+    "--phase",
+    "multitenant:authz",
+    "--controller",
+    "http://127.0.0.1:18788",
+    "--fixture",
+    "/tmp/opencode/b26a-clean/fixtures/multi-b26a.json",
+    "--out",
+    "/tmp/opencode/b26a-fix4/evidence/b15-fix4",
+    "--timeout",
+    "600"
+  ],
+  "contract_version": "1.3.0",
+  "cwd": "/tmp/opencode/b26a-fix4",
+  "evidence_kind": "live",
+  "exit_code": 0,
+  "extensions": {
+    "acceptance.operation_class": "control",
+    "acceptance.target": "local",
+    "b15.accounts": {
+      "alice": {
+        "account_id": "acct_40296a07d668cf56",
+        "principal_id": "principal_b15_alice"
+      },
+      "bob": {
+        "account_id": "acct_d9752a955936a815",
+        "principal_id": "principal_b15_bob"
+      }
+    },
+    "b15.artifacts": [
+      {
+        "path": "multitenant-authz.json",
+        "sha256": "c9165fa8ab976cb824ed38cb92d190c8c981e47658d790415cdf6932d7e73a82",
+        "size_bytes": 3558
+      }
+    ],
+    "b15.controller": "http://127.0.0.1:18788",
+    "b15.fixture": "/tmp/opencode/b26a-clean/fixtures/multi-b26a.json",
+    "b15.fixture_jobs": {
+      "created": [],
+      "jobs_database": "/tmp/opencode/b26a-clean/data/run-root-b15/acp_jobs.db",
+      "reset": [],
+      "run_root": "/tmp/opencode/b26a-clean/data/run-root-b15"
+    },
+    "b15.matrix": "multitenant-authz.json",
+    "b15.revocation_semantics": {
+      "account": "account status + key revocation + stream re-check",
+      "key": "next request and next stream poll re-read the key row"
+    }
+  },
+  "finished_at": "2026-10-23T14:44:17Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "B",
+  "phase": "multitenant:authz",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "20261023T144412Z-1699050-11be1713",
+  "scenario": "multitenant",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-23T14:44:12Z",
+  "submission_id": null,
+  "usage": null
+}

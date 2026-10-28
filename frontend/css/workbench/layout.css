@@ -87,7 +87,8 @@
   flex-shrink: 0;
 }
 
-.project-new-btn {
+.project-new-btn,
+.project-delete-btn {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -105,22 +106,6 @@
 .project-new-btn:hover {
   background: rgba(78, 161, 255, 0.16);
   color: var(--accent);
-}
-
-.project-delete-btn {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 5px;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 0;
-  transition: background var(--transition), color var(--transition);
 }
 .project-delete-btn:hover {
   background: rgba(248, 81, 73, 0.16);
@@ -285,7 +270,8 @@
   transition: background 0.15s ease;
 }
 
-.left-resize-handle::after {
+.left-resize-handle::after,
+.right-resize-handle::after {
   content: "";
   position: absolute;
   top: 0;
@@ -327,16 +313,6 @@ body.resizing canvas {
   z-index: 10;
   background: transparent;
   transition: background 0.15s ease;
-}
-
-.right-resize-handle::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 3px;
-  width: 2px;
-  height: 100%;
-  background: var(--border-default);
 }
 
 .right-resize-handle:hover,
@@ -404,13 +380,42 @@ body.resizing-v canvas {
   grid-area: right-col;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
   border-left: 1px solid var(--border-default);
   background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
 }
+.right-col::-webkit-scrollbar { width: 10px; }
+.right-col::-webkit-scrollbar-track { background: transparent; }
+.right-col::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.right-col::-webkit-scrollbar-thumb:hover { background: var(--accent); background-clip: padding-box; }
+.right-col-scroll-cue {
+  position: sticky;
+  bottom: 0;
+  z-index: 6;
+  align-self: stretch;
+  margin-top: -22px;
+  height: 22px;
+  padding: 3px 10px 4px;
+  font-size: 10px;
+  line-height: 15px;
+  color: var(--text-tertiary);
+  text-align: center;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(11, 15, 20, 0), rgba(11, 15, 20, 0.92) 55%);
+}
+.right-col-scroll-cue[hidden] { display: none; }
 
 /* ── Detail drawer (right slide-in) ── */
-.detail-drawer-overlay {
+.detail-drawer-overlay,
+.sysres-drawer-overlay {
   position: fixed;
   inset: 0;
   z-index: 55;
@@ -435,7 +440,8 @@ body.resizing-v canvas {
   transition: transform 0.2s ease;
 }
 .detail-drawer.open { transform: translateX(0); }
-.detail-drawer-head {
+.detail-drawer-head,
+.sysres-drawer-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -449,7 +455,8 @@ body.resizing-v canvas {
   font-weight: 600;
   color: var(--text-primary);
 }
-.detail-drawer-close {
+.detail-drawer-close,
+.sysres-drawer-close {
   border: 1px solid var(--border-default);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.04);
@@ -467,14 +474,6 @@ body.resizing-v canvas {
 }
 
 /* ── System & Resources drawer (right slide-in, mirrors detail-drawer) ── */
-.sysres-drawer-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 55;
-  background: rgba(4, 7, 11, 0.50);
-  backdrop-filter: blur(4px);
-  display: none;
-}
 .sysres-drawer-overlay.open { display: block; }
 .sysres-drawer {
   position: fixed;
@@ -492,30 +491,11 @@ body.resizing-v canvas {
   transition: transform 0.2s ease;
 }
 .sysres-drawer.open { transform: translateX(0); }
-.sysres-drawer-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px 12px;
-  border-bottom: 1px solid var(--border-default);
-  flex: 0 0 auto;
-}
 .sysres-drawer-head h3 {
   margin: 0;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
-}
-.sysres-drawer-close {
-  border: 1px solid var(--border-default);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-secondary);
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  font-size: 14px;
 }
 .sysres-drawer-close:hover { border-color: var(--accent); color: var(--text-primary); }
 .sysres-drawer-body {

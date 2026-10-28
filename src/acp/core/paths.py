@@ -9,8 +9,7 @@ Two-tier layout contract:
   is orders of magnitude slower.
 
 Resolution priority: explicit CLI argument > ``ACP_RUN_ROOT`` env >
-platform default. ``scripts/start_acp.sh`` and the generated systemd unit
-pre-set ``ACP_RUN_ROOT=/var/lib/acp/runs`` for daemon deployments.
+``deployment.params.run_root`` saved by ``acp init`` > platform default.
 """
 
 from __future__ import annotations
@@ -35,6 +34,7 @@ __all__ = [
     "RUN_ROOT_ENV_VAR",
     "check_run_root_safety",
     "mount_fstype_for",
+    "normalize_configured_run_root",
     "platform_default_run_root",
     "resolve_run_root",
 ]
@@ -69,8 +69,21 @@ def platform_default_run_root() -> Path:
     return Path(data_home).expanduser() / "acp" / "runs"
 
 
+def normalize_configured_run_root(value: object) -> Path:
+    """Validate a persistent run root, independent of the launch directory."""
+    if not isinstance(value, (str, Path)) or not str(value).strip() or "\0" in str(value):
+        raise ValueError("deployment.params.run_root 必须是非空目录路径字符串")
+    root = Path(str(value).strip()).expanduser()
+    if not root.is_absolute():
+        raise ValueError("deployment.params.run_root 必须使用绝对路径或 ~/ 开头的路径")
+    root = root.resolve()
+    if root.exists() and not root.is_dir():
+        raise ValueError(f"deployment.params.run_root 不是目录：{root}")
+    return root
+
+
 def resolve_run_root(explicit: str | Path | None = None) -> Path:
-    """Resolve the data run root: CLI argument > env > platform default.
+    """Resolve the data run root: CLI > env > init config > platform default.
 
     Returns an absolute, user-expanded path. Does not create the directory —
     callers decide when to materialise it.
@@ -80,7 +93,24 @@ def resolve_run_root(explicit: str | Path | None = None) -> Path:
     elif env_value := os.environ.get(RUN_ROOT_ENV_VAR):
         root = Path(env_value)
     else:
-        root = platform_default_run_root()
+        from acp.core.config import load_config
+
+        deployment = load_config().get("deployment")
+        if deployment is None:
+            deployment = {}
+        if not isinstance(deployment, dict):
+            raise ValueError("deployment must be a mapping")
+        params = deployment.get("params")
+        if params is None:
+            params = {}
+        if not isinstance(params, dict):
+            raise ValueError("deployment.params must be a mapping")
+        value = params.get("run_root")
+        root = (
+            platform_default_run_root()
+            if value is None or value == ""
+            else normalize_configured_run_root(value)
+        )
     return Path(root).expanduser().resolve()
 
 

@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "product_kind": "vibration",
+  "identity": {
+    "product_kind": "vibration",
+    "schema_version": 1,
+    "generator": "cccp.calculation.products.vibration.build_vibration_product",
+    "input_digest": "sha256:efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef",
+    "algorithm": "vibration",
+    "algorithm_version": "1",
+    "params_digest": ""
+  },
+  "state": "unavailable",
+  "complete": false,
+  "errors": [],
+  "missing_reason": "missing_frequency"
+}

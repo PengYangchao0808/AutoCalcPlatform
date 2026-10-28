@@ -1,0 +1,16 @@
+{
+  "candidate_count": null,
+  "candidate_sources": null,
+  "declared_input_class": null,
+  "filtering_rejection_reasons": null,
+  "generation_steps": null,
+  "h4_search_row": "open",
+  "known_candidate_chain_counted_as_search": false,
+  "reason": "search_not_declared",
+  "result": "NOT_VERIFIED",
+  "rule": "Only a separate B20a-search PASS with declared input/criteria, candidate source/count, generation steps, rejection reasons, validator and success criteria may set search supported. A known-candidate chain never upgrades search.",
+  "schema": "acp2.b20a.search-gap.v1",
+  "success_criteria": null,
+  "ts_seed": null,
+  "validator": null
+}

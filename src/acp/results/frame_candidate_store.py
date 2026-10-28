@@ -12,13 +12,12 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
-import tempfile
 from pathlib import Path
 from typing import Any
 
 from acp.results.frame_candidate_geometry import FrameCandidateError
+from acp_services.data.helpers import atomic_write_text as _atomic_write_text
 
 logger = logging.getLogger(__name__)
 
@@ -122,27 +121,13 @@ def candidate_id_for(
 
 
 def atomic_write_text(path: Path, text: str) -> None:
-    """Atomically write *text* to *path* via a temp file + ``os.replace``."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    handle = tempfile.NamedTemporaryFile(
-        dir=str(path.parent),
-        suffix=".tmp",
-        delete=False,
-        mode="w",
-        encoding="utf-8",
-        newline="",
-    )
-    try:
-        handle.write(text)
-        handle.close()
-        os.replace(handle.name, path)
-    except Exception:
-        handle.close()
-        try:
-            os.unlink(handle.name)
-        except OSError:
-            pass
-        raise
+    """Atomically write *text* to *path* via a temp file + ``os.replace``.
+
+    Thin forwarding alias onto the Data owner's single implementation
+    (``acp_services.data.helpers.atomic_write_text``, B05-5/CQ-02).  The public
+    API is unchanged; the module attribute stays monkeypatchable.
+    """
+    _atomic_write_text(path, text)
 
 
 def write_authority(task_root: Path, payload: dict[str, Any]) -> None:

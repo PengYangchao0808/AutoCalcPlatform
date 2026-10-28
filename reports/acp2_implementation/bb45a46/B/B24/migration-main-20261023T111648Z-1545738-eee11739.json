@@ -1,0 +1,397 @@
+{
+  "artifacts": [
+    {
+      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B24/source-digests.json",
+      "sha256": "d4d38610e39ea03cf0039817410e0b5489e552eae270869c92b497f54afe3197",
+      "size_bytes": 11713
+    },
+    {
+      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B24/migration-log.json",
+      "sha256": "f242811328cbc4ee139cddb50253ac5139987b4b31ec247a951e33b99b6e5166",
+      "size_bytes": 3186
+    },
+    {
+      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B24/restore-comparison.json",
+      "sha256": "176d6240d79514579900e149e7063ec0ee9328306f5e2f23a2f7a6ae67acaf3a",
+      "size_bytes": 19844
+    },
+    {
+      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B24/drill-receipts.json",
+      "sha256": "c4772d7256d40e9974f1f98330b9510c7cb660c0c667d1865156f0edadde50a5",
+      "size_bytes": 10045
+    },
+    {
+      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B24/corrupt-artifacts.json",
+      "sha256": "da832289d9c909998db0289f5caeb7be54d6bd3dcd40cc4ee9eb20ee34f6a826",
+      "size_bytes": 337
+    },
+    {
+      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B24/verify-rows.json",
+      "sha256": "acf9192c008c33e399309565715180e3a3142e65b825b25c83600cd9566465e6",
+      "size_bytes": 7869
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "{\"changed\": [], \"post_files\": 46, \"pre_files\": 46}",
+      "name": "b24.source_fixtures_read_only",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"differences\": [], \"equal\": true}",
+      "name": "b24.backup.restorable_before_migration",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"exit\": 0, \"result\": {\"action\": \"migrate\", \"applied\": 0, \"db\": \"/ACPServer/acp2-development/data/b/b24-migration/db/acp_jobs.db\", \"schema_version\": 23}, \"stderr\": \"\"}",
+      "name": "b24.migration.candidate_schema",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"differences\": [], \"equal\": true}",
+      "name": "b24.migration.state_equal",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"differences\": [], \"equal\": true}",
+      "name": "b24.restore.counts_digests_schema_equal",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"injected\": \"historical_manifest/RESULT_v2/corrupt_manifest.json\", \"observed\": [{\"error\": \"JSONDecodeError: Expecting value: line 2 column 1 (char 15)\", \"path\": \"historical_manifest/RESULT_v2/corrupt_manifest.json\"}]}",
+      "name": "b24.corrupt_artifact.reported_not_skipped",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"exit\": -9, \"expected_schema_version\": 21, \"jobs\": 1, \"payload\": {\"action\": \"kill-migrate\", \"killed_before\": \"023\", \"pid\": 1545792, \"schema_version_before_commit\": 21}, \"schema_version\": 21, \"stderr\": \"\", \"stdout\": \"{\\\"action\\\": \\\"kill-migrate\\\", \\\"killed_before\\\": \\\"023\\\", \\\"pid\\\": 1545792, \\\"schema_version_before_commit\\\": 21}\\n\"}",
+      "name": "b24.interrupted_migration.readable_attributed",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"differences\": [], \"equal\": true}",
+      "name": "b24.interrupted_migration.restored",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"after\": {\"counts\": {\"approval_records\": 0, \"artifacts\": 0, \"idempotency_records\": 0, \"job_outbox\": 0, \"jobs\": 1, \"organization_events\": 0, \"stage_tasks\": 0, \"tasks\": 0}, \"digests\": {\"approval_records\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"artifacts\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"idempotency_records\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"job_outbox\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"jobs\": \"52947a024eca8487fd7e4d10025846561d3f7df42ae37bd1df92af9fec452f61\", \"organization_events\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"stage_tasks\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"tasks\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\"}, \"prepared_schema_version\": 0, \"present\": true, \"schema_version\": 23}, \"before\": {\"counts\": {\"artifacts\": 0, \"job_outbox\": 0, \"jobs\": 1, \"organization_events\": 0, \"stage_tasks\": 0, \"tasks\": 0}, \"digests\": {\"artifacts\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"job_outbox\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"jobs\": \"52947a024eca8487fd7e4d10025846561d3f7df42ae37bd1df92af9fec452f61\", \"organization_events\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"stage_tasks\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\", \"tasks\": \"4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945\"}, \"prepared_schema_version\": 0, \"present\": true, \"schema_version\": 21}, \"result\": {\"action\": \"migrate\", \"applied\": 2, \"db\": \"/ACPServer/acp2-development/data/b/b24-migration/legacy/acp_jobs.db\", \"schema_version\": 23}, \"stderr\": \"\"}",
+      "name": "b24.legacy.upgrade",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"result\": {\"action\": \"lost-worker\", \"recovered\": {\"error\": \"worker_lost:pid=999999:no_live_process\", \"from\": \"running\", \"job_id\": \"mig_lost\", \"revision\": 1, \"to\": \"failed\"}, \"recovery_scan_after\": [], \"terminal_guard\": \"acp_services.runtime.attempt_completion._is_terminal\", \"terminal_revival_blocked\": true, \"terminal_selected_by_recovery_scan\": false, \"terminal_unchanged\": true}, \"stderr\": \"\"}",
+      "name": "b24.drill.lost_worker.no_terminal_revival",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"result\": {\"action\": \"receipts\", \"duplicate\": {\"manifest_twice\": \"/ACPServer/acp2-development/data/b/b24-migration/drills/duplicate_receipt/result_manifest.json\", \"product_ids\": [\"sp_output.log\"], \"product_ids_unique\": true, \"publication_complete\": true, \"publication_result_id\": \"v2:1f42183904c1d932834e8c2c8a6404c4-step0-singlepoint\", \"result_id\": \"v2:1f42183904c1d932834e8c2c8a6404c4-step0-singlepoint\"}, \"old_v1\": {\"default_adopted\": false, \"default_decision\": \"conservative_recompute\", \"explicit_legacy_adopted\": true}}, \"stderr\": \"\"}",
+      "name": "b24.drill.old_receipt.conservative_recompute",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"manifest_twice\": \"/ACPServer/acp2-development/data/b/b24-migration/drills/duplicate_receipt/result_manifest.json\", \"product_ids\": [\"sp_output.log\"], \"product_ids_unique\": true, \"publication_complete\": true, \"publication_result_id\": \"v2:1f42183904c1d932834e8c2c8a6404c4-step0-singlepoint\", \"result_id\": \"v2:1f42183904c1d932834e8c2c8a6404c4-step0-singlepoint\"}",
+      "name": "b24.drill.duplicate_receipt.idempotent",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"result\": {\"action\": \"publication\", \"manifest_exists\": true, \"marker_after_complete\": true, \"marker_before\": null, \"qc_calls\": 0, \"qc_executed\": false, \"recovered\": true}, \"stderr\": \"\"}",
+      "name": "b24.drill.publication_pending.defined_state",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"result\": {\"action\": \"cursor\", \"claim_id\": \"idem_7a5fec8f43a14563be6d739146963ed7\", \"expired\": [\"idem_7a5fec8f43a14563be6d739146963ed7\"], \"expired_state\": \"expired\", \"lease_epoch\": 1, \"no_duplicate_row\": true, \"rows_after\": 3, \"rows_before\": 3, \"takeover_detail\": \"takeover\", \"takeover_kind\": \"created\"}, \"stderr\": \"\"}",
+      "name": "b24.drill.cursor_expiry.no_duplicate",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"result\": {\"action\": \"verify\", \"approval\": {\"approval_ref\": \"ap_e45a4f5a71074e249ec6fa557eb066ec\", \"binding\": {\"allowed_change_range\": {}, \"budget_digest\": \"sha256:583654019df6d71bbceb02914cb222ae781f260aa6e570c5a7551e9a5123335e\", \"plan_digest\": \"sha256:e218ed4ca55ec01579591d225ab424a2c972d2d1db86be3304bd21124a271c66\", \"project_id\": \"default\", \"proposal_digest\": \"sha256:a5aa3be912482900abb08007b704037afcbc33fdb09e7500b276fecd7b5ffdb6\"}, \"revision\": 2, \"state\": \"approved\"}, \"budget\": {\"approval_ref\": \"ap_e45a4f5a71074e249ec6fa557eb066ec\", \"budget_id\": \"mig-budget\", \"limits\": {\"attempt\": 4, \"qc_invocation\": 10, \"task_ref\": 4}, \"projection\": {\"approval_ref\": \"ap_e45a4f5a71074e249ec6fa557eb066ec\", \"approved_limits\": {\"attempt\": 4, \"qc_invocation\": 10, \"task_ref\": 4}, \"budget_id\": \"mig-budget\", \"consumed\": {\"attempt\": 1, \"bsub\": 0, \"model_request\": 0, \"qc_invocation\": 2, \"recipe_step\": 0, \"task_ref\": 1}, \"limits\": {\"attempt\": 4, \"qc_invocation\": 10, \"task_ref\": 4}, \"project_id\": \"default\", \"receipt_counters\": {\"attempt\": 0, \"bsub\": 0, \"model_request\": 0, \"qc_invocation\": 0, \"recipe_step\": 0, \"task_ref\": 0}, \"receipts\": 0, \"release_statement\": {\"enforced\": [\"task_ref\", \"attempt\"], \"not_verified\": [{\"capability\": \"model_token_enforcement\", \"reason\": \"model-call proxy is C-owned (acp2_experience_budget_proxy.py, C T-13)\"}, {\"capability\": \"bsub_enforcement\", \"reason\": \"LSF is absent in this environment; bsub count is 0 and recorded only\"}], \"notes\": {\"identity\": \"budget identity is project + proposal_ref (research round/batch); it is independent of run_id, so retries and restarts inherit the remaining batch\", \"model_tokens\": \"model-token enforcement is NOT_VERIFIED; the model-call proxy is C-owned and B neither proxies tokens nor invents unified billing\", \"publication\": \"A publication failure or retry never re-charges computation: usage is ingested once from the trusted receipt and publication is an independent step.\", \"science\": \"budget/balance state never changes scientific behavior, TaskRequest or an algorithm result\", \"settlement\": \"settlement comes from receipts/trusted usage; a duplicate receipt/event cannot charge twice because its deterministic receipt id is unique\"}, \"recorded_only\": [\"recipe_step\", \"qc_invocation\", \"bsub\", \"model_request\"], \"release_rules\": {\"cancel_after_dispatch\": {\"detail\": \"science already started; the consumed units stay charged\", \"recharges_computation\": false, \"release_reserved_units\": false}, \"cancel_before_dispatch\": {\"detail\": \"a queued reservation released before any QC invocation is refunded\", \"recharges_computation\": false, \"release_reserved_units\": true}, \"publication_failure\": {\"detail\": \"publication retries only republish; they never re-charge computation\", \"recharges_computation\": false, \"release_reserved_units\": false}, \"publication_pending\": {\"detail\": \"publication is a separate fact; pending publication keeps computation charged\", \"recharges_computation\": false, \"release_reserved_units\": false}, \"recovery\": {\"detail\": \"restart recovery replays reservations and receipts; it never resets a budget\", \"recharges_computation\": false, \"release_reserved_units\": false}, \"replay\": {\"detail\": \"a duplicate receipt/claim replay is idempotent and charges nothing new\", \"recharges_computation\": false, \"release_reserved_units\": false}, \"science_failure\": {\"detail\": \"a failed attempt that invoked QC consumes its units; a retry is a new attempt\", \"recharges_computation\": false, \"release_reserved_units\": false}, \"submit_failed\": {\"detail\": \"the claim never dispatched; its queued reservation is released\", \"recharges_computation\": false, \"release_reserved_units\": true}}, \"unit_consumption\": {\"attempt\": {\"consumed_at\": \"accepted submit/dispatch of an attempt\", \"failure\": \"consumes the failed attempt\", \"recovery\": \"same attempt recovery does not consume; continue/rerun is a new attempt\", \"replay\": \"does not consume a second attempt\"}, \"bsub\": {\"consumed_at\": \"trusted receipt per real bsub\", \"failure\": \"consumes when bsub was invoked\", \"recovery\": \"does not re-issue bsub\", \"replay\": \"does not re-consume the same receipt\"}, \"model_request\": {\"consumed_at\": \"trusted receipt from the C-owned model proxy\", \"failure\": \"recorded when the trusted source reports it\", \"recovery\": \"does not re-request tokens\", \"replay\": \"does not re-consume the same receipt\"}, \"qc_invocation\": {\"consumed_at\": \"trusted receipt per QC process invocation\", \"failure\": \"consumes when the process was invoked\", \"recovery\": \"does not re-invoke a completed step\", \"replay\": \"does not re-consume the same receipt\"}, \"recipe_step\": {\"consumed_at\": \"trusted receipt for a dispatched step\", \"failure\": \"consumes when the step was invoked\", \"recovery\": \"does not re-consume a completed step\", \"replay\": \"does not re-consume the same receipt\"}, \"task_ref\": {\"consumed_at\": \"accepted submit, before any work directory\", \"failure\": \"consumes\", \"recovery\": \"does not consume a new TaskRef\", \"replay\": \"does not consume a second TaskRef\"}}}, \"remaining\": {\"attempt\": 3, \"qc_invocation\": 8, \"task_ref\": 3}, \"reservations\": [{\"admission_reservation_id\": \"\", \"budget_id\": \"mig-budget\", \"claim_id\": \"mig-claim-1\", \"created_at\": \"2026-10-23T11:16:49.734606+00:00\", \"detail\": \"B24a migration drill\", \"reservation_id\": \"mig-budget-res-1\", \"run_id\": \"mig-run-1\", \"state\": \"reserved\", \"task_ref\": \"mig_idem_job\", \"units\": {\"attempt\": 1, \"qc_invocation\": 2, \"task_ref\": 1}, \"updated_at\": \"2026-10-23T11:16:49.734606+00:00\"}], \"timeouts\": {\"client_request_s\": 60.0, \"overall_acceptance_s\": 3600.0, \"queue_wait_s\": 0.0, \"science_runtime_s\": 1800.0}, \"unit_capabilities\": {\"attempt\": \"enforced\", \"qc_invocation\": \"recorded-only\", \"task_ref\": \"enforced\"}}}, \"idempotency\": {\"claim_id\": \"idem_44bc76781b5d4df3876c261679c8064e\", \"request_digest\": \"sha256:9ca16a65e61ceb10f7b9a485dd30cfefb80074224ed7a711bf172426216e6fb1\", \"state\": \"committed\", \"task_id\": \"mig_idem_job\"}, \"terminal\": {\"job_id\": \"mig_done\", \"revision\": 0, \"status\": \"completed\"}}, \"stderr\": \"\"}",
+      "name": "b24.approval_budget_idempotency_preserved",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"interrupted\": 21, \"legacy_post\": 23, \"legacy_pre\": 21, \"post_migration\": 23, \"post_restore\": 23, \"pre\": 23}",
+      "name": "b24.schema_version_matches_fixture",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": null,
+    "harness_revision": "084b63641564d677d942cc8b89de144f515b071f783b417d680eb6b521e6156a",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "a4a52c01eda33f7d5902e457d62db1013212dcd6",
+  "command": [
+    "/ACPServer/acp2-development/venvs/b/bin/python",
+    "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py",
+    "--scenario",
+    "migration",
+    "--fixture",
+    "/ACPServer/acp2-development/data/b/fixtures/migration",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B24",
+    "--timeout",
+    "1800"
+  ],
+  "contract_version": "1.3.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "fixture",
+  "exit_code": 0,
+  "extensions": {
+    "acceptance.operation_class": "control",
+    "acceptance.target": "local",
+    "b24.artifacts": [
+      {
+        "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B24/source-digests.json",
+        "sha256": "d4d38610e39ea03cf0039817410e0b5489e552eae270869c92b497f54afe3197",
+        "size_bytes": 11713
+      },
+      {
+        "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B24/migration-log.json",
+        "sha256": "f242811328cbc4ee139cddb50253ac5139987b4b31ec247a951e33b99b6e5166",
+        "size_bytes": 3186
+      },
+      {
+        "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B24/restore-comparison.json",
+        "sha256": "176d6240d79514579900e149e7063ec0ee9328306f5e2f23a2f7a6ae67acaf3a",
+        "size_bytes": 19844
+      },
+      {
+        "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B24/drill-receipts.json",
+        "sha256": "c4772d7256d40e9974f1f98330b9510c7cb660c0c667d1865156f0edadde50a5",
+        "size_bytes": 10045
+      },
+      {
+        "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B24/corrupt-artifacts.json",
+        "sha256": "da832289d9c909998db0289f5caeb7be54d6bd3dcd40cc4ee9eb20ee34f6a826",
+        "size_bytes": 337
+      },
+      {
+        "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B24/verify-rows.json",
+        "sha256": "acf9192c008c33e399309565715180e3a3142e65b825b25c83600cd9566465e6",
+        "size_bytes": 7869
+      }
+    ],
+    "b24.backup_manifest": "/ACPServer/acp2-development/data/b/b24-migration/backup/manifest.json",
+    "b24.corrupt": [
+      {
+        "error": "JSONDecodeError: Expecting value: line 2 column 1 (char 15)",
+        "path": "historical_manifest/RESULT_v2/corrupt_manifest.json"
+      }
+    ],
+    "b24.corrupt_artifacts": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B24/corrupt-artifacts.json",
+    "b24.counts": {
+      "admission_db": {
+        "counts": {
+          "admission_reservations": 0,
+          "research_budget_events": 2,
+          "research_budget_policies": 1,
+          "research_budget_receipts": 0,
+          "research_budget_reservations": 1
+        },
+        "digests": {
+          "admission_reservations": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "research_budget_events": "9f632fc7909d58b7604d80f3233a40e35c67573c2de19b27b6f7f315e2ae4a7c",
+          "research_budget_policies": "c25b1343ca03ade294c2ac0e91396eae0689316f004776f049a092aa0aee17b3",
+          "research_budget_receipts": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "research_budget_reservations": "c39bf4b87994a1a2bf3f7fbeb41a981fd64457fc7c5d302a812a612e44595ee4"
+        },
+        "prepared_schema_version": 0,
+        "present": true,
+        "schema_version": 0
+      },
+      "artifacts": {
+        "legacy-root/tasks": {
+          "files": {},
+          "tree_digest": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        },
+        "source-copy": {
+          "files": {
+            "README.md": "a082aec4a5664ce4761a54de0ff3a06fa510c86ebccd99d9af59f54ce1c8d117",
+            "batch_sp_cache/aff64f9d434de7e96ad6ca978d73eae12a5e43150cf47b172b7d2ac3029c16d3.json": "364429b8c1fc6ce9a8479436419025b70433a1ba5f621f21269191aefc8a5771",
+            "batch_sp_cache/cache_input.json": "60e225e3e91de437adf6e36fda993897513341d336848597932391d444affce7",
+            "batch_sp_cache/frames/frame_000/sp_output.log": "6a2154d424c36c3eb7da21ff401bc1ed96a1d197a7686f5c1d221c3ee55ec1a3",
+            "checkpoint_mixed/WORK/00_RUNTIME/checkpoint.json": "2d1ed45629d85f6b2f3b30e2b3537455b1ed463bb7b976ad6326e1787db2f2eb",
+            "checkpoint_mixed/plan_fingerprint.json": "63c399ddb5355acb7e5d6eb0543aff730301c07b737ade120918d11db7a7b93f",
+            "generate_fixtures.py": "9ec780150c931da0e454cfafb9e7c31ec177cc817ca65a342d6b7a75fd68930f",
+            "historical_manifest/RESULT_v2/corrupt_manifest.json": "109bc0c5386f15810805be5ffc68823d4d749d27102397a711f070726e088a71",
+            "historical_manifest/RESULT_v2/result_manifest.json": "7efdc3fe3ae6b3bef63d4ac4a1c3434c7594ba980979c1be57ea494b6b500040",
+            "historical_manifest/batch_calculation_manifest_v1.json": "1fb183f64f2c5bb8a949f7d70fdae5b00266fde0bf205cfc147eb5df75694518",
+            "partial_failure/RESULT/result_manifest.json": "b40a8251589a518b6a3ef8991c06abb1b235c730bb0343863fbd13564c85328f",
+            "partial_failure/batch_items_manifest.json": "5b9643ca2a4247f3edda0cdf7a99d01083f890955b3bce3810330d46b2e94426",
+            "remote_path_reference/remote_job_paths.json": "bde7364b39195cdd6bc85418a96d23ed5ce7770bc9f2058dca722e46c260b22f",
+            "v2_casscf_not_converged/WORK/00_RUNTIME/checkpoint.json": "94bd1a456c2802a52c8c19dbf2fe018b89707a2ffda46614a81e41e2b17392c8",
+            "v2_casscf_not_converged/WORK/08_CASSCF/active_space.json": "04e534ccc877b0dd1a7ea92a194e99514d2c48ebfeefc10c1bcb6e546ad310ae",
+            "v2_casscf_not_converged/WORK/08_CASSCF/casscf.log": "45edcc8e2693edcb43ed2fca043e942f74d2ae1fe32ea5d19f3f0aa454610464",
+            "v2_casscf_not_converged/WORK/08_CASSCF/publication_state.json": "45ab852104323bad2084ca64cdd296e73561382bd6f9cc1851125c15ffb18e50",
+            "v2_casscf_not_converged/WORK/08_CASSCF/result_manifest.json": "98a83bdfd6240333ac2dad4d7e891de7c48d29c8083f9c675de0ef7a7d5ce604",
+            "v2_casscf_not_converged/WORK/08_CASSCF/scientific_result.json": "001472344317d7b4fdfddeca870eec3f34c7892d118a27904ef0dc8a47a36053",
+            "v2_casscf_not_converged/WORK/08_CASSCF/step_result.json": "150e8fdea3403c9959e84940d7597fa6ccc2ec5e2216358b3080b78f998c9124",
+            "v2_casscf_not_converged/identity.json": "e980029eb7ebe1d6cdf4075c06ae7373c31a32f61c001e003848fcec6146f102",
+            "v2_casscf_not_converged/structures/input.xyz": "9af1449826e3aea7b6b87b7f9545bfec30b27cf4372998fd4a072054f132277a",
+            "v2_checkpoint_malformed/WORK/00_RUNTIME/checkpoint.json": "01637e269694a8181ab80f227251eddb9b71ce09c42b68eebc7f417cd76bbc22",
+            "v2_checkpoint_malformed/WORK/05_SP/publication_state.json": "3696ca827688dab0cce4206298b6c2a007a1da08744727f1a7c69d66e5203fd2",
+            "v2_checkpoint_malformed/WORK/05_SP/result_manifest.json": "bc6a4bc31da7b743638b0360324e84192dba0e00d5f1762edda668fa1336f11a",
+            "v2_checkpoint_malformed/WORK/05_SP/scientific_result.json": "ce07640aec87b8dc2250f73df4ac45107ad56148ea0869cac58142a2c55fae3b",
+            "v2_checkpoint_malformed/WORK/05_SP/sp_output.log": "c8f57017526a2f7258b9a2aed2d820b3e165e963812d0c93326e24450eac48fb",
+            "v2_checkpoint_malformed/WORK/05_SP/step_result.json": "f03a2827b218e0a78ccb9c6558e4299f320f68b6f30844c2d941c283c3078c07",
+            "v2_checkpoint_malformed/identity.json": "bc089c701a86737aa103c5044e6ee342605a2510c601db94885000ea8b9aa10c",
+            "v2_checkpoint_malformed/structures/input.xyz": "9af1449826e3aea7b6b87b7f9545bfec30b27cf4372998fd4a072054f132277a",
+            "v2_checkpoint_mixed/RESULT/result_manifest.json": "42edfa8f94056590bf3c492af054d40021e015e557e0650cf62809af5e80cd15",
+            "v2_checkpoint_mixed/WORK/00_RUNTIME/checkpoint.json": "a1596267e8a4c5110148cee50485cd9a1bad0b41a273f4246c0757c3ceb051ae",
+            "v2_checkpoint_mixed/WORK/05_SP/publication_state.json": "3696ca827688dab0cce4206298b6c2a007a1da08744727f1a7c69d66e5203fd2",
+            "v2_checkpoint_mixed/WORK/05_SP/result_manifest.json": "bc6a4bc31da7b743638b0360324e84192dba0e00d5f1762edda668fa1336f11a",
+            "v2_checkpoint_mixed/WORK/05_SP/scientific_result.json": "ce07640aec87b8dc2250f73df4ac45107ad56148ea0869cac58142a2c55fae3b",
+            "v2_checkpoint_mixed/WORK/05_SP/sp_output.log": "c8f57017526a2f7258b9a2aed2d820b3e165e963812d0c93326e24450eac48fb",
+            "v2_checkpoint_mixed/WORK/05_SP/step_result.json": "f03a2827b218e0a78ccb9c6558e4299f320f68b6f30844c2d941c283c3078c07",
+            "v2_checkpoint_mixed/identity.json": "bc089c701a86737aa103c5044e6ee342605a2510c601db94885000ea8b9aa10c",
+            "v2_checkpoint_mixed/structures/input.xyz": "9af1449826e3aea7b6b87b7f9545bfec30b27cf4372998fd4a072054f132277a",
+            "v2_publish_interrupted/WORK/00_RUNTIME/checkpoint.json": "6e9af2f1a116c4573f82e724e87e68859c8cfc23110fd79e9c58ad50604248f2",
+            "v2_publish_interrupted/WORK/05_SP/result_manifest.json": "bc6a4bc31da7b743638b0360324e84192dba0e00d5f1762edda668fa1336f11a",
+            "v2_publish_interrupted/WORK/05_SP/scientific_result.json": "ce07640aec87b8dc2250f73df4ac45107ad56148ea0869cac58142a2c55fae3b",
+            "v2_publish_interrupted/WORK/05_SP/sp_output.log": "c8f57017526a2f7258b9a2aed2d820b3e165e963812d0c93326e24450eac48fb",
+            "v2_publish_interrupted/WORK/05_SP/step_result.json": "f03a2827b218e0a78ccb9c6558e4299f320f68b6f30844c2d941c283c3078c07",
+            "v2_publish_interrupted/identity.json": "bc089c701a86737aa103c5044e6ee342605a2510c601db94885000ea8b9aa10c",
+            "v2_publish_interrupted/structures/input.xyz": "9af1449826e3aea7b6b87b7f9545bfec30b27cf4372998fd4a072054f132277a"
+          },
+          "tree_digest": "af8856b6022b97a68dfbe9063b5d5fa2b9319ef4b45cda1badbd107e45c78dbc"
+        },
+        "tasks": {
+          "files": {
+            "mig_done/RESULT/result_manifest.json": "fc6e66a96ba6a63f1b0c031d6e7961208434b4b66714ed3bb0f4fac2f8262485",
+            "mig_done/RESULT/structures/min.xyz": "f984ea2c6486c46ff7f27fe5f96544aea38f993387a88bfa4c5d7e576e3b5aa5",
+            "mig_done/WORK/00_RUNTIME/events.jsonl": "d709fe234f3220e9783efd009fa417c1cf516ee55df0d7f257249c819eea6988",
+            "mig_done/job.json": "db15c088231cc814479bbb55f2dd181808576007e8ab560f20b4fba1570cceb1",
+            "mig_done/task.json": "66a182e40e82596b49d4e577c1446060c9050e1c576a49463425b50218191d2f",
+            "mig_idem_job/WORK/00_RUNTIME/events.jsonl": "235a3fb4526b97671e10a0da61986c34fd8c652cf129f7dd3ce9c30170dc7561",
+            "mig_idem_job/job.json": "eca92d09b8bc1456f61d31515b6045d7554daaa3029ee1f693b773450d9fd5ff",
+            "mig_idem_job/task.json": "874d52d35a21d34a59cfafa1a0598dd652947c40f1867605786d9fcf773558d0",
+            "mig_lost/WORK/00_RUNTIME/events.jsonl": "b4018cabb4c533ed5f2fba8c21934f6571bb8e630d3e51766d190cd692bc3676",
+            "mig_lost/job.json": "5ed9f6d4e6317e06f1d4fe58e4dd92a80b814266592fb42e6466ef4302995369",
+            "mig_lost/task.json": "3089476da5ea5d89c399e62e663881af37502adf61a920ab7b6a12bb26d8e249"
+          },
+          "tree_digest": "68fd2df3ec23f9cd2eef3f2692b1967130d39af301fae853ffb30bc562883531"
+        }
+      },
+      "fixture_id": "fx-migration-v1",
+      "jobs_db": {
+        "counts": {
+          "approval_records": 3,
+          "artifacts": 1,
+          "idempotency_records": 2,
+          "job_outbox": 4,
+          "jobs": 3,
+          "organization_events": 0,
+          "stage_tasks": 0,
+          "tasks": 3
+        },
+        "digests": {
+          "approval_records": "0bdca217e392e7500a16ff5bad905f12abde4430bd764fdc3a1410968bf7743d",
+          "artifacts": "9142cf0d650116109b8f92e55dc1e8414f1943d0bcb4f98132c33163eac90e0b",
+          "idempotency_records": "6e725374c955bf062fcafd151bec3d8df1d3b29e15619304210e72b332a14b0a",
+          "job_outbox": "d120c99923bea5d9a0a68ea0d13d172171bc2c3bdbe3ab53ef487b78f3d5bd43",
+          "jobs": "db917f814300f09eb09be20d3d66f5beff4a4f3611ed476d43c44be6f9c90a7b",
+          "organization_events": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "stage_tasks": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "tasks": "47aa5addeb97dfac9b81db43b9c178da3bc79eb4aef2e673b52b96d7dd68fb9b"
+        },
+        "prepared_schema_version": 0,
+        "present": true,
+        "schema_version": 23
+      },
+      "schema": "acp2.migration.snapshot.v1",
+      "target_schema_version": 23
+    },
+    "b24.drill_receipts": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B24/drill-receipts.json",
+    "b24.fixture": "/ACPServer/acp2-development/data/b/fixtures/migration",
+    "b24.fixture_id": "fx-migration-v1",
+    "b24.migration_log": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B24/migration-log.json",
+    "b24.reason": null,
+    "b24.restore_comparison": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B24/restore-comparison.json",
+    "b24.schema_versions": {
+      "interrupted": 21,
+      "legacy_post": 23,
+      "legacy_pre": 21,
+      "post_migration": 23,
+      "post_restore": 23,
+      "pre": 23
+    },
+    "b24.seed": {
+      "action": "seed",
+      "admission_db": "/ACPServer/acp2-development/data/b/b24-migration/db/acp_admission.db",
+      "approvals": {
+        "approved": "ap_e45a4f5a71074e249ec6fa557eb066ec",
+        "approved_binding": {
+          "allowed_change_range": {},
+          "budget_digest": "sha256:583654019df6d71bbceb02914cb222ae781f260aa6e570c5a7551e9a5123335e",
+          "plan_digest": "sha256:e218ed4ca55ec01579591d225ab424a2c972d2d1db86be3304bd21124a271c66",
+          "project_id": "default",
+          "proposal_digest": "sha256:a5aa3be912482900abb08007b704037afcbc33fdb09e7500b276fecd7b5ffdb6"
+        },
+        "approved_revision": 2,
+        "draft": "ap_48d53d7b19b64900b3c8b4706d2ef1fa",
+        "pending": "ap_7f7faa08c22d4ffabd1e06ab8ba90a2c"
+      },
+      "budget": {
+        "admitted": true,
+        "budget_id": "mig-budget",
+        "remaining": {
+          "attempt": 3,
+          "qc_invocation": 8,
+          "task_ref": 3
+        },
+        "reservation_id": "mig-budget-res-1"
+      },
+      "db": "/ACPServer/acp2-development/data/b/b24-migration/db/acp_jobs.db",
+      "idempotency": {
+        "committed_claim": "idem_44bc76781b5d4df3876c261679c8064e",
+        "expired": [
+          "idem_cd09d18482254040858c46a007521073"
+        ],
+        "replay_outcome": "replay",
+        "rows": 2,
+        "states": [
+          "committed",
+          "expired"
+        ]
+      },
+      "job_record_revisions": {
+        "mig_done": 0,
+        "mig_lost": 0
+      },
+      "jobs": {
+        "mig_done": {
+          "pid": null,
+          "status": "completed",
+          "work_dir": "/ACPServer/acp2-development/data/b/b24-migration/tasks/mig_done"
+        },
+        "mig_lost": {
+          "pid": 999999,
+          "status": "running",
+          "work_dir": "/ACPServer/acp2-development/data/b/b24-migration/tasks/mig_lost"
+        }
+      },
+      "schema_version": 23
+    },
+    "b24.source_digests": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B24/source-digests.json",
+    "b24.source_fixtures": "/ACPServer/AutoCalcPlatform/tests/baseline/recovery_fixtures",
+    "b24.workspace": "/ACPServer/acp2-development/data/b/b24-migration"
+  },
+  "finished_at": "2026-10-23T11:16:52Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "B",
+  "phase": "main",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "20261023T111648Z-1545738-eee11739",
+  "scenario": "migration",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-23T11:16:48Z",
+  "submission_id": null,
+  "usage": null
+}

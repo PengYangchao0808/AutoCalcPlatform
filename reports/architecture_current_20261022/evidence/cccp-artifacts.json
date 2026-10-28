@@ -1,0 +1,20 @@
+{
+  "result": "PASS",
+  "library_files": 198,
+  "roundtrip_same_library_files": true,
+  "forbidden_packages": [],
+  "model_assets": [
+    "cccp/analysis/nmr/model_assets/LICENSE-DP5",
+    "cccp/analysis/nmr/model_assets/NOTICE.md",
+    "cccp/analysis/nmr/model_assets/atomic_reps.gz",
+    "cccp/analysis/nmr/model_assets/c_w_kde_mean_s_0.025.p",
+    "cccp/analysis/nmr/model_assets/folded_scaled_errors.p",
+    "cccp/analysis/nmr/model_assets/frag_reps.gz",
+    "cccp/analysis/nmr/model_assets/i_w_kde_mean_s_0.025.p",
+    "cccp/analysis/nmr/model_assets/tms_references.txt"
+  ],
+  "py_typed": true,
+  "wheel_size_bytes": 44580467,
+  "wheel_sha256": "b32f204b1c314837493a5fc5cd85f17ec6e29ebbc07be9341bd9887a640cef40",
+  "sdist_sha256": "4ba75f8620eaddc96b7c40ca7fcc83de119a243e4dac2127d2e15179b6f75d35"
+}

@@ -67,7 +67,9 @@ from acp.nmr.shift_predictor import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DP5Q_MODULE_PATH = REPO_ROOT / "src" / "acp" / "nmr" / "dp5q_stub.py"
+# T29: the stub implementation now lives in cccp; ``acp.nmr.dp5q_stub`` is a
+# module-identity alias. The isolation guards inspect the live implementation.
+DP5Q_MODULE_PATH = REPO_ROOT / "src" / "cccp" / "analysis" / "nmr" / "dp5q_stub.py"
 
 #: Formal-chain class/function tokens, assembled from fragments so this file
 #: never carries the grep-checked coupling literal itself.
@@ -590,6 +592,9 @@ def test_default_chain_sources_never_reference_the_dp5q_stub() -> None:
     for directory in _DEFAULT_CHAIN_GUARD_DIRS:
         guarded_paths.extend(sorted((REPO_ROOT / directory).rglob("*.py")))
     guarded_paths.extend(REPO_ROOT / name for name in _DEFAULT_CHAIN_GUARD_FILES)
+    # The guard scans src/cccp for default-chain references; the stub's own
+    # module necessarily names itself, so it is excluded (never a consumer).
+    guarded_paths = [path for path in guarded_paths if path != DP5Q_MODULE_PATH]
 
     offenders: list[str] = []
     for path in guarded_paths:
@@ -618,10 +623,14 @@ def test_module_imports_stay_stdlib_plus_the_predictor_protocol() -> None:
     imported = _imported_module_names(tree)
 
     acp_imports = [name for name in imported if name == "acp" or name.startswith("acp.")]
-    assert acp_imports == ["acp.nmr.shift_predictor"], (
-        f"dp5q_stub.py may import only the todo-55 protocol, got {acp_imports}"
+    assert acp_imports == [], f"dp5q_stub.py may not import the platform package, got {acp_imports}"
+    # The stub now lives in cccp, so the permitted imports are the todo-55
+    # protocol module plus the T55 stdlib-only asset locator; any other cccp
+    # module would re-couple the stub to the default scientific chain.
+    cccp_imports = [name for name in imported if name == "cccp" or name.startswith("cccp.")]
+    assert cccp_imports == ["cccp.analysis.nmr.assets", "cccp.analysis.nmr.shift_predictor"], (
+        f"dp5q_stub.py may import only the predictor protocol + asset locator, got {cccp_imports}"
     )
-    assert not [name for name in imported if name == "cccp" or name.startswith("cccp.")]
     assert not [name for name in imported if "error_model" in name]
     assert not [name for name in imported if "workflows" in name]
     assert not [name for name in imported if "probability" in name]

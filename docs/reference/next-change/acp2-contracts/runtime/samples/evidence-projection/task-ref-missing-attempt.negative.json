@@ -1,0 +1,19 @@
+{
+  "sample_id": "task-ref-missing-attempt.negative",
+  "contract": "ADR-003-taskref-evidence-decision.md",
+  "kind": "negative",
+  "payload": {
+    "project_id": "proj-m1-03",
+    "task_id": "job-m1-03-static",
+    "release": {
+      "release_id": "release-m1-03",
+      "release_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
+  "expected": {
+    "valid": false,
+    "code": "task_ref_missing_attempt",
+    "violation": "task_ref_missing_attempt",
+    "class": "invalid-parameter"
+  }
+}

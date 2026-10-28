@@ -1,0 +1,151 @@
+{
+  "atom_mapping": {
+    "left_to_right": {
+      "ethene:ethene_c1": "ethane:ethane_c1",
+      "ethene:ethene_c2": "ethane:ethane_c2",
+      "ethene:ethene_h1": "ethane:ethane_h1",
+      "ethene:ethene_h2": "ethane:ethane_h2",
+      "ethene:ethene_h3": "ethane:ethane_h3",
+      "ethene:ethene_h4": "ethane:ethane_h4",
+      "hydrogen:hydrogen_h1": "ethane:ethane_h5",
+      "hydrogen:hydrogen_h2": "ethane:ethane_h6"
+    },
+    "right_to_left": {
+      "ethane:ethane_c1": "ethene:ethene_c1",
+      "ethane:ethane_c2": "ethene:ethene_c2",
+      "ethane:ethane_h1": "ethene:ethene_h1",
+      "ethane:ethane_h2": "ethene:ethene_h2",
+      "ethane:ethane_h3": "ethene:ethene_h3",
+      "ethane:ethane_h4": "ethene:ethene_h4",
+      "ethane:ethane_h5": "hydrogen:hydrogen_h1",
+      "ethane:ethane_h6": "hydrogen:hydrogen_h2"
+    },
+    "unmapped_left": [],
+    "unmapped_right": []
+  },
+  "bond_changes": [
+    {
+      "bond_order_left": 0,
+      "bond_order_right": 1,
+      "change_type": "formed",
+      "left_atoms": [
+        "ethene:ethene_c1",
+        "hydrogen:hydrogen_h1"
+      ],
+      "right_atoms": [
+        "ethane:ethane_c1",
+        "ethane:ethane_h5"
+      ]
+    },
+    {
+      "bond_order_left": 0,
+      "bond_order_right": 1,
+      "change_type": "formed",
+      "left_atoms": [
+        "ethene:ethene_c2",
+        "hydrogen:hydrogen_h2"
+      ],
+      "right_atoms": [
+        "ethane:ethane_c2",
+        "ethane:ethane_h6"
+      ]
+    },
+    {
+      "bond_order_left": 1,
+      "bond_order_right": 0,
+      "change_type": "broken",
+      "left_atoms": [
+        "hydrogen:hydrogen_h1",
+        "hydrogen:hydrogen_h2"
+      ],
+      "right_atoms": [
+        "ethane:ethane_h5",
+        "ethane:ethane_h6"
+      ]
+    },
+    {
+      "bond_order_left": 2,
+      "bond_order_right": 1,
+      "change_type": "changed",
+      "left_atoms": [
+        "ethene:ethene_c1",
+        "ethene:ethene_c2"
+      ],
+      "right_atoms": [
+        "ethane:ethane_c1",
+        "ethane:ethane_c2"
+      ]
+    }
+  ],
+  "conditions": {
+    "phase": "gas",
+    "pressure_pa": 100000.0,
+    "solvent": null,
+    "standard_state": "1_bar_ideal_gas",
+    "temperature_k": 298.15
+  },
+  "input_uncertainty": {
+    "notes": "Limited gas-phase hydrogenation net reaction. Stereochemistry is not established by the inputs and stays unknown.",
+    "unknown_fields": [
+      "conditions.solvent"
+    ]
+  },
+  "left": [
+    {
+      "atom_id_scheme": "explicit",
+      "atom_ids": [
+        "ethene_c1",
+        "ethene_c2",
+        "ethene_h1",
+        "ethene_h2",
+        "ethene_h3",
+        "ethene_h4"
+      ],
+      "charge": 0,
+      "elements": [
+        "C",
+        "C",
+        "H",
+        "H",
+        "H",
+        "H"
+      ],
+      "formula": "C2H4",
+      "input_format": "smiles",
+      "multiplicity": 1,
+      "species": "ethene",
+      "stereochemistry": {
+        "centers": [],
+        "double_bonds": [],
+        "status": "unknown"
+      },
+      "structure_id": "ethene"
+    },
+    {
+      "atom_id_scheme": "explicit",
+      "atom_ids": [
+        "hydrogen_h1",
+        "hydrogen_h2"
+      ],
+      "charge": 0,
+      "elements": [
+        "H",
+        "H"
+      ],
+      "formula": "H2",
+      "input_format": "smiles",
+      "multiplicity": 1,
+      "species": "dihydrogen",
+      "stereochemistry": {
+        "centers": [],
+        "double_bonds": [],
+        "status": "unknown"
+      },
+      "structure_id": "hydrogen"
+    }
+  ],
+  "reaction_id": "reaction.missing_product.v1",
+  "reaction_scope": "net_reaction",
+  "right": [],
+  "schema_version": 1
+}

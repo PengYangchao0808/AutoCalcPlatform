@@ -1,0 +1,728 @@
+{
+  "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+  "controller": {
+    "argv": [
+      "/ACPServer/acp2-development/venvs/b/bin/python",
+      "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_fault_controller.py",
+      "--source",
+      "/ACPServer/acp2-development/B/src",
+      "--fault-file",
+      "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+      "--config",
+      "/ACPServer/acp2-development/data/b/controller-config/cccp.yaml",
+      "--candidate-revision",
+      "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+      "--orca",
+      "/home/xieningke/orca611/orca",
+      "--orca-ld-library-path",
+      "/home/xieningke/openmpi418/lib:/home/xieningke/orca611",
+      "--",
+      "run",
+      "serve",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "18771",
+      "--run-root",
+      "/ACPServer/acp2-development/data/b/run-root-b13",
+      "--poll-interval",
+      "1",
+      "--no-browser"
+    ],
+    "cwd": "/ACPServer/AutoCalcPlatform",
+    "fault_file": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+    "fault_seam": true,
+    "pid": 749204,
+    "run_root": "/ACPServer/acp2-development/data/b/run-root-b13",
+    "script": "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_fault_controller.py",
+    "source": "/ACPServer/acp2-development/B/src",
+    "source_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+    "source_revision_matches": true,
+    "source_root": "/ACPServer/acp2-development/B",
+    "start_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_fault_controller.py --source /ACPServer/acp2-development/B/src --fault-file /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json --config /ACPServer/acp2-development/data/b/controller-config/cccp.yaml --candidate-revision 10eb71e4bc1811054c9d19ae4fd71d974e027f8a --orca /home/xieningke/orca611/orca --orca-ld-library-path /home/xieningke/openmpi418/lib:/home/xieningke/orca611 -- run serve --host 127.0.0.1 --port 18771 --run-root /ACPServer/acp2-development/data/b/run-root-b13 --poll-interval 1 --no-browser"
+  },
+  "dsh": {
+    "client_revision": "NOT_VERIFIED",
+    "detail": "C DSH/Workbench is not delivered on this host (B10 P1 records client_revision=NOT_VERIFIED); no DSH process is started, so a re-handshake cannot be claimed.",
+    "fault": "dsh_disconnect",
+    "kind": "client",
+    "reason": "c_dsh_absent",
+    "status": "NOT_VERIFIED"
+  },
+  "lsf_control": {
+    "budget": {
+      "cores": 1,
+      "jobs": 1,
+      "memory_mb": 1024,
+      "status": "frozen_unallocated",
+      "walltime_s": 300
+    },
+    "distinct_from_normal": true,
+    "fixture_digest": "4b2061b1f1961718ed8ef89f6b6c64e642247ff3d3e85927c10baa1b2695a25a",
+    "fixture_id": "fx-control-recovery-lsf-v1",
+    "input": "/ACPServer/acp2-development/data/b/fixtures/control.json",
+    "input_digest": "4b2061b1f1961718ed8ef89f6b6c64e642247ff3d3e85927c10baa1b2695a25a",
+    "input_digest_matches": true,
+    "missing_prerequisites": [
+      "ACP_LSF_NODE",
+      "LSF_ENVDIR",
+      "bsub",
+      "bjobs",
+      "bhosts",
+      "bqueues",
+      "ssh_credentials"
+    ],
+    "no_bstop_bresume_invoked": true,
+    "no_bsub_invoked": true,
+    "no_fake_scheduler": true,
+    "normal_completion_fixture_id": "fx-lsf-singlepoint-v1",
+    "observed": {
+      "ACP_LSF_NODE": null,
+      "LSF_ENVDIR": null,
+      "ssh_credentials": false,
+      "which:bhosts": null,
+      "which:bjobs": null,
+      "which:bqueues": null,
+      "which:bsub": null,
+      "which:ssh": "/usr/bin/ssh"
+    },
+    "reason": "lsf_prerequisite_missing:ACP_LSF_NODE,LSF_ENVDIR,bsub,bjobs,bhosts,bqueues,ssh_credentials",
+    "registered": true,
+    "registry": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/fixture-runs.json",
+    "status": "NOT_VERIFIED",
+    "submitted_once": false,
+    "task_ref": null,
+    "timeout_seconds": 2400
+  },
+  "races": [
+    {
+      "adapter_exit": 0,
+      "adapter_pid": 750142,
+      "assertions": [
+        {
+          "detail": "task=20261023_073417_004_singlepoint pid=750185 running=True",
+          "name": "b13.adapter_eof.task_was_running",
+          "status": "PASS"
+        },
+        {
+          "detail": "adapter_pid=750142 exit=0",
+          "name": "b13.adapter_eof.adapter_sigterm_delivered",
+          "status": "PASS"
+        },
+        {
+          "detail": "status=running pid_alive=True",
+          "name": "b13.adapter_eof.task_kept_running_after_adapter_exit",
+          "status": "PASS"
+        },
+        {
+          "detail": "same_task=True at_running=21 after=21",
+          "name": "b13.adapter_eof.reconnect_same_task_no_new_task",
+          "status": "PASS"
+        },
+        {
+          "detail": "status_after_adapter_exit=running",
+          "name": "b13.adapter_eof.not_cancelled_by_adapter_exit",
+          "status": "PASS"
+        },
+        {
+          "detail": "terminal=True status=completed job.started=1",
+          "name": "b13.adapter_eof.task_completed_once",
+          "status": "PASS"
+        },
+        {
+          "detail": "orca_pids=[750272] max_concurrent=1",
+          "name": "b13.adapter_eof.real_orca_once",
+          "status": "PASS"
+        }
+      ],
+      "attempt": 1,
+      "budget": {
+        "cleanup_seconds": 10,
+        "cores": 1,
+        "jobs": 1,
+        "max_orca": 1,
+        "max_prepare_seconds": 30,
+        "memory_mb": 1024,
+        "walltime_s": 60
+      },
+      "budget_row": {
+        "budget": {
+          "cleanup_seconds": 10,
+          "cores": 1,
+          "jobs": 1,
+          "max_orca": 1,
+          "max_prepare_seconds": 30,
+          "memory_mb": 1024,
+          "walltime_s": 60
+        },
+        "orca_pids": [
+          750272
+        ],
+        "pid": 750185,
+        "race_id": "adapter_eof",
+        "task_ref": "20261023_073417_004_singlepoint",
+        "timeout_seconds": 120
+      },
+      "evidence": "races/adapter_eof",
+      "fault": "mcp_adapter_eof_sigterm",
+      "final_status": "completed",
+      "finished_at": "2026-10-22T23:34:34.419747Z",
+      "fixture": "ethanol-wb97mv-def2svp",
+      "input_sha256": "0d226a10d59c9dc5b3e854f9e873e07bd9ff21bf28e16e246d3a63bb6631f404",
+      "job_started_events": 1,
+      "kind": "local",
+      "method": {
+        "basis": "def2-SVP",
+        "engine": "orca",
+        "functional": "wB97M-V"
+      },
+      "orca_max_concurrent": 1,
+      "orca_pids": [
+        750272
+      ],
+      "pid": 750185,
+      "pid_alive_at_adapter_exit": true,
+      "race_id": "adapter_eof",
+      "running_at_adapter_exit": true,
+      "started_at": "2026-10-22T23:34:16.871653Z",
+      "status": "PASS",
+      "task_count_after_reconnect": 21,
+      "task_count_at_running": 21,
+      "task_count_before": 20,
+      "task_ref": "20261023_073417_004_singlepoint",
+      "timeout_seconds": 120
+    },
+    {
+      "after_restart": {
+        "attempt": 1,
+        "event_lines": 8,
+        "exit_code": 0,
+        "job_started_events": 1,
+        "manifest_sha256": "18f5029e9c7b68d9ac7b36bc027376f19afb91c3fef955b6019355bd6fdf2337",
+        "plan_identity": "v2:8efe7a0ff50469a208dd34b166b48768",
+        "process_starting_events": 1,
+        "publication_complete": true,
+        "release_id": "98e0695545d668e6",
+        "result_digest": "sha256:d9fd52a44b7775ded90fbb4637852a04e1012694a2cd69a69af0693c17ed9bd7",
+        "revision": 6,
+        "status": "completed",
+        "submission_id": "sub_0f79f33c4c284d1c",
+        "task_count": 22,
+        "task_id": "20261023_073435_005_singlepoint",
+        "task_result_digest": "sha256:1d96144bb29cdd498bf69966e90dd0c49e32a0485eebfaffb3e90ce33d586132",
+        "work_dir": "/ACPServer/acp2-development/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09"
+      },
+      "assertions": [
+        {
+          "detail": "pid=749204 port=18771",
+          "name": "b13.restart.controller_pid_found",
+          "status": "PASS"
+        },
+        {
+          "detail": "old_pid=749204 alive=False",
+          "name": "b13.restart.controller_stopped",
+          "status": "PASS"
+        },
+        {
+          "detail": "{\"candidate_revision\": \"10eb71e4bc1811054c9d19ae4fd71d974e027f8a\", \"contract_digest\": \"67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4\", \"contract_digest_scope\": \"delivered-contract-set\", \"contract_version\": \"1.1.0\", \"read_only\": true, \"schema_version\": 1, \"started_at\": \"2026-10-22T23:34:41.660743Z\", \"status\": \"ok\"}",
+          "name": "b13.restart.health_restored",
+          "status": "PASS"
+        },
+        {
+          "detail": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a -> 10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+          "name": "b13.restart.same_candidate_revision",
+          "status": "PASS"
+        },
+        {
+          "detail": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4 -> 67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
+          "name": "b13.restart.same_contract_digest",
+          "status": "PASS"
+        },
+        {
+          "detail": "old=749204 new=750900",
+          "name": "b13.restart.new_process_same_argv",
+          "status": "PASS"
+        },
+        {
+          "detail": "{\"attempt\": [1, 1], \"manifest_sha256\": [\"18f5029e9c7b68d9ac7b36bc027376f19afb91c3fef955b6019355bd6fdf2337\", \"18f5029e9c7b68d9ac7b36bc027376f19afb91c3fef955b6019355bd6fdf2337\"], \"plan_identity\": [\"v2:8efe7a0ff50469a208dd34b166b48768\", \"v2:8efe7a0ff50469a208dd34b166b48768\"], \"release_id\": [\"98e0695545d668e6\", \"98e0695545d668e6\"], \"result_digest\": [\"sha256:d9fd52a44b7775ded90fbb4637852a04e1012694a2cd69a69af0693c17ed9bd7\", \"sha256:d9fd52a44b7775ded90fbb4637852a04e1012694a2cd69a69af0693c17ed9bd7\"], \"submission_id\": [\"sub_0f79f33c4c284d1c\", \"sub_0f79f33c4c284d1c\"], \"task_id\": [\"20261023_073435_005_singlepoint\", \"20261023_073435_005_singlepoint\"], \"task_result_digest\": [\"sha256:1d96144bb29cdd498bf69966e90dd0c49e32a0485eebfaffb3e90ce33d586132\", \"sha256:1d96144bb29cdd498bf69966e90dd0c49e32a0485eebfaffb3e90ce33d586132\"]}",
+          "name": "b13.restart.same_task_and_release",
+          "status": "PASS"
+        },
+        {
+          "detail": "before=completed/0 after=completed/0 published=True",
+          "name": "b13.restart.terminal_state_preserved",
+          "status": "PASS"
+        },
+        {
+          "detail": "job.started=1->1 process.starting=1->1 tasks=22->22",
+          "name": "b13.restart.no_second_dispatch",
+          "status": "PASS"
+        },
+        {
+          "detail": "orca_pids=[750891] max_concurrent=1",
+          "name": "b13.restart.real_orca_unchanged",
+          "status": "PASS"
+        }
+      ],
+      "attempt": 1,
+      "before_restart": {
+        "attempt": 1,
+        "event_lines": 7,
+        "exit_code": 0,
+        "job_started_events": 1,
+        "manifest_sha256": "18f5029e9c7b68d9ac7b36bc027376f19afb91c3fef955b6019355bd6fdf2337",
+        "plan_identity": "v2:8efe7a0ff50469a208dd34b166b48768",
+        "process_starting_events": 1,
+        "publication_complete": true,
+        "release_id": "98e0695545d668e6",
+        "result_digest": "sha256:d9fd52a44b7775ded90fbb4637852a04e1012694a2cd69a69af0693c17ed9bd7",
+        "revision": 5,
+        "status": "completed",
+        "submission_id": "sub_0f79f33c4c284d1c",
+        "task_count": 22,
+        "task_id": "20261023_073435_005_singlepoint",
+        "task_result_digest": "sha256:1d96144bb29cdd498bf69966e90dd0c49e32a0485eebfaffb3e90ce33d586132",
+        "work_dir": "/ACPServer/acp2-development/data/b/run-root-b13/uncategorized/2_H2_B13_quick_control_fixture_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint__09"
+      },
+      "budget": {
+        "cleanup_seconds": 10,
+        "cores": 1,
+        "jobs": 1,
+        "max_orca": 1,
+        "max_prepare_seconds": 30,
+        "memory_mb": 1024,
+        "walltime_s": 60
+      },
+      "budget_row": {
+        "budget": {
+          "cleanup_seconds": 10,
+          "cores": 1,
+          "jobs": 1,
+          "max_orca": 1,
+          "max_prepare_seconds": 30,
+          "memory_mb": 1024,
+          "walltime_s": 60
+        },
+        "orca_pids": [
+          750891
+        ],
+        "pid": 750700,
+        "race_id": "controller_restart",
+        "task_ref": "20261023_073435_005_singlepoint",
+        "timeout_seconds": 120
+      },
+      "evidence": "races/controller_restart",
+      "fault": "controller_restart_same_db_config_release",
+      "finished_at": "2026-10-22T23:34:42.874114Z",
+      "fixture": "h2-hf-sto3g",
+      "input_sha256": "7a259acca5ffc4353eaca7cbda7bb8feca834144acd4919c5adb3290f2384efe",
+      "kind": "local",
+      "method": {
+        "basis": "STO-3G",
+        "engine": "orca",
+        "functional": "HF"
+      },
+      "orca_pids": [
+        750891
+      ],
+      "pid": 750700,
+      "race_id": "controller_restart",
+      "release_id": "98e0695545d668e6",
+      "restart": {
+        "command_before": [
+          "/ACPServer/acp2-development/venvs/b/bin/python",
+          "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_fault_controller.py",
+          "--source",
+          "/ACPServer/acp2-development/B/src",
+          "--fault-file",
+          "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+          "--config",
+          "/ACPServer/acp2-development/data/b/controller-config/cccp.yaml",
+          "--candidate-revision",
+          "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+          "--orca",
+          "/home/xieningke/orca611/orca",
+          "--orca-ld-library-path",
+          "/home/xieningke/openmpi418/lib:/home/xieningke/orca611",
+          "--",
+          "run",
+          "serve",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          "18771",
+          "--run-root",
+          "/ACPServer/acp2-development/data/b/run-root-b13",
+          "--poll-interval",
+          "1",
+          "--no-browser"
+        ],
+        "cwd_before": "/ACPServer/AutoCalcPlatform",
+        "health_after": {
+          "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+          "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
+          "contract_digest_scope": "delivered-contract-set",
+          "contract_version": "1.1.0",
+          "read_only": true,
+          "schema_version": 1,
+          "started_at": "2026-10-22T23:34:41.660743Z",
+          "status": "ok"
+        },
+        "log": "controller/controller-restart-1792712080.log",
+        "parsed_before": {
+          "fault_file": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+          "fault_seam": true,
+          "module": null,
+          "port": 18771,
+          "run_root": "/ACPServer/acp2-development/data/b/run-root-b13",
+          "script": "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_fault_controller.py",
+          "source": "/ACPServer/acp2-development/B/src"
+        },
+        "pid_after": 750900,
+        "pid_before": 749204,
+        "port": 18771,
+        "stopped": true
+      },
+      "started_at": "2026-10-22T23:34:34.419972Z",
+      "status": "PASS",
+      "submission_id": "sub_0f79f33c4c284d1c",
+      "task_count_before": 21,
+      "task_ref": "20261023_073435_005_singlepoint",
+      "timeout_seconds": 120
+    },
+    {
+      "assertions": [
+        {
+          "detail": "publication_failed=True pending=True manifest_absent=True event=publication_failed",
+          "name": "b13.publication.failed_after_real_qc",
+          "status": "PASS"
+        },
+        {
+          "detail": "receipt=True task_result=True copied=8",
+          "name": "b13.publication.scientific_artifacts_saved",
+          "status": "PASS"
+        },
+        {
+          "detail": "published=True publication_completed=1 job.started=1 process.starting=1",
+          "name": "b13.publication.retried_only_after_fault_cleared",
+          "status": "PASS"
+        },
+        {
+          "detail": "{\"after\": [751208], \"before\": [751208], \"max_concurrent\": 1}",
+          "name": "b13.publication.qc_spawn_count_unchanged",
+          "status": "PASS"
+        },
+        {
+          "detail": "result_id=20261023_073443_001_singlepoint:attempt1:sub_de832e38e61c3559 manifest=True",
+          "name": "b13.publication.one_published_result",
+          "status": "PASS"
+        }
+      ],
+      "attempt": 1,
+      "budget": {
+        "cleanup_seconds": 10,
+        "cores": 1,
+        "jobs": 1,
+        "max_orca": 1,
+        "max_prepare_seconds": 60,
+        "memory_mb": 1024,
+        "walltime_s": 90
+      },
+      "budget_row": {
+        "budget": {
+          "cleanup_seconds": 10,
+          "cores": 1,
+          "jobs": 1,
+          "max_orca": 1,
+          "max_prepare_seconds": 60,
+          "memory_mb": 1024,
+          "walltime_s": 90
+        },
+        "orca_pids": [
+          751208
+        ],
+        "pid": 751095,
+        "race_id": "publication_failure",
+        "task_ref": "20261023_073443_001_singlepoint",
+        "timeout_seconds": 180
+      },
+      "evidence": "races/publication_failure",
+      "fault": "publication_failure_after_real_qc",
+      "finished_at": "2026-10-22T23:34:57.834735Z",
+      "fixture": "h2-hf-sto3g",
+      "input_sha256": "7a259acca5ffc4353eaca7cbda7bb8feca834144acd4919c5adb3290f2384efe",
+      "kind": "local",
+      "method": {
+        "basis": "STO-3G",
+        "engine": "orca",
+        "functional": "HF"
+      },
+      "pid": 751095,
+      "publication_completed_events": 1,
+      "published_artifacts": [
+        {
+          "path": "published/execution_receipt.json",
+          "sha256": "f6ca5a16cae5c1839080d9d38e3c71a022752ff205134cb75bb40e9e675ace23",
+          "size_bytes": 1753,
+          "source_relative": "execution_receipt.json"
+        },
+        {
+          "path": "published/sp.inp",
+          "sha256": "30c08be9ec755050384418d62ffd67cc576c4335cf7a967b23e508e6f1d2f2f6",
+          "size_bytes": 161,
+          "source_relative": "sp.inp"
+        },
+        {
+          "path": "published/sp.out",
+          "sha256": "98e5612a7fc89e03796e65a150c25284352d7ddd02044f6618f7ebc13de930b2",
+          "size_bytes": 42092,
+          "source_relative": "sp.out"
+        },
+        {
+          "path": "published/WORK__00_RUNTIME__task_result.json",
+          "sha256": "6b574c8e36fb05796e022e03379d368464402141d94f9b20d27ac6d302391c9f",
+          "size_bytes": 2019,
+          "source_relative": "WORK/00_RUNTIME/task_result.json"
+        },
+        {
+          "path": "published/WORK__00_RUNTIME__frozen__envelope.json",
+          "sha256": "201749341fbd55b13a9abc0828bca0a762c28c96668fa3af2e74dd8ac48d6856",
+          "size_bytes": 1622,
+          "source_relative": "WORK/00_RUNTIME/frozen/envelope.json"
+        },
+        {
+          "path": "published/WORK__00_RUNTIME__events.jsonl",
+          "sha256": "216b6273c406e66f01f7ba9f8d6c1f6eb8ca62da0e245c939b0771825edfa928",
+          "size_bytes": 3434,
+          "source_relative": "WORK/00_RUNTIME/events.jsonl"
+        },
+        {
+          "path": "published/RESULT__task_result.json",
+          "sha256": "6b574c8e36fb05796e022e03379d368464402141d94f9b20d27ac6d302391c9f",
+          "size_bytes": 2019,
+          "source_relative": "RESULT/task_result.json"
+        },
+        {
+          "path": "published/RESULT__scientific_result.json",
+          "sha256": "6534404ea4187a55fd6ec2bfd18ce82aaa5635e1bc61d9dfac975ddbe505a85c",
+          "size_bytes": 917,
+          "source_relative": "RESULT/scientific_result.json"
+        },
+        {
+          "path": "published/RESULT__result_manifest.json",
+          "sha256": "0a193f703ec8fca65cbb48f6d1fbc6cceafe116f15207a217d029b83813c2213",
+          "size_bytes": 1247,
+          "source_relative": "RESULT/result_manifest.json"
+        },
+        {
+          "path": "published/RESULT__publication_state.json",
+          "sha256": "1cd34861a8322e5597c73df1de88598a75a6f4d48c4869b6f8e435466e09653d",
+          "size_bytes": 102,
+          "source_relative": "RESULT/publication_state.json"
+        }
+      ],
+      "qc_pids_after_retry": [
+        751208
+      ],
+      "qc_pids_before_retry": [
+        751208
+      ],
+      "race_id": "publication_failure",
+      "release_id": "98e0695545d668e6",
+      "started_at": "2026-10-22T23:34:42.874259Z",
+      "status": "PASS",
+      "submission_id": "sub_de832e38e61c3559",
+      "task_count_before": 22,
+      "task_ref": "20261023_073443_001_singlepoint",
+      "timeout_seconds": 180
+    },
+    {
+      "assertions": [
+        {
+          "detail": "task=20261023_073458_002_singlepoint pid=751343 alive=True",
+          "name": "b13.cancel.task_running_when_cancel_issued",
+          "status": "PASS"
+        },
+        {
+          "detail": "http=200 status='cancelling'",
+          "name": "b13.cancel.no_premature_cancelled_response",
+          "status": "PASS"
+        },
+        {
+          "detail": "stop=2026-10-22T23:34:59.303088Z cancelled_at=2026-10-22T23:35:02.662537+00:00 task_processes_at_stop=[]",
+          "name": "b13.cancel.confirmed_stop_before_cancelled",
+          "status": "PASS"
+        },
+        {
+          "detail": "status=cancelled exit=130 remaining=[]",
+          "name": "b13.cancel.terminal_cancelled_no_live_processes",
+          "status": "PASS"
+        },
+        {
+          "detail": "job.started=1 job.cancelled=1",
+          "name": "b13.cancel.one_dispatch_one_cancelled_event",
+          "status": "PASS"
+        },
+        {
+          "detail": "{\"cas\": {\"detail\": \"job 20261023_073458_002_singlepoint state conflict: expected {'revision': 4, 'status': 'cancelling', 'attempt': 1}, actual {'status': 'cancelled', 'revision': 7, 'attempt': 1}\", \"error\": \"JobStateConflictError\", \"rejected\": true}, \"exit_code\": 0, \"old_attempt\": {\"accepted\": false, \"code\": \"stale_attempt\"}, \"proof\": \"acp2.b13.receipt_cas_gate.v1\", \"row\": {\"attempt\": 1, \"revision\": 7, \"status\": \"cancelled\"}, \"same_attempt\": {\"accepted\": true, \"code\": \"\"}}",
+          "name": "b13.cancel.late_receipt_identity_and_old_attempt_rejected",
+          "status": "PASS"
+        },
+        {
+          "detail": "status=cancelled revision=7/7 attempt=1 job.started=1 job.completed=0",
+          "name": "b13.cancel.terminal_revision_unchanged_after_late_receipt",
+          "status": "PASS"
+        }
+      ],
+      "attempt": 1,
+      "budget": {
+        "cleanup_seconds": 10,
+        "cores": 1,
+        "jobs": 1,
+        "max_orca": 1,
+        "max_prepare_seconds": 30,
+        "memory_mb": 1024,
+        "walltime_s": 60
+      },
+      "budget_row": {
+        "budget": {
+          "cleanup_seconds": 10,
+          "cores": 1,
+          "jobs": 1,
+          "max_orca": 1,
+          "max_prepare_seconds": 30,
+          "memory_mb": 1024,
+          "walltime_s": 60
+        },
+        "orca_pids": [],
+        "pid": 751343,
+        "race_id": "cancel_race",
+        "task_ref": "20261023_073458_002_singlepoint",
+        "timeout_seconds": 150
+      },
+      "cancelled_persisted_at": "2026-10-22T23:35:02.662537+00:00",
+      "controller_restart": "b13.fault.controller_restart",
+      "evidence": "races/cancel_race",
+      "fault": "cancel_confirmed_stop_late_receipt",
+      "finished_at": "2026-10-22T23:35:06.262706Z",
+      "fixture": "ethanol-wb97mv-def2svp",
+      "input_sha256": "0d226a10d59c9dc5b3e854f9e873e07bd9ff21bf28e16e246d3a63bb6631f404",
+      "kind": "local",
+      "late_receipt_gate": {
+        "cas": {
+          "detail": "job 20261023_073458_002_singlepoint state conflict: expected {'revision': 4, 'status': 'cancelling', 'attempt': 1}, actual {'status': 'cancelled', 'revision': 7, 'attempt': 1}",
+          "error": "JobStateConflictError",
+          "rejected": true
+        },
+        "exit_code": 0,
+        "old_attempt": {
+          "accepted": false,
+          "code": "stale_attempt"
+        },
+        "proof": "acp2.b13.receipt_cas_gate.v1",
+        "row": {
+          "attempt": 1,
+          "revision": 7,
+          "status": "cancelled"
+        },
+        "same_attempt": {
+          "accepted": true,
+          "code": ""
+        }
+      },
+      "method": {
+        "basis": "def2-SVP",
+        "engine": "orca",
+        "functional": "wB97M-V"
+      },
+      "orca_pids": [],
+      "pid": 751343,
+      "race_id": "cancel_race",
+      "release_id": "98e0695545d668e6",
+      "revision_before_cancel": 4,
+      "revision_settled_after_terminal": 7,
+      "started_at": "2026-10-22T23:34:57.834887Z",
+      "status": "PASS",
+      "stop_observed_at": "2026-10-22T23:34:59.303088Z",
+      "submission_id": "sub_2c6656fce10f3349",
+      "task_count_before": 23,
+      "task_ref": "20261023_073458_002_singlepoint",
+      "timeout_seconds": 150
+    },
+    {
+      "assertions": [
+        {
+          "detail": "task=20261023_073506_003_singlepoint pid=751470 client_timeout_at=2026-10-22T23:35:07.480642Z",
+          "name": "b13.timeout.client_abandoned_while_running",
+          "status": "PASS"
+        },
+        {
+          "detail": "status_after_client=running pid_alive=True cancel_events_before_platform=False",
+          "name": "b13.timeout.killing_client_is_not_cancel",
+          "status": "PASS"
+        },
+        {
+          "detail": "http=200 response='cancelling' stop=2026-10-22T23:35:08.752873Z cancelled_at=2026-10-22T23:35:12.831538+00:00",
+          "name": "b13.timeout.platform_cancel_confirmed_stop",
+          "status": "PASS"
+        },
+        {
+          "detail": "status=cancelled remaining=[] job.started=1",
+          "name": "b13.timeout.reconciled_terminal",
+          "status": "PASS"
+        }
+      ],
+      "attempt": 1,
+      "budget": {
+        "cleanup_seconds": 10,
+        "cores": 1,
+        "jobs": 1,
+        "max_orca": 1,
+        "max_prepare_seconds": 30,
+        "memory_mb": 1024,
+        "walltime_s": 60
+      },
+      "budget_row": {
+        "budget": {
+          "cleanup_seconds": 10,
+          "cores": 1,
+          "jobs": 1,
+          "max_orca": 1,
+          "max_prepare_seconds": 30,
+          "memory_mb": 1024,
+          "walltime_s": 60
+        },
+        "orca_pids": [],
+        "pid": 751470,
+        "race_id": "timeout_cancel",
+        "task_ref": "20261023_073506_003_singlepoint",
+        "timeout_seconds": 150
+      },
+      "cancelled_persisted_at": "2026-10-22T23:35:12.831538+00:00",
+      "client_timeout_at": "2026-10-22T23:35:07.480642Z",
+      "evidence": "races/timeout_cancel",
+      "fault": "client_timeout_then_platform_cancel",
+      "finished_at": "2026-10-22T23:35:13.040111Z",
+      "fixture": "ethanol-wb97mv-def2svp",
+      "input_sha256": "0d226a10d59c9dc5b3e854f9e873e07bd9ff21bf28e16e246d3a63bb6631f404",
+      "kind": "local",
+      "method": {
+        "basis": "def2-SVP",
+        "engine": "orca",
+        "functional": "wB97M-V"
+      },
+      "orca_pids": [],
+      "pid": 751470,
+      "platform_cancel_at": "2026-10-22T23:35:08.553577Z",
+      "race_id": "timeout_cancel",
+      "started_at": "2026-10-22T23:35:06.262873Z",
+      "status": "PASS",
+      "status_after_client_timeout": "running",
+      "stop_observed_at": "2026-10-22T23:35:08.752873Z",
+      "task_count_before": 24,
+      "task_ref": "20261023_073506_003_singlepoint",
+      "timeout_seconds": 150
+    }
+  ],
+  "schema": "acp2.b13.races.v1"
+}

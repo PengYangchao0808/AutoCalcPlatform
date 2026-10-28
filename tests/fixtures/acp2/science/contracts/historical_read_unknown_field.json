@@ -1,0 +1,150 @@
+{
+  "capability_id": "electronic.energy",
+  "compatibility": {
+    "backward_compatible_additions": "same_major_only",
+    "contract_version": "acp2.science.capability.v1",
+    "declared_major": 1,
+    "historical_unknown_fields": "preserve_read_only_no_execution_or_recovery_eligibility",
+    "max_reader_schema_version": 1,
+    "min_reader_schema_version": 1,
+    "unknown_major_error_code": "unknown_major_version",
+    "unknown_major_version": "reject_and_never_execute"
+  },
+  "completion_checks": [
+    {
+      "compares": [
+        "scf_convergence",
+        "final_energy"
+      ],
+      "description": "The single-point SCF converged and reported a finite final energy.",
+      "evaluator": "cccp.calculation.tasks.singlepoint",
+      "failure_error_code": "invalid_scientific_input",
+      "id": "scf_converged",
+      "required": true
+    }
+  ],
+  "execution_semantics": {
+    "delegates_to_task_kind": "singlepoint",
+    "delegation_count": 1,
+    "kind": "compute",
+    "legacy_runtime_hint": "local-only",
+    "network_access": false,
+    "reads_existing_artifacts_only": false,
+    "side_effects": "artifacts_only",
+    "starts_subprocess": true,
+    "writes_artifacts": true
+  },
+  "extensions": {},
+  "implementation_id": "cccp.calculation.tasks.singlepoint",
+  "input_schema": {
+    "digest": null,
+    "ref": "cccp.calculation.requests#TaskRequest",
+    "schema_version": 1
+  },
+  "legacy_notes": "Migrated from the pre-v1 descriptor; preserved read-only.",
+  "limitations": [
+    {
+      "applies_to": "energies from a single supplied geometry",
+      "id": "no_geometry_relaxation",
+      "severity": "info",
+      "text": "This capability evaluates one supplied structure; it does not optimize the geometry."
+    }
+  ],
+  "output_schema": {
+    "digest": null,
+    "ref": "cccp.calculation.results#TaskResult",
+    "schema_version": 1
+  },
+  "preconditions": [
+    {
+      "description": "A resolvable structure input is supplied.",
+      "error_code": "invalid_scientific_input",
+      "evaluated_by": "cccp",
+      "id": "structure_supplied",
+      "kind": "input",
+      "required": true
+    },
+    {
+      "description": "Charge and multiplicity are consistent with the electron count.",
+      "error_code": "invalid_scientific_input",
+      "evaluated_by": "cccp",
+      "id": "charge_multiplicity_consistent",
+      "kind": "scientific",
+      "required": true
+    }
+  ],
+  "projections": {
+    "available": {
+      "reason": "Availability is determined by Runtime, not by this descriptor.",
+      "state": "unknown"
+    },
+    "described": {
+      "state": "present"
+    },
+    "installed": {
+      "reason": "Named for contract illustration only; this fixture does not install anything.",
+      "state": "unknown"
+    },
+    "verified": {
+      "state": "not_verified"
+    }
+  },
+  "provenance_requirements": {
+    "artifact_digests": "required",
+    "input_digest": "required",
+    "method_identity": "required",
+    "notes": [
+      "Digests use cccp.analysis.identity.content_sha256."
+    ],
+    "software_version": "required",
+    "units": "required"
+  },
+  "schema": "acp2.science.capability",
+  "schema_version": 1,
+  "unknown_field_policy": {
+    "extension_namespace": "x-acp2-<owner>-<name>",
+    "historical_read": "preserve_unknown_fields_without_execution_or_recovery_eligibility",
+    "new_execution_request": "reject_unsupported_execution_fields",
+    "unknown_major_version": "never_execute"
+  },
+  "validation_layers": {
+    "cccp_scientific_semantics": {
+      "checks": [
+        "charge and multiplicity consistency",
+        "method and basis applicability",
+        "electronic-state applicability"
+      ],
+      "does_not_cover": [
+        "provider enablement",
+        "binary availability"
+      ],
+      "owner": "cccp"
+    },
+    "json_structure": {
+      "checks": [
+        "required fields",
+        "types",
+        "enums",
+        "patterns",
+        "minimum and maximum"
+      ],
+      "does_not_cover": [
+        "scientific applicability",
+        "platform enablement"
+      ],
+      "owner": "contract"
+    },
+    "runtime_platform_constraints": {
+      "checks": [
+        "provider enablement",
+        "binary availability",
+        "quota"
+      ],
+      "does_not_cover": [
+        "scientific semantics",
+        "JSON structure"
+      ],
+      "owner": "runtime"
+    }
+  }
+}

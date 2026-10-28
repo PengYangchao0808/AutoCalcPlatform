@@ -1,0 +1,471 @@
+{
+  "assertions": [
+    {
+      "detail": "binding_errors=[] mismatched=[]",
+      "name": "b18a.science_binding_digests",
+      "status": "PASS"
+    },
+    {
+      "detail": "capability=electronic.energy task_kind=singlepoint",
+      "name": "b18a.discovery",
+      "status": "PASS"
+    },
+    {
+      "detail": "preserved={'method': True, 'basis': True, 'solvent': True, 'charge': True, 'multiplicity': True, 'structure_path': True, 'resources': True, 'mapping_digest': True} mapping_rejected=True method_rejected=True",
+      "name": "b18a.roundtrip_preserves_science",
+      "status": "PASS"
+    },
+    {
+      "detail": "errors=[] order=['ts_opt', 'ts_freq', 'ts_irc']",
+      "name": "b18b.bounded_dag",
+      "status": "PASS"
+    },
+    {
+      "detail": "calls=['ts_opt', 'ts_freq', 'ts_irc'] statuses={'ts_opt': 'completed', 'ts_freq': 'completed', 'ts_irc': 'completed'} budget={'task_refs': 1, 'steps': 3, 'qc_invocations': 3, 'attempts': 3, 'bsub': 0}",
+      "name": "b18c.outputref_passing",
+      "status": "PASS"
+    },
+    {
+      "detail": "statuses={'ts_opt': 'completed', 'ts_freq': 'failed', 'ts_irc': 'upstream_failed'}",
+      "name": "b18c.required_upstream_failure_blocks_dependents",
+      "status": "PASS"
+    },
+    {
+      "detail": "dispatches=['ts_opt', 'ts_freq', 'ts_irc'] statuses={'ts_opt': 'completed', 'ts_freq': 'completed', 'ts_irc': 'completed'}",
+      "name": "b18c.publication_failure_no_recompute",
+      "status": "PASS"
+    },
+    {
+      "detail": "redispatch=['ts_irc'] statuses={'ts_freq': 'completed', 'ts_irc': 'completed', 'ts_opt': 'completed'}",
+      "name": "b18c.restart_recovers_only_unfinished",
+      "status": "PASS"
+    },
+    {
+      "detail": "statuses={'ts_opt': 'cancelled', 'ts_freq': 'cancelled', 'ts_irc': 'cancelled'} dispatch=0",
+      "name": "b18c.cancel_creates_no_new_step",
+      "status": "PASS"
+    },
+    {
+      "detail": "statuses=[{'claim_id': 'c-static-supported', 'status': 'supported'}, {'claim_id': 'c-static-refuted', 'status': 'refuted'}, {'claim_id': 'c-static-inconclusive', 'status': 'inconclusive'}, {'claim_id': 'c-static-not-evaluated', 'status': 'not_evaluated'}] completed=True",
+      "name": "b18.evidence_report_statuses_preserved",
+      "status": "PASS"
+    },
+    {
+      "detail": "create=1 cas=2 conflict=True revoked=True",
+      "name": "b18.research_resource_cas",
+      "status": "PASS"
+    },
+    {
+      "detail": "frequency=envelope irc=envelope tsmode=legacy",
+      "name": "b18.dispatch_enablement_ts_frequency_irc",
+      "status": "PASS"
+    },
+    {
+      "detail": "tasks_created=0 http_calls=['GET /api/health', 'GET /api/v1/jobs?limit=1000', 'GET /api/v1/jobs?limit=1000']",
+      "name": "b18.da_preflight_no_side_effects",
+      "status": "PASS"
+    }
+  ],
+  "controller_health": {
+    "candidate_revision": "ab492cc8be9e46125fa2d2fae69a3ecaac64a548",
+    "contract_digest": "a79bb89be5c8f5732bd9321c3871ef58faa15bfa7b28ff45cef848ba94c99b0e",
+    "contract_digest_scope": "delivered-contract-set",
+    "contract_version": "1.2.0",
+    "read_only": true,
+    "schema_version": 1,
+    "started_at": "2026-10-23T08:06:06.301209Z",
+    "status": "ok"
+  },
+  "counters": {
+    "bsub": 0,
+    "compute_owner": "none (da-preflight is contract-only)",
+    "http_calls": [
+      "GET /api/health",
+      "GET /api/v1/jobs?limit=1000",
+      "GET /api/v1/jobs?limit=1000"
+    ],
+    "prepare_operations": 0,
+    "qc_invocations": 0,
+    "reservations": 0,
+    "schema": "acp2.runtime.b18-counters.v1",
+    "tasks_after": 0,
+    "tasks_before": 0,
+    "tasks_created": 0
+  },
+  "dag": {
+    "execution_unit": {
+      "compute_owner": "cccp.calculation.tasks",
+      "loop_owner": "acp_services.runtime.step_dag.BoundedStepDagExecutor",
+      "one_platform_task": true
+    },
+    "limits": {
+      "max_consumers_per_step": 1,
+      "max_edges": 8,
+      "max_fan_in": 1,
+      "max_steps": 8
+    },
+    "recipe_id": "recipe.da.static.v1",
+    "schema": "acp2.runtime.step-dag.v1",
+    "steps": [
+      {
+        "capability": "optimize.ts",
+        "consumes": [],
+        "diagnostic_only": false,
+        "entrypoint": "cccp.calculation.run_optimize",
+        "implementation_version": "cccp-opt-static-1",
+        "intent": "STATIC/SIMULATED optimize of the frozen TS guess",
+        "kind": "optimize",
+        "parameters": {
+          "optimizer": "r2SCAN-3c"
+        },
+        "produces": [
+          {
+            "from_step": "ts_opt",
+            "product_kind": "ts_geometry",
+            "required": true
+          }
+        ],
+        "required": true,
+        "step_id": "ts_opt",
+        "structure_role": "transition_state",
+        "task_kind": "optimize"
+      },
+      {
+        "capability": "frequency.ts",
+        "consumes": [
+          {
+            "expected_digest": "sha256:fc407cda0821aa1f523ba0f4101aada9f3d987175acd413a35a9de6a088ac833",
+            "from_step": "ts_opt",
+            "product_kind": "ts_geometry",
+            "required": true
+          }
+        ],
+        "diagnostic_only": false,
+        "entrypoint": "cccp.calculation.run_frequency",
+        "implementation_version": "cccp-freq-static-1",
+        "intent": "STATIC/SIMULATED imaginary-frequency screening",
+        "kind": "frequency",
+        "parameters": {
+          "thermo": "grimme"
+        },
+        "produces": [
+          {
+            "from_step": "ts_freq",
+            "product_kind": "frequency_summary",
+            "required": true
+          }
+        ],
+        "required": true,
+        "step_id": "ts_freq",
+        "structure_role": "transition_state",
+        "task_kind": "frequency"
+      },
+      {
+        "capability": "irc.ts",
+        "consumes": [
+          {
+            "expected_digest": "sha256:78b3c5e9ea782b5a761893ab0e69c30fc93888faa555050e36fea7cd95ab93c1",
+            "from_step": "ts_freq",
+            "product_kind": "frequency_summary",
+            "required": true
+          }
+        ],
+        "diagnostic_only": false,
+        "entrypoint": "cccp.calculation.run_irc",
+        "implementation_version": "cccp-irc-static-1",
+        "intent": "STATIC/SIMULATED bidirectional IRC endpoint check",
+        "kind": "irc",
+        "parameters": {
+          "directions": [
+            "forward",
+            "reverse"
+          ]
+        },
+        "produces": [
+          {
+            "from_step": "ts_irc",
+            "product_kind": "irc_paths",
+            "required": true
+          }
+        ],
+        "required": true,
+        "step_id": "ts_irc",
+        "structure_role": "transition_state",
+        "task_kind": "irc"
+      }
+    ],
+    "task_ref": "task-b18-static"
+  },
+  "evidence_class": "STATIC/SIMULATED",
+  "evidence_manifest": {
+    "claim_interpretation": "not_interpreted",
+    "claim_statuses": [
+      {
+        "claim_id": "c-static-supported",
+        "status": "supported"
+      },
+      {
+        "claim_id": "c-static-refuted",
+        "status": "refuted"
+      },
+      {
+        "claim_id": "c-static-inconclusive",
+        "status": "inconclusive"
+      },
+      {
+        "claim_id": "c-static-not-evaluated",
+        "status": "not_evaluated"
+      }
+    ],
+    "evidence_class": "STATIC/SIMULATED",
+    "execution_terminal_state": "completed",
+    "limitations": [
+      "STATIC/SIMULATED fixture only; no real QC execution."
+    ],
+    "native_files": [
+      {
+        "attempt": 1,
+        "authorization": {
+          "action": "read",
+          "allowed": true,
+          "authorization_version": 0,
+          "principal_id": "b18-preflight",
+          "project_id": "proj-b18",
+          "scope": "local-single"
+        },
+        "availability": "ready",
+        "digest": "sha256:4e126dca11757b6e65b27642c3003ce7f607e69de85acca49bdf5cbb513c8540",
+        "generation": 1,
+        "job_id": "b18-static",
+        "media_type": "application/octet-stream",
+        "operation_id": "",
+        "relative_path": "native/stdout.txt",
+        "resource_id": "evidence_report_native_0",
+        "schema": "acp2.artifact-ref.v1",
+        "size_bytes": 18,
+        "source_refs": [
+          {
+            "role": "native_output"
+          }
+        ],
+        "source_schema": "",
+        "version": 1
+      },
+      {
+        "attempt": 1,
+        "authorization": {
+          "action": "read",
+          "allowed": true,
+          "authorization_version": 0,
+          "principal_id": "b18-preflight",
+          "project_id": "proj-b18",
+          "scope": "local-single"
+        },
+        "availability": "ready",
+        "digest": "sha256:fee1ffbdc1f1525d88bf42a5e5bbc3a49b6cf33dc7e7b0b1c24218fea595dfe1",
+        "generation": 1,
+        "job_id": "b18-static",
+        "media_type": "application/octet-stream",
+        "operation_id": "",
+        "relative_path": "native/stderr.txt",
+        "resource_id": "evidence_report_native_1",
+        "schema": "acp2.artifact-ref.v1",
+        "size_bytes": 18,
+        "source_refs": [
+          {
+            "role": "native_output"
+          }
+        ],
+        "source_schema": "",
+        "version": 1
+      }
+    ],
+    "provenance_digest": "sha256:7b4a011e688025b3f8382dd43fe53fcc3beabbc47044eb45211f95eb3e40f181",
+    "report": {
+      "attempt": 1,
+      "authorization": {
+        "action": "read",
+        "allowed": true,
+        "authorization_version": 0,
+        "principal_id": "b18-preflight",
+        "project_id": "proj-b18",
+        "scope": "local-single"
+      },
+      "availability": "ready",
+      "digest": "sha256:69c2f2c6f07b90ed3f09a3c9d6806cc6c9e965cafce9fbbe8274d7d9bdc1fcae",
+      "generation": 1,
+      "job_id": "b18-static",
+      "media_type": "application/json",
+      "operation_id": "",
+      "relative_path": "evidence_report.json",
+      "resource_id": "evidence_report",
+      "schema": "acp2.artifact-ref.v1",
+      "size_bytes": 2084,
+      "source_refs": [
+        {
+          "artifact_path": "native/stdout.txt",
+          "digest": "{'algorithm': 'sha256', 'value': 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'}",
+          "role": "native_output"
+        },
+        {
+          "artifact_path": "native/stdout.txt",
+          "digest": "{'algorithm': 'sha256', 'value': 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'}",
+          "role": "native_output"
+        }
+      ],
+      "source_schema": "acp2.science.evidence-report.v1",
+      "version": 1
+    },
+    "report_id": "report-b18-static-singlepoint",
+    "schema": "acp2.runtime.evidence-manifest.v1",
+    "served_digest": "sha256:69c2f2c6f07b90ed3f09a3c9d6806cc6c9e965cafce9fbbe8274d7d9bdc1fcae",
+    "task_execution_completed": true
+  },
+  "negatives": {
+    "cancel": {
+      "dispatch_count": 0,
+      "statuses": {
+        "ts_freq": "cancelled",
+        "ts_irc": "cancelled",
+        "ts_opt": "cancelled"
+      }
+    },
+    "publication_failure": {
+      "dispatches_after_retry": 3,
+      "dispatches_before_retry": 2,
+      "statuses": {
+        "ts_freq": "completed",
+        "ts_irc": "completed",
+        "ts_opt": "completed"
+      }
+    },
+    "required_upstream_failure": {
+      "ts_freq": "failed",
+      "ts_irc": "upstream_failed",
+      "ts_opt": "completed"
+    },
+    "restart": {
+      "redispatch": [
+        "ts_irc"
+      ],
+      "statuses": {
+        "ts_freq": "completed",
+        "ts_irc": "completed",
+        "ts_opt": "completed"
+      }
+    }
+  },
+  "real_qc": false,
+  "research_resource": {
+    "cas": {
+      "digest": "sha256:60921e931fda663a2e21867853b5f339ef6266d4e8774a7e9a4e6e819225f62a",
+      "revision": 2
+    },
+    "conflict": {
+      "observed_current_revision": 2,
+      "rejected": true
+    },
+    "create": {
+      "digest": "sha256:55f0e8af43f2d544a85ec9108cfa0e30c4c363ebd2828da8c9c49281b6ffe741",
+      "document_schema": "acp2.experience.proposal.v1",
+      "resource_id": "rr-b18-proposal",
+      "revision": 1
+    },
+    "no_research_decision_logic": true,
+    "no_task_table": true,
+    "read": {
+      "digest": "sha256:55f0e8af43f2d544a85ec9108cfa0e30c4c363ebd2828da8c9c49281b6ffe741",
+      "document_equal": true,
+      "revision": 1
+    },
+    "resource_schema": "acp2.data.research-resource.v1",
+    "revocation": {
+      "read_refused": true,
+      "resource_id": "rr-b18-record"
+    },
+    "schema": "acp2.runtime.research-resource-cas.v1"
+  },
+  "roundtrip": {
+    "a_descriptor": {
+      "capability_id": "electronic.energy",
+      "delegation_target": "cccp.calculation.run_singlepoint",
+      "implementation_id": "cccp.calculation.tasks.singlepoint",
+      "source": "reports/acp2_implementation/bb45a46/B/B18/fixtures/capability-energy.json",
+      "task_kind": "singlepoint"
+    },
+    "b_discovery": {
+      "capability_id": "electronic.energy",
+      "delegation_target": "cccp.calculation.run_singlepoint",
+      "implementation_id": "cccp.calculation.tasks.singlepoint",
+      "limitations": [
+        "This capability evaluates one supplied structure; it does not optimize the geometry."
+      ],
+      "request_schema_version": 1,
+      "required_form_fields": [
+        "workflow",
+        "structure",
+        "method",
+        "charge",
+        "multiplicity",
+        "mapping",
+        "resources"
+      ],
+      "result_schema_version": 1,
+      "task_kind": "singlepoint",
+      "validation_owner": {
+        "cccp_scientific_semantics": "cccp",
+        "json_structure": "contract",
+        "runtime_platform_constraints": "runtime"
+      }
+    },
+    "c_p2_minimal_form": {
+      "digest": "sha256:020eaa1f9b2c338990630eea56c129146c631552e1af7f00f97860dcace1d40a",
+      "full_dynamic_form": "C T-38/H5 (not a B18 gate)",
+      "production_path": "frontend/js/workbench/features/science-question.js",
+      "source": "C/frontend/js/workbench/features/science-question.js",
+      "source_commit": "39d4aeb"
+    },
+    "cccp_request": {
+      "charge": 0,
+      "level": {
+        "basis": "def2-TZVP",
+        "method": "r2SCAN-3c",
+        "solvent": "none",
+        "solvent_model": "none"
+      },
+      "multiplicity": 1,
+      "options": {
+        "stability_check": false
+      },
+      "resources": {
+        "mem": "2GB",
+        "nproc": 2
+      },
+      "schema_version": 1,
+      "structure": {
+        "path": "structures/water.xyz",
+        "role": "minimum",
+        "source": "c2_minimal_form"
+      },
+      "task": "singlepoint"
+    },
+    "evidence_class": "STATIC/SIMULATED",
+    "negatives": {
+      "atom_mapping_mismatch": "rejected_before_adoption",
+      "missing_method": "method_identity_missing"
+    },
+    "preserved": {
+      "basis": true,
+      "charge": true,
+      "mapping_digest": true,
+      "method": true,
+      "multiplicity": true,
+      "resources": true,
+      "solvent": true,
+      "structure_path": true
+    },
+    "roundtrip_digest": "sha256:6a163941de04f43b8c8327210c2d4c032b4383b70080e8ace9c01029e8838485",
+    "schema": "acp2.runtime.science-roundtrip.v1"
+  },
+  "schema": "acp2.b18.da-preflight.v1"
+}

@@ -1,0 +1,17 @@
+{
+ "fixture": "curve_scatter_empty",
+ "operation": "report_empty",
+ "result_digest": "sha256:6a0f78d5b3480af0e25e363bbb663652d782badd09d676bdbf615484589a4857",
+ "checks": {
+  "block_count": 0,
+  "max_block_size": 0,
+  "total_items": 0,
+  "covered_range": [
+   0,
+   0
+  ],
+  "block_complete": [],
+  "missing": []
+ },
+ "expected_rejection": null
+}

@@ -1,0 +1,223 @@
+{
+  "artifact_check": {
+    "path": "reports/acp2_remediation_20261026/m5-02/artifact-check.json",
+    "result": "PASS",
+    "schema": "acp2.m5-01.artifact-check.v1",
+    "sha256": "a37285aa03535e619d0a238116a93146ef27cf4c63b7644ff99354f957a6b152"
+  },
+  "bom": {
+    "bytes": 237674375,
+    "components": 27,
+    "components_by_kind": {
+      "contract-bundle": 1,
+      "document": 1,
+      "plugin-wheel": 3,
+      "python-sdist": 4,
+      "python-wheel": 4,
+      "rph-package": 12,
+      "science-asset": 1,
+      "static-asset-bundle": 1
+    },
+    "path": "docs/reference/next-change/acp2-contracts/release/bom.current.json",
+    "reuse_rule": "exact",
+    "sha256": "538f573b523a6511057be0954fb80ef58e96cf86bcabf71f5317d0f9a7a8cf60",
+    "supersedes": [
+      "/ACPServer/acp2-artifacts/remediation/m5-01/bom/bom.current.json sha256:ee23e7b0c26a9351dda8727d31f48ca520930f8368fcb61cb405e5c5c3b62e18"
+    ]
+  },
+  "candidate": {
+    "clean": true,
+    "persistent_ref": "acp2/integration-remediation",
+    "persistent_tag": "acp2-remediation-m5-02-candidate (proposed, not created; ref acp2/integration-remediation)",
+    "release_overlay_paths": 17,
+    "revision": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+    "tree": "2b8fb094209ffbad5c1ef7d49504250517e2ec24"
+  },
+  "coverage": {
+    "blocking_rows": [
+      "G01",
+      "G05",
+      "G06",
+      "G10",
+      "G13",
+      "G15",
+      "G16",
+      "G17",
+      "G18",
+      "G19",
+      "H3",
+      "H4",
+      "H7",
+      "M3-03",
+      "M5-03"
+    ],
+    "checkpoints_open": 1,
+    "checkpoints_total": 32,
+    "coverage_sha256": "fa04b53dca214ebbc40bf1d85edd455b6d32e57dd49e928d9a4b2633b4a97018",
+    "deferred_rows_total": 3,
+    "file_sha256": "d92a9fb3de5a0d472d3d7d8d9eca6fbf1e9a83276d959ff6293a22cfa7f79f97",
+    "full_release_status": "NOT_VERIFIED",
+    "gaps_open": 10,
+    "gaps_total": 26,
+    "h_rows_open": 3,
+    "h_rows_total": 8,
+    "open_rows": [
+      "M0-13",
+      "M3-03",
+      "M5-03",
+      "M0-02c",
+      "G01",
+      "G05",
+      "G06",
+      "G10",
+      "G13",
+      "G15",
+      "G16",
+      "G17",
+      "G18",
+      "G19",
+      "H3",
+      "H4",
+      "H7",
+      "DEF-01",
+      "DEF-02",
+      "DEF-03"
+    ],
+    "path": "docs/reference/next-change/acp2-contracts/release/evidence-coverage.current.json",
+    "required_open_rows": [
+      "M3-03",
+      "M5-03",
+      "G01",
+      "G05",
+      "G06",
+      "G10",
+      "G13",
+      "G15",
+      "G16",
+      "G17",
+      "G18",
+      "G19",
+      "H3",
+      "H4",
+      "H7"
+    ],
+    "tasks_open": 2,
+    "tasks_total": 39
+  },
+  "deferred": [
+    {
+      "capability": "SCOPE-DEF-01",
+      "id": "DEF-01",
+      "result": "NOT_VERIFIED",
+      "statement": "worker-hosted 第三方 COMPUTE"
+    },
+    {
+      "capability": "SCOPE-DEF-02",
+      "id": "DEF-02",
+      "result": "NOT_VERIFIED",
+      "statement": "CDXML"
+    },
+    {
+      "capability": "SCOPE-DEF-03",
+      "id": "DEF-03",
+      "result": "NOT_VERIFIED",
+      "statement": "累计 core-hours/token 硬强制"
+    }
+  ],
+  "generated_at": "2026-10-28T03:45:00Z",
+  "key_judgements": {
+    "G15": {
+      "reason": "bounded_recipe_public_entry=absent; DA-ENV-LSF=NOT_VERIFIED",
+      "result": "NOT_VERIFIED",
+      "status": "OPEN"
+    },
+    "H3": {
+      "reasons": [
+        "DA-ENV-LSF required and NOT_VERIFIED",
+        "shipped execution_limits rows NOT_VERIFIED"
+      ],
+      "result": "NOT_VERIFIED",
+      "status": "OPEN"
+    },
+    "H4": {
+      "reasons": [
+        "DA-ENV-LSF NOT_VERIFIED",
+        "Local DA row missing walltime_process_termination and terminal_usage_receipt",
+        "bounded recipe public entry unsupported (G15)",
+        "budget timing basis unmeasured"
+      ],
+      "result": "NOT_VERIFIED",
+      "status": "OPEN"
+    },
+    "H6": {
+      "receipts": [
+        "M4-06a upgrade/rollback",
+        "M4-06b cross-domain + multitenant + revocation"
+      ],
+      "result": "PASS",
+      "status": "CLOSED"
+    },
+    "M0-02c": {
+      "reason": "Ruff 0.15.22 ratchet pending; D-INT-06 excludes it from the required chain",
+      "result": "NOT_VERIFIED",
+      "status": "OPEN"
+    },
+    "M0-13": {
+      "reason": "external_change_not_required",
+      "result": "NOT_VERIFIED",
+      "scope": "NOT_APPLICABLE",
+      "status": "CLOSED"
+    },
+    "M3-03": {
+      "reason": "production model credential rotation/authorization pending; M4-02 live round recorded but not a production-gateway clearance",
+      "result": "NOT_VERIFIED",
+      "status": "OPEN"
+    },
+    "M4-04": {
+      "reason": "route-a execution chain PASS on real ORCA; scientific proposition refuted (DA-C05 endpoint identity); H4 stays open; h4_closeout location-dependent tests are not evidence",
+      "result": "PASS",
+      "status": "CLOSED"
+    },
+    "M5-03": {
+      "reason": "independent operator/clean-host acceptance not run",
+      "result": "NOT_VERIFIED",
+      "status": "OPEN"
+    }
+  },
+  "limitations": [
+    "Built from the clean committed candidate f6b6153070bae9fee175b0c98b840ee7e5f1515a (tree 2b8fb094209ffbad5c1ef7d49504250517e2ec24). The only worktree differences are the M5-02 release-ledger overlay recorded in source.release_overlay; no business source changed.",
+    "RPH packages remain private:true at version 0.0.0 and are distributed as tarballs; no public npm publication is claimed.",
+    "The versioned /experience/<release_id>/ read-only mount from B-req-06 is not implemented here; the packaged Workbench /, /js and /css mounts are verified read-only with startup digest verification (B25 static-assets row stays NOT_VERIFIED).",
+    "BOM evidence reuse_rule is exact for this M5-02 rebuild: every artifact is rebuilt from the clean candidate and every URI/receipt is re-fetched by scripts/release/walk_bom.py --verify. Rows whose receipts predate the candidate use coverage row reuse=reused or rerun_required; they are never silently upgraded.",
+    "The contract bundle is a build-time snapshot of acp2-contracts and deliberately excludes release/bom.current.json; the manifest snapshot inside the bundle predates the final BOM sha registration. The live manifest and this BOM are the authoritative pair.",
+    "No QC or model invocation was performed by the BOM build; scientific software entries record binary version probes only. M4 receipts remain the scientific evidence.",
+    "persistent_tag is a proposal only: no tag, commit or push was performed by this task."
+  ],
+  "manifest": {
+    "b26_registrations": {
+      "release-bom-current": "538f573b523a6511057be0954fb80ef58e96cf86bcabf71f5317d0f9a7a8cf60",
+      "release-bom-schema": "1db78ac355bdfac6aeab30bf561c7a94544330babf694ae4991c98fcc9df6aba",
+      "release-evidence-coverage-current": "d92a9fb3de5a0d472d3d7d8d9eca6fbf1e9a83276d959ff6293a22cfa7f79f97",
+      "release-evidence-coverage-schema": "39e191053691020c42a472c39d2a9b43879bb24010775c998706053582a72b94",
+      "release-scope": "180509e071b4e33fe7de05105e704b87c26ba6c1735c6528e47b716f38dae110"
+    },
+    "contract_digest": "5701101bb521213484e5ab3551814357c9342b7c1849ace944897fe712bf879b",
+    "contract_version": "1.7.0"
+  },
+  "not_used_as_evidence": [
+    "tests/test_acp2_runtime_h4_closeout.py::test_closeout_input_set_excludes_its_own_digest",
+    "tests/test_acp2_runtime_h4_closeout.py::test_final_reference_digest_and_index_chain"
+  ],
+  "owner": "B + REL + INT",
+  "result": "PASS",
+  "schema": "acp2.m5-02.summary.v1",
+  "task_id": "M5-02",
+  "walker": {
+    "artifacts_verified": 27,
+    "byte_check": "sha256",
+    "path": "reports/acp2_remediation_20261026/m5-02/walk-bom.json",
+    "receipts_verified": 108,
+    "result": "PASS",
+    "sha256": "c173aedb0cb822c270db8454916d680d649acee166e0dba55c84207649dda4b6"
+  }
+}

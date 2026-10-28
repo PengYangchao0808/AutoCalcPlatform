@@ -1,0 +1,112 @@
+{
+  "science_files_absent_from_main": [
+    "src/cccp/analysis/ensemble/science.py",
+    "src/cccp/analysis/nmr/comparison.py",
+    "src/cccp/analysis/research/__init__.py",
+    "src/cccp/analysis/research/_common.py",
+    "src/cccp/analysis/research/artifact_manifest.py",
+    "src/cccp/analysis/research/contracts.py",
+    "src/cccp/analysis/research/evidence.py",
+    "src/cccp/analysis/research/provenance.py",
+    "src/cccp/analysis/research/question.py",
+    "src/cccp/analysis/research/reaction.py",
+    "src/cccp/analysis/research/selectivity.py",
+    "src/cccp/analysis/research/validators.py",
+    "src/cccp/calculation/capabilities/__init__.py",
+    "src/cccp/calculation/capabilities/builtin.py",
+    "src/cccp/calculation/capabilities/contracts.py",
+    "src/cccp/calculation/capabilities/domains.py",
+    "src/cccp/calculation/capabilities/registry.py",
+    "src/cccp/calculation/capabilities/task_binding.py",
+    "src/cccp/calculation/recipes/__init__.py",
+    "src/cccp/calculation/recipes/compile.py",
+    "src/cccp/calculation/recipes/contracts.py",
+    "src/cccp/calculation/recipes/validation.py"
+  ],
+  "science_files_absent_from_release_wheel": [
+    "src/cccp/analysis/ensemble/science.py",
+    "src/cccp/analysis/nmr/comparison.py",
+    "src/cccp/analysis/research/__init__.py",
+    "src/cccp/analysis/research/_common.py",
+    "src/cccp/analysis/research/artifact_manifest.py",
+    "src/cccp/analysis/research/contracts.py",
+    "src/cccp/analysis/research/evidence.py",
+    "src/cccp/analysis/research/provenance.py",
+    "src/cccp/analysis/research/question.py",
+    "src/cccp/analysis/research/reaction.py",
+    "src/cccp/analysis/research/selectivity.py",
+    "src/cccp/analysis/research/validators.py",
+    "src/cccp/calculation/capabilities/__init__.py",
+    "src/cccp/calculation/capabilities/builtin.py",
+    "src/cccp/calculation/capabilities/contracts.py",
+    "src/cccp/calculation/capabilities/domains.py",
+    "src/cccp/calculation/capabilities/registry.py",
+    "src/cccp/calculation/capabilities/task_binding.py",
+    "src/cccp/calculation/recipes/__init__.py",
+    "src/cccp/calculation/recipes/compile.py",
+    "src/cccp/calculation/recipes/contracts.py",
+    "src/cccp/calculation/recipes/validation.py"
+  ],
+  "experience_examples": {
+    "frontend/js/workbench/features/science-question.js": {
+      "experience_source": true,
+      "main_source": false
+    },
+    "frontend/js/workbench/features/scientific-evidence.js": {
+      "experience_source": true,
+      "main_source": false
+    },
+    "frontend/js/client/research-client.js": {
+      "experience_source": false,
+      "main_source": false
+    },
+    "rph/package.json": {
+      "experience_source": true,
+      "main_source": false
+    },
+    "scripts/acceptance/acp2_experience.py": {
+      "experience_source": true,
+      "main_source": false
+    }
+  },
+  "release_artifacts": [
+    {
+      "name": "acp-web-0.3.0.tar.gz",
+      "exists": true,
+      "digest_match": true
+    },
+    {
+      "name": "acp-worker-0.3.0.tar.gz",
+      "exists": true,
+      "digest_match": true
+    },
+    {
+      "name": "acp_web-0.3.0-py3-none-any.whl",
+      "exists": true,
+      "digest_match": true
+    },
+    {
+      "name": "acp_worker-0.3.0-py3-none-any.whl",
+      "exists": true,
+      "digest_match": true
+    },
+    {
+      "name": "cccp-0.3.0-py3-none-any.whl",
+      "exists": true,
+      "digest_match": true
+    },
+    {
+      "name": "cccp-0.3.0.tar.gz",
+      "exists": true,
+      "digest_match": true
+    }
+  ],
+  "release_source": {
+    "clean": true,
+    "dirty_paths": [],
+    "git": true,
+    "path": "/tmp/opencode/fix5-build-src",
+    "revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
+    "tree": "e2b23771a47e7553738ef902cc4c1b62528fe508"
+  }
+}

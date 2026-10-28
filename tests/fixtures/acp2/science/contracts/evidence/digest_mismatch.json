@@ -1,0 +1,47 @@
+{
+  "claims": [
+    {
+      "claim_id": "c-true-minimum",
+      "missing_checks": [],
+      "scope": {
+        "applicability": "conformer_specific",
+        "conditions": "conformer A",
+        "subject": "stationary_point_kind"
+      },
+      "source_refs": [
+        {
+          "artifact_path": "artifacts/freq.out",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          "quantity": "harmonic_frequencies",
+          "role": "native_output",
+          "units": "cm-1"
+        }
+      ],
+      "statement": "The optimized geometry is a true minimum (no imaginary frequencies).",
+      "status": "supported",
+      "validator": {
+        "kind": "deterministic",
+        "validator_id": "check.imaginary_mode_count",
+        "validator_version": "1.0.0"
+      }
+    }
+  ],
+  "execution": {
+    "argv": [
+      "orca",
+      "freq.inp"
+    ],
+    "exit_code": 0,
+    "terminal_state": "completed"
+  },
+  "limitations": [],
+  "report_id": "report-digest-mismatch",
+  "schema_version": 1,
+  "subject": {
+    "subject_id": "run-fixture-digest-mismatch",
+    "subject_kind": "calculation_result"
+  }
+}

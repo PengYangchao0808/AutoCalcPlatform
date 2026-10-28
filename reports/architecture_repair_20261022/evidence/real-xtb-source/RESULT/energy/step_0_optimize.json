@@ -1,0 +1,10 @@
+{
+  "energy": -0.982686139534,
+  "energy_hartree": -0.982686139534,
+  "method": "default",
+  "schema_version": "acp_energy_product_v1",
+  "source": "scientific_result.json",
+  "step_id": "step_0_optimize",
+  "step_kind": "optimize",
+  "unit": "hartree"
+}

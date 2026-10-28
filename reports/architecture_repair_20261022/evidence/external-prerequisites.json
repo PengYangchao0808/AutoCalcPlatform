@@ -1,0 +1,21 @@
+{
+  "binary_on_path": {
+    "orca": true,
+    "xtb": true,
+    "crest": true,
+    "censo": true,
+    "bsub": true,
+    "bjobs": true,
+    "bstop": true
+  },
+  "configured_environment": {
+    "ACP_M1_ORCA": false,
+    "ACP_LSF_NODE": false,
+    "ACP_EXECUTION_CGROUP_ROOT": false
+  },
+  "production_deployed": false,
+  "delegated_cgroup": "NOT_VERIFIED",
+  "real_qc_lsf": "ORCA GUI/M1 and LSF NOT_VERIFIED",
+  "binary_discovery_note": "PATH presence is not vendor/runtime verification; /usr/bin/orca is the GNOME screen reader, not quantum chemistry ORCA.",
+  "real_xtb_cli": "PASS: source and installed role H2 optimization"
+}

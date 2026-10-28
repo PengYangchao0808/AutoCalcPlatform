@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "product_kind": "structure_trajectory",
+  "identity": {
+    "product_kind": "structure_trajectory",
+    "schema_version": 1,
+    "generator": "cccp.calculation.products.structure.build_structure_trajectory_product",
+    "input_digest": "",
+    "algorithm": "structure_trajectory",
+    "algorithm_version": "1",
+    "params_digest": ""
+  },
+  "state": "unavailable",
+  "complete": false,
+  "missing_reason": "source_missing",
+  "errors": [],
+  "payload": null
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@rph/bridge",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Research semantics to public platform client contract",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@rph/research": "workspace:*"
+  },
+  "license": "MIT"
+}

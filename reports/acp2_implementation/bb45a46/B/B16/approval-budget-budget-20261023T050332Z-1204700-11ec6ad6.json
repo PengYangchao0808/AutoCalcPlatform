@@ -1,0 +1,63 @@
+{
+  "artifacts": [],
+  "assertions": [
+    {
+      "detail": "cumulative budget reservation/settlement is owned by B17",
+      "name": "b17.budget_branch",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": null,
+    "harness_revision": "81023137624bddcc6582451e3ad5018f2585fc9b485ff87371766eb32a614ea6",
+    "server_revision": "sha256:fc6b8028f7189278e802d4c9a5d3a9382d6678a4f2350e01d31c4f181f16ec23"
+  },
+  "candidate_revision": "sha256:fc6b8028f7189278e802d4c9a5d3a9382d6678a4f2350e01d31c4f181f16ec23",
+  "command": [
+    "/ACPServer/acp2-development/venvs/b/bin/python",
+    "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py",
+    "--scenario",
+    "approval-budget",
+    "--phase",
+    "budget",
+    "--controller",
+    "http://127.0.0.1:18776",
+    "--fixture",
+    "/ACPServer/acp2-development/data/b/fixtures/approval.json",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B16",
+    "--timeout",
+    "600"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "live",
+  "exit_code": 2,
+  "extensions": {
+    "acceptance.operation_class": "control",
+    "acceptance.target": "local",
+    "b16.controller": "http://127.0.0.1:18776",
+    "b16.fixture": "/ACPServer/acp2-development/data/b/fixtures/approval.json",
+    "b16.phase": "budget",
+    "b17.reason": "b17_budget_not_implemented"
+  },
+  "finished_at": "2026-10-23T05:03:32Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "B",
+  "phase": "budget",
+  "reason": "b17_budget_not_implemented",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "20261023T050332Z-1204700-11ec6ad6",
+  "scenario": "approval-budget",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-23T05:03:32Z",
+  "submission_id": null,
+  "usage": null
+}

@@ -1,0 +1,77 @@
+{
+  "available": true,
+  "ok": true,
+  "problem": null,
+  "supported": false,
+  "rows": [
+    {
+      "label": "research",
+      "value": "res-m404-da"
+    },
+    {
+      "label": "round",
+      "value": "0"
+    },
+    {
+      "label": "task",
+      "value": "20261028_943_projection_attempt#1"
+    },
+    {
+      "label": "release",
+      "value": "2d1ab37a0f988933"
+    },
+    {
+      "label": "execution",
+      "value": "completed"
+    },
+    {
+      "label": "evidence",
+      "value": "complete"
+    },
+    {
+      "label": "claims",
+      "value": "refuted"
+    },
+    {
+      "label": "report",
+      "value": "report.m4-04.diels-alder.v1"
+    },
+    {
+      "label": "projection",
+      "value": "sha256:cadcbeeb93474962cff34d0f478fa6bd8396914989708708d4333a0806e52fde"
+    },
+    {
+      "label": "verdict",
+      "value": "needs_review"
+    },
+    {
+      "label": "claim[0]",
+      "value": "c-ts-exactly-one-imaginary-mode: supported"
+    },
+    {
+      "label": "claim[1]",
+      "value": "c-ts-mapped-imaginary-mode: supported"
+    },
+    {
+      "label": "claim[2]",
+      "value": "c-frequency-hessian-present: supported"
+    },
+    {
+      "label": "claim[3]",
+      "value": "c-irc-bidirectional-complete: supported"
+    },
+    {
+      "label": "claim[4]",
+      "value": "c-irc-forward-endpoint: refuted"
+    },
+    {
+      "label": "claim[5]",
+      "value": "c-electronic-activation-barrier-comparable: supported"
+    },
+    {
+      "label": "claim[6]",
+      "value": "c-reactant-stoichiometry-complete: supported"
+    }
+  ],
+  "source": "frontend/js/workbench/features/research-evidence-view.js::project"
+}

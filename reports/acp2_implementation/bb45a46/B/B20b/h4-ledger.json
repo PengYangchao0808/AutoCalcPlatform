@@ -1,0 +1,104 @@
+{
+  "schema": "acp2.b20b.h4-ledger.v1",
+  "generated_at": "2026-10-23T09:17:41Z",
+  "source_handoff": {
+    "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20b/science-handoff.json",
+    "schema": "acp2.b20b.science-handoff.v1"
+  },
+  "h4_gate": "open",
+  "promotion_allowed": false,
+  "rows": [
+    {
+      "sequence": "01",
+      "label": "H4-01",
+      "row_id": "H4-01-valid-ts",
+      "claim_id": "c-ts-first-order-saddle-candidate",
+      "status": "NOT_VERIFIED",
+      "claim_status": "not_evaluated",
+      "required_for_h4_closure": true,
+      "source": "B20a-exec",
+      "source_gap": "B20a-exec has not published the authorized TS optimize/frequency step receipts and artifacts: no real magnitude/mode record, snapshot digest, attempt or release exists. A constructed validator PASS is not real evidence.",
+      "source_artifact": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "source_digest": {
+        "algorithm": "sha256",
+        "value": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c"
+      },
+      "promoted": false,
+      "promotion_reason": null
+    },
+    {
+      "sequence": "02",
+      "label": "H4-02",
+      "row_id": "H4-02-bidirectional-irc",
+      "claim_id": "c-ts-connects-intended-endpoints",
+      "status": "NOT_VERIFIED",
+      "claim_status": "not_evaluated",
+      "required_for_h4_closure": true,
+      "source": "B20a-exec",
+      "source_gap": "B20a-exec has not published the authorized forward/reverse IRC step receipts and artifacts: no real direction results, native step counts, terminal states or snapshot digest exist.",
+      "source_artifact": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "source_digest": {
+        "algorithm": "sha256",
+        "value": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c"
+      },
+      "promoted": false,
+      "promotion_reason": null
+    },
+    {
+      "sequence": "03",
+      "label": "H4-03",
+      "row_id": "H4-03-endpoint-connectivity",
+      "claim_id": "c-endpoint-connectivity",
+      "status": "NOT_VERIFIED",
+      "claim_status": "not_evaluated",
+      "required_for_h4_closure": true,
+      "source": "B20a-exec",
+      "source_gap": "B20a-exec has not published the authorized endpoint geometries or the mapped product structure; no real atom-order-stable endpoint mapping exists.",
+      "source_artifact": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "source_digest": {
+        "algorithm": "sha256",
+        "value": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c"
+      },
+      "promoted": false,
+      "promotion_reason": null
+    },
+    {
+      "sequence": "04",
+      "label": "H4-04",
+      "row_id": "H4-04-comparable-energy",
+      "claim_id": "c-electronic-activation-barrier-comparable",
+      "status": "NOT_VERIFIED",
+      "claim_status": "not_evaluated",
+      "required_for_h4_closure": true,
+      "source": "B20a-exec",
+      "source_gap": "B20a-exec has not published authorized energy/thermochemistry artifacts; additionally B18 must reconcile the frozen 1_bar_ideal_gas standard state with the ThermochemistryOptions 1atm/1M lexicon before a real run.",
+      "source_artifact": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/handoff-H4.json",
+      "source_digest": {
+        "algorithm": "sha256",
+        "value": "3c1691b0c58bac891fba47a05f42b146d9055b1e94ed83a5721e6fb34e31458c"
+      },
+      "promoted": false,
+      "promotion_reason": null
+    },
+    {
+      "sequence": "search",
+      "label": "H4-search",
+      "row_id": "H4-search",
+      "claim_id": "c-search-capability",
+      "status": "NOT_VERIFIED",
+      "claim_status": "not_evaluated",
+      "required_for_h4_closure": true,
+      "source": "B20a-search",
+      "source_gap": "B20a-search has not published its separate search evidence row: no input category, candidate source/count, generation steps, rejection reasons, validators or success criteria exist. A control-loop or known-candidate PASS is explicitly not search evidence.",
+      "source_artifact": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B20/search-gap.json",
+      "source_digest": {
+        "algorithm": "sha256",
+        "value": "cc70787c02fc9b488d5d0e5d0ebf608d3292050f799fbe6da9fa010988280f8e"
+      },
+      "promoted": false,
+      "promotion_reason": null
+    }
+  ],
+  "promotions": [],
+  "rule": "H4-01..H4-04 and H4-search stay NOT_VERIFIED until real B20a-exec/B20a-search artifacts exist and A/C sign their own scope. B20b records the gap; it does not promote a constructed negative, a known-candidate chain or an execution fact into positive evidence."
+}

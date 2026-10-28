@@ -1,0 +1,24 @@
+=== cccp.software.discover_all ===
+dict
+{
+  "censo": null,
+  "crest": null,
+  "isostat": null,
+  "molclus": null,
+  "orca": "/usr/bin/orca",
+  "shermo": null,
+  "xtb": null
+}
+exit=0
+=== which binaries (absence = fact) ===
+orca: FOUND /usr/bin/orca
+crest: ABSENT
+xtbopt: ABSENT
+xtb: ABSENT
+censo: ABSENT
+isostat: ABSENT
+shermo: ABSENT
+bsub: ABSENT
+bjobs: ABSENT
+bstop: ABSENT
+ssh: FOUND /usr/bin/ssh

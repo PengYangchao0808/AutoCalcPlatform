@@ -1,0 +1,40 @@
+{
+  "accepted": [
+    "20261028_012750_001_m403-budget"
+  ],
+  "approval_ref": "ap_12f232117df1407c9a4754f343746849",
+  "codes": [
+    201,
+    403
+  ],
+  "denied": [
+    {
+      "code": 403,
+      "payload": {
+        "detail": {
+          "code": "budget_exhausted",
+          "message": "task_ref budget 1 - consumed 1 < requested 1; new dispatch refused",
+          "params": {
+            "enforced": true,
+            "exceeded": [
+              {
+                "dimension": "task_ref",
+                "requested": {
+                  "attempt": 1,
+                  "task_ref": 1
+                },
+                "scope": "research_budget"
+              }
+            ],
+            "mode": "quota-only",
+            "reason_code": "budget_exhausted"
+          },
+          "retryable": false
+        }
+      }
+    }
+  ],
+  "new_lsf_jobs": [
+    "108"
+  ]
+}

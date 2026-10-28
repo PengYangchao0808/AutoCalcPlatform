@@ -1,0 +1,32 @@
+{
+  "schema": "acp2.experience.p2-minimal-form.v1",
+  "source": "C/frontend/js/workbench/features/science-question.js",
+  "source_commit": "39d4aeb",
+  "source_note": "C T-17 model-free manual research form values; not the T-38 dynamic schema form (H5).",
+  "form": {
+    "question_id": "single_point_energy",
+    "workflow": "singlepoint",
+    "structure": {
+      "source": "c2_minimal_form",
+      "path": "structures/water.xyz",
+      "role": "minimum"
+    },
+    "method": {
+      "method": "r2SCAN-3c",
+      "basis": "def2-TZVP",
+      "solvent": "none",
+      "solvent_model": "none"
+    },
+    "charge": 0,
+    "multiplicity": 1,
+    "mapping": "mapping-da-endo-v1",
+    "mapping_digest": "sha256:355ee8f81a3f6ce0d62e99dda623dd69b7393ab67652770c8d85695297aacf8d",
+    "resources": {
+      "nproc": 2,
+      "mem": "2GB"
+    },
+    "options": {
+      "stability_check": false
+    }
+  }
+}

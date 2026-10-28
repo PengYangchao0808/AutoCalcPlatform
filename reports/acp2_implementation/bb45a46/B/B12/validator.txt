@@ -1,0 +1,1 @@
+VALID: docs/reference/next-change/acp2-contracts/manifest.json

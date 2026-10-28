@@ -1,0 +1,22 @@
+{
+  "sample_id": "submit-invalid-workflow.negative",
+  "contract": "application-api.v1.json",
+  "kind": "negative",
+  "operation": "submit",
+  "payload": {
+    "schema_version": 1,
+    "workflow": "ensemble",
+    "input": {
+      "smiles": "CCO"
+    },
+    "plan_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "expected": {
+    "valid": false,
+    "class": "unsupported",
+    "code": "unsupported_capability",
+    "violation": "enum",
+    "field": "workflow"
+  },
+  "note": "a retired workflow id is not active"
+}

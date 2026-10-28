@@ -1,0 +1,43 @@
+{
+  "remote_current_attempt": {
+    "root": {
+      "job_id": "job-review",
+      "path": "/tmp/acp2-r8-review-cya0dq7w/.remote_cache/job-review",
+      "is_remote": true,
+      "catalog_ready": false,
+      "found": true,
+      "attempt": 2,
+      "historical": false,
+      "reason": ""
+    },
+    "r8_historical_only_guard_rejects": false,
+    "direct_manifest_read_ids": [
+      "attempt-one-product"
+    ],
+    "direct_release_facts": {
+      "release_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "stored_manifest_attempt": 1,
+    "requested_attempt": 2,
+    "note": "The route is not implemented; this proves the planned guard does not reject this actual resolver output."
+  },
+  "r8_key_delimiter_collision": {
+    "identities": [
+      [
+        "a",
+        "prop-x:proposal:prop-y"
+      ],
+      [
+        "a:proposal:prop-x",
+        "prop-y"
+      ]
+    ],
+    "keys": [
+      "a:proposal:prop-x:proposal:prop-y",
+      "a:proposal:prop-x:proposal:prop-y"
+    ],
+    "same_key": true,
+    "store_error": "ResearchResourceConflictError: resource 'a:proposal:prop-x:proposal:prop-y' already exists at revision 1",
+    "scope": "Allowed by the Data contract. Normal ProjectStore.create_project generates UUIDs; this is not a claim of a current UI exploit."
+  }
+}

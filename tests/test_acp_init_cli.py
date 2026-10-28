@@ -1,5 +1,12 @@
 """TDD tests for acp.init_wizard.flows + the `acp init` CLI wiring (plan T8).
 
+The wizard is now the unified step flow (usage → tier → resources →
+components → params/secrets → preview/apply → doctor, todo 36): the
+resource menu is reached after choosing usage=本机 and tier=Standalone, and
+its ``q`` finishes the resource step (the usage menu owns full quit).  The
+flow-level inputs below prepend those two answers via
+:func:`_local_standalone_input`.
+
 Acceptance criteria covered:
 (a) parser accepts ``init --config X --log-level DEBUG`` (default ~/.cccp.yaml);
 (b) dispatch invokes run_init (mocked) and maps its return code;
@@ -78,6 +85,16 @@ def _script_input(monkeypatch: pytest.MonkeyPatch, answers: list[str]) -> None:
     monkeypatch.setattr(builtins, "input", lambda prompt="": next(it))
 
 
+def _local_standalone_input(resource_answers: list[str]) -> list[str]:
+    """Full unified-flow input for one local Standalone resource pass.
+
+    usage(local) → tier(Standalone) → resource answers → q (finish resources)
+    → components(default) → run_root(default) → public_origin(direct)
+    → secrets(skip) → apply → quit.
+    """
+    return ["1", "1", *resource_answers, "q", "", "", "", "", "1", "q"]
+
+
 def _write_target(tmp_path: Path, nodes: list[dict[str, Any]]) -> Path:
     """Write a wizard target YAML carrying the given cluster.nodes entries."""
     target = tmp_path / "wizard_target.yaml"
@@ -86,6 +103,35 @@ def _write_target(tmp_path: Path, nodes: list[dict[str, Any]]) -> Path:
         encoding="utf-8",
     )
     return target
+
+
+def test_public_origin_reprompts_then_saves(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    target = tmp_path / "cfg.yaml"
+    _script_input(
+        monkeypatch,
+        [
+            "1",
+            "1",
+            "q",
+            "",
+            "",
+            "https://acp.example/path",
+            "https://new.example:9443",
+            "",
+            "1",
+            "q",
+        ],
+    )
+    assert run_init(target) == 0
+    assert (
+        yaml.safe_load(target.read_text())["deployment"]["params"]["public_origin"]
+        == "https://new.example:9443"
+    )
+    assert "不含路径" in capsys.readouterr().out
 
 
 def _node_entry(**overrides: Any) -> dict[str, Any]:
@@ -173,8 +219,8 @@ def test_cli_smoke_quit_leaves_empty_file_untouched(tmp_path: Path) -> None:
     )
     assert proc.returncode == 0, proc.stderr
     assert target.read_bytes() == b""
-    assert "本地" in proc.stdout
-    assert "声明新集群" in proc.stdout
+    assert "初始化本机部署" in proc.stdout
+    assert "连接已有 ACP 服务" in proc.stdout
     assert "q) 退出" in proc.stdout
 
 
@@ -223,7 +269,7 @@ def test_paramiko_absent_local_flow_still_runs(
 
     target = tmp_path / "cfg.yaml"
     target.write_bytes(b"")
-    _script_input(monkeypatch, ["1", "q"])
+    _script_input(monkeypatch, _local_standalone_input(["1"]))
 
     assert run_init(target) == 0
     out = capsys.readouterr().out
@@ -236,7 +282,7 @@ def test_paramiko_absent_remote_entry_shows_hint_and_returns_to_menu(
 ) -> None:
     monkeypatch.setitem(sys.modules, "paramiko", None)
     target = _write_target(tmp_path, [_node_entry()])
-    _script_input(monkeypatch, ["2", "q"])
+    _script_input(monkeypatch, _local_standalone_input(["2"]))
 
     assert run_init(target) == 0
     out = capsys.readouterr().out
@@ -257,7 +303,9 @@ def test_malformed_entries_render_invalid_and_unselectable(
         _node_entry(name="bad-mcj", max_concurrent_jobs="xyz"),
     ]
     target = _write_target(tmp_path, nodes)
-    _script_input(monkeypatch, ["2", "q"])  # pick bad-port -> reason -> menu -> q
+    _script_input(
+        monkeypatch, _local_standalone_input(["2"])
+    )  # pick bad-port -> reason -> menu -> q
 
     assert run_init(target) == 0
     out = capsys.readouterr().out
@@ -284,7 +332,7 @@ def test_disabled_node_refused_with_reason(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     target = _write_target(tmp_path, [_node_entry(name="sleepy", enabled=False)])
-    _script_input(monkeypatch, ["2", "q"])
+    _script_input(monkeypatch, _local_standalone_input(["2"]))
 
     assert run_init(target) == 0
     out = capsys.readouterr().out
@@ -293,9 +341,7 @@ def test_disabled_node_refused_with_reason(
     assert out.count("选择要初始化的资源") == 2  # back at the menu, never crashed
 
 
-def test_run_init_returns_zero_on_quit(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_run_init_returns_zero_on_quit(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     target = tmp_path / "cfg.yaml"
     target.write_bytes(b"")
     _script_input(monkeypatch, ["q"])
@@ -311,9 +357,7 @@ def test_run_init_returns_one_on_init_abort(
     assert "错误" in capsys.readouterr().out
 
 
-def test_eof_abort_returns_zero(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_eof_abort_returns_zero(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """D15: EOF mid-menu is a graceful quit (exit 0), not a traceback."""
 
     def _eof(prompt: str = "") -> str:
@@ -342,7 +386,7 @@ def test_new_node_flow_dispatch_and_repeat_loop(
     monkeypatch.setattr(flows_module, "run_new_node", fake_run_new_node)
     target = tmp_path / "cfg.yaml"
     target.write_bytes(b"")
-    _script_input(monkeypatch, ["2", "q"])
+    _script_input(monkeypatch, _local_standalone_input(["2"]))  # no nodes: 2 == 声明新集群
 
     assert run_init(target) == 0
     assert len(calls) == 1
@@ -370,13 +414,12 @@ def test_local_flow_applies_specs_and_prints_final_table(
     monkeypatch.setattr(
         flows_module,
         "apply_local_spec",
-        lambda target_path, data, specs: applied.append((target_path, data, specs))
-        or fake_entries,
+        lambda target_path, data, specs: applied.append((target_path, data, specs)) or fake_entries,
     )
 
     target = tmp_path / "cfg.yaml"
     target.write_bytes(b"")
-    _script_input(monkeypatch, ["1", "q"])
+    _script_input(monkeypatch, _local_standalone_input(["1"]))
 
     assert run_init(target) == 0
     assert len(applied) == 1

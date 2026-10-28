@@ -1,0 +1,156 @@
+{
+  "schema": "acp2.acceptance.samples.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "contract_version": "1.0.0",
+  "description": "Deterministic B01 acceptance sample corpus. Positive samples must be accepted by validate_receipt; every negative sample must be rejected for the named reason. --validate-samples runs this file and prints one line per sample.",
+  "samples": [
+    {
+      "path": "positive/b-env-runtime-discover.json",
+      "expect": "accept",
+      "provenance": "B-authored legal sample"
+    },
+    {
+      "path": "positive/c-dsh-local-singlepoint-fixture.json",
+      "expect": "accept",
+      "provenance": "B-authored shape exemplar of the C dsh-local-singlepoint example; C-authored sample pending blocked_fixture"
+    },
+    {
+      "path": "positive/c-dsh-local-singlepoint-live.json",
+      "expect": "accept",
+      "provenance": "C-authored live shape sample; declares the required present/absent observations (M0-03/R10)"
+    },
+    {
+      "path": "positive/b-approval.json",
+      "expect": "accept"
+    },
+    {
+      "path": "positive/b-budget.json",
+      "expect": "accept"
+    },
+    {
+      "path": "positive/b-da-preflight.json",
+      "expect": "accept"
+    },
+    {
+      "path": "positive/b-da-submit.json",
+      "expect": "accept"
+    },
+    {
+      "path": "positive/b-da-evidence.json",
+      "expect": "accept"
+    },
+    {
+      "path": "positive/b-da-aggregate.json",
+      "expect": "accept"
+    },
+    {
+      "path": "positive/b-artifact-read.json",
+      "expect": "accept"
+    },
+    {
+      "path": "negative/bad-time-field.json",
+      "expect": "reject",
+      "expect_reason": "schema:missing_required:$:started_at"
+    },
+    {
+      "path": "negative/corrupt-digest.json",
+      "expect": "reject",
+      "expect_reason": "artifact_sha256_mismatch"
+    },
+    {
+      "path": "negative/unknown-required-version.json",
+      "expect": "reject",
+      "expect_reason": "unsupported_contract_version_major:2.0.0"
+    },
+    {
+      "path": "negative/missing-owner.json",
+      "expect": "reject",
+      "expect_reason": "schema:missing_required:$:owner"
+    },
+    {
+      "path": "negative/unknown-evidence-kind.json",
+      "expect": "reject",
+      "expect_reason": "schema:enum:$.evidence_kind"
+    },
+    {
+      "path": "negative/invalid-result.json",
+      "expect": "reject",
+      "expect_reason": "schema:enum:$.result"
+    },
+    {
+      "path": "negative/invalid-scope.json",
+      "expect": "reject",
+      "expect_reason": "schema:enum:$.scope"
+    },
+    {
+      "path": "negative/fixture-phase-with-live-kind.json",
+      "expect": "reject",
+      "expect_reason": "phase_evidence_kind_mismatch:experience:fixture!=live"
+    },
+    {
+      "path": "negative/duplicate-platform-conflict.json",
+      "expect": "reject",
+      "expect_reason": "platform_alias_conflict:job_id"
+    },
+    {
+      "path": "negative/fixture-with-platform-refs.json",
+      "expect": "reject",
+      "expect_reason": "fixture_platform_refs_not_null:job_id"
+    },
+    {
+      "path": "negative/live-submit-missing-job-id.json",
+      "expect": "reject",
+      "expect_reason": "live_submit_missing_job_id"
+    },
+    {
+      "path": "negative/remote-live-missing-submission-id.json",
+      "expect": "reject",
+      "expect_reason": "live_submit_missing_submission_id"
+    },
+    {
+      "path": "negative/live-discovery-with-job-ref.json",
+      "expect": "reject",
+      "expect_reason": "live_discover_platform_ref:job_id"
+    },
+    {
+      "path": "negative/local-live-with-submission-id.json",
+      "expect": "reject",
+      "expect_reason": "live_submit_submission_id_not_null_local"
+    },
+    {
+      "path": "negative/aggregate-missing-child-phase.json",
+      "expect": "reject",
+      "expect_reason": "aggregate_missing_required_child_phase:da-evidence"
+    },
+    {
+      "path": "negative/live-pass-without-observations.json",
+      "expect": "reject",
+      "expect_reason": "experience_observations_missing",
+      "provenance": "M0-03/R10: a live PASS row must publish declared observations"
+    },
+    {
+      "path": "negative/live-with-offline-fixture.json",
+      "expect": "reject",
+      "expect_reason": "live_nested_evidence_kind:offline_fixture:extensions.experience.diagnostic.offline_proof.evidence_kind",
+      "provenance": "M0-03/R10: an outer live row may not embed an offline_fixture evidence kind"
+    },
+    {
+      "path": "negative/live-model-present-without-calls.json",
+      "expect": "reject",
+      "expect_reason": "live_model_present_without_calls",
+      "provenance": "M0-03/R10: model=present requires a real call and a usage receipt"
+    },
+    {
+      "path": "negative/live-observation-mismatch.json",
+      "expect": "reject",
+      "expect_reason": "experience_observation_mismatch:qc",
+      "provenance": "M0-03/R10: a declared qc=present direction may not be published as absent"
+    },
+    {
+      "path": "negative/live-undeclared-observations.json",
+      "expect": "reject",
+      "expect_reason": "experience_observations_undeclared:not-a-live-scenario",
+      "provenance": "M0-03/R10: a live scenario without a declared observation contract is a contract error"
+    }
+  ]
+}

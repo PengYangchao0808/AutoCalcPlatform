@@ -1,0 +1,279 @@
+{
+  "budget": {
+    "aggregate_budget_seconds": 3600,
+    "budget_timing_basis": "unmeasured",
+    "constructed": true,
+    "cumulative_rule": "the nmr/thermo/selectivity subrows share the B/C cross-domain cumulative budget; A never resets it by changing run_id",
+    "export_budget_seconds": 600,
+    "export_window_rule": "the 600 s export window starts after the last terminal step and never extends the science deadline",
+    "h6_open_consequence": "the timing basis is unmeasured and B23b has not executed the selectivity paths; H6 remains open until the B/C budget table and the authorized artifacts exist",
+    "in_flight_stop_rule": "after an accepted stop no new step or retry is dispatched; partial artifacts are not accepted as scientific evidence",
+    "max_attempts_per_step": 2,
+    "max_bsub": 1,
+    "max_candidate_paths": 2,
+    "max_conformers_per_endpoint": 1,
+    "max_qc_invocations": 14,
+    "max_regioisomers": 1,
+    "max_task_refs": 1,
+    "max_ts_candidates_per_path": 1,
+    "measured_step_timings": null,
+    "queue_wait_counts_toward_total_wall_time": true,
+    "science_deadline_seconds": 3000,
+    "timing_evidence": []
+  },
+  "case_id": "selectivity.cp_methyl_acrylate.endo_exo.v1",
+  "comparison": {
+    "activation_energy_definition": "Delta-E-double-dagger(path) = E(TS(path)) - [E(cyclopentadiene) + E(methyl acrylate)] under the frozen conditions; Delta-G-double-dagger additionally uses the frozen thermochemistry; no tunneling correction",
+    "basis": "def2-SVP",
+    "charge": 0,
+    "comparison_energy_unit": "kcal_per_mol",
+    "compatibility_requirements": [
+      "same_method",
+      "same_electronic_state",
+      "same_temperature",
+      "same_pressure",
+      "same_standard_state",
+      "same_reference_state",
+      "same_energy_unit"
+    ],
+    "electronic_state": {
+      "charge": 0,
+      "multiplicity": 1,
+      "state_id": "state.singlet.s0"
+    },
+    "energy_unit": "hartree",
+    "method": "wB97X-D4",
+    "method_definition": "wB97X-D4/def2-SVP, gas phase, restricted closed-shell singlet; no implicit solvent",
+    "multiplicity": 1,
+    "phase": "gas",
+    "pressure_pa": 100000.0,
+    "reference_state": "separated cyclopentadiene + methyl acrylate at infinite separation, and each declared product at the same conditions",
+    "selectivity_observable": "Delta-Delta-E-double-dagger = Delta-E-double-dagger(endo) - Delta-E-double-dagger(exo)",
+    "selectivity_preference_rule": "endo if Delta-Delta-E <= -0.5 kcal_per_mol; exo if Delta-Delta-E >= +0.5 kcal_per_mol; no preference otherwise",
+    "solvent": null,
+    "standard_state": "1_bar_ideal_gas",
+    "temperature_k": 298.15
+  },
+  "constructed": true,
+  "file_digests": {
+    "cyclopentadiene.mol": "27565542622358ec7728b4895e7f9bcb96de3f390a923593d31a67b269afaa3c",
+    "cyclopentadiene.xyz": "bec824c24af2321f28c427564f7f540ecf15850b268c4f037bcbfcbb7fb0284c",
+    "methyl-acrylate.mol": "286f22ee3945c641436c6124766e585ec87563a968fcb48a62921f613d754cd3",
+    "methyl-acrylate.xyz": "a5216a5936eaeca0e5c1f1283c4c6e00cf6ce2e4cdf58c9ef60fd420daf6451f",
+    "product-endo.mol": "2633ffbc851b4dc57880f3d08d616530598062e799c6400fa7df0dd45df2924f",
+    "product-endo.xyz": "a3f70eca805c48cc6fee5c63fbf6e53dbf923a2b0222d16cf2f7cc99c6d1b9ee",
+    "product-exo.mol": "1f12ffc54970ddeecb95170e1af20d49aaf5fbc79a8de4e091f2c38eb14c28af",
+    "product-exo.xyz": "fb453406a94e173fb4daa9013bde9c5c54b8c3878547843f50c1fef923b87913",
+    "questions.json": "feb9f1fbac7d0eb6333629b3bd1d9ce156c3ceb9d9712b5437ccdc85d5234644",
+    "reactants.xyz": "fb9c65df084d32e9dbac3586a14ed932c5049a66f17a515560d1635e6fc61fd3",
+    "reaction-endo.json": "c1e3a148bdf2d9225b37229d14a91431d136c984483af33ef8d60add3526e5b2",
+    "reaction-exo.json": "89eb77864387d81bafb03efa1d07970817382742c1d0e6b19f20fd11def9a6ec"
+  },
+  "fixture_files": {
+    "cyclopentadiene_mol": "cyclopentadiene.mol",
+    "cyclopentadiene_xyz": "cyclopentadiene.xyz",
+    "methyl_acrylate_mol": "methyl-acrylate.mol",
+    "methyl_acrylate_xyz": "methyl-acrylate.xyz",
+    "product_endo_mol": "product-endo.mol",
+    "product_endo_xyz": "product-endo.xyz",
+    "product_exo_mol": "product-exo.mol",
+    "product_exo_xyz": "product-exo.xyz",
+    "questions": "questions.json",
+    "reactants_xyz": "reactants.xyz",
+    "reaction_endo": "reaction-endo.json",
+    "reaction_exo": "reaction-exo.json"
+  },
+  "fixture_id": "selectivity-cyclopentadiene-methyl-acrylate-endo-exo-wb97xd4-def2svp",
+  "frozen_at": "2026-10-23T12:00:00Z",
+  "frozen_at_basis": "constructed frozen epoch for the static fixture; it is not a run timestamp",
+  "frozen_before_real_run": true,
+  "missing_path_policy": {
+    "absent_artifact_result": "NOT_VERIFIED",
+    "absent_artifact_rule": "If the B23b authorized artifacts or the public (owner, scenario, phase, run_id) reference are absent, the platform evidence state is NOT_VERIFIED, no preference claim is made and H6 remains open.",
+    "both_paths_required": true,
+    "budget_exhausted_result": "inconclusive",
+    "budget_exhausted_rule": "If the frozen budget is exhausted before both paths are qualified, record the gap and report inconclusive; do not start a new hypothesis and never reset the cumulative budget by changing run_id.",
+    "missing_path_result": "inconclusive",
+    "missing_path_rule": "If either declared path lacks a qualified TS, frequency, bidirectional IRC, endpoint mapping, comparable energy or thermochemistry, the selectivity result is inconclusive and no relative preference is stated.",
+    "no_experimental_claim": true,
+    "no_substitution_rule": "A single-point minimum, a single imaginary frequency or one IRC direction never substitutes for a qualified path."
+  },
+  "paths": [
+    {
+      "endpoint_digest": "2633ffbc851b4dc57880f3d08d616530598062e799c6400fa7df0dd45df2924f",
+      "endpoint_xyz_digest": "a3f70eca805c48cc6fee5c63fbf6e53dbf923a2b0222d16cf2f7cc99c6d1b9ee",
+      "hypothesis_id": "hypothesis.endo",
+      "label": "endo",
+      "mapping_digest": "242efcc79a1198b0f1d040e4ae4474840e02857e1ec74025bf360b8f3bcfacbf",
+      "mapping_topology_digest": "f131899dba9c7b02f8d841546362eca1a2b3ef9d5e160a71f3acc7744fc3ed16",
+      "path_id": "path.endo",
+      "product_atom_count": 23,
+      "product_file": "product-endo.mol",
+      "product_formula": "C9H12O2",
+      "product_structure_id": "product_endo",
+      "product_xyz": "product-endo.xyz",
+      "question_id": "question.selectivity.endo.activation_energy.v1",
+      "reaction_file": "reaction-endo.json",
+      "reaction_id": "reaction.selectivity.cp_methyl_acrylate.endo.v1",
+      "signature": {
+        "all_cip_centers": {
+          "pd_c1": "R",
+          "pd_c5": "S",
+          "pd_c6": "R"
+        },
+        "c7_signed_distance_angstrom": 0.8464839796159058,
+        "cip_configuration": "S",
+        "ester_carbon_signed_distance_angstrom": 1.2093791986529474,
+        "face": "endo",
+        "reference_plane_atoms": [
+          "pd_c4",
+          "pd_c5",
+          "pd_c6"
+        ],
+        "signed_volume": -2.854753545526662,
+        "signed_volume_atoms": [
+          "pd_c4",
+          "pd_c6",
+          "pd_c8"
+        ],
+        "signed_volume_sign": -1,
+        "stereocenter_atom_id": "pd_c5"
+      }
+    },
+    {
+      "endpoint_digest": "1f12ffc54970ddeecb95170e1af20d49aaf5fbc79a8de4e091f2c38eb14c28af",
+      "endpoint_xyz_digest": "fb453406a94e173fb4daa9013bde9c5c54b8c3878547843f50c1fef923b87913",
+      "hypothesis_id": "hypothesis.exo",
+      "label": "exo",
+      "mapping_digest": "2444a15bbcdce36a01148b6d4336e82dfebd5f92a8a93ce7fbddcc0fd1587691",
+      "mapping_topology_digest": "f131899dba9c7b02f8d841546362eca1a2b3ef9d5e160a71f3acc7744fc3ed16",
+      "path_id": "path.exo",
+      "product_atom_count": 23,
+      "product_file": "product-exo.mol",
+      "product_formula": "C9H12O2",
+      "product_structure_id": "product_exo",
+      "product_xyz": "product-exo.xyz",
+      "question_id": "question.selectivity.exo.activation_energy.v1",
+      "reaction_file": "reaction-exo.json",
+      "reaction_id": "reaction.selectivity.cp_methyl_acrylate.exo.v1",
+      "signature": {
+        "all_cip_centers": {
+          "pd_c1": "R",
+          "pd_c5": "R",
+          "pd_c6": "R"
+        },
+        "c7_signed_distance_angstrom": 0.932233659954846,
+        "cip_configuration": "R",
+        "ester_carbon_signed_distance_angstrom": -1.1513641064591886,
+        "face": "exo",
+        "reference_plane_atoms": [
+          "pd_c4",
+          "pd_c5",
+          "pd_c6"
+        ],
+        "signed_volume": 2.720432428494769,
+        "signed_volume_atoms": [
+          "pd_c4",
+          "pd_c6",
+          "pd_c8"
+        ],
+        "signed_volume_sign": 1,
+        "stereocenter_atom_id": "pd_c5"
+      }
+    }
+  ],
+  "real_run": false,
+  "reference": {
+    "owner": "C",
+    "phase": "experience:selectivity",
+    "run_id": null,
+    "run_id_gap": "B01 has not published the (owner, scenario, phase, run_id) registry; A does not invent a run_id.",
+    "scenario": "experience:cross-domain-live",
+    "subcase": "selectivity",
+    "subcase_semantics": "subcase=selectivity is display metadata; the public identity is (owner, scenario, phase, run_id). Two subcases sharing one public key must be rejected as NOT_VERIFIED."
+  },
+  "required_coverage": {
+    "both_paths_required": true,
+    "conformation_coverage": "one frozen conformation per endpoint; no conformer search, MD or Monte-Carlo sampling",
+    "declared_paths": [
+      "path.endo",
+      "path.exo"
+    ],
+    "methyl_acrylate_conformer": "s-cis only (C=C-C=O dihedral 0.0 +/- 5.0 degrees)",
+    "out_of_scope": [
+      "other regioisomers",
+      "other methyl acrylate conformers",
+      "solvent effects",
+      "tunneling",
+      "experimental rates",
+      "complete mechanism",
+      "global minimum",
+      "general method accuracy"
+    ],
+    "regioisomer_coverage": "only the declared 2-substituted regioisomer; the 3-substituted regioisomer is out of scope",
+    "required_energy_checks": [
+      "single-point electronic energy at the frozen method",
+      "thermochemistry at 298.15 K and 1 bar for Delta-G-double-dagger when claimed",
+      "same method/state/conditions/reference/unit for both paths"
+    ],
+    "required_path_checks": [
+      "bidirectional IRC reaching both frozen endpoints",
+      "exact one-to-one endpoint atom mapping",
+      "endpoint geometry within the frozen coordinate tolerance"
+    ],
+    "required_ts_checks": [
+      "stationary-point optimization",
+      "exactly one significant imaginary frequency",
+      "mapped imaginary mode"
+    ],
+    "ts_coverage": "one TS candidate per declared path; no automated TS search"
+  },
+  "schema": "acp2.science.fixture-manifest",
+  "schema_version": 1,
+  "selectivity_definition": {
+    "case_kind": "substituted Diels-Alder endo/exo competition",
+    "declared_regioisomer": "2-substituted methyl bicyclo[2.2.1]hept-5-ene-2-carboxylate",
+    "diene": "cyclopentadiene",
+    "dienophile": "methyl acrylate",
+    "distinguishability_requirement": "the two endpoints must differ in stereochemistry, not only in atom order; the atom-id order and element sequence must be identical",
+    "endo_definition": "the ester carbonyl carbon (pd_c8) and the C7 methylene bridge (pd_c7) are on the same side of the pd_c4/pd_c5/pd_c6 plane",
+    "exo_definition": "the ester carbonyl carbon (pd_c8) and the C7 methylene bridge (pd_c7) are on opposite sides of the pd_c4/pd_c5/pd_c6 plane",
+    "face_reference_atom_id": "pd_c7",
+    "reference_plane_atoms": [
+      "pd_c4",
+      "pd_c5",
+      "pd_c6"
+    ],
+    "stereocenter_atom_id": "pd_c5",
+    "stereochemical_signature": "CIP configuration at pd_c5 plus the sign of the signed volume of (pd_c4, pd_c6, pd_c8) about pd_c5; an atom-order permutation must not change either value",
+    "substituent_reference_atom_id": "pd_c8"
+  },
+  "shared_left_side": {
+    "atom_count": 23,
+    "formulas": [
+      "C5H6",
+      "C4H6O2"
+    ],
+    "frozen_conformation": "one conformation per reactant; cyclopentadiene is rigid; methyl acrylate is frozen in the s-cis conformer (C=C-C=O dihedral 0.0 +/- 5.0 degrees)",
+    "mapping_topology_digest": "f131899dba9c7b02f8d841546362eca1a2b3ef9d5e160a71f3acc7744fc3ed16",
+    "methyl_acrylate_dihedral_degrees": 0.00014037389876583512,
+    "structures": [
+      "cyclopentadiene",
+      "methyl_acrylate"
+    ]
+  },
+  "source": "Constructed static fixture. All structures are RDKit ETKDG/MMFF-generated for geometric plausibility only; no QC optimization, TS search, IRC, energy or experimental measurement exists.",
+  "task_kind": "selectivity",
+  "tolerances": {
+    "activation_energy_comparison_abs_kcal_per_mol": 0.5,
+    "atom_count_tolerance": 0,
+    "constructed": true,
+    "coordinate_abs_tolerance_angstrom": 0.001,
+    "energy_reparse_abs_hartree": 1e-06,
+    "imaginary_mode_threshold_cm1": 0.0,
+    "low_frequency_threshold_cm1": 50.0,
+    "selectivity_preference_abs_kcal_per_mol": 0.5,
+    "stereo_configuration_exact": true,
+    "stereo_signed_volume_sign_exact": true
+  }
+}

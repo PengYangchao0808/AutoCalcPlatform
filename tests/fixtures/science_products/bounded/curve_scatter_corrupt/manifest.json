@@ -1,0 +1,569 @@
+{
+ "schema_version": 99,
+ "bounded_identity": {
+  "product_kind": "curve_scatter",
+  "schema_version": 1,
+  "generator": "cccp.analysis.bounded.chunking.chunk_curve_product",
+  "input_digest": "sha256:b194fe9da09127ece15108bf96f505ac831e5c347697bfdb1f694daa7d29408c",
+  "algorithm": "chunk",
+  "algorithm_version": "1",
+  "params_digest": "sha256:b6ae6f1805a1f716bee7d7b017839b8bac91cb29fb991f169cbc8225bb5d2262"
+ },
+ "base_identity": {
+  "product_kind": "curve_scatter",
+  "schema_version": 1,
+  "generator": "cccp.calculation.products.curve.build_curve_scatter_product",
+  "input_digest": "sha256:b194fe9da09127ece15108bf96f505ac831e5c347697bfdb1f694daa7d29408c",
+  "algorithm": "curve_scatter",
+  "algorithm_version": "1",
+  "params_digest": ""
+ },
+ "spec": {
+  "method": "chunk",
+  "algorithm_version": "1",
+  "resolution": 16,
+  "start": 0,
+  "end": 40,
+  "params": [
+   {
+    "name": "series_id",
+    "value": "curve_scatter:series:scan_energy"
+   },
+   {
+    "name": "product_kind",
+    "value": "curve_scatter"
+   }
+  ]
+ },
+ "display_subsampled": false,
+ "note": "",
+ "blocks": [
+  {
+   "block_index": 0,
+   "start": 0,
+   "end": 16,
+   "resolution": 16,
+   "product": {
+    "schema_version": 1,
+    "product_kind": "curve_scatter",
+    "identity": {
+     "product_kind": "curve_scatter",
+     "schema_version": 1,
+     "generator": "cccp.calculation.products.curve.build_curve_scatter_product",
+     "input_digest": "sha256:b194fe9da09127ece15108bf96f505ac831e5c347697bfdb1f694daa7d29408c",
+     "algorithm": "chunk",
+     "algorithm_version": "1",
+     "params_digest": "sha256:3314261c1825591884fb92d8371d2cef5d06fb7819fedd07634539d61898192a"
+    },
+    "state": "available",
+    "complete": true,
+    "errors": [],
+    "payload": {
+     "reference_frame": {
+      "axes": "cartesian",
+      "origin": "native_input"
+     },
+     "series": [
+      {
+       "series_id": "curve_scatter:series:scan_energy",
+       "x_unit": "angstrom-or-degree",
+       "y_unit": "hartree",
+       "reference_frame": {
+        "axes": "cartesian",
+        "origin": "native_input"
+       },
+       "label": "scan energy",
+       "points": [
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:0",
+         "x": 0.0,
+         "y": -114.495,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 0
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:1",
+         "x": 0.01,
+         "y": -114.494802,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 1
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:2",
+         "x": 0.02,
+         "y": -114.49460802,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 2
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:3",
+         "x": 0.03,
+         "y": -114.49441808,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 3
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:4",
+         "x": 0.04,
+         "y": -114.49423217,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 4
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:5",
+         "x": 0.05,
+         "y": -114.49405031,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 5
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:6",
+         "x": 0.06,
+         "y": -114.4938725,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 6
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:7",
+         "x": 0.07,
+         "y": -114.49369874,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 7
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:8",
+         "x": 0.08,
+         "y": -114.49352902,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 8
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:9",
+         "x": 0.09,
+         "y": -114.49336332,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 9
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:10",
+         "x": 0.1,
+         "y": -114.49320165,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 10
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:11",
+         "x": 0.11,
+         "y": -114.49304397,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 11
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:12",
+         "x": 0.12,
+         "y": -114.49289027,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 12
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:13",
+         "x": 0.13,
+         "y": -114.49274052,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 13
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:14",
+         "x": 0.14,
+         "y": -114.49259469,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 14
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:15",
+         "x": 0.15,
+         "y": -114.49245275,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 15
+         }
+        }
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "block_index": 1,
+   "start": 16,
+   "end": 32,
+   "resolution": 16,
+   "product": {
+    "schema_version": 1,
+    "product_kind": "curve_scatter",
+    "identity": {
+     "product_kind": "curve_scatter",
+     "schema_version": 1,
+     "generator": "cccp.calculation.products.curve.build_curve_scatter_product",
+     "input_digest": "sha256:b194fe9da09127ece15108bf96f505ac831e5c347697bfdb1f694daa7d29408c",
+     "algorithm": "chunk",
+     "algorithm_version": "1",
+     "params_digest": "sha256:4cc705780318d0306f16211f4c495ad47dad01822b6be86522b315b42b5787c6"
+    },
+    "state": "available",
+    "complete": true,
+    "errors": [],
+    "payload": {
+     "reference_frame": {
+      "axes": "cartesian",
+      "origin": "native_input"
+     },
+     "series": [
+      {
+       "series_id": "curve_scatter:series:scan_energy",
+       "x_unit": "angstrom-or-degree",
+       "y_unit": "hartree",
+       "reference_frame": {
+        "axes": "cartesian",
+        "origin": "native_input"
+       },
+       "label": "scan energy",
+       "points": [
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:16",
+         "x": 0.16,
+         "y": -114.49231466,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 16
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:17",
+         "x": 0.17,
+         "y": -114.49218038,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 17
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:18",
+         "x": 0.18,
+         "y": -114.49204987,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 18
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:19",
+         "x": 0.19,
+         "y": -114.49192307,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 19
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:20",
+         "x": 0.2,
+         "y": -114.49179994,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 20
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:21",
+         "x": 0.21,
+         "y": -114.49168042,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 21
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:22",
+         "x": 0.22,
+         "y": -114.49156445,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 22
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:23",
+         "x": 0.23,
+         "y": -114.49145198,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 23
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:24",
+         "x": 0.24,
+         "y": -114.49134293,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 24
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:25",
+         "x": 0.25,
+         "y": -114.49123723,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 25
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:26",
+         "x": 0.26,
+         "y": -114.49113483,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 26
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:27",
+         "x": 0.27,
+         "y": -114.49103564,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 27
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:28",
+         "x": 0.28,
+         "y": -114.49093959,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 28
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:29",
+         "x": 0.29,
+         "y": -114.49084659,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 29
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:30",
+         "x": 0.3,
+         "y": -114.49075656,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 30
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:31",
+         "x": 0.31,
+         "y": -114.49066943,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 31
+         }
+        }
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "block_index": 2,
+   "start": 32,
+   "end": 40,
+   "resolution": 16,
+   "product": {
+    "schema_version": 1,
+    "product_kind": "curve_scatter",
+    "identity": {
+     "product_kind": "curve_scatter",
+     "schema_version": 1,
+     "generator": "cccp.calculation.products.curve.build_curve_scatter_product",
+     "input_digest": "sha256:b194fe9da09127ece15108bf96f505ac831e5c347697bfdb1f694daa7d29408c",
+     "algorithm": "chunk",
+     "algorithm_version": "1",
+     "params_digest": "sha256:2e9335065b9fe94b4cfa263417f5ce3afc9ec2b6f71403a8dadab626e6309535"
+    },
+    "state": "available",
+    "complete": true,
+    "errors": [],
+    "payload": {
+     "reference_frame": {
+      "axes": "cartesian",
+      "origin": "native_input"
+     },
+     "series": [
+      {
+       "series_id": "curve_scatter:series:scan_energy",
+       "x_unit": "angstrom-or-degree",
+       "y_unit": "hartree",
+       "reference_frame": {
+        "axes": "cartesian",
+        "origin": "native_input"
+       },
+       "label": "scan energy",
+       "points": [
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:32",
+         "x": 0.32,
+         "y": -114.49058509,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 32
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:33",
+         "x": 0.33,
+         "y": -114.49050346,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 33
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:34",
+         "x": 0.34,
+         "y": -114.49042446,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 34
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:35",
+         "x": 0.35,
+         "y": -114.49034797,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 35
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:36",
+         "x": 0.36,
+         "y": -114.49027391,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 36
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:37",
+         "x": 0.37,
+         "y": -114.49020217,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 37
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:38",
+         "x": 0.38,
+         "y": -114.49013266,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 38
+         }
+        },
+        {
+         "point_id": "curve_scatter:series:scan_energy:point:39",
+         "x": 0.39,
+         "y": -114.49006527,
+         "source": {
+          "source_kind": "curve_point",
+          "artifact": "",
+          "native_index": 39
+         }
+        }
+       ]
+      }
+     ]
+    }
+   }
+  }
+ ],
+ "key_points": []
+}

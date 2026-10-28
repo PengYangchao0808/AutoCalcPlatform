@@ -1,0 +1,48 @@
+{
+  "artifacts": [
+    {
+      "actual": "5d7c5a3f735ee5a10b553c1e4d095a0d32cd25a377573d01858e73b91019d67f",
+      "artifact": "acp-web-0.3.0.tar.gz",
+      "expected": "5d7c5a3f735ee5a10b553c1e4d095a0d32cd25a377573d01858e73b91019d67f",
+      "ok": true
+    },
+    {
+      "actual": "badb68d3ea69ab5fe95711049ed26db4d9304f8969ede6443a29da0963c8e17b",
+      "artifact": "acp-worker-0.3.0.tar.gz",
+      "expected": "badb68d3ea69ab5fe95711049ed26db4d9304f8969ede6443a29da0963c8e17b",
+      "ok": true
+    },
+    {
+      "actual": "68077f7d9734276b46a1a68fc207f5cde0582788f0218ebffed851763fdf41b1",
+      "artifact": "acp_web-0.3.0-py3-none-any.whl",
+      "expected": "68077f7d9734276b46a1a68fc207f5cde0582788f0218ebffed851763fdf41b1",
+      "ok": true
+    },
+    {
+      "actual": "f30e72ca56e620520987f1408eccdd69b181a81c353a8cec461df268bcb38471",
+      "artifact": "acp_worker-0.3.0-py3-none-any.whl",
+      "expected": "f30e72ca56e620520987f1408eccdd69b181a81c353a8cec461df268bcb38471",
+      "ok": true
+    },
+    {
+      "actual": "088604cdbe52bbc98c879edb6cb3ccca486f9ed68d8ecd4471e296b9c5110445",
+      "artifact": "cccp-0.3.0-py3-none-any.whl",
+      "expected": "088604cdbe52bbc98c879edb6cb3ccca486f9ed68d8ecd4471e296b9c5110445",
+      "ok": true
+    },
+    {
+      "actual": "b8c712f3ebf2afd9eee547f80797b74b70534bed3005506059df0256c7e8e96f",
+      "artifact": "cccp-0.3.0.tar.gz",
+      "expected": "b8c712f3ebf2afd9eee547f80797b74b70534bed3005506059df0256c7e8e96f",
+      "ok": true
+    }
+  ],
+  "manifest": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-fix4/release-manifest.json",
+  "ok": true,
+  "root_wheel": {
+    "actual": "423a9cd8f533429d3f2a78284ccf0d5f058c5e590c169790be6e663c982fed63",
+    "expected": "423a9cd8f533429d3f2a78284ccf0d5f058c5e590c169790be6e663c982fed63",
+    "ok": true,
+    "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release-fix4/root-build/acp-0.3.0-py3-none-any.whl"
+  }
+}

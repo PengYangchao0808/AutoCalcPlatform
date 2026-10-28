@@ -1,0 +1,166 @@
+{
+  "artifacts": [],
+  "assertions": [
+    {
+      "detail": "acp task query --controller http://127.0.0.1:18768 --job 20261023_031453_001_singlepoint",
+      "name": "cli_query_row",
+      "status": "PASS"
+    },
+    {
+      "detail": "GET /api/v1/jobs/20261023_031453_001_singlepoint",
+      "name": "http_get_row",
+      "status": "PASS"
+    },
+    {
+      "detail": "mismatched=[]",
+      "name": "entry_identity_equal",
+      "status": "PASS"
+    },
+    {
+      "detail": "task_count_before=1 after=1",
+      "name": "three_entry_read_only",
+      "status": "PASS"
+    },
+    {
+      "detail": "c_driver_absent: C P1 Workbench UI/DSH is not delivered and this host has no Chromium/DSH driver, so the same task cannot be read from the Workbench surface. The CLI and HTTP rows are verified independently.",
+      "name": "workbench_row_not_verified",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "acp task query --controller <url> --job <task_id>",
+      "name": "legacy_acp_run_not_used",
+      "status": "PASS"
+    }
+  ],
+  "attempt": 1,
+  "candidate": {
+    "client_revision": null,
+    "harness_revision": "ddf1e40ee8381adc4ff1f97c811df2dacb11bdfa834a204762c5948a9e6c5d36",
+    "server_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a"
+  },
+  "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+  "command": [
+    "/ACPServer/acp2-development/venvs/b/bin/python",
+    "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py",
+    "--scenario",
+    "three-entry",
+    "--phase",
+    "main",
+    "--controller",
+    "http://127.0.0.1:18768",
+    "--fixture",
+    "reports/acp2_implementation/bb45a46/B/B10/three-entry-request.json",
+    "--out",
+    "reports/acp2_implementation/bb45a46/B/B10/three-entry",
+    "--timeout",
+    "300"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "live",
+  "exit_code": 2,
+  "extensions": {
+    "acceptance.operation_class": "submit",
+    "acceptance.target": "local",
+    "b10.attempt": 1,
+    "b10.cli_command": [
+      "/ACPServer/acp2-development/venvs/b/bin/python",
+      "-m",
+      "acp",
+      "task",
+      "query",
+      "--controller",
+      "http://127.0.0.1:18768",
+      "--job",
+      "20261023_031453_001_singlepoint"
+    ],
+    "b10.compare_keys": [
+      "job_id",
+      "attempt",
+      "release_id",
+      "plan_identity",
+      "manifest_sha256",
+      "result_digest",
+      "method",
+      "input_hash"
+    ],
+    "b10.entries": {
+      "cli": {
+        "attempt": 1,
+        "entry": "cli:acp task query --controller",
+        "input_hash": "sha256:d1b8bb253e5ac5364d01358c6d868c3692f4d29f9eb707fbc4e975916a03e1b9",
+        "job_id": "20261023_031453_001_singlepoint",
+        "manifest_sha256": "f13f4a9ed1cc5535cd6d0fe01b726d1c9fc08ee4cb14af50cf9fe1c6dc19adad",
+        "method": {
+          "levels": {
+            "single_point": {
+              "basis": "STO-3G",
+              "engine": "orca",
+              "functional": "HF"
+            }
+          }
+        },
+        "plan_identity": "v2:0cbae6ed2d2bd8daf42b262881b5fe04",
+        "release_id": "98e0695545d668e6",
+        "result_digest": "sha256:cc9bf55634f73ce5e0355c64c1587f189979de46eb62e213cfb40965f7e07f4f",
+        "status": "completed",
+        "submission_id": "sub_3006306693beb030"
+      },
+      "http": {
+        "attempt": 1,
+        "entry": "http:GET /api/v1/jobs/{id} + /files",
+        "input_hash": "sha256:d1b8bb253e5ac5364d01358c6d868c3692f4d29f9eb707fbc4e975916a03e1b9",
+        "job_id": "20261023_031453_001_singlepoint",
+        "manifest_sha256": "f13f4a9ed1cc5535cd6d0fe01b726d1c9fc08ee4cb14af50cf9fe1c6dc19adad",
+        "method": {
+          "levels": {
+            "single_point": {
+              "basis": "STO-3G",
+              "engine": "orca",
+              "functional": "HF"
+            }
+          }
+        },
+        "plan_identity": "v2:0cbae6ed2d2bd8daf42b262881b5fe04",
+        "release_id": "98e0695545d668e6",
+        "result_digest": "sha256:cc9bf55634f73ce5e0355c64c1587f189979de46eb62e213cfb40965f7e07f4f",
+        "status": "completed",
+        "submission_id": "sub_3006306693beb030"
+      },
+      "workbench": {
+        "entry": "c-workbench:RPH Workbench",
+        "reason": "c_driver_absent: C P1 Workbench UI/DSH is not delivered and this host has no Chromium/DSH driver, so the same task cannot be read from the Workbench surface. The CLI and HTTP rows are verified independently.",
+        "status": "NOT_VERIFIED"
+      }
+    },
+    "b10.gated_cli_surface": "acp task query --controller <url> --job <task_id>",
+    "b10.legacy_acp_run_used": false,
+    "b10.legacy_cli_distinction": "The equivalence gate uses the gated Controller query `acp task query --controller <url> --job <id>`; the legacy `acp run singlepoint` was never executed because it would create a second task instead of reading the submitted one.",
+    "b10.legacy_cli_surface": "acp run singlepoint (not used; would create a second task)",
+    "b10.mismatched": [],
+    "b10.reason": "three_entry_workbench_not_verified:c_driver_absent",
+    "b10.release_id": "98e0695545d668e6",
+    "b10.task_count_after": 1,
+    "b10.task_count_before": 1,
+    "b10.task_ref": "20261023_031453_001_singlepoint",
+    "b10.three_entry_fixture": "reports/acp2_implementation/bb45a46/B/B10/three-entry-request.json"
+  },
+  "finished_at": "2026-10-22T19:17:26Z",
+  "job_id": "20261023_031453_001_singlepoint",
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "B",
+  "phase": "main",
+  "reason": "three_entry_workbench_not_verified:c_driver_absent",
+  "release_id": "98e0695545d668e6",
+  "result": "NOT_VERIFIED",
+  "run_id": "20261022T191725Z-598020-1111d458",
+  "scenario": "three-entry",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T19:17:25Z",
+  "submission_id": null,
+  "usage": null
+}

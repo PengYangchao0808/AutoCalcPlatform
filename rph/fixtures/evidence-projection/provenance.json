@@ -1,0 +1,100 @@
+{
+  "files": {
+    "evidence-view-foreign-research.negative.json": {
+      "sha256": "cf83ab5dd12bfb3c5c540906e4db0e8d0cb7e49c73ff552326d9a6c1d57b905c",
+      "source": "docs/reference/next-change/acp2-contracts/runtime/samples/evidence-projection/evidence-view-foreign-research.negative.json"
+    },
+    "evidence-view-foreign-round.negative.json": {
+      "sha256": "4bec8c17d64437bad9b38f1826546bc1a57deb2a4924b4e5ac7ae066297e2fee",
+      "source": "docs/reference/next-change/acp2-contracts/runtime/samples/evidence-projection/evidence-view-foreign-round.negative.json"
+    },
+    "evidence-view.positive.json": {
+      "sha256": "3a47b3edfc897919c9e3e30875384ed0ee687d501d82a9500039752dfb947a0f",
+      "source": "docs/reference/next-change/acp2-contracts/runtime/samples/evidence-projection/evidence-view.positive.json"
+    },
+    "platform-attribution-foreign-project.negative.json": {
+      "sha256": "5b012a812dd7fcc9fa410e90c6de964b7b7d6ccfe9c2ef8ab81d8822118cda9a",
+      "source": "docs/reference/next-change/acp2-contracts/runtime/samples/evidence-projection/platform-attribution-foreign-project.negative.json"
+    },
+    "platform-attribution.positive.json": {
+      "sha256": "d259bfea3dacfc6f0ad7e1951d64f250dc6346d4da514902bf3e367eb21f33ab",
+      "source": "docs/reference/next-change/acp2-contracts/runtime/samples/evidence-projection/platform-attribution.positive.json"
+    },
+    "research-decision-accept.positive.json": {
+      "sha256": "794b36f0e9d9c5d74e0f6ab1f6532d1293fb2675ec0ddfcaadabba455aac2f46",
+      "source": "docs/reference/next-change/acp2-contracts/runtime/samples/evidence-projection/research-decision-accept.positive.json"
+    },
+    "research-decision-blocking-missing-check.negative.json": {
+      "sha256": "5de877a567300374936dfec7bb59c6ca87cad08b5a530facad9fc4dbfd20eda8",
+      "source": "docs/reference/next-change/acp2-contracts/runtime/samples/evidence-projection/research-decision-blocking-missing-check.negative.json"
+    },
+    "research-decision-foreign-project.negative.json": {
+      "sha256": "07f765b9a4f22db9d857dd9ed00000d45ffbf3b25e72955b20bcbd5949e2e01e",
+      "source": "docs/reference/next-change/acp2-contracts/runtime/samples/evidence-projection/research-decision-foreign-project.negative.json"
+    },
+    "research-decision-foreign-release.negative.json": {
+      "sha256": "53d760a4b32b2a69890c6459f68b578789a65127f6f2ddc12973fff9c0d283dc",
+      "source": "docs/reference/next-change/acp2-contracts/runtime/samples/evidence-projection/research-decision-foreign-release.negative.json"
+    },
+    "research-decision-foreign-research.negative.json": {
+      "sha256": "a2edfd37d2ef5e24ebce13843235c953760b8261236da9f2b881ee346e80b27c",
+      "source": "docs/reference/next-change/acp2-contracts/runtime/samples/evidence-projection/research-decision-foreign-research.negative.json"
+    },
+    "research-decision-foreign-round.negative.json": {
+      "sha256": "cb0065674755aa9a76a195cf5902bfb08dcb4684277bcbe083219be592599cd1",
+      "source": "docs/reference/next-change/acp2-contracts/runtime/samples/evidence-projection/research-decision-foreign-round.negative.json"
+    },
+    "research-decision-incomplete-accept.negative.json": {
+      "sha256": "7dba88c8fe68a0610cb096c3a15874cc8e11772daa1f50bdb2e2fccff1061909",
+      "source": "docs/reference/next-change/acp2-contracts/runtime/samples/evidence-projection/research-decision-incomplete-accept.negative.json"
+    },
+    "research-decision-inconclusive-accept.negative.json": {
+      "sha256": "3d6ce766c3125a5b1f907eaf779b6182d77bcab7a86deb7e48aef46fbe540cd2",
+      "source": "docs/reference/next-change/acp2-contracts/runtime/samples/evidence-projection/research-decision-inconclusive-accept.negative.json"
+    },
+    "research-decision-model-text.negative.json": {
+      "sha256": "142d2d3d8244e5cdf441c8b5be035e5234837f2e9086e1a3228fc8b8562326fd",
+      "source": "docs/reference/next-change/acp2-contracts/runtime/samples/evidence-projection/research-decision-model-text.negative.json"
+    },
+    "research-decision-no-evidence.negative.json": {
+      "sha256": "bfc802725998192c655b7a245e439cd2810a6b6624df6eec44fed88dc2479fb6",
+      "source": "docs/reference/next-change/acp2-contracts/runtime/samples/evidence-projection/research-decision-no-evidence.negative.json"
+    },
+    "research-decision-not-evaluated-accept.negative.json": {
+      "sha256": "1e0d69134791091a88477dfb79dd46d3e22ab6cab71e834ec1f76b4d8b7297e8",
+      "source": "docs/reference/next-change/acp2-contracts/runtime/samples/evidence-projection/research-decision-not-evaluated-accept.negative.json"
+    },
+    "research-decision-partial-accept.negative.json": {
+      "sha256": "003c4d13ac0bf716dee7fd8fee65788cc0849167ab19a14b0ec4424de52399aa",
+      "source": "docs/reference/next-change/acp2-contracts/runtime/samples/evidence-projection/research-decision-partial-accept.negative.json"
+    },
+    "research-decision-refuted-accept.negative.json": {
+      "sha256": "97769074e5743a1c41782407416eb6f4e935bfaef1f13f341e8bb51d1e32e259",
+      "source": "docs/reference/next-change/acp2-contracts/runtime/samples/evidence-projection/research-decision-refuted-accept.negative.json"
+    },
+    "research-decision-revise-inconclusive.positive.json": {
+      "sha256": "4d9c0ea98d495c795b90701c04291095d42b927ce06f5f41fe8dc0c1fa94f252",
+      "source": "docs/reference/next-change/acp2-contracts/runtime/samples/evidence-projection/research-decision-revise-inconclusive.positive.json"
+    },
+    "task-ref-flat-release.positive.json": {
+      "sha256": "313fdbd47a80fe13cace4f7cac79557752f8c9a2562e08928af035538b3eaa53",
+      "source": "docs/reference/next-change/acp2-contracts/runtime/samples/evidence-projection/task-ref-flat-release.positive.json"
+    },
+    "task-ref-missing-attempt.negative.json": {
+      "sha256": "b7bbfd2f9e24b2753a90cb33f1da2aba0461982dc429c5a0eb4cca584dfce35a",
+      "source": "docs/reference/next-change/acp2-contracts/runtime/samples/evidence-projection/task-ref-missing-attempt.negative.json"
+    },
+    "task-ref-missing-release.negative.json": {
+      "sha256": "6ed8a52b615abb706a0527833e1ff7909a15c936e171d23d867f493c83b54a2b",
+      "source": "docs/reference/next-change/acp2-contracts/runtime/samples/evidence-projection/task-ref-missing-release.negative.json"
+    },
+    "task-ref.positive.json": {
+      "sha256": "73da3054c5398c463d0d8aa667d66d2a26893567809fab8f44e5fdd8ac09b3d7",
+      "source": "docs/reference/next-change/acp2-contracts/runtime/samples/evidence-projection/task-ref.positive.json"
+    }
+  },
+  "producer": "docs/reference/next-change/acp2-contracts/runtime/samples/evidence-projection",
+  "producer_revision": "working-tree:15c218a (M1-03, uncommitted sample set)",
+  "rule": "verbatim copies; tests/test_acp2_evidence_projection.py fails on any drift",
+  "schema": "rph.evidence-projection.fixtures.v1"
+}

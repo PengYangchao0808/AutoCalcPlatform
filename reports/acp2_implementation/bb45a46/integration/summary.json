@@ -1,0 +1,41 @@
+{
+  "candidate_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+  "candidate_revision_note": "The H0-H7 receipt set under receipts/ is frozen at the pre-fix5 code candidate and is immutable; release-fix5 was rebuilt from 6ec01ec and is referenced by release_candidate. The aggregate receipts were not rewritten to a SHA they never ran on.",
+  "contract_version": "1.3.0",
+  "fix5_runs": [
+    "reports/acp2_implementation/bb45a46/B/Bfix5/summary.json",
+    "reports/acp2_implementation/bb45a46/B/Bfix5/installed-manifest.json",
+    "reports/acp2_implementation/bb45a46/B/Bfix5/three-entry-compare.json",
+    "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/summary.json",
+    "reports/acp2_implementation/bb45a46/B/Bfix5/package-install/package-install-main-20261023T171127Z-1836513-f8e08a89.json",
+    "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/job-terminal.json",
+    "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/local-artifacts/execution_receipt.json",
+    "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/remote/facts.json",
+    "reports/acp2_implementation/bb45a46/B/Bfix5/bare-root/singlepoint.log",
+    "reports/acp2_implementation/bb45a46/B/Bfix5/clean-guards-fix5.txt"
+  ],
+  "generated_at": "2026-10-23T18:40:00Z",
+  "release_candidate": {
+    "artifact": "reports/acp2_implementation/bb45a46/integration/release-candidate.json",
+    "label": "release-fix5",
+    "release_dir": "reports/acp2_implementation/bb45a46/B/B25/release-fix5",
+    "release_manifest": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/release-manifest.json",
+    "release_manifest_sha256": "380b4915cf44cbd94e279e7e0ee6dfb1e27891da654dae09e0c7990335740a58",
+    "source_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
+    "source_tree": "e2b23771a47e7553738ef902cc4c1b62528fe508",
+    "version": "0.3.0"
+  },
+  "refresh_note": "receipts/h1-r2.json re-registers the immutable H1 receipt's five artifacts at their current sha256 after acp2-final-acceptance-remediation m1 legitimately refreshed the acp2-contracts manifest; receipts/h1.json remains byte-identical and no receipt result changed.",
+  "runs": [
+    "receipts/h0.json",
+    "receipts/h1-r2.json",
+    "receipts/h2.json",
+    "receipts/h3.json",
+    "receipts/h4.json",
+    "receipts/h5.json",
+    "receipts/h6.json",
+    "receipts/h7.json"
+  ],
+  "schema": "acp2.acceptance.summary.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema"
+}

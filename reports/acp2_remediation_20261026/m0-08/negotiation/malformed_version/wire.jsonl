@@ -1,0 +1,3 @@
+{"direction": "send", "message": {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": 20250618, "capabilities": {}, "clientInfo": {"name": "acp2-c-negotiation-probe", "version": "1"}}}}
+{"direction": "receive_raw", "message": "{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":-32602,\"message\":\"protocolVersion must be a non-empty version string\",\"data\":{\"code\":\"invalid_protocol_version\",\"received_type\":\"int\"}}}\n"}
+{"direction": "receive", "message": {"jsonrpc": "2.0", "id": 1, "error": {"code": -32602, "message": "protocolVersion must be a non-empty version string", "data": {"code": "invalid_protocol_version", "received_type": "int"}}}}

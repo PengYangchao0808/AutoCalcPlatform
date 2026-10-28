@@ -1,0 +1,124 @@
+{
+ "index_schema": "hn03_block_index",
+ "index_schema_version": 1,
+ "delivery_version": "hn-03-bounded-delivery-v1",
+ "bounded_schema_version": 1,
+ "product_schema_version": 1,
+ "delivery_state": "ok",
+ "product_kind": "curve_scatter",
+ "manifest": {
+  "file": "manifest.json",
+  "bytes": 14854,
+  "sha256": "sha256:cc98c56f84ae4a7eb12d15c7906260b292fe23abe056bcadcb8fc18d3dbf33b5"
+ },
+ "bounded_identity": {
+  "product_kind": "curve_scatter",
+  "schema_version": 1,
+  "generator": "cccp.analysis.bounded.chunking.chunk_curve_product",
+  "input_digest": "sha256:b194fe9da09127ece15108bf96f505ac831e5c347697bfdb1f694daa7d29408c",
+  "algorithm": "chunk",
+  "algorithm_version": "1",
+  "params_digest": "sha256:b6ae6f1805a1f716bee7d7b017839b8bac91cb29fb991f169cbc8225bb5d2262"
+ },
+ "base_identity": {
+  "product_kind": "curve_scatter",
+  "schema_version": 1,
+  "generator": "cccp.calculation.products.curve.build_curve_scatter_product",
+  "input_digest": "sha256:b194fe9da09127ece15108bf96f505ac831e5c347697bfdb1f694daa7d29408c",
+  "algorithm": "curve_scatter",
+  "algorithm_version": "1",
+  "params_digest": ""
+ },
+ "spec": {
+  "method": "chunk",
+  "algorithm_version": "1",
+  "resolution": 16,
+  "start": 0,
+  "end": 40,
+  "params": [
+   {
+    "name": "series_id",
+    "value": "curve_scatter:series:scan_energy"
+   },
+   {
+    "name": "product_kind",
+    "value": "curve_scatter"
+   }
+  ]
+ },
+ "display_subsampled": false,
+ "note": "",
+ "block_count": 3,
+ "max_block_size": 16,
+ "total_items": 40,
+ "covered_range": [
+  0,
+  40
+ ],
+ "blocks": [
+  {
+   "block_index": 0,
+   "start": 0,
+   "end": 16,
+   "resolution": 16,
+   "item_count": 16,
+   "file": "block_000000.json",
+   "bytes": 4583,
+   "sha256": "sha256:921f14746f5d5c3696312d27d13a9e3b0ee2be791b2327b49b827c9446a67e65",
+   "product_schema_version": 1,
+   "state": "available",
+   "complete": true,
+   "identity": {
+    "generator": "cccp.calculation.products.curve.build_curve_scatter_product",
+    "algorithm": "chunk",
+    "algorithm_version": "1",
+    "params_digest": "sha256:3314261c1825591884fb92d8371d2cef5d06fb7819fedd07634539d61898192a",
+    "input_digest": "sha256:b194fe9da09127ece15108bf96f505ac831e5c347697bfdb1f694daa7d29408c"
+   }
+  },
+  {
+   "block_index": 1,
+   "start": 16,
+   "end": 32,
+   "resolution": 16,
+   "item_count": 16,
+   "file": "block_000001.json",
+   "bytes": 4611,
+   "sha256": "sha256:6b716c15a2c0a075226ede29559baa9a7af07d0f97be9831fa39e6f9e57dee52",
+   "product_schema_version": 1,
+   "state": "available",
+   "complete": true,
+   "identity": {
+    "generator": "cccp.calculation.products.curve.build_curve_scatter_product",
+    "algorithm": "chunk",
+    "algorithm_version": "1",
+    "params_digest": "sha256:4cc705780318d0306f16211f4c495ad47dad01822b6be86522b315b42b5787c6",
+    "input_digest": "sha256:b194fe9da09127ece15108bf96f505ac831e5c347697bfdb1f694daa7d29408c"
+   }
+  },
+  {
+   "block_index": 2,
+   "start": 32,
+   "end": 40,
+   "resolution": 16,
+   "item_count": 8,
+   "file": "block_000002.json",
+   "bytes": 2749,
+   "sha256": "sha256:a986a14e9012a7c2e2c18c23b29cf16c0058250fecdff1f21f6d12ed2b3cc52f",
+   "product_schema_version": 1,
+   "state": "available",
+   "complete": true,
+   "identity": {
+    "generator": "cccp.calculation.products.curve.build_curve_scatter_product",
+    "algorithm": "chunk",
+    "algorithm_version": "1",
+    "params_digest": "sha256:2e9335065b9fe94b4cfa263417f5ce3afc9ec2b6f71403a8dadab626e6309535",
+    "input_digest": "sha256:b194fe9da09127ece15108bf96f505ac831e5c347697bfdb1f694daa7d29408c"
+   }
+  }
+ ],
+ "expected_consumption": {
+  "operation": "reconstruct",
+  "result_digest": "sha256:d23ae446ad2221d94b2f888223f453cc07c1a1b0634378dc4bcb7b3936dbb8c8"
+ }
+}

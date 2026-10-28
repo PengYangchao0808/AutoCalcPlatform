@@ -1,0 +1,6 @@
+# Negative self-check: one broken $ref must make the contracts scenario FAIL
+rc=1
+FAIL: /tmp/tmp.JtkP5saDmH/contracts/x-run-broken/main
+--- assertion detail ---
+result= FAIL reason= contracts_assertion_failed
+FAIL contracts.refs_resolve 40 ref(s), errors=["broken-ref.schema.json:#/$defs/does-not-exist:'does-not-exist'"]

@@ -1,0 +1,97 @@
+{
+  "schema": "acp2.experience.product-evidence.v1",
+  "scenario": "baseline",
+  "phase": "main",
+  "run_id": "20261022T123706Z-c04b",
+  "task": "T-04a / C04-b",
+  "evidence_kind": "aggregate",
+  "result": "PASS",
+  "scope": "B00/B02a committed-artifact adoption and T-04 environment/route re-verification; product c_accept PASS is NOT claimed",
+  "started_on": "2026-10-22T12:38:19Z",
+  "finished_on": "2026-10-22T12:38:19Z",
+  "candidate": {
+    "candidate_id": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
+    "client_revision": "75a8f08a06b5528b310b26bd309940e99d9cd9bd",
+    "harness_revision": null,
+    "materialized_commit": "a0185b15c546fbd07919326d581fab13e05000fa",
+    "c_baseline_commit": "75a8f08a06b5528b310b26bd309940e99d9cd9bd",
+    "tree": "1a1b4b23c554acaf2818db1dcee336b69494a887",
+    "evidence_root": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46",
+    "evidence_root_source": "B00 runtime/baseline-lock.json (commit ac43c16), project-relative resolved via ACP2_PROJECT_ROOT"
+  },
+  "adoption": {
+    "b00_commit": "ac43c16",
+    "b02a_commit": "0dee16f",
+    "b00_readiness": "verified",
+    "b02a_readiness": "integration_ready",
+    "evidence_binding": "b00_project_root",
+    "in_flight_not_consumed": [
+      "docs/reference/next-change/acp2-contracts/runtime/dependencies.json",
+      "docs/reference/next-change/acp2-contracts/runtime/samples/**"
+    ]
+  },
+  "checks": [
+    {
+      "name": "tree_equality",
+      "result": "PASS",
+      "detail": "C 75a8f08 tree == B a0185b15 tree == 1a1b4b23c554acaf2818db1dcee336b69494a887"
+    },
+    {
+      "name": "env_adoption",
+      "result": "PASS",
+      "detail": "ACP2_EVIDENCE absolute, equals ACP2_PROJECT_ROOT/reports/acp2_implementation/bb45a46 and B02a value"
+    },
+    {
+      "name": "route_matrix",
+      "result": "PASS",
+      "cases": 12
+    },
+    {
+      "name": "c_accept_real",
+      "result": "NOT_VERIFIED",
+      "exit": 2,
+      "reason": "harness_not_delivered"
+    },
+    {
+      "name": "negatives",
+      "result": "PASS",
+      "cases": 5,
+      "detail": "old provisional root, missing evidence_root, wrong project root, wrong evidence_roots.C all exit 2; absolute lock resolves"
+    }
+  ],
+  "not_verified": [
+    "NOT_VERIFIED(harness_not_delivered): scripts/acceptance/acp2_experience.py is C T-06/T-07 scope",
+    "NOT_VERIFIED(chromium_not_installed): Chromium install/launch is C T-08 scope"
+  ],
+  "artifacts": {
+    "argv.json": {
+      "sha256": "504f19451d451c3f97e83df6273ed40b7409e50e025ee626dc1b32743971caf1",
+      "size": 4858
+    },
+    "cwd.txt": {
+      "sha256": "8c7c3f73929045a850559e20696c55a8c9327a5d3bfe03313aa5a91b4ed192af",
+      "size": 28
+    },
+    "tree-equality.txt": {
+      "sha256": "99eecd434c177eb9940dc52d72817716ccce814e0c5341a7c7204550c19074da",
+      "size": 266
+    },
+    "env.txt": {
+      "sha256": "6338083290e39d80373ed7e91366b707494783a105b403b0740a8a513fe9e79f",
+      "size": 421
+    },
+    "matrix.txt": {
+      "sha256": "bbfae6b8961cc46d8ed65d1e4f50238f13da0157928b4804347e1b128137d8f7",
+      "size": 1678
+    },
+    "negatives.txt": {
+      "sha256": "d8db3c055050e4a1263c7d54dc552cdfbaf53c0ff233ff571ba069551aee8c51",
+      "size": 1241
+    },
+    "real-caccept.txt": {
+      "sha256": "a04e630068df3cca6941ea3d895d528081327d063160b84f8767b621e31bf82b",
+      "size": 183
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "contains_repo_path": false,
+  "file_count": 529,
+  "keys_are_absolute": false,
+  "modules": {
+    "acp": "/tmp/opencode/b26a-fix4/evidence/package-install-fix4/venvs/web/lib64/python3.11/site-packages/acp/__init__.py",
+    "acp_services": "/tmp/opencode/b26a-fix4/evidence/package-install-fix4/venvs/web/lib64/python3.11/site-packages/acp_services/__init__.py",
+    "cccp": "/tmp/opencode/b26a-fix4/evidence/package-install-fix4/venvs/web/lib64/python3.11/site-packages/cccp/__init__.py"
+  },
+  "prefixes": [
+    "acp",
+    "acp_services",
+    "cccp"
+  ],
+  "release_digest": "b59ec6b6b502ed70104baacb17b41873769813def34224840017792e438900b3",
+  "release_id": "2c7ffd56045b5bd5",
+  "runner_root": "/tmp/opencode/b26a-fix4/evidence/package-install-fix4/venvs/web/lib/python3.11"
+}

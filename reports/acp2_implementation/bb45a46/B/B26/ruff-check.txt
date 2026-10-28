@@ -1,0 +1,3 @@
+command: /usr/bin/python3.11 -m ruff check tests/test_acp2_runtime_h7_index.py
+All checks passed!
+exit=0

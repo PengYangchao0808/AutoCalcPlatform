@@ -1,0 +1,3 @@
+code_candidate_sha ab492cc8be9e46125fa2d2fae69a3ecaac64a548
+report_sha256 275e675dd7a27224a9d6f0a147fb5b53d62037eae35f7bf434a880f9d6e11ad5
+report_path reports/architecture_remediation_20261020/REPORT.md

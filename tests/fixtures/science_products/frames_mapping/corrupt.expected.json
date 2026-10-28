@@ -1,0 +1,9 @@
+{
+  "view_type": "scan",
+  "node_type": "frame",
+  "error": "ProductSchemaError",
+  "stage": "product_from_dict",
+  "message": "frame_index must be an integer, got str",
+  "nodes": [],
+  "annotations": []
+}

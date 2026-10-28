@@ -1,0 +1,9 @@
+{
+  "controller_started_by_c": false,
+  "leftover_adapter_processes": [],
+  "probe_server_pid": 540513,
+  "probe_server_pid_alive": false,
+  "production_8765_touched": false,
+  "schema": "acp2.c.mcp-live.cleanup.v1",
+  "tasks_submitted": 0
+}

@@ -1,0 +1,8 @@
+{
+  "api_key_revocation": "NOT_VERIFIED (B15 owns API-key revocation)",
+  "cross_attempt": "PASS via tests/test_acp2_runtime_artifact.py::test_cross_attempt_read_never_serves_newer_bytes",
+  "missing_remote_cache": "PASS via tests/test_acp2_runtime_artifact.py::test_missing_remote_cache_is_named_and_never_fetches",
+  "old_response_after_switch": "PASS via tests/test_acp2_runtime_artifact.py::test_old_response_after_switching_tasks_is_refused",
+  "revoked_permission": "PASS via tests/test_acp2_runtime_artifact.py::test_project_scope_denial_refuses_prepare_read_analyze (project-scope denial); API-key revocation is B15/NOT_VERIFIED",
+  "test_log": "artifact/pytest.txt"
+}

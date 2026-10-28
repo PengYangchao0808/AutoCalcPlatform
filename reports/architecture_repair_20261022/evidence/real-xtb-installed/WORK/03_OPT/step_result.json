@@ -1,0 +1,56 @@
+{
+  "artifacts": [
+    {
+      "path": "WORK/03_OPT/xtbopt.xyz",
+      "sha256": "dce26935329dde6e5443f01464524c18830fb39c6b94290f57ffe3068044584a",
+      "source": "xtb",
+      "type": "output"
+    },
+    {
+      "path": "WORK/03_OPT/xtb.log",
+      "sha256": "a808ac71c9f04153f327e6fa3b23327c7dab13e8ce9358dba13f8e5d97c02ea8",
+      "source": "xtb",
+      "type": "log"
+    }
+  ],
+  "attempt": null,
+  "code_release": "0.2.0",
+  "config_digest": "sha256:daa95b6b8c97fc1cfc6b88c88a315f975c807a0c8a6863cff50d96961fddecd9",
+  "coords": [
+    [
+      0.0,
+      0.0,
+      -0.01848467372883
+    ],
+    [
+      0.0,
+      -0.0,
+      0.75848467372883
+    ]
+  ],
+  "dependency_artifacts": [],
+  "energy": -0.982686139534,
+  "errors": [],
+  "frequencies": [],
+  "index": 0,
+  "job_id": null,
+  "kind": "optimize",
+  "metadata": {
+    "optimization_status": "converged"
+  },
+  "provenance": {
+    "backend": "xtb",
+    "input_signature": "/tmp/acp-repair-real-xtb/hydrogen.xyz",
+    "method": "",
+    "profile": "",
+    "version": "unknown"
+  },
+  "schema_version": 1,
+  "status": "completed",
+  "step_id": "step_0_optimize",
+  "step_identity": "v2:2e4b8e36c809fd2ad61164f3385abfe0",
+  "symbols": [
+    "H",
+    "H"
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "view_type": "irc",
+  "node_type": "irc_point",
+  "nodes": [
+    {
+      "id": "structure_trajectory:frame:0",
+      "label": "Frame 1",
+      "type": "irc_point",
+      "frame_index": 0,
+      "x": null,
+      "energy": null,
+      "status": "unknown",
+      "geometry_ref": "",
+      "metadata": {
+        "topology_source": "legacy_v0",
+        "coordinate_units": "angstrom"
+      }
+    },
+    {
+      "id": "structure_trajectory:frame:1",
+      "label": "Frame 2",
+      "type": "irc_point",
+      "frame_index": 1,
+      "x": null,
+      "energy": null,
+      "status": "unknown",
+      "geometry_ref": "",
+      "metadata": {
+        "topology_source": "legacy_v0",
+        "coordinate_units": "angstrom"
+      }
+    }
+  ],
+  "annotations": [],
+  "skipped_frames": [],
+  "unavailable": null,
+  "migrations": [
+    "v0->v1: atom_uid derived as element:rank (per-element source order)",
+    "v0->v1: coordinate_units defaulted to angstrom (documented trajectory convention)",
+    "v0->v1: topology_source set to legacy_v0"
+  ]
+}

@@ -1,0 +1,132 @@
+{
+  "approval_gate": {
+    "hint_present": true,
+    "hint_text": "\u63d0\u4ea4\u524d\u9700\u8981\u5df2\u6279\u51c6\u7684\u8ba1\u5212",
+    "module_refusal": {
+      "code": "approval_required",
+      "message": "approval_required: an approved record is required to submit",
+      "ok": true
+    },
+    "submit_disabled": true
+  },
+  "base_url": "http://127.0.0.1:60557",
+  "browser": "chromium/153.0.8010.12",
+  "console_error_count": 0,
+  "environment": {
+    "mode": "reused",
+    "python": "/ACPServer/acp2-runs/remediation/m4-05/environment/venv/bin/python"
+  },
+  "layout": {
+    "after_form": {
+      "height": 421.25,
+      "width": 224,
+      "x": 1201,
+      "y": 523.75
+    },
+    "before": {
+      "height": 1,
+      "width": 224,
+      "x": 1201,
+      "y": 3255.3125
+    },
+    "collapsed": [
+      "science_question",
+      "scientific_evidence",
+      "research_approval",
+      "info"
+    ],
+    "failed": []
+  },
+  "numeric_edit": {
+    "refusal": {
+      "code": "ui_value_type",
+      "text": "\u503c\u7684\u7c7b\u578b\u4e0d\u7b26\u5408\u7ea6\u675f"
+    },
+    "stored": "2",
+    "stored_type": "string"
+  },
+  "page_error_count": 0,
+  "project_id": "adc02a9b-736c-47f7-9e15-9dc1d18c4608",
+  "rendered": {
+    "fields": [
+      {
+        "binding": "task.charge",
+        "id": "capability-form-field-charge"
+      },
+      {
+        "binding": "task.multiplicity",
+        "id": "capability-form-field-multiplicity"
+      },
+      {
+        "binding": "task.resources.nproc",
+        "id": "capability-form-field-nproc"
+      },
+      {
+        "binding": "task.structure.source",
+        "id": "capability-form-field-source"
+      }
+    ],
+    "hint_present": true,
+    "hint_text": "\u63d0\u4ea4\u524d\u9700\u8981\u5df2\u6279\u51c6\u7684\u8ba1\u5212",
+    "options": [
+      {
+        "text": "electronic.energy",
+        "value": "electronic.energy"
+      },
+      {
+        "text": "geometry.optimize",
+        "value": "geometry.optimize"
+      },
+      {
+        "text": "vibration.analyze",
+        "value": "vibration.analyze"
+      },
+      {
+        "text": "vibration.compute \u2014 \u4e0d\u53ef\u7528",
+        "value": "vibration.compute"
+      },
+      {
+        "text": "acp2_external_native_singlepoint",
+        "value": "acp2_external_native_singlepoint"
+      }
+    ],
+    "selected": "acp2_external_native_singlepoint",
+    "submit_disabled": true,
+    "text": "\u80fd\u529belectronic.energygeometry.optimizevibration.analyzevibration.compute \u2014 \u4e0d\u53ef\u7528acp2_external_native_singlepointNative single-point record validatorThird-party (fixture) form shipped inside the installed distribution as cccp_ui_form.json. The platform validates it against acp2.ui-subset.v1 and serves it through discovery; the Workbench renders it with no frontend source change.ChargeMultiplicityProcessesNative record text *Inline structure text the validator consumes.\u9884\u68c0\u63d0\u4ea4\u63d0\u4ea4\u524d\u9700\u8981\u5df2\u6279\u51c6\u7684\u8ba1\u5212",
+    "title": "Native single-point record validator"
+  },
+  "response_statuses": [
+    200,
+    404
+  ],
+  "scenario": "schema-form-live",
+  "view_model": {
+    "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+    "fields": [
+      "task.charge=charge",
+      "task.multiplicity=multiplicity",
+      "task.resources.nproc=resources.nproc",
+      "task.structure.source=structure.source"
+    ],
+    "form_digest": "sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0",
+    "human_edits": [
+      {
+        "edited_at": "2026-10-28T00:05:47.840Z",
+        "editor_ref": "workbench-local",
+        "field_path": "task.structure.source",
+        "note": "capability=acp2_external_native_singlepoint; task_request=structure.source; descriptor_digest=sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780; form_digest=sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0"
+      },
+      {
+        "edited_at": "2026-10-28T00:05:48.472Z",
+        "editor_ref": "workbench-local",
+        "field_path": "task.charge",
+        "note": "capability=acp2_external_native_singlepoint; task_request=charge; descriptor_digest=sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780; form_digest=sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0"
+      }
+    ],
+    "plan_digest": "sha256:d57b6986198d317597d3beaa96e0a8cbdbc4df603bf94b6498391542f2a3e101",
+    "preflight_fingerprint": "sha256:d57b6986198d317597d3beaa96e0a8cbdbc4df603bf94b6498391542f2a3e101",
+    "subset_digest": "sha256:870d59473be275fa52785896cdb7e09d03aa15855a8a29dc69b90839fbf08b06",
+    "subset_version": "acp2.ui-subset.v1",
+    "workflow": "singlepoint"
+  }
+}

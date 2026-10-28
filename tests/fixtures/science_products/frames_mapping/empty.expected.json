@@ -1,0 +1,12 @@
+{
+  "view_type": "scan",
+  "node_type": "frame",
+  "nodes": [],
+  "annotations": [],
+  "skipped_frames": [],
+  "unavailable": {
+    "state": "unavailable",
+    "missing_reason": "source_missing"
+  },
+  "migrations": []
+}

@@ -17,6 +17,7 @@ lists drift" failure mode described in DevDoc §10.2.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -155,8 +156,18 @@ def test_cli_has_xtbmd_censo_energy_subcommand_and_all_flags() -> None:
             assert flag_true in option_strings, f"CLI missing {flag_true}"
         if flag_false:
             assert flag_false in option_strings, f"CLI missing {flag_false}"
-    for base in ("--input", "--batch-file", "--preset", "--no-opt", "--rank1-only",
-                 "--threshold", "--levels", "--solvent", "--ewin", "--resume"):
+    for base in (
+        "--input",
+        "--batch-file",
+        "--preset",
+        "--no-opt",
+        "--rank1-only",
+        "--threshold",
+        "--levels",
+        "--solvent",
+        "--ewin",
+        "--resume",
+    ):
         assert base in option_strings, f"CLI missing {base}"
 
     # Dispatch wiring: the handler must exist for the subcommand (cli.py
@@ -272,7 +283,10 @@ def test_catalog_opt_level_xtb_options_corrected_per_v14() -> None:
     from acp.catalog import FIELD_DEFINITIONS
 
     assert FIELD_DEFINITIONS["opt_level"]["per_backend"]["xtb"] == [
-        "crude", "normal", "tight", "verytight",
+        "crude",
+        "normal",
+        "tight",
+        "verytight",
     ]
 
 
@@ -329,8 +343,12 @@ def test_runner_boolean_string_coercion() -> None:
     from acp.scheduler.jobs import xtbmd_method_flags
 
     method = {
-        "md_shake": "false", "md_nvt": "false", "conv_check": "False",
-        "resume": "true", "rank1_only": "1", "keep_frames": "on",
+        "md_shake": "false",
+        "md_nvt": "false",
+        "conv_check": "False",
+        "resume": "true",
+        "rank1_only": "1",
+        "keep_frames": "on",
         "no_opt": "0",
     }
     flags = xtbmd_method_flags(method)
@@ -392,9 +410,7 @@ def test_runner_accepts_and_emits_xtbmd_flags() -> None:
     for key, flag in _XTBMD_FLAG_MAP.items():
         assert flag in joined, f"runner missing {flag} for {key}"
         if method.get(key) is not None:
-            assert str(method[key]) in cmd[cmd.index(flag) + 1], (
-                f"runner value mismatch for {flag}"
-            )
+            assert str(method[key]) in cmd[cmd.index(flag) + 1], f"runner value mismatch for {flag}"
     for key, flag_true, flag_false in _XTBMD_BOOL_FIELDS:
         if flag_false and method.get(key) is False:
             assert flag_false in joined, f"runner missing {flag_false} (method {key}=False)"
@@ -456,8 +472,15 @@ def test_stage_plan_provider_registered() -> None:
     spec = _job_spec({"preset": "censo-light"})
     names = [p.stage_name for p in get_stage_plan(spec)]
     assert names == [
-        "embed", "xtbmd", "batch_opt", "isostat", "energy_filter",
-        "censo", "dft_handoff", "finalize", "conformer_energy",
+        "embed",
+        "xtbmd",
+        "batch_opt",
+        "isostat",
+        "energy_filter",
+        "censo",
+        "dft_handoff",
+        "finalize",
+        "conformer_energy",
     ]
 
     spec_zero = _job_spec({"preset": "censo-zero", "no_opt": True})
@@ -487,10 +510,16 @@ def test_cli_threshold_merge_preserves_explicit_levels() -> None:
     from acp.cli import build_parser
 
     parser = build_parser()
-    args = parser.parse_args([
-        "run", _XTBMD_WORKFLOW_ID, "--input", "CCO",
-        "--levels", '{"refinement_threshold": 0.95}',
-    ])
+    args = parser.parse_args(
+        [
+            "run",
+            _XTBMD_WORKFLOW_ID,
+            "--input",
+            "CCO",
+            "--levels",
+            '{"refinement_threshold": 0.95}',
+        ]
+    )
     assert args.threshold == 0.99  # CLI default, not user-explicit
 
     # Reproduce the handler merge.
@@ -504,10 +533,18 @@ def test_cli_threshold_merge_preserves_explicit_levels() -> None:
     assert levels["refinement_threshold"] == 0.95
 
     # Explicit --threshold still wins over the levels value.
-    args2 = parser.parse_args([
-        "run", _XTBMD_WORKFLOW_ID, "--input", "CCO", "--threshold", "0.9",
-        "--levels", '{"refinement_threshold": 0.95}',
-    ])
+    args2 = parser.parse_args(
+        [
+            "run",
+            _XTBMD_WORKFLOW_ID,
+            "--input",
+            "CCO",
+            "--threshold",
+            "0.9",
+            "--levels",
+            '{"refinement_threshold": 0.95}',
+        ]
+    )
     levels2 = _parse_levels_json(args2.levels) or {}
     if args2.threshold != 0.99:
         levels2["refinement_threshold"] = args2.threshold
@@ -518,34 +555,40 @@ def test_cli_threshold_merge_preserves_explicit_levels() -> None:
 # 4. Frontend parity (E7 — five-way)
 # ---------------------------------------------------------------------------
 
-#: xtbmd submit/rank1 wiring moved out of the monolith HTML into the wizard
-#: module (feat/frontend-modular-slice); the frozen source pins read it there.
-_FRONTEND = REPO_ROOT / "frontend" / "js" / "workbench" / "features" / "wizard.js"
+#: The xtbmd submit/rank1 wiring was split out of the monolith
+#: (feat/frontend-modular-slice). Each compatibility guard pins its real
+#: owner file — a guard reading wizard.js would pass vacuously because the
+#: code it protects no longer lives there.
+_WIZARD_DIR = REPO_ROOT / "frontend" / "js" / "workbench" / "features" / "wizard"
+_SUBMIT_EDIT = _WIZARD_DIR / "submit-edit.js"
+_DRAFT_FORM = _WIZARD_DIR / "draft-form.js"
+_WIZARD_MONOLITH = REPO_ROOT / "frontend" / "js" / "workbench" / "features" / "wizard.js"
+
+#: Positive rank1 toggle guard owned by draft-form.js: both energy and
+#: xtbmd_censo_energy must render the rank1-only option card.
+_RANK1_TOGGLE_GUARD = (
+    'if (wizardState.workflow.id !== "energy" '
+    '&& wizardState.workflow.id !== "xtbmd_censo_energy") return;'
+)
 
 
-@pytest.mark.skipif(not _FRONTEND.exists(), reason="frontend not checked out")
-def test_frontend_submits_xtbmd_control_group_fields() -> None:
-    """The workbench submit branch must forward every control field.
+def _read_source(path: Path) -> str:
+    """Read a frontend owner file through one seam (negative-control hook)."""
+    return path.read_text(encoding="utf-8")
 
-    The frontend derives its top-level field set from the workflow
-    schema's control levels (xtb_md / xtb_opt / isostat), which reference
-    FIELD_DEFINITIONS — so the E7 frontend-derived set equals the catalog
-    control fields. We assert (a) the derivation mechanism exists in the
-    page, and (b) the schema's control-level fields — the actual derived
-    set the page will submit — equal the catalog control group.
-    """
+
+def _assert_control_group_forwarded(source: str) -> None:
+    """Assert the submit branch forwards the xtbmd control-group fields."""
     from acp.catalog import METHOD_SCHEMAS
 
-    html = _FRONTEND.read_text(encoding="utf-8")
-
     # The submit branch must be wired for the workflow.
-    assert "xtbmd_censo_energy" in html
-    assert "energyLike" in html
+    assert "xtbmd_censo_energy" in source, "submit-edit.js missing xtbmd_censo_energy branch"
+    assert "energyLike" in source, "submit-edit.js missing energyLike branch"
 
     # The control levels from which the field set is derived must exist
     # in both the page (level_ids) and the schema.
     for level_id in ("xtb_md", "xtb_opt", "isostat"):
-        assert f'"{level_id}"' in html, f"frontend missing control level {level_id}"
+        assert f'"{level_id}"' in source, f"frontend missing control level {level_id}"
 
     # The schema control levels must reference exactly the catalog
     # control group — the frontend reads these names at runtime, so this
@@ -561,19 +604,70 @@ def test_frontend_submits_xtbmd_control_group_fields() -> None:
     )
 
 
-@pytest.mark.skipif(not _FRONTEND.exists(), reason="frontend not checked out")
+def test_frontend_submits_xtbmd_control_group_fields() -> None:
+    """The workbench submit branch must forward every control field.
+
+    The frontend derives its top-level field set from the workflow
+    schema's control levels (xtb_md / xtb_opt / isostat), which reference
+    FIELD_DEFINITIONS — so the E7 frontend-derived set equals the catalog
+    control fields. We assert (a) the derivation mechanism exists in the
+    owner submit module, and (b) the schema's control-level fields — the
+    actual derived set the page will submit — equal the catalog control
+    group.
+    """
+    assert _SUBMIT_EDIT.is_file(), f"owner file missing: {_SUBMIT_EDIT}"
+    _assert_control_group_forwarded(_read_source(_SUBMIT_EDIT))
+
+
 def test_frontend_rank1_toggle_covers_xtbmd() -> None:
-    html = _FRONTEND.read_text(encoding="utf-8")
-    toggle_guard = 'wizardState.workflow.id !== "energy"'
-    xtbmd_guard = (
-        'wizardState.workflow.id !== "energy" '
-        '&& wizardState.workflow.id !== "xtbmd_censo_energy"'
+    """The rank1-only card must be offered for energy and xtbmd.
+
+    Positive guard: the owner draft-form.js carries the explicit combined
+    condition (and the xtbmd-specific description key). This replaces the
+    old negative-only match, which passed whenever the guard was absent.
+    """
+    assert _DRAFT_FORM.is_file(), f"owner file missing: {_DRAFT_FORM}"
+    source = _read_source(_DRAFT_FORM)
+    assert _RANK1_TOGGLE_GUARD in source, (
+        f"draft-form.js lacks the positive rank1 toggle guard {_RANK1_TOGGLE_GUARD!r}"
     )
-    assert toggle_guard not in html.replace(xtbmd_guard, "") or xtbmd_guard in html
+    assert "modal.rank1_only_desc_xtbmd" in source, (
+        "draft-form.js lacks the xtbmd-specific rank1 description key"
+    )
 
 
-@pytest.mark.skipif(not _FRONTEND.exists(), reason="frontend not checked out")
 def test_frontend_rank1_default_differs_per_workflow() -> None:
     """energy defaults rank1-only ON; xtbmd defaults to full ensemble."""
-    html = _FRONTEND.read_text(encoding="utf-8")
-    assert 'wizardState.method.rank1_only = (wizardState.workflow.id === "energy")' in html
+    assert _DRAFT_FORM.is_file(), f"owner file missing: {_DRAFT_FORM}"
+    source = _read_source(_DRAFT_FORM)
+    assert 'wizardState.method.rank1_only = (wizardState.workflow.id === "energy")' in source
+
+
+# ---------------------------------------------------------------------------
+# 4b. Negative controls — prove the owner pins are not vacuous
+# ---------------------------------------------------------------------------
+
+
+def _wizard_monolith_source() -> str:
+    assert _WIZARD_MONOLITH.is_file(), f"monolith missing: {_WIZARD_MONOLITH}"
+    return _read_source(_WIZARD_MONOLITH)
+
+
+def test_control_group_guard_rejects_wizard_only_source(monkeypatch) -> None:
+    """D12 non-vacuity: wizard.js no longer owns the submit branch.
+
+    If the read seam returns the old monolith content, the control-field
+    guard must fail instead of silently passing on unrelated source.
+    """
+    wizard_source = _wizard_monolith_source()
+    monkeypatch.setattr(sys.modules[__name__], "_read_source", lambda _path: wizard_source)
+    with pytest.raises(AssertionError):
+        test_frontend_submits_xtbmd_control_group_fields()
+
+
+def test_rank1_toggle_guard_rejects_wizard_only_source(monkeypatch) -> None:
+    """D12 non-vacuity: the positive toggle guard must come from draft-form.js."""
+    wizard_source = _wizard_monolith_source()
+    monkeypatch.setattr(sys.modules[__name__], "_read_source", lambda _path: wizard_source)
+    with pytest.raises(AssertionError):
+        test_frontend_rank1_toggle_covers_xtbmd()

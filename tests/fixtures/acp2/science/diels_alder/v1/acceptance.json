@@ -1,0 +1,158 @@
+{
+  "acceptance_criteria": [
+    {
+      "criterion_id": "DA-01-parse",
+      "current_state": "met_by_static_fixture",
+      "evidence": "validate.py",
+      "required_for": "static_fixture",
+      "statement": "All six fixture documents parse and the reaction/question payloads satisfy the frozen v1 contracts."
+    },
+    {
+      "criterion_id": "DA-02-unique-mapping",
+      "current_state": "met_by_static_fixture",
+      "evidence": "validate.py",
+      "required_for": "static_fixture",
+      "statement": "The atom mapping is unique, one-to-one and an exact inverse with full coverage of both sides."
+    },
+    {
+      "criterion_id": "DA-03-conservation",
+      "current_state": "met_by_static_fixture",
+      "evidence": "validate.py",
+      "required_for": "static_fixture",
+      "statement": "Elements and net charge are conserved across the reaction."
+    },
+    {
+      "criterion_id": "DA-04-no-selectivity-request",
+      "current_state": "met_by_static_fixture",
+      "evidence": "validate.py",
+      "required_for": "static_fixture",
+      "statement": "No endo/exo request or selectivity claim exists anywhere in the fixture."
+    },
+    {
+      "criterion_id": "DA-05-frozen-scope",
+      "current_state": "met_by_static_fixture",
+      "evidence": "fixture-manifest.json + validate.py",
+      "required_for": "static_fixture",
+      "statement": "Method, basis, solvent, temperature, standard state, candidate cap, budget and tolerances are frozen before any real run."
+    },
+    {
+      "criterion_id": "DA-06-run-spec",
+      "current_state": "met_by_static_fixture",
+      "evidence": "fixture-manifest.json + validate.py",
+      "required_for": "static_fixture",
+      "statement": "The run spec records science/export/aggregate deadlines, one shared started_at, queue-accounting policy and the in-flight stop/export-window rules."
+    },
+    {
+      "criterion_id": "DA-07-atom-order",
+      "current_state": "met_by_static_fixture",
+      "evidence": "validate.py",
+      "required_for": "static_fixture",
+      "statement": "Reactant and product XYZ atom order is byte-stable and matches the declared atom_ids order exactly."
+    },
+    {
+      "criterion_id": "DA-08-real-ts",
+      "current_state": "not_evaluated",
+      "evidence": "future real run",
+      "required_for": "H4",
+      "statement": "A real transition-state candidate has exactly one imaginary frequency with a mapped mode."
+    },
+    {
+      "criterion_id": "DA-09-real-irc",
+      "current_state": "not_evaluated",
+      "evidence": "future real run",
+      "required_for": "H4",
+      "statement": "Bidirectional IRC reaches both specified endpoints with stable atom order."
+    },
+    {
+      "criterion_id": "DA-10-real-energy",
+      "current_state": "not_evaluated",
+      "evidence": "future real run",
+      "required_for": "H4",
+      "statement": "Activation energy is computed under the frozen compatible conditions with explicit units."
+    }
+  ],
+  "claim_status": {
+    "activation_energy": {
+      "question_id": "question.diels_alder.activation_energy.v1",
+      "reason": "No energy or thermochemistry evidence exists yet.",
+      "status": "not_evaluated"
+    },
+    "endo_exo_selectivity": {
+      "reason": "Out of scope. The symmetric butadiene + ethene example cannot distinguish endo from exo, so no endo/exo request or claim is permitted.",
+      "requested": false,
+      "status": "not_evaluated",
+      "supported_by_fixture": false
+    },
+    "path_connectivity": {
+      "question_id": "question.diels_alder.path_connectivity.v1",
+      "reason": "No evidence exists yet; the static fixture cannot support the claim.",
+      "status": "not_evaluated"
+    }
+  },
+  "constructed": true,
+  "fixture_id": "diels_alder-butadiene-ethene-wb97xd4-def2tzvp",
+  "frozen_before_real_run": true,
+  "h4_closure": {
+    "closed": false,
+    "reason": "H4 requires a real valid TS (one imaginary frequency with mapped mode), bidirectional IRC with both endpoints, comparable energies and honest negative cases. None exists; the budget timing basis is also unmeasured.",
+    "status": "open"
+  },
+  "h4_rows": [
+    {
+      "claim_status": "not_evaluated",
+      "reason": "No TS calculation has been executed.",
+      "requirement": "A real valid TS: one imaginary mode and a mapped mode.",
+      "row_id": "H4-01-valid-ts",
+      "scenario_result": "NOT_VERIFIED",
+      "state": "open"
+    },
+    {
+      "claim_status": "not_evaluated",
+      "reason": "No IRC calculation has been executed.",
+      "requirement": "Bidirectional IRC with both specified endpoints reached.",
+      "row_id": "H4-02-bidirectional-irc",
+      "scenario_result": "NOT_VERIFIED",
+      "state": "open"
+    },
+    {
+      "claim_status": "not_evaluated",
+      "reason": "Connectivity evidence does not exist.",
+      "requirement": "Endpoint geometry and bond-topology mapping prove the declared candidate path connects the specified endpoints.",
+      "row_id": "H4-03-endpoint-connectivity",
+      "scenario_result": "NOT_VERIFIED",
+      "state": "open"
+    },
+    {
+      "claim_status": "not_evaluated",
+      "reason": "No energy or thermochemistry evidence exists.",
+      "requirement": "Activation energy is comparable under the frozen method/electronic-state/temperature/pressure/standard-state/reference-state and explicit unit.",
+      "row_id": "H4-04-comparable-energy",
+      "scenario_result": "NOT_VERIFIED",
+      "state": "open"
+    },
+    {
+      "claim_status": "not_evaluated",
+      "reason": "No real run exists to classify.",
+      "requirement": "Honest negative cases are recorded; an inconclusive or failed run never becomes a positive.",
+      "row_id": "H4-05-honest-negatives",
+      "scenario_result": "NOT_VERIFIED",
+      "state": "open"
+    }
+  ],
+  "limitations": [
+    "No real energy, transition-state geometry or reference value is present.",
+    "The symmetric example cannot support endo/exo selectivity.",
+    "The reaction contract records the net transformation; it does not assert a single elementary step.",
+    "Other paths and the complete mechanism are not excluded.",
+    "No experimental rate, global minimum or general accuracy is claimed.",
+    "The budget timing basis is unmeasured, so H4 stays open."
+  ],
+  "scenario_result": {
+    "artifacts": [],
+    "command": [],
+    "reason": "No real Diels-Alder transition-state, frequency, IRC or thermochemistry run has been executed. Static fixture construction is not a scenario result.",
+    "status": "NOT_VERIFIED"
+  },
+  "schema": "acp2.science.acceptance",
+  "schema_version": 1
+}

@@ -1,0 +1,73 @@
+{
+  "name": "acp2_external.native_singlepoint",
+  "distribution": "acp2-external-science-validator",
+  "version": "1.0.0",
+  "api": {
+    "api_version": 1,
+    "compatible_range": ">=1,<2",
+    "schema_version": 1
+  },
+  "capabilities": [
+    {
+      "name": "acp2_external_native_singlepoint",
+      "schema": "acp2.science.external.native_singlepoint",
+      "schema_version": 1,
+      "kind": "pure_analysis",
+      "implementation_id": "acp2_fixture.validator.native_singlepoint",
+      "delegates_to_task_kind": null,
+      "recipe_refs": [],
+      "validator_refs": [
+        {
+          "validator_id": "check.acp2_native_singlepoint_schema",
+          "validator_version": "1.0.0",
+          "required": true
+        }
+      ]
+    }
+  ],
+  "science_software": [],
+  "resources": {
+    "requires_subprocess": false,
+    "requires_network": false,
+    "min_memory_mb": null,
+    "cpu_cores": null
+  },
+  "license": "MIT",
+  "dependencies": [],
+  "error_semantics": {
+    "pre_launch_typed": true,
+    "partial_output_tolerant": false,
+    "never_overrides_builtin": true
+  },
+  "default_enabled": false,
+  "science_version_range": ">=1,<2",
+  "entry_point_group_version": 1,
+  "distribution_digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+  "fixture_evidence": [
+    {
+      "fixture_id": "acp2-external-native-singlepoint",
+      "digest": "sha256:fc06f818967f121a98b1bf7a3db30b2f43629a5633b742919ecb0b7a52fada98",
+      "verified": true,
+      "description": "Fixed water native single-point record and expected TaskResult fields; the platform owner verifies the fixture, this manifest only carries the claim."
+    }
+  ],
+  "trust_level": "untrusted",
+  "license_policy": {
+    "accepted_licenses": [
+      "AGPL-3.0-only",
+      "Apache-2.0",
+      "BSD-2-Clause",
+      "BSD-3-Clause",
+      "CC0-1.0",
+      "GPL-2.0-only",
+      "GPL-3.0-only",
+      "ISC",
+      "LGPL-2.1-only",
+      "LGPL-3.0-only",
+      "MIT",
+      "MPL-2.0",
+      "Unlicense"
+    ],
+    "unknown_policy": "reject"
+  }
+}

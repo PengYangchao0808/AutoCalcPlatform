@@ -1,0 +1,13 @@
+{
+  "error": {
+    "code": -32600,
+    "data": {
+      "code": "not_initialized"
+    },
+    "message": "MCP session is not initialized"
+  },
+  "error_code": "not_initialized",
+  "row": "tools_before_init",
+  "status": "PASS",
+  "tools_call_frames": 0
+}

@@ -1,0 +1,360 @@
+{
+  "absent_external_rows": [
+    {
+      "artifact": "A/A-20/result.json",
+      "owner": "A",
+      "row_id": "A-20",
+      "status": "NOT_VERIFIED(a20_absent)"
+    },
+    {
+      "artifact": "A/A-29/result.json or science/handoff-H7.json",
+      "owner": "A",
+      "row_id": "A-29",
+      "status": "NOT_VERIFIED(a29_absent)"
+    },
+    {
+      "artifact": "C proposal/approval record",
+      "owner": "C",
+      "row_id": "C24a",
+      "status": "NOT_VERIFIED(c24a_absent)"
+    },
+    {
+      "artifact": "C/experience-release-closeout/",
+      "owner": "C",
+      "row_id": "C35",
+      "status": "NOT_VERIFIED(c35_absent)"
+    }
+  ],
+  "c35": {
+    "b25a_input_rule": "C35 consumes B25a plus C33/C34 install facts; the B final index supplies release-fix5 digests only.",
+    "b26_mentioned_in_c35_section": false,
+    "c35_prerequisites": "C32-C34; A/B/C candidate SHA agreement; required scenario evidence (no B26 prerequisite in the C plan)",
+    "disposition": "c35_absent",
+    "expected_evidence_roots": [
+      "/ACPServer/acp2-development/C/experience-release-closeout/",
+      "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/experience-release-closeout/"
+    ],
+    "h7_effect": "H7 stays OPEN; B does not sign C's missing experience scope.",
+    "observed_evidence_present": false,
+    "plan_path": "docs/reference/next-change/ACP_2.0_Parallel_Plan_C_RPH_Workbench_20261020.md",
+    "plan_sha256": "7b7a10da9a102f84e843836911216c252f1c2137e946432dfd6123ad79eb42a5"
+  },
+  "candidate": {
+    "client_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
+    "evidence_revision": "0790a6e717add4cf31ae9a997a03cbc87408b8772e72e24aaa78894b160b321d",
+    "harness_revision": "dad07c7660ebda3d99c2d728f4da38b65d774e8729f9bdc66f5361c34f7e623b",
+    "landed_head": "493790709830eac4ce347b5fb81414050f7a1e21",
+    "landed_head_delta": {
+      "base_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
+      "command": "git diff --stat 6ec01ec96fa81b89bec8ff321c38e3db2dc154d2..493790709830eac4ce347b5fb81414050f7a1e21 -- src",
+      "deletions": 161,
+      "files": [
+        "src/acp/calculations/attempt_freeze.py",
+        "src/acp/calculations/attempt_publication.py",
+        "src/acp/calculations/batch/options.py",
+        "src/acp/scheduler/remote/runner.py",
+        "src/acp_services/runtime/attempt_freeze.py",
+        "src/acp_services/runtime/attempt_recovery.py",
+        "src/acp_services/runtime/cgroup.py",
+        "src/acp_services/runtime/isolation.py",
+        "src/acp_services/runtime/worker.py",
+        "src/acp_services/worker_bootstrap.py"
+      ],
+      "head_revision": "493790709830eac4ce347b5fb81414050f7a1e21",
+      "insertions": 823,
+      "note": "Ten src files, +823/-161. Nine are the B-fix-4/B-fix-5 runtime/cgroup/attempt-recovery changes landed before B-fix-7; batch/options.py is the B-fix-7 reviewed overlay (8 insertions/4 deletions). The release-fix5 artifacts remain built from 6ec01ec and their digests are unchanged."
+    },
+    "landed_head_tree": "f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a",
+    "release_manifest_sha256": "380b4915cf44cbd94e279e7e0ee6dfb1e27891da654dae09e0c7990335740a58",
+    "release_source_json_sha256": "4b674072c27e45f5f725898556dfb122c750c9e0d5acf4b5964278202ecc86c6",
+    "source_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2",
+    "source_tree": "e2b23771a47e7553738ef902cc4c1b62528fe508"
+  },
+  "generated_at": "2026-10-23T20:51:56Z",
+  "h7_status": "OPEN",
+  "open_rows": [
+    {
+      "evidence": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/release-manifest.json",
+      "owner": "B",
+      "reason": "Release-fix5 artifacts, source 6ec01ec and all eight digests verified on disk.",
+      "row_id": "H7-release-candidate",
+      "status": "PASS"
+    },
+    {
+      "evidence": [
+        "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/job-terminal.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/local-artifacts/execution_receipt.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/installed-manifest.json"
+      ],
+      "owner": "B",
+      "reason": "Real LSF normal singlepoint (bsub job 1765) terminal completed with release_id 1c79785a657c6614, submission_id sub_0fea781820a81666 and -1.116759307204 Ha; installed release sync 510 files with matching release_id. LSF/installed-sync gap closed.",
+      "row_id": "h3-lsf-normal-and-installed-sync",
+      "status": "PASS"
+    },
+    {
+      "expected_path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
+      "owner": "A",
+      "reason": "A has not published the H7 science sign-off; B does not sign A scope.",
+      "row_id": "A-29-science-signoff",
+      "status": "NOT_VERIFIED(a29_absent)"
+    },
+    {
+      "expected_path": "/ACPServer/acp2-development/C/experience-release-closeout/",
+      "owner": "C",
+      "reason": "C35 is absent. The C plan lists C32-C34, not B26, so the disposition is c35_absent (no C35_INPUT_CYCLE).",
+      "row_id": "C35-experience-closeout",
+      "status": "NOT_VERIFIED(c35_absent)"
+    },
+    {
+      "evidence": "reports/acp2_implementation/bb45a46/B/B26a/independent-operator.json",
+      "owner": "B",
+      "reason": "B26a is self-reproduction by the authoring session; no independent operator was available.",
+      "row_id": "independent-operator",
+      "status": "NOT_VERIFIED(independent_operator_absent)"
+    },
+    {
+      "evidence": "reports/acp2_implementation/bb45a46/B/B26a/reproduction-matrix.json",
+      "owner": "B",
+      "reason": "C33/C34 install evidence, DSH/browser/model scope and running-task disconnect recovery remain NOT_VERIFIED. LSF is no longer a gap (B-fix-5 job 1765).",
+      "row_id": "c33-c34-install-and-dsh",
+      "status": "NOT_VERIFIED(prerequisite_gap)"
+    }
+  ],
+  "production_deployed": false,
+  "release_candidate": "reports/acp2_implementation/bb45a46/integration/release-candidate.json",
+  "rows": [
+    {
+      "evidence": [
+        "reports/acp2_implementation/bb45a46/B/B00/manifest.json",
+        "reports/acp2_implementation/bb45a46/B/B00/head-sha.txt",
+        "reports/acp2_implementation/bb45a46/B/B02/summary.json",
+        "docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json"
+      ],
+      "gate_status": "CLOSED",
+      "handoff": "H0",
+      "notes": [
+        "H0 is a historical freeze; the final source candidate is independently recorded in h7-index.json."
+      ],
+      "owner": "B",
+      "reason": null,
+      "result": "PASS",
+      "reuse_mapping": [
+        {
+          "rationale": "H0 records the frozen historical baseline and ownership; later B-fix-4/B-fix-5 code does not rewrite those historical facts. The manifest on disk was re-read and re-validated by validate_acp2_contracts.py.",
+          "receipt": "reports/acp2_implementation/bb45a46/B/B00/manifest.json",
+          "receipt_sha256": "37d7614cc71bf31113bb187cb9c1a15afb769f48bdc057c33807232b749c77ef",
+          "unchanged": [
+            "historical debug baseline 096cdff and final_debug_candidate overlay sha256",
+            "A/B/C path ownership globs",
+            "contract manifest identity and baseline-lock rule"
+          ]
+        },
+        {
+          "rationale": "Environment identity is host-level and was not changed by B-fix-4/B-fix-5 (no dependency, config, or interpreter change).",
+          "receipt": "reports/acp2_implementation/bb45a46/B/B02/summary.json",
+          "receipt_sha256": "b5098d33928e357a6dcabf45283f6d72479ec866b569023298de24126738c394",
+          "unchanged": [
+            "isolated worktree and host environment",
+            "three-package import source at the P0 baseline"
+          ]
+        }
+      ],
+      "scope": "IN_SCOPE",
+      "signed_by": [
+        "B"
+      ],
+      "title": "Baseline, path ownership and contract manifest"
+    },
+    {
+      "evidence": [
+        "reports/acp2_implementation/bb45a46/B/B01/validate-samples.txt",
+        "reports/acp2_implementation/bb45a46/B/B03/validator-happy.txt",
+        "reports/acp2_implementation/bb45a46/B/B03/dependencies-validation.log",
+        "docs/reference/next-change/acp2-contracts/manifest.json",
+        "docs/reference/next-change/acp2-contracts/runtime/acceptance-result.schema.json"
+      ],
+      "gate_status": "OPEN",
+      "handoff": "H1",
+      "notes": [
+        "B01 harness and B03 application contracts validate (25/25 sample expectations).",
+        "A's science cross-track dependency fixture and a C-authored (not B-authored exemplar) sample are still absent, so the H1 freeze is not closed.",
+        "No FAIL was relabelled; the missing rows are NOT_VERIFIED with their evidence."
+      ],
+      "owner": "B",
+      "reason": "a_science_contract_fixture_absent;c_authored_sample_absent",
+      "result": "NOT_VERIFIED",
+      "reuse_mapping": [],
+      "scope": "IN_SCOPE",
+      "signed_by": [
+        "B"
+      ],
+      "title": "Consumable minimal contracts (K-SCI/K-APP/K-MCP/K-EXP/K-ENV/K-TEST)"
+    },
+    {
+      "evidence": [
+        "reports/acp2_implementation/bb45a46/B/B07/summary.json",
+        "reports/acp2_implementation/bb45a46/B/environment/b07-environment.json",
+        "reports/acp2_implementation/bb45a46/B/B13/dsh-disconnect.json",
+        "reports/acp2_implementation/bb45a46/C/dsh-discovery-live/f3-honesty-dsh-20261022T234142Z/main/experience_dsh-discovery-live-experience_live-f3-honesty-dsh-20261022T234142Z.json"
+      ],
+      "gate_status": "OPEN",
+      "handoff": "H2",
+      "notes": [
+        "B07 environment/daemon rows PASS; the real stdio MCP probe passes.",
+        "C's official DSH discovery receipts remain NOT_VERIFIED(controller_unavailable); LSF is absent by design."
+      ],
+      "owner": "B",
+      "reason": "c_dsh_handshake_absent;lsf_prerequisite_missing",
+      "result": "NOT_VERIFIED",
+      "reuse_mapping": [],
+      "scope": "IN_SCOPE",
+      "signed_by": [
+        "B"
+      ],
+      "title": "P0 real MCP process and DSH default negotiation/tool discovery"
+    },
+    {
+      "evidence": [
+        "reports/acp2_implementation/bb45a46/B/B14b/h3-receipt.json",
+        "reports/acp2_implementation/bb45a46/B/B14b/rerun-index.json",
+        "reports/acp2_implementation/bb45a46/B/B11/summary.json",
+        "reports/acp2_implementation/bb45a46/B/B10/summary.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/job-terminal.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/local-artifacts/execution_receipt.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/remote/facts.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/installed-manifest.json"
+      ],
+      "gate_status": "OPEN",
+      "handoff": "H3",
+      "notes": [
+        "h3_status is OPEN in the frozen H3 receipt. Local singlepoint/optimize/frequency PASS (B14b).",
+        "B-fix-5 adds a real LSF normal singlepoint PASS: bsub job 1765 terminal completed, release_id 1c79785a657c6614, submission_id sub_0fea781820a81666, energy -1.116759307204 Ha; the installed release sync produced 510 files with the same release_id. The LSF prerequisite gap is closed.",
+        "C DSH/Workbench and the A scientific audit remain NOT_VERIFIED, so H3 stays OPEN and is not promoted to closure."
+      ],
+      "owner": "B",
+      "reason": "c_dsh_browser_absent;a_scientific_audit_absent",
+      "result": "NOT_VERIFIED",
+      "reuse_mapping": [],
+      "scope": "IN_SCOPE",
+      "signed_by": [
+        "B"
+      ],
+      "title": "P1 Local/LSF basic closed loop"
+    },
+    {
+      "evidence": [
+        "reports/acp2_implementation/bb45a46/B/B20c/h4-final-index.json",
+        "reports/acp2_implementation/bb45a46/B/B20c/h4-open-rows.json",
+        "reports/acp2_implementation/bb45a46/B/B20c/h4-closeout.json",
+        "reports/acp2_implementation/bb45a46/B/B20/search-gap.json"
+      ],
+      "gate_status": "OPEN",
+      "handoff": "H4",
+      "notes": [
+        "h4_status is OPEN: B20a-exec and B20a-search have no signed execution/search evidence; A-20 and C25 do not exist.",
+        "No science result was fabricated or re-run; the closeout input set and open rows are referenced unchanged."
+      ],
+      "owner": "B",
+      "reason": "h4_open: A-20 absent; C25 absent; B20a-exec/B20a-search missing",
+      "result": "NOT_VERIFIED",
+      "reuse_mapping": [],
+      "scope": "IN_SCOPE",
+      "signed_by": [
+        "B"
+      ],
+      "title": "Limited Diels-Alder science closed loop (TS/frequency/IRC/EvidenceReport)"
+    },
+    {
+      "evidence": [
+        "reports/acp2_implementation/bb45a46/B/B22/h5-manifest.json",
+        "reports/acp2_implementation/bb45a46/B/B22/summary.json",
+        "reports/acp2_implementation/bb45a46/B/B22/infra_upgrade-upgrade-rollback.json",
+        "reports/acp2_implementation/bb45a46/B/B22/infra_upgrade-third-party-capability.json"
+      ],
+      "gate_status": "CLOSED",
+      "handoff": "H5",
+      "notes": [
+        "H5 plugin install (B21) and upgrade/rollback (B22) rows PASS with real infrastructure-adapter execution and historical read-only behavior.",
+        "Process/OS isolation, LSF, DSH and Chromium remain NOT_VERIFIED in the H5 manifest and are not H5 closure rows.",
+        "The PASS is a reused immutable receipt: applicability is recorded above rather than claiming a rerun on 6ec01ec."
+      ],
+      "owner": "B",
+      "reason": null,
+      "result": "PASS",
+      "reuse_mapping": [
+        {
+          "rationale": "B-fix-5 changes the installed-release sync/remote-import path, the package-install candidate identity and the API release projection, not the plugin or adapter registry. The H5 rows run AdapterRegistry discover/install/enable/freeze and an infrastructure adapter operation; they record no task submission (job_id/attempt/release_id/submission_id are all null) and never call the release-identity helper. The plugin code, fixtures, inputs and validator are unchanged between ded5cfd and 6ec01ec.",
+          "receipt": "reports/acp2_implementation/bb45a46/B/B22/h5-manifest.json",
+          "receipt_sha256": "7e24ff283a7a6d6b7bf3dfa2c504771836103bf0047cc60e53585c2937816768",
+          "unchanged": [
+            "src/acp_services/runtime/adapter_registry.py and capability_registry.py",
+            "plugin workspace fixtures and descriptor digests",
+            "release-role packaging configs",
+            "acceptance validator and contract version 1.3.0"
+          ]
+        }
+      ],
+      "scope": "IN_SCOPE",
+      "signed_by": [
+        "B"
+      ],
+      "title": "Third-party plugin extension without core-source change"
+    },
+    {
+      "evidence": [
+        "reports/acp2_implementation/bb45a46/B/B24b/h6-receipt.json",
+        "reports/acp2_implementation/bb45a46/B/B24b/open-rows.json",
+        "reports/acp2_implementation/bb45a46/B/B24b/four-combination-summary.json",
+        "reports/acp2_implementation/bb45a46/B/B24b/migration/summary.json"
+      ],
+      "gate_status": "OPEN",
+      "handoff": "H6",
+      "notes": [
+        "h6_status is OPEN. B-owned migration/backup/restore, four-combination and legacy readers PASS; C DSH, A/C readability, selectivity B23b and real DA remain NOT_VERIFIED.",
+        "B-fix-5's real LSF normal singlepoint (job 1765) closes the basic LSF loop recorded under H3/H7; H6's own multi-project isolation and running-task recovery dimensions were not re-run and stay open.",
+        "No production restart or production run-root write was executed."
+      ],
+      "owner": "B",
+      "reason": "h6_open: DSH/A-readability/C-readability/selectivity/real-DA missing",
+      "result": "NOT_VERIFIED",
+      "reuse_mapping": [],
+      "scope": "IN_SCOPE",
+      "signed_by": [
+        "B"
+      ],
+      "title": "Cross-domain reliability, multi-project isolation and recovery"
+    },
+    {
+      "evidence": [
+        "reports/acp2_implementation/bb45a46/B/B26a/reproduction-matrix.json",
+        "reports/acp2_implementation/bb45a46/B/B26a/independent-operator.json",
+        "reports/acp2_implementation/bb45a46/B/B25/release-fix5/release-manifest.json",
+        "reports/acp2_implementation/bb45a46/B/B25/release-fix5/source.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/summary.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/installed-manifest.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/job-terminal.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/three-entry-compare.json"
+      ],
+      "gate_status": "OPEN",
+      "handoff": "H7",
+      "notes": [
+        "Release-fix5 artifacts and digests are frozen and verified; the installed release reports 510 files with release_id 1c79785a657c6614 and the real LSF normal singlepoint (job 1765) completed with the same release_id, so the installed-sync and LSF gaps are closed.",
+        "H7 remains OPEN because A-29 and C35 signatures are absent, C33/C34 install evidence and C DSH/model scope are absent, and the B26a reproduction is same-agent, not independent.",
+        "C35 is absent and its plan does not list B26 as a prerequisite: disposition c35_absent, not C35_INPUT_CYCLE."
+      ],
+      "owner": "B",
+      "reason": "h7_open: A-29 absent; C35 absent; independent operator absent; C33/C34/DSH rows absent",
+      "result": "NOT_VERIFIED",
+      "reuse_mapping": [],
+      "scope": "IN_SCOPE",
+      "signed_by": [
+        "B"
+      ],
+      "title": "Release and independent installation"
+    }
+  ],
+  "schema": "acp2.h7.receipt.v1",
+  "statement": "H7 is NOT signed. Release-fix5 is frozen and reviewable with a real LSF normal PASS (job 1765), but A-29/C35, C33/C34/DSH scope and the independent-operator rows are absent; H4 and H6 remain open.",
+  "summary": "reports/acp2_implementation/bb45a46/integration/summary.json",
+  "task": "B26b"
+}

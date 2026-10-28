@@ -1,0 +1,26 @@
+
+Job <105>, Job Name <acp_sub_99cf77110e3a6090>, User <xieningke>, Project <defa
+                     ult>, Status <PEND>, Queue <normal>, Command <#!/bin/bash;
+                     #BSUB -J acp_sub_99cf77110e3a6090;#BSUB -q normal;#BSUB -n
+                     4;#BSUB -M 8808038;#BSUB -o /ACPServer/acp2-runs/remediati
+                     on/m4-03/remote_jobs/M4-03_LSF_matrix_20261028T011416/CCO_
+                     xtb_optimize__02/stdout.log;#BSUB -e /ACPServ>
+Wed Oct 28 01:20:49: Submitted from host <workstation>, CWD </ACPServer/acp2-ru
+                     ns/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028
+                     T011416/CCO_xtb_optimize__02>, Output File </ACPServer/acp
+                     2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_2026
+                     1028T011416/CCO_xtb_optimize__02/stdout.log>, Error File <
+                     /ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M4-03_L
+                     SF_matrix_20261028T011416/CCO_xtb_optimize__02/stderr.log>
+                     , 4 Processors Requested;
+
+ MEMLIMIT
+ 8808038 K
+ PENDING REASONS:
+ New job is waiting for scheduling;
+
+ SCHEDULING PARAMETERS:
+           r15s   r1m  r15m   ut      pg    io   ls    it    tmp    swp    mem
+ loadSched   -     -     -     -       -     -    -     -     -      -      -  
+ loadStop    -     -     -     -       -     -    -     -     -      -      -  
+

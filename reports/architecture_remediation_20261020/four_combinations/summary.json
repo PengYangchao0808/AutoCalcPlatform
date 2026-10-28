@@ -1,0 +1,26 @@
+{
+  "all_pass": true,
+  "scenarios": [
+    {
+      "result": "PASS",
+      "scenario": "F0/S0",
+      "skip_reason": null
+    },
+    {
+      "result": "PASS",
+      "scenario": "F1/S0",
+      "skip_reason": null
+    },
+    {
+      "result": "PASS",
+      "scenario": "F0/S1",
+      "skip_reason": null
+    },
+    {
+      "result": "PASS",
+      "scenario": "F1/S1",
+      "skip_reason": null
+    }
+  ],
+  "schema": "acp.acceptance.summary.v1"
+}

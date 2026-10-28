@@ -1,0 +1,70 @@
+{
+  "aggregate_budget_seconds": 120,
+  "aggregate_window": "120s reserved after export for the aggregate phase.",
+  "backend": "local",
+  "created_at_utc": "2026-10-23T08:53:00Z",
+  "export_budget_seconds": 900,
+  "export_window": "900s reserved after the science stop point for evidence/export, judged by actual completion rather than elapsed time alone.",
+  "h3_status": "OPEN (Local only; LSF rows NOT_VERIFIED)",
+  "inflight_stop_policy": "At science_deadline_seconds stop starting new science steps. A still-running step is either stopped with confirmed termination or retained by reference and reconciled in the export window; it is never reported complete.",
+  "lsf_choice": "not selected: no bsub/bjobs/bhosts, LSF_ENVDIR or configured test node exists",
+  "payable_task_count": {
+    "agreement": "NOT_VERIFIED(c24a_absent)",
+    "candidate_ts_cap": 3,
+    "scenario_cap": 12,
+    "source": "C plan W9 DA lane: one main chain, candidate TS <= 3, total tasks <= 12, wall clock <= 4h",
+    "this_submission": 1
+  },
+  "per_phase_timing_baseline": {
+    "frequency_seconds_upper_bound": 3,
+    "note": "Measured on the frozen P1 candidate 77ac1de for tiny H2/STO-3G Local steps. The optimize step dominates; the DA slice is larger, so the science window is not derived by scaling these rows alone.",
+    "optimize_seconds_upper_bound": 185,
+    "singlepoint_seconds_upper_bound": 6
+  },
+  "queue_accounting": "Local queue wait is 0s and is included in the same cumulative window. If LSF were selected, queue wait would count against science_deadline_seconds; it does not get a separate budget.",
+  "ready_attempt_started_at": "2026-10-23T08:53:00Z",
+  "representative_timings": [
+    {
+      "backend": "local",
+      "capability": "singlepoint",
+      "evidence": "B/B14b/singlepoint/run.json",
+      "evidence_sha256": "e63e1a5a36449cb503ee58d1f80ecfb037f5c8de165cd451451d8978578466e2",
+      "evidence_written_at_utc": "2026-10-23T03:16:39Z",
+      "result": "PASS",
+      "task_ref": "20261023_111633_001_singlepoint",
+      "task_started_at_utc": "2026-10-23T03:16:33Z",
+      "wall_seconds_upper_bound": 6
+    },
+    {
+      "backend": "local",
+      "capability": "optimize",
+      "evidence": "B/B14b/optimize/run.json",
+      "evidence_sha256": "7050febe6321aa6e1749d80bcc0dc59970c023fac299a30d0de7072f1aa16671",
+      "evidence_written_at_utc": "2026-10-23T03:19:57Z",
+      "result": "PASS",
+      "task_ref": "20261023_111652_002_optimize",
+      "task_started_at_utc": "2026-10-23T03:16:52Z",
+      "wall_seconds_upper_bound": 185
+    },
+    {
+      "backend": "local",
+      "capability": "frequency",
+      "evidence": "B/B14b/frequency/run.json",
+      "evidence_sha256": "76914fa3d8322733531e8d9622a7cb35e76156bcd47f1d4c882c6142ffb8495b",
+      "evidence_written_at_utc": "2026-10-23T03:19:49Z",
+      "result": "PASS",
+      "task_ref": "20261023_111946_003_frequency",
+      "task_started_at_utc": "2026-10-23T03:19:46Z",
+      "wall_seconds_upper_bound": 3
+    }
+  ],
+  "rule": "A valid staged run reads one shared run-spec; a phase never resets started_at. A missing C24a leaves started_at null instead of inventing a science clock.",
+  "schema": "acp2.b20a.run-spec.v1",
+  "science_deadline_seconds": 13380,
+  "started_at": null,
+  "started_at_binding_rule": "Set once at the first C24a-approved submit. Every phase (da-submit, da-evidence, aggregate) reads this same value; the readiness attempt does not start the science clock.",
+  "started_at_status": "NOT_VERIFIED(c24a_absent)",
+  "timeout_env": "ACP2_DA_TIMEOUT=14400",
+  "timeout_rule": "An unset ACP2_DA_TIMEOUT is a usage error and never a silent default.",
+  "total_budget_seconds": 14400
+}

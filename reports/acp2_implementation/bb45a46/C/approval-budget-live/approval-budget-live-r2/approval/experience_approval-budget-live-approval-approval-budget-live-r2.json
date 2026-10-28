@@ -1,0 +1,117 @@
+{
+  "artifacts": [
+    {
+      "path": "approval-source-scan.json",
+      "sha256": "57fe72c2a5600773aac4dfc4334bf0a18d6067c41a4d85dc0126566064965d53",
+      "size_bytes": 199
+    },
+    {
+      "path": "approval-node-tests.log",
+      "sha256": "f1bd71d4965aeacbe141d4df60555c007cfea58da859e6e5d6ff66f274051a03",
+      "size_bytes": 941
+    },
+    {
+      "path": "approval-bind-matrix.json",
+      "sha256": "e207567c9a7ce6be21a70a3e776b30b82aaae784a8abc4d46feccc847302e875",
+      "size_bytes": 1502
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "[]",
+      "name": "approval.fixture_content_no_platform_transport",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 d\n  ok - dsh tool approval never changes platform approval state\n  ok - unbound submit is blocked without the bound digest\n  ok - another user's approve is rejected\n  ok - a model claim of user agreement is never an approval\n  ok - revoked approval can never authorize a submit\n  ok - approval state persists across dispose and remount\n  ok - approval module owns no network call\n\n14 passed, 0 failed",
+      "name": "approval.node_suite",
+      "status": "PASS"
+    },
+    {
+      "detail": "passed=14 failed=0 minimum=8",
+      "name": "approval.module_tests_ge_8",
+      "status": "PASS"
+    },
+    {
+      "detail": "missing=[] covered=['card_digests', 'card_expiry', 'card_limits_caps_basis', 'digest_vector', 'dsh_platform_separation', 'matrix_appended_refs', 'matrix_display_time', 'matrix_invalidates', 'model_claim_rejected', 'other_user_rejected', 'submit_bound_digest']",
+      "name": "approval.bind_invalidate_matrix_covered",
+      "status": "PASS"
+    },
+    {
+      "detail": "content evidence_kind=fixture; public evidence_kind=live (harness-contract.md \u00a74 maps an explicit common phase to live; the field is never faked here)",
+      "name": "approval.evidence_kind_fixture_content",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "e03a9dd9f6897ca0a8d43e69a10b22a20097f05d",
+    "harness_revision": "d6647a2a4b58ed5b59f0fcfe97e55673b58429009f5ebe7ecf1e3b5891c64561",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "e03a9dd9f6897ca0a8d43e69a10b22a20097f05d",
+  "command": [
+    "/ACPServer/acp2-development/venvs/integration/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "approval-budget-live",
+    "--timeout",
+    "600",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/approval-budget-live/approval-budget-live-r2/approval"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "live",
+  "exit_code": 0,
+  "extensions": {
+    "experience.approval_budget": {
+      "bind_tuple": [
+        "plan_definition_digest",
+        "project_id",
+        "budget",
+        "allowed_change_scope"
+      ],
+      "evidence_kind": "fixture",
+      "live_b16_rows": {
+        "budget.deny": "NOT_VERIFIED(b16_handoff)",
+        "budget.expire": "NOT_VERIFIED(b16_handoff)",
+        "budget.reservation": "NOT_VERIFIED(b16_handoff)",
+        "budget.revoke": "NOT_VERIFIED(b16_handoff)"
+      },
+      "node_tests": {
+        "failed": 0,
+        "passed": 14
+      },
+      "phase": "approval",
+      "public_evidence_kind": "live"
+    },
+    "experience.harness_contract_revision": "d6647a2a4b58ed5b59f0fcfe97e55673b58429009f5ebe7ecf1e3b5891c64561",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/integration/bin/python",
+    "experience.mode": "live",
+    "experience.product_import": "/ACPServer/acp2-development/integration/src/acp/__init__.py",
+    "experience.run_id": "approval-budget-live-r2",
+    "experience.scenario_key": "approval-budget-live",
+    "experience.subcase": null,
+    "experience.test_revision": "e03a9dd9f6897ca0a8d43e69a10b22a20097f05d"
+  },
+  "finished_at": "2026-10-22T23:32:35Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "approval",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "approval-budget-live-r2",
+  "scenario": "experience:approval-budget-live",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T23:32:35Z",
+  "submission_id": null,
+  "usage": null
+}

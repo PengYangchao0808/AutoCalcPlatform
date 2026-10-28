@@ -1,0 +1,51 @@
+{
+  "data": {
+    "accepted": [
+      "20261028_012750_001_m403-budget"
+    ],
+    "approval_ref": "ap_12f232117df1407c9a4754f343746849",
+    "codes": [
+      201,
+      403
+    ],
+    "denied": [
+      {
+        "code": 403,
+        "payload": {
+          "detail": {
+            "code": "budget_exhausted",
+            "message": "task_ref budget 1 - consumed 1 < requested 1; new dispatch refused",
+            "params": {
+              "enforced": true,
+              "exceeded": [
+                {
+                  "dimension": "task_ref",
+                  "requested": {
+                    "attempt": 1,
+                    "task_ref": 1
+                  },
+                  "scope": "research_budget"
+                }
+              ],
+              "mode": "quota-only",
+              "reason_code": "budget_exhausted"
+            },
+            "retryable": false
+          }
+        }
+      }
+    ],
+    "duration_s": 54.3,
+    "new_lsf_jobs": [
+      "108"
+    ]
+  },
+  "detail": "an approval with task_ref=1 admitted exactly one of two concurrent remote submits",
+  "evidence": [
+    "native/budget-concurrency.json"
+  ],
+  "name": "budget_concurrency",
+  "recorded_at": "2026-10-27T17:28:37.753520Z",
+  "schema": "acp2.m403.acceptance.v1",
+  "status": "PASS"
+}

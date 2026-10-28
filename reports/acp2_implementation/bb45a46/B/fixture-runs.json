@@ -1,0 +1,683 @@
+{
+  "candidate_label": "bb45a46",
+  "consumers": {
+    "C": "read lsf_timeout_seconds (or lsf_singlepoint.* below) as the frozen LSF scenario timeout; if absent, C must not invent one"
+  },
+  "contract_version": "1.0.0",
+  "derivation_rule": "scenario_timeout_seconds = max_queue_wait_seconds + max_run_seconds + max_prepare_seconds + cleanup_seconds + margin_seconds (arithmetic only; no separate x1.1 rule)",
+  "fixtures": [
+    {
+      "attempt": 1,
+      "backend": "local",
+      "budget": {
+        "cores": 1,
+        "jobs": 1,
+        "memory_mb": 1024,
+        "status": "allocated",
+        "walltime_s": 60
+      },
+      "cleanup_seconds": 10,
+      "evidence": "B/B10/local-singlepoint/",
+      "evidence_owner": "B10",
+      "fixture_id": "fx-local-singlepoint-h2-sto3g-v1",
+      "input": "/ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz",
+      "input_digest": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
+      "input_status": "present",
+      "kind": "local-singlepoint",
+      "margin_seconds": 30,
+      "max_prepare_seconds": 10,
+      "max_queue_wait_seconds": 0,
+      "max_run_seconds": 60,
+      "method": {
+        "basis": "STO-3G",
+        "charge": 0,
+        "method": "HF",
+        "multiplicity": 1
+      },
+      "note": "Tiny H2/STO-3G (HF) local singlepoint fixture. Submitted exactly once by B10 through the real MCP path onto P1; later reads are query-only. It is not the B07 ORCA probe and not the independent m1 baseline.",
+      "plan_identity": "v2:0cbae6ed2d2bd8daf42b262881b5fe04",
+      "release": {
+        "release_digest": "c3efc22cb25f40101c97e9db203e4d02d2648edc6ab83bacbda8e657a4faf98a",
+        "release_id": "98e0695545d668e6"
+      },
+      "request_owner": "B",
+      "result_digest": "sha256:cc9bf55634f73ce5e0355c64c1587f189979de46eb62e213cfb40965f7e07f4f",
+      "reusable_by": [
+        "B10",
+        "B10b",
+        "B14a"
+      ],
+      "scenario_timeout_seconds": 110,
+      "server_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+      "status": "completed",
+      "submission_id": "sub_3006306693beb030",
+      "submitted_once": true,
+      "submitted_via": "real MCP stdio acp_submit (B10 MCP driver), then query-only",
+      "task": "20261023_031453_001_singlepoint",
+      "workflow": "singlepoint"
+    },
+    {
+      "attempt": null,
+      "backend": "lsf",
+      "blocked_prerequisite": "LSF client/queue (bsub/bjobs/bhosts, LSF_ENVDIR) and a configured test node are absent; no remote submission attempted.",
+      "budget": {
+        "cores": 1,
+        "jobs": 1,
+        "memory_mb": 1024,
+        "status": "frozen_unallocated",
+        "walltime_s": 300
+      },
+      "cleanup_seconds": 60,
+      "evidence": "B/B11/",
+      "evidence_owner": "B11",
+      "fixture_id": "fx-lsf-singlepoint-v1",
+      "input": "/ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz",
+      "input_digest": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
+      "input_status": "present",
+      "kind": "lsf-singlepoint",
+      "margin_seconds": 120,
+      "max_prepare_seconds": 120,
+      "max_queue_wait_seconds": 1800,
+      "max_run_seconds": 300,
+      "method": {
+        "charge": 0,
+        "method": "r2SCAN-3c",
+        "multiplicity": 1
+      },
+      "missing_prerequisites": [
+        "ACP_LSF_NODE",
+        "LSF_ENVDIR",
+        "bsub",
+        "bjobs",
+        "bhosts",
+        "bqueues",
+        "ssh_credentials"
+      ],
+      "no_remote_job_attempted": true,
+      "note": "Normal-completion LSF fixture only. B13 uses its own control fixture; this row is not reused for control races.",
+      "release": null,
+      "request_owner": "B",
+      "reusable_by": [
+        "B11",
+        "B14a",
+        "B14b"
+      ],
+      "scenario_timeout_seconds": 2400,
+      "status": "NOT_VERIFIED",
+      "submitted_once": false,
+      "task": null,
+      "task_ref": null,
+      "workflow": "singlepoint",
+      "b14b_check": {
+        "result": "NOT_VERIFIED",
+        "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+        "reason": "lsf_prerequisite_missing:bsub,bjobs,bhosts,bqueues,LSF_ENVDIR,ACP_LSF_NODE",
+        "missing_prerequisites": [
+          "bsub",
+          "bjobs",
+          "bhosts",
+          "bqueues",
+          "LSF_ENVDIR",
+          "ACP_LSF_NODE"
+        ],
+        "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --workflow singlepoint --target lsf --fixture-id fx-lsf-singlepoint-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/lsf/singlepoint --timeout 300",
+        "submitted": false,
+        "remote_job_attempted": false,
+        "evidence": "B/B14b/lsf/singlepoint/"
+      }
+    },
+    {
+      "attempt": null,
+      "backend": "lsf",
+      "blocked_prerequisite": "LSF client/queue and a configured test node are absent; no remote submission attempted.",
+      "budget": {
+        "cores": 1,
+        "jobs": 1,
+        "memory_mb": 1024,
+        "status": "frozen_unallocated",
+        "walltime_s": 300
+      },
+      "cleanup_seconds": 60,
+      "evidence_owner": "B13",
+      "fixture_id": "fx-control-recovery-lsf-v1",
+      "input": "/ACPServer/acp2-development/data/b/fixtures/control.json",
+      "input_digest": "4b2061b1f1961718ed8ef89f6b6c64e642247ff3d3e85927c10baa1b2695a25a",
+      "input_status": "present",
+      "kind": "control-recovery",
+      "margin_seconds": 120,
+      "max_prepare_seconds": 120,
+      "max_queue_wait_seconds": 1800,
+      "max_run_seconds": 300,
+      "method": {
+        "charge": 0,
+        "method": "r2SCAN-3c",
+        "multiplicity": 1
+      },
+      "note": "Bounded LSF control-recovery fixture, distinct from fx-lsf-singlepoint-v1; no expensive duplicate. B13 owns every control race TaskRef.",
+      "release": null,
+      "request_owner": "B",
+      "reusable_by": [
+        "B13"
+      ],
+      "scenario_timeout_seconds": 2400,
+      "status": "NOT_VERIFIED",
+      "submitted_once": false,
+      "task": null,
+      "workflow": "singlepoint-control"
+    },
+    {
+      "attempt": null,
+      "backend": "local",
+      "budget": {
+        "status": "planned"
+      },
+      "cleanup_seconds": null,
+      "evidence_owner": "B12",
+      "fixture_id": "fx-artifact-local-v1",
+      "input": null,
+      "input_digest": null,
+      "input_status": "not_created",
+      "kind": "artifact",
+      "margin_seconds": null,
+      "max_prepare_seconds": null,
+      "max_queue_wait_seconds": null,
+      "max_run_seconds": null,
+      "method": null,
+      "note": "artifact/prepare/read lifecycle — planned; no fixture bytes or budget are claimed before its owner creates them.",
+      "release": null,
+      "request_owner": "B12",
+      "reusable_by": [],
+      "scenario_timeout_seconds": null,
+      "status": "planned",
+      "submitted_once": false,
+      "task": null,
+      "workflow": "planned"
+    },
+    {
+      "attempt": null,
+      "backend": "local",
+      "budget": {
+        "status": "no_qc",
+        "jobs": 0,
+        "cores": 0,
+        "walltime_s": 0
+      },
+      "cleanup_seconds": 10,
+      "evidence_owner": "B15",
+      "fixture_id": "fx-multi-singlepoint-v1",
+      "input": "/ACPServer/acp2-development/data/b/fixtures/multi.json",
+      "input_digest": "0075ab6c2415367c61504d4922f9ff100f907fa4e5ba0c03656bbc71895981dd",
+      "input_status": "present",
+      "kind": "multitenant",
+      "margin_seconds": 20,
+      "max_prepare_seconds": 0,
+      "max_queue_wait_seconds": 0,
+      "max_run_seconds": 0,
+      "method": null,
+      "note": "B15 multitenant authorization fixture (acp2.multi-fixture.v1): two users/projects/roles and project-scoped API keys created through the Services identity/key APIs. The authz phase creates only paused fixture task rows and denied requests; no QC, no science, no two-project submission (B23 owns that phase). Credentials live in the 0600 file named by identity.credentials_file.",
+      "release": null,
+      "request_owner": "B15",
+      "reusable_by": [
+        "B23"
+      ],
+      "scenario_timeout_seconds": 600,
+      "status": "registered",
+      "submitted_once": false,
+      "task": null,
+      "workflow": "multitenant:authz"
+    },
+    {
+      "attempt": null,
+      "backend": "local",
+      "budget": {
+        "cores": 1,
+        "jobs": 1,
+        "memory_mb": 1024,
+        "status": "frozen_unallocated",
+        "walltime_s": 14400
+      },
+      "cleanup_seconds": 120,
+      "evidence_owner": "B20a",
+      "fixture_id": "fx-da-bounded-dag-v1",
+      "input": "/ACPServer/acp2-development/data/b/fixtures/da/da-run.json",
+      "input_digest": "ef543b6936d2e91cb64a831af3edb39aa2acf1a85d9db770df367780bb399486",
+      "input_status": "present",
+      "kind": "da",
+      "margin_seconds": 0,
+      "max_prepare_seconds": 900,
+      "max_queue_wait_seconds": 0,
+      "max_run_seconds": 13380,
+      "method": null,
+      "note": "Limited DA known-candidate slice. Run-spec: 13380s science + 900s export + 120s aggregate = 14400s. No submission is attempted: C24a is [~] and no approved single submission exists. This row freezes the timeout/budget only; it does not claim execution or search.",
+      "release": null,
+      "request_owner": "B20a",
+      "reusable_by": [],
+      "scenario_timeout_seconds": 14400,
+      "status": "frozen_pending_c24a",
+      "submitted_once": false,
+      "task": null,
+      "workflow": "da-runtime",
+      "evidence": "B/B20/",
+      "queue_accounting": "Local queue wait 0s included in the science window; LSF queue wait would count if selected.",
+      "inflight_stop_policy": "At 13380s stop new science; a running step is stopped with confirmed termination or retained by reference and reconciled.",
+      "timeout_env": "ACP2_DA_TIMEOUT=14400",
+      "c24a_prerequisite": "C24a approved single submission (absent)"
+    },
+    {
+      "attempt": null,
+      "backend": "local",
+      "budget": {
+        "status": "planned"
+      },
+      "cleanup_seconds": null,
+      "evidence_owner": "B21",
+      "fixture_id": "fx-plugin-lifecycle-v1",
+      "input": null,
+      "input_digest": null,
+      "input_status": "not_created",
+      "kind": "plugin",
+      "margin_seconds": null,
+      "max_prepare_seconds": null,
+      "max_queue_wait_seconds": null,
+      "max_run_seconds": null,
+      "method": null,
+      "note": "infra-plugin install/upgrade — planned; no fixture bytes or budget are claimed before its owner creates them.",
+      "release": null,
+      "request_owner": "B21",
+      "reusable_by": [],
+      "scenario_timeout_seconds": null,
+      "status": "planned",
+      "submitted_once": false,
+      "task": null,
+      "workflow": "planned"
+    },
+    {
+      "attempt": null,
+      "backend": "local",
+      "budget": {
+        "status": "no_qc",
+        "jobs": 0,
+        "cores": 0,
+        "walltime_s": 0
+      },
+      "cleanup_seconds": 20,
+      "evidence_owner": "B24a",
+      "fixture_id": "fx-migration-v1",
+      "input": "/ACPServer/acp2-development/data/b/fixtures/migration",
+      "input_digest": "c577f46299013de3346262baec78cbd6b42d13e6e5e43a453965d478771315ca",
+      "input_status": "present",
+      "kind": "migration",
+      "margin_seconds": 30,
+      "max_prepare_seconds": 50,
+      "max_queue_wait_seconds": 0,
+      "max_run_seconds": 1700,
+      "method": null,
+      "note": "B24a frozen migration fixture: read-only recovery fixtures are copied to an isolated workspace; DB+manifest+artifact backups, schema upgrade 021->023, restore proof and six recovery drills run without a Controller or QC.",
+      "release": null,
+      "request_owner": "B24a",
+      "reusable_by": [
+        "B24b"
+      ],
+      "scenario_timeout_seconds": 1800,
+      "status": "completed",
+      "submitted_once": false,
+      "task": null,
+      "workflow": "migration",
+      "evidence": "B/B24/"
+    },
+    {
+      "attempt": null,
+      "backend": "local",
+      "budget": {
+        "status": "planned"
+      },
+      "cleanup_seconds": null,
+      "evidence_owner": "B25b",
+      "fixture_id": "fx-package-install-v1",
+      "input": null,
+      "input_digest": null,
+      "input_status": "not_created",
+      "kind": "package",
+      "margin_seconds": null,
+      "max_prepare_seconds": null,
+      "max_queue_wait_seconds": null,
+      "max_run_seconds": null,
+      "method": null,
+      "note": "package install/upgrade/uninstall — planned; no fixture bytes or budget are claimed before its owner creates them.",
+      "release": null,
+      "request_owner": "B25b",
+      "reusable_by": [],
+      "scenario_timeout_seconds": null,
+      "status": "planned",
+      "submitted_once": false,
+      "task": null,
+      "workflow": "planned"
+    },
+    {
+      "input": "/ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz",
+      "input_digest": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
+      "input_status": "present",
+      "method": {
+        "basis": "STO-3G",
+        "charge": 0,
+        "method": "HF",
+        "multiplicity": 1
+      },
+      "request_owner": "B",
+      "submitted_once": true,
+      "task": "20261023_111652_002_optimize",
+      "attempt": 1,
+      "release": {
+        "release_id": null,
+        "release_digest": null
+      },
+      "fixture_id": "fx-local-optimize-h2-sto3g-v1",
+      "kind": "local-optimize",
+      "backend": "local",
+      "workflow": "optimize",
+      "status": "completed",
+      "evidence": "B/B14b/",
+      "evidence_owner": "B14b",
+      "reusable_by": [
+        "B14b"
+      ],
+      "budget": {
+        "cores": 1,
+        "jobs": 1,
+        "memory_mb": 1024,
+        "walltime_s": 120,
+        "status": "allocated"
+      },
+      "max_queue_wait_seconds": 0,
+      "max_run_seconds": 120,
+      "max_prepare_seconds": 10,
+      "cleanup_seconds": 10,
+      "margin_seconds": 30,
+      "scenario_timeout_seconds": 170,
+      "note": "Tiny H2/STO-3G (HF) local optimize fixture for B14b. Submitted exactly once through the real MCP path on candidate 77ac1de. Runs on the legacy CLI chain; no execution_receipt/release_id is emitted (science PASS, release identity NOT_EMITTED).",
+      "release_status": "NOT_EMITTED_ON_LEGACY_CHAIN",
+      "execution_chain": "legacy-cli",
+      "server_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+      "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --workflow optimize --target local --fixture-id fx-local-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/optimize --timeout 300",
+      "result": "PASS"
+    },
+    {
+      "input": "/ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz",
+      "input_digest": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
+      "input_status": "present",
+      "method": {
+        "basis": "STO-3G",
+        "charge": 0,
+        "method": "HF",
+        "multiplicity": 1
+      },
+      "request_owner": "B",
+      "submitted_once": false,
+      "task": null,
+      "attempt": null,
+      "release": null,
+      "fixture_id": "fx-lsf-optimize-h2-sto3g-v1",
+      "kind": "lsf-optimize",
+      "backend": "lsf",
+      "workflow": "optimize",
+      "status": "NOT_VERIFIED",
+      "evidence": "B/B14b/",
+      "evidence_owner": "B14b",
+      "reusable_by": [
+        "B14b"
+      ],
+      "budget": {
+        "cores": 1,
+        "jobs": 1,
+        "memory_mb": 1024,
+        "walltime_s": 300,
+        "status": "frozen_unallocated"
+      },
+      "max_queue_wait_seconds": 1800,
+      "max_run_seconds": 300,
+      "max_prepare_seconds": 120,
+      "cleanup_seconds": 60,
+      "margin_seconds": 120,
+      "scenario_timeout_seconds": 2400,
+      "blocked_prerequisite": "LSF client/queue (bsub/bjobs/bhosts, LSF_ENVDIR) and a configured test node are absent; no remote submission attempted.",
+      "missing_prerequisites": [
+        "ACP_LSF_NODE",
+        "LSF_ENVDIR",
+        "bsub",
+        "bjobs",
+        "bhosts",
+        "bqueues",
+        "ssh_credentials"
+      ],
+      "no_remote_job_attempted": true,
+      "note": "LSF optimize capability row. No LSF client/queue/node is installed; B14b checked the prerequisites and submitted nothing. NOT_VERIFIED is never inferred from the Local row.",
+      "b14b_check": {
+        "result": "NOT_VERIFIED",
+        "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+        "reason": "lsf_prerequisite_missing:bsub,bjobs,bhosts,bqueues,LSF_ENVDIR,ACP_LSF_NODE",
+        "missing_prerequisites": [
+          "bsub",
+          "bjobs",
+          "bhosts",
+          "bqueues",
+          "LSF_ENVDIR",
+          "ACP_LSF_NODE"
+        ],
+        "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --workflow optimize --target lsf --fixture-id fx-lsf-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/lsf/optimize --timeout 300",
+        "submitted": false,
+        "remote_job_attempted": false,
+        "evidence": "B/B14b/lsf/optimize/"
+      },
+      "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --workflow optimize --target lsf --fixture-id fx-lsf-optimize-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/lsf/optimize --timeout 300"
+    },
+    {
+      "input": "/ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz",
+      "input_digest": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
+      "input_status": "present",
+      "method": {
+        "basis": "STO-3G",
+        "charge": 0,
+        "method": "HF",
+        "multiplicity": 1
+      },
+      "request_owner": "B",
+      "submitted_once": true,
+      "task": "20261023_111946_003_frequency",
+      "attempt": 1,
+      "release": {
+        "release_id": null,
+        "release_digest": null
+      },
+      "fixture_id": "fx-local-frequency-h2-sto3g-v1",
+      "kind": "local-frequency",
+      "backend": "local",
+      "workflow": "frequency",
+      "status": "completed",
+      "evidence": "B/B14b/",
+      "evidence_owner": "B14b",
+      "reusable_by": [
+        "B14b"
+      ],
+      "budget": {
+        "cores": 1,
+        "jobs": 1,
+        "memory_mb": 1024,
+        "walltime_s": 120,
+        "status": "allocated"
+      },
+      "max_queue_wait_seconds": 0,
+      "max_run_seconds": 120,
+      "max_prepare_seconds": 10,
+      "cleanup_seconds": 10,
+      "margin_seconds": 30,
+      "scenario_timeout_seconds": 170,
+      "note": "Tiny H2/STO-3G (HF) local frequency fixture for B14b. Submitted exactly once through the real MCP path on candidate 77ac1de. Runs on the legacy CLI chain; no execution_receipt/release_id is emitted (science PASS, release identity NOT_EMITTED).",
+      "release_status": "NOT_EMITTED_ON_LEGACY_CHAIN",
+      "execution_chain": "legacy-cli",
+      "server_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+      "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --workflow frequency --target local --fixture-id fx-local-frequency-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/frequency --timeout 300",
+      "result": "PASS"
+    },
+    {
+      "input": "/ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz",
+      "input_digest": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
+      "input_status": "present",
+      "method": {
+        "basis": "STO-3G",
+        "charge": 0,
+        "method": "HF",
+        "multiplicity": 1
+      },
+      "request_owner": "B",
+      "submitted_once": false,
+      "task": null,
+      "attempt": null,
+      "release": null,
+      "fixture_id": "fx-lsf-frequency-h2-sto3g-v1",
+      "kind": "lsf-frequency",
+      "backend": "lsf",
+      "workflow": "frequency",
+      "status": "NOT_VERIFIED",
+      "evidence": "B/B14b/",
+      "evidence_owner": "B14b",
+      "reusable_by": [
+        "B14b"
+      ],
+      "budget": {
+        "cores": 1,
+        "jobs": 1,
+        "memory_mb": 1024,
+        "walltime_s": 300,
+        "status": "frozen_unallocated"
+      },
+      "max_queue_wait_seconds": 1800,
+      "max_run_seconds": 300,
+      "max_prepare_seconds": 120,
+      "cleanup_seconds": 60,
+      "margin_seconds": 120,
+      "scenario_timeout_seconds": 2400,
+      "blocked_prerequisite": "LSF client/queue (bsub/bjobs/bhosts, LSF_ENVDIR) and a configured test node are absent; no remote submission attempted.",
+      "missing_prerequisites": [
+        "ACP_LSF_NODE",
+        "LSF_ENVDIR",
+        "bsub",
+        "bjobs",
+        "bhosts",
+        "bqueues",
+        "ssh_credentials"
+      ],
+      "no_remote_job_attempted": true,
+      "note": "LSF frequency capability row. No LSF client/queue/node is installed; B14b checked the prerequisites and submitted nothing. NOT_VERIFIED is never inferred from the Local row.",
+      "b14b_check": {
+        "result": "NOT_VERIFIED",
+        "candidate_sha": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+        "reason": "lsf_prerequisite_missing:bsub,bjobs,bhosts,bqueues,LSF_ENVDIR,ACP_LSF_NODE",
+        "missing_prerequisites": [
+          "bsub",
+          "bjobs",
+          "bhosts",
+          "bqueues",
+          "LSF_ENVDIR",
+          "ACP_LSF_NODE"
+        ],
+        "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --workflow frequency --target lsf --fixture-id fx-lsf-frequency-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/lsf/frequency --timeout 300",
+        "submitted": false,
+        "remote_job_attempted": false,
+        "evidence": "B/B14b/lsf/frequency/"
+      },
+      "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --workflow frequency --target lsf --fixture-id fx-lsf-frequency-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/lsf/frequency --timeout 300"
+    },
+    {
+      "fixture_id": "fx-local-singlepoint-h2-sto3g-b14b-v1",
+      "kind": "local-singlepoint",
+      "backend": "local",
+      "workflow": "singlepoint",
+      "input": "/ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz",
+      "input_digest": "d117dc2f7956653e6ee7e4a543533ea98d50429acef5bee0d69e95faa31d34a0",
+      "input_status": "present",
+      "method": {
+        "basis": "STO-3G",
+        "charge": 0,
+        "method": "HF",
+        "multiplicity": 1
+      },
+      "request_owner": "B",
+      "evidence": "B/B14b/singlepoint/",
+      "evidence_owner": "B14b",
+      "reusable_by": [
+        "B14b"
+      ],
+      "budget": {
+        "cores": 1,
+        "jobs": 1,
+        "memory_mb": 1024,
+        "walltime_s": 60,
+        "status": "allocated"
+      },
+      "max_queue_wait_seconds": 0,
+      "max_run_seconds": 60,
+      "max_prepare_seconds": 10,
+      "cleanup_seconds": 10,
+      "margin_seconds": 30,
+      "scenario_timeout_seconds": 110,
+      "status": "completed",
+      "submitted_once": false,
+      "task": "20261023_111633_001_singlepoint",
+      "attempt": 1,
+      "release": {
+        "release_id": "28b9a5b5e038090a",
+        "release_digest": "42a004836eec9fad89a9c54a06cdfb62cf674ed3da5fac9deda832b0f968dd19"
+      },
+      "server_revision": "77ac1de1af6a5db6b57f4f904a859305ff73042c",
+      "exact_command": "/ACPServer/acp2-development/venvs/b/bin/python /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/driver.py --controller http://127.0.0.1:18774 --launch /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/mcp-launch.json --input /ACPServer/acp2-development/data/b/fixtures/singlepoint.xyz --workflow singlepoint --target local --fixture-id fx-local-singlepoint-h2-sto3g-v1 --candidate-sha 77ac1de1af6a5db6b57f4f904a859305ff73042c --method HF --basis STO-3G --out /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B14b/singlepoint --timeout 240",
+      "result": "PASS",
+      "note": "B14b re-execution on 77ac1de. The submission command used the existing B10 fixture label in --fixture-id; the registry row is separate so the B10 historical task is never overwritten. Same fixture path and digest.",
+      "submitted_fixture_label": "fx-local-singlepoint-h2-sto3g-v1"
+    }
+  ],
+  "generated_at_utc": "2026-10-23T03:22:00Z",
+  "h2_server_revision": "58d81ec5ec528577692e6c1aa300c46fbf3b43c6",
+  "lsf_singlepoint": {
+    "blocked_prerequisite": "LSF client/queue (bsub/bjobs/bhosts, LSF_ENVDIR) and a configured test node are absent; no remote submission attempted.",
+    "cleanup_seconds": 60,
+    "evidence": "B/B11/",
+    "fixture_id": "fx-lsf-singlepoint-v1",
+    "margin_seconds": 120,
+    "max_prepare_seconds": 120,
+    "max_queue_wait_seconds": 1800,
+    "max_run_seconds": 300,
+    "reusable_by": [
+      "B11",
+      "B14a",
+      "B14b"
+    ],
+    "scenario_timeout_seconds": 2400,
+    "status": "NOT_VERIFIED"
+  },
+  "lsf_timeout_seconds": 2400,
+  "p1_server_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+  "registration": {
+    "duplicate_check": "fixture_id unique; expensive local/LSF/control rows have distinct kind and owner; planned rows claim no bytes",
+    "duplicate_expensive_fixture": false,
+    "registry_owner": "B",
+    "submission_rule": "a fixture is submitted at most once; this registry is registered before any submission; expensive fixtures are never duplicated",
+    "write_protocol": "single writer writes tmp file then os.replace() (atomic)"
+  },
+  "schema": "acp2.fixture-runs.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "da_run_spec": {
+    "started_at": null,
+    "started_at_status": "NOT_VERIFIED(c24a_absent)",
+    "science_deadline_seconds": 13380,
+    "export_budget_seconds": 900,
+    "aggregate_budget_seconds": 120,
+    "total_budget_seconds": 14400,
+    "timeout_env": "ACP2_DA_TIMEOUT=14400",
+    "timeout_rule": "An unset ACP2_DA_TIMEOUT is a usage error and never a silent default.",
+    "payable_task_count": {
+      "this_submission": 1,
+      "scenario_cap": 12,
+      "agreement": "NOT_VERIFIED(c24a_absent)"
+    }
+  }
+}

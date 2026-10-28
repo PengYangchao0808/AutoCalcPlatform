@@ -1,0 +1,66 @@
+{
+  "artifacts": [
+    {
+      "path": "chromium-executable-probe.log",
+      "sha256": "ce051755b84287d66135982d6797f36d623f6d955ca43a08015a6f65ee0c5f1d",
+      "size_bytes": 368
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "chromium_not_installed:/ACPServer/acp2-tools/empty-browsers-final-5qvmZu/chromium-1243/chrome-linux64/chrome",
+      "name": "prerequisite:chromium_not_installed",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "9184d64a153727b35d743bf59934c13c6d48e27d",
+    "harness_revision": "032f45da0b43bbd122aee80a7b1c127cc5bd0806be2086045bc0ba0d393ef04f",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "9184d64a153727b35d743bf59934c13c6d48e27d",
+  "command": [
+    "/ACPServer/acp2-development/venvs/c/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "browser-install",
+    "--timeout",
+    "600",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/browser-install/browser-install-20261022T142952Z-213470/main"
+  ],
+  "contract_version": "1.0.0",
+  "cwd": "/ACPServer/acp2-development/C",
+  "evidence_kind": "fixture",
+  "exit_code": 2,
+  "extensions": {
+    "experience.harness_contract_revision": "032f45da0b43bbd122aee80a7b1c127cc5bd0806be2086045bc0ba0d393ef04f",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+    "experience.mode": "fixture",
+    "experience.product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+    "experience.run_id": "browser-install-20261022T142952Z-213470",
+    "experience.scenario_key": "browser-install",
+    "experience.subcase": null,
+    "experience.test_revision": "9184d64a153727b35d743bf59934c13c6d48e27d"
+  },
+  "finished_at": "2026-10-22T14:29:53Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:fixture",
+  "reason": "chromium_not_installed:/ACPServer/acp2-tools/empty-browsers-final-5qvmZu/chromium-1243/chrome-linux64/chrome",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "browser-install-20261022T142952Z-213470",
+  "scenario": "experience:browser-install",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T14:29:53Z",
+  "submission_id": null,
+  "usage": null
+}

@@ -1,0 +1,36 @@
+{
+  "sample_id": "proposal-create.positive",
+  "contract": "p2-research-operations.v1.json",
+  "kind": "positive",
+  "operation": "P2-R1",
+  "payload": {
+    "tool": "acp_research_proposal_create_v1",
+    "arguments": {
+      "project_id": "proj-demo",
+      "proposal": {
+        "proposal_id": "prop-1",
+        "title": "DA selectivity",
+        "capability_ids": [
+          "vibration.analyze"
+        ]
+      },
+      "idempotency_key": "idem-prop-1",
+      "plan": {
+        "workflow": "singlepoint",
+        "input": {
+          "source": "CCO",
+          "source_type": "smiles"
+        },
+        "method": {
+          "method": "r2SCAN-3c"
+        },
+        "resources": {
+          "cores": 1
+        }
+      }
+    }
+  },
+  "expected": {
+    "valid": true
+  }
+}

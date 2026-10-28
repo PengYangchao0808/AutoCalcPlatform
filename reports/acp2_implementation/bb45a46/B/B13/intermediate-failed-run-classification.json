@@ -1,0 +1,81 @@
+{
+  "schema": "acp2.b13.intermediate-failure-classification.v1",
+  "receipt": "before-repro/intermediate-failed-run-control-recovery-main-20261022T233130Z-747267-17ab1f98.json",
+  "run_id": "20261022T233130Z-747267-17ab1f98",
+  "scenario": "control-recovery",
+  "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+  "contract_version": "1.1.0",
+  "started_at": "2026-10-22T23:31:30Z",
+  "finished_at": "2026-10-22T23:33:29Z",
+  "result": "FAIL",
+  "exit_code": 1,
+  "failing_assertions": {
+    "b13.fault.controller_restart": "FAIL",
+    "b13.local_fault_rows": "adapter_eof=PASS,controller_restart=FAIL,publication_failure=PASS,cancel_race=PASS,timeout_cancel=PASS"
+  },
+  "cause": {
+    "classification": "pre-fix controller-restart race in the pre-reproducible acceptance harness",
+    "detail": "The run was executed before commit 2a57d6b made the B13 fault seam and Controller restart reproducible. The preserved receipt records only the FAIL status and the row budget/PID/TaskRef; the failing run's race comparison and timing files were not preserved, so the cause is classified from the FAIL assertion plus the subsequent re-run rather than from a surviving race log.",
+    "confidence": "derived",
+    "fixed_by": {
+      "commit": "2a57d6b6d91427093c6a10e710e5a52446ed801e",
+      "subject": "test(acceptance): make the B13 fault seam reproducible",
+      "commit_date": "2026-10-23T07:46:12+08:00"
+    }
+  },
+  "superseded_by": {
+    "reproducible_run": "control-recovery-main-20261022T233416Z-750137-2aaee4c9.json",
+    "reproducible_run_result": "NOT_VERIFIED (exit 2; controller_restart PASS; LSF row NOT_VERIFIED because LSF is absent)",
+    "preserved_local_pass_receipt": "before-repro/control-recovery-main-20261022T225006Z-719835-3b3f6d59.json",
+    "preserved_local_pass_result": "NOT_VERIFIED (exit 2; all five local fault rows PASS; LSF row NOT_VERIFIED)",
+    "note": "Both later runs record controller_restart PASS. The reproducible B13 root aggregate is the current evidence; before-repro/summary.json points at the earlier local-PASS run. Neither later run is a full PASS because LSF remains absent."
+  },
+  "artifact_integrity": {
+    "declared_artifacts": 62,
+    "verified_against_failed_receipt": 6,
+    "overwritten_in_before_repro_by_earlier_run": 51,
+    "absent_from_before_repro_repo_copy_identical_to_receipt": 2,
+    "missing_everywhere": 3,
+    "receipt_is_partial": true,
+    "verified_artifact_paths": [
+      "races/adapter_eof/native/sp.inp",
+      "races/controller_restart/native/sp.inp",
+      "races/publication_failure/published/sp.inp",
+      "races/publication_failure/scientific/sp.inp",
+      "races/cancel_race/process-table-after-cancel.txt",
+      "races/timeout_cancel/native/sp.inp"
+    ],
+    "overwritten_note": "before-repro/ is a snapshot of the earlier 2026-10-22T22:50:06Z local-PASS run: 51 of the failed run's declared paths are byte-identical to that run's digests, not to the 23:31:30Z run. The failed run's B13-root copies were then overwritten by the 23:34:16Z re-run.",
+    "absent_from_before_repro_but_identical_in_root": [
+      {
+        "path": "lsf-control-fixture.json",
+        "root_copy": "lsf-control-fixture.json",
+        "note": "Digest and size match the failed receipt; the copy survives unchanged in the B13 root."
+      },
+      {
+        "path": "dsh-disconnect.json",
+        "root_copy": "dsh-disconnect.json",
+        "note": "Digest and size match the failed receipt; the copy survives unchanged in the B13 root."
+      }
+    ],
+    "missing_everywhere_paths": [
+      {
+        "path": "exit-semantics.json",
+        "expected_sha256": "3a5882b810e3d3e1a7767544ec954a9f588940de3eb3545d017754c217a7cca6",
+        "expected_size_bytes": 570
+      },
+      {
+        "path": "candidate.json",
+        "expected_sha256": "56ad3925be5b16e0975ca7bec3fbfc66ffc2fc56eaf6615180b51cb827ac30c8",
+        "expected_size_bytes": 885
+      },
+      {
+        "path": "races/publication_failure/fault-disarmed.json",
+        "expected_sha256": "7f109c14a204a2f55cd627d53d24f882d9ca62f95f7fe4970e9cbb97c0fd6806",
+        "expected_size_bytes": 1133,
+        "note": "Not present in before-repro/. The B13 root fault descriptor (fault/publication-fault.json) now holds the later 23:34:16Z disarmed content sha256 1227af96..., not this failed run's version."
+      }
+    ],
+    "not_fabricated": true
+  }
+}

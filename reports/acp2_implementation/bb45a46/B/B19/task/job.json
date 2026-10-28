@@ -1,0 +1,86 @@
+{
+  "id": "20261023_163522_001_b19-research-recovery",
+  "spec": {
+    "workflow": "singlepoint",
+    "name": "9_ethanol_B19_research-recovery_fixture_C_0.000_0.000_0.000_C_1.520_0.000_0.000_O_2.050_1.250_0.000__02",
+    "input": {
+      "source_type": "xyz_text",
+      "source": "9\nethanol B19 research-recovery fixture\nC 0.000 0.000 0.000\nC 1.520 0.000 0.000\nO 2.050 1.250 0.000\nH -0.500 0.900 0.000\nH -0.500 -0.500 0.800\nH -0.500 -0.500 -0.800\nH 1.900 -0.600 0.800\nH 1.900 -0.600 -0.800\nH 2.950 1.150 0.000\n",
+      "charge": 0,
+      "multiplicity": 1
+    },
+    "method": {
+      "levels": {
+        "singlepoint": {
+          "engine": "orca",
+          "functional": "wB97M-V",
+          "basis": "def2-SVP"
+        }
+      }
+    },
+    "resources": {
+      "cores": 1,
+      "memory_mb": 1024,
+      "nproc": 20,
+      "mem": "60GB"
+    },
+    "output_dir": null,
+    "config_path": null,
+    "tags": [],
+    "project_id": "uncategorized",
+    "input_hash": "sha256:aa21390d218f8b689a12e6242523506816ff2f91278ba83e4441c652f9b33aeb",
+    "execution_mode": null,
+    "target_node": null,
+    "node_tags": [],
+    "molecule_name": "9\nethanol B19 research-recovery fixture\nC 0.000 0.000 0.000\nC 1.520 0.000 0.000\nO 2.050 1.250 0.000\nH -0.500 0.900 0.000\nH -0.500 -0.500 0.800\nH -0.500 -0.500 -0.800\nH 1.900 -0.600 0.800\nH 1.900 -0.600 -0.800\nH 2.950 1.150 0.000",
+    "task_name": "singlepoint",
+    "remark": "",
+    "custom_name": null
+  },
+  "status": "cancelled",
+  "work_dir": "/ACPServer/acp2-development/data/b/run-root-b19/uncategorized/9_ethanol_B19_research-recovery_fixture_C_0.000_0.000_0.000_C_1.520_0.000_0.000_O_2.050_1.250_0.000__02",
+  "created_at": "2026-10-23T08:35:22.082131+00:00",
+  "updated_at": "2026-10-23T08:35:26.764873+00:00",
+  "started_at": "2026-10-23T08:35:22.094276+00:00",
+  "completed_at": "2026-10-23T08:35:26.764840+00:00",
+  "current_stage": null,
+  "progress": null,
+  "error": null,
+  "project_id": "uncategorized",
+  "input_hash": "sha256:aa21390d218f8b689a12e6242523506816ff2f91278ba83e4441c652f9b33aeb",
+  "pid": 1399629,
+  "exit_code": 130,
+  "remote_job_id": null,
+  "group_id": "20261023_163522_001_b19-research-recovery",
+  "node_id": "local",
+  "host": "workstation",
+  "result": {
+    "admission": {
+      "reservation_id": "res_idem_5a9e2132212c405380cd0c0d6fbb3634",
+      "enforcement": "local-single-enforced",
+      "mode": "quota-only",
+      "enforced": true,
+      "policy_version": "local-single-v1",
+      "principal_id": "principal_local",
+      "verified_project": null,
+      "multi_tenant_security": false,
+      "budget": {
+        "budget_id": "rb_3777405c83e92625b5f43b30",
+        "reservation_id": "bres_idem_5a9e2132212c405380cd0c0d6fbb3634",
+        "units": {
+          "attempt": 1,
+          "task_ref": 1
+        },
+        "state": "reserved"
+      }
+    },
+    "required_software": [
+      "orca"
+    ],
+    "execution_target": "local",
+    "execution_kind": "local",
+    "terminal_side_effects_done": false
+  },
+  "revision": 6,
+  "attempt": 1
+}

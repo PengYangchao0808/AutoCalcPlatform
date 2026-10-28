@@ -1,0 +1,175 @@
+{
+  "bom": "/ACPServer/acp2-remediation-integration/docs/reference/next-change/acp2-contracts/release/bom.current.json",
+  "bom_sha256": "ee23e7b0c26a9351dda8727d31f48ca520930f8368fcb61cb405e5c5c3b62e18",
+  "commands": {
+    "artifact_check": "PYTHONPATH=src python scripts/acceptance/check_release_artifacts.py",
+    "build": "python scripts/release/build_release_bom.py",
+    "install": "python scripts/acceptance/acp2_m501_install.py --store /ACPServer/acp2-artifacts/remediation/m5-01 --out /ACPServer/acp2-remediation-integration/reports/acp2_remediation_20261026/m5-01",
+    "rph_package": "pnpm --dir rph package",
+    "tests": "pytest tests/test_acp2_m501_release_artifacts.py tests/test_packaging_assets.py tests/test_acp2_rph_install_surface.py -q --run-slow"
+  },
+  "generated_at": "2026-10-28T02:36:04Z",
+  "imports": {
+    "roles": {
+      "distributions": [
+        "cccp",
+        "acp-worker",
+        "acp-web"
+      ],
+      "repo_on_sys_path": false,
+      "resolved_inside_venv": true
+    },
+    "root": {
+      "distributions": [
+        "acp"
+      ],
+      "repo_on_sys_path": false,
+      "resolved_inside_venv": true
+    }
+  },
+  "limitations": [
+    "Built from a dirty working tree (28 paths) at 6cbf7258c3598095549f80ce55c5a4493291896f; a clean committed candidate is required before M5-02/M5-03 sign-off.",
+    "RPH packages remain private:true at version 0.0.0 and are distributed as tarballs; no public npm publication is claimed.",
+    "The versioned /experience/<release_id>/ read-only mount from B-req-06 is not implemented here; the packaged Workbench /, /js and /css mounts are verified read-only with startup digest verification (B25 static-assets row stays NOT_VERIFIED).",
+    "BOM evidence reuse_rule is rerun_required: M5-01 proves build+install+serve from artifacts, while the full G01-G26 walker is M5-02 and the independent operator run is M5-03.",
+    "No QC or model invocation was performed; scientific software entries record binary version probes only.",
+    "persistent_tag is a proposal only: no tag, commit or push was performed by this task."
+  ],
+  "matrix": {
+    "mixed": {
+      "reason": "release contract forbids mixing distributions: ['root'] already installed, refusing the 'roles' set",
+      "shared_paths_byte_identical": true,
+      "status": "REFUSED"
+    },
+    "roles_only": {
+      "distributions": [
+        "cccp",
+        "acp-worker",
+        "acp-web"
+      ],
+      "status": "PASS"
+    },
+    "root_only": {
+      "distributions": [
+        "acp"
+      ],
+      "status": "PASS"
+    },
+    "web_research_surface": {
+      "research_read_refusal": 403,
+      "science_capabilities": 200,
+      "status": "PASS"
+    }
+  },
+  "mcp": {
+    "pre_initialize_code": "not_initialized",
+    "protocol_version": "2025-06-18",
+    "tools": [
+      "acp_analyze",
+      "acp_cancel",
+      "acp_capabilities",
+      "acp_preflight",
+      "acp_prepare_artifact",
+      "acp_read_artifact",
+      "acp_status",
+      "acp_submit"
+    ]
+  },
+  "not_verified": [
+    "doctor optional science binary not registered: software:censo",
+    "doctor optional science binary not registered: software:isostat",
+    "doctor optional science binary not registered: software:molclus",
+    "versioned /experience/<release_id>/ mount: not implemented (packaged /,/js,/css mounts are verified read-only with startup digest verification)",
+    "full G01-G26 evidence walk and independent operator run are M5-02/M5-03"
+  ],
+  "result": "PASS",
+  "rph": {
+    "bin_version": "rph 0.0.0",
+    "doctor_mode": "static",
+    "doctor_schema": "acp2.rph.doctor.v1",
+    "doctor_status": "ok",
+    "verify_exit": 0
+  },
+  "schema": "acp2.m5-01.summary.v1",
+  "seconds": 89.0,
+  "steps": [
+    {
+      "name": "store.digests",
+      "status": "PASS"
+    },
+    {
+      "name": "root.imports",
+      "status": "PASS"
+    },
+    {
+      "name": "root.distribution_set",
+      "status": "PASS"
+    },
+    {
+      "name": "root.cli",
+      "status": "PASS"
+    },
+    {
+      "name": "root.mcp_handshake",
+      "status": "PASS"
+    },
+    {
+      "name": "roles.imports",
+      "status": "PASS"
+    },
+    {
+      "name": "roles.distribution_set",
+      "status": "PASS"
+    },
+    {
+      "name": "roles.cli",
+      "status": "PASS"
+    },
+    {
+      "name": "roles.mcp_handshake",
+      "status": "PASS"
+    },
+    {
+      "name": "web.workbench.static",
+      "status": "PASS"
+    },
+    {
+      "name": "web.workbench.capabilities",
+      "status": "PASS"
+    },
+    {
+      "name": "web.workbench.read_only_mounts",
+      "status": "PASS"
+    },
+    {
+      "name": "web.workbench.digest_startup",
+      "status": "PASS"
+    },
+    {
+      "name": "install.matrix",
+      "status": "PASS"
+    },
+    {
+      "name": "rph.offline_install",
+      "status": "PASS"
+    },
+    {
+      "name": "plugin.wheel_install",
+      "status": "PASS"
+    }
+  ],
+  "store": "/ACPServer/acp2-artifacts/remediation/m5-01",
+  "store_components": {
+    "artifacts": 27,
+    "bom": true,
+    "bytes": 237660838
+  },
+  "task_id": "M5-01",
+  "workbench": {
+    "digest_matches_bom": true,
+    "files": 121,
+    "release_id": "acp2-experience-0.3.0",
+    "static_digest": "1d5c28c721119515b4bf600c0689b6fe80cc406fa665a39f3c9a74607997aab9",
+    "tamper_rejected": true
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "attempt": 1,
+  "chain_digest": "",
+  "data_bindings": [],
+  "errors": [],
+  "evidence_digests": {
+    "task_result_digest": "sha256:9beae8887f057b52b06b2f589cb97e0ef522e4784bf62a11f37bf64e011e0b00"
+  },
+  "fencing_token": "",
+  "job_id": "m406b-nmr-crossdomain",
+  "owner": "m406b-acceptance",
+  "plan_identity": "",
+  "receipt_version": 1,
+  "release_digest": "sha256:a9fc2614b92fed53a66ea43933ce92ffbfc09179a0d93d28d3a2d1bea383b8ea",
+  "release_id": "a9fc2614b92fed53",
+  "result_digest": "sha256:6c016d604051623960c59f5c68eddce2343f1d495d6eba2ad05f0597fd2bc78d",
+  "state": "completed",
+  "step_execution_chain": [],
+  "step_identities": [],
+  "submission_id": "m406b-m406b-nmr-crossdomain",
+  "written_at": "2026-10-28T00:55:49.884790Z"
+}

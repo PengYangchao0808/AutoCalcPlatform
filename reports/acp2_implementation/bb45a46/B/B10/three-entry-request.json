@@ -1,0 +1,15 @@
+{
+  "attempt": 1,
+  "cli_cwd": "/ACPServer/acp2-development/B",
+  "described_from": "B10a local-singlepoint PASS receipt (submitted once via MCP)",
+  "launch_env": {
+    "ACP_CONFIG": "/ACPServer/acp2-development/data/b/controller-config/cccp.yaml",
+    "ACP_RUN_ROOT": "/ACPServer/acp2-development/data/b/run-root-b10",
+    "CONFSEARCH_ORCA_LD_LIBRARY_PATH": "/home/xieningke/openmpi418/lib:/home/xieningke/orca611",
+    "CONFSEARCH_ORCA_PATH": "/home/xieningke/orca611/orca",
+    "LD_LIBRARY_PATH": "/home/xieningke/openmpi418/lib:/home/xieningke/orca611"
+  },
+  "plan_identity": "v2:0cbae6ed2d2bd8daf42b262881b5fe04",
+  "release_id": "98e0695545d668e6",
+  "task_id": "20261023_031453_001_singlepoint"
+}

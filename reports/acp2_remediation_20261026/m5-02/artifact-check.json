@@ -1,0 +1,160 @@
+{
+  "artifact_kinds": [
+    "contract-bundle",
+    "document",
+    "plugin-wheel",
+    "python-sdist",
+    "python-wheel",
+    "rph-package",
+    "science-asset",
+    "static-asset-bundle"
+  ],
+  "artifacts": 27,
+  "bom": "docs/reference/next-change/acp2-contracts/release/bom.current.json",
+  "bom_sha256": "538f573b523a6511057be0954fb80ef58e96cf86bcabf71f5317d0f9a7a8cf60",
+  "bundles": {
+    "contracts": {
+      "members": 379
+    },
+    "documents": [
+      "acp-release-docs.tar.gz"
+    ],
+    "science": {
+      "members": 8
+    }
+  },
+  "plugins": {
+    "plugin-external": {
+      "entry_point_group": "cccp.science_plugins",
+      "name": "acp2-external-science-validator",
+      "version": "1.0.0"
+    },
+    "plugin-upgrade-v1": {
+      "entry_point_group": "cccp.science_plugins",
+      "name": "acp2-upgrade-science-validator",
+      "version": "1.0.0"
+    },
+    "plugin-upgrade-v2": {
+      "entry_point_group": "cccp.science_plugins",
+      "name": "acp2-upgrade-science-validator",
+      "version": "2.0.0"
+    }
+  },
+  "python": {
+    "disjoint_roles": true,
+    "root_role_overlap_identical": true,
+    "sdist_roundtrip": {
+      "acp-0.3.0-py3-none-any.whl": "PASS",
+      "acp_web-0.3.0-py3-none-any.whl": "PASS",
+      "acp_worker-0.3.0-py3-none-any.whl": "PASS",
+      "cccp-0.3.0-py3-none-any.whl": "PASS"
+    },
+    "wheels": {
+      "acp-0.3.0-py3-none-any.whl": {
+        "files": 676,
+        "owners": [
+          "acp",
+          "acp_services",
+          "cccp"
+        ],
+        "role": "root",
+        "set": "root"
+      },
+      "acp_web-0.3.0-py3-none-any.whl": {
+        "files": 432,
+        "owners": [
+          "acp",
+          "acp_web_assets"
+        ],
+        "role": "web",
+        "set": "roles"
+      },
+      "acp_worker-0.3.0-py3-none-any.whl": {
+        "files": 129,
+        "owners": [
+          "acp_services"
+        ],
+        "role": "worker",
+        "set": "roles"
+      },
+      "cccp-0.3.0-py3-none-any.whl": {
+        "files": 238,
+        "owners": [
+          "cccp"
+        ],
+        "role": "cccp",
+        "set": "roles"
+      }
+    }
+  },
+  "result": "PASS",
+  "rph": {
+    "contents_complete": true,
+    "directory": "/ACPServer/acp2-artifacts/remediation/m5-02/rph/install-surface",
+    "packages": [
+      {
+        "bin": null,
+        "file": "rph-research-0.0.0.tgz",
+        "license": "MIT",
+        "name": "research",
+        "package": "@rph/research",
+        "sha256": "7a881b008c734ff47347337950655cebb55660d571563f523bd7d2cab1180517",
+        "size": 57950,
+        "version": "0.0.0"
+      },
+      {
+        "bin": null,
+        "file": "rph-bridge-0.0.0.tgz",
+        "license": "MIT",
+        "name": "bridge",
+        "package": "@rph/bridge",
+        "sha256": "5e662be42b61c93757ab59ff713446fb81ffafa3f26acd2e6e691d119ac1c027",
+        "size": 43959,
+        "version": "0.0.0"
+      },
+      {
+        "bin": null,
+        "file": "rph-dsh-bundle-0.0.0.tgz",
+        "license": "MIT",
+        "name": "dsh-bundle",
+        "package": "@rph/dsh-bundle",
+        "sha256": "521faca590bc4436e7ae2b7112a6f721243c541f8da4db79fa49b1f57432ae4a",
+        "size": 159162,
+        "version": "0.0.0"
+      },
+      {
+        "bin": "rph",
+        "file": "rph-cli-0.0.0.tgz",
+        "license": "MIT",
+        "name": "cli",
+        "package": "@rph/cli",
+        "sha256": "b550b90fb27aa734e6bf1ce49fdc564312d1d26e604e339ac451a64c86a70b86",
+        "size": 18496,
+        "version": "0.0.0"
+      }
+    ],
+    "registry_free": true,
+    "surface_files": [
+      "README.md",
+      "package.json",
+      "pnpm-lock.yaml",
+      "pnpm-workspace.yaml",
+      "rph-bridge-0.0.0.tgz",
+      "rph-cli-0.0.0.tgz",
+      "rph-dsh-bundle-0.0.0.tgz",
+      "rph-install.package.json",
+      "rph-packages.json",
+      "rph-research-0.0.0.tgz",
+      "verify-install.mjs"
+    ]
+  },
+  "schema": "acp2.m5-01.artifact-check.v1",
+  "static_assets": {
+    "bytes": 4215619,
+    "digest": "1d5c28c721119515b4bf600c0689b6fe80cc406fa665a39f3c9a74607997aab9",
+    "files": 121,
+    "release_id": "acp2-experience-0.3.0",
+    "verified_against_wheel": "acp_web-0.3.0-py3-none-any.whl"
+  },
+  "task_id": "M5-02"
+}

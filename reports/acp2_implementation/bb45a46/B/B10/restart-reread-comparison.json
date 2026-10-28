@@ -1,0 +1,147 @@
+{
+  "after": {
+    "artifacts": [
+      {
+        "checksum": "sha256:30c08be9ec755050384418d62ffd67cc576c4335cf7a967b23e508e6f1d2f2f6",
+        "path": "/ACPServer/acp2-development/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.inp",
+        "source": "orca",
+        "type": "output"
+      },
+      {
+        "checksum": "sha256:b083545e1254c6ef5f2a9b91b0b515d77965ca56dce795bffb14435f7a6c43df",
+        "path": "/ACPServer/acp2-development/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.out",
+        "source": "orca",
+        "type": "log"
+      }
+    ],
+    "coordinates": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.74
+      ]
+    ],
+    "energy_hartree": -1.116759307204,
+    "energy_units": "hartree",
+    "frequencies": [],
+    "provenance": {
+      "backend": "orca",
+      "input_signature": "input.xyz",
+      "method": "HF",
+      "version": "unknown"
+    },
+    "symbols": [
+      "H",
+      "H"
+    ]
+  },
+  "before": {
+    "artifacts": [
+      {
+        "checksum": "sha256:30c08be9ec755050384418d62ffd67cc576c4335cf7a967b23e508e6f1d2f2f6",
+        "path": "/ACPServer/acp2-development/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.inp",
+        "source": "orca",
+        "type": "output"
+      },
+      {
+        "checksum": "sha256:b083545e1254c6ef5f2a9b91b0b515d77965ca56dce795bffb14435f7a6c43df",
+        "path": "/ACPServer/acp2-development/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.out",
+        "source": "orca",
+        "type": "log"
+      }
+    ],
+    "coordinates": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        0.74
+      ]
+    ],
+    "energy_hartree": -1.116759307204,
+    "energy_units": "hartree",
+    "frequencies": [],
+    "provenance": {
+      "backend": "orca",
+      "input_signature": "input.xyz",
+      "method": "HF",
+      "version": "unknown"
+    },
+    "symbols": [
+      "H",
+      "H"
+    ]
+  },
+  "comparison": {
+    "attempt_equal": true,
+    "energy_equal": true,
+    "frequencies_equal": true,
+    "geometry_equal": true,
+    "http_cli_equal_after": {
+      "attempt": true,
+      "job_id": true,
+      "manifest_sha256": true,
+      "plan_identity": true,
+      "release_id": true,
+      "result_digest": true
+    },
+    "manifest_sha256_equal": true,
+    "no_new_dispatch": true,
+    "no_new_task": true,
+    "plan_identity_equal": true,
+    "release_equal": true,
+    "state_files_unchanged": {
+      "event_lines": true,
+      "result_manifest_sha256": true,
+      "sp_out_sha256": true,
+      "task_result_sha256": true
+    },
+    "symbols_equal": true,
+    "task_result_sha256_equal": true
+  },
+  "controller_restart": {
+    "health_after": {
+      "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+      "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
+      "contract_digest_scope": "delivered-contract-set",
+      "contract_version": "1.1.0",
+      "read_only": true,
+      "schema_version": 1,
+      "started_at": "2026-10-22T19:16:55.807035Z",
+      "status": "ok"
+    },
+    "same_db": "/ACPServer/acp2-development/data/b/run-root-b10/acp_jobs.db",
+    "same_run_root": "/ACPServer/acp2-development/data/b/run-root-b10"
+  },
+  "post_restart": {
+    "event_lines": 8,
+    "job_ids": [
+      "20261023_031453_001_singlepoint"
+    ],
+    "job_started_events": 1,
+    "result_manifest_sha256": "f13f4a9ed1cc5535cd6d0fe01b726d1c9fc08ee4cb14af50cf9fe1c6dc19adad",
+    "sp_out_sha256": "b083545e1254c6ef5f2a9b91b0b515d77965ca56dce795bffb14435f7a6c43df",
+    "task_count": 1,
+    "task_result_sha256": "128b22494edbe2133f58c8aab08bbbfd2782dca4010e4a807f8d1b4ccfe667d4"
+  },
+  "pre_restart": {
+    "event_lines": 8,
+    "job_ids": [
+      "20261023_031453_001_singlepoint"
+    ],
+    "job_started_events": 1,
+    "result_manifest_sha256": "f13f4a9ed1cc5535cd6d0fe01b726d1c9fc08ee4cb14af50cf9fe1c6dc19adad",
+    "sp_out_sha256": "b083545e1254c6ef5f2a9b91b0b515d77965ca56dce795bffb14435f7a6c43df",
+    "task_count": 1,
+    "task_result_sha256": "128b22494edbe2133f58c8aab08bbbfd2782dca4010e4a807f8d1b4ccfe667d4"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "products": [
+    {
+      "id": "optimize.inp",
+      "kind": "file",
+      "label": "optimize.inp",
+      "path": "optimize.inp"
+    },
+    {
+      "id": "optimize.out",
+      "kind": "file",
+      "label": "optimize.out",
+      "path": "optimize.out"
+    }
+  ],
+  "status": "completed",
+  "task_id": "v2:4f818dcd0c76cd8d1ac9556ca4121dd6-step0-optimize",
+  "version": 2,
+  "workflow": "optimize"
+}

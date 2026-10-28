@@ -22,11 +22,11 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     from acp.scheduler.remote.runner import RemotePollObservation
@@ -41,6 +41,7 @@ from acp.scheduler.jobs import (
     SCAN_CONFIG_FILENAME,
     JobRecord,
     JobSpec,
+    JobStatus,
     batchoptimize_method_flags,
     build_task_record,
     censo_ewin_from_method,
@@ -59,6 +60,20 @@ from acp.scheduler.processctl import find_task_processes, pid_is_alive, process_
 from acp.scheduler.provenance import Provenance, build_provenance_for_job
 from acp.scheduler.stage_tasks import StageTaskObserver, StageTaskStore
 from acp.storage.layout import TaskStorage, runtime_file
+from acp_services.runtime.execution_chain import (
+    DEFAULT_ENVELOPE_WORKFLOWS,
+    EXECUTION_ENTRY_ENVELOPE,
+    AttemptExecutionChoice,
+    FrozenGroupError,
+    frozen_artifacts_present,
+    local_launch,
+    read_attempt_choice,
+    resolve_attempt_choice,
+    with_attempt_choice,
+    worker_argv,
+    write_attempt_choice,
+)
+from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +95,7 @@ def _electronic_state_cli_flags(module: Mapping[str, object], work_dir: Path) ->
         encoding="utf-8",
     )
     return ["--spin-config", sidecar.as_posix()]
+
 
 _GFN_DISPLAY_TO_INT: dict[str, int] = {
     "GFN0-xTB": 0,
@@ -146,10 +162,6 @@ class LocalCleanupProtocol(Protocol):
     """
 
     def pre_submit_housekeeping(self) -> Any: ...
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _safe_timestamp(value: object) -> float:
@@ -520,6 +532,16 @@ class JobRunner:
         # branch runs pre-submit housekeeping before materializing input.
         # Populated by ``JobManager`` when ``local_retention.enabled``.
         self.local_cleanup = local_cleanup
+        # 07-C activation: default-envelope attempts are frozen here before the
+        # dispatcher selects the entry.  Tests may inject a prepared release.
+        self.freeze_release: Any | None = None
+        self._default_release: Any | None = None
+        self._repo_root = Path(__file__).resolve().parents[3]
+        # Worker-independence probe only (controlled integration tests): when
+        # set, envelope-selected local attempts pass ``--probe-executor`` to the
+        # Services worker.  Production leaves it ``None``; no ordinary job is
+        # affected and the worker remains the same executable.
+        self.worker_probe_executor: str | None = None
         self._proc_lock = threading.Lock()
         self._processes: dict[str, subprocess.Popen[Any]] = {}
         self._seen_stages: dict[str, set[str]] = {}
@@ -617,8 +639,9 @@ class JobRunner:
         effective_input_path = (
             str(materialized) if materialized else _extract_input_source(record.spec.input)
         )
-        cmd = self._build_cmd(
-            record.spec,
+        self._ensure_default_frozen_attempt(record, work_dir, effective_input_path, event_log)
+        cmd = self._build_execution_cmd(
+            record,
             work_dir,
             effective_input_path,
             materialized_roles,
@@ -668,10 +691,27 @@ class JobRunner:
             # re-fail a job just because it is absent from ``_processes``.
             if self._foreign_task_alive(record):
                 return (False, None)
+            # The worker exited in another controller's lifetime (no live
+            # process remains).  Never finalise from ``record.exit_code``
+            # alone: that column is only filled by the controller that
+            # observed the exit, so a cross-process rerun/continue leaves it
+            # ``None`` and a completed workflow would be recorded as FAILED.
+            # Read the durable completion evidence instead; a persisted
+            # CANCELLING intent wins over any observation (control intent is
+            # never overwritten).
+            if record.status == JobStatus.CANCELLING:
+                exit_code = record.exit_code if record.exit_code not in (None, 0) else 130
+                event_type = "job.cancelled"
+            else:
+                evidence = self.disk_completion_exit_code(record)
+                exit_code = (
+                    evidence
+                    if evidence is not None
+                    else (record.exit_code if record.exit_code is not None else 1)
+                )
+                event_type = "job.completed" if exit_code == 0 else "job.failed"
             event_log = self._event_logs.get(record.id)
-            exit_code = record.exit_code if record.exit_code is not None else 1
             if event_log:
-                event_type = "job.failed" if exit_code != 0 else "job.completed"
                 event_log.append(
                     event_type,
                     job_id=record.id,
@@ -836,6 +876,59 @@ class JobRunner:
                 return True
         return bool(find_task_processes(work_dir))
 
+    def disk_completion_exit_code(self, record: JobRecord) -> int | None:
+        """Return the exit code proven by on-disk completion evidence.
+
+        Cross-process finishing (rerun/continue started by a controller that
+        exited before the worker) leaves ``record.exit_code`` empty.  The
+        wrapper marker is authoritative when present; otherwise the workflow
+        ``state.json`` records the terminal status.  Evidence declaring a
+        different attempt is ignored (stale receipt fence).
+        """
+        work_dir = Path(record.work_dir)
+        try:
+            marker = (work_dir / ".exit_code").read_text(encoding="utf-8").strip()
+        except OSError:
+            marker = ""
+        if marker:
+            try:
+                return int(marker)
+            except ValueError:
+                logger.debug("Ignoring non-numeric .exit_code marker in %s", work_dir)
+        state_path = find_workflow_state(work_dir)
+        if state_path is None:
+            return None
+        data = _read_json_object(state_path)
+        if data is None:
+            return None
+        declared_attempt = data.get("attempt")
+        if isinstance(declared_attempt, int) and not isinstance(declared_attempt, bool):
+            if declared_attempt != record.attempt:
+                return None
+        status = data.get("status")
+        if status == "completed":
+            return 0
+        if status == "failed":
+            return 1
+        stages = data.get("stages")
+        if isinstance(stages, dict) and stages:
+            if all(
+                isinstance(info, dict) and info.get("status") in ("completed", "skipped")
+                for info in stages.values()
+            ):
+                return 0
+        return None
+
+    def attach_run_lock(self, record: JobRecord, *, task_pid: int | None) -> None:
+        """Persist this controller's ownership of an adopted task process."""
+        lock_path = runtime_file(Path(record.work_dir), "run.lock")
+        try:
+            self._write_run_lock(lock_path, record, task_pid=task_pid)
+        except OSError:
+            logger.warning("Failed to write adopted run.lock for %s", record.id, exc_info=True)
+            return
+        self._run_locks[record.id] = lock_path
+
     def _guard_single_execution(self, record: JobRecord) -> None:
         """Refuse to start when a live process already occupies the task."""
         live = self._live_task_pids(record)
@@ -850,6 +943,7 @@ class JobRunner:
             "job_id": record.id,
             "owner_pid": os.getpid(),
             "task_pid": task_pid,
+            "attempt": record.attempt,
             "acquired_at": datetime.now(timezone.utc).isoformat(),
         }
         lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1003,8 +1097,9 @@ class JobRunner:
         effective_input_path = (
             str(materialized) if materialized else _extract_input_source(record.spec.input)
         )
-        cmd = self._build_cmd(
-            record.spec,
+        self._ensure_default_frozen_attempt(record, work_dir, effective_input_path, event_log)
+        cmd = self._build_execution_cmd(
+            record,
             work_dir,
             effective_input_path,
             materialized_roles,
@@ -1222,6 +1317,118 @@ class JobRunner:
 
         return False
 
+    def _ensure_default_frozen_attempt(
+        self,
+        record: JobRecord,
+        work_dir: Path,
+        input_path: str,
+        event_log: JobEventLog,
+    ) -> None:
+        """Freeze the default-envelope attempt BEFORE the dispatcher decides.
+
+        Ordinary submissions for :data:`DEFAULT_ENVELOPE_WORKFLOWS` get a
+        verified group here; the existing dispatcher then selects the envelope
+        entry.  A same-attempt replay keeps the recorded choice/group/claim; a
+        recorded envelope choice with a missing/corrupt group is a typed
+        failure (never a silent legacy re-submit).
+        """
+        workflow = str(record.spec.workflow)
+        if workflow not in DEFAULT_ENVELOPE_WORKFLOWS:
+            return
+        previous = read_attempt_choice(work_dir)
+        if previous is not None and previous.attempt == record.attempt:
+            if previous.entry == EXECUTION_ENTRY_ENVELOPE:
+                if not frozen_artifacts_present(work_dir, expected_attempt=record.attempt):
+                    raise FrozenGroupError(
+                        f"envelope choice for attempt {record.attempt} is recorded but the "
+                        "frozen group is missing/corrupt; refusing a legacy re-submit"
+                    )
+            # Same attempt: never re-select or re-freeze, regardless of entry.
+            return
+        if previous is not None and previous.attempt != record.attempt:
+            # The caller (continue/rerun) owns archiving; a surviving old group
+            # is a typed conflict in the builder, never silently overwritten.
+            pass
+
+        if self.freeze_release is not None:
+            release = self.freeze_release
+        elif self._default_release is not None:
+            release = self._default_release
+        else:
+            from acp.calculations.attempt_freeze import build_local_release
+
+            release = build_local_release(self._repo_root, work_dir.parent.parent)
+            self._default_release = release
+
+        from acp.calculations.attempt_freeze import build_freeze_spec
+        from acp_services.runtime.attempt_freeze import write_frozen_attempt
+
+        spec = build_freeze_spec(record, work_dir, input_path, release)
+        group = write_frozen_attempt(work_dir, spec)
+        event_log.append(
+            "attempt.frozen",
+            job_id=record.id,
+            workflow=workflow,
+            attempt=record.attempt,
+            release_id=group.manifest.release_id,
+            release_digest=group.manifest.release_digest,
+        )
+
+    def _resolve_attempt_choice(
+        self, record: JobRecord, work_dir: Path, *, remote: bool = False
+    ) -> AttemptExecutionChoice:
+        """Resolve (and record) this attempt's execution entry via the dispatcher.
+
+        The single dispatcher (``execution_chain``) owns the decision: an
+        already-recorded choice for the same attempt is reused verbatim (resume
+        never re-selects), a new attempt re-selects from the frozen table. The
+        choice is persisted in the attempt runtime dir so the same attempt can
+        never dispatch a second, different entry.
+        """
+        previous = read_attempt_choice(work_dir)
+        remote_meta = (record.result or {}).get("remote")
+        release_id = ""
+        if isinstance(remote_meta, Mapping):
+            raw_release = remote_meta.get("code_release")
+            if isinstance(raw_release, str):
+                release_id = raw_release
+        choice = resolve_attempt_choice(
+            workflow=record.spec.workflow,
+            attempt=record.attempt,
+            remote=remote,
+            envelope_available=frozen_artifacts_present(work_dir, expected_attempt=record.attempt),
+            previous=previous,
+            release_id=release_id,
+        )
+        if previous != choice:
+            write_attempt_choice(work_dir, choice)
+        return choice
+
+    def _build_execution_cmd(
+        self,
+        record: JobRecord,
+        work_dir: Path,
+        input_path: str,
+        materialized_roles: Mapping[str, Path | str] | None,
+    ) -> list[str]:
+        """Return the ONE entry command for this attempt (dispatcher-driven).
+
+        Envelope-selected attempts run the Services worker bootstrap; every
+        other attempt keeps the legacy CLI mapping. Never both — the selection
+        is frozen on the attempt first.
+        """
+        choice = self._resolve_attempt_choice(record, work_dir)
+        record.result = with_attempt_choice(record.result, choice)
+        if choice.entry == EXECUTION_ENTRY_ENVELOPE:
+            launch = local_launch(work_dir, choice)
+            return worker_argv(
+                self.python,
+                launch,
+                work_dir=str(work_dir),
+                probe_executor=self.worker_probe_executor,
+            )
+        return self._build_cmd(record.spec, work_dir, input_path, materialized_roles)
+
     def _build_cmd(
         self,
         spec: JobSpec,
@@ -1272,12 +1479,12 @@ class JobRunner:
 
         if wf == "tsmode":
             bundle_path = Path(input_path) if input_path else None
-            if bundle_path is None or not bundle_path.is_file() or not str(
-                bundle_path
-            ).endswith("bundle.json"):
-                raise ValueError(
-                    "tsmode job requires a materialized INPUT/tsmode/bundle.json"
-                )
+            if (
+                bundle_path is None
+                or not bundle_path.is_file()
+                or not str(bundle_path).endswith("bundle.json")
+            ):
+                raise ValueError("tsmode job requires a materialized INPUT/tsmode/bundle.json")
             cmd += [
                 "--source-bundle",
                 bundle_path.as_posix(),
@@ -1406,7 +1613,7 @@ class JobRunner:
                 cmd += ["--name", spec.name]
             levels = method.get("levels", {})
             if levels:
-                from acp.catalog import method_levels_to_cli_flags
+                from acp_services.runtime.method_flags import method_levels_to_cli_flags
 
                 cmd += method_levels_to_cli_flags(levels, workflow=wf)
                 spin_module = electronic_state_from_method(method)
@@ -1674,8 +1881,7 @@ class JobRunner:
         path_request = dict(inp.get("path_request") or spec.method.get("path_request") or {})
         if not path_request:
             raise ValueError(
-                "XtbPathSearch job requires input.path_request "
-                "(pes2ts_xtb_path_request_v1 payload)"
+                "XtbPathSearch job requires input.path_request (pes2ts_xtb_path_request_v1 payload)"
             )
         work_dir.mkdir(parents=True, exist_ok=True)
         path_config_path = work_dir / PATH_CONFIG_FILENAME

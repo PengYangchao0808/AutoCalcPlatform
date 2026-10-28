@@ -1,0 +1,282 @@
+{
+  "adr008_step_declaration": {
+    "adr": "ADR-008",
+    "open_steps": [
+      "endpoint_prep",
+      "candidate_path",
+      "energy_thermochemistry"
+    ],
+    "recipe_id": "recipe.diels_alder.limited.v1",
+    "schema": "acp2.runtime.adr008-step-declaration.v1",
+    "steps": [
+      {
+        "dag_step_kind": "",
+        "index": 1,
+        "mapping": "open",
+        "reason": "conformer_search has no bounded StepDispatchAdapter task core mapping",
+        "required": true,
+        "step_id": "endpoint_prep",
+        "task_kind": "conformer_search"
+      },
+      {
+        "dag_step_kind": "",
+        "index": 2,
+        "mapping": "open",
+        "reason": "xtb_path_search has no bounded StepDispatchAdapter task core mapping",
+        "required": true,
+        "step_id": "candidate_path",
+        "task_kind": "xtb_path_search"
+      },
+      {
+        "dag_step_kind": "frequency",
+        "index": 3,
+        "mapping": "mapped",
+        "reason": "",
+        "required": true,
+        "step_id": "candidate_frequency",
+        "task_kind": "frequency"
+      },
+      {
+        "dag_step_kind": "optimize",
+        "index": 4,
+        "mapping": "mapped",
+        "reason": "",
+        "required": true,
+        "step_id": "ts_optimize",
+        "task_kind": "optimize"
+      },
+      {
+        "dag_step_kind": "frequency",
+        "index": 5,
+        "mapping": "mapped",
+        "reason": "",
+        "required": true,
+        "step_id": "ts_frequency",
+        "task_kind": "frequency"
+      },
+      {
+        "dag_step_kind": "irc",
+        "index": 6,
+        "mapping": "mapped",
+        "reason": "",
+        "required": true,
+        "step_id": "irc",
+        "task_kind": "irc"
+      },
+      {
+        "dag_step_kind": "singlepoint",
+        "index": 7,
+        "mapping": "mapped",
+        "reason": "",
+        "required": true,
+        "step_id": "endpoint_reactants",
+        "task_kind": "singlepoint"
+      },
+      {
+        "dag_step_kind": "singlepoint",
+        "index": 8,
+        "mapping": "mapped",
+        "reason": "",
+        "required": true,
+        "step_id": "endpoint_product",
+        "task_kind": "singlepoint"
+      },
+      {
+        "dag_step_kind": "",
+        "index": 9,
+        "mapping": "open",
+        "reason": "thermochemistry has no bounded StepDispatchAdapter task core mapping",
+        "required": true,
+        "step_id": "energy_thermochemistry",
+        "task_kind": "thermochemistry"
+      }
+    ]
+  },
+  "atom_mapping": {
+    "bijective": true,
+    "pairs": [
+      [
+        0,
+        0
+      ],
+      [
+        1,
+        1
+      ],
+      [
+        2,
+        2
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        4,
+        6
+      ],
+      [
+        5,
+        7
+      ],
+      [
+        6,
+        8
+      ],
+      [
+        7,
+        9
+      ],
+      [
+        8,
+        10
+      ],
+      [
+        9,
+        11
+      ],
+      [
+        10,
+        4
+      ],
+      [
+        11,
+        5
+      ],
+      [
+        12,
+        12
+      ],
+      [
+        13,
+        13
+      ],
+      [
+        14,
+        14
+      ],
+      [
+        15,
+        15
+      ]
+    ],
+    "product_atom_ids": [
+      "cyclohexene:cy_c1",
+      "cyclohexene:cy_c2",
+      "cyclohexene:cy_c3",
+      "cyclohexene:cy_c4",
+      "cyclohexene:cy_c5",
+      "cyclohexene:cy_c6",
+      "cyclohexene:cy_h1",
+      "cyclohexene:cy_h2",
+      "cyclohexene:cy_h3",
+      "cyclohexene:cy_h4",
+      "cyclohexene:cy_h5",
+      "cyclohexene:cy_h6",
+      "cyclohexene:cy_h7",
+      "cyclohexene:cy_h8",
+      "cyclohexene:cy_h9",
+      "cyclohexene:cy_h10"
+    ],
+    "reactant_atom_ids": [
+      "butadiene:bd_c1",
+      "butadiene:bd_c2",
+      "butadiene:bd_c3",
+      "butadiene:bd_c4",
+      "butadiene:bd_h1",
+      "butadiene:bd_h2",
+      "butadiene:bd_h3",
+      "butadiene:bd_h4",
+      "butadiene:bd_h5",
+      "butadiene:bd_h6",
+      "ethene:et_c1",
+      "ethene:et_c2",
+      "ethene:et_h1",
+      "ethene:et_h2",
+      "ethene:et_h3",
+      "ethene:et_h4"
+    ]
+  },
+  "criteria": {
+    "criteria_rows": 7,
+    "digest": "f89f73da4178f4db35b5eb2b8f3958a4cad8bacc5c82490ccfc6777a2c3449d3",
+    "expected_digest": "f89f73da4178f4db35b5eb2b8f3958a4cad8bacc5c82490ccfc6777a2c3449d3",
+    "fingerprint_in_adr": true,
+    "frozen_read_only": true,
+    "matches_adr": true,
+    "question_rows": 2,
+    "version": "1.0.0"
+  },
+  "fixture_digests": {
+    "acceptance.json": "b615dd59892345f47e6b4c294b0a1707631675794d46ee356d633081f2aa2a85",
+    "product.xyz": "7260ce96792f43825bd2fc48e3141332300343445d7de1ea9897fa95ca431197",
+    "question.json": "ed129232100e5f8a6d7d39a928e111640623855e988672a19ff60e97afb62b1b",
+    "reactants.xyz": "a1e49fcbaa7363e58eb004071720327fb00336e748fb8277487084e11a665949",
+    "reaction.json": "aace9f06369f7b712038d406e3ae1789de385c759725a9b177d23ab17df84232"
+  },
+  "fixture_root": "/ACPServer/acp2-remediation-integration/tests/fixtures/acp2/science/diels_alder",
+  "frozen_method": {
+    "basis": "def2-TZVP",
+    "charge": 0,
+    "energy_unit": "hartree",
+    "method": "wB97X-D4",
+    "multiplicity": 1,
+    "pressure_pa": 100000.0,
+    "solvent": null,
+    "standard_state": "1_bar_ideal_gas",
+    "state_id": "state.singlet.s0",
+    "temperature_k": 298.15
+  },
+  "generated_at": "2026-10-27T15:31:36Z",
+  "git_revision": "02cb71e97eee477d638741bd4c43494d42f9c2db",
+  "reaction_id": "reaction.diels_alder.butadiene_ethene_cyclohexene.v1",
+  "schema": "acp2.m4-04.preflight.v1",
+  "software": {
+    "config": {
+      "executables": {
+        "orca": {
+          "maxcore": 3000,
+          "nproc": 4,
+          "path": "/home/xieningke/orca611/orca"
+        },
+        "xtb": {
+          "maxcore": 3000,
+          "nproc": 4,
+          "path": "/home/xieningke/xtb-dist/bin/xtb"
+        }
+      }
+    },
+    "findings": [
+      {
+        "candidate": "/usr/bin/orca",
+        "name": "orca",
+        "probe": "",
+        "source": "env:CONFSEARCH_ORCA_PATH",
+        "state": "rejected_not_orca"
+      },
+      {
+        "candidate": "/home/xieningke/orca504/orca",
+        "name": "orca",
+        "probe": "",
+        "source": "scan",
+        "state": "rejected_not_orca"
+      }
+    ],
+    "resolved": {
+      "orca": {
+        "executable": "/home/xieningke/orca611/orca",
+        "is_expected": true,
+        "name": "orca",
+        "source": "scan",
+        "version": "Program Version 6.1.1  -  RELEASE   -"
+      },
+      "xtb": {
+        "executable": "/home/xieningke/xtb-dist/bin/xtb",
+        "is_expected": true,
+        "name": "xtb",
+        "source": "env:CONFSEARCH_XTB_PATH",
+        "version": "* xtb version 6.7.1 (edcfbbe) compiled by 'albert@albert-system' on 2024-07-22"
+      }
+    }
+  }
+}

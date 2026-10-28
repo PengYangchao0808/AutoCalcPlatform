@@ -113,22 +113,76 @@ async function energyGraphFetchFrameCandidates(jobId) {
   } catch (e) { return null; }
 }
 
+/* ── R5/T23 task-session identity for candidate/result writes ──
+ * Candidate saves and PES review/restore are scoped to the task selection
+ * that started them. Capture the identity before the request and apply the
+ * response only while that same job/session is still displayed — the same
+ * token rule files-logs.js applies to /files and /logs tails. The token is
+ * the taskSession controller's monotonic session token (authoritative under
+ * A→B→A and same-job reselect); the jobId compare covers the no-controller
+ * fallback. Rejecting (rather than applying late) keeps a stale A response
+ * from repopulating B's candidate review state. */
+function energyGraphResultSession(jobId) {
+  var cur = null;
+  if (window.ACPWorkbench && ACPWorkbench.controllers && ACPWorkbench.controllers.taskSession) {
+    cur = ACPWorkbench.controllers.taskSession.current();
+  }
+  return {
+    jobId: String(jobId == null ? (energyGraphState.jobId || "") : jobId),
+    token: cur ? cur.token : null,
+  };
+}
+
+function energyGraphResultSessionCurrent(session) {
+  if (!session) return false;
+  if (String(energyGraphState.jobId || "") !== String(session.jobId)) return false;
+  var cur = null;
+  if (window.ACPWorkbench && ACPWorkbench.controllers && ACPWorkbench.controllers.taskSession) {
+    cur = ACPWorkbench.controllers.taskSession.current();
+  }
+  var nowToken = cur ? cur.token : null;
+  return nowToken === session.token;
+}
+
+/** Invalidate any in-flight energy workspace / geometry request. Called by
+ * the page's task-session reset so a response started for the previous job
+ * cannot land between the reset and the new job's first load. */
+function energyGraphInvalidateInFlight() {
+  energyGraphState.requestToken = (Number(energyGraphState.requestToken) || 0) + 1;
+  if (energyGraphState.abortController) {
+    try { energyGraphState.abortController.abort(); } catch (e) {}
+    energyGraphState.abortController = null;
+  }
+  if (energyGraphState.structureAbort) {
+    try { energyGraphState.structureAbort.abort(); } catch (e) {}
+    energyGraphState.structureAbort = null;
+  }
+}
+
 /* ── Shared-loader delegation (phase D, todo 38) ──
    The energy mini canvas registers its load adapter with the SHARED
    geometry loader in structure_viewer.js (one parse/style/load path for
-   every canvas). This canvas keeps its own element + 3Dmol instance; only
-   the duplicate load logic is removed. The lazy viewer creation below is
-   the SAME creation point that always lived here — not a new viewer. */
+   every canvas). This canvas keeps its own element + scene instance; only
+   the duplicate load logic is removed. The lazy creation below is
+   the SAME creation point that always lived here — not a new viewer.
+   T9: energyGraphState.viewer holds a bounded ACPVisualization.scene
+   instance (never a raw 3Dmol handle); all model/style/teardown/PNG/framing
+   access goes through the instance's restricted API. */
 if (window.ACPStructureViewer && typeof window.ACPStructureViewer.registerCanvasLoader === "function") {
   window.ACPStructureViewer.registerCanvasLoader("energy-mini", function(xyzText, styleSpec) {
     var container = document.getElementById("energy-structure-viewer");
     if (!container) return false;
     if (energyGraphState.viewer && container.querySelector("canvas")) {
-      try { energyGraphState.viewer.removeAllModels(); } catch (e) {}
+      energyGraphState.viewer.removeAllModels();
     } else {
       container.innerHTML = "";
-      if (!ACPVisualization.mol3d.isAvailable()) return false;
-      energyGraphState.viewer = ACPVisualization.mol3d.create(container, { backgroundColor: "0x0e1419", antialias: true });
+      /* scene.create returns null when the 3Dmol library (or the scene
+         module) is missing — the loader degrades to false with no throw,
+         keeping the "3D 查看器未加载" empty state. */
+      var sceneNs = ACPVisualization.scene;
+      energyGraphState.viewer = (sceneNs && typeof sceneNs.create === "function")
+        ? sceneNs.create({ container: container, options: { backgroundColor: "0x0e1419", antialias: true } })
+        : null;
       if (!energyGraphState.viewer) return false;
     }
     energyGraphState.viewer.addModel(xyzText, "xyz");
@@ -955,6 +1009,7 @@ function energyGraphBindInspectorButtons(root) {
       /* Saving state: disable all */
       card.setAttribute("data-energy-card-state", "saving");
       card.querySelectorAll("button").forEach(function(btn) { btn.disabled = true; });
+      var session = energyGraphResultSession(energyGraphState.jobId);
       try {
         var body = {
           view_type: String(data.view_type || ""),
@@ -967,11 +1022,13 @@ function energyGraphBindInspectorButtons(root) {
         var resp = await api("/jobs/" + encodeURIComponent(energyGraphState.jobId) + "/frame-candidate", {
           method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
         });
+        if (!energyGraphResultSessionCurrent(session)) return;
         if (resp) {
           energyGraphApplyFrameCandidates(resp);
           energyGraphRenderCurrent();
         }
       } catch (e) {
+        if (!energyGraphResultSessionCurrent(session)) return;
         var errMsg = String((e && e.message) || e);
         /* Conflict: 409 / expected_revision mismatch */
         if (errMsg.indexOf("409") >= 0 || errMsg.indexOf("revision") >= 0 || errMsg.indexOf("conflict") >= 0) {
@@ -979,7 +1036,7 @@ function energyGraphBindInspectorButtons(root) {
           energyGraphState.pendingCardError = { message: t("energy.card.conflict"), role: role };
           /* Re-fetch candidates */
           var fresh = await energyGraphFetchFrameCandidates(energyGraphState.jobId);
-          if (fresh) { energyGraphApplyFrameCandidates(fresh); energyGraphRenderCurrent(); }
+          if (fresh && energyGraphResultSessionCurrent(session)) { energyGraphApplyFrameCandidates(fresh); energyGraphRenderCurrent(); }
         } else {
           var errorEl2 = card.querySelector("[data-energy-card-error]");
           if (errorEl2) { errorEl2.textContent = errMsg; errorEl2.style.display = ""; }
@@ -1081,14 +1138,17 @@ function energyGraphBindInspectorButtons(root) {
       if (!entry) return;
       if (!confirm(t("energy.inspector.remove_candidate") + ": " + String(entry.candidate_id || "") + "?")) return;
       button.disabled = true;
+      var session = energyGraphResultSession(energyGraphState.jobId);
       try {
         var delUrl = "/jobs/" + encodeURIComponent(energyGraphState.jobId) + "/frame-candidate/" + encodeURIComponent(String(entry.candidate_id)) + "?expected_revision=" + String(Number(energyGraphState.frameCandidates.revision) || 0);
         var delResp = await api(delUrl, { method: "DELETE" });
+        if (!energyGraphResultSessionCurrent(session)) return;
         if (delResp) {
           energyGraphApplyFrameCandidates(delResp);
           energyGraphRenderCurrent();
         }
       } catch (e) {
+        if (!energyGraphResultSessionCurrent(session)) return;
         alert(String((e && e.message) || e));
       } finally {
         button.disabled = false;
@@ -2422,8 +2482,8 @@ function optimizationStatusPanelModel(data, job) {
   return buildTaskStatusModel(data, job);
 }
 
-function optimizationStatusPanelMarkup(data) {
-  var model = optimizationStatusPanelModel(data, lastSelectedJob);
+function optimizationStatusPanelMarkup(data, job) {
+  var model = optimizationStatusPanelModel(data, job);
   if (model.mode === "selected") {
     var rowsHtml = model.rows.map(function(r) {
       var valueDisplay = r.value != null ? escapeHtml(r.value) + ' ' + escapeHtml(r.unit) : '--';
@@ -2453,8 +2513,8 @@ function optimizationStatusPanelMarkup(data) {
   '</div>';
 }
 
-function optimizationWorkspaceMarkup(data) {
-  var job = lastSelectedJob || {};
+function optimizationWorkspaceMarkup(data, job) {
+  job = job || {};
   var series = Array.isArray(data.series) ? data.series : [];
   var energySeries = series.filter(function(item) { return ["relative_energy", "delta_energy", "scf_energy"].indexOf(String(item.id)) >= 0; });
   var selectedNode = energyGraphSelectedNode(data);
@@ -2474,7 +2534,7 @@ function optimizationWorkspaceMarkup(data) {
   return '<div class="optimization-workspace" data-energy-workspace data-energy-view="optimization">' +
     '<div class="optimization-workspace-head"><div><div class="optimization-workspace-kicker">任务观察 · Optimization Viewer</div><div class="optimization-workspace-title">' + escapeHtml(String(job.name || job.id || data.job_id || "几何结构优化")) + '</div></div><div class="optimization-workspace-meta"><span>几何优化</span><span>当前周期 ' + escapeHtml(String(currentCycle)) + '</span><span class="live">' + escapeHtml(statusText) + '</span></div></div>' +
     '<div class="optimization-workspace-toolbar"><div class="optimization-view-switch" role="tablist">' + viewButtons + '</div><label for="optimization-energy-series" data-optimization-energy-label' + energyPickerHidden + '>能量曲线</label><select id="optimization-energy-series" class="tool-select" data-optimization-energy' + energyPickerHidden + '>' + energyOptions + '</select>' + energyAnnotationToolbarMarkup() + '<span class="optimization-toolbar-spacer"></span><div class="optimization-action-group"><button class="plot-tool' + (energyGraphState.optimizationTool === "box" ? ' active' : '') + '" data-optimization-action="box" type="button" title="框选放大" aria-label="框选放大">⬚</button><button class="plot-tool' + (energyGraphState.optimizationTool !== "box" ? ' active' : '') + '" data-optimization-action="pan" type="button" title="拖动平移" aria-label="拖动平移">✥</button><button class="plot-tool" data-optimization-action="reset" type="button" title="重置视图" aria-label="重置视图">⟲</button><button class="optimization-follow-btn' + (energyGraphState.liveFollow ? ' active' : '') + '" data-optimization-action="follow" type="button">' + (energyGraphState.liveFollow ? '跟随最新周期' : '回到最新周期') + '</button><button class="plot-tool optimization-reload-btn" data-optimization-action="reload" type="button" title="刷新" aria-label="刷新"><svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10a7 7 0 1 1 2 5M3 10v4M3 10h4"/></svg><span class="reload-label">刷新</span></button></div></div>' +
-    '<div class="optimization-grid"><div class="optimization-charts"><section class="optimization-chart-card"><div class="optimization-chart-card-head"><span class="optimization-chart-card-title" data-optimization-title>' + escapeHtml(cfg.title) + ' \u00b7 ' + ((data.nodes || []).length) + ' ' + t("energy.header.frames") + '</span><span class="optimization-chart-card-subtitle" data-optimization-subtitle style="color:' + energyHeaderStatusInfo(data).color + ';">\u25cf ' + escapeHtml(energyHeaderStatusInfo(data).text) + '</span></div><div class="optimization-chart-scroll" data-optimization-scroll="main">' + optimizationGraphBuildSvg(data, view) + '</div><div class="optimization-chart-legend" data-optimization-legend>' + optimizationLegendMarkup(data, view) + '</div></section>' + optimizationStatusPanelMarkup(data) + '</div><aside class="energy-inspector-panel"><div class="energy-inspector-head"><div class="energy-inspector-title">结构查看器</div><div class="energy-inspector-subtitle">点选周期查看对应几何</div></div><div id="energy-structure-viewer" class="energy-structure-viewer' + (selectedNode && selectedNode.geometry_ref ? '' : ' empty') + '">' + (selectedNode && selectedNode.geometry_ref ? '' : '当前周期没有可加载的 XYZ 结构') + '</div>' + energyGraphInspectorMarkup(data) + '</aside></div>' +
+    '<div class="optimization-grid"><div class="optimization-charts"><section class="optimization-chart-card"><div class="optimization-chart-card-head"><span class="optimization-chart-card-title" data-optimization-title>' + escapeHtml(cfg.title) + ' \u00b7 ' + ((data.nodes || []).length) + ' ' + t("energy.header.frames") + '</span><span class="optimization-chart-card-subtitle" data-optimization-subtitle style="color:' + energyHeaderStatusInfo(data).color + ';">\u25cf ' + escapeHtml(energyHeaderStatusInfo(data).text) + '</span></div><div class="optimization-chart-scroll" data-optimization-scroll="main">' + optimizationGraphBuildSvg(data, view) + '</div><div class="optimization-chart-legend" data-optimization-legend>' + optimizationLegendMarkup(data, view) + '</div></section>' + optimizationStatusPanelMarkup(data, job) + '</div><aside class="energy-inspector-panel"><div class="energy-inspector-head"><div class="energy-inspector-title">结构查看器</div><div class="energy-inspector-subtitle">点选周期查看对应几何</div></div><div id="energy-structure-viewer" class="energy-structure-viewer' + (selectedNode && selectedNode.geometry_ref ? '' : ' empty') + '">' + (selectedNode && selectedNode.geometry_ref ? '' : '当前周期没有可加载的 XYZ 结构') + '</div>' + energyGraphInspectorMarkup(data) + '</aside></div>' +
     '<div class="optimization-workspace-footer"><span>数据源：<strong>' + escapeHtml(String(data.source || '--')) + '</strong> · 周期 ' + escapeHtml(String(nCycles)) + selectedItem + '</span><span>' + optimizationQualityBadge(data) + ' · revision <strong>' + escapeHtml(String(data.revision || '--')) + '</strong></span></div></div>';
 }
 
@@ -2485,7 +2545,7 @@ function optimizationGraphRenderCurrent() {
   var root = screen.querySelector('[data-energy-view="optimization"]');
   if (!root) {
     screen.style.display = "block";
-    screen.innerHTML = optimizationWorkspaceMarkup(data);
+    screen.innerHTML = optimizationWorkspaceMarkup(data, lastSelectedJob);
     root = screen.querySelector('[data-energy-view="optimization"]');
     if (root) optimizationGraphBind(root);
     return;
@@ -2522,12 +2582,12 @@ function optimizationGraphRenderCurrent() {
   if (qualitySlot) qualitySlot.outerHTML = optimizationQualityBadge(data);
   var convergenceSlot = root.querySelector("[data-optimization-convergence]");
   if (convergenceSlot) {
-    convergenceSlot.outerHTML = optimizationStatusPanelMarkup(data);
+    convergenceSlot.outerHTML = optimizationStatusPanelMarkup(data, lastSelectedJob);
   } else {
     var chartsDiv = root.querySelector(".optimization-charts");
     if (chartsDiv) {
       var chartCard = chartsDiv.querySelector(".optimization-chart-card");
-      if (chartCard) chartCard.insertAdjacentHTML("afterend", optimizationStatusPanelMarkup(data));
+      if (chartCard) chartCard.insertAdjacentHTML("afterend", optimizationStatusPanelMarkup(data, lastSelectedJob));
     }
   }
   var body = root.querySelector(".energy-inspector-body");
@@ -2763,9 +2823,9 @@ function optimizationGraphBind(root) {
   if (current && current.frame_index != null) energyGraphLoadStructure(current.frame_index);
 }
 
-function energyGraphWorkspaceMarkup(data) {
+function energyGraphWorkspaceMarkup(data, job) {
   const series = Array.isArray(data.series) ? data.series : [];
-  const job = lastSelectedJob || {};
+  job = job || {};
   const projectId = String(s2scanState.projectId || "");
   const reviewState = candidateReviewState();
   const candidateCount = reviewState.candidates.length;
@@ -2875,7 +2935,9 @@ function energyGraphDestroyViewer() {
   disposeViewerFraming(energyGraphState.structureFraming);
   if (energyGraphState.structureAbort) { energyGraphState.structureAbort.abort(); energyGraphState.structureAbort = null; }
   if (energyGraphState.viewer) {
-    ACPVisualization.mol3d.destroy(energyGraphState.viewer);
+    // dispose() is idempotent: clearScene + destroyImpl run exactly once,
+    // tokens/callbacks die immediately; a re-entry after nulling is a no-op.
+    energyGraphState.viewer.dispose();
     energyGraphState.viewer = null;
   }
   energyGraphState.loadedFrameIndex = null;
@@ -3963,6 +4025,8 @@ function energyGraphOpenSaveDialog() {
         btn.addEventListener("click", async function() {
           var n = parseInt(btn.getAttribute("data-energy-review-restore"), 10);
           var errEl = overlay.querySelector(".energy-dialog-error");
+          var session = energyGraphResultSession(jobId);
+          if (!energyGraphResultSessionCurrent(session)) { closeDialog(); return; }
           btn.disabled = true;
           try {
             var payload = { backup: n };
@@ -3972,10 +4036,12 @@ function energyGraphOpenSaveDialog() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(payload),
             });
+            if (!energyGraphResultSessionCurrent(session)) { closeDialog(); return; }
             energyGraphApplyReviewResult(result);
             closeDialog();
             energyGraphRenderCurrent();
           } catch (e) {
+            if (!energyGraphResultSessionCurrent(session)) { closeDialog(); return; }
             if (errEl) {
               errEl.style.display = "block";
               errEl.textContent = "恢复第 " + n + " 轮失败：" + (e.message || String(e));
@@ -4002,6 +4068,8 @@ function energyGraphOpenSaveDialog() {
       var note = noteInput ? noteInput.value.trim() : "";
       var errEl = overlay.querySelector(".energy-dialog-error");
       if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
+      var session = energyGraphResultSession(jobId);
+      if (!energyGraphResultSessionCurrent(session)) { closeDialog(); return; }
 
       var payload = energyGraphReviewPayload();
       if (note) payload.note = note;
@@ -4013,10 +4081,12 @@ function energyGraphOpenSaveDialog() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+        if (!energyGraphResultSessionCurrent(session)) { closeDialog(); return; }
         energyGraphApplyReviewResult(result);
         closeDialog();
         energyGraphRenderCurrent();
       } catch (e) {
+        if (!energyGraphResultSessionCurrent(session)) { closeDialog(); return; }
         if (errEl) {
           errEl.style.display = "block";
           errEl.textContent = (e.message || String(e));
@@ -4050,7 +4120,7 @@ function energyGraphRenderCurrent() {
     // Mount once.  Replacing the complete workspace would also detach the
     // 3Dmol container and reset the user's chart view on every data update.
     screen.style.display = "block";
-    screen.innerHTML = energyGraphWorkspaceMarkup(energyGraphState.data);
+    screen.innerHTML = energyGraphWorkspaceMarkup(energyGraphState.data, lastSelectedJob);
     root = screen.querySelector("[data-energy-workspace]");
     if (root) energyGraphBind(root);
     return;
@@ -4580,7 +4650,4 @@ async function renderMechanismTab(job, tab) {
   if (!ready) return false;
   return renderMechanismTabFromCache(tab);
 }
-
-// Retained for the SR display path, which still calls this legacy hook.
-function updateSrPickButtons() { /* retired */ }
 

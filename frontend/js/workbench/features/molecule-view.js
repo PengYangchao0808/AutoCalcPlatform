@@ -87,6 +87,10 @@ function disposeViewerFraming(framingState) {
 }
 
 function initViewer() {
+  // T8: reuse the live bounded instance — repeated init must not leak a
+  // second viewer/interval (scene dispose is idempotent; a disposed holder
+  // is replaced with a fresh instance below).
+  if (viewer && typeof viewer.isDisposed === "function" && !viewer.isDisposed()) return true;
   if (!ACPVisualization.mol3d.isAvailable()) {
     const empty = document.getElementById("viewer-empty");
     if (empty) {
@@ -97,7 +101,9 @@ function initViewer() {
     return false;
   }
   const container = document.getElementById("viewer-3d");
-  viewer = ACPVisualization.mol3d.create(container, { backgroundColor: molDoc.bgColor, antialias: true });
+  // T8: the holder receives the RESTRICTED scene instance (never a native
+  // 3Dmol viewer); scene.create owns the underlying viewer internally.
+  viewer = ACPVisualization.scene.create({ container: container, options: { backgroundColor: molDoc.bgColor, antialias: true } });
   if (!viewer) return false;
   // Resize handled by the global rAF-throttled listener → applyLayout → viewer.resize
   return true;
@@ -202,7 +208,7 @@ function renderMolDoc(options) {
   }
   hideEmpty();
   currentModel = viewer.addModel(atomsToXYZ(atoms), "xyz");
-  currentModelAtoms = currentModel.selectedAtoms({});
+  currentModelAtoms = (currentModel && currentModel.selectedAtoms({})) || [];
   viewer.setBackgroundColor(molDoc.bgColor);
   applyStylePreset(molDoc.style);
   // Invisible 3Dmol clickspheres enlarge picking without changing the visible style preset.
@@ -741,7 +747,8 @@ function parseXYZBlock(text) {
 function parseMolTextToFrame(text, format) {
   if (!viewer && !initViewer()) return [];
   const model = viewer.addModel(text, format);
-  const atoms = model.selectedAtoms({}).map(function(atom, idx) {
+  if (!model) return [];
+  const atoms = (model.selectedAtoms({}) || []).map(function(atom, idx) {
     return { id: idx, elem: atom.elem || atom.atom || "X", x: Number(atom.x || 0), y: Number(atom.y || 0), z: Number(atom.z || 0) };
   });
   viewer.removeModel(model);
@@ -1031,7 +1038,7 @@ function _svSyncGeometryToCanvas(opts) {
   viewer.removeAllShapes();
   viewer.removeAllLabels();
   currentModel = viewer.addModel(atomsToXYZ(atoms), "xyz");
-  currentModelAtoms = currentModel.selectedAtoms({});
+  currentModelAtoms = (currentModel && currentModel.selectedAtoms({})) || [];
   viewer.setBackgroundColor(molDoc.bgColor);
   applyStylePreset(molDoc.style);
   viewer.addStyle({}, { clicksphere: { radius: Math.max(0.3, getCurrentSphereScale() * 1.5) } });
@@ -1073,7 +1080,7 @@ function _svRenderSelectionOverlay() {
     }
   }
   _svHighlightedIndices = newHighlighted;
-  // Pick-order badges
+  // Pick-order badges (_svBadgeLabels holds opaque instance label tokens).
   // Remove previous badges
   for (var k = 0; k < _svBadgeLabels.length; k++) {
     viewer.removeLabel(_svBadgeLabels[k]);
@@ -1087,7 +1094,7 @@ function _svRenderSelectionOverlay() {
       position: { x: coord.x, y: coord.y, z: coord.z },
       fontSize: 14, fontColor: "yellow", backgroundColor: "rgba(0,0,0,0.6)", showBackground: true
     });
-    _svBadgeLabels.push(lbl);
+    if (lbl) _svBadgeLabels.push(lbl);
   }
   viewer.render();
 }

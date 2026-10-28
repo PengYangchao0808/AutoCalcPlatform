@@ -1,0 +1,20 @@
+{
+  "compat": {
+    "contracts_identity": true,
+    "exit": 0,
+    "modules": {
+      "acp.backends": "/tmp/opencode/b26a-clean/evidence/package-install/venvs/web/lib64/python3.11/site-packages/acp/backends/__init__.py",
+      "acp.calculations.primitives": "/tmp/opencode/b26a-clean/evidence/package-install/venvs/web/lib64/python3.11/site-packages/acp/calculations/primitives/__init__.py",
+      "acp.compat.legacy.manifests": "/tmp/opencode/b26a-clean/evidence/package-install/venvs/web/lib64/python3.11/site-packages/acp/compat/legacy/manifests.py"
+    },
+    "store_identity": true
+  },
+  "root": {
+    "exit": 0,
+    "has_run": true
+  },
+  "web": {
+    "exit": 0,
+    "has_run": true
+  }
+}

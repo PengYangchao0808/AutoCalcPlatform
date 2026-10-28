@@ -1,0 +1,133 @@
+{
+  "launch_path": "/tmp/opencode/m008/work/mcp-launch.json",
+  "launch_protocol_version": "2025-06-18",
+  "passed": true,
+  "rows": [
+    {
+      "error": null,
+      "guidance": {
+        "client_decides_compatibility": true,
+        "client_declared_versions": [],
+        "id": "acp.negotiation.v1",
+        "negotiation": "server_advertises_supported_version",
+        "requested_version": "2025-06-18",
+        "server_preferred_version": "2025-06-18",
+        "supported_versions": [
+          "2025-06-18"
+        ],
+        "version": "1.0.0"
+      },
+      "negotiated": "2025-06-18",
+      "requested": "2025-06-18",
+      "result_shape_problems": [],
+      "row": "same",
+      "status": "PASS",
+      "tool_count": 8,
+      "tools_call_frames": 0
+    },
+    {
+      "declared": null,
+      "error": null,
+      "guidance": {
+        "client_decides_compatibility": true,
+        "client_declared_versions": [],
+        "id": "acp.negotiation.v1",
+        "negotiation": "server_advertises_supported_version",
+        "requested_version": "2025-11-25",
+        "server_preferred_version": "2025-06-18",
+        "supported_versions": [
+          "2025-06-18"
+        ],
+        "version": "1.0.0"
+      },
+      "negotiated": "2025-06-18",
+      "requested": "2025-11-25",
+      "result_shape_problems": [],
+      "row": "unsupported_version",
+      "status": "PASS",
+      "tool_count": 8,
+      "tools_call_frames": 0
+    },
+    {
+      "declared": [
+        "1999-01-01"
+      ],
+      "error": null,
+      "guidance": {
+        "client_decides_compatibility": true,
+        "client_declared_versions": [
+          "1999-01-01"
+        ],
+        "id": "acp.negotiation.v1",
+        "negotiation": "server_advertises_supported_version",
+        "requested_version": "1999-01-01",
+        "server_preferred_version": "2025-06-18",
+        "supported_versions": [
+          "2025-06-18"
+        ],
+        "version": "1.0.0"
+      },
+      "negotiated": "2025-06-18",
+      "requested": "1999-01-01",
+      "result_shape_problems": [],
+      "row": "private_versions",
+      "status": "PASS",
+      "tool_count": 8,
+      "tools_call_frames": 0
+    },
+    {
+      "error": {
+        "code": -32602,
+        "data": {
+          "code": "invalid_protocol_version",
+          "received_type": "int"
+        },
+        "message": "protocolVersion must be a non-empty version string"
+      },
+      "error_code": "invalid_protocol_version",
+      "jsonrpc_code": -32602,
+      "requested": 20250618,
+      "row": "malformed_version",
+      "status": "PASS",
+      "tools_call_frames": 0
+    },
+    {
+      "discover_error_code": null,
+      "discover_jsonrpc_code": -32601,
+      "discover_result_present": false,
+      "negotiated": "2025-06-18",
+      "result_shape_problems": [],
+      "row": "server_discover",
+      "status": "PASS",
+      "tool_count": 8,
+      "tools_call_frames": 0
+    },
+    {
+      "error": {
+        "code": -32600,
+        "data": {
+          "code": "not_initialized"
+        },
+        "message": "MCP session is not initialized"
+      },
+      "error_code": "not_initialized",
+      "row": "tools_before_init",
+      "status": "PASS",
+      "tools_call_frames": 0
+    },
+    {
+      "exit_code": 0,
+      "fabricated_frames_after_notification": 0,
+      "negotiated": "2025-06-18",
+      "requested": "2025-06-18",
+      "row": "notification_eof",
+      "status": "PASS",
+      "submitted_job": null,
+      "tools_call_frames": 0
+    }
+  ],
+  "schema": "acp2.c.mcp-live.negotiation-matrix.v2",
+  "semantics": "mcp-2025-06-18 standard handshake (ADR-006): server answers its own version, client decides compatibility, private protocolVersions recorded only; malformed shapes are -32602",
+  "server_version": "2025-06-18",
+  "tools_call_frames": 0
+}

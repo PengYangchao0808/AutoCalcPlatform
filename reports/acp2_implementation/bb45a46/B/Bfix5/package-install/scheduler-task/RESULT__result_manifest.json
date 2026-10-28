@@ -1,0 +1,25 @@
+{
+  "products": [
+    {
+      "id": "task_result.json",
+      "kind": "file",
+      "label": "task_result.json",
+      "metadata": {
+        "attempt": 1,
+        "job_id": "20261024_011311_001_b25-scheduler-smoke",
+        "normal_reuse": true,
+        "partial_result": false,
+        "plan_identity": "v2:9bc40cd8ffd921c7e9e966978f436614",
+        "product_role": "normal",
+        "qualification": "complete",
+        "submission_id": "sub_f1a0cb997a3e7af5",
+        "task_result_digest": "sha256:86603fb0ad6d3eec4455e79a40c67a9fa12143d6f8c024d1f05752d8ae7e01e9"
+      },
+      "path": "task_result.json"
+    }
+  ],
+  "status": "completed",
+  "task_id": "20261024_011311_001_b25-scheduler-smoke",
+  "version": 2,
+  "workflow": "singlepoint"
+}

@@ -1,0 +1,28 @@
+{
+  "browser_version": "153.0.8010.12",
+  "browsers_path": "/ACPServer/acp2-tools/playwright-browsers",
+  "cache_home": "/ACPServer/acp2-development/data/browser-runtime/browser-install-20261022T142534Z-199307/cache",
+  "cwd": "/ACPServer/acp2-development/data/browser-runtime/browser-install-20261022T142534Z-199307/cwd",
+  "executable_inside_browsers_path": true,
+  "executable_path": "/ACPServer/acp2-tools/playwright-browsers/chromium-1243/chrome-linux64/chrome",
+  "home": "/ACPServer/acp2-development/data/browser-runtime/browser-install-20261022T142534Z-199307/home",
+  "interpreter": "/ACPServer/acp2-development/venvs/browser/bin/python",
+  "launch": {
+    "browser_version": "153.0.8010.12",
+    "cwd": "/ACPServer/acp2-development/data/browser-runtime/browser-install-20261022T142534Z-199307/cwd",
+    "executable_path": "/ACPServer/acp2-tools/playwright-browsers/chromium-1243/chrome-linux64/chrome",
+    "interpreter": "/ACPServer/acp2-development/venvs/browser/bin/python",
+    "ok": true,
+    "pages": 2,
+    "screenshot_bytes": 11202,
+    "title": "ACP2 Chromium launch probe",
+    "title_ok": true,
+    "user_data_dir": "/ACPServer/acp2-development/data/browser-runtime/browser-install-20261022T142534Z-199307/user-data"
+  },
+  "launch_returncode": 1,
+  "pages": 2,
+  "playwright_executable_probe_log": "{\"executable_path\": \"/ACPServer/acp2-tools/playwright-browsers/chromium-1243/chrome-linux64/chrome\", \"playwright_version\": \"1.63.0\"}\n",
+  "screenshot_bytes": 11202,
+  "tmpdir": "/ACPServer/acp2-development/data/browser-runtime/browser-install-20261022T142534Z-199307/tmp",
+  "user_data_dir": "/ACPServer/acp2-development/data/browser-runtime/browser-install-20261022T142534Z-199307/user-data"
+}

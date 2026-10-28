@@ -1,0 +1,66 @@
+{
+  "ok": true,
+  "status": 200,
+  "value": {
+    "budget": {
+      "budget_id": "rb_62a089a1291aabc2f2d084c8",
+      "is_planned_identity": true,
+      "limit": 20,
+      "model_requests": 1,
+      "receipts": 1,
+      "released": 0,
+      "remaining": 19,
+      "reserved": 0,
+      "round": 0,
+      "settled": 1
+    },
+    "client_research_id_used": false,
+    "identity": {
+      "principal_id": "principal_m402_operator",
+      "project_id": "482b0aa0-7569-4fe4-b728-50c818a0eb8a",
+      "research_id": "res-94576f2a1b3da09e022060b7",
+      "session_id": "ses-0c61d0e0e55551dd8f2ee43e"
+    },
+    "output": "{\"note\": \"Ran the same-task browser acceptance suite and confirmed the primary workflow completes successfully.\"}",
+    "receipt": {
+      "attempt": 0,
+      "budget_id": "rb_62a089a1291aabc2f2d084c8",
+      "call_seq": 1,
+      "claim_id": "plan|482b0aa0-7569-4fe4-b728-50c818a0eb8a|res-94576f2a1b3da09e022060b7|ses-0c61d0e0e55551dd8f2ee43e|0|1",
+      "is_execution_fact": false,
+      "job_id": "",
+      "model": "deepseek-chat",
+      "outcome": "completed",
+      "phase": "plan",
+      "project_id": "482b0aa0-7569-4fe4-b728-50c818a0eb8a",
+      "receipt_id": "modelrcpt|482b0aa0-7569-4fe4-b728-50c818a0eb8a|res-94576f2a1b3da09e022060b7|ses-0c61d0e0e55551dd8f2ee43e|0|1|sha256:c714288086a4552f64705e99d93485fd572b935f4d7954ed24e09d1438bfb040",
+      "recorded_at": "2026-10-27T13:17:07.427311+00:00",
+      "request_digest": "sha256:c714288086a4552f64705e99d93485fd572b935f4d7954ed24e09d1438bfb040",
+      "research_id": "res-94576f2a1b3da09e022060b7",
+      "reservation_id": "bres_plan_7c512d796d32cedd8a7dba47bf16777c",
+      "round": 0,
+      "schema": "acp2.runtime.model-call-receipt.v1",
+      "session_id": "ses-0c61d0e0e55551dd8f2ee43e",
+      "trusted_source": "controller-terminal-receipt",
+      "usage": {
+        "complete": true,
+        "estimate": false,
+        "input_tokens": 30,
+        "output_tokens": 20,
+        "source": "provider-reported",
+        "total_tokens": 50
+      }
+    },
+    "receipt_id": "modelrcpt|482b0aa0-7569-4fe4-b728-50c818a0eb8a|res-94576f2a1b3da09e022060b7|ses-0c61d0e0e55551dd8f2ee43e|0|1|sha256:c714288086a4552f64705e99d93485fd572b935f4d7954ed24e09d1438bfb040",
+    "replayed": false,
+    "schema": "acp2.api.model-plan.v1",
+    "usage": {
+      "complete": true,
+      "estimate": false,
+      "input_tokens": 30,
+      "output_tokens": 20,
+      "source": "provider-reported",
+      "total_tokens": 50
+    }
+  }
+}

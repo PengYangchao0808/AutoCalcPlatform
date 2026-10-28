@@ -1,0 +1,11 @@
+{
+  "artifact_id": "frequency_modes",
+  "generation": 1,
+  "observed_digest": "sha256:8386c96ce6c796da1cc073b249441dee174186ee86709c939bb6db3ff5820c03",
+  "operation_id": "op_2b3f3a0823a8422dbd454283adab8405",
+  "own_digest_distinct_from_primary": true,
+  "prepare_status": 200,
+  "receipt": "artifact-main-20261022T212957Z-677819-c7cfdc67.json",
+  "served_digest": "sha256:8386c96ce6c796da1cc073b249441dee174186ee86709c939bb6db3ff5820c03",
+  "size_bytes": 307
+}

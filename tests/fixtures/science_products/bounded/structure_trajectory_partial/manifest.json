@@ -1,0 +1,566 @@
+{
+ "schema_version": 1,
+ "bounded_identity": {
+  "product_kind": "structure_trajectory",
+  "schema_version": 1,
+  "generator": "cccp.analysis.bounded.chunking.chunk_trajectory_product",
+  "input_digest": "sha256:bbd26371ca48fe835d4395f56bb03a98f4f4f39273b39eb8ec0303fd81f2d60d",
+  "algorithm": "chunk",
+  "algorithm_version": "1",
+  "params_digest": "sha256:502a81b7c77efff1846ceecf2de3fba451a261798bb60ba9dd645b817e209886"
+ },
+ "base_identity": {
+  "product_kind": "structure_trajectory",
+  "schema_version": 1,
+  "generator": "cccp.calculation.products.structure.build_structure_trajectory_product",
+  "input_digest": "sha256:bbd26371ca48fe835d4395f56bb03a98f4f4f39273b39eb8ec0303fd81f2d60d",
+  "algorithm": "structure_trajectory",
+  "algorithm_version": "1",
+  "params_digest": ""
+ },
+ "spec": {
+  "method": "chunk",
+  "algorithm_version": "1",
+  "resolution": 4,
+  "start": 0,
+  "end": 10,
+  "params": [
+   {
+    "name": "product_kind",
+    "value": "structure_trajectory"
+   }
+  ]
+ },
+ "display_subsampled": false,
+ "note": "",
+ "blocks": [
+  {
+   "block_index": 0,
+   "start": 0,
+   "end": 4,
+   "resolution": 4,
+   "product": {
+    "schema_version": 1,
+    "product_kind": "structure_trajectory",
+    "identity": {
+     "product_kind": "structure_trajectory",
+     "schema_version": 1,
+     "generator": "cccp.calculation.products.structure.build_structure_trajectory_product",
+     "input_digest": "sha256:bbd26371ca48fe835d4395f56bb03a98f4f4f39273b39eb8ec0303fd81f2d60d",
+     "algorithm": "chunk",
+     "algorithm_version": "1",
+     "params_digest": "sha256:33593b6efce02665d69f4f5069cd1edc441105b262015d9d6d7dd09daf97c918"
+    },
+    "state": "available",
+    "complete": true,
+    "errors": [],
+    "payload": {
+     "coordinate_units": "angstrom",
+     "topology_source": "synth",
+     "atom_order": [
+      "C:0",
+      "C:1",
+      "C:2",
+      "C:3"
+     ],
+     "reference_frame": {
+      "axes": "cartesian",
+      "origin": "native_input"
+     },
+     "frames": [
+      {
+       "frame_id": "structure_trajectory:frame:0",
+       "frame_index": 0,
+       "coordinate_units": "angstrom",
+       "topology_source": "synth",
+       "atoms": [
+        {
+         "atom_uid": "C:0",
+         "element": "C",
+         "coordinate": [
+          0.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "atom_uid": "C:1",
+         "element": "C",
+         "coordinate": [
+          0.01,
+          0.01,
+          0.0
+         ]
+        },
+        {
+         "atom_uid": "C:2",
+         "element": "C",
+         "coordinate": [
+          0.02,
+          0.02,
+          0.0
+         ]
+        },
+        {
+         "atom_uid": "C:3",
+         "element": "C",
+         "coordinate": [
+          0.03,
+          0.03,
+          0.0
+         ]
+        }
+       ],
+       "block_index": 0
+      },
+      {
+       "frame_id": "structure_trajectory:frame:1",
+       "frame_index": 1,
+       "coordinate_units": "angstrom",
+       "topology_source": "synth",
+       "atoms": [
+        {
+         "atom_uid": "C:0",
+         "element": "C",
+         "coordinate": [
+          1.0,
+          0.0,
+          1.0
+         ]
+        },
+        {
+         "atom_uid": "C:1",
+         "element": "C",
+         "coordinate": [
+          1.01,
+          0.01,
+          1.0
+         ]
+        },
+        {
+         "atom_uid": "C:2",
+         "element": "C",
+         "coordinate": [
+          1.02,
+          0.02,
+          1.0
+         ]
+        },
+        {
+         "atom_uid": "C:3",
+         "element": "C",
+         "coordinate": [
+          1.03,
+          0.03,
+          1.0
+         ]
+        }
+       ],
+       "block_index": 0
+      },
+      {
+       "frame_id": "structure_trajectory:frame:2",
+       "frame_index": 2,
+       "coordinate_units": "angstrom",
+       "topology_source": "synth",
+       "atoms": [
+        {
+         "atom_uid": "C:0",
+         "element": "C",
+         "coordinate": [
+          2.0,
+          0.0,
+          2.0
+         ]
+        },
+        {
+         "atom_uid": "C:1",
+         "element": "C",
+         "coordinate": [
+          2.01,
+          0.01,
+          2.0
+         ]
+        },
+        {
+         "atom_uid": "C:2",
+         "element": "C",
+         "coordinate": [
+          2.02,
+          0.02,
+          2.0
+         ]
+        },
+        {
+         "atom_uid": "C:3",
+         "element": "C",
+         "coordinate": [
+          2.03,
+          0.03,
+          2.0
+         ]
+        }
+       ],
+       "block_index": 0
+      },
+      {
+       "frame_id": "structure_trajectory:frame:3",
+       "frame_index": 3,
+       "coordinate_units": "angstrom",
+       "topology_source": "synth",
+       "atoms": [
+        {
+         "atom_uid": "C:0",
+         "element": "C",
+         "coordinate": [
+          3.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "atom_uid": "C:1",
+         "element": "C",
+         "coordinate": [
+          3.01,
+          0.01,
+          0.0
+         ]
+        },
+        {
+         "atom_uid": "C:2",
+         "element": "C",
+         "coordinate": [
+          3.02,
+          0.02,
+          0.0
+         ]
+        },
+        {
+         "atom_uid": "C:3",
+         "element": "C",
+         "coordinate": [
+          3.03,
+          0.03,
+          0.0
+         ]
+        }
+       ],
+       "block_index": 0
+      }
+     ]
+    }
+   }
+  },
+  {
+   "block_index": 1,
+   "start": 4,
+   "end": 8,
+   "resolution": 4,
+   "product": {
+    "schema_version": 1,
+    "product_kind": "structure_trajectory",
+    "identity": {
+     "product_kind": "structure_trajectory",
+     "schema_version": 1,
+     "generator": "cccp.calculation.products.structure.build_structure_trajectory_product",
+     "input_digest": "sha256:bbd26371ca48fe835d4395f56bb03a98f4f4f39273b39eb8ec0303fd81f2d60d",
+     "algorithm": "chunk",
+     "algorithm_version": "1",
+     "params_digest": "sha256:d938f291f1e655a6049b692a7daca48325644e11afe5dda35f9bed197545f9df"
+    },
+    "state": "available",
+    "complete": false,
+    "errors": [],
+    "payload": {
+     "coordinate_units": "angstrom",
+     "topology_source": "synth",
+     "atom_order": [
+      "C:0",
+      "C:1",
+      "C:2",
+      "C:3"
+     ],
+     "reference_frame": {
+      "axes": "cartesian",
+      "origin": "native_input"
+     },
+     "frames": [
+      {
+       "frame_id": "structure_trajectory:frame:4",
+       "frame_index": 4,
+       "coordinate_units": "angstrom",
+       "topology_source": "synth",
+       "atoms": [],
+       "missing_reason": "missing_coordinates"
+      },
+      {
+       "frame_id": "structure_trajectory:frame:5",
+       "frame_index": 5,
+       "coordinate_units": "angstrom",
+       "topology_source": "synth",
+       "atoms": [
+        {
+         "atom_uid": "C:0",
+         "element": "C",
+         "coordinate": [
+          5.0,
+          0.0,
+          2.0
+         ]
+        },
+        {
+         "atom_uid": "C:1",
+         "element": "C",
+         "coordinate": [
+          5.01,
+          0.01,
+          2.0
+         ]
+        },
+        {
+         "atom_uid": "C:2",
+         "element": "C",
+         "coordinate": [
+          5.02,
+          0.02,
+          2.0
+         ]
+        },
+        {
+         "atom_uid": "C:3",
+         "element": "C",
+         "coordinate": [
+          5.03,
+          0.03,
+          2.0
+         ]
+        }
+       ],
+       "block_index": 0
+      },
+      {
+       "frame_id": "structure_trajectory:frame:6",
+       "frame_index": 6,
+       "coordinate_units": "angstrom",
+       "topology_source": "synth",
+       "atoms": [
+        {
+         "atom_uid": "C:0",
+         "element": "C",
+         "coordinate": [
+          6.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "atom_uid": "C:1",
+         "element": "C",
+         "coordinate": [
+          6.01,
+          0.01,
+          0.0
+         ]
+        },
+        {
+         "atom_uid": "C:2",
+         "element": "C",
+         "coordinate": [
+          6.02,
+          0.02,
+          0.0
+         ]
+        },
+        {
+         "atom_uid": "C:3",
+         "element": "C",
+         "coordinate": [
+          6.03,
+          0.03,
+          0.0
+         ]
+        }
+       ],
+       "block_index": 0
+      },
+      {
+       "frame_id": "structure_trajectory:frame:7",
+       "frame_index": 7,
+       "coordinate_units": "angstrom",
+       "topology_source": "synth",
+       "atoms": [
+        {
+         "atom_uid": "C:0",
+         "element": "C",
+         "coordinate": [
+          7.0,
+          0.0,
+          1.0
+         ]
+        },
+        {
+         "atom_uid": "C:1",
+         "element": "C",
+         "coordinate": [
+          7.01,
+          0.01,
+          1.0
+         ]
+        },
+        {
+         "atom_uid": "C:2",
+         "element": "C",
+         "coordinate": [
+          7.02,
+          0.02,
+          1.0
+         ]
+        },
+        {
+         "atom_uid": "C:3",
+         "element": "C",
+         "coordinate": [
+          7.03,
+          0.03,
+          1.0
+         ]
+        }
+       ],
+       "block_index": 0
+      }
+     ]
+    }
+   }
+  },
+  {
+   "block_index": 2,
+   "start": 8,
+   "end": 10,
+   "resolution": 4,
+   "product": {
+    "schema_version": 1,
+    "product_kind": "structure_trajectory",
+    "identity": {
+     "product_kind": "structure_trajectory",
+     "schema_version": 1,
+     "generator": "cccp.calculation.products.structure.build_structure_trajectory_product",
+     "input_digest": "sha256:bbd26371ca48fe835d4395f56bb03a98f4f4f39273b39eb8ec0303fd81f2d60d",
+     "algorithm": "chunk",
+     "algorithm_version": "1",
+     "params_digest": "sha256:67419726c73c6f6cb3fa24d0564c65f076c3513b30dac734687f574d3d07bcad"
+    },
+    "state": "available",
+    "complete": true,
+    "errors": [],
+    "payload": {
+     "coordinate_units": "angstrom",
+     "topology_source": "synth",
+     "atom_order": [
+      "C:0",
+      "C:1",
+      "C:2",
+      "C:3"
+     ],
+     "reference_frame": {
+      "axes": "cartesian",
+      "origin": "native_input"
+     },
+     "frames": [
+      {
+       "frame_id": "structure_trajectory:frame:8",
+       "frame_index": 8,
+       "coordinate_units": "angstrom",
+       "topology_source": "synth",
+       "atoms": [
+        {
+         "atom_uid": "C:0",
+         "element": "C",
+         "coordinate": [
+          8.0,
+          0.0,
+          2.0
+         ]
+        },
+        {
+         "atom_uid": "C:1",
+         "element": "C",
+         "coordinate": [
+          8.01,
+          0.01,
+          2.0
+         ]
+        },
+        {
+         "atom_uid": "C:2",
+         "element": "C",
+         "coordinate": [
+          8.02,
+          0.02,
+          2.0
+         ]
+        },
+        {
+         "atom_uid": "C:3",
+         "element": "C",
+         "coordinate": [
+          8.03,
+          0.03,
+          2.0
+         ]
+        }
+       ],
+       "block_index": 0
+      },
+      {
+       "frame_id": "structure_trajectory:frame:9",
+       "frame_index": 9,
+       "coordinate_units": "angstrom",
+       "topology_source": "synth",
+       "atoms": [
+        {
+         "atom_uid": "C:0",
+         "element": "C",
+         "coordinate": [
+          9.0,
+          0.0,
+          0.0
+         ]
+        },
+        {
+         "atom_uid": "C:1",
+         "element": "C",
+         "coordinate": [
+          9.01,
+          0.01,
+          0.0
+         ]
+        },
+        {
+         "atom_uid": "C:2",
+         "element": "C",
+         "coordinate": [
+          9.02,
+          0.02,
+          0.0
+         ]
+        },
+        {
+         "atom_uid": "C:3",
+         "element": "C",
+         "coordinate": [
+          9.03,
+          0.03,
+          0.0
+         ]
+        }
+       ],
+       "block_index": 0
+      }
+     ]
+    }
+   }
+  }
+ ],
+ "key_points": []
+}

@@ -1,0 +1,35 @@
+{
+  "argv": [
+    "/ACPServer/acp2-development/venvs/b/bin/python",
+    "-m",
+    "acp2_controller_fault",
+    "--fault-file",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+    "--",
+    "run",
+    "serve",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "18771",
+    "--run-root",
+    "/ACPServer/acp2-development/data/b/run-root-b13",
+    "--poll-interval",
+    "1",
+    "--no-browser"
+  ],
+  "cwd": "/ACPServer/acp2-development/B/src",
+  "fault_file": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B13/fault/publication-fault.json",
+  "health": {
+    "candidate_revision": "10eb71e4bc1811054c9d19ae4fd71d974e027f8a",
+    "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4",
+    "contract_digest_scope": "delivered-contract-set",
+    "contract_version": "1.1.0",
+    "read_only": true,
+    "schema_version": 1,
+    "started_at": "2026-10-22T22:46:56.035759Z",
+    "status": "ok"
+  },
+  "pid": 715881,
+  "run_root": "/ACPServer/acp2-development/data/b/run-root-b13"
+}

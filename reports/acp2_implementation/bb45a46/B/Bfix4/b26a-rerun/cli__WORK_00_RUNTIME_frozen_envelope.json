@@ -1,0 +1,50 @@
+{
+  "attempt": 1,
+  "data_bindings": [
+    {
+      "artifact_digests": {
+        "input.xyz": "sha256:3ba442e949c46e020ea42187f2c0cab7decceed85af97317f3074c8a7017a916"
+      },
+      "binding_id": "local:2c7ffd56045b5bd5:b26a-fix4-sp2_singlepoint",
+      "endpoint": "local",
+      "kind": "local",
+      "mapping_version": 1,
+      "project_id": "",
+      "relative_path": "b26a-fix4-sp2_singlepoint",
+      "root": "/tmp/opencode/b26a-fix4/data/task-exec-root2/uncategorized",
+      "tenant_id": ""
+    }
+  ],
+  "entrypoint": "worker.bootstrap",
+  "envelope_version": 1,
+  "fencing_token": "4e3d2627d1cec5b9fa1f4c7d1b1cc9bc",
+  "job_id": "20261023_224052_001_b26a-fix4-sp2",
+  "owner": "local:workstation:1696389:1",
+  "plan_digest": "v2:b5912067c05e25d2bfd49c63fd01b584",
+  "plan_identity": "v2:686f5c2fc0c8240fd0473fbf705102d8",
+  "protocol": "local",
+  "release_digest": "b59ec6b6b502ed70104baacb17b41873769813def34224840017792e438900b3",
+  "release_id": "2c7ffd56045b5bd5",
+  "required_capabilities": [
+    "singlepoint"
+  ],
+  "resource_budget": {
+    "mem": null,
+    "mem_mb": null,
+    "nproc": null,
+    "partial": false,
+    "queue": null,
+    "walltime_s": null
+  },
+  "scientific_closure": {
+    "algorithm_version": "",
+    "dependency_digests": {},
+    "payload_schema": 1,
+    "result_schema": 1,
+    "task_kind": "singlepoint"
+  },
+  "step_identities": [
+    "v2:250b24830914566eaa26badb1092a9ff"
+  ],
+  "submission_id": "sub_6ba95cc686d63eed"
+}

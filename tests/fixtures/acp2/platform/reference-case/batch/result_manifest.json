@@ -1,0 +1,83 @@
+{
+  "products": [
+    {
+      "id": "batch_item_001_normal_modes",
+      "kind": "frequency_modes",
+      "label": "input \u2014 normal modes",
+      "metadata": {
+        "geometry_product_id": "batch_item_001"
+      },
+      "path": "frequencies/item_001__normal_modes.json"
+    },
+    {
+      "id": "batch_item_001",
+      "kind": "structure",
+      "label": "input (TS, opt_freq)",
+      "metadata": {
+        "auto_reusable": true,
+        "failure_reason": "",
+        "frequency": {
+          "frequencies": [
+            -456.57,
+            126.95,
+            193.3,
+            278.64,
+            376.73,
+            389.87,
+            476.62,
+            589.45,
+            608.2,
+            681.14,
+            775.48,
+            824.84,
+            852.1,
+            900.53,
+            944.07,
+            963.27,
+            966.7,
+            989.45,
+            992.16,
+            1002.64,
+            1101.25,
+            1111.46,
+            1244.86,
+            1257.58,
+            1272.94,
+            1319.82,
+            1428.02,
+            1463.76,
+            1488.27,
+            1540.37,
+            1587.17,
+            1592.71,
+            3133.11,
+            3136.25,
+            3137.47,
+            3142.94,
+            3145.19,
+            3156.43,
+            3218.96,
+            3227.0,
+            3229.49,
+            3244.46
+          ],
+          "status": "completed",
+          "ts_validation": "passed"
+        },
+        "frequency_status": "completed",
+        "item_id": "item_001",
+        "method_fingerprint": "{\"frequency_basis\":\"\",\"frequency_method\":\"\",\"minimum_basis\":\"def2-mTZVPP\",\"minimum_method\":\"r2SCAN-3c\",\"minimum_opt_convergence\":\"Tight\",\"minimum_opt_initial_hessian\":\"auto\",\"minimum_opt_max_iter\":null,\"minimum_opt_max_rescue\":2,\"minimum_opt_recalc_hess\":\"auto\",\"minimum_opt_rescue_policy\":\"adaptive\",\"minimum_opt_trust_radius\":null,\"minimum_scf_convergence\":\"Tight\",\"minimum_scf_max_iter\":300,\"minimum_scf_strategy\":\"normal\",\"opt_convergence\":\"Tight\",\"opt_initial_hessian\":\"auto\",\"opt_max_iter\":null,\"opt_max_rescue\":2,\"opt_recalc_hess\":\"auto\",\"opt_rescue_policy\":\"adaptive\",\"opt_trust_radius\":null,\"optimization_basis\":\"def2-mTZVPP\",\"optimization_method\":\"r2SCAN-3c\",\"pressure\":1.0,\"scale_factor\":0.9905,\"scf_convergence\":\"Tight\",\"scf_damp\":false,\"scf_damp_fac\":0.5,\"scf_max_iter\":300,\"scf_orbital_inherit\":true,\"scf_shift\":false,\"scf_shift_fac\":0.3,\"scf_strategy\":\"normal\",\"single_point_basis\":\"def2-TZVPP\",\"single_point_method\":\"wB97M-V\",\"temperature\":298.15,\"transition_state_basis\":\"def2-mTZVPP\",\"transition_state_method\":\"r2SCAN-3c\",\"transition_state_opt_convergence\":\"Tight\",\"transition_state_opt_initial_hessian\":\"calculate\",\"transition_state_opt_max_iter\":null,\"transition_state_opt_max_rescue\":2,\"transition_state_opt_recalc_hess\":5,\"transition_state_opt_rescue_policy\":\"adaptive\",\"transition_state_opt_trust_radius\":0.3,\"transition_state_scf_convergence\":\"Tight\",\"transition_state_scf_max_iter\":300,\"transition_state_scf_strategy\":\"normal\"}",
+        "optimization_status": "converged",
+        "policy_version": 1,
+        "source_kind": "optimization",
+        "stage_id": "frequency",
+        "stage_status": "completed"
+      },
+      "path": "structures/item_001__TAG_TS__optimized.xyz"
+    }
+  ],
+  "status": "completed",
+  "task_id": "",
+  "version": 2,
+  "workflow": "BatchOptimize"
+}

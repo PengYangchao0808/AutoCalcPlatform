@@ -1017,18 +1017,36 @@ def test_content_change_preserved_mtime_publishes_new_release_for_new_job(
 #   src/acp/calculations/irc/source.py:16-17      (acp.scheduler.files/jobs)
 #   src/acp/results/irc_remote_live.py:12-13      (acp.scheduler.jobs + remote.fetcher)
 #   src/acp/results/structure_migration.py:12     (acp.scheduler.files)
+#   src/acp/services_bootstrap.py                 (acp.scheduler.* — B06 control plane)
+#   src/acp/services_data_bootstrap.py            (acp.scheduler.remote.paths + stores)
+#   src/acp/services_events_bootstrap.py          (acp.scheduler.events/store)
+#   src/acp/services_publication_bootstrap.py     (via acp.services_data_bootstrap)
 # These modules are present on the node (in the sync file set) but their
 # MODULE-LEVEL imports reach acp.scheduler/acp.api, which are excluded
-# from the release file set — importing them node-side would fail.
+# from the release file set — importing them node-side would fail.  The
+# ``acp.services_*_bootstrap`` modules are the B06 controller composition
+# roots: they are statically reachable from ``acp.cli`` only through
+# function-level (lazy) imports, never imported by a node-side ``run``
+# workflow, and the sync/release exclusion set is deliberately left
+# unchanged (they stay in the sync file set — pinned below).
 _NODE_GAP_MODULES = {
     "acp.calculations.irc.source",
     "acp.results.irc_remote_live",
     "acp.results.structure_migration",
+    "acp.services_bootstrap",
+    "acp.services_events_bootstrap",
+    # M2-02's lazy structure-store import made services_data_bootstrap and
+    # services_publication_bootstrap importable node-side (verified 2026-10-28
+    # after the M4 wave); they left the gap set and must not return.
 }
 _NODE_GAP_FILES = {
     "src/acp/calculations/irc/source.py",
     "src/acp/results/irc_remote_live.py",
     "src/acp/results/structure_migration.py",
+    "src/acp/services_bootstrap.py",
+    "src/acp/services_data_bootstrap.py",
+    "src/acp/services_events_bootstrap.py",
+    "src/acp/services_publication_bootstrap.py",
 }
 _EXCLUDED_FROM_SYNC = ("acp.api", "acp.scheduler")
 
@@ -1167,7 +1185,6 @@ def test_node_side_cli_reachable_modules_importable_enumeration():
         f"node-side import gaps changed (Todo 19 risk set): {sorted(gaps)}; "
         f"expected exactly {sorted(_NODE_GAP_MODULES)}"
     )
-
     # The gap FILES stay in the sync/release file set — the exclusion set
     # must NOT be expanded to paper over them.
     project_root = Path(__file__).resolve().parents[1]

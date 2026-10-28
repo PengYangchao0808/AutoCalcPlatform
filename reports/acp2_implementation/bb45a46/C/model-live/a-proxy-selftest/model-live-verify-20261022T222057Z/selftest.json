@@ -1,0 +1,547 @@
+{
+  "artifacts": [
+    "routing.cordis.yml",
+    "routing-web.dump.yml",
+    "routing-headless.dump.yml",
+    "routing.json",
+    "ledger.json"
+  ],
+  "checks": [
+    {
+      "detail": "http://127.0.0.1:34777/v1",
+      "name": "lifecycle.start_ready",
+      "status": "PASS"
+    },
+    {
+      "detail": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/model-live/a-proxy-selftest/model-live-verify-20261022T222057Z/budget/ledger.json",
+      "name": "lifecycle.ledger_under_budget_dir",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"input_tokens\": 150000, \"model_requests\": 12, \"output_tokens\": 30000}",
+      "name": "lifecycle.health_caps",
+      "status": "PASS"
+    },
+    {
+      "detail": "batch-bec2bafdc10c4912",
+      "name": "lifecycle.batch_id_present",
+      "status": "PASS"
+    },
+    {
+      "detail": "{'input_cap_overshoot_events': 0, 'input_tokens': 0, 'input_tokens_estimated': 0, 'input_tokens_reported': 0, 'model_calls': 0, 'output_cap_violation_events': 0, 'output_tokens': 0, 'output_tokens_reported': 0, 'output_tokens_unknown_events': 0, 'total_tokens': 0, 'total_tokens_complete': True, 'unknown_usage_events': 0}",
+      "name": "lifecycle.zero_requests_at_start",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0",
+      "name": "lifecycle.stop",
+      "status": "PASS"
+    },
+    {
+      "detail": "[(200, 7), (200, 7), (200, 7), (200, 7)]",
+      "name": "count.twelve_allowed",
+      "status": "PASS"
+    },
+    {
+      "detail": "delta=12",
+      "name": "count.upstream_calls_exactly_twelve",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=429 error={'batch_id': 'batch-bec2bafdc10c4912', 'code': 'model_requests', 'message': 'model request cap reached (12); the next request is refused before reaching the provider', 'scenario_budget_id': 'selftest-count', 'type': 'acp2_budget_refusal'}",
+      "name": "count.thirteenth_refused",
+      "status": "PASS"
+    },
+    {
+      "detail": "delta=12",
+      "name": "count.refused_request_not_forwarded",
+      "status": "PASS"
+    },
+    {
+      "detail": "{'input_cap_overshoot_events': 0, 'input_tokens': 132, 'input_tokens_estimated': 0, 'input_tokens_reported': 132, 'model_calls': 12, 'output_cap_violation_events': 0, 'output_tokens': 84, 'output_tokens_reported': 84, 'output_tokens_unknown_events': 0, 'total_tokens': 216, 'total_tokens_complete': True, 'unknown_usage_events': 0}",
+      "name": "count.usage_exactly_twelve",
+      "status": "PASS"
+    },
+    {
+      "detail": "{'input_tokens': 149868, 'model_requests': 0, 'output_tokens': 29916}",
+      "name": "count.remaining_zero",
+      "status": "PASS"
+    },
+    {
+      "detail": "{'model_requests': 1}",
+      "name": "count.refusal_recorded",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=400 error={'batch_id': 'batch-bec2bafdc10c4912', 'code': 'per_request_output_cap', 'message': 'requested max_tokens=4097 exceeds the per-request output cap 4096', 'scenario_budget_id': 'selftest-per-request', 'type': 'acp2_budget_refusal'}",
+      "name": "per_request_cap.refused",
+      "status": "PASS"
+    },
+    {
+      "detail": "calls=0",
+      "name": "per_request_cap.not_forwarded",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=200",
+      "name": "per_request_cap.boundary_allowed",
+      "status": "PASS"
+    },
+    {
+      "detail": "{'usage': {'input_cap_overshoot_events': 0, 'input_tokens': 11, 'input_tokens_estimated': 0, 'input_tokens_reported': 11, 'model_calls': 1, 'output_cap_violation_events': 0, 'output_tokens': 7, 'output_tokens_reported': 7, 'output_tokens_unknown_events': 0, 'total_tokens': 18, 'total_tokens_complete': True, 'unknown_usage_events': 0}, 'last': {'model': 'stub-ok', 'stream': False, 'max_tokens': 4096, 'include_usage': False, 'path': '/v1/chat/completions'}}",
+      "name": "per_request_cap.sent_max_tokens_clamped_to_cap",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=200 bytes=505",
+      "name": "streaming.sse_delivered",
+      "status": "PASS"
+    },
+    {
+      "detail": "{'input_cap_overshoot_events': 0, 'input_tokens': 11, 'input_tokens_estimated': 0, 'input_tokens_reported': 11, 'model_calls': 1, 'output_cap_violation_events': 0, 'output_tokens': 7, 'output_tokens_reported': 7, 'output_tokens_unknown_events': 0, 'total_tokens': 18, 'total_tokens_complete': True, 'unknown_usage_events': 0}",
+      "name": "streaming.usage_reported",
+      "status": "PASS"
+    },
+    {
+      "detail": "{'model': 'stub-ok', 'stream': True, 'max_tokens': 32, 'include_usage': True, 'path': '/v1/chat/completions'}",
+      "name": "streaming.proxy_requested_usage_in_stream",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=200",
+      "name": "missing_usage.response_ok",
+      "status": "PASS"
+    },
+    {
+      "detail": "{'input_cap_overshoot_events': 0, 'input_tokens': 46, 'input_tokens_estimated': 46, 'input_tokens_reported': 0, 'model_calls': 1, 'output_cap_violation_events': 0, 'output_tokens': 0, 'output_tokens_reported': 0, 'output_tokens_unknown_events': 1, 'total_tokens': 46, 'total_tokens_complete': False, 'unknown_usage_events': 1}",
+      "name": "missing_usage.output_recorded_unknown",
+      "status": "PASS"
+    },
+    {
+      "detail": "{'input_cap_overshoot_events': 0, 'input_tokens': 46, 'input_tokens_estimated': 46, 'input_tokens_reported': 0, 'model_calls': 1, 'output_cap_violation_events': 0, 'output_tokens': 0, 'output_tokens_reported': 0, 'output_tokens_unknown_events': 1, 'total_tokens': 46, 'total_tokens_complete': False, 'unknown_usage_events': 1}",
+      "name": "missing_usage.input_marked_estimated",
+      "status": "PASS"
+    },
+    {
+      "detail": "{'input_source': 'estimated', 'input_tokens': None, 'output_source': 'unknown', 'output_tokens': None}",
+      "name": "missing_usage.event_sources",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=200 truncated=False tail=b'event: error\\ndata: {\"message\": \"IncompleteRead: IncompleteRead(332 bytes read)\", \"type\": \"acp2_proxy_upstream_error\"}\\n\\n'",
+      "name": "interruption.upstream_close_visible",
+      "status": "PASS"
+    },
+    {
+      "detail": "['upstream_interrupted']",
+      "name": "interruption.upstream_settled_as_consumed",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=200",
+      "name": "interruption.client_headers_received",
+      "status": "PASS"
+    },
+    {
+      "detail": "['upstream_interrupted', 'client_disconnected']",
+      "name": "interruption.client_disconnect_settled",
+      "status": "PASS"
+    },
+    {
+      "detail": "{'input_cap_overshoot_events': 0, 'input_tokens': 91, 'input_tokens_estimated': 91, 'input_tokens_reported': 0, 'model_calls': 2, 'output_cap_violation_events': 0, 'output_tokens': 0, 'output_tokens_reported': 0, 'output_tokens_unknown_events': 2, 'total_tokens': 91, 'total_tokens_complete': False, 'unknown_usage_events': 2}",
+      "name": "interruption.both_requests_consumed",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=500 body={'error': {'message': 'stub upstream failure'}}",
+      "name": "upstream_error.status_forwarded",
+      "status": "PASS"
+    },
+    {
+      "detail": "{'usage': {'input_cap_overshoot_events': 0, 'input_tokens': 45, 'input_tokens_estimated': 45, 'input_tokens_reported': 0, 'model_calls': 1, 'output_cap_violation_events': 0, 'output_tokens': 0, 'output_tokens_reported': 0, 'output_tokens_unknown_events': 1, 'total_tokens': 45, 'total_tokens_complete': False, 'unknown_usage_events': 1}, 'outcomes': ['upstream_status_500']}",
+      "name": "upstream_error.consumed_with_unknown_usage",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0",
+      "name": "restart.first_stop",
+      "status": "PASS"
+    },
+    {
+      "detail": "{'input_cap_overshoot_events': 0, 'input_tokens': 33, 'input_tokens_estimated': 0, 'input_tokens_reported': 33, 'model_calls': 3, 'output_cap_violation_events': 0, 'output_tokens': 21, 'output_tokens_reported': 21, 'output_tokens_unknown_events': 0, 'total_tokens': 54, 'total_tokens_complete': True, 'unknown_usage_events': 0}",
+      "name": "restart.inherits_settled_usage",
+      "status": "PASS"
+    },
+    {
+      "detail": "{'input_tokens': 149967, 'model_requests': 9, 'output_tokens': 29979}",
+      "name": "restart.inherits_remaining_requests",
+      "status": "PASS"
+    },
+    {
+      "detail": "batch-bec2bafdc10c4912 == batch-bec2bafdc10c4912",
+      "name": "restart.batch_id_stable",
+      "status": "PASS"
+    },
+    {
+      "detail": "[200, 200, 200, 200, 200, 200, 200, 200, 200]",
+      "name": "restart.nine_more_allowed",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=429 error={'batch_id': 'batch-bec2bafdc10c4912', 'code': 'model_requests', 'message': 'model request cap reached (12); the next request is refused before reaching the provider', 'scenario_budget_id': 'selftest-restart', 'type': 'acp2_budget_refusal'}",
+      "name": "restart.thirteenth_overall_refused",
+      "status": "PASS"
+    },
+    {
+      "detail": "{'usage': {'input_cap_overshoot_events': 0, 'input_tokens': 33, 'input_tokens_estimated': 0, 'input_tokens_reported': 33, 'model_calls': 3, 'output_cap_violation_events': 0, 'output_tokens': 21, 'output_tokens_reported': 21, 'output_tokens_unknown_events': 0, 'total_tokens': 54, 'total_tokens_complete': True, 'unknown_usage_events': 0}, 'remaining': {'input_tokens': 149967, 'model_requests': 9, 'output_tokens': 29979}}",
+      "name": "run_id.change_does_not_reset_budget",
+      "status": "PASS"
+    },
+    {
+      "detail": "['run-alpha', 'run-beta']",
+      "name": "run_id.both_recorded",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=429 error={'batch_id': 'batch-bec2bafdc10c4912', 'code': 'input_tokens', 'message': 'input token cap would be exceeded: used=0 estimate=177 cap=50', 'scenario_budget_id': 'selftest-input-cap', 'type': 'acp2_budget_refusal'} upstream_delta=0",
+      "name": "input_cap.refused_before_upstream",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=200",
+      "name": "output_cap.first_allowed",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=429 error={'batch_id': 'batch-bec2bafdc10c4912', 'code': 'output_tokens', 'message': 'output token cap reached (10); no further model request may run', 'scenario_budget_id': 'selftest-output-cap', 'type': 'acp2_budget_refusal'}",
+      "name": "output_cap.second_refused",
+      "status": "PASS"
+    },
+    {
+      "detail": "{'usage': {'input_cap_overshoot_events': 0, 'input_tokens': 11, 'input_tokens_estimated': 0, 'input_tokens_reported': 11, 'model_calls': 1, 'output_cap_violation_events': 0, 'output_tokens': 10, 'output_tokens_reported': 10, 'output_tokens_unknown_events': 0, 'total_tokens': 21, 'total_tokens_complete': True, 'unknown_usage_events': 0}, 'remaining': {'input_tokens': 149989, 'model_requests': 11, 'output_tokens': 0}}",
+      "name": "output_cap.settled_exactly_at_cap",
+      "status": "PASS"
+    },
+    {
+      "detail": "{'codes': [200, 429], 'refusals': ['concurrency_cap']}",
+      "name": "concurrency.second_refused",
+      "status": "PASS"
+    },
+    {
+      "detail": "status=400 error={'batch_id': 'batch-bec2bafdc10c4912', 'code': 'unapproved_model', 'message': \"model 'not-approved-model' is not approved; no fallback is attempted\", 'scenario_budget_id': 'selftest-unapproved', 'type': 'acp2_budget_refusal'} upstream_delta=0",
+      "name": "unapproved.refused_without_fallback",
+      "status": "PASS"
+    },
+    {
+      "detail": "{'input_cap_overshoot_events': 0, 'input_tokens': 0, 'input_tokens_estimated': 0, 'input_tokens_reported': 0, 'model_calls': 0, 'output_cap_violation_events': 0, 'output_tokens': 0, 'output_tokens_reported': 0, 'output_tokens_unknown_events': 0, 'total_tokens': 0, 'total_tokens_complete': True, 'unknown_usage_events': 0}",
+      "name": "unapproved.not_counted_against_budget",
+      "status": "PASS"
+    },
+    {
+      "detail": "{'usage': {'input_cap_overshoot_events': 0, 'input_tokens': 321, 'input_tokens_estimated': 321, 'input_tokens_reported': 0, 'model_calls': 1, 'output_cap_violation_events': 0, 'output_tokens': 0, 'output_tokens_reported': 0, 'output_tokens_unknown_events': 1, 'total_tokens': 321, 'total_tokens_complete': False, 'unknown_usage_events': 1}, 'outcomes': ['restart_recovered']}",
+      "name": "crash.inflight_charged_on_restart",
+      "status": "PASS"
+    },
+    {
+      "detail": "budget-proxy: caps_mismatch: scenario 'selftest-caps' already has caps {'input_tokens': 150000, 'model_requests': 12, 'output_tokens': 30000}; refusing to change them to {'model_requests': 20, 'input_tokens': 150000, 'output_tokens': 30000} (no silent widening or narrowing)\n",
+      "name": "caps_mismatch.refused_to_widen",
+      "status": "PASS"
+    },
+    {
+      "detail": "http://127.0.0.1:37025/v1",
+      "name": "routing.proxy_url_recorded",
+      "status": "PASS"
+    },
+    {
+      "detail": "/ACPServer/acp2-development/data/acceptance-env-c.sh",
+      "name": "routing.dsh_env_available",
+      "status": "PASS"
+    },
+    {
+      "detail": "",
+      "name": "routing.web_dump_config",
+      "status": "PASS"
+    },
+    {
+      "detail": "{'provider': True, 'baseURL': True, 'api': True}",
+      "name": "routing.web_points_at_proxy",
+      "status": "PASS"
+    },
+    {
+      "detail": "clean",
+      "name": "routing.web_dump_has_no_secret",
+      "status": "PASS"
+    },
+    {
+      "detail": "",
+      "name": "routing.headless_dump_config",
+      "status": "PASS"
+    },
+    {
+      "detail": "{'provider': True, 'baseURL': True, 'api': True}",
+      "name": "routing.headless_points_at_proxy",
+      "status": "PASS"
+    },
+    {
+      "detail": "clean",
+      "name": "routing.headless_dump_has_no_secret",
+      "status": "PASS"
+    }
+  ],
+  "data_root": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/model-live/a-proxy-selftest/model-live-verify-20261022T222057Z",
+  "finished_at": "2026-10-22T22:21:10Z",
+  "ledger_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/model-live/a-proxy-selftest/model-live-verify-20261022T222057Z/budget/ledger.json",
+  "schema": "acp2.model-budget.selftest.v1",
+  "started_at": "2026-10-22T22:20:57Z",
+  "status": "PASS",
+  "stub_upstream": {
+    "calls": 35,
+    "entries": [
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 4096,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": true,
+        "max_tokens": 32,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": true
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-no-usage",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": true,
+        "max_tokens": 16,
+        "model": "stub-interrupt",
+        "path": "/v1/chat/completions",
+        "stream": true
+      },
+      {
+        "include_usage": true,
+        "max_tokens": 16,
+        "model": "stub-slow",
+        "path": "/v1/chat/completions",
+        "stream": true
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-error",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 10,
+        "model": "stub-usage10",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-slow",
+        "path": "/v1/chat/completions",
+        "stream": false
+      }
+    ]
+  }
+}

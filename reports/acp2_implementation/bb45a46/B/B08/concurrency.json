@@ -1,0 +1,60 @@
+{
+  "receipt_command": [
+    "/ACPServer/acp2-development/venvs/b/bin/python",
+    "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py",
+    "--scenario",
+    "submit-replay",
+    "--controller",
+    "http://127.0.0.1:18766",
+    "--launch",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B08/mcp-launch.json",
+    "--fixture",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B08/fixtures/singlepoint.xyz",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B08",
+    "--timeout",
+    "600"
+  ],
+  "result": "PASS",
+  "assertions": [
+    {
+      "detail": "task_ids=['20261023_001354_001_singlepoint', '20261023_001354_001_singlepoint'] errors=['', '']",
+      "name": "two_mcp_processes_same_task_ref",
+      "status": "PASS"
+    },
+    {
+      "detail": "before=0 after=1",
+      "name": "exactly_one_new_task",
+      "status": "PASS"
+    },
+    {
+      "detail": "job.started=1",
+      "name": "exactly_one_dispatch",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"schema_version\": 1, \"operation\": \"acp_submit\", \"status\": \"error\", \"exit_code\": 4, \"dry_run\": false, \"operation_identity\": null, \"diagnostic_ref\": null, \"data\": null, \"error\": {\"code\": \"revision_conflict\", \"category\": \"conflict\", \"message\": \"idempotency key reused with a different request payload\", \"retryable\": false, \"params\": {\"command\": \"submit\", \"idempotency_key\": \"b08-bdc4ad4041b947a3a3676b7",
+      "name": "same_key_changed_payload_conflict",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"schema_version\": 1, \"operation\": \"acp_submit\", \"status\": \"error\", \"exit_code\": 4, \"dry_run\": false, \"operation_identity\": null, \"diagnostic_ref\": null, \"data\": null, \"error\": {\"code\": \"revision_conflict\", \"category\": \"conflict\", \"message\": \"idempotency key was already used under a different verified scope\", \"retryable\": false, \"params\": {\"command\": \"submit\", \"idempotency_key\": \"b08-bdc4ad4041b94",
+      "name": "same_key_changed_scope_rejected",
+      "status": "PASS"
+    }
+  ],
+  "job_id": "20261023_001354_001_singlepoint",
+  "attempt": 1,
+  "extensions": {
+    "acceptance.operation_class": "submit",
+    "acceptance.target": "local",
+    "b08.attempt": 1,
+    "b08.fixture": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B08/fixtures/singlepoint.xyz",
+    "b08.idempotency_key": "b08-bdc4ad4041b947a3a3676b7c",
+    "b08.job_started_events": 1,
+    "b08.mcp_launch": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B08/mcp-launch.json",
+    "b08.task_count_after": 1,
+    "b08.task_count_before": 0,
+    "b08.task_ref": "20261023_001354_001_singlepoint"
+  }
+}

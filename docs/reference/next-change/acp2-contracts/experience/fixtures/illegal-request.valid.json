@@ -1,0 +1,15 @@
+{
+  "fixture": "illegal_request_positive",
+  "description": "Positive counterpart: a research client may request (not decide) an approval, binding the frozen plan digest. No approver/role/tenant is supplied in the payload.",
+  "tool": "acp_research_approval_request_v1",
+  "arguments": {
+    "proposal_ref": "prop-da-selectivity-001",
+    "plan_digest": "sha256:32bd96dd1c8d2eb962a419590ff91ebf695adef1c587c147185f522be5422d9b",
+    "comment": "Please review the frozen endo/exo single-step plan.",
+    "idempotency_key": "idem-approval-da-selectivity-001"
+  },
+  "expected_result": {
+    "approval_ref": "approval-da-selectivity-001",
+    "status": "pending"
+  }
+}

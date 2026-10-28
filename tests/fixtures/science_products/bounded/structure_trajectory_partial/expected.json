@@ -1,0 +1,30 @@
+{
+ "fixture": "structure_trajectory_partial",
+ "operation": "reconstruct",
+ "result_digest": "sha256:76a44344f49073967a665795543cac2652eaa4c4fde830ff536e6e2afd4ca3cf",
+ "checks": {
+  "n_frames": 10,
+  "first_frame_id": "structure_trajectory:frame:0",
+  "last_frame_id": "structure_trajectory:frame:9",
+  "block_count": 3,
+  "max_block_size": 4,
+  "total_items": 10,
+  "covered_range": [
+   0,
+   10
+  ],
+  "block_complete": [
+   true,
+   false,
+   true
+  ],
+  "missing": [
+   {
+    "frame_index": 4,
+    "frame_id": "structure_trajectory:frame:4",
+    "reason": "missing_coordinates"
+   }
+  ]
+ },
+ "expected_rejection": null
+}

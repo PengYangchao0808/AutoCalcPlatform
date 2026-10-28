@@ -1,0 +1,163 @@
+{
+  "attempt": 1,
+  "completed_at": "2026-10-27T17:15:29.882145+00:00",
+  "created_at": "2026-10-27T17:14:42.808568+00:00",
+  "current_stage": null,
+  "custom_name": null,
+  "default_name": "CCO_xtb_optimize",
+  "display_method": null,
+  "error": null,
+  "exit_code": 0,
+  "group_id": "20261028_011442_001_m403-submission",
+  "host": "127.0.0.1",
+  "id": "20261028_011442_001_m403-submission",
+  "input_hash": "sha256:f9edc3d71ed774865895a9a94ae080a405d190061313eef97d9d4cd51396f365",
+  "latest_event": null,
+  "live_status": null,
+  "name_revision": 0,
+  "name_updated_at": null,
+  "node_id": "lsf-local",
+  "pid": null,
+  "plan_digest": null,
+  "progress": 1.0,
+  "progress_state": "determinate",
+  "project_id": "b680d7d9-79dc-4204-b5ba-d3450e3e05b7",
+  "project_name": null,
+  "release_digest": null,
+  "release_id": null,
+  "remote_job_id": "1",
+  "resolved_name": "CCO_xtb_optimize",
+  "result": {
+    "admission": {
+      "enforced": true,
+      "enforcement": "local-single-enforced",
+      "key_id": null,
+      "mode": "quota-only",
+      "multi_tenant_security": false,
+      "policy_version": "local-single-v1",
+      "principal_id": "principal_local",
+      "reason_code": "admitted",
+      "reservation_id": "res_job_20261028_011442_001_m403-submission",
+      "verified_project": null
+    },
+    "command_line": "/usr/bin/python3.11 -m acp.cli run xtb_optimize --input input.xyz --output . --name CCO_xtb_optimize --nproc 4 --mem 8GB",
+    "execution": {
+      "attempt": 1,
+      "closure": "integrated",
+      "entry": "legacy",
+      "protocol": "lsf",
+      "release_id": "2d1ab37a0f988933",
+      "schema": 1,
+      "workflow": "xtb_optimize"
+    },
+    "execution_kind": "remote",
+    "execution_target": "lsf-local",
+    "exit_code": 0,
+    "host": "127.0.0.1",
+    "lsf_job_id": "1",
+    "node": "lsf-local",
+    "provenance": {
+      "acp_version": "0.3.0",
+      "backend_name": "xtb_optimize",
+      "backend_version": "",
+      "basis": null,
+      "command_line": "/usr/bin/python3.11 -m acp.cli run xtb_optimize --input input.xyz --output . --name CCO_xtb_optimize --nproc 4 --mem 8GB",
+      "creator": null,
+      "hostname": "127.0.0.1",
+      "input_hash": "sha256:f9edc3d71ed774865895a9a94ae080a405d190061313eef97d9d4cd51396f365",
+      "memory_gb": 8.0,
+      "method": "xtb_optimize",
+      "molecule_hash": null,
+      "ncores": 4,
+      "routine": "xtb_optimize",
+      "schema_version": "1.0",
+      "solvent": null,
+      "wall_time_seconds": 47.056693
+    },
+    "remote": {
+      "attempt": 1,
+      "code_release": "2d1ab37a0f988933",
+      "intent_at": "2026-10-27T17:14:42.857678+00:00",
+      "lease_expires_at": "2026-10-27T17:16:42.857660+00:00",
+      "lsf_job_id": "1",
+      "node": "lsf-local",
+      "path_source": "stored",
+      "relative": "M4-03_LSF_matrix_20261028T011416/CCO_xtb_optimize",
+      "schema": 1,
+      "submission_id": "sub_41332c2d8baf6d9a",
+      "submit_owner": "827643:1793121274430878599:140564579202624:1",
+      "submit_state": "submitted",
+      "submitted_at": "2026-10-27T17:15:08.275662+00:00"
+    },
+    "remote_dir": "/ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028T011416/CCO_xtb_optimize",
+    "required_software": [
+      "xtb"
+    ],
+    "state": {
+      "created_at": "2026-10-27T17:15:20.431616+00:00",
+      "current_stage": null,
+      "job_name": "xtb_optimize",
+      "overall_progress": 1.0,
+      "progress_state": "determinate",
+      "stage_detail": null,
+      "stage_index": 1,
+      "stage_order": [
+        "xtb_optimize"
+      ],
+      "stage_progress": null,
+      "stage_total": 1,
+      "stages": {
+        "xtb_optimize": {
+          "completed_at": "2026-10-27T17:15:20.669760+00:00",
+          "started_at": "2026-10-27T17:15:20.476029+00:00",
+          "status": "completed"
+        }
+      },
+      "status": "completed",
+      "updated_at": "2026-10-27T17:15:20.670538+00:00",
+      "version": "1.0"
+    },
+    "terminal_side_effects_done": true
+  },
+  "revision": 11,
+  "snapshot_version": null,
+  "spec": {
+    "config_path": null,
+    "execution_mode": "remote",
+    "input": {
+      "source": "CCO",
+      "source_type": "smiles"
+    },
+    "method": {
+      "gfn": 2
+    },
+    "molecule_name": "CCO",
+    "name": "CCO_xtb_optimize",
+    "node_tags": [
+      "xtb"
+    ],
+    "output_dir": null,
+    "project_id": "b680d7d9-79dc-4204-b5ba-d3450e3e05b7",
+    "remark": "",
+    "resources": {
+      "mem": "8GB",
+      "nproc": 4
+    },
+    "tags": [],
+    "target_node": "lsf-local",
+    "task_name": "xtb_optimize",
+    "workflow": "xtb_optimize"
+  },
+  "stage_detail": null,
+  "stage_index": null,
+  "stage_order": [],
+  "stage_progress": null,
+  "stage_total": null,
+  "started_at": "2026-10-27T17:14:42.824599+00:00",
+  "status": "completed",
+  "study_id": null,
+  "study_status": null,
+  "submission_id": null,
+  "updated_at": "2026-10-27T17:15:29.919093+00:00",
+  "work_dir": "/ACPServer/acp2-runs/remediation/m4-03/run/20261028T011416/main/M4-03_LSF_matrix_20261028T011416/CCO_xtb_optimize"
+}

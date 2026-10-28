@@ -1,0 +1,24 @@
+{
+  "sample_id": "prepare-without-purpose.negative",
+  "contract": "control-and-data.v1.json",
+  "kind": "negative",
+  "operation": "prepare",
+  "payload": {
+    "task_ref": {
+      "task_id": "20261022_001_demo",
+      "attempt": 1,
+      "release": {
+        "release_id": "rel-1",
+        "release_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    "artifact_id": "freq_log"
+  },
+  "expected": {
+    "valid": false,
+    "class": "invalid-parameter",
+    "code": "input_invalid",
+    "violation": "missing_required",
+    "field": "purpose"
+  }
+}

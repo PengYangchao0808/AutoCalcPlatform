@@ -1,0 +1,35 @@
+{
+  "after": {
+    "cli": {
+      "code": "unauthenticated",
+      "returncode": 1,
+      "status": "failed"
+    },
+    "http_identity": 401,
+    "http_task": 401,
+    "mcp_error_code": "access_denied",
+    "mcp_is_error": true
+  },
+  "before": {
+    "cli": {
+      "code": null,
+      "returncode": 0,
+      "status": "ok"
+    },
+    "http_identity": 200,
+    "http_task": 200,
+    "mcp_status_is_error": false,
+    "mcp_task_id": "m406b-alpha-task"
+  },
+  "credential_surface": "ACP_API_KEY (same env for mcp serve and task --controller)",
+  "faces": [
+    "http",
+    "mcp_stdio",
+    "cli_task_query_controller"
+  ],
+  "key_id": "9a95d0e44a01f62a",
+  "passed": true,
+  "project": "project_m406b_alpha",
+  "revoked": true,
+  "task_id": "m406b-alpha-task"
+}

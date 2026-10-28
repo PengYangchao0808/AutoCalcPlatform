@@ -1,0 +1,291 @@
+{
+  "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+  "enable_command": {
+    "argv": [
+      "/ACPServer/acp2-runs/remediation/m4-05/environment/venv/bin/python",
+      "-m",
+      "acp.cli",
+      "science-plugin",
+      "enable",
+      "--capability",
+      "acp2_external_native_singlepoint",
+      "--run-root",
+      "/ACPServer/acp2-runs/remediation/m4-05/run-root"
+    ],
+    "returncode": 0,
+    "stderr_tail": "",
+    "stdout_tail": "{\"command\": \"enable\", \"enabled\": {\"capability_id\": \"acp2_external_native_singlepoint\", \"computed_distribution_digest\": \"sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85\", \"descriptor_digest\": \"sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780\", \"enabled\": true, \"enabled_at\": \"2026-10-28T00:05:31Z\", \"enabled_by\": \"controller\", \"installed\": true, \"installed_at\": \"2026-10-28T00:05:31Z\", \"plugin_name\": \"acp2_external.native_singlepoint\", \"version\": \"1.0.0\"}, \"generation\": 1, \"run_root\": \"/ACPServer/acp2-runs/remediation/m4-05/run-root\", \"status\": \"ok\"}\n"
+  },
+  "enable_command_upgrade": {
+    "argv": [
+      "/ACPServer/acp2-runs/remediation/m4-05/environment/venv/bin/python",
+      "-m",
+      "acp.cli",
+      "science-plugin",
+      "enable",
+      "--capability",
+      "acp2_upgrade_native_singlepoint",
+      "--run-root",
+      "/ACPServer/acp2-runs/remediation/m4-05/run-root"
+    ],
+    "returncode": 0,
+    "stderr_tail": "",
+    "stdout_tail": "{\"command\": \"enable\", \"enabled\": {\"capability_id\": \"acp2_upgrade_native_singlepoint\", \"computed_distribution_digest\": \"sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98\", \"descriptor_digest\": \"sha256:4297fd794d57e3d16ec6980ab9803ffbf1010d9c89cd070637ab1ba0462314df\", \"enabled\": true, \"enabled_at\": \"2026-10-28T00:05:32Z\", \"enabled_by\": \"controller\", \"installed\": true, \"installed_at\": \"2026-10-28T00:05:32Z\", \"plugin_name\": \"acp2_upgrade.native_singlepoint\", \"version\": \"1.0.0\"}, \"generation\": 2, \"run_root\": \"/ACPServer/acp2-runs/remediation/m4-05/run-root\", \"status\": \"ok\"}\n"
+  },
+  "enablement": {
+    "command": "enable",
+    "enabled": {
+      "capability_id": "acp2_external_native_singlepoint",
+      "computed_distribution_digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+      "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+      "enabled": true,
+      "enabled_at": "2026-10-28T00:05:31Z",
+      "enabled_by": "controller",
+      "installed": true,
+      "installed_at": "2026-10-28T00:05:31Z",
+      "plugin_name": "acp2_external.native_singlepoint",
+      "version": "1.0.0"
+    },
+    "generation": 1,
+    "run_root": "/ACPServer/acp2-runs/remediation/m4-05/run-root",
+    "status": "ok"
+  },
+  "enablement_upgrade": {
+    "command": "enable",
+    "enabled": {
+      "capability_id": "acp2_upgrade_native_singlepoint",
+      "computed_distribution_digest": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+      "descriptor_digest": "sha256:4297fd794d57e3d16ec6980ab9803ffbf1010d9c89cd070637ab1ba0462314df",
+      "enabled": true,
+      "enabled_at": "2026-10-28T00:05:32Z",
+      "enabled_by": "controller",
+      "installed": true,
+      "installed_at": "2026-10-28T00:05:32Z",
+      "plugin_name": "acp2_upgrade.native_singlepoint",
+      "version": "1.0.0"
+    },
+    "generation": 2,
+    "run_root": "/ACPServer/acp2-runs/remediation/m4-05/run-root",
+    "status": "ok"
+  },
+  "executable": [
+    "acp2_external_native_singlepoint",
+    "acp2_upgrade_native_singlepoint"
+  ],
+  "installed_computed_distribution_digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+  "list_after": {
+    "command": "list",
+    "enablements": [
+      {
+        "capability_id": "acp2_external_native_singlepoint",
+        "computed_distribution_digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+        "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+        "enabled": true,
+        "enabled_at": "2026-10-28T00:05:31Z",
+        "enabled_by": "controller",
+        "installed": true,
+        "installed_at": "2026-10-28T00:05:31Z",
+        "plugin_name": "acp2_external.native_singlepoint",
+        "version": "1.0.0"
+      },
+      {
+        "capability_id": "acp2_upgrade_native_singlepoint",
+        "computed_distribution_digest": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+        "descriptor_digest": "sha256:4297fd794d57e3d16ec6980ab9803ffbf1010d9c89cd070637ab1ba0462314df",
+        "enabled": true,
+        "enabled_at": "2026-10-28T00:05:32Z",
+        "enabled_by": "controller",
+        "installed": true,
+        "installed_at": "2026-10-28T00:05:32Z",
+        "plugin_name": "acp2_upgrade.native_singlepoint",
+        "version": "1.0.0"
+      }
+    ],
+    "executable": [
+      "acp2_external_native_singlepoint",
+      "acp2_upgrade_native_singlepoint"
+    ],
+    "generation": 2,
+    "installed": [
+      {
+        "capability_id": "acp2_external_native_singlepoint",
+        "capability_kind": "pure_analysis",
+        "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+        "distribution": "acp2-external-science-validator",
+        "distribution_digest": {
+          "algorithm": "acp2.plugin.distribution-digest.v1",
+          "declared": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+          "digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+          "file_count": 5,
+          "matches_declared": true
+        },
+        "entry_point": "cccp.science_plugins:acp2_external_validator",
+        "implementation_id": "acp2_fixture.validator.native_singlepoint",
+        "license": "MIT",
+        "plugin_name": "acp2_external.native_singlepoint",
+        "schema": "acp2.science.external.native_singlepoint",
+        "schema_version": 1,
+        "trust_level": "untrusted",
+        "version": "1.0.0"
+      },
+      {
+        "capability_id": "acp2_upgrade_native_singlepoint",
+        "capability_kind": "pure_analysis",
+        "descriptor_digest": "sha256:4297fd794d57e3d16ec6980ab9803ffbf1010d9c89cd070637ab1ba0462314df",
+        "distribution": "acp2-upgrade-science-validator",
+        "distribution_digest": {
+          "algorithm": "acp2.plugin.distribution-digest.v1",
+          "declared": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+          "digest": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+          "file_count": 5,
+          "matches_declared": true
+        },
+        "entry_point": "cccp.science_plugins:acp2_upgrade_validator",
+        "implementation_id": "acp2_upgrade.validator.native_singlepoint",
+        "license": "MIT",
+        "plugin_name": "acp2_upgrade.native_singlepoint",
+        "schema": "acp2.science.external.upgrade_singlepoint",
+        "schema_version": 1,
+        "trust_level": "untrusted",
+        "version": "1.0.0"
+      }
+    ],
+    "refusals": [],
+    "run_root": "/ACPServer/acp2-runs/remediation/m4-05/run-root",
+    "status": "ok"
+  },
+  "list_before": {
+    "command": "list",
+    "enablements": [],
+    "executable": [],
+    "generation": 0,
+    "installed": [
+      {
+        "capability_id": "acp2_external_native_singlepoint",
+        "capability_kind": "pure_analysis",
+        "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+        "distribution": "acp2-external-science-validator",
+        "distribution_digest": {
+          "algorithm": "acp2.plugin.distribution-digest.v1",
+          "declared": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+          "digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+          "file_count": 5,
+          "matches_declared": true
+        },
+        "entry_point": "cccp.science_plugins:acp2_external_validator",
+        "implementation_id": "acp2_fixture.validator.native_singlepoint",
+        "license": "MIT",
+        "plugin_name": "acp2_external.native_singlepoint",
+        "schema": "acp2.science.external.native_singlepoint",
+        "schema_version": 1,
+        "trust_level": "untrusted",
+        "version": "1.0.0"
+      },
+      {
+        "capability_id": "acp2_upgrade_native_singlepoint",
+        "capability_kind": "pure_analysis",
+        "descriptor_digest": "sha256:4297fd794d57e3d16ec6980ab9803ffbf1010d9c89cd070637ab1ba0462314df",
+        "distribution": "acp2-upgrade-science-validator",
+        "distribution_digest": {
+          "algorithm": "acp2.plugin.distribution-digest.v1",
+          "declared": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+          "digest": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+          "file_count": 5,
+          "matches_declared": true
+        },
+        "entry_point": "cccp.science_plugins:acp2_upgrade_validator",
+        "implementation_id": "acp2_upgrade.validator.native_singlepoint",
+        "license": "MIT",
+        "plugin_name": "acp2_upgrade.native_singlepoint",
+        "schema": "acp2.science.external.upgrade_singlepoint",
+        "schema_version": 1,
+        "trust_level": "untrusted",
+        "version": "1.0.0"
+      }
+    ],
+    "refusals": [],
+    "run_root": "/ACPServer/acp2-runs/remediation/m4-05/run-root",
+    "status": "ok"
+  },
+  "persisted_computed_distribution_digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+  "persisted_ledger": {
+    "document": {
+      "capability_id": "acp2_external_native_singlepoint",
+      "descriptor": {
+        "capability_id": "acp2_external_native_singlepoint",
+        "capability_source": "science_plugin",
+        "execution_semantics": {
+          "delegates_to_task_kind": null,
+          "kind": "pure_analysis",
+          "network_access": false,
+          "starts_subprocess": false
+        },
+        "implementation_id": "acp2_fixture.validator.native_singlepoint",
+        "input_schema": {
+          "ref": "acp2.science.prepared-artifact.v1",
+          "schema_version": 1
+        },
+        "output_schema": {
+          "ref": "acp2.science.external.native_singlepoint",
+          "schema_version": 1
+        },
+        "plugin": {
+          "distribution": "acp2-external-science-validator",
+          "entry_point_group": 1,
+          "license": "MIT",
+          "name": "acp2_external.native_singlepoint",
+          "trust_level": "untrusted",
+          "version": "1.0.0"
+        },
+        "provenance": {
+          "descriptor_digest_algorithm": "acp2.plugin.descriptor-digest.v1",
+          "distribution_digest": {
+            "algorithm": "acp2.plugin.distribution-digest.v1",
+            "declared": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+            "digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+            "file_count": 5,
+            "matches_declared": true
+          },
+          "fixture_evidence": [
+            {
+              "description": "Fixed water native single-point record and expected TaskResult fields; the platform owner verifies the fixture, this manifest only carries the claim.",
+              "digest": "sha256:fc06f818967f121a98b1bf7a3db30b2f43629a5633b742919ecb0b7a52fada98",
+              "fixture_id": "acp2-external-native-singlepoint",
+              "verified": true
+            }
+          ],
+          "recipe_refs": [],
+          "validator_refs": [
+            {
+              "required": true,
+              "validator_id": "check.acp2_native_singlepoint_schema",
+              "validator_version": "1.0.0"
+            }
+          ]
+        },
+        "schema": "acp2.plugin.capability-descriptor.v1",
+        "schema_version": 1
+      },
+      "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+      "disabled_at": null,
+      "disabled_by": null,
+      "distribution_digest": {
+        "algorithm": "acp2.plugin.distribution-digest.v1",
+        "declared": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+        "digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+        "file_count": 5,
+        "matches_declared": true
+      },
+      "enabled": true,
+      "enabled_at": "2026-10-28T00:05:31Z",
+      "enabled_by": "controller",
+      "installed": true,
+      "installed_at": "2026-10-28T00:05:31Z",
+      "plugin_name": "acp2_external.native_singlepoint",
+      "schema": "acp2.plugin.enablement.v1",
+      "version": "1.0.0"
+    },
+    "path": "/ACPServer/acp2-runs/remediation/m4-05/run-root/science-plugins/plugins/acp2_external.native_singlepoint/1.0.0/acp2_external_native_singlepoint/enablement.json",
+    "sha256": "sha256:7d04d1be8517e4cf28bda106c02146c8a1df62c9ae14b49bb290733ccbff15fd"
+  }
+}

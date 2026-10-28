@@ -1,0 +1,45 @@
+{
+  "attempt": 2,
+  "candidate_id": "cand-001",
+  "candidates": [
+    {
+      "candidate_id": "cand-001",
+      "reason": "selected for TS optimization and frequency validation; this proves the execution/validation chain, not research search capability",
+      "source": "frozen_known_candidate",
+      "status": "selected"
+    },
+    {
+      "candidate_id": "cand-002",
+      "reason": "rejected before submission: the frozen cap max_ts_candidates=1 is already consumed by cand-001",
+      "source": "generated_candidate",
+      "status": "rejected"
+    }
+  ],
+  "constructed": true,
+  "mapped_mode": {
+    "mapping_status": "resolved",
+    "native_printed_index": 6,
+    "source_artifact_digest": "sha256:ddec23aa155aca4c9cab62df1f525d2ef4f74101f0ab0d2d61cd15ef561ce1a8",
+    "source_step": "candidate_frequency",
+    "target_mode_id": "tm_constructed_da_ts_native_6"
+  },
+  "note": "A known starting structure proves the execution and validation chain only; research candidate search is a separate B20a-search row and is not claimed here.",
+  "producer": "B20a-exec",
+  "schema": "acp2.science.da-candidate-selection",
+  "schema_version": 1,
+  "search_capability_claim": "not_claimed",
+  "search_range": {
+    "bounds_basis": "frozen A-14a candidate caps; no broader search was authorized",
+    "max_candidate_paths": 1,
+    "max_conformers_per_endpoint": 1,
+    "max_ts_candidates": 1
+  },
+  "selected_candidate_id": "cand-001",
+  "selection_reason": "superseded attempt-2 selection; the current snapshot attempt is 1",
+  "selection_status": "selected",
+  "starting_structure_source": "frozen_known_candidate",
+  "ts_frequency_provenance": "ts-frequency-result.json",
+  "ts_frequency_provenance_sha256": "sha256:ddec23aa155aca4c9cab62df1f525d2ef4f74101f0ab0d2d61cd15ef561ce1a8",
+  "ts_optimize_provenance": "ts-optimize-result.json",
+  "ts_optimize_provenance_sha256": "sha256:a33fa1d5bfa09b5fa2d3b64e24321e3f3360b457b255e577a0327bca6f6af0bd"
+}

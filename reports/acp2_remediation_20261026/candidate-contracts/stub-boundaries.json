@@ -1,0 +1,59 @@
+{
+  "boundaries": [
+    {
+      "declared": true,
+      "id": "cccp.dispatch",
+      "real": [
+        "the task/job/attempt row and lifecycle (Controller + SQLite)",
+        "the work dir, stage tasks and job events",
+        "task_result.json via acp_services.runtime.worker.write_task_result_document",
+        "execution_receipt.json via worker.write_receipt_atomic"
+      ],
+      "stubbed": [
+        "the scientific call cccp.calculation.run_singlepoint (the synthetic `fake` workflow ran instead)",
+        "the values in task_result (a fixed energy placeholder)"
+      ],
+      "why": "M1-06 must prove the cross-end chain, not science; the dispatch seam is the only place allowed to be a controlled stub."
+    },
+    {
+      "declared": true,
+      "id": "science.report",
+      "real": [
+        "A's frozen evidence schema (EvidenceReport.from_dict)",
+        "claim source digest verification under the controlled read root",
+        "the M1-03 projection and decision policy"
+      ],
+      "stubbed": [
+        "the report contents are the frozen A fixture with the subject/report id rewritten; artifacts/freq.out is the fixture byte stream"
+      ],
+      "why": "no QC ran, so no real scientific report exists."
+    },
+    {
+      "declared": true,
+      "id": "supervisor.skills",
+      "real": [
+        "the Supervisor state machine and its budget/approval/evidence rules",
+        "the submit port calls the real bridge \u2192 real MCP \u2192 real Controller",
+        "the real M1-02 intent ledger (the supervisor's submit replays the same TaskRef)"
+      ],
+      "stubbed": [
+        "the four skills are injected test skills wrapping the deterministic local skills and appending adversarial model text; no model is called",
+        "the approve port receives the real approval state read over HTTP by the orchestrator instead of the supervisor reading the platform itself"
+      ],
+      "why": "M3-03/M3-04 own the real planner/model/gateway and the supervisor's own approval port."
+    },
+    {
+      "declared": true,
+      "id": "quota",
+      "real": [
+        "zero model calls",
+        "zero QC invocations",
+        "zero LSF submissions"
+      ],
+      "stubbed": [],
+      "why": "M1-06 must not consume model or QC quota."
+    }
+  ],
+  "evidence_kind": "fixture",
+  "schema": "acp2.m1-06.stub-boundaries.v1"
+}

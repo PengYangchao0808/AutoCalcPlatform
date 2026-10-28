@@ -1,0 +1,90 @@
+{
+  "artifacts": [
+    {
+      "path": "dry-run.txt",
+      "sha256": "25d462bdba657e736d4450f97bf95cc91209480a82555b7bde46263a91fa2103",
+      "size_bytes": 850
+    },
+    {
+      "path": "manifest.redacted.json",
+      "sha256": "c35ca9a732eac91ca5ab3d1ec01620b3c3f4fba7a66889beebc1cd06a41a1cc4",
+      "size_bytes": 337
+    },
+    {
+      "path": "self-reference.json",
+      "sha256": "80e188f4e3c272686796d19b7668bd0b6edd3c33717eb194c324d2faae3dc6ce",
+      "size_bytes": 3146
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "input validation only; no scenario execution",
+      "name": "dry_run",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "450f2cb8fe1f5b16264b3fe878a021e77f02eba9",
+    "harness_revision": "906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "450f2cb8fe1f5b16264b3fe878a021e77f02eba9",
+  "command": [
+    "/ACPServer/acp2-development/venvs/c/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "baseline",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/harness-selftest/20261022T141500Z-c03a-harness-selftest/dry-run-baseline",
+    "--timeout",
+    "60",
+    "--dry-run",
+    "--manifest",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/harness-selftest/20261022T141500Z-c03a-harness-selftest/manifest.json"
+  ],
+  "contract_version": "1.0.0",
+  "cwd": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/harness-selftest/20261022T141500Z-c03a-harness-selftest/verify-receipt",
+  "evidence_kind": "fixture",
+  "exit_code": 0,
+  "extensions": {
+    "experience.harness_contract_revision": "906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+    "experience.manifest": {
+      "candidate_id": "450f2cb8fe1f5b16264b3fe878a021e77f02eba9",
+      "evidence_root": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46",
+      "extensions": {},
+      "fixtures": [],
+      "paths": {
+        "c_source": "/ACPServer/acp2-development/C"
+      },
+      "schema": "acp2.experience.manifest-extension.v1",
+      "schema_version": "1.0.0"
+    },
+    "experience.mode": "fixture",
+    "experience.product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+    "experience.run_id": "20261022T141500Z-c03a-harness-selftest",
+    "experience.scenario_key": "baseline",
+    "experience.subcase": null,
+    "experience.test_revision": "450f2cb8fe1f5b16264b3fe878a021e77f02eba9"
+  },
+  "finished_at": "2026-10-22T13:45:47Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:fixture",
+  "reason": "dry_run",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "20261022T141500Z-c03a-harness-selftest",
+  "scenario": "experience:baseline",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T13:45:47Z",
+  "submission_id": null,
+  "usage": null
+}

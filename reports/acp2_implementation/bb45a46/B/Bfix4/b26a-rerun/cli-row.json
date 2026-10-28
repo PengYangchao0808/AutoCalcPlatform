@@ -1,0 +1,146 @@
+{
+  "task_result": {
+    "authority": "cccp.calculation.tasks.singlepoint:184-239",
+    "complete": true,
+    "content_digest": "sha256:7f5186bde362507282a21a20a1d25d53891879df19c896c13c6cd69dc6bdd3ed",
+    "exit_code": 0,
+    "job_status": "completed",
+    "missing_required_facts": [],
+    "normal_reuse": true,
+    "partial_result": false,
+    "publish": true,
+    "publish_policy": "normal",
+    "qualification": "complete",
+    "receipt_state": "completed",
+    "required_facts": [
+      "energy_hartree"
+    ],
+    "result_digest": "sha256:14e23c6eed51b28d6b55744b4ec0945729d72d37b32d53d2a1ede2e8c2a89506",
+    "schema": "acp_task_result_v1",
+    "status": "completed",
+    "task": "singlepoint",
+    "truth_table_row": "b",
+    "written_at": "2026-10-23T14:40:55.558759+00:00"
+  },
+  "manifest": {
+    "products": [
+      {
+        "id": "task_result.json",
+        "kind": "file",
+        "label": "task_result.json",
+        "metadata": {
+          "attempt": 1,
+          "job_id": "20261023_224052_001_b26a-fix4-sp2",
+          "normal_reuse": true,
+          "partial_result": false,
+          "plan_identity": "v2:686f5c2fc0c8240fd0473fbf705102d8",
+          "product_role": "normal",
+          "qualification": "complete",
+          "submission_id": "sub_6ba95cc686d63eed",
+          "task_result_digest": "sha256:7f5186bde362507282a21a20a1d25d53891879df19c896c13c6cd69dc6bdd3ed"
+        },
+        "path": "task_result.json"
+      }
+    ],
+    "status": "completed",
+    "task_id": "20261023_224052_001_b26a-fix4-sp2",
+    "version": 2,
+    "workflow": "singlepoint"
+  },
+  "receipt": {
+    "attempt": 1,
+    "data_bindings": [
+      {
+        "artifact_digests": {
+          "input.xyz": "sha256:3ba442e949c46e020ea42187f2c0cab7decceed85af97317f3074c8a7017a916"
+        },
+        "binding_id": "local:2c7ffd56045b5bd5:b26a-fix4-sp2_singlepoint",
+        "endpoint": "local",
+        "kind": "local",
+        "mapping_version": 1,
+        "project_id": "",
+        "relative_path": "b26a-fix4-sp2_singlepoint",
+        "root": "/tmp/opencode/b26a-fix4/data/task-exec-root2/uncategorized",
+        "tenant_id": ""
+      }
+    ],
+    "errors": [],
+    "evidence_digests": {
+      "exit_code": "0",
+      "job_status": "completed",
+      "missing_required_facts": "",
+      "normal_reuse": "true",
+      "partial_result": "false",
+      "publish": "true",
+      "publish_policy": "normal",
+      "qualification": "complete",
+      "required_facts": "energy_hartree",
+      "task_result_digest": "sha256:7f5186bde362507282a21a20a1d25d53891879df19c896c13c6cd69dc6bdd3ed",
+      "truth_table_row": "b"
+    },
+    "fencing_token": "4e3d2627d1cec5b9fa1f4c7d1b1cc9bc",
+    "job_id": "20261023_224052_001_b26a-fix4-sp2",
+    "owner": "local:workstation:1696389:1",
+    "plan_identity": "v2:686f5c2fc0c8240fd0473fbf705102d8",
+    "receipt_version": 1,
+    "release_digest": "b59ec6b6b502ed70104baacb17b41873769813def34224840017792e438900b3",
+    "release_id": "2c7ffd56045b5bd5",
+    "result_digest": "sha256:14e23c6eed51b28d6b55744b4ec0945729d72d37b32d53d2a1ede2e8c2a89506",
+    "state": "completed",
+    "step_identities": [
+      "v2:250b24830914566eaa26badb1092a9ff"
+    ],
+    "submission_id": "sub_6ba95cc686d63eed",
+    "written_at": "2026-10-23T14:40:55.562134+00:00"
+  },
+  "envelope": {
+    "attempt": 1,
+    "data_bindings": [
+      {
+        "artifact_digests": {
+          "input.xyz": "sha256:3ba442e949c46e020ea42187f2c0cab7decceed85af97317f3074c8a7017a916"
+        },
+        "binding_id": "local:2c7ffd56045b5bd5:b26a-fix4-sp2_singlepoint",
+        "endpoint": "local",
+        "kind": "local",
+        "mapping_version": 1,
+        "project_id": "",
+        "relative_path": "b26a-fix4-sp2_singlepoint",
+        "root": "/tmp/opencode/b26a-fix4/data/task-exec-root2/uncategorized",
+        "tenant_id": ""
+      }
+    ],
+    "entrypoint": "worker.bootstrap",
+    "envelope_version": 1,
+    "fencing_token": "4e3d2627d1cec5b9fa1f4c7d1b1cc9bc",
+    "job_id": "20261023_224052_001_b26a-fix4-sp2",
+    "owner": "local:workstation:1696389:1",
+    "plan_digest": "v2:b5912067c05e25d2bfd49c63fd01b584",
+    "plan_identity": "v2:686f5c2fc0c8240fd0473fbf705102d8",
+    "protocol": "local",
+    "release_digest": "b59ec6b6b502ed70104baacb17b41873769813def34224840017792e438900b3",
+    "release_id": "2c7ffd56045b5bd5",
+    "required_capabilities": [
+      "singlepoint"
+    ],
+    "resource_budget": {
+      "mem": null,
+      "mem_mb": null,
+      "nproc": null,
+      "partial": false,
+      "queue": null,
+      "walltime_s": null
+    },
+    "scientific_closure": {
+      "algorithm_version": "",
+      "dependency_digests": {},
+      "payload_schema": 1,
+      "result_schema": 1,
+      "task_kind": "singlepoint"
+    },
+    "step_identities": [
+      "v2:250b24830914566eaa26badb1092a9ff"
+    ],
+    "submission_id": "sub_6ba95cc686d63eed"
+  }
+}

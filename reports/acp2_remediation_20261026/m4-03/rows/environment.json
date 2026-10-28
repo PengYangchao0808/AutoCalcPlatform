@@ -1,0 +1,27 @@
+{
+  "data": {
+    "active_jobs_before": [],
+    "duration_s": 1.97,
+    "hosts": [
+      "HOST_NAME          STATUS       JL/U    MAX  NJOBS    RUN  SSUSP  USUSP    RSV ",
+      "workstation        ok              -     20      0      0      0      0      0"
+    ],
+    "lsf_envdir": "/opt/openlava-2.0/etc",
+    "lsf_version": "openlava project 2.0, May 31 2026",
+    "node": "lsf-local",
+    "queues": [
+      "QUEUE_NAME      PRIO STATUS          MAX JL/U JL/P JL/H NJOBS  PEND   RUN  SUSP ",
+      "normal           30   Open:Active      -    -    -    -     0     0     0     0"
+    ],
+    "ssh": true
+  },
+  "detail": "Openlava reachable, host workstation ok, queue normal open",
+  "evidence": [
+    "native/bhosts.txt",
+    "native/bqueues.txt"
+  ],
+  "name": "environment",
+  "recorded_at": "2026-10-27T17:14:19.310402Z",
+  "schema": "acp2.m403.acceptance.v1",
+  "status": "PASS"
+}

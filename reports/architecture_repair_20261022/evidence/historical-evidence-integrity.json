@@ -1,0 +1,12 @@
+[
+  {
+    "archive": "architecture_debug_20261021",
+    "files_verified": 29,
+    "result": "PASS"
+  },
+  {
+    "archive": "architecture_quality_review_20261022",
+    "files_verified": 14,
+    "result": "PASS"
+  }
+]

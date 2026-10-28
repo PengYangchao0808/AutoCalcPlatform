@@ -1,0 +1,65 @@
+{
+  "case": "test_local_spawn_lost_response0",
+  "db": "reports/acp2_implementation/bb45a46/B/B08/pytest-tmp/test_local_spawn_lost_response0/run-root/acp_jobs.db",
+  "db_exists": true,
+  "jobs_db": {
+    "jobs": [
+      {
+        "id": "20261023_001923_001_b08",
+        "workflow": "singlepoint",
+        "name": "b08_singlepoint",
+        "status": "failed",
+        "work_dir": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B08/pytest-tmp/test_local_spawn_lost_response0/run-root/uncategorized/b08_singlepoint",
+        "spec_json": "{\"workflow\": \"singlepoint\", \"name\": \"b08_singlepoint\", \"input\": {\"source\": \"CCO\"}, \"method\": {}, \"resources\": {\"nproc\": 20, \"mem\": \"60GB\"}, \"output_dir\": null, \"config_path\": null, \"tags\": [], \"project_id\": \"uncategorized\", \"input_hash\": \"sha256:3f44b96125bccc5af82a9d3733be61a0212f0bef7e6a0b178663d387d7114960\", \"execution_mode\": null, \"target_node\": null, \"node_tags\": [], \"molecule_name\": \"\", \"task_name\": \"\", \"remark\": \"\", \"custom_name\": null}",
+        "created_at": "2026-10-22T16:19:23.526973+00:00",
+        "updated_at": "2026-10-22T16:19:23.868001+00:00",
+        "started_at": "2026-10-22T16:19:23.535149+00:00",
+        "completed_at": "2026-10-22T16:19:23.867967+00:00",
+        "project_id": "uncategorized",
+        "input_hash": "sha256:3f44b96125bccc5af82a9d3733be61a0212f0bef7e6a0b178663d387d7114960",
+        "current_stage": null,
+        "progress": null,
+        "error": "[RESTART_FAILED] interrupted by server restart \u2014 \u8bf7\u4f7f\u7528\u91cd\u7b97 (rerun)",
+        "pid": null,
+        "exit_code": null,
+        "remote_job_id": null,
+        "group_id": "20261023_001923_001_b08",
+        "node_id": "local",
+        "host": "workstation",
+        "result_json": "{\"required_software\": [\"orca\"], \"execution_target\": \"local\", \"execution_kind\": \"local\"}",
+        "revision": 3,
+        "attempt": 1
+      }
+    ],
+    "idempotency_records": [
+      {
+        "claim_id": "idem_9e78e2fa79044db2baf05ddabf1bfefb",
+        "scope_id": "principal_local\u001fb08-project",
+        "action": "submit",
+        "idempotency_key": "key-crash-spawn",
+        "request_digest": "sha256:9ebc64b897d4c90655eeb100ff9df944d9d4c31aa281dea6bfa55621b9495ee5",
+        "state": "committed",
+        "owner_token": "1cdab8a3d14447e6b3a52a3aca057295",
+        "lease_epoch": 0,
+        "lease_expires_at": "2026-10-22T16:20:23.506995+00:00",
+        "task_id": "20261023_001923_001_b08",
+        "operation_id": null,
+        "created_at": "2026-10-22T16:19:23.506995+00:00",
+        "updated_at": "2026-10-22T16:19:23.526992+00:00"
+      }
+    ]
+  },
+  "dirs": [
+    ".staging",
+    "uncategorized",
+    "uncategorized/b08_singlepoint",
+    "uncategorized/b08_singlepoint/RESULT",
+    "uncategorized/b08_singlepoint/WORK",
+    "uncategorized/b08_singlepoint/WORK/00_RUNTIME"
+  ],
+  "staging": [],
+  "spawn_count": [
+    "spawn"
+  ],
+  "raw_temp_note": "The raw pytest temp DB/run-root was removed after this row dump; the dump above is the crash-window receipt."
+}

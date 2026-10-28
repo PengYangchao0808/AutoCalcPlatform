@@ -1,0 +1,272 @@
+{
+  "capabilities": {
+    "admission": {
+      "enforcement": "local-single-enforced",
+      "limits": {
+        "default_walltime_s": 86400,
+        "max_cores": 256,
+        "max_memory_mb": 1048576,
+        "max_storage_bytes": 10995116277760,
+        "max_tasks": 10000,
+        "max_walltime_s": 2592000,
+        "policy_version": "local-single-v1"
+      },
+      "mode": "quota-only",
+      "model_token_enforcement": "NOT_VERIFIED",
+      "multi_tenant_security": false,
+      "occupancy": {
+        "by_state": {},
+        "concurrency": 0,
+        "cores": 0,
+        "memory_mb": 0,
+        "reservations": 0,
+        "storage_bytes": 0
+      },
+      "policy_version": "local-single-v1",
+      "principal_id": "principal_local",
+      "quota_enforced": true,
+      "recorded_only": false,
+      "research_budget": {
+        "budget_identity": "project+proposal_ref (independent of run_id)",
+        "enforced": [
+          "task_ref",
+          "attempt"
+        ],
+        "ledger": "durable-reservation-ledger",
+        "model_proxy_owner": "C (acp2_experience_budget_proxy.py, C T-13); B does not proxy tokens",
+        "model_token_enforcement": "NOT_VERIFIED",
+        "not_verified": [
+          {
+            "capability": "model_token_enforcement",
+            "reason": "model-call proxy is C-owned (acp2_experience_budget_proxy.py, C T-13)"
+          },
+          {
+            "capability": "bsub_enforcement",
+            "reason": "LSF is absent in this environment; bsub count is 0 and recorded only"
+          }
+        ],
+        "notes": {
+          "identity": "budget identity is project + proposal_ref (research round/batch); it is independent of run_id, so retries and restarts inherit the remaining batch",
+          "model_tokens": "model-token enforcement is NOT_VERIFIED; the model-call proxy is C-owned and B neither proxies tokens nor invents unified billing",
+          "publication": "A publication failure or retry never re-charges computation: usage is ingested once from the trusted receipt and publication is an independent step.",
+          "science": "budget/balance state never changes scientific behavior, TaskRequest or an algorithm result",
+          "settlement": "settlement comes from receipts/trusted usage; a duplicate receipt/event cannot charge twice because its deterministic receipt id is unique"
+        },
+        "recorded_only": [
+          "recipe_step",
+          "qc_invocation",
+          "bsub",
+          "model_request"
+        ],
+        "release_rules": {
+          "cancel_after_dispatch": {
+            "detail": "science already started; the consumed units stay charged",
+            "recharges_computation": false,
+            "release_reserved_units": false
+          },
+          "cancel_before_dispatch": {
+            "detail": "a queued reservation released before any QC invocation is refunded",
+            "recharges_computation": false,
+            "release_reserved_units": true
+          },
+          "publication_failure": {
+            "detail": "publication retries only republish; they never re-charge computation",
+            "recharges_computation": false,
+            "release_reserved_units": false
+          },
+          "publication_pending": {
+            "detail": "publication is a separate fact; pending publication keeps computation charged",
+            "recharges_computation": false,
+            "release_reserved_units": false
+          },
+          "recovery": {
+            "detail": "restart recovery replays reservations and receipts; it never resets a budget",
+            "recharges_computation": false,
+            "release_reserved_units": false
+          },
+          "replay": {
+            "detail": "a duplicate receipt/claim replay is idempotent and charges nothing new",
+            "recharges_computation": false,
+            "release_reserved_units": false
+          },
+          "science_failure": {
+            "detail": "a failed attempt that invoked QC consumes its units; a retry is a new attempt",
+            "recharges_computation": false,
+            "release_reserved_units": false
+          },
+          "submit_failed": {
+            "detail": "the claim never dispatched; its queued reservation is released",
+            "recharges_computation": false,
+            "release_reserved_units": true
+          }
+        },
+        "unit_consumption": {
+          "attempt": {
+            "consumed_at": "accepted submit/dispatch of an attempt",
+            "failure": "consumes the failed attempt",
+            "recovery": "same attempt recovery does not consume; continue/rerun is a new attempt",
+            "replay": "does not consume a second attempt"
+          },
+          "bsub": {
+            "consumed_at": "trusted receipt per real bsub",
+            "failure": "consumes when bsub was invoked",
+            "recovery": "does not re-issue bsub",
+            "replay": "does not re-consume the same receipt"
+          },
+          "model_request": {
+            "consumed_at": "trusted receipt from the C-owned model proxy",
+            "failure": "recorded when the trusted source reports it",
+            "recovery": "does not re-request tokens",
+            "replay": "does not re-consume the same receipt"
+          },
+          "qc_invocation": {
+            "consumed_at": "trusted receipt per QC process invocation",
+            "failure": "consumes when the process was invoked",
+            "recovery": "does not re-invoke a completed step",
+            "replay": "does not re-consume the same receipt"
+          },
+          "recipe_step": {
+            "consumed_at": "trusted receipt for a dispatched step",
+            "failure": "consumes when the step was invoked",
+            "recovery": "does not re-consume a completed step",
+            "replay": "does not re-consume the same receipt"
+          },
+          "task_ref": {
+            "consumed_at": "accepted submit, before any work directory",
+            "failure": "consumes",
+            "recovery": "does not consume a new TaskRef",
+            "replay": "does not consume a second TaskRef"
+          }
+        }
+      },
+      "usage": {
+        "core_hours": "0.000000",
+        "core_seconds": 0,
+        "receipts": 2
+      },
+      "verified_project": null
+    },
+    "admission_enforcement": "local-single-enforced",
+    "backends": [
+      {
+        "available": false,
+        "name": "censo"
+      },
+      {
+        "available": false,
+        "name": "crest"
+      },
+      {
+        "available": false,
+        "name": "external"
+      },
+      {
+        "available": false,
+        "name": "isostat"
+      },
+      {
+        "available": false,
+        "name": "molclus"
+      },
+      {
+        "available": true,
+        "name": "orca"
+      },
+      {
+        "available": false,
+        "name": "xtb"
+      }
+    ],
+    "capability_descriptors": null,
+    "identity": {
+      "mode": "api-key",
+      "multi_tenant_security": "api-key-scoped",
+      "principal_resolution": "api-key-verified-by-controller",
+      "project_hint_policy": "narrow-only"
+    },
+    "identity_mode": "api-key",
+    "identity_profiles": [
+      "local-single",
+      "api-key"
+    ],
+    "limits": {
+      "max_artifact_bytes": 8388608,
+      "max_cores": 64,
+      "max_read_bytes": 1048576,
+      "max_walltime_s": 604800
+    },
+    "model_token_enforcement": "NOT_VERIFIED",
+    "multi_tenant_security": "api-key-scoped",
+    "protocol_version": "2025-06-18",
+    "remote_identity_providers": {
+      "external_iam": {
+        "reason": "External IAM/federation is not implemented; enforced modes are local-single and project-scoped API keys.",
+        "state": "unsupported"
+      },
+      "oidc": {
+        "reason": "OIDC/SSO is not implemented in this iteration: no identity dependency is approved (component manifest: pwdlib/Authlib/PyCasbin/Keycloak are all candidate, approved=0). Capability reports must report OIDC as NOT available.",
+        "state": "unsupported"
+      }
+    },
+    "schema_version": 1,
+    "stdio_identity_binding": {
+      "binding": "server-resolved-principal",
+      "identity_source": "api-key-verified-by-controller",
+      "local_single_default": true,
+      "multi_user_requires_explicit_api_key": true,
+      "permission_ceiling": [
+        "control",
+        "read",
+        "write"
+      ],
+      "permission_ceiling_rule": "bound-actions-intersect-ceiling",
+      "shared_launch_allowed": false,
+      "tool_arguments_are_identity": false
+    },
+    "task_kinds": [
+      "casscf",
+      "censo_refine",
+      "clustering",
+      "conformer_search",
+      "frequency",
+      "irc",
+      "md_sampling",
+      "nmr_shielding",
+      "optimize",
+      "orca_gradient",
+      "scan",
+      "singlepoint",
+      "thermochemistry",
+      "xtb_constrained_opt",
+      "xtb_path_search"
+    ],
+    "tools": [
+      "acp_capabilities",
+      "acp_preflight",
+      "acp_submit",
+      "acp_status",
+      "acp_cancel",
+      "acp_prepare_artifact",
+      "acp_read_artifact",
+      "acp_analyze"
+    ],
+    "workflows": [
+      "singlepoint",
+      "optimize",
+      "frequency",
+      "scan",
+      "irc",
+      "tsmode",
+      "casscf",
+      "xtb_optimize",
+      "nmr",
+      "Confsearch",
+      "PESsearch",
+      "BatchOptimize",
+      "XtbPathSearch",
+      "OrcaGradient",
+      "XtbConstrainedOpt"
+    ]
+  },
+  "schema": "acp2.b17.release-statement.v1"
+}

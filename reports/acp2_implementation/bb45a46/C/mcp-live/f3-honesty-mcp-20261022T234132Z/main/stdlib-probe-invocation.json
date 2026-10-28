@@ -1,0 +1,11 @@
+{
+  "command": [
+    "/ACPServer/acp2-development/venvs/c/bin/python",
+    "/ACPServer/acp2-development/C/docs/reference/next-change/examples/acp_mcp_stdio_probe.py",
+    "--launch",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B05/mcp-launch.json"
+  ],
+  "exit_code": 1,
+  "stderr": "Traceback (most recent call last):\n  File \"/ACPServer/acp2-development/C/docs/reference/next-change/examples/acp_mcp_stdio_probe.py\", line 155, in <module>\n    main()\n  File \"/ACPServer/acp2-development/C/docs/reference/next-change/examples/acp_mcp_stdio_probe.py\", line 151, in main\n    asyncio.run(probe(args))\n  File \"/usr/lib64/python3.11/asyncio/runners.py\", line 190, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/usr/lib64/python3.11/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib64/python3.11/asyncio/base_events.py\", line 654, in run_until_complete\n    return future.result()\n           ^^^^^^^^^^^^^^^\n  File \"/ACPServer/acp2-development/C/docs/reference/next-change/examples/acp_mcp_stdio_probe.py\", line 90, in probe\n    initialized = await request(\n                  ^^^^^^^^^^^^^^\n  File \"/ACPServer/acp2-development/C/docs/reference/next-change/examples/acp_mcp_stdio_probe.py\", line 75, in request\n    raise RuntimeError(f\"server closed stdout during {method}\")\nRuntimeError: server closed stdout during initialize\n",
+  "stdout": ""
+}

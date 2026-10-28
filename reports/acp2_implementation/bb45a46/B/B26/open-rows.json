@@ -1,0 +1,74 @@
+{
+  "candidate": {
+    "evidence_revision": "0790a6e717add4cf31ae9a997a03cbc87408b8772e72e24aaa78894b160b321d",
+    "landed_head": "493790709830eac4ce347b5fb81414050f7a1e21",
+    "landed_head_tree": "f0f940498b56bdf9377e49efb1b9a29e0e3a3d4a",
+    "release_source_tree": "e2b23771a47e7553738ef902cc4c1b62528fe508",
+    "source_revision": "6ec01ec96fa81b89bec8ff321c38e3db2dc154d2"
+  },
+  "generated_at": "2026-10-23T20:51:56Z",
+  "h7_status": "OPEN",
+  "missing_external_rows": [
+    "A-20",
+    "A-29",
+    "C24a",
+    "C25",
+    "C33",
+    "C34",
+    "C35"
+  ],
+  "non_owner_signature_count": 0,
+  "non_owner_signatures": [],
+  "owner": "B",
+  "row_count": 6,
+  "rows": [
+    {
+      "evidence": "reports/acp2_implementation/bb45a46/B/B25/release-fix5/release-manifest.json",
+      "owner": "B",
+      "reason": "Release-fix5 artifacts, source 6ec01ec and all eight digests verified on disk.",
+      "row_id": "H7-release-candidate",
+      "status": "PASS"
+    },
+    {
+      "evidence": [
+        "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/job-terminal.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/lsf/local-artifacts/execution_receipt.json",
+        "reports/acp2_implementation/bb45a46/B/Bfix5/installed-manifest.json"
+      ],
+      "owner": "B",
+      "reason": "Real LSF normal singlepoint (bsub job 1765) terminal completed with release_id 1c79785a657c6614, submission_id sub_0fea781820a81666 and -1.116759307204 Ha; installed release sync 510 files with matching release_id. LSF/installed-sync gap closed.",
+      "row_id": "h3-lsf-normal-and-installed-sync",
+      "status": "PASS"
+    },
+    {
+      "expected_path": "/ACPServer/acp2-development/A/docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
+      "owner": "A",
+      "reason": "A has not published the H7 science sign-off; B does not sign A scope.",
+      "row_id": "A-29-science-signoff",
+      "status": "NOT_VERIFIED(a29_absent)"
+    },
+    {
+      "expected_path": "/ACPServer/acp2-development/C/experience-release-closeout/",
+      "owner": "C",
+      "reason": "C35 is absent. The C plan lists C32-C34, not B26, so the disposition is c35_absent (no C35_INPUT_CYCLE).",
+      "row_id": "C35-experience-closeout",
+      "status": "NOT_VERIFIED(c35_absent)"
+    },
+    {
+      "evidence": "reports/acp2_implementation/bb45a46/B/B26a/independent-operator.json",
+      "owner": "B",
+      "reason": "B26a is self-reproduction by the authoring session; no independent operator was available.",
+      "row_id": "independent-operator",
+      "status": "NOT_VERIFIED(independent_operator_absent)"
+    },
+    {
+      "evidence": "reports/acp2_implementation/bb45a46/B/B26a/reproduction-matrix.json",
+      "owner": "B",
+      "reason": "C33/C34 install evidence, DSH/browser/model scope and running-task disconnect recovery remain NOT_VERIFIED. LSF is no longer a gap (B-fix-5 job 1765).",
+      "row_id": "c33-c34-install-and-dsh",
+      "status": "NOT_VERIFIED(prerequisite_gap)"
+    }
+  ],
+  "rule": "A row is signed only by its owner. B never signs A/C scope and never promotes a missing row to PASS.",
+  "schema": "acp2.h7.open_rows.v1"
+}

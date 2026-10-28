@@ -1,0 +1,17 @@
+{
+  "attempt": 1,
+  "fencing_token": "acceptance-worker-fence",
+  "job_id": "real-worker-xtb",
+  "members": {
+    "envelope.json": "cec69820cf1ddb2d7ec1a40089af00eca51f651d18fc4b61e94d7a79c8a466bc",
+    "plan.json": "5a4387893945a53da161b75046bcd972e4b3fe75943226a0e0af1038138bee8d"
+  },
+  "owner": "acceptance-worker",
+  "plan_digest": "v2:9c863c4ca99513c9d56a66a8c0d799fe",
+  "plan_identity": "v2:real-worker-xtb",
+  "release_digest": "",
+  "release_id": "repair-20261022",
+  "schema": 1,
+  "submission_id": "sub_24a6963818188410",
+  "workflow": "optimize"
+}

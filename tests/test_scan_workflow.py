@@ -693,7 +693,20 @@ def _fake_scheduler(monkeypatch: pytest.MonkeyPatch, captured: list) -> None:
     from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
     from acp.scheduler.manager import JobManager
 
-    def _submit(self: JobManager, spec: JobSpec) -> JobRecord:
+    # Compatibility with the Services runtime adapter, which forwards the
+    # queue-grouping key positionally (`manager.submit(spec, group_id)`) and,
+    # since M0-04, always forwards the idempotency/budget/identity keyword
+    # arguments of the verified CommandIdentity path; the real
+    # JobManager.submit signature accepts them all as optional arguments.
+    def _submit(
+        self: JobManager,
+        spec: JobSpec,
+        group_id: str | None = None,
+        *,
+        idempotency: object | None = None,
+        budget: object | None = None,
+        identity: object | None = None,
+    ) -> JobRecord:
         captured.append(spec)
         return JobRecord(
             id=f"scanjob_{len(captured):03d}",

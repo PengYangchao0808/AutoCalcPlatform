@@ -1,0 +1,11 @@
+{
+  "command": [
+    "/ACPServer/acp2-tools/node-v22.19.0-linux-x64/bin/node",
+    "--import",
+    "file:///ACPServer/acp2-tools/deepseek-harness/node_modules/.pnpm/tsx@4.23.13/node_modules/tsx/dist/esm/index.mjs",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_mcp_live_client.mjs"
+  ],
+  "exit_code": 1,
+  "stdout": "",
+  "stderr": "2026-10-23 02:00:40,441 [ERROR] acp.cli: Controller unavailable at http://127.0.0.1:18765: Controller unreachable at http://127.0.0.1:18765: [Errno 111] Connection refused\n"
+}

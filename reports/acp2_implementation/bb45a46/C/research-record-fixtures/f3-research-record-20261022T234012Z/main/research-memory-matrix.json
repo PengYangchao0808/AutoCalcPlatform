@@ -1,0 +1,35 @@
+{
+  "audit": {
+    "actor": true,
+    "after": true,
+    "before": true,
+    "human_edit_actor_revision_before_after": true,
+    "revision": true
+  },
+  "authorization": {
+    "anonymous_denied": true,
+    "cross_project_denied_audit": true,
+    "cross_project_zero_hits": true,
+    "same_project_hit": true,
+    "tenant_mismatch_denied": true,
+    "write_only_denied": true
+  },
+  "evidence_boundary": {
+    "model_assumption_rejected": true,
+    "no_prompt_or_cot_archived": true,
+    "prompt_cot_archive_rejected": true
+  },
+  "evidence_kind": "fixture",
+  "executed_memory_cases": 8,
+  "live_b18a_rows": {
+    "memory.live_authorized_retrieval": "NOT_VERIFIED(b18a_handoff)",
+    "memory.live_cross_project_denial": "NOT_VERIFIED(b18a_handoff)"
+  },
+  "memory_cases": 8,
+  "source_module": "rph/packages/research/src/memory.ts",
+  "test_source": "rph/test/research-memory.test.ts",
+  "versioning": {
+    "exact_revision_filter": true,
+    "min_revision_excludes_stale": true
+  }
+}

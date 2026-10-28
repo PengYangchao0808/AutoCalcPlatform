@@ -1,0 +1,2 @@
+HOST_NAME          STATUS       JL/U    MAX  NJOBS    RUN  SSUSP  USUSP    RSV 
+workstation        ok              -     20      0      0      0      0      0

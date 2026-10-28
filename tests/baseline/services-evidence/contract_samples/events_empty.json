@@ -1,0 +1,9 @@
+{
+  "contract": "events",
+  "sample_kind": "empty",
+  "sample_version": 1,
+  "expected_classification": "accepted",
+  "body": {
+    "events": []
+  }
+}

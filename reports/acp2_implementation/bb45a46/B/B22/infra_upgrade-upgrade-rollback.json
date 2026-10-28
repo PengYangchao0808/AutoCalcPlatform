@@ -1,0 +1,127 @@
+{
+  "adapter_id": "acp.storage.inventory",
+  "historical_read_only": {
+    "v1_old_task": {
+      "adapter_id": "acp.storage.inventory",
+      "descriptor": {
+        "adapter_id": "acp.storage.inventory",
+        "capabilities": [
+          "storage.inventory"
+        ],
+        "claims_process_isolation": false,
+        "description": "External infrastructure adapter fixture; no science parser.",
+        "descriptor_schema": "acp2.adapter.v1",
+        "entrypoint": {
+          "attribute": "run",
+          "module": "adapter"
+        },
+        "environment": [
+          "env:ACP2_B21_PLUGIN_ENV"
+        ],
+        "kind": "storage",
+        "resource_limits": {
+          "max_concurrency": 1,
+          "max_cpu_seconds": 30,
+          "max_io_bytes": 1048576,
+          "max_memory_bytes": 33554432
+        },
+        "supported_schema": [
+          "acp2.adapter.v1"
+        ],
+        "trust_level": "discover-only",
+        "verification_fixture": "verification.json",
+        "version": "1.0.0"
+      },
+      "descriptor_digest": "ae511f7aa91ff85e2b460cb81b88b966c2359111c0d2cd2a29a5c18c3c2f8a3e",
+      "entrypoint_digest": "98454e2d55749908797555156aa8f8dfa3b76df8c2aae9e868a9674d3937d03c",
+      "entrypoint_sha256": "98454e2d55749908797555156aa8f8dfa3b76df8c2aae9e868a9674d3937d03c",
+      "entrypoint_size_bytes": 1459,
+      "read_only": true,
+      "schema": "acp2.adapter.frozen-artifact.v1",
+      "snapshot_dir": "/ACPServer/acp2-development/data/b/plugin-state/b21/tasks/b21-old-task/attempt-1/artifacts/acp.storage.inventory/1.0.0",
+      "source": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-inventory-1.0.0/adapter.py",
+      "version": "1.0.0"
+    },
+    "v2_new_task": {
+      "adapter_id": "acp.storage.inventory",
+      "descriptor": {
+        "adapter_id": "acp.storage.inventory",
+        "capabilities": [
+          "storage.inventory"
+        ],
+        "claims_process_isolation": false,
+        "description": "External infrastructure adapter fixture; no science parser.",
+        "descriptor_schema": "acp2.adapter.v1",
+        "entrypoint": {
+          "attribute": "run",
+          "module": "adapter"
+        },
+        "environment": [
+          "env:ACP2_B21_PLUGIN_ENV"
+        ],
+        "kind": "storage",
+        "resource_limits": {
+          "max_concurrency": 1,
+          "max_cpu_seconds": 30,
+          "max_io_bytes": 1048576,
+          "max_memory_bytes": 33554432
+        },
+        "supported_schema": [
+          "acp2.adapter.v1"
+        ],
+        "trust_level": "discover-only",
+        "verification_fixture": "verification.json",
+        "version": "1.1.0"
+      },
+      "descriptor_digest": "97ea1d8601e4625341c269567e08e53d3be015b639f7c573ef556099ae9330ec",
+      "entrypoint_digest": "808825879f0f08fd7d9860abe7395718577cf73d7e8211c687ed70b734b4ee6c",
+      "entrypoint_sha256": "808825879f0f08fd7d9860abe7395718577cf73d7e8211c687ed70b734b4ee6c",
+      "entrypoint_size_bytes": 1459,
+      "read_only": true,
+      "schema": "acp2.adapter.frozen-artifact.v1",
+      "snapshot_dir": "/ACPServer/acp2-development/data/b/plugin-state/b21/tasks/b21-new-task/attempt-1/artifacts/acp.storage.inventory/1.1.0",
+      "source": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-inventory-1.1.0/adapter.py",
+      "version": "1.1.0"
+    }
+  },
+  "new_execution_error": "adapter_version_not_installed",
+  "new_task": {
+    "attempt": 1,
+    "task_id": "b21-new-task"
+  },
+  "old_task": {
+    "attempt": 1,
+    "task_id": "b21-old-task"
+  },
+  "old_task_read_back_uses_v1_digest": true,
+  "schema": "acp2.b22.upgrade-rollback.v1",
+  "v1": {
+    "descriptor_digest": "ae511f7aa91ff85e2b460cb81b88b966c2359111c0d2cd2a29a5c18c3c2f8a3e",
+    "version": "1.0.0"
+  },
+  "v1_uninstall": {
+    "active_after": null,
+    "adapter_id": "acp.storage.inventory",
+    "descriptor_digest": "ae511f7aa91ff85e2b460cb81b88b966c2359111c0d2cd2a29a5c18c3c2f8a3e",
+    "installed_record_removed": true,
+    "payload_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-inventory-1.0.0",
+    "payload_removed": true,
+    "schema": "acp2.adapter.uninstall.v1",
+    "version": "1.0.0"
+  },
+  "v2": {
+    "descriptor_digest": "97ea1d8601e4625341c269567e08e53d3be015b639f7c573ef556099ae9330ec",
+    "version": "1.1.0"
+  },
+  "v2_payload_absent": true,
+  "v2_uninstall": {
+    "active_after": null,
+    "adapter_id": "acp.storage.inventory",
+    "descriptor_digest": "97ea1d8601e4625341c269567e08e53d3be015b639f7c573ef556099ae9330ec",
+    "installed_record_removed": true,
+    "payload_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B22/workspace/plugin-root/storage-inventory-1.1.0",
+    "payload_removed": true,
+    "schema": "acp2.adapter.uninstall.v1",
+    "version": "1.1.0"
+  }
+}

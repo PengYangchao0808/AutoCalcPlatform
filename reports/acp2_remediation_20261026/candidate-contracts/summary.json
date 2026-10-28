@@ -1,0 +1,353 @@
+{
+  "approval": {
+    "approval_ref": "ap_218d62f1a777443eb0a3fbe3b86392ef",
+    "binding_status": "full",
+    "state": "approved"
+  },
+  "duration_seconds": 8.3,
+  "evidence": {
+    "decision": "accept",
+    "evidence_status": "complete",
+    "overall_claim_status": "supported",
+    "projection_digest": "sha256:c3c5d964a05d518b6ca0394031e751a2c0d55833662feaa559a44ffdf10dd227"
+  },
+  "evidence_kind": "fixture",
+  "failed_steps": [],
+  "files": [
+    "README.md",
+    "candidate-contracts.json",
+    "controller.log",
+    "go-no-go-inputs.json",
+    "negative-cases.json",
+    "stub-boundaries.json",
+    "summary.json",
+    "trace.jsonl"
+  ],
+  "frontend_contracts": {
+    "evidence": {
+      "exit_code": 0,
+      "ok": true,
+      "problems": [],
+      "view": {
+        "ok": true,
+        "rows": 11,
+        "supported": true
+      }
+    },
+    "proposal": {
+      "exit_code": 0,
+      "ok": true,
+      "problems": [],
+      "view": null
+    },
+    "record": {
+      "exit_code": 0,
+      "ok": true,
+      "problems": [],
+      "view": null
+    }
+  },
+  "generated_at": "2026-10-27T00:51:42Z",
+  "git_head": "2551c0397531d732daa6a778bf50beba3dc44c42",
+  "limitations": [
+    "real science / QC / LSF: NOT_VERIFIED (controlled stub)",
+    "real model / DSH agent: NOT_VERIFIED (injected test skills)",
+    "real browser: NOT_VERIFIED (module tests + contract probe only)",
+    "P2 research MCP tools: advertised but not implemented (adapter refusal)"
+  ],
+  "mcp": {
+    "protocol_version": "2025-06-18",
+    "steps": [
+      "mcp.initialize",
+      "mcp.tools_list",
+      "mcp.capabilities_handshake",
+      "bridge.discover",
+      "bridge.submit",
+      "bridge.submit_replay",
+      "bridge.status",
+      "mcp.status_terminal",
+      "mcp.prepare_artifact",
+      "mcp.read_artifact",
+      "supervisor.injected_test_skills"
+    ],
+    "supervisor": {
+      "injection_text_digest": "sha256:b09efffa6ea0fa238107c9d77d7e7b03c568d90c4e1e612a11181dd9b7c889c2",
+      "model_invocations": 4,
+      "phases": [
+        "understand@0",
+        "hypothesize@0",
+        "critique@0",
+        "plan@0",
+        "approve@0",
+        "wait@0",
+        "stop@0"
+      ],
+      "status": "stopped",
+      "stop_reason": "wait_timeout",
+      "submit_port_calls": 1,
+      "submits": 1,
+      "submitted_task_ids": [
+        "20261027_085136_001_fake"
+      ],
+      "wait_invocations": 1
+    },
+    "tools": [
+      "acp_capabilities",
+      "acp_preflight",
+      "acp_submit",
+      "acp_status",
+      "acp_cancel",
+      "acp_prepare_artifact",
+      "acp_read_artifact",
+      "acp_analyze"
+    ]
+  },
+  "negative_cases": [
+    {
+      "duration_ms": 42.62,
+      "expected": "revision_conflict",
+      "jobs_after": 1,
+      "jobs_before": 1,
+      "message": {
+        "code": "revision_conflict",
+        "message": "expected revision 6 but current is 1",
+        "params": {
+          "current_digest": "sha256:61ea62ae2ef3bf68ca884a35e68bb9024fe52995c78bf736742abb1a7efa5bd4",
+          "current_revision": 1,
+          "rule": "revision_conflict"
+        },
+        "retryable": false
+      },
+      "name": "negative.stale_revision",
+      "ok": true,
+      "rule": "revision_conflict",
+      "status": 409
+    },
+    {
+      "duration_ms": 33.78,
+      "expected": "research_identity_mismatch",
+      "jobs_after": 1,
+      "jobs_before": 1,
+      "message": {
+        "code": "access_denied",
+        "message": "the record research_id is not the identity derived for this session",
+        "params": {
+          "rule": "research_identity_mismatch"
+        },
+        "retryable": false
+      },
+      "name": "negative.wrong_identity",
+      "ok": true,
+      "rule": "research_identity_mismatch",
+      "status": 403
+    },
+    {
+      "duration_ms": 29.77,
+      "expected": "projection_digest_mismatch",
+      "jobs_after": 1,
+      "jobs_before": 1,
+      "message": {
+        "code": "revision_conflict",
+        "message": "projection_digest_mismatch: declared 'sha256:870ad1bb6d39c8dcd35322b9bb740e1adb87cc15c7c45a6d11058cefd2aeae6e' != recomputed 'sha256:c3c5d964a05d518b6ca0394031e751a2c0d55833662feaa559a44ffdf10dd227'",
+        "params": {
+          "rule": "projection_digest_mismatch"
+        },
+        "retryable": false
+      },
+      "name": "negative.fake_evidence",
+      "ok": true,
+      "rule": "projection_digest_mismatch",
+      "status": 409
+    },
+    {
+      "duration_ms": 31.86,
+      "expected": "evidence_not_complete",
+      "jobs_after": 1,
+      "jobs_before": 1,
+      "message": {
+        "code": "research_write_error",
+        "message": "evidence_not_complete: evidence status 'partial' cannot be accepted",
+        "params": {
+          "rule": "evidence_not_complete"
+        },
+        "retryable": false
+      },
+      "name": "negative.accept_on_partial_evidence",
+      "ok": true,
+      "rule": "evidence_not_complete",
+      "status": 400
+    },
+    {
+      "duration_ms": 31.9,
+      "expected": "plan_digest_mismatch",
+      "jobs_after": 1,
+      "jobs_before": 1,
+      "message": {
+        "code": "input_invalid",
+        "message": "plan_digest does not match the submitted scientific plan",
+        "params": {
+          "field": "plan_digest",
+          "rule": "plan_digest_mismatch"
+        }
+      },
+      "name": "negative.injection_plan_digest",
+      "ok": true,
+      "rule": "plan_digest_mismatch",
+      "status": 400
+    },
+    {
+      "duration_ms": 31.2,
+      "expected": "approver_identity_from_payload",
+      "jobs_after": 1,
+      "jobs_before": 1,
+      "message": {
+        "code": "access_denied",
+        "message": "approver identity must come from the authenticated channel",
+        "params": {
+          "fields": [
+            "approver"
+          ],
+          "rule": "approver_identity_from_payload"
+        },
+        "retryable": false
+      },
+      "name": "negative.approver_identity_from_payload",
+      "ok": true,
+      "rule": "approver_identity_from_payload",
+      "status": 403
+    },
+    {
+      "duration_ms": 35.95,
+      "expected": "approval_revoked",
+      "jobs_after": 1,
+      "jobs_before": 1,
+      "message": {
+        "code": "access_denied",
+        "message": "the approval was revoked",
+        "params": {
+          "rule": "approval_revoked"
+        },
+        "retryable": false
+      },
+      "name": "negative.revoked_approval",
+      "ok": true,
+      "rule": "approval_revoked",
+      "status": 403
+    }
+  ],
+  "not_verified_steps": [],
+  "observability_baseline": {
+    "controller_http_calls": 35,
+    "controller_http_max_ms": 266.99,
+    "controller_http_p50_ms": 11.03,
+    "controller_http_p95_ms": 17.87,
+    "mcp_tool_steps": 11,
+    "note": "cold 1 MiB-configured local Controller, no result cache; the p50/p95 are one run's baseline, not a throughput SLA"
+  },
+  "project_id": "ca5fafd3-a566-424a-b5de-2b01c95e312d",
+  "proposal": {
+    "digests": {
+      "canonical_digest_version": "1.0.0",
+      "plan_digest": "sha256:982125c6d24106652327445819b1b53f65161c49ed3e7e2df1476ad442e4b673",
+      "proposal_digest": "sha256:23d2040904fc6653face8a1f54bbcca0fcffd5e9358f359f7296d13ddee4416a",
+      "science_digest": "sha256:da18795f8688381b8ad8c771576e2bfd6dfa608d11896fc66cc54f5b87a33e87"
+    },
+    "proposal_id": "prop-m1-06-001",
+    "resource_id": "rrk_16a700db798e79e74f53c0913534db4c69f039c4851390fb",
+    "revision": 1
+  },
+  "reasons": [],
+  "record": {
+    "decision": "accept",
+    "resource_id": "rrk_b741a625d01f9685999375724caa5a437ab9ba17bd8f3e1f",
+    "revision": 1
+  },
+  "run_root": "/tmp/opencode/acp2-m1-06-8db57s8o/runs",
+  "schema": "acp2.m1-06.thin-slice.v1",
+  "status": "PASS",
+  "steps": [
+    {
+      "duration_ms": 25,
+      "name": "preflight",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 2476,
+      "name": "controller.start",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 97,
+      "name": "db.migrations",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 12,
+      "name": "project.create",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 16,
+      "name": "proposal.create",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 5,
+      "name": "proposal.read",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 16,
+      "name": "approval.approve",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 4141,
+      "name": "mcp.runner",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 12,
+      "name": "job.terminal",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 718,
+      "name": "stub.dispatch",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 165,
+      "name": "evidence.project_local",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 14,
+      "name": "record.create",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 26,
+      "name": "record.read_evidence",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 123,
+      "name": "frontend.contract",
+      "status": "PASS"
+    }
+  ],
+  "task": "M1-06 early thin vertical slice (G02/G07/G11/G14/G20)",
+  "task_record": {
+    "attempt": 1,
+    "status": "completed",
+    "task_id": "20261027_085136_001_fake",
+    "work_dir": "/tmp/opencode/acp2-m1-06-8db57s8o/runs/ACP_2.0_M1-06_thin_slice/CCO_fake"
+  },
+  "task_ref": {
+    "attempt": 1,
+    "job_id": "20261027_085136_001_fake",
+    "task_id": "20261027_085136_001_fake"
+  },
+  "working_tree_dirty_paths": 28
+}

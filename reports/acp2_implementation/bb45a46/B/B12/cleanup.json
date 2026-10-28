@@ -1,0 +1,11 @@
+{
+  "b10_run_root_mutated": false,
+  "controller_log": "controller/controller.log",
+  "controller_pid": 676602,
+  "controller_stopped_with": "SIGTERM",
+  "port": 18770,
+  "port_free_after_stop": true,
+  "production_8765_touched": false,
+  "production_run_root_touched": false,
+  "run_root": "/ACPServer/acp2-development/data/b/run-root-b12"
+}

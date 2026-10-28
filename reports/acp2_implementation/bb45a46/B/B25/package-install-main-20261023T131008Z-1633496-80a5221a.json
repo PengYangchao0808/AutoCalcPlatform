@@ -1,0 +1,284 @@
+{
+  "artifacts": [
+    {
+      "path": "release-digests.json",
+      "sha256": "b437586a15960bffef33dbc601bebff81a8d17e8c04bf9ddaab896282fe7c4b1",
+      "size_bytes": 1964
+    },
+    {
+      "path": "install-results.json",
+      "sha256": "5642db6bdf6948a7d6691c8c5bc04f96ec037721c43db68c3a18a1d2fe3e1d71",
+      "size_bytes": 1236
+    },
+    {
+      "path": "installed-probes.json",
+      "sha256": "0965c28bf937d434e7f0754af61fa4a7b8d44b61a983093ffe15420c4d693f80",
+      "size_bytes": 2929
+    },
+    {
+      "path": "cccp-sample.json",
+      "sha256": "474a17eb56ea1974983d696aaf7fdcb640c8e0b2f26a02cf3908ccb6c1b3a9c3",
+      "size_bytes": 218
+    },
+    {
+      "path": "cli-and-compat.json",
+      "sha256": "e18d3248d9c0e1d8d499cba38d3ff2e7c894829e5018178e763e2016c99244cb",
+      "size_bytes": 756
+    },
+    {
+      "path": "lab-health.json",
+      "sha256": "45d5df7f1c91c6d499c920bbbbc4e263d68d4fd1df9cbb55f31d715fcdf9ade9",
+      "size_bytes": 353
+    },
+    {
+      "path": "mcp-tools.json",
+      "sha256": "2997b76053f4bfd5f2b0c2fab06487848daa4135d1e747675d90b7cab67ef125",
+      "size_bytes": 232
+    },
+    {
+      "path": "assets-audit.json",
+      "sha256": "2ca228bd9898dabcf40335da20a6bc854a8ac2a91e32270239b112981d5ac706",
+      "size_bytes": 2007
+    },
+    {
+      "path": "version-locations.json",
+      "sha256": "f5d902498c4b06a451948696c1b45f1780438b324c8d863b73d2241c76474eb3",
+      "size_bytes": 135
+    },
+    {
+      "path": "a-c-evidence.json",
+      "sha256": "36a91a043f98a23d6868f65a452a358e512bb640a17ee0e2960583e82c0fa43a",
+      "size_bytes": 902
+    },
+    {
+      "path": "static-assets-status.json",
+      "sha256": "f7c7a8d134b1f8b6336fb31a7e03d471a0bd6245b0e6f6cd74f02e5d03390010",
+      "size_bytes": 323
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "all manifest digests match",
+      "name": "b25.release_digests",
+      "status": "PASS"
+    },
+    {
+      "detail": "four fresh venvs installed",
+      "name": "b25.clean_install",
+      "status": "PASS"
+    },
+    {
+      "detail": "all modules resolve under venv site-packages at the expected version",
+      "name": "b25.installed_paths_and_versions",
+      "status": "PASS"
+    },
+    {
+      "detail": "controlled CCCP singlepoint ran without acp/acp_services",
+      "name": "b25.cccp_sample_without_controller",
+      "status": "PASS"
+    },
+    {
+      "detail": "acp --help in web and root role venvs",
+      "name": "b25.standalone_cli",
+      "status": "PASS"
+    },
+    {
+      "detail": "primitives/backends/compat.legacy import and identity forwarders hold",
+      "name": "b25.compat_imports",
+      "status": "PASS"
+    },
+    {
+      "detail": "health on 127.0.0.1:51245 isolated run root",
+      "name": "b25.lab_server",
+      "status": "PASS"
+    },
+    {
+      "detail": "initialize 2025-06-18 and eight P1 tools",
+      "name": "b25.stdio_mcp_eight_tools",
+      "status": "PASS"
+    },
+    {
+      "detail": "assets/notices/licenses/model assets/py.typed/sample config/schema/SDK/docs present",
+      "name": "b25.assets_notices_licenses_config_schema_sdk_docs",
+      "status": "PASS"
+    },
+    {
+      "detail": "four version locations == 0.3.0",
+      "name": "b25.four_version_locations",
+      "status": "PASS"
+    },
+    {
+      "detail": "raw evidence at /ACPServer/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z",
+      "name": "b25.aggregate_A-27b",
+      "status": "PASS"
+    },
+    {
+      "detail": "raw evidence at /ACPServer/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z",
+      "name": "b25.aggregate_A-28",
+      "status": "PASS"
+    },
+    {
+      "detail": "expected path absent: /ACPServer/acp2-development/evidence/C/clean-install-live",
+      "name": "b25.aggregate_C33",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "expected path absent: /ACPServer/acp2-development/evidence/C/operator-runbook-live",
+      "name": "b25.aggregate_C34",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "NOT_VERIFIED(c_static_assets_absent) expected /ACPServer/AutoCalcPlatform/docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json",
+      "name": "b25.static_assets_mount",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "harness venvs/processes removed; production untouched",
+      "name": "b25.cleanup",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": null,
+    "harness_revision": "0ea8d0cc7e17f27ff53a7e10b7f28cc289831b04934ae92aaf560e4596b13ab6",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+  "command": [
+    "/ACPServer/acp2-development/venvs/b/bin/python",
+    "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py",
+    "--scenario",
+    "package-install",
+    "--fixture",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/package-install-fixture.json",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25",
+    "--timeout",
+    "1800"
+  ],
+  "contract_version": "1.3.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "live",
+  "exit_code": 0,
+  "extensions": {
+    "acceptance.operation_class": "control",
+    "acceptance.target": "local",
+    "b25.a_c_evidence": [
+      {
+        "id": "A-27b",
+        "note": "raw evidence present; scientific/experience sign-off stays with its owner",
+        "path": "/ACPServer/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z",
+        "present": true,
+        "status": "PASS"
+      },
+      {
+        "id": "A-28",
+        "note": "raw evidence present; scientific/experience sign-off stays with its owner",
+        "path": "/ACPServer/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z",
+        "present": true,
+        "status": "PASS"
+      },
+      {
+        "id": "C33",
+        "note": "evidence absent at the registered path",
+        "path": "/ACPServer/acp2-development/evidence/C/clean-install-live",
+        "present": false,
+        "status": "NOT_VERIFIED"
+      },
+      {
+        "id": "C34",
+        "note": "evidence absent at the registered path",
+        "path": "/ACPServer/acp2-development/evidence/C/operator-runbook-live",
+        "present": false,
+        "status": "NOT_VERIFIED"
+      }
+    ],
+    "b25.artifacts": [
+      {
+        "path": "release-digests.json",
+        "sha256": "b437586a15960bffef33dbc601bebff81a8d17e8c04bf9ddaab896282fe7c4b1",
+        "size_bytes": 1964
+      },
+      {
+        "path": "install-results.json",
+        "sha256": "5642db6bdf6948a7d6691c8c5bc04f96ec037721c43db68c3a18a1d2fe3e1d71",
+        "size_bytes": 1236
+      },
+      {
+        "path": "installed-probes.json",
+        "sha256": "0965c28bf937d434e7f0754af61fa4a7b8d44b61a983093ffe15420c4d693f80",
+        "size_bytes": 2929
+      },
+      {
+        "path": "cccp-sample.json",
+        "sha256": "474a17eb56ea1974983d696aaf7fdcb640c8e0b2f26a02cf3908ccb6c1b3a9c3",
+        "size_bytes": 218
+      },
+      {
+        "path": "cli-and-compat.json",
+        "sha256": "e18d3248d9c0e1d8d499cba38d3ff2e7c894829e5018178e763e2016c99244cb",
+        "size_bytes": 756
+      },
+      {
+        "path": "lab-health.json",
+        "sha256": "45d5df7f1c91c6d499c920bbbbc4e263d68d4fd1df9cbb55f31d715fcdf9ade9",
+        "size_bytes": 353
+      },
+      {
+        "path": "mcp-tools.json",
+        "sha256": "2997b76053f4bfd5f2b0c2fab06487848daa4135d1e747675d90b7cab67ef125",
+        "size_bytes": 232
+      },
+      {
+        "path": "assets-audit.json",
+        "sha256": "2ca228bd9898dabcf40335da20a6bc854a8ac2a91e32270239b112981d5ac706",
+        "size_bytes": 2007
+      },
+      {
+        "path": "version-locations.json",
+        "sha256": "f5d902498c4b06a451948696c1b45f1780438b324c8d863b73d2241c76474eb3",
+        "size_bytes": 135
+      },
+      {
+        "path": "a-c-evidence.json",
+        "sha256": "36a91a043f98a23d6868f65a452a358e512bb640a17ee0e2960583e82c0fa43a",
+        "size_bytes": 902
+      },
+      {
+        "path": "static-assets-status.json",
+        "sha256": "f7c7a8d134b1f8b6336fb31a7e03d471a0bd6245b0e6f6cd74f02e5d03390010",
+        "size_bytes": 323
+      }
+    ],
+    "b25.expected_version": "0.3.0",
+    "b25.fixture": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/package-install-fixture.json",
+    "b25.lab_port": 51245,
+    "b25.python": "/usr/bin/python3.11",
+    "b25.release_dir": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release",
+    "b25.static_assets": {
+      "expected_path": "/ACPServer/AutoCalcPlatform/docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json",
+      "mount": "/experience/<release_id>/",
+      "note": "C has not published experience/static-assets.manifest.json; no mount was fabricated",
+      "status": "NOT_VERIFIED(c_static_assets_absent)"
+    }
+  },
+  "finished_at": "2026-10-23T13:11:51Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "B",
+  "phase": "main",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "20261023T131008Z-1633496-80a5221a",
+  "scenario": "package-install",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-23T13:10:08Z",
+  "submission_id": null,
+  "usage": null
+}

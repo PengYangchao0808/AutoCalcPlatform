@@ -1,0 +1,33 @@
+{
+  "contract": "access",
+  "sample_kind": "old-version",
+  "sample_version": 1,
+  "expected_classification": "accepted_with_migration",
+  "body": {
+    "legacy": true,
+    "principal": {
+      "user_id": "p1",
+      "kind": "user",
+      "tenant_id": "t1",
+      "roles": [
+        "admin"
+      ]
+    },
+    "scope": {
+      "scope_id": "s1",
+      "action": "read"
+    },
+    "grants": [],
+    "decision": {
+      "decision_id": "d1",
+      "effect": "allow",
+      "user_id": "p1",
+      "scope_id": "s1",
+      "reason_code": "granted",
+      "decided_at": "2026-10-18T00:00:00Z",
+      "available_actions": [
+        "read"
+      ]
+    }
+  }
+}

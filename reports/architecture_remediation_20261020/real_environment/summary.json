@@ -1,0 +1,11 @@
+{
+  "all_pass": false,
+  "scenarios": [
+    {
+      "result": "NOT_VERIFIED",
+      "scenario": "lsf-singlepoint",
+      "skip_reason": null
+    }
+  ],
+  "schema": "acp.acceptance.summary.v1"
+}

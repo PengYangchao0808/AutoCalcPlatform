@@ -1,0 +1,23 @@
+2026-10-23 22:40:52,157 [INFO] acp.scheduler.manager: JobManager booted: pid=1696389 run_root=/tmp/opencode/b26a-fix4/data/task-exec-root2
+2026-10-23 22:40:52,394 [INFO] acp.scheduler.manager: Poll loop started (interval=15s, remote=False)
+2026-10-23 22:40:52,395 [INFO] acp.scheduler.manager: Reconcile loop started (interval=15s)
+2026-10-23 22:40:52,401 [DEBUG] cccp.config: Using built-in default configuration
+2026-10-23 22:40:52,420 [DEBUG] cccp.config: Applied env override: CONFSEARCH_NPROC -> resources.nproc
+2026-10-23 22:40:52,420 [DEBUG] cccp.config: Applied env override: CONFSEARCH_ORCA_PATH -> executables.orca.path
+2026-10-23 22:40:52,420 [DEBUG] cccp.config: Applied env override: CONFSEARCH_ORCA_LD_LIBRARY_PATH -> executables.orca.ld_library_path
+2026-10-23 22:40:52,435 [DEBUG] cccp.config: Using built-in default configuration
+2026-10-23 22:40:52,456 [DEBUG] cccp.config: Applied env override: CONFSEARCH_NPROC -> resources.nproc
+2026-10-23 22:40:52,456 [DEBUG] cccp.config: Applied env override: CONFSEARCH_ORCA_PATH -> executables.orca.path
+2026-10-23 22:40:52,456 [DEBUG] cccp.config: Applied env override: CONFSEARCH_ORCA_LD_LIBRARY_PATH -> executables.orca.ld_library_path
+2026-10-23 22:40:53,840 [DEBUG] acp.core.config: Loading ACP configuration via cccp.config
+2026-10-23 22:40:53,840 [DEBUG] cccp.config: Using built-in default configuration
+2026-10-23 22:40:53,858 [DEBUG] cccp.config: Applied env override: CONFSEARCH_NPROC -> resources.nproc
+2026-10-23 22:40:53,858 [DEBUG] cccp.config: Applied env override: CONFSEARCH_ORCA_PATH -> executables.orca.path
+2026-10-23 22:40:53,858 [DEBUG] cccp.config: Applied env override: CONFSEARCH_ORCA_LD_LIBRARY_PATH -> executables.orca.ld_library_path
+2026-10-23 22:40:53,859 [DEBUG] cccp.config: Using built-in default configuration
+2026-10-23 22:40:53,875 [DEBUG] cccp.config: Applied env override: CONFSEARCH_NPROC -> resources.nproc
+2026-10-23 22:40:53,875 [DEBUG] cccp.config: Applied env override: CONFSEARCH_ORCA_PATH -> executables.orca.path
+2026-10-23 22:40:53,876 [DEBUG] cccp.config: Applied env override: CONFSEARCH_ORCA_LD_LIBRARY_PATH -> executables.orca.ld_library_path
+{"command": "execute", "job_id": "20261023_224052_001_b26a-fix4-sp2", "status": "completed", "task_ref": {"attempt": 1, "job_id": "20261023_224052_001_b26a-fix4-sp2", "task_id": "20261023_224052_001_b26a-fix4-sp2"}, "work_dir": "/tmp/opencode/b26a-fix4/data/task-exec-root2/uncategorized/b26a-fix4-sp2_singlepoint"}
+2026-10-23 22:41:07,435 [INFO] acp.scheduler.manager: Reconcile loop stopped
+2026-10-23 22:41:07,454 [INFO] acp.scheduler.manager: Poll loop stopped

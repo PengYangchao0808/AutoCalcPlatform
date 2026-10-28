@@ -1,0 +1,96 @@
+{
+  "base_revision": "e5463de61001343d20e2a0befb7288c0515619f3",
+  "base_revision_short": "e5463de",
+  "branch": "feat/frontend-plan1-closure",
+  "candidate_revision": "sha256:9f02c4d377099026fcc8a2cd6ac5bcd4daacbc5e56f1a56b2630946d71812299",
+  "candidate_revision_rule": "sha256 over sorted lines '<path> <sha256>\\n' for the B17 working-tree files",
+  "contract_digest": "8b55b931f490b256bcfcfecaa85fb3f3d0949d09f7bf90a21735286613b24209",
+  "contract_version": "1.1.0",
+  "controller_command": "/ACPServer/acp2-development/venvs/b/bin/python -m acp.cli run serve --host 127.0.0.1 --port 18777 --run-root /ACPServer/acp2-development/data/b/run-root-b17 --poll-interval 1 --no-browser",
+  "controller_health": {
+    "candidate_revision": "sha256:9f02c4d377099026fcc8a2cd6ac5bcd4daacbc5e56f1a56b2630946d71812299",
+    "contract_digest": "8b55b931f490b256bcfcfecaa85fb3f3d0949d09f7bf90a21735286613b24209",
+    "contract_digest_scope": "delivered-contract-set",
+    "contract_version": "1.1.0",
+    "read_only": true,
+    "schema_version": 1,
+    "started_at": "2026-10-23T05:55:24.018219Z",
+    "status": "ok"
+  },
+  "fixture": "/ACPServer/acp2-development/data/b/fixtures/approval-b17.json",
+  "fixture_sha256": "093a3671d15134794a581acb673e40c0e74b8e3e893373d1ceb13ed1f6ea4a99",
+  "schema": "acp2.b17.candidate.v1",
+  "server_revision": "e5463de + B17 working-tree files",
+  "source_checkout": "/ACPServer/AutoCalcPlatform",
+  "source_composition": "current working tree (PYTHONPATH=/ACPServer/AutoCalcPlatform/src)",
+  "working_tree_files": [
+    {
+      "path": "src/acp_services/runtime/usage_units.py",
+      "sha256": "ec4db8b8bfdc66bf8e69887a2526c5e8ae953e76be0a00c5498633a435765440"
+    },
+    {
+      "path": "src/acp_services/runtime/research_budget.py",
+      "sha256": "309f5ae31e96bab354d78dda1da59eb50136addb61670132375774137a275acf"
+    },
+    {
+      "path": "src/acp_services/runtime/usage.py",
+      "sha256": "c71f3e7f88d9d9a024af15cad0fc0d1f2248e96d0251446862b382853e9557e9"
+    },
+    {
+      "path": "src/acp_services/runtime/metering_decoupling.py",
+      "sha256": "8659d429ac81d53111751cbdf9c15281a86e582bf7b6e841df036b0874043fcd"
+    },
+    {
+      "path": "src/acp_services/runtime/admission.py",
+      "sha256": "fc11b5a635930ec419da665208f03de37817ad121dfd62b633bebb371bbc7c2f"
+    },
+    {
+      "path": "src/acp_services/runtime/quota.py",
+      "sha256": "59c46d61ed5e3d38b42c3e2dbeb040035f08c971b6b09651fcc825052a4e6ad3"
+    },
+    {
+      "path": "src/acp_services/runtime/local_admission.py",
+      "sha256": "5df26af67db0c01bbf28a9334701c1b9bffb7fe3d3b86d517a648bba6ebaf531"
+    },
+    {
+      "path": "src/acp_services/runtime/idempotency.py",
+      "sha256": "a16e9ec8ceb3adacb3ee65abe22d1697ed14f20910dd0b6401522b5dad66150e"
+    },
+    {
+      "path": "src/acp_services/runtime/commands.py",
+      "sha256": "2f8b23a5a221ac89237cec3c49dd231d55d36e26c526264a2e52328f19b397d3"
+    },
+    {
+      "path": "src/acp_services/contracts/injection.py",
+      "sha256": "7662c779260fd31b651072d4facd73a8fe199e41cc2fa8b36dc3f73f84b1d87c"
+    },
+    {
+      "path": "src/acp/services_bootstrap.py",
+      "sha256": "b92106f9b9b390147e06c4320e229deedff13c75103193ae1688317c283acf30"
+    },
+    {
+      "path": "src/acp/scheduler/manager.py",
+      "sha256": "41a94a543789aadb6301bc21ca6c7f8874b6e116d1623fd7384105691c1570f4"
+    },
+    {
+      "path": "src/acp/api/v1_routes.py",
+      "sha256": "10ceb0aecb543748dfefbfc7826781ef54517ea2592b5d718cbd563582c5844b"
+    },
+    {
+      "path": "src/acp/api/v2_budgets.py",
+      "sha256": "45d4e0e0dfcef72d55ffbaf086d9fabf7a1fda09c80c444c42b24c537e796a7e"
+    },
+    {
+      "path": "src/acp/api/server.py",
+      "sha256": "b220c532e6d82f9ee08c4b3f1efb57b8827e1dc4604da74537f5d3da0777033e"
+    },
+    {
+      "path": "scripts/acceptance/acp2_runtime.py",
+      "sha256": "2f6a2b3a8f13ad34aa64740ede9ca002977a0438bc1744e7d319b4a732b5d282"
+    },
+    {
+      "path": "tests/test_acp2_runtime_budget.py",
+      "sha256": "111a58904c344a2ac95fb5f15f58e81b5f2661b4b84e77931ce183c3e1109982"
+    }
+  ]
+}

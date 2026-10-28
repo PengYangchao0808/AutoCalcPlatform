@@ -1,0 +1,10 @@
+diff --git a/packaging/roles/cccp/pyproject.toml b/packaging/roles/cccp/pyproject.toml
+index 2edace2..d31b777 100644
+--- a/packaging/roles/cccp/pyproject.toml
++++ b/packaging/roles/cccp/pyproject.toml
+@@ -26,4 +26,5 @@ include = ["cccp", "cccp.*"]
+ 
+ [tool.setuptools.package-data]
+ "cccp.analysis.nmr" = ["model_assets/*"]
++"cccp.analysis.research" = ["contracts/*.json", "contracts/*.md", "contracts/examples/*.json"]
+ "cccp" = ["py.typed"]

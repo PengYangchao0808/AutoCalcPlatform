@@ -1,0 +1,77 @@
+{
+  "schema": "acp2.runtime.fallback-deferral.v1",
+  "frozen_at": "2026-10-22",
+  "owner": "B",
+  "status": "delivered",
+  "closes": "R3-12 (CDXML input chain owner/scope) at the contract level",
+  "defers": [
+    {
+      "id": "DEFER-CXML-01",
+      "capability": "CDXML (ChemDraw) structure/reaction input",
+      "decision": "deferred",
+      "phase_scope": "out of P0 and P1; candidate for P2/P3 only after A delivers a parser with declared semantics",
+      "evidence_that_it_is_absent": "src/cccp/analysis/structure/parsers.py has no CDXML branch (verified at B03); no A or B task delivers one",
+      "why_deferred_not_implemented_here": "B must not invent chemistry; a parser without declared atom-label/mapping/stereo semantics would silently misread ChemDraw files",
+      "unsupported_behaviour": {
+        "error": {"class": "invalid-parameter", "code": "input_invalid", "params": {"rule": "unsupported_structure_format", "format": "cdxml"}},
+        "empty_structure_task_forbidden": true,
+        "rule": "an unsupported format never creates an empty structure, an empty task or a placeholder attempt"
+      },
+      "p1_supported_formats": ["xyz", "gjf", "com", "inp", "sdf", "mol", "smiles"],
+      "scope_change_records": {
+        "A": {
+          "change": "CDXML parse semantics (structure-only vs reaction, atom labels, atom mapping, stereo) are NOT in the P1 A scope",
+          "owner": "A",
+          "required_before_backfill": "A publishes a descriptor/parser with declared representable and non-representable constructs plus positive/negative fixtures"
+        },
+        "B": {
+          "change": "no upload/parse endpoint in P1; the reserved endpoint below is not frozen or implemented",
+          "owner": "B",
+          "required_before_backfill": "freeze structure.parse (upload, size/type limits, authorization, structured errors) and implement it behind the single command surface"
+        },
+        "C": {
+          "change": "no CDXML preview or ambiguity confirmation in P1; C T-23's CDXML sub-row MUST be reported NOT_VERIFIED rather than passing on MOL/SDF/SMILES",
+          "owner": "C",
+          "required_before_backfill": "preview + ambiguity confirmation UI for the constructs A declares representable"
+        }
+      },
+      "product_claim_rule": "no product statement may claim a complete ChemDraw entry point while this row is deferred; MOL/SDF/SMILES support does not substitute",
+      "reserved_endpoint": {
+        "operation_id": "structure.parse",
+        "status": "reserved_not_frozen",
+        "why_not_frozen": "freezing limits for an endpoint that must refuse every CDXML upload would imply a supported path",
+        "reserved_fields": ["content_base64", "filename", "media_type", "max_bytes"],
+        "reserved_limits": {"max_bytes": 5242880, "media_types": ["chemical/x-cdxml", "application/xml"]},
+        "authorization": "scope write",
+        "structured_errors": ["invalid-parameter", "unsupported", "authorization", "retryable"]
+      },
+      "backfill_conditions": [
+        "A publishes the CDXML parser and declared semantics with fixtures",
+        "B freezes and implements structure.parse with limits and structured errors",
+        "C renders a preview and an explicit ambiguity confirmation",
+        "a real CDXML file produces one traceable structure reference and one plan_digest",
+        "the main plan, this contract and C's task matrix are updated together (no silent scope creep)"
+      ],
+      "not_verified": {
+        "status": "NOT_VERIFIED",
+        "reason": "deferred_by_scope_decision",
+        "reopen_owner": "A (semantics) + B (endpoint) + C (preview)"
+      }
+    }
+  ],
+  "other_deferrals": [
+    {
+      "id": "DEFER-PKG-01",
+      "capability": "project-package CLI/API",
+      "decision": "deferred",
+      "reference": "manifest.json deferred_capabilities (DEFERRED)",
+      "owner": "B",
+      "entry_condition": "after M1 is stable; delivery under M2 with command/permission/receipt/integrity/idempotent import"
+    }
+  ],
+  "samples": {
+    "root": "runtime/samples/fallback-deferral",
+    "positive": ["unsupported-format-refusal.positive.json"],
+    "negative": ["empty-structure-task.negative.json"]
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "exactly_one_fixture_submit": true,
+  "first_recovery": {
+    "action": {
+      "detail": "",
+      "idempotency_key": "uncategorized:20261023_163522_001_b19-research-recovery:ap_730c1f16a1a64dd8b33d1781cc0702ef:submit",
+      "kind": "submit"
+    },
+    "claim": {
+      "detail": "",
+      "kind": "created",
+      "task_ref": null
+    },
+    "duplicates": 0,
+    "next_cursor": "r1.NzoxNzkyNzQ0NTI5LjUyODI3Mw",
+    "previous_cursor": "",
+    "projection": {
+      "applied_event_count": 2,
+      "approval_ref": "ap_730c1f16a1a64dd8b33d1781cc0702ef",
+      "approval_revision": 1,
+      "approval_state": "approved",
+      "attempt": 1,
+      "budget_revision": 0,
+      "budget_state": "",
+      "c_references": {},
+      "error": "",
+      "last_event_id": "submit:20261023_163522_001_b19-research-recovery:fixture-submit",
+      "progress": null,
+      "project_id": "uncategorized",
+      "revision": 2,
+      "status": "unknown",
+      "submitted": true,
+      "task_id": "20261023_163522_001_b19-research-recovery",
+      "task_ref": {
+        "attempt": 1,
+        "task_id": "20261023_163522_001_b19-research-recovery"
+      },
+      "task_terminal": false
+    },
+    "replayed": 7,
+    "reset": true,
+    "reset_reason": "cursor_missing",
+    "stale": 0,
+    "submitted": true
+  },
+  "ledger_claim_calls": 1,
+  "ledger_complete_calls": 1,
+  "rph_exit": {
+    "blocks_on_llm": false,
+    "continues": true,
+    "reason": "rph_exit:task_not_terminal"
+  },
+  "schema": "acp2.b19b.fixture-recovery.v1",
+  "second_recovery": {
+    "action": {
+      "detail": "already submitted",
+      "idempotency_key": "",
+      "kind": "no_action"
+    },
+    "claim": null,
+    "duplicates": 0,
+    "next_cursor": "r1.ODoxNzkyNzQ0NTI5LjUzMTU1NA",
+    "previous_cursor": "",
+    "projection": {
+      "applied_event_count": 2,
+      "approval_ref": "ap_730c1f16a1a64dd8b33d1781cc0702ef",
+      "approval_revision": 1,
+      "approval_state": "approved",
+      "attempt": 1,
+      "budget_revision": 0,
+      "budget_state": "",
+      "c_references": {},
+      "error": "",
+      "last_event_id": "submit:20261023_163522_001_b19-research-recovery:fixture-submit",
+      "progress": null,
+      "project_id": "uncategorized",
+      "revision": 2,
+      "status": "unknown",
+      "submitted": true,
+      "task_id": "20261023_163522_001_b19-research-recovery",
+      "task_ref": {
+        "attempt": 1,
+        "task_id": "20261023_163522_001_b19-research-recovery"
+      },
+      "task_terminal": false
+    },
+    "replayed": 8,
+    "reset": true,
+    "reset_reason": "cursor_missing",
+    "stale": 0,
+    "submitted": false
+  },
+  "submit_calls": 1
+}

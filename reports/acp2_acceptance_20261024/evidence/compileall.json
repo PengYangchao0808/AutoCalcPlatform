@@ -1,0 +1,20 @@
+{
+  "python": "3.11.13 (main, Jun  1 2026, 00:00:00) [GCC 11.5.0 20240719 (Red Hat 11.5.0-14)]",
+  "results": {
+    "current": {
+      "src": true,
+      "scripts": true,
+      "tests": true
+    },
+    "science": {
+      "src": true,
+      "scripts": true,
+      "tests": true
+    },
+    "experience": {
+      "src": true,
+      "scripts": true,
+      "tests": true
+    }
+  }
+}

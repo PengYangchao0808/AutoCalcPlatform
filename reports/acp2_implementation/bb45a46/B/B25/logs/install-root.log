@@ -1,0 +1,46 @@
+$ /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/root/bin/python -m pip install --disable-pip-version-check --no-input --find-links /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/root-build/acp-0.3.0-py3-none-any.whl --find-links /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/root-build
+exit=0
+--- stdout ---
+Looking in links: /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release, /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/root-build
+Processing ./root-build/acp-0.3.0-py3-none-any.whl
+Collecting numpy>=2.1.0
+  Using cached numpy-2.4.6-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.9 MB)
+Collecting rdkit>=2022.09.1
+  Using cached rdkit-2026.9.1-cp311-cp311-manylinux_2_28_x86_64.whl (31.8 MB)
+Collecting pyyaml>=6.0
+  Using cached pyyaml-6.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (806 kB)
+Collecting scipy>=1.10
+  Using cached scipy-1.17.1-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (35.3 MB)
+Collecting matplotlib>=3.7
+  Using cached matplotlib-3.11.2-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (9.9 MB)
+Collecting openpyxl>=3.1
+  Using cached openpyxl-3.1.5-py2.py3-none-any.whl (250 kB)
+Collecting typing-extensions>=4.1
+  Using cached typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+Collecting contourpy>=1.0.1
+  Using cached contourpy-1.3.3-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (355 kB)
+Collecting cycler>=0.10
+  Using cached cycler-0.12.1-py3-none-any.whl (8.3 kB)
+Collecting fonttools>=4.28.2
+  Using cached fonttools-4.67.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (5.5 MB)
+Collecting kiwisolver>=1.3.1
+  Using cached kiwisolver-1.5.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (1.4 MB)
+Collecting packaging>=20.0
+  Using cached packaging-26.3-py3-none-any.whl (129 kB)
+Collecting pillow>=9
+  Using cached pillow-13.0.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (7.1 MB)
+Collecting pyparsing>=3
+  Using cached pyparsing-3.3.3-py3-none-any.whl (126 kB)
+Collecting python-dateutil>=2.7
+  Using cached python_dateutil-3.0.0-py2.py3-none-any.whl (94 kB)
+Collecting et-xmlfile
+  Using cached et_xmlfile-2.0.0-py3-none-any.whl (18 kB)
+Collecting six>=1.6
+  Using cached six-1.17.0-py2.py3-none-any.whl (11 kB)
+Collecting tzdata
+  Using cached tzdata-2026.5-py2.py3-none-any.whl (347 kB)
+Installing collected packages: tzdata, typing-extensions, six, pyyaml, pyparsing, pillow, packaging, numpy, kiwisolver, fonttools, et-xmlfile, cycler, scipy, rdkit, python-dateutil, openpyxl, contourpy, matplotlib, acp
+Successfully installed acp-0.3.0 contourpy-1.3.3 cycler-0.12.1 et-xmlfile-2.0.0 fonttools-4.67.0 kiwisolver-1.5.1 matplotlib-3.11.2 numpy-2.4.6 openpyxl-3.1.5 packaging-26.3 pillow-13.0.0 pyparsing-3.3.3 python-dateutil-3.0.0 pyyaml-6.0.3 rdkit-2026.9.1 scipy-1.17.1 six-1.17.0 typing-extensions-4.16.0 tzdata-2026.5
+
+--- stderr ---
+

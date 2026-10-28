@@ -17,7 +17,9 @@ from acp.core.paths import (
 
 
 @pytest.fixture(autouse=True)
-def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def _clean_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
     monkeypatch.delenv(RUN_ROOT_ENV_VAR, raising=False)
     monkeypatch.delenv(ALLOW_SLOW_FS_ENV_VAR, raising=False)
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)

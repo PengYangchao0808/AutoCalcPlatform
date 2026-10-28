@@ -1,0 +1,54 @@
+INFO:     Started server process [1002584]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:18772 (Press CTRL+C to quit)
+ACP Workbench starting at http://127.0.0.1:18772
+  Run root      : /ACPServer/acp2-development/data/integration/controller-run-root
+  Poll interval : 30s
+  Docs (Swagger): http://127.0.0.1:18772/docs
+  Reload        : off
+
+INFO:     127.0.0.1:42366 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42380 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42396 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42400 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42416 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42418 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34186 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34188 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34190 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34192 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34208 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34212 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34228 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34230 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34246 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59926 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59928 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59938 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59950 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59954 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59966 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59982 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59998 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60014 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40582 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40598 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40612 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40624 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40636 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40638 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40646 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40648 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40662 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50212 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50218 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50226 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50238 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50242 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50256 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55002 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1002584]

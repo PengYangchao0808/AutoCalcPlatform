@@ -1,0 +1,10 @@
+{
+  "candidate_revision": "21610bc1b071d58f367cd04c4f65edb4d2153a5b",
+  "contract_version": "1.0.0",
+  "generated_at": "2026-10-22T13:35:41Z",
+  "runs": [
+    "entry-readonly-main-20261022T133541Z-13842-f9fac578.json"
+  ],
+  "schema": "acp2.acceptance.summary.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema"
+}

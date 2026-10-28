@@ -1,0 +1,36 @@
+{
+  "command": {
+    "argv": [
+      "/ACPServer/acp2-runs/remediation/m4-05/environment/venv/bin/python",
+      "-m",
+      "acp.cli",
+      "science-plugin",
+      "enable",
+      "--capability",
+      "acp2_external_native_singlepoint",
+      "--run-root",
+      "/ACPServer/acp2-remediation-integration/reports/acp2_remediation_20261026/m4-05/browser/schema-form-live/_runtime/runs"
+    ],
+    "returncode": 0,
+    "stderr_tail": "",
+    "stdout_tail": "{\"command\": \"enable\", \"enabled\": {\"capability_id\": \"acp2_external_native_singlepoint\", \"computed_distribution_digest\": \"sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85\", \"descriptor_digest\": \"sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780\", \"enabled\": true, \"enabled_at\": \"2026-10-28T00:05:41Z\", \"enabled_by\": \"controller\", \"installed\": true, \"installed_at\": \"2026-10-28T00:05:41Z\", \"plugin_name\": \"acp2_external.native_singlepoint\", \"version\": \"1.0.0\"}, \"generation\": 1, \"run_root\": \"/ACPServer/acp2-remediation-integration/reports/acp2_remediation_20261026/m4-05/browser/schema-form-live/_runtime/runs\", \"status\": \"ok\"}\n"
+  },
+  "payload": {
+    "command": "enable",
+    "enabled": {
+      "capability_id": "acp2_external_native_singlepoint",
+      "computed_distribution_digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+      "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+      "enabled": true,
+      "enabled_at": "2026-10-28T00:05:41Z",
+      "enabled_by": "controller",
+      "installed": true,
+      "installed_at": "2026-10-28T00:05:41Z",
+      "plugin_name": "acp2_external.native_singlepoint",
+      "version": "1.0.0"
+    },
+    "generation": 1,
+    "run_root": "/ACPServer/acp2-remediation-integration/reports/acp2_remediation_20261026/m4-05/browser/schema-form-live/_runtime/runs",
+    "status": "ok"
+  }
+}

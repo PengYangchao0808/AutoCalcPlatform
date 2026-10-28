@@ -1,0 +1,635 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://acp.local/acp2/experience/manifest-extension.schema.json",
+  "title": "ACP 2.0 C-track experience manifest extension",
+  "description": "Frozen (T-02 / C01a) C-owned manifest extension. It binds one C acceptance run to its candidate, absolute paths, the B01 public registry by reference, A/B contract references, toolchain, model endpoint reference, fixture list and spend caps. It never carries a credential value. Public phase/readiness/scenario ownership stays in the B01 registry: this document only records a registry_ref and, while B01 has published nothing, NOT_VERIFIED(b01_handoff). C's own block is extensions.experience (mode/subcase/scenario_key/interpreter/product_import/harness_path/test_revision/evidence) and never re-defines a public phase.",
+  "$comment": "Executable vocabulary is JSON Schema 2020-12 only. range/nullable exist solely inside ui_dialect as non-executable UI annotations with a written standard equivalent.",
+  "schema": "acp2.experience.manifest-extension.v1",
+  "schema_version": "1.0.0",
+  "schema_dialect": "json-schema-2020-12",
+  "ui_dialect": {
+    "version": "acp2.ui-subset.v1",
+    "supported_keywords": [
+      "$schema",
+      "$id",
+      "$ref",
+      "$comment",
+      "$defs",
+      "schema",
+      "schema_version",
+      "schema_dialect",
+      "ui_dialect",
+      "title",
+      "description",
+      "type",
+      "enum",
+      "const",
+      "required",
+      "properties",
+      "additionalProperties",
+      "items",
+      "minItems",
+      "maxItems",
+      "uniqueItems",
+      "minimum",
+      "maximum",
+      "exclusiveMinimum",
+      "exclusiveMaximum",
+      "minLength",
+      "maxLength",
+      "pattern",
+      "oneOf",
+      "anyOf",
+      "allOf",
+      "not",
+      "if",
+      "then",
+      "else",
+      "dependentRequired",
+      "default",
+      "examples",
+      "format"
+    ],
+    "non_standard_keywords": {
+      "range": {
+        "standard_equivalent": "minimum and maximum",
+        "executable": false,
+        "scope": "UI annotation only; a generic 2020-12 validator must not execute it"
+      },
+      "nullable": {
+        "standard_equivalent": "type array that contains \"null\"",
+        "executable": false,
+        "scope": "UI annotation only; a generic 2020-12 validator must not execute it"
+      }
+    },
+    "rule": "Only supported_keywords are executable. range/nullable must never appear outside this ui_dialect block."
+  },
+  "type": "object",
+  "required": [
+    "candidate_id",
+    "candidate",
+    "evidence_root",
+    "registry_ref",
+    "contracts",
+    "paths",
+    "test_controller",
+    "mcp_launch",
+    "dsh",
+    "browser",
+    "model",
+    "credential_sources",
+    "fixtures",
+    "budget",
+    "extensions"
+  ],
+  "properties": {
+    "candidate_id": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{40}|sha256:[0-9a-f]{64})$",
+      "description": "Producer candidate label. The executable revisions live in candidate{server_revision,client_revision,harness_revision}."
+    },
+    "candidate": {
+      "type": "object",
+      "required": ["server_revision", "client_revision", "harness_revision"],
+      "properties": {
+        "server_revision": {
+          "type": "string",
+          "pattern": "^(?:[0-9a-f]{40}|sha256:[0-9a-f]{64})$",
+          "description": "Server/product source revision actually exercised."
+        },
+        "client_revision": {
+          "type": "string",
+          "pattern": "^(?:[0-9a-f]{40}|sha256:[0-9a-f]{64})$",
+          "description": "C-owned client/RPH revision actually exercised."
+        },
+        "harness_revision": {
+          "type": "string",
+          "pattern": "^(?:[0-9a-f]{40}|sha256:[0-9a-f]{64})$",
+          "description": "Acceptance harness revision actually exercised."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Three revisions may differ; the actual combination must be recorded, never a single blended label."
+    },
+    "evidence_root": {
+      "$ref": "#/$defs/absolute_path",
+      "description": "Absolute evidence root. Must equal the root registered by B00 when that handoff exists; otherwise the run records NOT_VERIFIED(b00_handoff)."
+    },
+    "registry_ref": {
+      "type": "object",
+      "required": [
+        "owner",
+        "registry_path",
+        "registry_version",
+        "registry_digest",
+        "status",
+        "not_verified"
+      ],
+      "properties": {
+        "owner": {
+          "const": "B01",
+          "description": "B01 is the only authority for public scenario/phase/readiness."
+        },
+        "registry_path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Versioned path of the B01 public registry. It is referenced, never copied into C's schema."
+        },
+        "registry_version": {
+          "type": ["string", "null"],
+          "description": "B01 registry version, or null while undelivered."
+        },
+        "registry_digest": {
+          "type": ["string", "null"],
+          "pattern": "^(?:sha256:[0-9a-f]{64})?$",
+          "description": "B01 registry digest, or null while undelivered."
+        },
+        "status": {
+          "enum": ["delivered", "not_verified"],
+          "description": "delivered only after B01 publishes version + digest."
+        },
+        "not_verified": {
+          "enum": ["NOT_VERIFIED(b01_handoff)"],
+          "description": "Mandatory while the B01 registry is absent. A delivered registry requires a v2 of this schema; v1 never promotes this token."
+        }
+      },
+      "additionalProperties": false
+    },
+    "contracts": {
+      "type": "object",
+      "required": ["a_science", "b_runtime", "b01_acceptance"],
+      "properties": {
+        "a_science": {
+          "$ref": "#/$defs/contract_ref",
+          "description": "Read-only A science contract; C only $refs it and records a digest, never edits its fields."
+        },
+        "b_runtime": {
+          "$ref": "#/$defs/contract_ref",
+          "description": "B runtime/launch contract reference."
+        },
+        "b01_acceptance": {
+          "$ref": "#/$defs/contract_ref",
+          "description": "B01 acceptance-result contract. While absent, status is NOT_VERIFIED and no field list is copied into C."
+        }
+      },
+      "additionalProperties": false
+    },
+    "paths": {
+      "type": "object",
+      "required": ["source", "tools", "data", "evidence"],
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/absolute_path",
+          "description": "Absolute product source root actually imported."
+        },
+        "tools": {
+          "$ref": "#/$defs/absolute_path",
+          "description": "Absolute isolated toolchain root (Node/pnpm/DSH/browser)."
+        },
+        "data": {
+          "$ref": "#/$defs/absolute_path",
+          "description": "Absolute acceptance data root."
+        },
+        "evidence": {
+          "$ref": "#/$defs/absolute_path",
+          "description": "Absolute evidence root for this run."
+        },
+        "contracts": {
+          "$ref": "#/$defs/absolute_path"
+        },
+        "harness": {
+          "$ref": "#/$defs/absolute_path"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Every declared path must be absolute (leading /)."
+    },
+    "test_controller": {
+      "type": "object",
+      "required": ["kind", "path", "revision"],
+      "properties": {
+        "kind": {
+          "enum": ["acp2_experience"],
+          "description": "The single C acceptance controller entry."
+        },
+        "path": {
+          "$ref": "#/$defs/absolute_path",
+          "description": "Absolute path of the Harness/controller script."
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64}|sha256:[0-9a-f]{64})$"
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "enum": ["fixture", "live", "dry-run"]
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "mcp_launch": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "transport",
+          "command",
+          "args",
+          "cwd",
+          "protocol_version",
+          "tool_allowlist"
+        ],
+        "properties": {
+          "transport": {
+            "const": "stdio",
+            "description": "The only transport this server slice speaks; the caller owns framing."
+          },
+          "command": {
+            "$ref": "#/$defs/absolute_path"
+          },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "cwd": {
+            "$ref": "#/$defs/absolute_path"
+          },
+          "protocol_version": {
+            "const": "2025-06-18",
+            "description": "Locked MCP protocol version; a different requested version is refused, never downgraded."
+          },
+          "tool_allowlist": {
+            "type": "object",
+            "required": ["owner", "version", "digest", "status", "not_verified"],
+            "properties": {
+              "owner": {
+                "const": "B03"
+              },
+              "version": {
+                "type": ["string", "null"]
+              },
+              "digest": {
+                "type": ["string", "null"],
+                "pattern": "^(?:sha256:[0-9a-f]{64})?$"
+              },
+              "status": {
+                "enum": ["delivered", "not_verified"]
+              },
+              "not_verified": {
+                "enum": ["NOT_VERIFIED(b03_handoff)", "NOT_VERIFIED(mcp_extension)"],
+                "description": "Until B03 publishes a versioned allowlist, C must not invent extra tools."
+              }
+            },
+            "additionalProperties": false,
+            "description": "Owned by B03. C references it and does not enumerate a second allowlist here."
+          },
+          "env_refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/credential_ref"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "dsh": {
+      "type": "object",
+      "required": ["revision", "launcher", "profile", "transport"],
+      "properties": {
+        "revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$",
+          "description": "Frozen DSH checkout revision."
+        },
+        "launcher": {
+          "type": "object",
+          "required": ["command", "args"],
+          "properties": {
+            "command": {
+              "$ref": "#/$defs/absolute_path"
+            },
+            "args": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "profile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "transport": {
+          "const": "stdio"
+        },
+        "plugin": {
+          "type": "object",
+          "required": ["name", "version"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "not_verified": {
+          "type": ["string", "null"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "browser": {
+      "type": "object",
+      "required": ["executable", "version"],
+      "properties": {
+        "executable": {
+          "$ref": "#/$defs/absolute_path"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "headless": {
+          "type": "boolean",
+          "default": true
+        },
+        "not_verified": {
+          "type": ["string", "null"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "model": {
+      "type": "object",
+      "required": ["provider", "model_id", "provider_ref"],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provider_ref": {
+          "$ref": "#/$defs/credential_ref",
+          "description": "Reference to the provider configuration. Values are forbidden."
+        },
+        "max_requests": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_completion_units": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "credential_sources": {
+      "type": "object",
+      "required": ["references"],
+      "properties": {
+        "references": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/credential_ref"
+          },
+          "description": "REFERENCES ONLY (env:/file:/provider: prefix or an opaque ref object). A literal value is forbidden anywhere in a manifest, sample or evidence file."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Names where a credential can be resolved; never stores the credential itself."
+    },
+    "fixtures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["fixture_id", "path", "sha256", "kind"],
+        "properties": {
+          "fixture_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Absolute or source-relative fixture path."
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "kind": {
+            "enum": ["manifest", "view_model", "acceptance_result", "sample"]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "budget": {
+      "type": "object",
+      "required": [
+        "max_model_requests",
+        "max_tasks",
+        "max_qc_invocations",
+        "max_bsub_submissions",
+        "max_wall_clock_seconds",
+        "max_cores"
+      ],
+      "properties": {
+        "max_model_requests": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_tasks": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_qc_invocations": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_bsub_submissions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_wall_clock_seconds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_cores": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "description": "Hard caps checked before spend, not only audited afterwards."
+    },
+    "extensions": {
+      "type": "object",
+      "required": ["experience"],
+      "properties": {
+        "experience": {
+          "$ref": "#/$defs/experience_extension"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "absolute_path": {
+      "type": "string",
+      "pattern": "^/",
+      "description": "Absolute POSIX path."
+    },
+    "contract_ref": {
+      "type": "object",
+      "required": ["owner", "path", "version", "digest", "status", "not_verified"],
+      "properties": {
+        "owner": {
+          "enum": ["A", "B", "B01", "B03"]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": ["string", "null"]
+        },
+        "digest": {
+          "type": ["string", "null"],
+          "pattern": "^(?:sha256:[0-9a-f]{64})?$"
+        },
+        "status": {
+          "enum": ["delivered", "not_verified"]
+        },
+        "not_verified": {
+          "type": ["string", "null"],
+          "description": "e.g. NOT_VERIFIED(b01_handoff), NOT_VERIFIED(b03_handoff), NOT_VERIFIED(a_handoff)."
+        }
+      },
+      "additionalProperties": false
+    },
+    "credential_ref": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^(?:env|file|provider):[A-Za-z0-9_./:@-]+$"
+        },
+        {
+          "type": "object",
+          "required": ["ref", "kind", "redacted"],
+          "properties": {
+            "ref": {
+              "type": "string",
+              "pattern": "^(?:env|file|provider):[A-Za-z0-9_./:@-]+$"
+            },
+            "kind": {
+              "enum": ["env", "file", "provider"]
+            },
+            "redacted": {
+              "const": true,
+              "description": "Marks the indirection: the referenced value is never inlined."
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "description": "A location reference, never a value."
+    },
+    "experience_extension": {
+      "type": "object",
+      "required": [
+        "mode",
+        "scenario_key",
+        "interpreter",
+        "product_import",
+        "harness_path",
+        "test_revision",
+        "evidence"
+      ],
+      "properties": {
+        "mode": {
+          "enum": ["fixture", "live"]
+        },
+        "subcase": {
+          "type": ["string", "null"],
+          "description": "Display metadata only; the canonical public phase is in the B01 registry."
+        },
+        "scenario_key": {
+          "type": "string",
+          "pattern": "^experience:(?:fixture|live|control|search|nmr|thermo|selectivity)(?:/[A-Za-z0-9_.-]+)?$",
+          "description": "C's namespaced registration request. It is not a second public phase registry; B01 owns the canonical entry."
+        },
+        "interpreter": {
+          "$ref": "#/$defs/absolute_path",
+          "description": "Absolute role interpreter used for this run."
+        },
+        "product_import": {
+          "$ref": "#/$defs/absolute_path",
+          "description": "Absolute product source root that the selected interpreter imports."
+        },
+        "harness_path": {
+          "$ref": "#/$defs/absolute_path",
+          "description": "Absolute Harness revision path (always the C revision)."
+        },
+        "test_revision": {
+          "type": "string",
+          "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64}|sha256:[0-9a-f]{64})$"
+        },
+        "evidence": {
+          "type": "object",
+          "required": ["run_id", "evidence_dir", "not_verified"],
+          "properties": {
+            "run_id": {
+              "type": "string",
+              "minLength": 8
+            },
+            "evidence_dir": {
+              "$ref": "#/$defs/absolute_path"
+            },
+            "assertions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "result_ref": {
+              "type": ["string", "null"]
+            },
+            "not_verified": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "C-owned evidence caveats, e.g. NOT_VERIFIED(b01_handoff)."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "description": "The only C-owned keys. Public phase/readiness never appear here; read them through registry_ref."
+    }
+  }
+}

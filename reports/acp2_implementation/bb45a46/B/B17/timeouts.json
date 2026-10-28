@@ -1,0 +1,16 @@
+{
+  "distinct_keys": true,
+  "keys": [
+    "client_request_s",
+    "overall_acceptance_s",
+    "queue_wait_s",
+    "science_runtime_s"
+  ],
+  "schema": "acp2.b17.timeouts.v1",
+  "timeouts": {
+    "client_request_s": 60.0,
+    "overall_acceptance_s": 3600.0,
+    "queue_wait_s": 0.0,
+    "science_runtime_s": 60.0
+  }
+}

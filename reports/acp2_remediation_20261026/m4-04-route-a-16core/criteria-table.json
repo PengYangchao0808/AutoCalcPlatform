@@ -1,0 +1,111 @@
+{
+  "criteria": [
+    {
+      "applied_rules": [],
+      "claim_status": "supported",
+      "criterion_id": "DA-C01-ts-single-imaginary-mode",
+      "evidence_digest": "daccc9a973a62cede19d72c14f89728b0d469a55fbb8cd229f43411d432b2b88",
+      "evidence_status": "supported",
+      "missing_check_ids": [],
+      "notes": [],
+      "reason": "affirmed",
+      "scenario_result": "PASS",
+      "validator_id": "check.ts_saddle_candidate"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "supported",
+      "criterion_id": "DA-C02-ts-mode-mapping",
+      "evidence_digest": "33971fea49bd1a4182e894d8c2063d84b196bcf637d7adfadf3ac2a6ec03f3fe",
+      "evidence_status": "supported",
+      "missing_check_ids": [],
+      "notes": [],
+      "reason": "affirmed",
+      "scenario_result": "PASS",
+      "validator_id": "check.ts_mode_mapping"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "supported",
+      "criterion_id": "DA-C03-frequency-evidence",
+      "evidence_digest": "6f94e4f21e7531a2b0f3cf0bc1480a89ffca34e0b8c01c5f6a71959ecd5dfd09",
+      "evidence_status": "supported",
+      "missing_check_ids": [],
+      "notes": [],
+      "reason": "affirmed",
+      "scenario_result": "PASS",
+      "validator_id": "check.frequency_evidence"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "supported",
+      "criterion_id": "DA-C04-irc-bidirectional",
+      "evidence_digest": "cf37e37e6e67dd81ef12b53d0783b76496d8bca1c31f34d1ef20fe9657639a33",
+      "evidence_status": "supported",
+      "missing_check_ids": [],
+      "notes": [],
+      "reason": "affirmed",
+      "scenario_result": "PASS",
+      "validator_id": "check.irc_bidirectional_completion"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "refuted",
+      "criterion_id": "DA-C05-endpoint-association",
+      "evidence_digest": "dcb7d3c64608ad84bf85d3c284962c0df46f38c2d797ec5973c4c58eef3b7639",
+      "evidence_status": "refuted",
+      "missing_check_ids": [],
+      "notes": [],
+      "reason": "contradiction",
+      "scenario_result": "PASS",
+      "validator_id": "check.irc_endpoint_identity"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "supported",
+      "criterion_id": "DA-C06-energy-comparability",
+      "evidence_digest": "ea8a14705960c601d55352a9982eb986b729d06bbd5099deaebe70327c715d46",
+      "evidence_status": "supported",
+      "missing_check_ids": [],
+      "notes": [],
+      "reason": "affirmed",
+      "scenario_result": "PASS",
+      "validator_id": "check.activation_energy_comparability"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "supported",
+      "criterion_id": "DA-C07-reactant-stoichiometry",
+      "evidence_digest": "e11887b882c60e6bc1b5143c79e909b26b417fba7470f2174078c9f65fefbb5c",
+      "evidence_status": "supported",
+      "missing_check_ids": [],
+      "notes": [],
+      "reason": "affirmed",
+      "scenario_result": "PASS",
+      "validator_id": "check.reactant_stoichiometry_completeness"
+    }
+  ],
+  "overall_claim_status": "refuted",
+  "questions": [
+    {
+      "blocked_by": [
+        "DA-C05-endpoint-association"
+      ],
+      "claim_status": "refuted",
+      "question_id": "question.diels_alder.path_connectivity.v1",
+      "reason": "contradiction",
+      "refuted_by": [
+        "DA-C05-endpoint-association"
+      ]
+    },
+    {
+      "blocked_by": [],
+      "claim_status": "supported",
+      "question_id": "question.diels_alder.activation_energy.v1",
+      "reason": "affirmed",
+      "refuted_by": []
+    }
+  ],
+  "scenario_result": "PASS",
+  "schema": "acp2.m4-04.criteria-table.v1"
+}

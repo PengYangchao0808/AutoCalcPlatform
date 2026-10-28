@@ -1,0 +1,20 @@
+{
+  "cost_cap_usd": 0.01,
+  "cost_spent_usd": 0.0,
+  "credential_env_names": [
+    "ACP2_MODEL_API_KEY",
+    "DEEPSEEK_API_KEY"
+  ],
+  "credential_values_recorded": false,
+  "evidence_level": "NOT_VERIFIED",
+  "executed": false,
+  "gateway_path": "src/acp_services/runtime/model_gateway.py::ModelGateway.call",
+  "note": "The controlled fake-transport tests prove reservation/settlement/unknown/restart/concurrency semantics. No provider credential was present in the process environment, so no real model call was made and no key was written to this or any repository file.",
+  "provider_calls": 0,
+  "reason": "no_model_credential",
+  "recorded_at": "2026-10-27T07:53:33.967198+00:00",
+  "schema": "acp2.remediation.model-smoke.v1",
+  "task": "M3-03",
+  "title": "optional real low-cost DeepSeek smoke through the production model gateway",
+  "transport_used": "none"
+}

@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "acp-worker"
+dynamic = ["version", "dependencies"]
+description = "Independent ACP Services worker"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+
+[project.scripts]
+acp-worker = "acp_services.worker_bootstrap:main"
+
+[tool.setuptools.dynamic]
+version = {file = ["VERSION"]}
+dependencies = {file = ["requirements-role.txt"]}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["acp_services", "acp_services.*"]

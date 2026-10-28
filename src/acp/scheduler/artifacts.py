@@ -9,12 +9,12 @@ import sqlite3
 import threading
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from acp.scheduler.migrations import migrate
 from acp.scheduler.provenance import ParserStatus
+from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
 
 _EXTENSION_TYPE_MAP = {
     ".xyz": "xyz",
@@ -35,10 +35,6 @@ _IGNORED_SUFFIXES = {".tmp", ".pyc", ".pid"}
 _IGNORED_NAMES = {"__pycache__", ".DS_Store", "Thumbs.db"}
 _IGNORED_PATTERNS = {"core.", "slurm-", ".nfs"}
 _MAX_ARTIFACT_SIZE = 500 * 1024 * 1024
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 @dataclass

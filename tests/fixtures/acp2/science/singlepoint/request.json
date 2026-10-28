@@ -1,0 +1,38 @@
+{
+  "charge": 0,
+  "level": {
+    "basis": "def2-SVP",
+    "method": "wB97X-D4"
+  },
+  "multiplicity": 1,
+  "resources": {},
+  "schema_version": 1,
+  "structure": {
+    "coordinates": [
+      [
+        0.0,
+        0.0,
+        0.11779
+      ],
+      [
+        0.0,
+        0.75716,
+        -0.47116
+      ],
+      [
+        0.0,
+        -0.75716,
+        -0.47116
+      ]
+    ],
+    "path": "input.xyz",
+    "role": "minimum",
+    "source": "fixture input.xyz; atom_order=O,H,H; coordinate_unit=angstrom; expected_energy_unit=hartree",
+    "symbols": [
+      "O",
+      "H",
+      "H"
+    ]
+  },
+  "task": "singlepoint"
+}

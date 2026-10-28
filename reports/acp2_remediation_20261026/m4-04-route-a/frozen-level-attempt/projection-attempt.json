@@ -1,0 +1,40 @@
+{
+  "duration_seconds": 44.88,
+  "entry": "single_task_worker_envelope",
+  "error": null,
+  "frozen_group": {
+    "member_digests": {
+      "binding.json": "6f1cbd9fe505a2cf371855f8cbb9fecbfa08d220c1301dbe85641d226a9fa25e",
+      "envelope.json": "9851d41a27fc518c683882a839224c0edea0f7e00a9ba22d4ff101e4583eb1d8",
+      "plan.json": "33c9ae1d32f858a7a2516310884f2a6de045a7810eac52fd87841000aadeee5a"
+    },
+    "workflow": "singlepoint"
+  },
+  "receipt": {
+    "attempt": 1,
+    "chain_digest": "",
+    "evidence_digests": {
+      "exit_code": "0",
+      "job_status": "completed",
+      "missing_required_facts": "",
+      "normal_reuse": "true",
+      "partial_result": "false",
+      "publish": "true",
+      "publish_policy": "normal",
+      "qualification": "complete",
+      "required_facts": "energy_hartree",
+      "task_result_digest": "sha256:2180234cacd0ea05bd62241c0e54cd19499586c60f95e95f64fd77ccdb80b8cb",
+      "truth_table_row": "b"
+    },
+    "job_id": "20261028_943_projection_attempt",
+    "release_digest": "813583bdcaae20ef900a99180f433b34a7dfa730fb47c1efea5c9435919a061b",
+    "release_id": "2d1ab37a0f988933",
+    "state": "completed"
+  },
+  "schema": "acp2.m4-04.projection-attempt.v1",
+  "status": "completed",
+  "step_id": "projection_attempt",
+  "task_ref": "20261028_943_projection_attempt",
+  "task_result_digest": "sha256:c6453ba3fb59fac604ea10c9518d742ec23cade59e8cb36f78a50ba23cb0a70e",
+  "task_result_present": true
+}

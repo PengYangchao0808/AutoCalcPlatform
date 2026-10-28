@@ -1,0 +1,23 @@
+{
+  "c_live_confirmation": "NOT_VERIFIED(controller_unavailable)",
+  "descriptor_sha256": "ca807cc4b8014af265fac64c9b84ca3c4050df9bfbab3b5dc408ce068b548046",
+  "finding": "F1 descriptor tools[].inputSchema differs from a live tools/list shape",
+  "live_snapshot_kind": "b_recorded_not_c_owned",
+  "mismatched_tools": [
+    "acp_analyze",
+    "acp_cancel",
+    "acp_capabilities",
+    "acp_preflight",
+    "acp_prepare_artifact",
+    "acp_read_artifact",
+    "acp_status",
+    "acp_submit"
+  ],
+  "must_reconcile_before": "H2",
+  "owner": "B",
+  "schema": "acp2.c.dsh-discovery.f1.v1",
+  "status": "OPEN",
+  "t11_matches": false,
+  "t11_source": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/mcp-live/mcp-live-20261022T183515Z-569902/main/schema-drift.json",
+  "t11_source_sha256": "11cfc845e118572eb4948ebd9d0a26a3455a0cd23d3b4be72e593fab2f5e1d58"
+}

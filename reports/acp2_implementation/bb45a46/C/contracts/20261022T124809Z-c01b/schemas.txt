@@ -1,0 +1,12 @@
+PARSED fixture illegal-request.json
+PARSED fixture illegal-request.valid.json
+PARSED fixture proposal.valid.json
+PARSED fixture research-record.valid.json
+PARSED fixture stale-reference.json
+PARSED fixture stale-reference.valid.json
+PARSED fixture unknown-tool.json
+PARSED fixture unknown-tool.valid.json
+PARSED fixture wrong-project.json
+PARSED fixture wrong-project.valid.json
+PASS proposal.valid.json (plan_definition_digest=sha256:32bd96dd1c8d2eb962a419590ff91ebf695adef1c587c147185f522be5422d9b)
+PASS research-record.valid.json

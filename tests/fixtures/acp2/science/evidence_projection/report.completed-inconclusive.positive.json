@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "report_id": "report-m1-03-static",
+  "subject": {
+    "subject_id": "task-m1-03-static",
+    "subject_kind": "calculation_result",
+    "description": "STATIC M1-03 projection fixture; no real QC execution.",
+    "input_digests": [
+      {
+        "algorithm": "sha256",
+        "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ]
+  },
+  "execution": {
+    "terminal_state": "completed",
+    "argv": ["m1-03-static", "frequency"],
+    "exit_code": 0,
+    "stdout_path": "artifacts/freq.out",
+    "stderr_path": null
+  },
+  "claims": [
+    {
+      "claim_id": "c-true-minimum",
+      "statement": "The optimized geometry is a true minimum (no imaginary frequencies).",
+      "status": "supported",
+      "scope": {
+        "subject": "stationary_point_kind",
+        "applicability": "conformer_specific",
+        "conditions": "conformer A, gas phase"
+      },
+      "source_refs": [
+        {
+          "artifact_path": "artifacts/freq.out",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "cec0e00d21f0d39aaccc2ad75ba6f6141f1f37030137709648d2858930cf1cfe"
+          },
+          "role": "native_output",
+          "units": "cm-1",
+          "quantity": "harmonic_frequencies"
+        }
+      ],
+      "missing_checks": [],
+      "validator": {
+        "kind": "deterministic",
+        "validator_id": "check.imaginary_mode_count",
+        "validator_version": "1.0.0"
+      }
+    },
+    {
+      "claim_id": "c-ts-connects-product",
+      "statement": "The transition state connects the intended product.",
+      "status": "inconclusive",
+      "scope": {
+        "subject": "irc_connectivity",
+        "applicability": "system_specific",
+        "conditions": null
+      },
+      "source_refs": [],
+      "missing_checks": [
+        {
+          "check_id": "missing_irc",
+          "reason": "reverse IRC output is absent",
+          "blocking": false
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    {
+      "limitation_id": "lim-static",
+      "description": "STATIC fixture only; no real QC execution.",
+      "affected_claim_ids": ["c-true-minimum"]
+    }
+  ],
+  "provenance_digest": {
+    "algorithm": "sha256",
+    "value": "69d6c252c9e2b169bfb7188837e021809523a26da7ad273c1c55fac2e02ebba2"
+  }
+}

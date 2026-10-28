@@ -1,0 +1,118 @@
+{
+  "artifacts": [
+    {
+      "path": "approval-source-scan.json",
+      "sha256": "57fe72c2a5600773aac4dfc4334bf0a18d6067c41a4d85dc0126566064965d53",
+      "size_bytes": 199
+    },
+    {
+      "path": "approval-node-tests.log",
+      "sha256": "a0b7d9786a9ef2f1cf1f977cb87a9465d04fa5aa0109dbdeb0d4b7bcaf66ac6f",
+      "size_bytes": 1520
+    },
+    {
+      "path": "approval-bind-matrix.json",
+      "sha256": "d5956b59e837e553a5531c1ee83cb198056e64a920b95b57ed1e2c26d5378695",
+      "size_bytes": 1578
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "[]",
+      "name": "approval.fixture_content_no_platform_transport",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 bmit without the bound digest is refused\n  ok - method change invalidates the status chip and keeps the reason at the top of the card\n  ok - visible approval copy is humanized: no raw keys or snake_case state tokens\n  ok - machine enum values are humanized: no snake_case codes in visible copy\n  ok - approval card uses the real ACPClient.research namespace, not an injected fake\n\n21 passed, 0 failed",
+      "name": "approval.node_suite",
+      "status": "PASS"
+    },
+    {
+      "detail": "passed=21 failed=0 minimum=8",
+      "name": "approval.module_tests_ge_8",
+      "status": "PASS"
+    },
+    {
+      "detail": "missing=[] covered=['card_digests', 'card_expiry', 'card_limits_caps_basis', 'digest_vector', 'dsh_platform_separation', 'matrix_appended_refs', 'matrix_display_time', 'matrix_invalidates', 'model_claim_rejected', 'other_user_rejected', 'submit_bound_digest']",
+      "name": "approval.bind_invalidate_matrix_covered",
+      "status": "PASS"
+    },
+    {
+      "detail": "content evidence_kind=fixture; public evidence_kind=fixture",
+      "name": "approval.evidence_kind_fixture_content",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "8413db719681ffa08370c00001bb634f4dea274a",
+    "harness_revision": "9c2523d35a884272807c6857794886eeedd43e728da0d695fd2a26244ddaa433",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "8413db719681ffa08370c00001bb634f4dea274a",
+  "command": [
+    "/ACPServer/acp2-development/venvs/integration/bin/python",
+    "/ACPServer/acp2-development/integration/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "approval-budget-live",
+    "--timeout",
+    "600",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/approval-budget-live/approval-budget-live-20261023T024452Z-979225/approval"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "fixture",
+  "exit_code": 0,
+  "extensions": {
+    "experience.approval_budget": {
+      "bind_tuple": [
+        "plan_definition_digest",
+        "project_id",
+        "budget",
+        "allowed_change_scope"
+      ],
+      "evidence_kind": "fixture",
+      "live_b16_rows": {
+        "budget.deny": "NOT_VERIFIED(b16_handoff)",
+        "budget.expire": "NOT_VERIFIED(b16_handoff)",
+        "budget.reservation": "NOT_VERIFIED(b16_handoff)",
+        "budget.revoke": "NOT_VERIFIED(b16_handoff)"
+      },
+      "node_tests": {
+        "failed": 0,
+        "passed": 21
+      },
+      "phase": "approval",
+      "public_evidence_kind": "fixture",
+      "public_phase": "experience:fixture"
+    },
+    "experience.harness_contract_revision": "9c2523d35a884272807c6857794886eeedd43e728da0d695fd2a26244ddaa433",
+    "experience.harness_path": "/ACPServer/acp2-development/integration/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/integration/bin/python",
+    "experience.mode": "fixture",
+    "experience.product_import": "/ACPServer/acp2-development/integration/src/acp/__init__.py",
+    "experience.run_id": "approval-budget-live-20261023T024452Z-979225",
+    "experience.scenario_key": "approval-budget-live",
+    "experience.subcase": null,
+    "experience.test_revision": "8413db719681ffa08370c00001bb634f4dea274a"
+  },
+  "finished_at": "2026-10-23T02:44:52Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:fixture",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "approval-budget-live-20261023T024452Z-979225",
+  "scenario": "experience:approval-budget-live",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-23T02:44:52Z",
+  "submission_id": null,
+  "usage": null
+}

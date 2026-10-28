@@ -1,0 +1,8 @@
+bsub=<absent>
+bjobs=<absent>
+bstop=<absent>
+bresume=<absent>
+bqueues=<absent>
+bhosts=<absent>
+LSF_ENVDIR=<unset>
+LSF_SERVERDIR=<unset>

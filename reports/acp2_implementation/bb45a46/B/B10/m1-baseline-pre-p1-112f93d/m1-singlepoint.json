@@ -1,0 +1,51 @@
+{
+  "artifacts": [
+    {
+      "bytes": 730,
+      "path": "/tmp/acp-m1-vbuix6cr/uncategorized/CCO_singlepoint/RESULT/result_manifest.json",
+      "sha256": "b299812d2ce8727e1f8d5deffb4312ff4932e4932e2bf4f2fba77f1ba7d99bdc"
+    }
+  ],
+  "candidate_revision": "",
+  "cell": null,
+  "environment": {
+    "env_missing_reason": null,
+    "env_present": {
+      "ACP_LSF_NODE": false,
+      "ACP_M1_ORCA": true
+    },
+    "python": "3.11.13",
+    "run_root": ""
+  },
+  "f0_revision": null,
+  "f1_revision": null,
+  "finished_on": "2026-10-22T19:04:46Z",
+  "harness": "real_environment.py",
+  "harness_version": "1",
+  "metrics": null,
+  "not_verified_reason": null,
+  "result": "PASS",
+  "scenario": "m1-singlepoint",
+  "schema": "acp.acceptance.harness.v1",
+  "scope": "IN_SCOPE",
+  "skip_reason": null,
+  "started_on": "2026-10-22T19:04:46Z",
+  "steps": [
+    {
+      "exit_code": 0,
+      "id": "submit",
+      "ok": true
+    },
+    {
+      "actual": "completed",
+      "exit_code": 0,
+      "id": "terminal",
+      "ok": true
+    },
+    {
+      "exit_code": 200,
+      "id": "structure_viewer",
+      "ok": true
+    }
+  ]
+}

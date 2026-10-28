@@ -54,12 +54,13 @@ from acp.nmr.reference_validation import (
     compare_reference_vs_migration,
     pinned_goodman_upstream,
 )
+from cccp.analysis.nmr.assets import asset_dir
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "scripts" / "nmr_reference_validation.py"
-MODELS_DIR = ROOT / "src" / "acp" / "nmr" / "models"
+MODELS_DIR = asset_dir()
 
-#: sha256 values recorded in ``src/acp/nmr/models/NOTICE.md`` (Source revision).
+#: sha256 values recorded in ``src/cccp/analysis/nmr/model_assets/NOTICE.md`` (Source revision).
 NOTICE_HASHES = {
     "atomic_reps.gz": "bb8f798c1dd898811801a9fdd9f4bf037e434968f66e050acf3fb616a7652a65",
     "frag_reps.gz": "e5daae0f7b525632beed6cbd9b972b0be466f33e28c5cdb7efd1f1caaafb6c64",

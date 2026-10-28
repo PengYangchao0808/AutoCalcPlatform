@@ -1,0 +1,39 @@
+{
+  "schema": "acp2.remediation.full_suite_result.v1",
+  "generated_on": "2026-10-27T00:00:00Z",
+  "task": "post-reconciliation full-suite gate for the M0 commit batch",
+  "selector": "tests/ -m \"not slow and not contract\"",
+  "runs": [
+    {
+      "run": "full suite at HEAD 77e4c74",
+      "result": "12 failed / 11455 passed / 13 skipped / 102 deselected",
+      "wall_clock_s": 1929
+    },
+    {
+      "run": "baseline worktree c463706 (same selector, bare env)",
+      "result": "5 pre-existing failures reproduced (h4_closeout x2, docs_contract x3)"
+    }
+  ],
+  "classification": {
+    "regressions_fixed_in_3e526f0": [
+      "tests/test_scan_workflow.py x4 + tests/test_acp_api_v2.py::test_no_live_scan_execution_submission_stays_in_process + tests/test_frontend_sync_wizard.py (shared _fake_scheduler stub lacked the idempotency/budget/identity kwargs that services_bootstrap.submit always forwards since M0-04 a1cf33b)",
+      "tests/test_f4_scope_audit.py::test_migration_scope_audit_reaches_migration_files (new src/acp/mcp_extension.py from M0-09 77e4c74 needed registration as an audited migration station)"
+    ],
+    "pre_existing_fixed_in_3e526f0": [
+      "tests/test_docs_contract.py::test_simple_workflow_examples_use_file_inputs[optimize|frequency|xtb_optimize] (root AGENTS.md lacked runnable file-input examples; fails at baseline c463706 too)"
+    ],
+    "pre_existing_open": [
+      {
+        "tests": [
+          "tests/test_acp2_runtime_h4_closeout.py::test_closeout_input_set_excludes_its_own_digest",
+          "tests/test_acp2_runtime_h4_closeout.py::test_final_reference_digest_and_index_chain"
+        ],
+        "cause": "tracked evidence reports/acp2_implementation/bb45a46/B/B20c/{h4-closeout.json,input-set.json} embed the original checkout absolute path /ACPServer/AutoCalcPlatform; the tests compare against the current worktree path /ACPServer/acp2-remediation-integration",
+        "scope": "location-dependent test/evidence pair; not a digest or logic defect; fails identically at baseline c463706",
+        "candidate_owner": "M0-12 field/hygiene stream or a dedicated evidence-relocation task; do not rewrite historical evidence silently"
+      }
+    ]
+  },
+  "residual_full_suite_expectation": "2 failed (h4_closeout, location-dependent) / everything else green",
+  "claim_scope": "implementation-side local verification; CI has not run on this branch yet"
+}

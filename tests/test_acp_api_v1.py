@@ -244,11 +244,12 @@ def test_v1_job_create_defaults_node_tags_to_empty(client: TestClient) -> None:
     assert detail.json()["spec"]["node_tags"] == []
 
 
-def test_v1_job_create_mode_conflict_returns_400_code(client: TestClient) -> None:
-    """A validate_execution_request conflict shares the D12 dict detail (m4).
+def test_v1_job_create_mode_conflict_returns_422_input_invalid(client: TestClient) -> None:
+    """A validate_execution_request conflict is the shared application envelope.
 
-    Same shape as the continue endpoint and the unknown/disabled target
-    errors: a dict with a stable machine-readable ``code``.
+    M0-06/G23: HTTP, MCP and the CLI answer ``input_invalid`` with
+    ``params.field``/``params.rule`` (the fine-grained ``execution_mode_conflict``
+    survives in ``params.rule``), so one client mapping covers every entry.
     """
     response = client.post(
         "/api/v1/jobs",
@@ -261,10 +262,12 @@ def test_v1_job_create_mode_conflict_returns_400_code(client: TestClient) -> Non
             "target_node": "local",
         },
     )
-    assert response.status_code == 400
+    assert response.status_code == 422
     detail = response.json()["detail"]
     assert isinstance(detail, dict)
-    assert detail["code"] == "execution_mode_conflict"
+    assert detail["code"] == "input_invalid"
+    assert detail["params"]["rule"] == "execution_mode_conflict"
+    assert detail["params"]["field"] == "execution_mode"
     assert "conflict" in detail["message"]
 
 
@@ -370,6 +373,122 @@ def test_v1_job_rerun_requeues_original_task(client: TestClient) -> None:
     assert [job["id"] for job in jobs.json()["jobs"]].count(job_id) == 1
 
 
+def test_record_to_v1_model_projects_authoritative_attempt_and_revision() -> None:
+    from acp.api.v1_routes import _record_to_v1_model
+
+    record = JobRecord(
+        id="proj-identity",
+        spec=JobSpec(workflow="fake", name="proj-identity"),
+        attempt=6,
+        revision=42,
+    )
+    model = _record_to_v1_model(record)
+    assert (model.attempt, model.revision) == (6, 42)
+
+
+def test_enrichment_preserves_attempt_and_revision(tmp_path: Path) -> None:
+    from acp.api.v1_routes import _enrich_job_snapshot, _enrich_v1_with_names, _record_to_v1_model
+
+    work_dir = tmp_path / "enrich-identity"
+    work_dir.mkdir()
+    (work_dir / "state.json").write_text(
+        json.dumps({"stage_index": 2, "stage_total": 3, "current_stage": "opt"}),
+        encoding="utf-8",
+    )
+    record = JobRecord(
+        id="enrich-identity",
+        spec=JobSpec(workflow="fake", name="enrich-identity"),
+        work_dir=str(work_dir),
+        attempt=6,
+        revision=42,
+    )
+    model = _record_to_v1_model(record)
+    snapshot = _enrich_job_snapshot(record, model, include_event=False)
+    assert (snapshot.attempt, snapshot.revision) == (6, 42)
+    assert snapshot.stage_index == 2
+
+    named = _enrich_v1_with_names(
+        snapshot,
+        {
+            "custom_name": "renamed",
+            "resolved_name": "renamed",
+            "default_name": "enrich-identity",
+            "name_revision": 9,
+        },
+    )
+    assert (named.attempt, named.revision) == (6, 42)
+    assert named.name_revision == 9
+
+
+def test_v1_model_without_projection_reports_schema_defaults() -> None:
+    from acp.api.v1_schemas import V1JobRecordModel, V1JobSpecModel
+
+    model = V1JobRecordModel(id="legacy", spec=V1JobSpecModel(workflow="fake"), status="queued")
+    assert (model.attempt, model.revision) == (1, 0)
+
+
+def test_v1_attempt_and_revision_follow_rerun(client: TestClient) -> None:
+    created = _submit_fake_job(client, name="attempt-revision-rerun")
+    job_id = str(created["job_id"])
+    first = _wait_for_terminal_job(client, job_id)
+    first_attempt = int(first["attempt"])
+    first_revision = int(first["revision"])
+    assert first_attempt == 1
+
+    rerun = client.post(f"/api/v1/jobs/{job_id}/rerun")
+    assert rerun.status_code == 200
+    assert rerun.json()["attempt"] == first_attempt + 1
+    assert rerun.json()["revision"] > first_revision
+
+    second = _wait_for_terminal_job(client, job_id)
+    assert second["attempt"] == first_attempt + 1
+    assert second["revision"] > first_revision
+
+    detail_job = client.get(f"/api/v1/jobs/{job_id}/detail").json()["job"]
+    list_job = next(
+        job for job in client.get("/api/v1/jobs?limit=100").json()["jobs"] if job["id"] == job_id
+    )
+    v2_task = client.get(f"/api/v2/tasks/{job_id}").json()
+    v2_row = next(
+        row
+        for group in client.get("/api/v2/task-view?group_by=none").json()["groups"]
+        for row in group["jobs"]
+        if row["id"] == job_id
+    )
+    expected = (second["attempt"], second["revision"])
+    for projection in (detail_job, list_job, v2_task, v2_row):
+        assert (projection["attempt"], projection["revision"]) == expected
+
+    history = second["result"].get("attempt_history") or []
+    assert history[-1]["attempt"] == first_attempt
+    assert [entry["attempt"] for entry in history].count(first_attempt) == 1
+
+    historical = client.get(
+        f"/api/v1/jobs/{job_id}/availability",
+        params={"attempt": first_attempt},
+    )
+    assert historical.status_code == 200
+    assert client.get(f"/api/v1/jobs/{job_id}").json()["attempt"] == expected[0]
+
+
+def test_v1_execution_identity_ignores_name_revision(client: TestClient) -> None:
+    created = _submit_fake_job(client, name="name-revision-isolation")
+    job_id = str(created["job_id"])
+    _wait_for_terminal_job(client, job_id)
+    before = client.get(f"/api/v1/jobs/{job_id}").json()
+
+    renamed = client.patch(
+        f"/api/v2/tasks/{job_id}",
+        json={"custom_name": "display-only", "expected_name_revision": before["name_revision"]},
+    )
+    assert renamed.status_code == 200
+    assert renamed.json()["custom_name"] == "display-only"
+
+    after = client.get(f"/api/v1/jobs/{job_id}").json()
+    assert after["name_revision"] == before["name_revision"] + 1
+    assert (after["attempt"], after["revision"]) == (before["attempt"], before["revision"])
+
+
 def _seed_failed_job(client: TestClient, tmp_path: Path, job_id: str) -> None:
     """Seed a FAILED mechanism job directly into the app manager's store."""
     manager = client.app.state.job_manager
@@ -400,7 +519,7 @@ def _stub_manager_submit(client: TestClient, tmp_path: Path) -> dict[str, object
     captured: dict[str, object] = {}
     original = manager.submit
 
-    def _submit(spec, group_id=None):
+    def _submit(spec, group_id=None, **_kwargs):
         captured["spec"] = spec
         work_dir = tmp_path / "captured"
         work_dir.mkdir(parents=True, exist_ok=True)
@@ -1362,9 +1481,7 @@ def test_v1_batch_structures_requires_nonempty_items(
     assert record.spec.input["items"] == []
 
 
-def test_v1_batch_structures_rejects_bad_item(
-    client: TestClient, qc_capable_local: None
-) -> None:
+def test_v1_batch_structures_rejects_bad_item(client: TestClient, qc_capable_local: None) -> None:
     response = client.post(
         "/api/v1/jobs",
         json={
@@ -1473,23 +1590,54 @@ def test_run_irc_endpoint(client: TestClient, tmp_path: Path) -> None:
     optimized = source_dir / "WORK" / "03_OPT" / "optimized.xyz"
     optimized.parent.mkdir(parents=True)
     optimized.write_text("2\noptimized\nH 0.0 0.0 0.0\nH 0.0 0.0 0.7\n", encoding="utf-8")
-    (runtime / "checkpoint.json").write_text(json.dumps({"items_state": {
-        "item_001": {"status": "completed", "tag": "TS", "optimized_xyz": "WORK/03_OPT/optimized.xyz",
-                     "charge": 0, "multiplicity": 1,
-                     "frequency": {"status": "completed", "frequencies": [-130.0, 40.0]}}
-    }}), encoding="utf-8")
-    (source_dir / "RESULT" / "batch_provenance.json").write_text(json.dumps({"items": [{
-        "item_id": "item_001", "role": "ts",
-        "effective_config": {"method": "B97-3c", "basis": "def2-mTZVPP"},
-    }]}), encoding="utf-8")
+    (runtime / "checkpoint.json").write_text(
+        json.dumps(
+            {
+                "items_state": {
+                    "item_001": {
+                        "status": "completed",
+                        "tag": "TS",
+                        "optimized_xyz": "WORK/03_OPT/optimized.xyz",
+                        "charge": 0,
+                        "multiplicity": 1,
+                        "frequency": {"status": "completed", "frequencies": [-130.0, 40.0]},
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    (source_dir / "RESULT" / "batch_provenance.json").write_text(
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "item_id": "item_001",
+                        "role": "ts",
+                        "effective_config": {"method": "B97-3c", "basis": "def2-mTZVPP"},
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
     source_record = JobRecord(
-        id="source-job", status=JobStatus.COMPLETED, work_dir=str(source_dir),
+        id="source-job",
+        status=JobStatus.COMPLETED,
+        work_dir=str(source_dir),
         project_id="uncategorized",
-        spec=JobSpec(workflow="BatchOptimize", name="source-ts", project_id="uncategorized",
-                     resources={"nproc": 2}, method={"batch_roles": {
-                         "ts": {"method": "B97-3c", "basis": "def2-mTZVPP"},
-                         "int": {"method": "r2SCAN-3c", "basis": ""},
-                     }}),
+        spec=JobSpec(
+            workflow="BatchOptimize",
+            name="source-ts",
+            project_id="uncategorized",
+            resources={"nproc": 2},
+            method={
+                "batch_roles": {
+                    "ts": {"method": "B97-3c", "basis": "def2-mTZVPP"},
+                    "int": {"method": "r2SCAN-3c", "basis": ""},
+                }
+            },
+        ),
     )
     manager = _FakeIrcManager({"source-job": source_record})
     client.app.state.job_manager = manager
@@ -2681,9 +2829,7 @@ def test_v1_job_files_serves_nmr_report_new_layout(
     (work_dir / "RESULT" / "reports" / "nmr_report.json").write_text(
         json.dumps(_NMR_REPORT_WITH_NULLS), encoding="utf-8"
     )
-    (work_dir / "nmr_report.json").write_text(
-        json.dumps(_NMR_REPORT_WITH_NULLS), encoding="utf-8"
-    )
+    (work_dir / "nmr_report.json").write_text(json.dumps(_NMR_REPORT_WITH_NULLS), encoding="utf-8")
 
     new_layout = client.get(f"/api/v1/jobs/{job_id}/files/RESULT/reports/nmr_report.json")
     assert new_layout.status_code == 200

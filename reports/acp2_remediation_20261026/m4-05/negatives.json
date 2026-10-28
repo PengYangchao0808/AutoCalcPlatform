@@ -1,0 +1,181 @@
+{
+  "all_closed": true,
+  "note": "every negative row uses the same operator CLI/public service path as the positive rows; the mutation is applied to an isolated copy or to the installed payload, never to the committed fixture",
+  "root": "/ACPServer/acp2-runs/remediation/m4-05/negatives",
+  "rows": [
+    {
+      "argv": [
+        "/ACPServer/acp2-runs/remediation/m4-05/environment/venv/bin/python",
+        "-m",
+        "acp.cli",
+        "science-plugin",
+        "enable",
+        "--capability",
+        "acp2_external_native_singlepoint",
+        "--run-root",
+        "/ACPServer/acp2-runs/remediation/m4-05/negatives/run-root"
+      ],
+      "closed": true,
+      "error": "capability_untrusted",
+      "exit_code": 1,
+      "reason": "capability_untrusted: acp2_external_native_singlepoint is discover-only; add the capability or its plugin to the explicit trust allow-list to enable it",
+      "row": "untrusted_capability",
+      "status": "failed"
+    },
+    {
+      "argv": [
+        "/ACPServer/acp2-runs/remediation/m4-05/environment/venv/bin/python",
+        "-m",
+        "acp.cli",
+        "science-plugin",
+        "enable",
+        "--capability",
+        "acp2_external_native_singlepoint",
+        "--authorized-by",
+        "reviewer",
+        "--run-root",
+        "/ACPServer/acp2-runs/remediation/m4-05/negatives/run-root"
+      ],
+      "closed": true,
+      "error": "capability_authorization_invalid",
+      "exit_code": 1,
+      "reason": "capability_authorization_invalid: principal 'reviewer' may not authorize capabilities",
+      "row": "insufficient_authorization",
+      "status": "failed"
+    },
+    {
+      "analyze_code": "unsupported_capability",
+      "analyze_status": 422,
+      "closed": true,
+      "discovery_plugin_entries": [],
+      "enable_error": "capability_distribution_digest_mismatch",
+      "enable_exit_code": 1,
+      "executable": [],
+      "list_exit_code": 0,
+      "list_status": "ok",
+      "refusals": [
+        {
+          "capability_id": "acp2_external_native_singlepoint",
+          "computed": "sha256:bf176c41fdd6ee28df201a9f22392d6d24c7d8d77b7cd54098cf3eb269229149",
+          "declared": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+          "reason": "distribution_digest_mismatch",
+          "version": "1.0.0"
+        }
+      ],
+      "row": "installed_bytes_digest_mismatch",
+      "tampered_file": "/ACPServer/acp2-runs/remediation/m4-05/environment/venv/lib/python3.11/site-packages/acp2_fixture_validator/__init__.py"
+    },
+    {
+      "closed": true,
+      "executable": [
+        "acp2_external_native_singlepoint"
+      ],
+      "exit_code": 0,
+      "matches_declared": true,
+      "row": "restored_bytes_control"
+    },
+    {
+      "build": {
+        "argv": [
+          "/usr/bin/python3.11",
+          "-m",
+          "build",
+          "--wheel",
+          "--no-isolation",
+          "--outdir",
+          "/ACPServer/acp2-runs/remediation/m4-05/negatives/variants/incompatible_api_range/wheel",
+          "/ACPServer/acp2-runs/remediation/m4-05/negatives/variants/incompatible_api_range"
+        ],
+        "returncode": 0,
+        "stderr_tail": "* Getting build dependencies for wheel...\n* Building wheel...\n",
+        "stdout_tail": "Successfully built acp2_external_science_validator-1.0.0-py3-none-any.whl\n"
+      },
+      "closed": true,
+      "enable_error": "science_plugin_error",
+      "enable_exit_code": 1,
+      "install": {
+        "argv": [
+          "/ACPServer/acp2-runs/remediation/m4-05/environment/venv/bin/python",
+          "-m",
+          "pip",
+          "install",
+          "--no-deps",
+          "--no-index",
+          "/ACPServer/acp2-runs/remediation/m4-05/negatives/variants/incompatible_api_range/wheel/acp2_external_science_validator-1.0.0-py3-none-any.whl"
+        ],
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "Processing /ACPServer/acp2-runs/remediation/m4-05/negatives/variants/incompatible_api_range/wheel/acp2_external_science_validator-1.0.0-py3-none-any.whl\nInstalling collected packages: acp2-external-science-validator\nSuccessfully installed acp2-external-science-validator-1.0.0\n"
+      },
+      "list_error": "science_plugin_error",
+      "list_exit_code": 1,
+      "list_status": "failed",
+      "mutation": {
+        "api.compatible_range": {
+          "from": ">=1,<2",
+          "to": ">=2,<3"
+        }
+      },
+      "reason": "plugin 'acp2_external.native_singlepoint' requires API '>=2,<3', host API version is 1",
+      "row": "incompatible_api_range",
+      "wheel": "/ACPServer/acp2-runs/remediation/m4-05/negatives/variants/incompatible_api_range/wheel/acp2_external_science_validator-1.0.0-py3-none-any.whl",
+      "wheel_sha256": "sha256:6707fe26701b90a28e70a7217e67aedccf09a4ed3b29dc570fdec6ba673df919"
+    },
+    {
+      "build": {
+        "argv": [
+          "/usr/bin/python3.11",
+          "-m",
+          "build",
+          "--wheel",
+          "--no-isolation",
+          "--outdir",
+          "/ACPServer/acp2-runs/remediation/m4-05/negatives/variants/unknown_license/wheel",
+          "/ACPServer/acp2-runs/remediation/m4-05/negatives/variants/unknown_license"
+        ],
+        "returncode": 0,
+        "stderr_tail": "* Getting build dependencies for wheel...\n* Building wheel...\n",
+        "stdout_tail": "Successfully built acp2_external_science_validator-1.0.0-py3-none-any.whl\n"
+      },
+      "closed": true,
+      "enable_error": "science_plugin_error",
+      "enable_exit_code": 1,
+      "install": {
+        "argv": [
+          "/ACPServer/acp2-runs/remediation/m4-05/environment/venv/bin/python",
+          "-m",
+          "pip",
+          "install",
+          "--no-deps",
+          "--no-index",
+          "/ACPServer/acp2-runs/remediation/m4-05/negatives/variants/unknown_license/wheel/acp2_external_science_validator-1.0.0-py3-none-any.whl"
+        ],
+        "returncode": 0,
+        "stderr_tail": "",
+        "stdout_tail": "Processing /ACPServer/acp2-runs/remediation/m4-05/negatives/variants/unknown_license/wheel/acp2_external_science_validator-1.0.0-py3-none-any.whl\nInstalling collected packages: acp2-external-science-validator\nSuccessfully installed acp2-external-science-validator-1.0.0\n"
+      },
+      "list_error": "science_plugin_error",
+      "list_exit_code": 1,
+      "list_status": "failed",
+      "mutation": {
+        "license": {
+          "from": "MIT",
+          "to": "WTFPL"
+        }
+      },
+      "reason": "plugin 'acp2_external.native_singlepoint' license 'WTFPL' rejected: license is not in the accepted-license policy (AGPL-3.0-only, Apache-2.0, BSD-2-Clause, BSD-3-Clause, CC0-1.0, GPL-2.0-only, GPL-3.0-only, ISC, LGPL-2.1-only, LGPL-3.0-only, MIT, MPL-2.0, Unlicense)",
+      "row": "unknown_license",
+      "wheel": "/ACPServer/acp2-runs/remediation/m4-05/negatives/variants/unknown_license/wheel/acp2_external_science_validator-1.0.0-py3-none-any.whl",
+      "wheel_sha256": "sha256:bc6cac92c8c7ed0770e63477973c630edcba137d9163cefe75881fbed95448bb"
+    },
+    {
+      "closed": true,
+      "exit_code": 0,
+      "installed": [
+        "acp2_external_native_singlepoint",
+        "acp2_upgrade_native_singlepoint"
+      ],
+      "row": "clean_reinstall_control"
+    }
+  ]
+}

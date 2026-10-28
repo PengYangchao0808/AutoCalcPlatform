@@ -1,0 +1,2 @@
+368344 /ACPServer/acp2-development/venvs/b/bin/python -m acp mcp serve --transport stdio --controller http://127.0.0.1:18765 --log-level INFO
+368348 /ACPServer/acp2-development/venvs/b/bin/python -m acp mcp serve --transport stdio --controller http://127.0.0.1:18765 --log-level INFO

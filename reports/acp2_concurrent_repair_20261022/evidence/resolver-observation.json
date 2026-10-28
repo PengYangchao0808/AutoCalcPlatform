@@ -1,0 +1,89 @@
+{
+  "purpose": "planning evidence, not fix acceptance",
+  "observations": [
+    {
+      "source_root": "/ACPServer/AutoCalcPlatform",
+      "software_sha256": "113d2461f03e99bb31a81cc0bfd20d98b0e32bb841af030c8e0dfda903e78f7a",
+      "scope": "resolver behavior only; dummy binary never executed",
+      "cases": [
+        {
+          "case": "missing_absolute_pin",
+          "source": "path",
+          "resolved_to_path_fixture": true,
+          "target_should_resolve": false,
+          "matches_target_contract": false
+        },
+        {
+          "case": "directory_pin",
+          "source": "path",
+          "resolved_to_path_fixture": true,
+          "target_should_resolve": false,
+          "matches_target_contract": false
+        },
+        {
+          "case": "non_executable_pin",
+          "source": "path",
+          "resolved_to_path_fixture": true,
+          "target_should_resolve": false,
+          "matches_target_contract": false
+        },
+        {
+          "case": "bare_name_discovery",
+          "source": "path",
+          "resolved_to_path_fixture": true,
+          "target_should_resolve": true,
+          "matches_target_contract": true
+        },
+        {
+          "case": "valid_absolute_pin",
+          "source": "config",
+          "resolved_to_path_fixture": true,
+          "target_should_resolve": true,
+          "matches_target_contract": true
+        }
+      ]
+    },
+    {
+      "source_root": "/ACPServer/acp2-development/A",
+      "software_sha256": "113d2461f03e99bb31a81cc0bfd20d98b0e32bb841af030c8e0dfda903e78f7a",
+      "scope": "resolver behavior only; dummy binary never executed",
+      "cases": [
+        {
+          "case": "missing_absolute_pin",
+          "source": "path",
+          "resolved_to_path_fixture": true,
+          "target_should_resolve": false,
+          "matches_target_contract": false
+        },
+        {
+          "case": "directory_pin",
+          "source": "path",
+          "resolved_to_path_fixture": true,
+          "target_should_resolve": false,
+          "matches_target_contract": false
+        },
+        {
+          "case": "non_executable_pin",
+          "source": "path",
+          "resolved_to_path_fixture": true,
+          "target_should_resolve": false,
+          "matches_target_contract": false
+        },
+        {
+          "case": "bare_name_discovery",
+          "source": "path",
+          "resolved_to_path_fixture": true,
+          "target_should_resolve": true,
+          "matches_target_contract": true
+        },
+        {
+          "case": "valid_absolute_pin",
+          "source": "config",
+          "resolved_to_path_fixture": true,
+          "target_should_resolve": true,
+          "matches_target_contract": true
+        }
+      ]
+    }
+  ]
+}

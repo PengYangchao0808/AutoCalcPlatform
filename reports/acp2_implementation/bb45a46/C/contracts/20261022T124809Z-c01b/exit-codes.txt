@@ -1,0 +1,11 @@
+json-tool-proposal=0
+json-tool-research-record=0
+schemas=0
+digest=0
+neg-round-string=1
+neg-taskrefs-bare=1
+neg-wrong-project=1
+neg-unknown-tool=1
+neg-illegal-request=1
+neg-stale-reference=1
+all=0

@@ -1,0 +1,3626 @@
+{
+  "candidate_full": {
+    "allowed": false,
+    "blocking_rows": [
+      "G05",
+      "G10",
+      "G13",
+      "G15",
+      "G18",
+      "H3",
+      "H4",
+      "H7",
+      "M3-03"
+    ],
+    "reason": "Required rows still open: M3-03 (production model-gateway credential rotation), G05/G10/G13 (same credential), G15/G18 with H3/H4 (DA-ENV-LSF and the single-bounded-attempt DA recipe gap); the declaration is final for this candidate and every open row is honestly recorded."
+  },
+  "checkpoints": [
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "aggregate",
+      "evidence_level": "L0",
+      "evidence_revision": "working-tree",
+      "id": "M0-01a",
+      "impact_globs": [
+        "docs/reference/next-change/acp2-contracts/release/**",
+        "scripts/acceptance/build_acp2_plan_graph.py",
+        "scripts/acceptance/validate_acp2_gap_coverage.py",
+        "tests/test_acp2_gap_coverage.py",
+        "tests/test_acp2_plan_graph.py"
+      ],
+      "notes": "Baseline, plan graph and coverage ledger frozen; validator re-run at the candidate.",
+      "owner": "INT",
+      "parent": "M0-01",
+      "receipt": "reports/acp2_remediation_20261026/m0-closeout.json",
+      "receipt_sha256": "62a66785b4085fb47609fe5fe0ca6f491d81692872e60ad01b7c14d692dadeb6",
+      "required_observations": {
+        "baseline": "present",
+        "coverage": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "aggregate",
+      "evidence_level": "L0",
+      "evidence_revision": "working-tree",
+      "id": "M0-01b",
+      "impact_globs": [
+        "docs/reference/next-change/acp2-contracts/release/**",
+        "scripts/acceptance/build_acp2_plan_graph.py",
+        "scripts/acceptance/validate_acp2_gap_coverage.py",
+        "tests/test_acp2_gap_coverage.py",
+        "tests/test_acp2_plan_graph.py"
+      ],
+      "notes": "B registered the release namespace as three planned contracts at M0-01; M5-02 flips them to delivered at B26.",
+      "owner": "B",
+      "parent": "M0-01",
+      "receipt": "reports/acp2_remediation_20261026/m0-closeout.json",
+      "receipt_sha256": "62a66785b4085fb47609fe5fe0ca6f491d81692872e60ad01b7c14d692dadeb6",
+      "required_observations": {
+        "manifest_registration": "present",
+        "validator_tests": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L1",
+      "evidence_revision": "e59ce7f2f8c7dbcf2277c27223495c5b7bce3c8a",
+      "id": "M0-02a",
+      "impact_globs": [
+        ".github/workflows/ci.yml",
+        "tests/test_frontend_module_tests_gate.py"
+      ],
+      "notes": "CI matrix, RPH package job, frontend module tests and wall-clock rules landed.",
+      "owner": "INT",
+      "parent": "M0-02",
+      "receipt": "reports/acp2_remediation_20261026/m0-02a-local-toolchain.json",
+      "receipt_sha256": "031748ccae7e7c46d32fb965737240111dc570d6a854455c20f8ecb383ffa6a1",
+      "required_observations": {
+        "ci_matrix": "present",
+        "toolchain": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L1",
+      "evidence_revision": "e59ce7f2f8c7dbcf2277c27223495c5b7bce3c8a",
+      "id": "M0-02b",
+      "impact_globs": [
+        ".github/workflows/ci.yml",
+        "tests/test_frontend_module_tests_gate.py"
+      ],
+      "notes": "mcp-conformance owns -m contract with JUnit skip accounting and DSH_DECLARED_BUT_UNRESOLVED.",
+      "owner": "INT + B + C-RPH",
+      "parent": "M0-02",
+      "receipt": ".github/workflows/ci.yml",
+      "receipt_sha256": "746025f9bb075224a406e7e4fc8a1708d04c0793653862c933cee1cbce1448ec",
+      "required_observations": {
+        "contract_lane": "present",
+        "dsh_declaration": "present",
+        "junit_accounting": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L1",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "id": "M0-02c",
+      "impact_globs": [
+        ".github/workflows/ci.yml",
+        "tests/test_frontend_module_tests_gate.py"
+      ],
+      "notes": "Ruff 0.15.22 hygiene/ratchet is still pending. D-INT-06 freezes it out of the G01-G26 required chain: it cannot close or keep open any gap and is not a candidate_full blocker.",
+      "owner": "INT",
+      "parent": "M0-02",
+      "receipt": "reports/acp2_remediation_20261026/m0-closeout.json",
+      "receipt_sha256": "62a66785b4085fb47609fe5fe0ca6f491d81692872e60ad01b7c14d692dadeb6",
+      "required_observations": {
+        "required_chain": "absent",
+        "ruff_ratchet": "absent"
+      },
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required",
+      "status": "OPEN"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L1",
+      "evidence_revision": "3663d54708503e55a606fb9cf07c14c2e160d6c0",
+      "id": "M0-03a",
+      "impact_globs": [
+        "scripts/acceptance/acp2_runtime.py",
+        "scripts/acceptance/acp2_experience.py",
+        "tests/test_acp2_runtime_acceptance_harness.py",
+        "tests/test_acp2_experience_observations.py"
+      ],
+      "notes": "B runtime evidence labels and required-observation enforcement.",
+      "owner": "B",
+      "parent": "M0-03",
+      "receipt": "tests/test_acp2_runtime_acceptance_harness.py",
+      "receipt_sha256": "f3dd57431ac1fa194dff6650309cb92ca2893f3d2808c29d2e266897836a9b1e",
+      "required_observations": {
+        "evidence_labels": "present",
+        "required_observations": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L1",
+      "evidence_revision": "3663d54708503e55a606fb9cf07c14c2e160d6c0",
+      "id": "M0-03b",
+      "impact_globs": [
+        "scripts/acceptance/acp2_runtime.py",
+        "scripts/acceptance/acp2_experience.py",
+        "tests/test_acp2_runtime_acceptance_harness.py",
+        "tests/test_acp2_experience_observations.py"
+      ],
+      "notes": "C experience/live harness labels and static live-port probes; no live row is upgraded by a probe.",
+      "owner": "C-RPH",
+      "parent": "M0-03",
+      "receipt": "reports/acp2_remediation_20261026/m0-03b-live-observations.json",
+      "receipt_sha256": "b960cf19b1f1a2b65748ef7abd40c9b00bf64e5e08011ed38911a0ca2f4a0723",
+      "required_observations": {
+        "experience_harness": "present",
+        "live_port_probe": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L1",
+      "evidence_revision": "3663d54708503e55a606fb9cf07c14c2e160d6c0",
+      "id": "M0-03c",
+      "impact_globs": [
+        "scripts/acceptance/acp2_runtime.py",
+        "scripts/acceptance/acp2_experience.py",
+        "tests/test_acp2_runtime_acceptance_harness.py",
+        "tests/test_acp2_experience_observations.py"
+      ],
+      "notes": "INT/REL BOM/coverage skeleton reached the M5-01 durable store; M5-02 rebuilds it from the clean candidate.",
+      "owner": "INT/REL",
+      "parent": "M0-03",
+      "receipt": "reports/acp2_remediation_20261026/m5-01/summary.json",
+      "receipt_sha256": "03414b0b12e1626f6e9e9a7e43771b530814f069ccd3090a5bdf183df4c007d2",
+      "required_observations": {
+        "artifact_store": "present",
+        "bom": "present",
+        "coverage": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L1",
+      "evidence_revision": "7959bf88ea5a583340bf575c44039b892cffd40d",
+      "id": "M1-01a",
+      "impact_globs": [
+        "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+        "docs/reference/next-change/acp2-contracts/runtime/science-binding.v1.json",
+        "docs/reference/next-change/acp2-contracts/runtime/control-and-data.v1.json",
+        "src/acp_services/entrypoints/mcp.py"
+      ],
+      "notes": "Extension negotiation/version axis frozen and consumed.",
+      "owner": "B",
+      "parent": "M1-01",
+      "receipt": "tests/test_acp2_runtime_contracts.py",
+      "receipt_sha256": "62d66c80ab33610799e477d0cdcc6f14b3b7356001ea59a3723b65c8fe79bf4e",
+      "required_observations": {
+        "negotiation": "present",
+        "version_axis": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L1",
+      "evidence_revision": "7959bf88ea5a583340bf575c44039b892cffd40d",
+      "id": "M1-01b",
+      "impact_globs": [
+        "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+        "docs/reference/next-change/acp2-contracts/runtime/science-binding.v1.json",
+        "docs/reference/next-change/acp2-contracts/runtime/control-and-data.v1.json",
+        "src/acp_services/entrypoints/mcp.py"
+      ],
+      "notes": "Operation/artifact/status schemas with one table per tool and three readers.",
+      "owner": "B",
+      "parent": "M1-01",
+      "receipt": "tests/test_acp2_runtime_contracts.py",
+      "receipt_sha256": "62d66c80ab33610799e477d0cdcc6f14b3b7356001ea59a3723b65c8fe79bf4e",
+      "required_observations": {
+        "artifact_schema": "present",
+        "operation_schema": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L1",
+      "evidence_revision": "7959bf88ea5a583340bf575c44039b892cffd40d",
+      "id": "M1-01c",
+      "impact_globs": [
+        "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+        "docs/reference/next-change/acp2-contracts/runtime/science-binding.v1.json",
+        "docs/reference/next-change/acp2-contracts/runtime/control-and-data.v1.json",
+        "src/acp_services/entrypoints/mcp.py"
+      ],
+      "notes": "Wire-id deobfuscation and the reviewed allowlist; acp_services isolation guard stays green.",
+      "owner": "B",
+      "parent": "M1-01",
+      "receipt": "tests/test_acp_services_isolation.py",
+      "receipt_sha256": "65751b386dffa0698aad824490c8779d97e70a275e3d0caa7b8ce279f1b9582f",
+      "required_observations": {
+        "isolation": "present",
+        "wire_id_allowlist": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L1",
+      "evidence_revision": "62d3ee73e254acd32500d047387ef4856d4ba456",
+      "id": "M1-04a",
+      "impact_globs": [
+        "src/acp_services/runtime/research_budget.py",
+        "src/acp/calculations/contracts/**",
+        "docs/reference/next-change/acp2-contracts/runtime/admission-approval.v1.json",
+        "tests/test_acp2_submit_policy.py"
+      ],
+      "notes": "Science input, multi-digest and definition/execution identity vectors.",
+      "owner": "B + A",
+      "parent": "M1-04",
+      "receipt": "tests/test_acp2_submit_policy.py",
+      "receipt_sha256": "14362136276af6c4ebca797454299d16c432ae25cfc8d07be1b19dd4bacaf86f",
+      "required_observations": {
+        "multi_digest": "present",
+        "science_inputs": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L1",
+      "evidence_revision": "62d3ee73e254acd32500d047387ef4856d4ba456",
+      "id": "M1-04b",
+      "impact_globs": [
+        "src/acp_services/runtime/research_budget.py",
+        "src/acp/calculations/contracts/**",
+        "docs/reference/next-change/acp2-contracts/runtime/admission-approval.v1.json",
+        "tests/test_acp2_submit_policy.py"
+      ],
+      "notes": "SubmitPolicy, clock and QC deduction vectors.",
+      "owner": "B + A",
+      "parent": "M1-04",
+      "receipt": "tests/test_acp2_planning_reservation.py",
+      "receipt_sha256": "993312f895adf12c28b1da9cfe8ad51f31eb7fc6bca1aac5cd531e9df17fd4c4",
+      "required_observations": {
+        "qc_deduction": "present",
+        "submit_policy": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L1",
+      "evidence_revision": "62d3ee73e254acd32500d047387ef4856d4ba456",
+      "id": "M1-04c",
+      "impact_globs": [
+        "src/acp_services/runtime/research_budget.py",
+        "src/acp/calculations/contracts/**",
+        "docs/reference/next-change/acp2-contracts/runtime/admission-approval.v1.json",
+        "tests/test_acp2_submit_policy.py"
+      ],
+      "notes": "Planning reservation, historical usage and execution_limits vectors.",
+      "owner": "B + A",
+      "parent": "M1-04",
+      "receipt": "tests/test_acp2_execution_limits.py",
+      "receipt_sha256": "91a1a5bd9f918b24e818950dcbb95ee6eb65b9942690dd1e84a954c98e5da43c",
+      "required_observations": {
+        "historical_usage": "present",
+        "planning_reservation": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "acad3863b03f2740d77c680c8b7ff4c8e1d2ad9e",
+      "id": "M2-01a",
+      "impact_globs": [
+        "src/acp_services/runtime/research_writer.py",
+        "src/acp/api/v2_research.py",
+        "src/acp_services/data/research_resources.py",
+        "tests/test_acp2_research_saga.py"
+      ],
+      "notes": "Minimal ResearchResource writer used by M1-06.",
+      "owner": "B",
+      "parent": "M2-01",
+      "receipt": "tests/test_acp2_research_saga.py",
+      "receipt_sha256": "d4a723d20e59b1d8e662b833de5d18439525efe73a09b50955634f2560933b38",
+      "required_observations": {
+        "minimal_writer": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "acad3863b03f2740d77c680c8b7ff4c8e1d2ad9e",
+      "id": "M2-01b",
+      "impact_globs": [
+        "src/acp_services/runtime/research_writer.py",
+        "src/acp/api/v2_research.py",
+        "src/acp_services/data/research_resources.py",
+        "tests/test_acp2_research_saga.py"
+      ],
+      "notes": "Business-write + local-outbox transaction API and cross-db idempotent saga.",
+      "owner": "B",
+      "parent": "M2-01",
+      "receipt": "tests/test_acp2_research_saga.py",
+      "receipt_sha256": "d4a723d20e59b1d8e662b833de5d18439525efe73a09b50955634f2560933b38",
+      "required_observations": {
+        "cross_db_idempotency": "present",
+        "outbox": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "acad3863b03f2740d77c680c8b7ff4c8e1d2ad9e",
+      "id": "M2-01c",
+      "impact_globs": [
+        "src/acp_services/runtime/research_writer.py",
+        "src/acp/api/v2_research.py",
+        "src/acp_services/data/research_resources.py",
+        "tests/test_acp2_research_saga.py"
+      ],
+      "notes": "HTTP/P2/MCP tools and recovery path.",
+      "owner": "B",
+      "parent": "M2-01",
+      "receipt": "tests/test_acp2_p2_tools.py",
+      "receipt_sha256": "d00e4b12d15e11853821ac6f9c0815a056cbced91d81115ca5a64012cdb75b4d",
+      "required_observations": {
+        "p2_tools": "present",
+        "recovery": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "d736a82140de626ba79b3d363e13c00ae1392083",
+      "id": "M2-03a",
+      "impact_globs": [
+        "src/acp_services/runtime/approvals.py",
+        "src/acp_services/runtime/research_budget.py",
+        "src/acp_services/runtime/step_dag.py",
+        "tests/test_acp2_m203_approval_policy.py"
+      ],
+      "notes": "Approval policy and double-digest binding.",
+      "owner": "B",
+      "parent": "M2-03",
+      "receipt": "tests/test_acp2_m203_approval_policy.py",
+      "receipt_sha256": "b479fce7aa94b78ef37de4e0fb0eefd0a79a54909227c0d87c308ce1849d6b54",
+      "required_observations": {
+        "approval_policy": "present",
+        "double_digest": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "d736a82140de626ba79b3d363e13c00ae1392083",
+      "id": "M2-03b",
+      "impact_globs": [
+        "src/acp_services/runtime/approvals.py",
+        "src/acp_services/runtime/research_budget.py",
+        "src/acp_services/runtime/step_dag.py",
+        "tests/test_acp2_m203_approval_policy.py"
+      ],
+      "notes": "Task/attempt and recipe/QC worst-case budget reservations.",
+      "owner": "B",
+      "parent": "M2-03",
+      "receipt": "tests/test_acp2_planning_reservation.py",
+      "receipt_sha256": "993312f895adf12c28b1da9cfe8ad51f31eb7fc6bca1aac5cd531e9df17fd4c4",
+      "required_observations": {
+        "planning_reservation": "present",
+        "task_attempt_budget": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "d736a82140de626ba79b3d363e13c00ae1392083",
+      "id": "M2-03c",
+      "impact_globs": [
+        "src/acp_services/runtime/approvals.py",
+        "src/acp_services/runtime/research_budget.py",
+        "src/acp_services/runtime/step_dag.py",
+        "tests/test_acp2_m203_approval_policy.py"
+      ],
+      "notes": "Deadline/usage/capability projection.",
+      "owner": "B",
+      "parent": "M2-03",
+      "receipt": "tests/test_acp2_execution_limits.py",
+      "receipt_sha256": "91a1a5bd9f918b24e818950dcbb95ee6eb65b9942690dd1e84a954c98e5da43c",
+      "required_observations": {
+        "deadline": "present",
+        "usage_projection": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "bc27a569e862aac69f619e471edc756c91da1f0f",
+      "id": "M2-04a",
+      "impact_globs": [
+        "src/cccp/calculation/recipes/**",
+        "src/cccp/calculation/tasks/**",
+        "src/acp/calculations/**",
+        "tests/test_acp2_runtime_bounded_recipe_dag_*.py"
+      ],
+      "notes": "Recipe compile and metering port.",
+      "owner": "B",
+      "parent": "M2-04",
+      "receipt": "tests/test_acp2_runtime_bounded_recipe_dag_a.py",
+      "receipt_sha256": "709e4313c845832f007caf31b1bf24fd239fe9e0b7aa6c94bafcbc6ee561b31a",
+      "required_observations": {
+        "compile": "present",
+        "metering": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "bc27a569e862aac69f619e471edc756c91da1f0f",
+      "id": "M2-04b",
+      "impact_globs": [
+        "src/cccp/calculation/recipes/**",
+        "src/cccp/calculation/tasks/**",
+        "src/acp/calculations/**",
+        "tests/test_acp2_runtime_bounded_recipe_dag_*.py"
+      ],
+      "notes": "Fenced commit and lost-right competition.",
+      "owner": "B + A",
+      "parent": "M2-04",
+      "receipt": "tests/test_acp2_runtime_bounded_recipe_dag_b.py",
+      "receipt_sha256": "b7e830d97fc0ecf7b4eef483c62dc8bc8ea9c0804d2ef34377fab6d78f7010e6",
+      "required_observations": {
+        "fenced_commit": "present",
+        "lost_right": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "bc27a569e862aac69f619e471edc756c91da1f0f",
+      "id": "M2-04c",
+      "impact_globs": [
+        "src/cccp/calculation/recipes/**",
+        "src/cccp/calculation/tasks/**",
+        "src/acp/calculations/**",
+        "tests/test_acp2_runtime_bounded_recipe_dag_*.py"
+      ],
+      "notes": "Execution resource precheck and recovery; missing binaries block before dispatch.",
+      "owner": "A/B3",
+      "parent": "M2-04",
+      "receipt": "tests/test_acp2_runtime_bounded_recipe_dag_c.py",
+      "receipt_sha256": "5039672874ac26da07b4aae28f1db51d0158e004360261ba0b4764206fbe3437",
+      "required_observations": {
+        "recovery": "present",
+        "resource_precheck": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "bc27a569e862aac69f619e471edc756c91da1f0f",
+      "id": "M2-04d",
+      "impact_globs": [
+        "src/cccp/calculation/recipes/**",
+        "src/cccp/calculation/tasks/**",
+        "src/acp/calculations/**",
+        "tests/test_acp2_runtime_bounded_recipe_dag_*.py"
+      ],
+      "notes": "DA public entry is declared but not closed: M4-04 records unsupported_step_kind for endpoint_prep, so G15/H4 stay open.",
+      "owner": "B + A",
+      "parent": "M2-04",
+      "receipt": "tests/test_acp2_runtime_bounded_recipe_dag_d.py",
+      "receipt_sha256": "8f4205761e3c32a209f3da35f504b9db799412b9fa19cb743b55e7b5e012a0c7",
+      "required_observations": {
+        "da_public_entry": "NOT_VERIFIED"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "42220b4f3046f805c0051a32e34a52743af022dc",
+      "id": "M3-01a",
+      "impact_globs": [
+        "rph/packages/bridge/src/**",
+        "rph/packages/dsh-bundle/src/**",
+        "rph/test/m3-01-bridge-surface.test.ts",
+        "rph/test/m3-01-findings.test.ts"
+      ],
+      "notes": "Minimal real MCP PlatformClient used by M1-06.",
+      "owner": "C-RPH",
+      "parent": "M3-01",
+      "receipt": "rph/test/m3-01-bridge-surface.test.ts",
+      "receipt_sha256": "62fe76dda24437a307c46fa907b483824262feaa1cbbb84b2f1a0c75be264101",
+      "required_observations": {
+        "mcp_client": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "42220b4f3046f805c0051a32e34a52743af022dc",
+      "id": "M3-01b",
+      "impact_globs": [
+        "rph/packages/bridge/src/**",
+        "rph/packages/dsh-bundle/src/**",
+        "rph/test/m3-01-bridge-surface.test.ts",
+        "rph/test/m3-01-findings.test.ts"
+      ],
+      "notes": "Bridge parameter and TaskRef findings closed.",
+      "owner": "C-RPH",
+      "parent": "M3-01",
+      "receipt": "rph/test/m3-01-findings.test.ts",
+      "receipt_sha256": "389ad1737e687fe3ce006574ff9620fcff09644c098cae739dc04ece5fb4e93f",
+      "required_observations": {
+        "bridge_findings": "present",
+        "taskref": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L3",
+      "evidence_revision": "d7f0b6b3e946ff24696d923e3360aac10163e04f",
+      "id": "M3-02a",
+      "impact_globs": [
+        "rph/packages/cli/src/**",
+        "rph/packages/dsh-bundle/src/**",
+        "rph/test/m3-02-cli.test.ts",
+        "rph/test/m3-02-profile.test.ts"
+      ],
+      "notes": "Composition root and a supported CLI start from the release package.",
+      "owner": "C-RPH",
+      "parent": "M3-02",
+      "receipt": "rph/test/m3-02-cli.test.ts",
+      "receipt_sha256": "4bb23770554b3c4cc0a21c8128a84ee63f9f71529cb80d398703e12e0f891df2",
+      "required_observations": {
+        "cli_bin": "present",
+        "composition": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L3",
+      "evidence_revision": "d7f0b6b3e946ff24696d923e3360aac10163e04f",
+      "id": "M3-02b",
+      "impact_globs": [
+        "rph/packages/cli/src/**",
+        "rph/packages/dsh-bundle/src/**",
+        "rph/test/m3-02-cli.test.ts",
+        "rph/test/m3-02-profile.test.ts"
+      ],
+      "notes": "Portable profile and product fail-fast matrix.",
+      "owner": "C-RPH",
+      "parent": "M3-02",
+      "receipt": "rph/test/m3-02-profile.test.ts",
+      "receipt_sha256": "758800f0f414dccc5f01e664625e8630edd8e61c655ed4f084d32b825b1707f0",
+      "required_observations": {
+        "fail_fast": "present",
+        "profile": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "35c5ced0d8fe2a15971a511c8374703d1bccf27d",
+      "id": "M3-05a",
+      "impact_globs": [
+        "frontend/js/workbench/**",
+        "frontend/js/client/**",
+        "frontend/js/module_tests/research_evidence_view.test.js"
+      ],
+      "notes": "Minimal read-only evidence consumer for M1-06.",
+      "owner": "C-Web",
+      "parent": "M3-05",
+      "receipt": "frontend/js/module_tests/research_evidence_view.test.js",
+      "receipt_sha256": "4efcd257e2fa423c7056fcb67e561802a302a13354121c006eec9894a4ec7c94",
+      "required_observations": {
+        "read_only_consumer": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "35c5ced0d8fe2a15971a511c8374703d1bccf27d",
+      "id": "M3-05b",
+      "impact_globs": [
+        "frontend/js/workbench/**",
+        "frontend/js/client/**",
+        "frontend/js/module_tests/research_evidence_view.test.js"
+      ],
+      "notes": "Research commands, product mount, approval and submit; real browser is M4-02.",
+      "owner": "C-Web + B",
+      "parent": "M3-05",
+      "receipt": "reports/acp2_remediation_20261026/m3-05b-research-commands.json",
+      "receipt_sha256": "3d60d316c3a7f2ac965959a0979f897692ded67f0e8636d3a39ab428cdf4e54b",
+      "required_observations": {
+        "approval_submit": "present",
+        "no_fallback": "present",
+        "research_commands": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "aggregate",
+      "evidence_level": "L4",
+      "evidence_revision": "293419cf4a8363ab18311f634d62c49d04047f32",
+      "id": "M4-06a",
+      "impact_globs": [
+        "scripts/acceptance/acp2_m406a_upgrade.py",
+        "scripts/acceptance/acp2_m406b.py",
+        "src/acp_services/store/migrations.py",
+        "src/acp_services/runtime/**"
+      ],
+      "notes": "Previous->candidate upgrade, backup/restore, rollback and legacy read-only history; no bare DELETE.",
+      "owner": "B + INT",
+      "parent": "M4-06",
+      "receipt": "reports/acp2_remediation_20261026/m4-06a/summary.json",
+      "receipt_sha256": "015d040446f0eef7634a88a37acaf7941c33f5571d554da07927886ed09dde38",
+      "required_observations": {
+        "failure_recovery": "present",
+        "legacy_readonly": "present",
+        "rollback": "present",
+        "upgrade": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "status": "CLOSED"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "aggregate",
+      "evidence_level": "L4",
+      "evidence_revision": "293419cf4a8363ab18311f634d62c49d04047f32",
+      "id": "M4-06b",
+      "impact_globs": [
+        "scripts/acceptance/acp2_m406a_upgrade.py",
+        "scripts/acceptance/acp2_m406b.py",
+        "src/acp_services/store/migrations.py",
+        "src/acp_services/runtime/**"
+      ],
+      "notes": "Cross-domain reuse, multi-project/multi-user isolation and three-face revocation.",
+      "owner": "A + B + C + INT",
+      "parent": "M4-06",
+      "receipt": "reports/acp2_remediation_20261026/m4-06b/summary.json",
+      "receipt_sha256": "af87057927b5c24639ad7f2d1d54fae9568f7c2db708d8051d379b49c5728673",
+      "required_observations": {
+        "multitenant": "present",
+        "nmr_reuse": "present",
+        "revocation": "present",
+        "thermochemistry_reuse": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "status": "CLOSED"
+    }
+  ],
+  "coverage_sha256": "75a330e90598aa620113be0baf5eef642d4d3dcd094692ad16b162ec3c2eebdb",
+  "deferred_rows": [
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "capability": "SCOPE-DEF-01",
+      "evidence_kind": "fixture",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "id": "DEF-01",
+      "impact_globs": [
+        "docs/reference/next-change/acp2-contracts/release/scope.json"
+      ],
+      "notes": "Separate DEFERRED row: the M2-05/M4-05 pure-analysis evidence never covers worker-hosted third-party COMPUTE. No handler/worker freeze group exists.",
+      "receipt": "docs/reference/next-change/acp2-contracts/release/scope.json",
+      "receipt_sha256": "180509e071b4e33fe7de05105e704b87c26ba6c1735c6528e47b716f38dae110",
+      "required_observations": {
+        "pure_analysis_plugin": "present",
+        "worker_hosted_compute": "NOT_VERIFIED"
+      },
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required",
+      "scope": "DEFERRED",
+      "statement": "worker-hosted 第三方 COMPUTE",
+      "status": "OPEN"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "capability": "SCOPE-DEF-02",
+      "evidence_kind": "fixture",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "id": "DEF-02",
+      "impact_globs": [
+        "docs/reference/next-change/acp2-contracts/release/scope.json"
+      ],
+      "notes": "CDXML stays DEFERRED; the fallback/deferral contract records the typed refusal.",
+      "receipt": "docs/reference/next-change/acp2-contracts/release/scope.json",
+      "receipt_sha256": "180509e071b4e33fe7de05105e704b87c26ba6c1735c6528e47b716f38dae110",
+      "required_observations": {
+        "cdxml": "NOT_VERIFIED",
+        "fallback": "present"
+      },
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required",
+      "scope": "DEFERRED",
+      "statement": "CDXML",
+      "status": "OPEN"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "capability": "SCOPE-DEF-03",
+      "evidence_kind": "fixture",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "id": "DEF-03",
+      "impact_globs": [
+        "docs/reference/next-change/acp2-contracts/release/scope.json"
+      ],
+      "notes": "Per-request/attempt budgets are enforced; cumulative core-hours/token hard enforcement stays DEFERRED.",
+      "receipt": "docs/reference/next-change/acp2-contracts/release/scope.json",
+      "receipt_sha256": "180509e071b4e33fe7de05105e704b87c26ba6c1735c6528e47b716f38dae110",
+      "required_observations": {
+        "cumulative_core_hours": "NOT_VERIFIED",
+        "per_request_limits": "present"
+      },
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required",
+      "scope": "DEFERRED",
+      "statement": "累计 core-hours/token 硬强制",
+      "status": "OPEN"
+    }
+  ],
+  "digest_rules": {
+    "coverage_sha256": "sha256 of canonical compact JSON (sort_keys=True, separators=(',', ':'), ensure_ascii=False) of this document with coverage_sha256 set to ''"
+  },
+  "gaps": [
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "client@2.2.0 默认握手 + 安装后握手",
+      "evidence_kind": "live",
+      "evidence_level": "L5",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H2",
+        "H7"
+      ],
+      "id": "G01",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Client@2.2.0 default handshake proven live (M0-08) and re-proven after a clean store-only install by the independent operator (round 2): initialize answers 2025-06-18 and tools/list returns exactly the eight P1 tools.",
+      "receipt": "reports/acp2_remediation_20261026/m5-03/m503-operator-receipt-round2/RESULTS.md",
+      "receipt_sha256": "12a7f913fa7a13f335411abebdff0082f15c73d658a00f2ecde4fb8691f3caad",
+      "required_observations": {
+        "m5_03_independent_install": "present",
+        "real_sdk": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "scope": "IN_SCOPE",
+      "status": "CLOSED",
+      "tasks": [
+        "M0-02",
+        "M0-08",
+        "M5-03"
+      ],
+      "title": "ACP 协议协商不兼容锁定 DSH SDK 默认请求"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "真实 SDK/DSH 扩展路径 + 协商后 18 工具/权限负例 + 全 P2 调用",
+      "conditional_tasks": [
+        "M0-13"
+      ],
+      "evidence_kind": "live",
+      "evidence_level": "L2",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H2",
+        "H4"
+      ],
+      "id": "G02",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Real SDK/DSH extension path and the full P2 call surface; M0-13 conditional task is NOT_APPLICABLE and excluded from the closure check.",
+      "receipt": "reports/acp2_remediation_20261026/m0-09/summary.json",
+      "receipt_sha256": "817d6f87920c169aa9ca1c26d125aae8642bb813faac7d1614521af21ded0855",
+      "required_observations": {
+        "dsh_extension": "present",
+        "p2_tools": "present",
+        "permission_negatives": "present",
+        "real_sdk": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "status": "CLOSED",
+      "tasks": [
+        "M0-09",
+        "M0-11",
+        "M0-12",
+        "M0-13",
+        "M1-01",
+        "M1-06",
+        "M2-01",
+        "M3-01",
+        "M4-01"
+      ],
+      "title": "P2 工具缺失、扩展版本冲突、虚假协商声明"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "真实 Bridge→MCP→Controller prepare/read；digest/attempt 负例",
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H3"
+      ],
+      "id": "G03",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Bridge->MCP->Controller prepare/read with digest and attempt negatives on the full chain.",
+      "receipt": "reports/acp2_remediation_20261026/m4-01/summary.json",
+      "receipt_sha256": "887b4102423909a64bbfc00a7f5df163e2c77ab444c4cb9cfe0537c04f7dd694",
+      "required_observations": {
+        "digest_negatives": "present",
+        "jobspec_equivalence": "present",
+        "prepare_read": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "status": "CLOSED",
+      "tasks": [
+        "M0-06",
+        "M0-11",
+        "M1-01",
+        "M2-02",
+        "M3-01"
+      ],
+      "title": "Bridge 的 prepare/read/evidence 参数与服务端不一致"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "descriptor 三态 + 内置/第三方分析共用公开路径与 digest",
+      "evidence_kind": "live",
+      "evidence_level": "L3",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H3",
+        "H5"
+      ],
+      "id": "G04",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Descriptor tri-state and shared public analysis path; pure-analysis plugin uses the same path.",
+      "receipt": "reports/acp2_remediation_20261026/m4-02/summary.json",
+      "receipt_sha256": "d6c5fa066e688507a31ce10ef4fcc7adda6000afb97d938e1733a6f99bf961d4",
+      "required_observations": {
+        "descriptor_tristate": "present",
+        "digest": "present",
+        "public_path": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "status": "CLOSED",
+      "tasks": [
+        "M0-09",
+        "M0-12",
+        "M1-01",
+        "M2-02",
+        "M2-05",
+        "M4-02"
+      ],
+      "title": "MCP 科学发现信息不足，分析 registry 无生产 handler"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "发布包 Supervisor 的真 DSH 首轮与反馈轮",
+      "conditional_tasks": [
+        "M0-13"
+      ],
+      "evidence_kind": "live",
+      "evidence_level": "L3",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H2",
+        "H4",
+        "H7"
+      ],
+      "id": "G05",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Real DSH and model rounds landed; the production model-gateway credential/authorization row is NOT_VERIFIED until rotation, so G05 stays open with M3-03.",
+      "receipt": "reports/acp2_remediation_20261026/m4-02/summary.json",
+      "receipt_sha256": "d6c5fa066e688507a31ce10ef4fcc7adda6000afb97d938e1733a6f99bf961d4",
+      "required_observations": {
+        "production_credential": "NOT_VERIFIED",
+        "real_dsh": "present",
+        "real_model": "present"
+      },
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required",
+      "scope": "IN_SCOPE",
+      "status": "OPEN",
+      "tasks": [
+        "M0-09",
+        "M0-13",
+        "M3-01",
+        "M3-02",
+        "M3-03",
+        "M3-04",
+        "M4-02"
+      ],
+      "title": "DSH–RPH–Supervisor 无生产装配；CLI 为打印骨架"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "另一目录无源码 profile/doctor/scoped key",
+      "evidence_kind": "live",
+      "evidence_level": "L5",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H7"
+      ],
+      "id": "G06",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Store-only install with a dual-platform wheelhouse verified fully offline by the independent operator; the four-distribution mutual exclusion is guarded in the product at all three entries; the RPH offline surface installs and its doctor passes on the clean host.",
+      "receipt": "reports/acp2_remediation_20261026/m5-03/m503-operator-receipt-round2/RESULTS.md",
+      "receipt_sha256": "12a7f913fa7a13f335411abebdff0082f15c73d658a00f2ecde4fb8691f3caad",
+      "required_observations": {
+        "clean_install": "present",
+        "independent_operator": "present",
+        "profile_doctor": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "scope": "IN_SCOPE",
+      "status": "CLOSED",
+      "tasks": [
+        "M0-10",
+        "M3-02",
+        "M5-01",
+        "M5-03"
+      ],
+      "title": "profile 固定为单机验收路径，身份/配置缺少用户化入口"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "CCCP 原件→唯一 adapter→RPH；缺失检查不升级",
+      "evidence_kind": "live",
+      "evidence_level": "L4",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H4"
+      ],
+      "id": "G07",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "CCCP native artifact -> one adapter -> RPH; missing checks never upgrade. The DA science proposition itself is refuted, which is a G15/H4 matter.",
+      "receipt": "reports/acp2_remediation_20261026/m4-04-route-a/summary.json",
+      "receipt_sha256": "ecb2373a8d98f9f1e819067edbdd3ce1007232812945636957a62ffab6679a2b",
+      "required_observations": {
+        "missing_check": "present",
+        "native_artifact": "present",
+        "single_adapter": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "status": "CLOSED",
+      "tasks": [
+        "M1-03",
+        "M1-06",
+        "M3-04",
+        "M4-04"
+      ],
+      "title": "EvidenceReport 两套模型不兼容，无转换权威"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "全身份/摘要负例 + 正确归属真实证据",
+      "evidence_kind": "live",
+      "evidence_level": "L4",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H4"
+      ],
+      "id": "G08",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Full identity/digest negatives and correct attribution on the real DA report; the controlled digest-prefix normalisation is recorded in the report.",
+      "receipt": "reports/acp2_remediation_20261026/m4-04-route-a/summary.json",
+      "receipt_sha256": "ecb2373a8d98f9f1e819067edbdd3ce1007232812945636957a62ffab6679a2b",
+      "required_observations": {
+        "attribution": "present",
+        "identity_negatives": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "status": "CLOSED",
+      "tasks": [
+        "M1-03",
+        "M3-04",
+        "M4-01",
+        "M4-04"
+      ],
+      "title": "Supervisor 不校验报告/事件归属及可信来源"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "超一分钟、多崩溃点、跨进程同 TaskRef 不重复",
+      "evidence_kind": "live",
+      "evidence_level": "L4",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H4",
+        "H6"
+      ],
+      "id": "G09",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Crash/restart and cross-process same-TaskRef non-duplication; M4-03 adds the real Controller/LSF restart.",
+      "receipt": "reports/acp2_remediation_20261026/m4-01/summary.json",
+      "receipt_sha256": "887b4102423909a64bbfc00a7f5df163e2c77ab444c4cb9cfe0537c04f7dd694",
+      "required_observations": {
+        "crash_recovery": "present",
+        "multi_crash": "present",
+        "same_taskref": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "status": "CLOSED",
+      "tasks": [
+        "M1-02",
+        "M3-04",
+        "M4-01",
+        "M4-02",
+        "M4-03"
+      ],
+      "title": "长任务等待与研究恢复只是单次内存流程"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "带电/开壳层、多输入、clarification、双摘要向量",
+      "evidence_kind": "live",
+      "evidence_level": "L3",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H4"
+      ],
+      "id": "G10",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Science-input vectors passed; M3-03's production credential row keeps G10 open.",
+      "receipt": "reports/acp2_remediation_20261026/m4-02/summary.json",
+      "receipt_sha256": "d6c5fa066e688507a31ce10ef4fcc7adda6000afb97d938e1733a6f99bf961d4",
+      "required_observations": {
+        "charged_open_shell": "present",
+        "clarification": "present",
+        "multi_input": "present",
+        "production_credential": "NOT_VERIFIED"
+      },
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required",
+      "scope": "IN_SCOPE",
+      "status": "OPEN",
+      "tasks": [
+        "M0-11",
+        "M1-04",
+        "M3-03",
+        "M4-02"
+      ],
+      "title": "默认 Planner 硬编码科学参数；digest 是 round 编号"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "真 Chromium 网络 + 平台 approval/TaskRef + 刷新/跨端",
+      "evidence_kind": "live",
+      "evidence_level": "L3",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H4"
+      ],
+      "id": "G11",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Real Chromium network, platform approval/TaskRef and two-identity refresh; no screenshot-only claim.",
+      "receipt": "reports/acp2_remediation_20261026/m4-02/summary.json",
+      "receipt_sha256": "d6c5fa066e688507a31ce10ef4fcc7adda6000afb97d938e1733a6f99bf961d4",
+      "required_observations": {
+        "approval": "present",
+        "chromium": "present",
+        "refresh": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "status": "CLOSED",
+      "tasks": [
+        "M1-06",
+        "M3-05",
+        "M4-02"
+      ],
+      "title": "前端审批/提交仍为本地 fixture 逻辑"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "Agent omit-all/budget-only 等真实入口负例",
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H4",
+        "H6"
+      ],
+      "id": "G12",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Agent omit-all/budget-only and real entry negatives; one admission under concurrency.",
+      "receipt": "reports/acp2_remediation_20261026/m4-01/summary.json",
+      "receipt_sha256": "887b4102423909a64bbfc00a7f5df163e2c77ab444c4cb9cfe0537c04f7dd694",
+      "required_observations": {
+        "budget_only": "present",
+        "omit_all": "present",
+        "real_entry_negatives": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "status": "CLOSED",
+      "tasks": [
+        "M0-11",
+        "M1-04",
+        "M2-03",
+        "M4-01"
+      ],
+      "title": "研究审批由客户端字段触发；budget-only 判断不一致"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "规划/QC 调用前限额、rescue/重启/真实 deadline + 历史 attempt 可信结算；能力矩阵一致",
+      "evidence_kind": "live",
+      "evidence_level": "L4",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H4",
+        "H6"
+      ],
+      "id": "G13",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Real LSF limits/rescue/restart/deadline landed, but M3-03's production model credential keeps G13 open; historical attempt settlement is covered.",
+      "receipt": "reports/acp2_remediation_20261026/m4-03/summary.json",
+      "receipt_sha256": "b0faddcf75ebbed759e4fd293214eeb3aa70cdfab721b0774db3e9ce4c44ffb8",
+      "required_observations": {
+        "deadline": "present",
+        "pre_dispatch_limit": "present",
+        "production_credential": "NOT_VERIFIED",
+        "rescue": "present"
+      },
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required",
+      "scope": "IN_SCOPE",
+      "status": "OPEN",
+      "tasks": [
+        "M0-07",
+        "M0-11",
+        "M1-04",
+        "M2-03",
+        "M2-04",
+        "M3-03",
+        "M4-01",
+        "M4-02",
+        "M4-03"
+      ],
+      "title": "预算表示分裂，模型/QC/bsub 并非全面前置强制"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "空项目 writer→CAS→恢复，无 seed fixture",
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H4",
+        "H6"
+      ],
+      "id": "G14",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Empty-project writer -> CAS -> recovery with no seed fixture; M4-01 re-runs the chain.",
+      "receipt": "reports/acp2_remediation_20261026/candidate-contracts/summary.json",
+      "receipt_sha256": "2c149d6ae8f5c8a6805765667a54530f08b997af9c056f5fd2f5078b8b84f113",
+      "required_observations": {
+        "empty_project": "present",
+        "no_seed": "present",
+        "writer_cas_recovery": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "status": "CLOSED",
+      "tasks": [
+        "M1-02",
+        "M1-06",
+        "M2-01",
+        "M3-04",
+        "M4-01"
+      ],
+      "title": "Proposal/ResearchRecord 有 store/read，无产品写入路径"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "ADR-008 + 生产 DAG adapter/完成资格/声明产物/双身份/额度/fencing/恢复 + 原生 Recipe",
+      "evidence_kind": "live",
+      "evidence_level": "L4",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H4"
+      ],
+      "id": "G15",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Production DAG adapter/completion/eligibility/fencing/recovery are present, but the frozen nine-step DA recipe is not reachable as one bounded attempt (compile_step_dag_definition rejects endpoint_prep; nine attempts share one release, not one TaskRef). ADR-008 required DA-ENV-LSF is NOT_VERIFIED. G15 stays open and H4 with it.",
+      "receipt": "reports/acp2_remediation_20261026/m4-04-route-a/summary.json",
+      "receipt_sha256": "ecb2373a8d98f9f1e819067edbdd3ce1007232812945636957a62ffab6679a2b",
+      "required_observations": {
+        "DA-ENV-LSF": "NOT_VERIFIED",
+        "bounded_recipe_public_entry": "absent",
+        "completion_eligibility": "present",
+        "dag_adapter": "present",
+        "native_recipe": "absent"
+      },
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required",
+      "scope": "IN_SCOPE",
+      "status": "OPEN",
+      "tasks": [
+        "M1-05",
+        "M2-04",
+        "M4-01",
+        "M4-04"
+      ],
+      "title": "bounded Recipe DAG 未装配进生产执行链"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "生产纯分析安装/启用/执行 + 不改前端源码的新 capability + 真浏览器/历史只读；worker-hosted COMPUTE 独立 DEFERRED/NOT_VERIFIED",
+      "evidence_kind": "live",
+      "evidence_level": "L5",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H5",
+        "H7"
+      ],
+      "id": "G16",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Pure-analysis plugin ecosystem closed end to end by M2-05/M3-06/M4-05 plus the independent operator install. worker-hosted third-party COMPUTE was SPLIT OUT of G16 by the frozen M2-05 scope decision into its own DEFERRED row (DEF-01) and is therefore not a required observation of this gap; it stays honestly deferred there and neither counts as delivered nor blocks G16.",
+      "receipt": "reports/acp2_remediation_20261026/m5-03/m503-operator-receipt-round2/RESULTS.md",
+      "receipt_sha256": "12a7f913fa7a13f335411abebdff0082f15c73d658a00f2ecde4fb8691f3caad",
+      "required_observations": {
+        "browser": "present",
+        "history_readonly": "present",
+        "independent_operator": "present",
+        "pure_analysis_plugin": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "scope": "IN_SCOPE",
+      "status": "CLOSED",
+      "tasks": [
+        "M2-05",
+        "M3-06",
+        "M4-05",
+        "M5-03"
+      ],
+      "title": "科学 UI 为三种固定工作流切片，插件驱动体验未闭环"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "全组件制品、RPH bin、静态资产、独立安装",
+      "evidence_kind": "aggregate",
+      "evidence_level": "L5",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H7"
+      ],
+      "id": "G17",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Every release component is retrievable from the durable store and the store-only install was verified twice by the independent operator (initial acceptance and the post-fix round), including the offline wheelhouse and the receipts bundle.",
+      "receipt": "reports/acp2_remediation_20261026/m5-03/m503-operator-receipt-round2/RESULTS.md",
+      "receipt_sha256": "12a7f913fa7a13f335411abebdff0082f15c73d658a00f2ecde4fb8691f3caad",
+      "required_observations": {
+        "artifacts": "present",
+        "independent_install": "present",
+        "rph_bin": "present",
+        "static_assets": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "scope": "IN_SCOPE",
+      "status": "CLOSED",
+      "tasks": [
+        "M0-10",
+        "M3-02",
+        "M5-01",
+        "M5-02",
+        "M5-03"
+      ],
+      "title": "RPH/静态资产/独立安装发行未完成"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "ADR-008 + 当前 BOM 的真实模型/科学/LSF/浏览器/跨领域/安装证据",
+      "evidence_kind": "aggregate",
+      "evidence_level": "L5",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H0",
+        "H1",
+        "H2",
+        "H3",
+        "H4",
+        "H5",
+        "H6",
+        "H7"
+      ],
+      "id": "G18",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "All current-candidate live rows except DA-ENV-LSF are present; H4 stays open and M5-03 independent install is absent, so the cross-cutting G18 cannot close.",
+      "receipt": "reports/acp2_remediation_20261026/m5-02/judgements.json",
+      "receipt_sha256": "08fa9616c4758c0c720caa24c3c61793babe3ad075fe05503e727024e08a6df9",
+      "required_observations": {
+        "DA-ENV-LSF": "NOT_VERIFIED",
+        "cross_domain": "present",
+        "da_execution": "present",
+        "independent_install": "absent",
+        "live_browser": "present",
+        "live_lsf": "present",
+        "live_model": "present"
+      },
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required",
+      "scope": "IN_SCOPE",
+      "status": "OPEN",
+      "tasks": [
+        "M0-03",
+        "M0-10",
+        "M1-05",
+        "M4-01",
+        "M4-02",
+        "M4-03",
+        "M4-04",
+        "M4-05",
+        "M4-06",
+        "M5-02",
+        "M5-03"
+      ],
+      "title": "真实端到端证据缺失，部分 live harness 为固定缺口分支"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "持久候选 ref、可取回制品、coverage/reuse 机械复核",
+      "evidence_kind": "aggregate",
+      "evidence_level": "L5",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H0",
+        "H7"
+      ],
+      "id": "G19",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "walk_bom --verify re-checks all 31 artifacts and 108 receipts from the store alone; the independent operator reproduced digest verification and declaration-consistency checks entirely from the store in round 2.",
+      "receipt": "reports/acp2_remediation_20261026/m5-03/m503-operator-receipt-round2/RESULTS.md",
+      "receipt_sha256": "12a7f913fa7a13f335411abebdff0082f15c73d658a00f2ecde4fb8691f3caad",
+      "required_observations": {
+        "independent_install": "present",
+        "ledger": "present",
+        "reuse_audit": "present",
+        "walker": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "scope": "IN_SCOPE",
+      "status": "CLOSED",
+      "tasks": [
+        "M0-01",
+        "M0-03",
+        "M5-02",
+        "M5-03"
+      ],
+      "title": "候选、发行、索引与证据根不统一"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "真实生产者→消费者常驻门，五类证据明确分层",
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H0",
+        "H1",
+        "H2",
+        "H3",
+        "H4",
+        "H5",
+        "H6",
+        "H7"
+      ],
+      "id": "G20",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Producer->consumer resident gates are wired; five evidence layers are declared. M0-02c Ruff is excluded by D-INT-06 and is not a G20 condition.",
+      "receipt": "reports/acp2_remediation_20261026/m0-02a-local-toolchain.json",
+      "receipt_sha256": "031748ccae7e7c46d32fb965737240111dc570d6a854455c20f8ecb383ffa6a1",
+      "required_observations": {
+        "ci_matrix": "present",
+        "contract_lane": "present",
+        "five_evidence_layers": "present",
+        "frontend_module_tests": "present",
+        "rph_job": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "status": "CLOSED",
+      "tasks": [
+        "M0-02",
+        "M0-11",
+        "M0-12",
+        "M1-01",
+        "M1-02",
+        "M1-03",
+        "M1-04",
+        "M1-05",
+        "M1-06",
+        "M4-01"
+      ],
+      "title": "测试重心在各自契约和 fixture，缺少真实消费对接"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "跨操作/target/并发/新实例重试，无双调用/串结果",
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H3",
+        "H4"
+      ],
+      "id": "G21",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Cross-operation/target/concurrency/new-instance retry without double calls.",
+      "receipt": "reports/acp2_remediation_20261026/m4-01/summary.json",
+      "receipt_sha256": "887b4102423909a64bbfc00a7f5df163e2c77ab444c4cb9cfe0537c04f7dd694",
+      "required_observations": {
+        "cross_operation": "present",
+        "new_instance_retry": "present",
+        "no_double_call": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "status": "CLOSED",
+      "tasks": [
+        "M0-05",
+        "M3-01",
+        "M4-01"
+      ],
+      "title": "Bridge 幂等缓存跨操作/跨目标复用（签名不含 operation/task/attempt/resource）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "prepare→submit 真提交；重试完整 TaskRef；无假成功",
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H3",
+        "H4"
+      ],
+      "id": "G22",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Prepare->submit real submission with a complete TaskRef and no false success.",
+      "receipt": "reports/acp2_remediation_20261026/m4-01/summary.json",
+      "receipt_sha256": "887b4102423909a64bbfc00a7f5df163e2c77ab444c4cb9cfe0537c04f7dd694",
+      "required_observations": {
+        "no_false_success": "present",
+        "prepare_submit": "present",
+        "taskref": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "status": "CLOSED",
+      "tasks": [
+        "M0-04",
+        "M0-05",
+        "M4-01"
+      ],
+      "title": "MCP 跨工具共享幂等缓存；submit 重放丢 TaskRef"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "HTTP/CLI/MCP 相同有效 JobSpec/应用层拒绝；真实 remote 约束",
+      "evidence_kind": "live",
+      "evidence_level": "L4",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H3",
+        "H6"
+      ],
+      "id": "G23",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "HTTP/CLI/MCP share the effective JobSpec; real remote target constraints refuse at the entry.",
+      "receipt": "reports/acp2_remediation_20261026/m4-03/summary.json",
+      "receipt_sha256": "b0faddcf75ebbed759e4fd293214eeb3aa70cdfab721b0774db3e9ce4c44ffb8",
+      "required_observations": {
+        "application_refusal": "present",
+        "http_cli_mcp": "present",
+        "remote_constraints": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "status": "CLOSED",
+      "tasks": [
+        "M0-06",
+        "M4-01",
+        "M4-03"
+      ],
+      "title": "MCP normalizer 丢弃执行目标等 8 个 HTTP 支持的字段"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "同项目两用户不串任务（显式 conflict/隔离）+ admission principal + 同用户 replay",
+      "evidence_kind": "live",
+      "evidence_level": "L4",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H6"
+      ],
+      "id": "G24",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Two users in one project do not leak tasks; explicit conflict/isolation and same-user replay on the real LSF path.",
+      "receipt": "reports/acp2_remediation_20261026/m4-03/summary.json",
+      "receipt_sha256": "b0faddcf75ebbed759e4fd293214eeb3aa70cdfab721b0774db3e9ce4c44ffb8",
+      "required_observations": {
+        "admission_principal": "present",
+        "replay": "present",
+        "same_project_two_users": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "status": "CLOSED",
+      "tasks": [
+        "M0-04",
+        "M4-01",
+        "M4-03"
+      ],
+      "title": "提交幂等范围硬编码 `LOCAL_PRINCIPAL_ID`（admission 记账同样合并）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "活跃会话撤销后写/控制/读一致拒绝且无副作用",
+      "evidence_kind": "live",
+      "evidence_level": "L4",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H3",
+        "H6"
+      ],
+      "id": "G25",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Active-session revocation refuses write/control/read consistently with no side effects.",
+      "receipt": "reports/acp2_remediation_20261026/m4-03/summary.json",
+      "receipt_sha256": "b0faddcf75ebbed759e4fd293214eeb3aa70cdfab721b0774db3e9ce4c44ffb8",
+      "required_observations": {
+        "all_faces": "present",
+        "no_side_effect": "present",
+        "revocation": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "status": "CLOSED",
+      "tasks": [
+        "M0-05",
+        "M4-01",
+        "M4-03"
+      ],
+      "title": "MCP 缓存命中不重验凭据（identity 仅启动时调用一次）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "closing_evidence": "member 伪造拒绝、历史/当前回执上下文分离、执行身份绑定、purge 后可核验、重复回执幂等",
+      "evidence_kind": "live",
+      "evidence_level": "L4",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "h_rows": [
+        "H4",
+        "H6"
+      ],
+      "id": "G26",
+      "impact_globs": [
+        "src/**",
+        "scripts/acceptance/**",
+        "docs/reference/next-change/acp2-contracts/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Member forgery refusal, history/current receipt separation, execution identity binding and idempotent duplicate receipts.",
+      "receipt": "reports/acp2_remediation_20261026/m4-01/summary.json",
+      "receipt_sha256": "887b4102423909a64bbfc00a7f5df163e2c77ab444c4cb9cfe0537c04f7dd694",
+      "required_observations": {
+        "history_context": "present",
+        "idempotent_receipt": "present",
+        "member_forgery": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "status": "CLOSED",
+      "tasks": [
+        "M0-07",
+        "M2-03",
+        "M4-01",
+        "M4-02",
+        "M4-03"
+      ],
+      "title": "可信用量来源由客户端自报字符串白名单，普通项目写凭据可声明 `worker-receipt`"
+    }
+  ],
+  "generated_at": "2026-10-26T00:00:00Z",
+  "h_index": {
+    "execution_index": {
+      "path": "docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md",
+      "sha256": "8e7b5820bca8bdb3b9284641a0fb145e3cf8739d3a452c0c6ab24e9376cfcf04",
+      "status": "REFERENCED"
+    },
+    "handoff_h7": {
+      "contract_set": "acp2.science",
+      "contract_set_version": 1,
+      "handoff_digests_verified": true,
+      "handoff_id": "H7",
+      "handoff_version": 1,
+      "path": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
+      "release_ready": false,
+      "sha256": "4707c023c79fb98108a98dc924e1db8c6ab162cf3b0d880df4ccf81602ce5524"
+    }
+  },
+  "h_rows": [
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "aggregate",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "gaps": [
+        "G18",
+        "G19",
+        "G20"
+      ],
+      "id": "H0",
+      "impact_globs": [
+        "docs/reference/next-change/acp2-contracts/science/**",
+        "docs/reference/next-change/acp2-contracts/release/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Baseline/boundary row PASS in handoff-H7 and reproduced by the M0-01 ledger and B26 registration.",
+      "receipt": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
+      "receipt_sha256": "4707c023c79fb98108a98dc924e1db8c6ab162cf3b0d880df4ccf81602ce5524",
+      "required": true,
+      "required_observations": {
+        "handoff_H0": "present",
+        "ledger": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "science_state": "PASS",
+      "scope": "IN_SCOPE",
+      "source": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json#prerequisites",
+      "status": "CLOSED",
+      "title": "基线与边界"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "fixture",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "gaps": [
+        "G18",
+        "G20"
+      ],
+      "id": "H1",
+      "impact_globs": [
+        "docs/reference/next-change/acp2-contracts/science/**",
+        "docs/reference/next-change/acp2-contracts/release/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Contracts are consumable: the contract manifest, consumer scanners and real consumers are green.",
+      "receipt": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
+      "receipt_sha256": "4707c023c79fb98108a98dc924e1db8c6ab162cf3b0d880df4ccf81602ce5524",
+      "required": true,
+      "required_observations": {
+        "consumer_gates": "present",
+        "handoff_H1": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "science_state": "PASS",
+      "scope": "IN_SCOPE",
+      "source": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json#prerequisites",
+      "status": "CLOSED",
+      "title": "契约可消费"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "live",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "gaps": [
+        "G01",
+        "G02",
+        "G05",
+        "G18",
+        "G20"
+      ],
+      "id": "H2",
+      "impact_globs": [
+        "docs/reference/next-change/acp2-contracts/science/**",
+        "docs/reference/next-change/acp2-contracts/release/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Real MCP/DSH handshake row: real client 2.2.0, real DSH extension negotiation and an M4-02 real DSH/model round. G05's production credential row stays open but does not reopen the handshake evidence.",
+      "receipt": "reports/acp2_remediation_20261026/m0-09/summary.json",
+      "receipt_sha256": "817d6f87920c169aa9ca1c26d125aae8642bb813faac7d1614521af21ded0855",
+      "required": true,
+      "required_observations": {
+        "handoff_H2": "present",
+        "real_dsh": "present",
+        "real_model_round": "present",
+        "real_sdk": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "science_state": "PASS",
+      "scope": "IN_SCOPE",
+      "source": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json#prerequisites",
+      "status": "CLOSED",
+      "title": "真实 MCP/DSH 握手"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "live",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "gaps": [
+        "G03",
+        "G04",
+        "G18",
+        "G20",
+        "G21",
+        "G22",
+        "G23",
+        "G25"
+      ],
+      "id": "H3",
+      "impact_globs": [
+        "docs/reference/next-change/acp2-contracts/science/**",
+        "docs/reference/next-change/acp2-contracts/release/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Local/LSF basic closure is not closed: the DA-ENV-LSF row is required and NOT_VERIFIED, and the shipped execution_limits rows remain NOT_VERIFIED.",
+      "receipt": "reports/acp2_remediation_20261026/m4-03/summary.json",
+      "receipt_sha256": "b0faddcf75ebbed759e4fd293214eeb3aa70cdfab721b0774db3e9ce4c44ffb8",
+      "required": true,
+      "required_observations": {
+        "execution_limits": "NOT_VERIFIED",
+        "handoff_H3": "NOT_VERIFIED",
+        "lsf_submission": "present"
+      },
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required",
+      "science_state": "NOT_VERIFIED",
+      "scope": "IN_SCOPE",
+      "source": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json#prerequisites",
+      "status": "OPEN",
+      "title": "Local/LSF 基础闭环"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "live",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "gaps": [
+        "G02",
+        "G05",
+        "G07",
+        "G08",
+        "G09",
+        "G10",
+        "G11",
+        "G12",
+        "G13",
+        "G14",
+        "G15",
+        "G18",
+        "G20",
+        "G21",
+        "G22",
+        "G26"
+      ],
+      "id": "H4",
+      "impact_globs": [
+        "docs/reference/next-change/acp2-contracts/science/**",
+        "docs/reference/next-change/acp2-contracts/release/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "H4 stays OPEN. Route-a execution chain PASS and the scientific proposition is refuted (DA-C05 endpoint identity; path connectivity refuted, activation energy supported). The Local row still lacks walltime_process_termination and terminal_usage_receipt, the LSF DA row is NOT_VERIFIED, and the bounded recipe public entry is unsupported. The two h4_closeout location-dependent tests are pre-existing path-relocation failures and are not used as H4 evidence.",
+      "receipt": "reports/acp2_remediation_20261026/m4-04/h4.json",
+      "receipt_sha256": "b662a80941420efb9390852adc7558193e71ee1a1cdffadf5138bfccc16ed3a8",
+      "required": true,
+      "required_observations": {
+        "DA-ENV-LOCAL": "present",
+        "DA-ENV-LSF": "NOT_VERIFIED",
+        "bounded_recipe_public_entry": "absent",
+        "budget_timing_basis": "NOT_VERIFIED",
+        "handoff_H4": "NOT_VERIFIED"
+      },
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required",
+      "science_state": "NOT_VERIFIED",
+      "scope": "IN_SCOPE",
+      "source": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json#prerequisites",
+      "status": "OPEN",
+      "title": "限定反应科学闭环"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "live",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "gaps": [
+        "G04",
+        "G16",
+        "G18",
+        "G20"
+      ],
+      "id": "H5",
+      "impact_globs": [
+        "docs/reference/next-change/acp2-contracts/science/**",
+        "docs/reference/next-change/acp2-contracts/release/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "Plugin extension row PASS for pure-analysis; worker-hosted COMPUTE is a separate DEFERRED row and is not claimed here.",
+      "receipt": "reports/acp2_remediation_20261026/m4-05/summary.json",
+      "receipt_sha256": "c8ddd281d4470a3bab662ef626e1999fc52253edc3bb3a3eb6b7bb0072ad7e9b",
+      "required": true,
+      "required_observations": {
+        "browser_form": "present",
+        "handoff_H5": "present",
+        "plugin_execute": "present",
+        "plugin_install": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "science_state": "PASS",
+      "scope": "IN_SCOPE",
+      "source": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json#prerequisites",
+      "status": "CLOSED",
+      "title": "插件扩展"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "aggregate",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "gaps": [
+        "G09",
+        "G12",
+        "G13",
+        "G14",
+        "G18",
+        "G20",
+        "G23",
+        "G24",
+        "G25",
+        "G26"
+      ],
+      "id": "H6",
+      "impact_globs": [
+        "docs/reference/next-change/acp2-contracts/science/**",
+        "docs/reference/next-change/acp2-contracts/release/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "H6 CLOSED on both required parts: M4-06a upgrade/rollback/recovery and M4-06b NMR/thermochemistry reuse, multi-project/multi-user isolation and revocation. science_state still mirrors handoff-H7 NOT_VERIFIED because the handoff predates M4-06; the receipt-backed coverage result is the current judgment.",
+      "receipt": "reports/acp2_remediation_20261026/m4-06b/summary.json",
+      "receipt_sha256": "af87057927b5c24639ad7f2d1d54fae9568f7c2db708d8051d379b49c5728673",
+      "required": true,
+      "required_observations": {
+        "cross_domain_nmr": "present",
+        "cross_domain_thermochemistry": "present",
+        "multitenant": "present",
+        "revocation": "present",
+        "upgrade_rollback": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "science_state": "NOT_VERIFIED",
+      "scope": "IN_SCOPE",
+      "source": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json#prerequisites",
+      "status": "CLOSED",
+      "title": "跨领域与可靠性"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "evidence_kind": "live",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "gaps": [
+        "G01",
+        "G05",
+        "G06",
+        "G16",
+        "G17",
+        "G18",
+        "G19",
+        "G20"
+      ],
+      "id": "H7",
+      "impact_globs": [
+        "docs/reference/next-change/acp2-contracts/science/**",
+        "docs/reference/next-change/acp2-contracts/release/**",
+        "reports/acp2_remediation_20261026/**"
+      ],
+      "notes": "H7 remains OPEN: the BOM and walker are ready, but the independent operator/clean-host install and the final supported/recorded-only/NOT_VERIFIED declaration are M5-03.",
+      "receipt": "reports/acp2_remediation_20261026/environment-readiness.json",
+      "receipt_sha256": "104be9b1a8a9f1ff2ac7fce2b32133fcbe84506b19c157e59c3ab4d3de760584",
+      "required": true,
+      "required_observations": {
+        "bom": "present",
+        "handoff_H7": "NOT_VERIFIED",
+        "independent_operator": "absent",
+        "walker": "present"
+      },
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required",
+      "science_state": "NOT_VERIFIED",
+      "scope": "IN_SCOPE",
+      "source": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json#prerequisites",
+      "status": "OPEN",
+      "title": "发行与独立安装"
+    }
+  ],
+  "limitations": [
+    "M5-02 records terminal judgments but does not rerun every scientific/model/LSF/browser scenario: exact rows are byte-identical to the candidate for their impacted paths, reused rows rely on later additive diffs and the 6cbf725 full suite, and rerun_required rows stay NOT_VERIFIED.",
+    "H rows are judged by their own required evidence, not by the union of their mapped gaps; the gap ledger remains the G01-G26 closure authority and H4/H7 stay open.",
+    "science_state mirrors A's handoff-H7 prerequisites verbatim; it is not a platform release signature. H6's handoff state predates M4-06, so the current receipt-backed coverage result is CLOSED/PASS while science_state remains NOT_VERIFIED.",
+    "The two h4_closeout tests fail only because the frozen evidence embeds the historical /ACPServer/AutoCalcPlatform absolute path; they are location-dependent and are never used as evidence for or against any row.",
+    "DEFERRED capabilities (worker-hosted third-party COMPUTE, CDXML, cumulative core-hours/token) are listed in deferred_rows and never count as delivered.",
+    "The production model-gateway credential must be rotated and authorized before M3-03/G05/G10/G13 can PASS; the M4-02 live round is recorded as evidence but does not clear that governance row."
+  ],
+  "owner": "B",
+  "schema": "acp2.release.evidence-coverage.v1",
+  "source": {
+    "h7_handoff": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
+    "h7_handoff_sha256": "4707c023c79fb98108a98dc924e1db8c6ab162cf3b0d880df4ccf81602ce5524",
+    "h_index": "docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md",
+    "plan": "reports/acp2_delivery_gap_audit_20261026/EXECUTION_PLAN.md",
+    "plan_graph": "reports/acp2_delivery_gap_audit_20261026/plan-graph.json",
+    "plan_graph_sha256": "7931e1469d8dc320b42ed8129ece59ac6f9998cacc9fb827e57e5b8761db443d",
+    "plan_sha256": "87c58195b0d89301671e9bdf2eac242338ceaa52e9cd413eb5e83c8015ae00db",
+    "scope": "docs/reference/next-change/acp2-contracts/release/scope.json",
+    "scope_sha256": "180509e071b4e33fe7de05105e704b87c26ba6c1735c6528e47b716f38dae110"
+  },
+  "summary": {
+    "checkpoints_open": 1,
+    "checkpoints_total": 32,
+    "full_release_status": "NOT_VERIFIED",
+    "gaps_open": 5,
+    "gaps_total": 26,
+    "h_rows_open": 3,
+    "h_rows_total": 8,
+    "notes": "Final ledger after the M5-03 independent operator sign-off (two rounds, 2026-10-28). Closed this round: M5-03 and G01/G06/G16/G17/G19. Remaining open rows are environment/credential-bound, not implementation-bound: M3-03 production model-gateway credential rotation (G05/G10/G13 follow it), and the DA science rows G15/G18 with H3/H4 (DA-ENV-LSF NOT_VERIFIED, single-bounded-attempt recipe gap); H4 also carries the honestly-refuted DA endpoint proposition from the real ORCA run. M0-02c Ruff hygiene stays pending outside the required chain; the three DEFERRED rows stay deferred.",
+    "tasks_open": 1,
+    "tasks_total": 39
+  },
+  "task_id": "M0-01",
+  "tasks": [
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [
+        "M0-01a",
+        "M0-01b"
+      ],
+      "evidence_kind": "aggregate",
+      "evidence_level": "L0",
+      "evidence_revision": "working-tree",
+      "gaps": [
+        "G19"
+      ],
+      "id": "M0-01",
+      "impact_globs": [
+        "docs/reference/next-change/acp2-contracts/release/**",
+        "scripts/acceptance/build_acp2_plan_graph.py",
+        "scripts/acceptance/validate_acp2_gap_coverage.py",
+        "tests/test_acp2_gap_coverage.py",
+        "tests/test_acp2_plan_graph.py"
+      ],
+      "notes": "M0-01a baseline/coverage + M0-01b B registration. The ledger, plan graph and validator are re-run at the candidate; the skeleton alone closes no G row.",
+      "owner": "INT（M0-01a 基线/coverage）+ B（M0-01b 契约注册）",
+      "receipt": "reports/acp2_remediation_20261026/m0-closeout.json",
+      "receipt_sha256": "62a66785b4085fb47609fe5fe0ca6f491d81692872e60ad01b7c14d692dadeb6",
+      "required_observations": {
+        "ledger": "present",
+        "plan_graph": "present",
+        "validator": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "scope": "IN_SCOPE",
+      "size": "S",
+      "status": "CLOSED",
+      "title": "冻结整改基线与 26 项机器可追踪台账"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [
+        "M0-02a",
+        "M0-02b",
+        "M0-02c"
+      ],
+      "evidence_kind": "fixture",
+      "evidence_level": "L1",
+      "evidence_revision": "e59ce7f2f8c7dbcf2277c27223495c5b7bce3c8a",
+      "gaps": [
+        "G01",
+        "G20"
+      ],
+      "id": "M0-02",
+      "impact_globs": [
+        ".github/workflows/ci.yml",
+        "tests/test_frontend_module_tests_gate.py"
+      ],
+      "notes": "M0-02a CI matrix/toolchain and M0-02b contract lane landed. M0-02c Ruff ratchet is an independent pending hygiene row per D-INT-06: it never closes or keeps open a G row and is not part of the required chain.",
+      "owner": "INT + B + C-RPH",
+      "receipt": "reports/acp2_remediation_20261026/m0-02a-local-toolchain.json",
+      "receipt_sha256": "031748ccae7e7c46d32fb965737240111dc570d6a854455c20f8ecb383ffa6a1",
+      "required_observations": {
+        "ci_matrix": "present",
+        "contract_lane": "present",
+        "frontend_module_tests": "present",
+        "rph_job": "present",
+        "ruff_ratchet": "absent"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "scope": "IN_SCOPE",
+      "size": "L",
+      "status": "CLOSED",
+      "title": "建立真实消费者 CI 门并修复 CI 自身断点"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [
+        "M0-03a",
+        "M0-03b",
+        "M0-03c"
+      ],
+      "evidence_kind": "fixture",
+      "evidence_level": "L1",
+      "evidence_revision": "3663d54708503e55a606fb9cf07c14c2e160d6c0",
+      "gaps": [
+        "G18",
+        "G19"
+      ],
+      "id": "M0-03",
+      "impact_globs": [
+        "scripts/acceptance/acp2_runtime.py",
+        "scripts/acceptance/acp2_experience.py",
+        "tests/test_acp2_runtime_acceptance_harness.py",
+        "tests/test_acp2_experience_observations.py"
+      ],
+      "notes": "Live evidence requires declared observations; offline diagnostics never yield PASS. Later M4 harness edits extended the same scripts; the recorded contract is unchanged. The two h4_closeout failures are pre-existing path-relocation failures and are not used against this row.",
+      "owner": "B（`acp2_runtime.py`）+ C-RPH（research harness）+ C-Web（browser harness）+ INT/REL（证据/BOM）",
+      "receipt": "reports/acp2_remediation_20261026/m0-03b-live-observations.json",
+      "receipt_sha256": "b960cf19b1f1a2b65748ef7abd40c9b00bf64e5e08011ed38911a0ca2f4a0723",
+      "required_observations": {
+        "controller": "present",
+        "live_rows": "NOT_VERIFIED",
+        "observation_contract": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "size": "M",
+      "status": "CLOSED",
+      "title": "修正证据标签、live harness 骨架与候选索引骨架"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "a1cf33b5a87782d0474be8689324d4664d823182",
+      "gaps": [
+        "G22",
+        "G24"
+      ],
+      "id": "M0-04",
+      "impact_globs": [
+        "src/acp_services/workspace/command_identity.py",
+        "src/acp_services/runtime/idempotency.py",
+        "src/acp_services/runtime/local_admission.py",
+        "src/acp/api/v1_routes.py",
+        "tests/test_acp2_runtime_command_identity.py"
+      ],
+      "notes": "Verified HTTP/server/explicit-local CommandIdentity; two principals reusing one key return a typed 409; migration 024 versions legacy idempotency. Later additive work touched the same runtime files and the final full suite at 6cbf725 is green apart from the documented h4_closeout location pair.",
+      "owner": "B",
+      "receipt": "tests/test_acp2_runtime_command_identity.py",
+      "receipt_sha256": "2a4814abe7707264ed27ec6c766219c716305681af3c0251f422fdb5613fca5d",
+      "required_observations": {
+        "command_identity": "present",
+        "idempotency_conflict": "present",
+        "migration_024": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "size": "M",
+      "status": "CLOSED",
+      "title": "统一 CommandIdentity，修复跨用户幂等与 admission 归属（G24）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "17aee7a1857c27acb2a52b304cc48f7368d7e893",
+      "gaps": [
+        "G21",
+        "G22",
+        "G25"
+      ],
+      "id": "M0-05",
+      "impact_globs": [
+        "src/acp_services/entrypoints/mcp.py",
+        "src/acp_services/runtime/idempotency.py",
+        "tests/test_acp2_runtime_mcp_process.py",
+        "tests/test_acp2_runtime_mcp_backends.py"
+      ],
+      "notes": "MCP idempotency now routes through CommandIdentity; prepare key v2 and lookup-only auto_ keys are covered by the process/backends tests. Revocation is re-tested on the remote path by M4-03.",
+      "owner": "B + C-RPH",
+      "receipt": "tests/test_acp2_runtime_mcp_process.py",
+      "receipt_sha256": "b75523fc274e7f628f88c33c235337fc56a2731879b74ba66a46c52aec2aa55b",
+      "required_observations": {
+        "auto_lookup_only": "present",
+        "mcp_idempotency": "present",
+        "prepare_key_v2": "present",
+        "revocation": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "size": "L",
+      "status": "CLOSED",
+      "title": "删除 MCP/Bridge 第二幂等权威并加入撤权重验（G21/G22/G25）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "96d6c8102dca0268374fee1771279a379eacfb68",
+      "gaps": [
+        "G03",
+        "G23"
+      ],
+      "id": "M0-06",
+      "impact_globs": [
+        "src/acp/api/v1_routes.py",
+        "src/acp_services/contracts/envelope.py",
+        "tests/test_acp2_runtime_contracts.py"
+      ],
+      "notes": "Exhaustive v1 field policy and cross-entry JobSpec equivalence with digest v2; the HTTP prepare route is the single prepare-field authority (M0-06 followup 927d92f).",
+      "owner": "B",
+      "receipt": "tests/test_acp2_runtime_contracts.py",
+      "receipt_sha256": "62d66c80ab33610799e477d0cdcc6f14b3b7356001ea59a3723b65c8fe79bf4e",
+      "required_observations": {
+        "digest_v2": "present",
+        "jobspec_equivalence": "present",
+        "v1_field_policy": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "size": "M",
+      "status": "CLOSED",
+      "title": "修复执行字段与跨入口 JobSpec 等价（G23）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "5edbe3f0d5e0c1a5af1f91b859c7c3edd35ef311",
+      "gaps": [
+        "G13",
+        "G26"
+      ],
+      "id": "M0-07",
+      "impact_globs": [
+        "src/acp_services/runtime/attempt_completion.py",
+        "src/acp_services/runtime/receipt_identity.py",
+        "src/acp_services/store/migrations.py",
+        "tests/test_acp2_runtime_usage_receipts.py"
+      ],
+      "notes": "Trusted usage receipts bind settlement to the producing attempt; migrations 025/026 and the late-attempt path are covered.",
+      "owner": "B",
+      "receipt": "tests/test_acp2_runtime_usage_receipts.py",
+      "receipt_sha256": "4360fc0fdbd54746efffa8665aa5fcddb3282dfa180a88a65d8b1d15e0c5ed0b",
+      "required_observations": {
+        "migrations_025_026": "present",
+        "producer_capability": "present",
+        "trusted_usage_receipt": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "scope": "IN_SCOPE",
+      "size": "L",
+      "status": "CLOSED",
+      "title": "可信 usage receipt 与结算绑定（G26）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "live",
+      "evidence_level": "L1",
+      "evidence_revision": "77e4c744e06c445b8810541a2287be667e3fab1f",
+      "gaps": [
+        "G01"
+      ],
+      "id": "M0-08",
+      "impact_globs": [
+        "src/acp/mcp_extension.py",
+        "tests/test_services_mcp.py",
+        "tests/test_acp2_mcp_sdk_contract.py",
+        "scripts/acceptance/acp2_mcp_negotiation_probe.py"
+      ],
+      "notes": "Real @modelcontextprotocol/client 2.2.0 default negotiation and server/discover probe; malformed shapes stay -32602. ADR-006 records the decision.",
+      "owner": "B",
+      "receipt": "reports/acp2_remediation_20261026/m0-08/summary.json",
+      "receipt_sha256": "2d98b428683cd14ef7bfe95d985255e9d270ca11a3072c3d216b23fd5fadceec",
+      "required_observations": {
+        "protocol": "present",
+        "real_sdk_client": "present",
+        "server_discover": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "size": "M",
+      "status": "CLOSED",
+      "title": "标准 MCP 握手与 ADR-006（G01）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "live",
+      "evidence_level": "L1",
+      "evidence_revision": "77e4c744e06c445b8810541a2287be667e3fab1f",
+      "gaps": [
+        "G02",
+        "G04",
+        "G05"
+      ],
+      "id": "M0-09",
+      "impact_globs": [
+        "src/acp/mcp_extension.py",
+        "scripts/acceptance/acp2_mcp_live_client.mjs",
+        "rph/test/mcp-handshake.test.ts"
+      ],
+      "notes": "Path selected: research_extension negotiated in tools/call acp_capabilities with implemented=false/negotiated=false; the unmodified DSH client observes it. M0-13 is NOT_APPLICABLE (external_change_not_required).",
+      "owner": "C-RPH + B",
+      "receipt": "reports/acp2_remediation_20261026/m0-09/summary.json",
+      "receipt_sha256": "817d6f87920c169aa9ca1c26d125aae8642bb813faac7d1614521af21ded0855",
+      "required_observations": {
+        "extension_negotiated": "present",
+        "m0_13": "NOT_APPLICABLE",
+        "real_dsh_client": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "scope": "IN_SCOPE",
+      "size": "L",
+      "status": "CLOSED",
+      "title": "真实 DSH 研究扩展协商接线验证（G02/G04，R12）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "live",
+      "evidence_level": "L0",
+      "evidence_revision": "bce1b951b933e73ce8a84788b181ccaf41597370",
+      "gaps": [
+        "G06",
+        "G17",
+        "G18"
+      ],
+      "id": "M0-10",
+      "impact_globs": [
+        "scripts/acceptance/acp2_environment_readiness.py",
+        "reports/acp2_remediation_20261026/environment-readiness.json"
+      ],
+      "notes": "Environment readiness ledger (21 PASS / 0 FAIL / 3 NOT_VERIFIED) and the prepared ARM64 clean host. The independent operator itself is M5-03 and remains NOT_VERIFIED.",
+      "owner": "INT",
+      "receipt": "reports/acp2_remediation_20261026/environment-readiness.json",
+      "receipt_sha256": "104be9b1a8a9f1ff2ac7fce2b32133fcbe84506b19c157e59c3ab4d3de760584",
+      "required_observations": {
+        "clean_host": "present",
+        "environment_ledger": "present",
+        "independent_operator": "NOT_VERIFIED"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "scope": "IN_SCOPE",
+      "size": "L",
+      "status": "CLOSED",
+      "title": "环境、账号与授权就绪（G06/G17/G18）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "fixture",
+      "evidence_level": "L0",
+      "evidence_revision": "e82cd8ad351ce2ce14ef227a7c47b7a1ccb5e3e0",
+      "gaps": [
+        "G02",
+        "G03",
+        "G10",
+        "G12",
+        "G13",
+        "G20"
+      ],
+      "id": "M0-11",
+      "impact_globs": [
+        "docs/reference/next-change/acp2-contracts/decision-freeze/identity.v1.json",
+        "scripts/acceptance/check_decision_consumers.py",
+        "tests/test_acp2_decision_freeze_identity.py"
+      ],
+      "notes": "decision-freeze/identity.v1.json (10 decisions) plus the mechanical consumer scanner; later additive decisions did not remove a frozen field.",
+      "owner": "INT 汇总，B/A/C-RPH/C-Web 各 owner 签核",
+      "receipt": "tests/test_acp2_decision_freeze_identity.py",
+      "receipt_sha256": "3aeeb153a5c4af2b0de02315c73eb9cbb40f82450310bd7274bb2d82b29a6796",
+      "required_observations": {
+        "consumer_scanner": "present",
+        "identity_decisions": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "size": "M",
+      "status": "CLOSED",
+      "title": "身份、字段与迁移决策冻结（G02/G03/G12/G13/G20）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "fixture",
+      "evidence_level": "L0",
+      "evidence_revision": "1b7a571940acecf52726b6048ffd1250fdd987a0",
+      "gaps": [
+        "G02",
+        "G04",
+        "G20"
+      ],
+      "id": "M0-12",
+      "impact_globs": [
+        "docs/reference/next-change/acp2-contracts/decision-freeze/integration.v1.json",
+        "scripts/acceptance/validate_acp2_decision_freeze.py",
+        "tests/test_acp2_decision_freeze_integration.py"
+      ],
+      "notes": "decision-freeze/integration.v1.json (8 decisions) and dual-freeze validation. D-INT-06 excludes Ruff hygiene from the G01-G26 chain; D-INT-04/05/07 remain pending implementation by their named tasks.",
+      "owner": "INT 汇总，B/C-RPH 签核",
+      "receipt": "tests/test_acp2_decision_freeze_integration.py",
+      "receipt_sha256": "4f4fea4f5a38f7c82a15ac0f2683beb4142c7059f14af33dd42c3d40b0f094c6",
+      "required_observations": {
+        "dual_freeze_validator": "present",
+        "integration_decisions": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "size": "M",
+      "status": "CLOSED",
+      "title": "扩展协商与 CI 决策冻结（G02/G04/G20）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "live",
+      "evidence_level": "L1",
+      "evidence_revision": "77e4c744e06c445b8810541a2287be667e3fab1f",
+      "gaps": [
+        "G02",
+        "G05"
+      ],
+      "id": "M0-13",
+      "impact_globs": [
+        "docs/reference/next-change/acp2-contracts/decision-freeze/integration.v1.json"
+      ],
+      "notes": "Conditional task NOT_APPLICABLE: M0-09 selected application_level_handshake_tools_call, so no upstream DSH client fork/patch/BOM entry is required. Recorded as CLOSED with result NOT_VERIFIED because the schema has no NOT_APPLICABLE result.",
+      "owner": "C-RPH + B",
+      "receipt": "reports/acp2_remediation_20261026/m0-09/summary.json",
+      "receipt_sha256": "817d6f87920c169aa9ca1c26d125aae8642bb813faac7d1614521af21ded0855",
+      "required_observations": {
+        "decision": "NOT_APPLICABLE",
+        "external_change": "NOT_APPLICABLE",
+        "m0_09_decision": "present"
+      },
+      "result": "NOT_VERIFIED",
+      "reuse": "exact",
+      "scope": "NOT_APPLICABLE",
+      "size": "L",
+      "status": "CLOSED",
+      "title": "DSH 外部适配依赖变更（条件任务，G02/G05）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [
+        "M1-01a",
+        "M1-01b",
+        "M1-01c"
+      ],
+      "evidence_kind": "fixture",
+      "evidence_level": "L1",
+      "evidence_revision": "7959bf88ea5a583340bf575c44039b892cffd40d",
+      "gaps": [
+        "G02",
+        "G03",
+        "G04",
+        "G20"
+      ],
+      "id": "M1-01",
+      "impact_globs": [
+        "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+        "docs/reference/next-change/acp2-contracts/runtime/science-binding.v1.json",
+        "docs/reference/next-change/acp2-contracts/runtime/control-and-data.v1.json",
+        "src/acp_services/entrypoints/mcp.py"
+      ],
+      "notes": "Application/MCP/artifact/analysis contract unification and the reviewed wire-id allowlist (M1-01a/b/c). Later additive contract versions are registered in the manifest.",
+      "owner": "B，A/C 消费确认",
+      "receipt": "tests/test_acp2_runtime_contracts.py",
+      "receipt_sha256": "62d66c80ab33610799e477d0cdcc6f14b3b7356001ea59a3723b65c8fe79bf4e",
+      "required_observations": {
+        "application_api": "present",
+        "operation_schema": "present",
+        "wire_id_allowlist": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "size": "L",
+      "status": "CLOSED",
+      "title": "应用/MCP/Artifact/Analysis 契约统一（G02/G03/G04）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "fixture",
+      "evidence_level": "L1",
+      "evidence_revision": "ef2b9ed4b7c979860d39ad15c958d23a28211c42",
+      "gaps": [
+        "G09",
+        "G14",
+        "G20"
+      ],
+      "id": "M1-02",
+      "impact_globs": [
+        "docs/reference/next-change/acp2-contracts/runtime/research-session.v1.md",
+        "src/acp_services/runtime/research_writer.py",
+        "rph/packages/bridge/src/index.ts"
+      ],
+      "notes": "ResearchRecord identity, round/submit-intent ledger and cross-session recovery contract; the events-recovery contract is separately registered by B19.",
+      "owner": "B + C-RPH",
+      "receipt": "tests/test_acp2_research_session_contract.py",
+      "receipt_sha256": "bd3ee88e3cb4224ed3732b960cb77201344e9fd3b2c399a655f7c2598aaa6861",
+      "required_observations": {
+        "event_recovery": "present",
+        "research_identity": "present",
+        "submit_intent": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "size": "L",
+      "status": "CLOSED",
+      "title": "ResearchRecord、提交意图、事件与恢复契约（G09/G14）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "fixture",
+      "evidence_level": "L1",
+      "evidence_revision": "e6e423fcc321deef1f9b2d9e8b7c010dd605ebfd",
+      "gaps": [
+        "G07",
+        "G08",
+        "G20"
+      ],
+      "id": "M1-03",
+      "impact_globs": [
+        "src/cccp/analysis/research/**",
+        "src/acp_services/runtime/science_binding.py",
+        "tests/test_acp2_evidence_projection.py"
+      ],
+      "notes": "One evidence projection with normalised TaskRefs and a separate ResearchDecision; missing checks never upgrade. The M4-04 real report is consumed through this projection.",
+      "owner": "A + B + C-RPH",
+      "receipt": "tests/test_acp2_evidence_projection.py",
+      "receipt_sha256": "27235a873b354abfc1c2d57aa37d77fa1e40af13553cd83038c39db489ac9162",
+      "required_observations": {
+        "decision_contract": "present",
+        "single_projection": "present",
+        "taskref_normalisation": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "size": "L",
+      "status": "CLOSED",
+      "title": "Evidence 投影、TaskRef 与 ResearchDecision 契约（G07/G08）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [
+        "M1-04a",
+        "M1-04b",
+        "M1-04c"
+      ],
+      "evidence_kind": "fixture",
+      "evidence_level": "L1",
+      "evidence_revision": "62d3ee73e254acd32500d047387ef4856d4ba456",
+      "gaps": [
+        "G10",
+        "G12",
+        "G13",
+        "G20"
+      ],
+      "id": "M1-04",
+      "impact_globs": [
+        "src/acp_services/runtime/research_budget.py",
+        "src/acp/calculations/contracts/**",
+        "docs/reference/next-change/acp2-contracts/runtime/admission-approval.v1.json",
+        "tests/test_acp2_submit_policy.py"
+      ],
+      "notes": "Typed science inputs, single SubmitPolicy and planning reservations (M1-04a/b/c); execution-limit vectors are re-run by M2-03c/M4-03.",
+      "owner": "B + A + C-RPH/C-Web",
+      "receipt": "tests/test_acp2_submit_policy.py",
+      "receipt_sha256": "14362136276af6c4ebca797454299d16c432ae25cfc8d07be1b19dd4bacaf86f",
+      "required_observations": {
+        "planning_reservation": "present",
+        "submit_policy": "present",
+        "typed_science_inputs": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "size": "L",
+      "status": "CLOSED",
+      "title": "科学输入、多摘要、SubmitPolicy 与 Budget 契约（G10/G12/G13）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "fixture",
+      "evidence_level": "L0",
+      "evidence_revision": "9f99301f5e1275394420a77ff787adaef90a5b6d",
+      "gaps": [
+        "G15",
+        "G18",
+        "G20"
+      ],
+      "id": "M1-05",
+      "impact_globs": [
+        "docs/reference/next-change/adr/ADR-008-limited-diels-alder-criteria.md",
+        "src/cccp/analysis/research/science_criteria.py",
+        "tests/fixtures/acp2/science/diels_alder/**"
+      ],
+      "notes": "ADR-008 and the limited DA criteria/fixtures are frozen; the criteria fingerprint is unchanged by the M4-04 route amendment. This row proves the frozen criteria, not a supported scientific claim.",
+      "owner": "A，B/C-RPH/C-Web 会签",
+      "receipt": "docs/reference/next-change/adr/ADR-008-limited-diels-alder-criteria.md",
+      "receipt_sha256": "8aa6d45f9eac28cfc123fc4312a37bfc54620a50c6f7ea0bde4779bd60651865",
+      "required_observations": {
+        "adr_008": "present",
+        "criteria_digest": "present",
+        "fixtures_frozen": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "scope": "IN_SCOPE",
+      "size": "L",
+      "status": "CLOSED",
+      "title": "新建 ADR-008 并冻结限定 DA 科学判据（G15/G18）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "f9badbea57a2dc7e3fa6a02ed09cc488be0b4678",
+      "gaps": [
+        "G02",
+        "G07",
+        "G11",
+        "G14",
+        "G20"
+      ],
+      "id": "M1-06",
+      "impact_globs": [
+        "scripts/acceptance/acp2_thin_slice.py",
+        "rph/packages/dsh-bundle/src/thin-slice.ts",
+        "frontend/js/workbench/features/research-evidence-view.js"
+      ],
+      "notes": "14/14 thin-slice steps and seven typed negatives on an empty project; Candidate-Contracts evidence is fixture-kind and the go/no-go decision was left to the user.",
+      "owner": "INT",
+      "receipt": "reports/acp2_remediation_20261026/candidate-contracts/summary.json",
+      "receipt_sha256": "2c149d6ae8f5c8a6805765667a54530f08b997af9c056f5fd2f5078b8b84f113",
+      "required_observations": {
+        "empty_project_chain": "present",
+        "go_no_go_inputs": "present",
+        "negative_cases": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "size": "L",
+      "status": "CLOSED",
+      "title": "早期薄纵切与 Candidate-Contracts（G02/G07/G11/G14/G20）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [
+        "M2-01a",
+        "M2-01b",
+        "M2-01c"
+      ],
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "acad3863b03f2740d77c680c8b7ff4c8e1d2ad9e",
+      "gaps": [
+        "G02",
+        "G14"
+      ],
+      "id": "M2-01",
+      "impact_globs": [
+        "src/acp_services/runtime/research_writer.py",
+        "src/acp/api/v2_research.py",
+        "src/acp_services/data/research_resources.py",
+        "tests/test_acp2_research_saga.py"
+      ],
+      "notes": "Research writer, cross-database idempotent saga and the ten P2 tools (M2-01a/b/c); replay/outbox attribution is exercised by M4-01.",
+      "owner": "B",
+      "receipt": "tests/test_acp2_research_saga.py",
+      "receipt_sha256": "d4a723d20e59b1d8e662b833de5d18439525efe73a09b50955634f2560933b38",
+      "required_observations": {
+        "cross_db_saga": "present",
+        "p2_tools": "present",
+        "research_writer": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "size": "XL",
+      "status": "CLOSED",
+      "title": "Research writer、跨库 Saga 与 P2 工具（G02/G14）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "935f11c200c3109613e90a7a1194b7e5c253a1a2",
+      "gaps": [
+        "G03",
+        "G04"
+      ],
+      "id": "M2-02",
+      "impact_globs": [
+        "src/cccp/calculation/**",
+        "src/acp/storage/**",
+        "src/acp/results/**",
+        "tests/test_acp2_runtime_artifact.py"
+      ],
+      "notes": "Artifact chain and vibration.analyze over the single science catalog; native artifact digests are linked by M4-02/M4-04.",
+      "owner": "B + A",
+      "receipt": "tests/test_acp2_runtime_artifact.py",
+      "receipt_sha256": "24ea0f542179d42ad0d0d6f989f506bd89e2637dd516589fc8a4bfde512b484d",
+      "required_observations": {
+        "artifact_chain": "present",
+        "science_catalog": "present",
+        "vibration_analyze": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "size": "L",
+      "status": "CLOSED",
+      "title": "Artifact 链、科学发现与真实 `vibration.analyze`（G03/G04）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [
+        "M2-03a",
+        "M2-03b",
+        "M2-03c"
+      ],
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "d736a82140de626ba79b3d363e13c00ae1392083",
+      "gaps": [
+        "G12",
+        "G13",
+        "G26"
+      ],
+      "id": "M2-03",
+      "impact_globs": [
+        "src/acp_services/runtime/approvals.py",
+        "src/acp_services/runtime/research_budget.py",
+        "src/acp_services/runtime/step_dag.py",
+        "tests/test_acp2_m203_approval_policy.py"
+      ],
+      "notes": "Server-side approval policy with double-digest binding, durable budget reservations and deadline/capability projection (M2-03a/b/c).",
+      "owner": "B",
+      "receipt": "tests/test_acp2_m203_approval_policy.py",
+      "receipt_sha256": "b479fce7aa94b78ef37de4e0fb0eefd0a79a54909227c0d87c308ce1849d6b54",
+      "required_observations": {
+        "approval_policy": "present",
+        "budget_reservation": "present",
+        "deadline_projection": "present",
+        "double_digest": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "size": "XL",
+      "status": "CLOSED",
+      "title": "服务端审批策略与预算强制（G12/G13）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [
+        "M2-04a",
+        "M2-04b",
+        "M2-04c",
+        "M2-04d"
+      ],
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "bc27a569e862aac69f619e471edc756c91da1f0f",
+      "gaps": [
+        "G13",
+        "G15"
+      ],
+      "id": "M2-04",
+      "impact_globs": [
+        "src/cccp/calculation/recipes/**",
+        "src/cccp/calculation/tasks/**",
+        "src/acp/calculations/**",
+        "tests/test_acp2_runtime_bounded_recipe_dag_*.py"
+      ],
+      "notes": "Bounded recipe DAG wiring with fencing and dispatch-time resource precheck (M2-04a-d). The DA nine-step public entry is not closed here: M4-04 records unsupported_step_kind for endpoint_prep and nine attempts sharing one release.",
+      "owner": "B + A",
+      "receipt": "tests/test_acp2_runtime_bounded_recipe_dag_a.py",
+      "receipt_sha256": "709e4313c845832f007caf31b1bf24fd239fe9e0b7aa6c94bafcbc6ee561b31a",
+      "required_observations": {
+        "bounded_dag": "present",
+        "da_public_entry": "NOT_VERIFIED",
+        "fencing": "present",
+        "resource_precheck": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "scope": "IN_SCOPE",
+      "size": "XL",
+      "status": "CLOSED",
+      "title": "Bounded Recipe DAG 生产接线（G15）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "2c292d3df4c71e3594bd93084ce2060ad994831d",
+      "gaps": [
+        "G04",
+        "G16"
+      ],
+      "id": "M2-05",
+      "impact_globs": [
+        "src/cccp/plugin/**",
+        "src/acp_services/runtime/adapter_registry.py",
+        "src/acp_services/runtime/analysis_capabilities.py",
+        "tests/test_acp2_science_plugin_production.py"
+      ],
+      "notes": "Production assembly for pure-analysis third-party plugins only. worker-hosted third-party COMPUTE stays a separate DEFERRED/NOT_VERIFIED row (see deferred_rows) and is never closed by this pure-analysis evidence.",
+      "owner": "B + A",
+      "receipt": "tests/test_acp2_science_plugin_production.py",
+      "receipt_sha256": "f955dfaa2a4f58f6d920b6704a24941f8e4c25fff1a5feef29a4a52f65bbaaef",
+      "required_observations": {
+        "computed_distribution_digest": "present",
+        "pure_analysis_plugin": "present",
+        "worker_hosted_compute": "NOT_VERIFIED"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "scope": "IN_SCOPE",
+      "size": "L",
+      "status": "CLOSED",
+      "title": "第三方科学插件生产装配（G04/G16，R07）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [
+        "M3-01a",
+        "M3-01b"
+      ],
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "42220b4f3046f805c0051a32e34a52743af022dc",
+      "gaps": [
+        "G02",
+        "G03",
+        "G05",
+        "G21"
+      ],
+      "id": "M3-01",
+      "impact_globs": [
+        "rph/packages/bridge/src/**",
+        "rph/packages/dsh-bundle/src/**",
+        "rph/test/m3-01-bridge-surface.test.ts",
+        "rph/test/m3-01-findings.test.ts"
+      ],
+      "notes": "Real MCP PlatformClient and bridge parameter/TaskRef path; the full-chain M4-01 run exercises it across CLI/MCP/Workbench. Later RPH additions kept the frozen bridge boundary.",
+      "owner": "C-RPH",
+      "receipt": "reports/acp2_remediation_20261026/m4-01/summary.json",
+      "receipt_sha256": "887b4102423909a64bbfc00a7f5df163e2c77ab444c4cb9cfe0537c04f7dd694",
+      "required_observations": {
+        "bridge_params": "present",
+        "mcp_platform_client": "present",
+        "taskref": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "size": "L",
+      "status": "CLOSED",
+      "title": "真实 MCP PlatformClient、Bridge 参数与 TaskRef（G02/G03/G21）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [
+        "M3-02a",
+        "M3-02b"
+      ],
+      "evidence_kind": "fixture",
+      "evidence_level": "L3",
+      "evidence_revision": "d7f0b6b3e946ff24696d923e3360aac10163e04f",
+      "gaps": [
+        "G05",
+        "G06",
+        "G17"
+      ],
+      "id": "M3-02",
+      "impact_globs": [
+        "rph/packages/cli/src/**",
+        "rph/packages/dsh-bundle/src/**",
+        "rph/test/m3-02-cli.test.ts",
+        "rph/test/m3-02-profile.test.ts"
+      ],
+      "notes": "CLI composition root, portable profiles and doctor; M5-01 re-runs rph doctor from the artifact-store install surface. Product fail-fast matrix (M3-02b) is covered by the CLI/profile tests.",
+      "owner": "C-RPH",
+      "receipt": "reports/acp2_remediation_20261026/m5-01/rph-install.json",
+      "receipt_sha256": "c0cc8e243cfebb5f8535ba1c34a39a81a07605c3c4707ad50b32b630150f3833",
+      "required_observations": {
+        "composition_root": "present",
+        "doctor": "present",
+        "portable_profile": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "size": "XL",
+      "status": "CLOSED",
+      "title": "CLI 组合根、可移植 profile 与 doctor（G05/G06/G17）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "fixture",
+      "evidence_level": "L3",
+      "evidence_revision": "d500bae0fb9a317c16b69940690340ac23012d16",
+      "gaps": [
+        "G05",
+        "G10",
+        "G13"
+      ],
+      "id": "M3-03",
+      "impact_globs": [
+        "src/acp_services/runtime/model_gateway.py",
+        "rph/test/model-planner.test.ts",
+        "rph/test/supervisor-gateway.test.ts"
+      ],
+      "notes": "M3-03 model smoke executed no provider call (no credential in the process) and is NOT_VERIFIED. M4-02 later ran a live deepseek-chat round through the production gateway with provider-reported usage, but the exposed development credential still requires rotation and production authorization/ceilings before this row can be PASS. Keep rerun_required.",
+      "owner": "C-RPH + A/B",
+      "receipt": "reports/acp2_remediation_20261026/m3-03-model-smoke.json",
+      "receipt_sha256": "471a434e183ae7483cbcad5c0edc599434a5c49f7a2eb7e65d730e721596bd54",
+      "required_observations": {
+        "production_credential": "NOT_VERIFIED",
+        "provider_calls": "absent",
+        "real_gateway_round": "present"
+      },
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required",
+      "scope": "IN_SCOPE",
+      "size": "L",
+      "status": "OPEN",
+      "title": "生产 Planner、科学确认与模型预算 gateway（G10/G13）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "56dcab0f858a69991597cbf0625e7a78564a1180",
+      "gaps": [
+        "G05",
+        "G07",
+        "G08",
+        "G09",
+        "G14"
+      ],
+      "id": "M3-04",
+      "impact_globs": [
+        "rph/packages/dsh-bundle/src/**",
+        "rph/test/supervisor-recovery.test.ts"
+      ],
+      "notes": "Recoverable Supervisor with bound evidence and durable decisions; M4-01/M4-03 re-exercise restart/recovery across the platform path.",
+      "owner": "C-RPH",
+      "receipt": "rph/test/supervisor-recovery.test.ts",
+      "receipt_sha256": "19c854a9e82694edf62607b218f6dc79e5d2e1111d750d986487a106d53dfa09",
+      "required_observations": {
+        "durable_decisions": "present",
+        "evidence_binding": "present",
+        "supervisor_recovery": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "size": "XL",
+      "status": "CLOSED",
+      "title": "可恢复 Supervisor、证据归属与研究决策（G07/G08/G09）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [
+        "M3-05a",
+        "M3-05b"
+      ],
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "35c5ced0d8fe2a15971a511c8374703d1bccf27d",
+      "gaps": [
+        "G11"
+      ],
+      "id": "M3-05",
+      "impact_globs": [
+        "frontend/js/workbench/**",
+        "frontend/js/client/**",
+        "frontend/js/module_tests/research_evidence_view.test.js"
+      ],
+      "notes": "Workbench research commands, platform approval and submit; fixture + real-controller-HTTP, no browser/model/QC/LSF. Real Chromium approvals are M4-02.",
+      "owner": "C-Web + B",
+      "receipt": "reports/acp2_remediation_20261026/m3-05b-research-commands.json",
+      "receipt_sha256": "3d60d316c3a7f2ac965959a0979f897692ded67f0e8636d3a39ab428cdf4e54b",
+      "required_observations": {
+        "no_local_fallback": "present",
+        "platform_approval": "present",
+        "submit": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "size": "L",
+      "status": "CLOSED",
+      "title": "Workbench 真实审批与提交（G11）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "dd893e711140fd28ae32bdad2e9396454fb09811",
+      "gaps": [
+        "G16"
+      ],
+      "id": "M3-06",
+      "impact_globs": [
+        "frontend/js/workbench/features/capability-form.js",
+        "src/acp/api/server.py",
+        "tests/test_acp2_m306_capability_form_live.py"
+      ],
+      "notes": "Schema-driven capability form over the frozen ui-subset; M4-05 exercises the real browser form. Numeric DOM edits are refused as ui_value_type and recorded as M4-05-F1.",
+      "owner": "A + C-Web + B",
+      "receipt": "reports/acp2_remediation_20261026/m4-05/form.json",
+      "receipt_sha256": "3b63c897a835f0feaaab7be17d53c0240298faefbfe9d775edcd6806bf146c0b",
+      "required_observations": {
+        "capability_form": "present",
+        "ui_subset": "present",
+        "unknown_keyword_refusal": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "size": "L",
+      "status": "CLOSED",
+      "title": "P3 Schema-Driven capability form（G16）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "fixture",
+      "evidence_level": "L2",
+      "evidence_revision": "9efdb1ca265d85ce905ed78bedfae3701f77db2f",
+      "gaps": [
+        "G02",
+        "G08",
+        "G09",
+        "G12",
+        "G13",
+        "G14",
+        "G15",
+        "G18",
+        "G20",
+        "G21",
+        "G22",
+        "G23",
+        "G24",
+        "G25",
+        "G26"
+      ],
+      "id": "M4-01",
+      "impact_globs": [
+        "scripts/acceptance/acp2_full_chain_mcp.mjs",
+        "src/acp_services/**",
+        "src/acp/api/**"
+      ],
+      "notes": "19/19 low-cost fault cases and the full product chain on real Controller/SQLite/MCP/Bridge/Supervisor; science/model/browser are declared seams (fixture kind).",
+      "owner": "INT",
+      "receipt": "reports/acp2_remediation_20261026/m4-01/summary.json",
+      "receipt_sha256": "887b4102423909a64bbfc00a7f5df163e2c77ab444c4cb9cfe0537c04f7dd694",
+      "required_observations": {
+        "browser": "absent",
+        "controller": "present",
+        "fault_matrix": "present",
+        "full_chain": "present",
+        "model": "absent",
+        "qc": "absent"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "size": "L",
+      "status": "CLOSED",
+      "title": "无 QC 的全产品链与故障矩阵（G20 及所有接口项）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "live",
+      "evidence_level": "L3",
+      "evidence_revision": "aee1dc832da581598e8b463d999bfb5a25e827c9",
+      "gaps": [
+        "G04",
+        "G05",
+        "G09",
+        "G10",
+        "G11",
+        "G13",
+        "G18",
+        "G26"
+      ],
+      "id": "M4-02",
+      "impact_globs": [
+        "scripts/acceptance/acp2_m402_real_rounds.py",
+        "src/acp_services/runtime/model_gateway.py",
+        "src/acp/api/**"
+      ],
+      "notes": "Real model rounds through the Controller gateway, real Local singlepoint/optimize/frequency with native receipts, and two Chromium identities plus injection and same-TaskRef legs. LSF is M4-03; the model credential governance caveat stays on M3-03.",
+      "owner": "INT + C + A/B",
+      "receipt": "reports/acp2_remediation_20261026/m4-02/summary.json",
+      "receipt_sha256": "d6c5fa066e688507a31ce10ef4fcc7adda6000afb97d938e1733a6f99bf961d4",
+      "required_observations": {
+        "browser": "present",
+        "controller": "present",
+        "lsf": "absent",
+        "model": "present",
+        "qc": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "scope": "IN_SCOPE",
+      "size": "XL",
+      "status": "CLOSED",
+      "title": "真 DSH/模型 + Local 科学 + Chromium（G05/G06/G11/G18）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "live",
+      "evidence_level": "L4",
+      "evidence_revision": "a5a833b2ef4623309d96b5b699373924e5db0b15",
+      "gaps": [
+        "G09",
+        "G13",
+        "G18",
+        "G23",
+        "G24",
+        "G25",
+        "G26"
+      ],
+      "id": "M4-03",
+      "impact_globs": [
+        "scripts/acceptance/acp2_m403_lsf.py",
+        "src/acp/scheduler/remote/**",
+        "src/acp_services/runtime/execution_limits.py"
+      ],
+      "notes": "15/15 real-LSF rows PASS with native bsub/bjobs/bhist evidence, termination, queue deadline, pause/cancel race, restart and publication recovery. The shipped execution_limits rows stay NOT_VERIFIED for the DA lane; the DA-ENV-LSF row remains NOT_VERIFIED in M4-04, so H3/H4 do not close.",
+      "owner": "B + INT",
+      "receipt": "reports/acp2_remediation_20261026/m4-03/summary.json",
+      "receipt_sha256": "b0faddcf75ebbed759e4fd293214eeb3aa70cdfab721b0774db3e9ce4c44ffb8",
+      "required_observations": {
+        "browser": "absent",
+        "controller": "present",
+        "da_lsf_row": "NOT_VERIFIED",
+        "lsf": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "scope": "IN_SCOPE",
+      "size": "XL",
+      "status": "CLOSED",
+      "title": "LSF、执行约束、控制与恢复（G18/G23/G24/G25/G13）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "live",
+      "evidence_level": "L4",
+      "evidence_revision": "ce4722046ea993ba2a7ec3f11ed30929b8b75e8e",
+      "gaps": [
+        "G07",
+        "G08",
+        "G15",
+        "G18"
+      ],
+      "id": "M4-04",
+      "impact_globs": [
+        "scripts/acceptance/acp2_m404_da.py",
+        "tests/fixtures/acp2/science/diels_alder/**",
+        "src/cccp/analysis/research/**"
+      ],
+      "notes": "Route-a execution chain PASS on real ORCA 6.1.1 at r2SCAN-3c/def2-mTZVPP (ADR-008 Amendment A): real TS, frequency, bidirectional IRC and deterministic analysis. claim_status=refuted on DA-C05 endpoint identity; path connectivity refuted, activation energy supported. The task row records the execution-chain result, not a supported scientific claim. H4 stays OPEN (LSF row NOT_VERIFIED, Local row missing walltime/terminal-usage receipts, bounded recipe entry unsupported). The two h4_closeout location-dependent tests are not evidence for this row.",
+      "owner": "A + B + C + INT",
+      "receipt": "reports/acp2_remediation_20261026/m4-04-route-a/summary.json",
+      "receipt_sha256": "ecb2373a8d98f9f1e819067edbdd3ce1007232812945636957a62ffab6679a2b",
+      "required_observations": {
+        "DA-ENV-LSF": "NOT_VERIFIED",
+        "bounded_recipe_public_entry": "absent",
+        "claim_refuted": "present",
+        "execution_chain": "present",
+        "qc": "present"
+      },
+      "result": "PASS",
+      "reuse": "reused",
+      "scope": "IN_SCOPE",
+      "size": "XL",
+      "status": "CLOSED",
+      "title": "限定 Diels–Alder 科学纵切（G07/G08/G15/G18）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "live",
+      "evidence_level": "L3",
+      "evidence_revision": "6bb267fd8764bc6e33d27c45554dead408b81240",
+      "gaps": [
+        "G16",
+        "G18"
+      ],
+      "id": "M4-05",
+      "impact_globs": [
+        "scripts/acceptance/acp2_m405_plugin.py",
+        "src/cccp/plugin/**",
+        "src/acp_services/runtime/**"
+      ],
+      "notes": "Third-party pure-analysis plugin install/enable/discover/form/preflight/execute/uninstall with a live schema-form browser row; upgrade/uninstall require a new Controller process (M4-05-F2), numeric DOM edits are refused (M4-05-F1). worker-hosted COMPUTE is not claimed.",
+      "owner": "A + C-Web + B",
+      "receipt": "reports/acp2_remediation_20261026/m4-05/summary.json",
+      "receipt_sha256": "c8ddd281d4470a3bab662ef626e1999fc52253edc3bb3a3eb6b7bb0072ad7e9b",
+      "required_observations": {
+        "browser": "present",
+        "history_readonly": "present",
+        "plugin_execute": "present",
+        "plugin_install": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "scope": "IN_SCOPE",
+      "size": "L",
+      "status": "CLOSED",
+      "title": "第三方 capability 插件纵切（G16/G18）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [
+        "M4-06a",
+        "M4-06b"
+      ],
+      "evidence_kind": "aggregate",
+      "evidence_level": "L4",
+      "evidence_revision": "293419cf4a8363ab18311f634d62c49d04047f32",
+      "gaps": [
+        "G18"
+      ],
+      "id": "M4-06",
+      "impact_globs": [
+        "scripts/acceptance/acp2_m406a_upgrade.py",
+        "scripts/acceptance/acp2_m406b.py",
+        "src/acp_services/store/migrations.py",
+        "src/acp_services/runtime/**"
+      ],
+      "notes": "M4-06a previous->candidate upgrade/rollback with recovery and read-only history; M4-06b NMR/thermochemistry reuse plus multi-project/multi-user isolation and three-face revocation. H6 closes on both receipts.",
+      "owner": "A + B + C + INT",
+      "receipt": "reports/acp2_remediation_20261026/m4-06b/summary.json",
+      "receipt_sha256": "af87057927b5c24639ad7f2d1d54fae9568f7c2db708d8051d379b49c5728673",
+      "required_observations": {
+        "cross_domain_nmr": "present",
+        "cross_domain_thermochemistry": "present",
+        "multitenant_isolation": "present",
+        "revocation": "present",
+        "upgrade_rollback": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "scope": "IN_SCOPE",
+      "size": "XL",
+      "status": "CLOSED",
+      "title": "跨领域、迁移与长期可靠性 required 行（G18）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "live",
+      "evidence_level": "L3",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "gaps": [
+        "G06",
+        "G17"
+      ],
+      "id": "M5-01",
+      "impact_globs": [
+        "scripts/release/**",
+        "scripts/build_release.py",
+        "src/acp/api/static_assets.py",
+        "src/acp/api/server.py"
+      ],
+      "notes": "M5-01 built every component into the durable store and installed from the store alone in fresh venvs: root/roles matrix, MCP 2025-06-18 eight tools, Workbench read-only mounts with digest verification, RPH offline install/doctor and the plugin wheel entry point. M5-02 rebuilds the BOM from the clean candidate and re-verifies every artifact byte.",
+      "owner": "REL + C-RPH + B",
+      "receipt": "reports/acp2_remediation_20261026/m5-01/summary.json",
+      "receipt_sha256": "03414b0b12e1626f6e9e9a7e43771b530814f069ccd3090a5bdf183df4c007d2",
+      "required_observations": {
+        "artifact_store": "present",
+        "clean_install": "present",
+        "mcp_handshake": "present",
+        "plugin_wheel": "present",
+        "rph_offline_install": "present",
+        "workbench": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "scope": "IN_SCOPE",
+      "size": "L",
+      "status": "CLOSED",
+      "title": "全组件制品与安装入口（G06/G17）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "aggregate",
+      "evidence_level": "L5",
+      "evidence_revision": "working-tree",
+      "gaps": [
+        "G17",
+        "G18",
+        "G19"
+      ],
+      "id": "M5-02",
+      "impact_globs": [
+        "docs/reference/next-change/acp2-contracts/release/**",
+        "scripts/release/**",
+        "scripts/acceptance/validate_acp2_gap_coverage.py",
+        "scripts/acceptance/validate_acp2_contracts.py"
+      ],
+      "notes": "This sign-off task: clean-candidate BOM, 39/32/26/8 + 3 deferred coverage judgments, B26 manifest registration, and walk_bom.py traversal of every artifact URI and coverage receipt. Full release stays NOT_VERIFIED because H4/H7 and the model-credential row are still open.",
+      "owner": "B（manifest/契约注册）+ REL（制品/BOM）+ INT（coverage/签收）",
+      "receipt": "reports/acp2_remediation_20261026/m5-02/judgements.json",
+      "receipt_sha256": "08fa9616c4758c0c720caa24c3c61793babe3ad075fe05503e727024e08a6df9",
+      "required_observations": {
+        "b26_registration": "present",
+        "clean_bom": "present",
+        "coverage_mechanical_counts": "present",
+        "walker": "present"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "scope": "IN_SCOPE",
+      "size": "L",
+      "status": "CLOSED",
+      "title": "单一 BOM、可取回制品与证据覆盖矩阵（G18/G19/G20）"
+    },
+    {
+      "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "checkpoints": [],
+      "evidence_kind": "live",
+      "evidence_level": "L5",
+      "evidence_revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+      "gaps": [
+        "G01",
+        "G06",
+        "G16",
+        "G17",
+        "G18",
+        "G19"
+      ],
+      "id": "M5-03",
+      "impact_globs": [
+        "reports/acp2_remediation_20261026/clean-host-prep.json",
+        "reports/acp2_remediation_20261026/environment-readiness.json"
+      ],
+      "notes": "Independent operator acceptance completed in two rounds (2026-10-28): round 1 found two real release defects (offline dependency wheelhouse missing; four-distribution mutual exclusion unguarded) plus five minor findings, all fixed and re-verified in round 2 from the rebuilt m5-03 store — fully offline dual-platform install, typed mixed-install refusal at all three entries, --version, paramiko-tolerant doctor, silent-before-project-selection Workbench, and 53 receipts verified from inside the store with zero implementation-repo access. Two non-blocking observations recorded in the receipt.",
+      "owner": "独立操作者 + INT",
+      "receipt": "reports/acp2_remediation_20261026/m5-03/m503-operator-receipt-round2/RESULTS.md",
+      "receipt_sha256": "12a7f913fa7a13f335411abebdff0082f15c73d658a00f2ecde4fb8691f3caad",
+      "required_observations": {
+        "clean_machine": "present",
+        "final_release": "absent",
+        "independent_operator": "absent",
+        "install": "absent"
+      },
+      "result": "PASS",
+      "reuse": "exact",
+      "scope": "IN_SCOPE",
+      "size": "L",
+      "status": "CLOSED",
+      "title": "独立操作者验收与最终放行（G17/G18/G19）"
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "authority": "cccp.calculation.tasks.optimize:467-599 (_successful_geometry/_result)",
+  "complete": true,
+  "content_digest": "sha256:463b5c9e07ad9581382d0167b9688f8466a71c6bfcc17737036a6c19ee60b17d",
+  "exit_code": 0,
+  "job_status": "completed",
+  "missing_required_facts": [],
+  "normal_reuse": true,
+  "partial_result": false,
+  "publish": true,
+  "publish_policy": "normal",
+  "qualification": "complete",
+  "receipt_state": "completed",
+  "required_facts": [
+    "coordinates",
+    "symbols_aligned"
+  ],
+  "result": {
+    "artifacts": [
+      {
+        "checksum": "sha256:dce26935329dde6e5443f01464524c18830fb39c6b94290f57ffe3068044584a",
+        "path": "/tmp/acp-repair-real-worker-clean/xtbopt.xyz",
+        "source": "xtb",
+        "type": "output"
+      },
+      {
+        "checksum": "sha256:66ae0dce00a3c3b54f98ebdbbaf79702f4f679d1304dc799ac43f79015d54ebf",
+        "path": "/tmp/acp-repair-real-worker-clean/xtb.log",
+        "source": "xtb",
+        "type": "log"
+      }
+    ],
+    "complete": true,
+    "coordinates": [
+      [
+        0.0,
+        0.0,
+        -0.01848467372883
+      ],
+      [
+        0.0,
+        -0.0,
+        0.75848467372883
+      ]
+    ],
+    "energy_hartree": -0.982686139534,
+    "errors": [],
+    "frequencies": [],
+    "metadata": {},
+    "payload": {
+      "optimization_status": "converged"
+    },
+    "provenance": {
+      "backend": "xtb",
+      "input_signature": "None",
+      "method": "GFN2-xTB",
+      "version": "unknown"
+    },
+    "schema_version": 1,
+    "status": "completed",
+    "symbols": [
+      "H",
+      "H"
+    ],
+    "task": "optimize"
+  },
+  "result_digest": "sha256:91fbc42b33d339a6be4fe40f08d9952178bba4deb1c1f6d75ff04a303ec023f7",
+  "schema": "acp_task_result_v1",
+  "status": "completed",
+  "task": "optimize",
+  "truth_table_row": "b",
+  "written_at": "2026-10-22T01:12:29.066469+00:00"
+}

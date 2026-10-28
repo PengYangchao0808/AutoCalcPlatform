@@ -1,0 +1,16 @@
+INFO:     Started server process [1634209]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:51245 (Press CTRL+C to quit)
+ACP Workbench starting at http://127.0.0.1:51245
+  Run root      : /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/lab-run-root
+  Poll interval : 30s
+  Docs (Swagger): http://127.0.0.1:51245/docs
+  Reload        : off
+
+INFO:     127.0.0.1:49000 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49016 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1634209]

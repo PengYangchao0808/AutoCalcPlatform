@@ -1,0 +1,27 @@
+# CONSTRUCTED SYNTHETIC OUTPUT — not a real ORCA run.
+# ACP2 A-16a negative fixture: normal-mode vectors exist but the VIBRATIONAL
+# FREQUENCIES section is absent, so the result carries no frequency list.  The
+# validators must report missing evidence (inconclusive/not_evaluated), never a
+# refutation and never support.  Numeric values are illustrative only.
+# Written in ORCA 5.x text shape so the existing frequency parser is exercised.
+
+------------
+NORMAL MODES
+------------
+
+These modes are the Cartesian displacements weighted by the diagonal matrix
+M(i,i)=1/sqrt(m[i]) where m[i] is the mass of the displaced atom
+Thus, these vectors are normalized but *not* orthogonal
+
+                  0          1          2          3          4          5
+      0       0.000000   0.000000   0.000000   0.000000   0.000000   0.000000
+      1       0.000000   0.000000   0.000000   0.000000   0.000000   0.000000
+      2       0.000000   0.000000   0.000000   0.000000   0.000000   0.000000
+      3       0.000000   0.000000   0.000000   0.000000   0.000000   0.000000
+      4       0.000000   0.000000   0.000000   0.000000   0.000000   0.000000
+      5       0.000000   0.000000   0.000000   0.000000   0.000000   0.000000
+      6       0.000000   0.000000   0.000000   0.000000   0.000000   0.000000
+      7       0.000000   0.000000   0.000000   0.000000   0.000000   0.000000
+      8       0.000000   0.000000   0.000000   0.000000   0.000000   0.000000
+
+****ORCA-CHEMISTRY JOB DONE****

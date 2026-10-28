@@ -1,0 +1,133 @@
+{
+  "build": {
+    "acp2_external_science_validator-1.0.0-py3-none-any.whl": {
+      "command": {
+        "argv": [
+          "/usr/bin/python3.11",
+          "-m",
+          "build",
+          "--wheel",
+          "--no-isolation",
+          "--outdir",
+          "/ACPServer/acp2-runs/remediation/m4-05/environment/wheel",
+          "/ACPServer/acp2-remediation-integration/tests/fixtures/acp2/science/external_plugin"
+        ],
+        "returncode": 0,
+        "stderr_tail": "* Getting build dependencies for wheel...\n* Building wheel...\n",
+        "stdout_tail": "Successfully built acp2_external_science_validator-1.0.0-py3-none-any.whl\n"
+      },
+      "sha256": "sha256:77f48f8e7b5327e9fb339a46004573a1af08160c6c348242dfb6c0d6dfceb39b",
+      "wheel": "/ACPServer/acp2-runs/remediation/m4-05/environment/wheel/acp2_external_science_validator-1.0.0-py3-none-any.whl"
+    },
+    "acp2_upgrade_science_validator-1.0.0-py3-none-any.whl": {
+      "command": {
+        "argv": [
+          "/usr/bin/python3.11",
+          "-m",
+          "build",
+          "--wheel",
+          "--no-isolation",
+          "--outdir",
+          "/ACPServer/acp2-runs/remediation/m4-05/environment/wheel",
+          "/ACPServer/acp2-remediation-integration/tests/fixtures/acp2/science/plugin_upgrade/v1"
+        ],
+        "returncode": 0,
+        "stderr_tail": "* Getting build dependencies for wheel...\n* Building wheel...\n",
+        "stdout_tail": "Successfully built acp2_upgrade_science_validator-1.0.0-py3-none-any.whl\n"
+      },
+      "sha256": "sha256:deddfc42ca326352b66fef2d7440b063c482955b8dbde25ccefa01c0db878956",
+      "wheel": "/ACPServer/acp2-runs/remediation/m4-05/environment/wheel/acp2_upgrade_science_validator-1.0.0-py3-none-any.whl"
+    },
+    "acp2_upgrade_science_validator-2.0.0-py3-none-any.whl": {
+      "command": {
+        "argv": [
+          "/usr/bin/python3.11",
+          "-m",
+          "build",
+          "--wheel",
+          "--no-isolation",
+          "--outdir",
+          "/ACPServer/acp2-runs/remediation/m4-05/environment/wheel",
+          "/ACPServer/acp2-remediation-integration/tests/fixtures/acp2/science/plugin_upgrade/v2"
+        ],
+        "returncode": 0,
+        "stderr_tail": "* Getting build dependencies for wheel...\n* Building wheel...\n",
+        "stdout_tail": "Successfully built acp2_upgrade_science_validator-2.0.0-py3-none-any.whl\n"
+      },
+      "sha256": "sha256:c3c6dfaa2eefb97d1a4e51b337bb6d3007ef86d2b3cba11dc50e88abda1ecd3a",
+      "wheel": "/ACPServer/acp2-runs/remediation/m4-05/environment/wheel/acp2_upgrade_science_validator-2.0.0-py3-none-any.whl"
+    }
+  },
+  "install": {
+    "external": {
+      "argv": [
+        "/ACPServer/acp2-runs/remediation/m4-05/environment/venv/bin/python",
+        "-m",
+        "pip",
+        "install",
+        "--no-deps",
+        "--no-index",
+        "/ACPServer/acp2-runs/remediation/m4-05/environment/wheel/acp2_external_science_validator-1.0.0-py3-none-any.whl"
+      ],
+      "returncode": 0,
+      "stderr_tail": "",
+      "stdout_tail": "Processing /ACPServer/acp2-runs/remediation/m4-05/environment/wheel/acp2_external_science_validator-1.0.0-py3-none-any.whl\nInstalling collected packages: acp2-external-science-validator\nSuccessfully installed acp2-external-science-validator-1.0.0\n"
+    },
+    "upgrade_v1": {
+      "argv": [
+        "/ACPServer/acp2-runs/remediation/m4-05/environment/venv/bin/python",
+        "-m",
+        "pip",
+        "install",
+        "--no-deps",
+        "--no-index",
+        "/ACPServer/acp2-runs/remediation/m4-05/environment/wheel/acp2_upgrade_science_validator-1.0.0-py3-none-any.whl"
+      ],
+      "returncode": 0,
+      "stderr_tail": "",
+      "stdout_tail": "Processing /ACPServer/acp2-runs/remediation/m4-05/environment/wheel/acp2_upgrade_science_validator-1.0.0-py3-none-any.whl\nInstalling collected packages: acp2-upgrade-science-validator\nSuccessfully installed acp2-upgrade-science-validator-1.0.0\n"
+    }
+  },
+  "install_is_offline": true,
+  "installed_before_enable": {
+    "enablements": [],
+    "executable": [],
+    "installed": [
+      {
+        "capability_id": "acp2_external_native_singlepoint",
+        "computed_distribution_digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+        "declared": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+        "matches_declared": true,
+        "version": "1.0.0"
+      },
+      {
+        "capability_id": "acp2_upgrade_native_singlepoint",
+        "computed_distribution_digest": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+        "declared": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+        "matches_declared": true,
+        "version": "1.0.0"
+      }
+    ],
+    "mode": "facts",
+    "module_imported": [],
+    "ok": true,
+    "refusals": [],
+    "run_root": "/ACPServer/acp2-runs/remediation/m4-05/run-root"
+  },
+  "python": "/usr/bin/python3.11",
+  "schema": "acp2.m4-05.plugin-slice.v1",
+  "venv": {
+    "argv": [
+      "/usr/bin/python3.11",
+      "-m",
+      "venv",
+      "--system-site-packages",
+      "/ACPServer/acp2-runs/remediation/m4-05/environment/venv"
+    ],
+    "returncode": 0,
+    "stderr_tail": "",
+    "stdout_tail": ""
+  },
+  "venv_python": "/ACPServer/acp2-runs/remediation/m4-05/environment/venv/bin/python",
+  "venv_root": "/ACPServer/acp2-runs/remediation/m4-05/environment"
+}

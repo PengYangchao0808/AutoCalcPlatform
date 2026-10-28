@@ -1,0 +1,23 @@
+{
+  "approval_ref": "ap_5345587eb1be4054b95dc02fd77abbe9",
+  "approved_range": {
+    "count": 1,
+    "timeout_s": 600,
+    "unit": "task_count"
+  },
+  "job_count": {
+    "after": 0,
+    "before": 0
+  },
+  "over_budget_request": {
+    "count": 5,
+    "timeout_s": 600,
+    "unit": "task_count"
+  },
+  "submit": {
+    "message": "approved_budget_mismatch: the requested budget changed after approval",
+    "ok": false,
+    "rule": "approved_budget_mismatch",
+    "status": 0
+  }
+}
