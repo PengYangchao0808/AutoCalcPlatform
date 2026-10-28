@@ -181,10 +181,17 @@ class _McpProcess:
         )
         self._buffer = b""
         self._stderr: bytes | None = None
+        self._stderr_buffer = bytearray()
+        self._stderr_lock = threading.Lock()
         self.lines: list[str] = []
         assert self.proc.stdin is not None
         assert self.proc.stdout is not None
         assert self.proc.stderr is not None
+        # Drain stderr continuously.  The server logs at DEBUG and a loaded
+        # runner can fill the OS pipe while the test is waiting for shutdown;
+        # that manifests as a false timeout because the child blocks in logging.
+        self._stderr_thread = threading.Thread(target=self._drain_stderr, daemon=True)
+        self._stderr_thread.start()
 
     def __enter__(self) -> _McpProcess:
         return self
@@ -261,12 +268,24 @@ class _McpProcess:
         except OSError:
             pass
 
-    def wait(self, timeout: float = 60.0) -> int:
+    def wait(self, timeout: float = 120.0) -> int:
         return self.proc.wait(timeout=timeout)
+
+    def _drain_stderr(self) -> None:
+        assert self.proc.stderr is not None
+        while True:
+            chunk = self.proc.stderr.read(65536)
+            if not chunk:
+                return
+            with self._stderr_lock:
+                self._stderr_buffer.extend(chunk)
 
     def stderr_text(self) -> str:
         if self._stderr is None:
-            self._stderr = self.proc.stderr.read() if self.proc.stderr else b""
+            if self.proc.poll() is not None:
+                self._stderr_thread.join(timeout=5)
+            with self._stderr_lock:
+                self._stderr = bytes(self._stderr_buffer)
         return self._stderr.decode("utf-8", errors="replace")
 
     def close(self) -> None:
