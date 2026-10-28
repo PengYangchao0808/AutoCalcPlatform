@@ -985,7 +985,8 @@ def _contract_digest(manifest: dict[str, Any]) -> str:
     lines = [
         f"{entry['path']} {entry['sha256']}\n"
         for entry in manifest["contracts"]
-        if entry["status"] == "delivered" and entry["id"] not in {"manifest", "baseline-lock"}
+        if entry["status"] == "delivered"
+        and entry["id"] not in {"manifest", "baseline-lock", "release-bom-current"}
     ]
     return sha256_bytes("".join(sorted(lines)).encode("utf-8"))
 
@@ -997,8 +998,9 @@ def test_manifest_delivers_every_delivered_contract(manifest: dict[str, Any]) ->
     # application-api 1.3.0 prepare table move it to 1.5.0.
     # M1-01/M1-02 (2026-10-27): contract unification + research-session
     # registration move it to 1.6.0.
+    # M5-02 (2026-10-28): the final B26 release registration moves it to 1.7.0.
     # Kept as an explicit expectation instead of reading the value back.
-    assert manifest["contract_version"] == "1.6.0"
+    assert manifest["contract_version"] == "1.7.0"
     delivered = {entry["id"]: entry for entry in manifest["contracts"]}
     b03_ids = {
         "application-api",
@@ -1040,26 +1042,33 @@ def test_manifest_delivers_every_delivered_contract(manifest: dict[str, Any]) ->
                 "M0-07",
                 "M0-12",
                 "M1-02",
+                "B26",
             }
         else:
             assert "sha256" not in entry
 
-    # M0-01b registers the release namespace as planned contracts owned by B;
-    # they may only flip to delivered through the recorded M5-02 release stage.
+    # M0-01b registered the release namespace as planned contracts owned by B;
+    # M5-02 is the recorded final release stage (B26) that flips them to
+    # delivered and registers the two generated ledger instances.
     release_ids = {
         "release-scope",
         "release-evidence-coverage-schema",
         "release-bom-schema",
+        "release-bom-current",
+        "release-evidence-coverage-current",
     }
     assert release_ids <= set(delivered)
     for contract_id in release_ids:
         entry = delivered[contract_id]
-        assert entry["status"] == "planned", contract_id
+        assert entry["status"] == "delivered", contract_id
+        assert entry["delivered_by"] == "B26", contract_id
         assert entry["owner"] == "B", contract_id
         assert entry["path"].startswith("docs/reference/next-change/acp2-contracts/release/"), (
             contract_id
         )
-        assert (REPO_ROOT / entry["path"]).is_file(), contract_id
+        target = REPO_ROOT / entry["path"]
+        assert target.is_file(), contract_id
+        assert sha256_bytes(target.read_bytes()) == entry["sha256"], contract_id
 
 
 def test_cross_track_requests_are_recorded_and_owned(manifest: dict[str, Any]) -> None:

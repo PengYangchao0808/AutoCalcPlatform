@@ -15,6 +15,7 @@ Nothing here runs QC or a model: scientific software is only version-probed.
 from __future__ import annotations
 
 import argparse
+import atexit
 import gzip
 import hashlib
 import json
@@ -41,7 +42,30 @@ import build_release  # noqa: E402  (sibling build tool: version + git facts)
 import schema_validate  # noqa: E402  (scripts/release/schema_validate.py)
 
 BOM_SCHEMA = "acp2.release.bom.v1"
-RECEIPT_SCHEMA = "acp2.m5-01.build-receipt.v1"
+RECEIPT_SCHEMA = "acp2.release.build-receipt.v1"
+TASK_ID = "M5-02"
+PERSISTENT_TAG = (
+    "acp2-remediation-m5-02-candidate (proposed, not created; ref acp2/integration-remediation)"
+)
+#: The M5-02 release-ledger overlay: worktree paths that are expected to differ
+#: from the clean committed candidate because they ARE the release deliverable
+#: being built.  Any other dirty path means the business source changed and the
+#: BOM must not claim a clean candidate.
+DEFAULT_RELEASE_OVERLAY = (
+    "docs/reference/next-change/acp2-contracts/release/",
+    "docs/reference/next-change/acp2-contracts/manifest.json",
+    "docs/reference/next-change/acp2-contracts/experience/release-manifest.json",
+    "docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json",
+    "scripts/release/",
+    "scripts/acceptance/validate_acp2_gap_coverage.py",
+    "scripts/acceptance/validate_acp2_contracts.py",
+    "tests/test_acp2_gap_coverage.py",
+    "tests/test_acp2_runtime_contracts.py",
+    "tests/test_acp2_runtime_acceptance_harness.py",
+    "tests/test_acp2_m501_release_artifacts.py",
+    "tests/test_acp2_m502_coverage_signoff.py",
+    "reports/acp2_remediation_20261026/m5-02/",
+)
 CONTRACTS = REPO / "docs" / "reference" / "next-change" / "acp2-contracts"
 EXPERIENCE = CONTRACTS / "experience"
 BOM_SCHEMA_PATH = CONTRACTS / "release" / "bom.schema.json"
@@ -601,6 +625,7 @@ def build_bom(
     toolchain: dict[str, Any],
     bundles: dict[str, Path],
     generated_at: str,
+    supersedes: list[str],
 ) -> dict[str, Any]:
     artifacts: list[dict[str, Any]] = []
     roles_dir = Path(python_facts["all"]["directory"])
@@ -734,9 +759,17 @@ def build_bom(
     coverage = json.loads(COVERAGE.read_text(encoding="utf-8"))
     limitations = [
         (
-            "Built from a dirty working tree "
-            f"({source_facts.get('dirty_count', 0)} paths) at {source_facts['revision']}; "
-            "a clean committed candidate is required before M5-02/M5-03 sign-off."
+            "Built from the clean committed candidate "
+            f"{source_facts['revision']} (tree {source_facts['tree']}). The only worktree "
+            "differences are the M5-02 release-ledger overlay recorded in "
+            "source.release_overlay; no business source changed."
+            if source_facts.get("clean")
+            else (
+                "Built from a dirty working tree "
+                f"({source_facts.get('dirty_count', 0)} non-overlay paths) at "
+                f"{source_facts['revision']}; a clean committed candidate is required "
+                "before M5-03 sign-off."
+            )
         ),
         (
             "RPH packages remain private:true at version 0.0.0 and are distributed as tarballs; "
@@ -748,13 +781,22 @@ def build_bom(
             "read-only with startup digest verification (B25 static-assets row stays NOT_VERIFIED)."
         ),
         (
-            "BOM evidence reuse_rule is rerun_required: M5-01 proves build+install+serve "
-            "from artifacts, while the full G01-G26 walker is M5-02 and the independent "
-            "operator run is M5-03."
+            "BOM evidence reuse_rule is exact for this M5-02 rebuild: every artifact is "
+            "rebuilt from the clean candidate and every URI/receipt is re-fetched by "
+            "scripts/release/walk_bom.py --verify. Rows whose receipts predate the "
+            "candidate use coverage row reuse=reused or rerun_required; they are never "
+            "silently upgraded."
         ),
         (
-            "No QC or model invocation was performed; scientific software entries record "
-            "binary version probes only."
+            "The contract bundle is a build-time snapshot of acp2-contracts and "
+            "deliberately excludes release/bom.current.json; the manifest snapshot inside "
+            "the bundle predates the final BOM sha registration. The live manifest and "
+            "this BOM are the authoritative pair."
+        ),
+        (
+            "No QC or model invocation was performed by the BOM build; scientific software "
+            "entries record binary version probes only. M4 receipts remain the scientific "
+            "evidence."
         ),
         ("persistent_tag is a proposal only: no tag, commit or push was performed by this task."),
     ]
@@ -762,7 +804,7 @@ def build_bom(
         "schema": BOM_SCHEMA,
         "bom_version": 1,
         "generated_at": generated_at,
-        "task_id": "M5-01",
+        "task_id": TASK_ID,
         "owner": "REL",
         "source": {
             "repository": source_facts["repository"],
@@ -772,6 +814,7 @@ def build_bom(
             "persistent_ref": source_facts["persistent_ref"],
             "persistent_tag": source_facts["persistent_tag"],
             "dirty_path_snapshot": source_facts.get("dirty_path_snapshot"),
+            "release_overlay": source_facts.get("release_overlay", []),
         },
         "evidence": {
             "contract_version": contract_manifest["contract_version"],
@@ -780,7 +823,12 @@ def build_bom(
             "coverage_sha256": coverage["coverage_sha256"],
             "coverage_scope_rows": len(coverage["tasks"]),
             "coverage_gap_rows": len(coverage["gaps"]),
-            "reuse_rule": "rerun_required",
+            "reuse_rule": "exact",
+            "supersedes": supersedes,
+            "reused_from": [
+                "reports/acp2_remediation_20261026/m5-01/summary.json",
+                "reports/acp2_remediation_20261026/m5-01/bom-summary.json",
+            ],
         },
         "artifacts": artifacts,
         "toolchain": toolchain,
@@ -794,25 +842,54 @@ def build_bom(
 # ---------------------------------------------------------------------------
 
 
-def _source_facts(source: Path) -> dict[str, Any]:
+def _porcelain_path(line: str) -> str:
+    """Extract the path from one ``git status --porcelain`` v1 line."""
+    path = line[3:] if len(line) > 3 else line
+    if " -> " in path:
+        path = path.split(" -> ", 1)[1]
+    return path.strip().strip('"')
+
+
+def _source_facts(
+    source: Path,
+    overlay: tuple[str, ...],
+    *,
+    allow_dirty: bool = False,
+    overlay_source: Path | None = None,
+) -> dict[str, Any]:
     state = build_release._git_state(source)
     if not state.get("git"):
         raise RuntimeError(f"{source} is not a git checkout; the BOM needs revision/tree facts")
-    dirty = state.get("dirty_paths") or []
+    dirty = build_release._git_state(overlay_source or source).get("dirty_paths") or []
+    overlay_paths: list[str] = []
+    unexpected: list[str] = []
+    for line in dirty:
+        path = _porcelain_path(line)
+        if any(path == prefix or path.startswith(prefix) for prefix in overlay):
+            overlay_paths.append(path)
+        else:
+            unexpected.append(path)
+    if unexpected and not allow_dirty:
+        raise RuntimeError(
+            "the worktree changed outside the declared M5-02 release overlay; a clean "
+            "candidate cannot be claimed: " + ", ".join(sorted(unexpected)[:12])
+        )
     snapshot = (
-        f"{len(dirty)} paths; sha256={hashlib.sha256(chr(10).join(dirty).encode()).hexdigest()}; "
-        f"sample={dirty[:8]}"
-        if dirty
+        f"{len(unexpected)} paths; sha256="
+        f"{hashlib.sha256(chr(10).join(unexpected).encode()).hexdigest()}; "
+        f"sample={unexpected[:8]}"
+        if unexpected
         else None
     )
+    repo_source = overlay_source or source
     remote = subprocess.run(
-        ["git", "-C", str(source), "config", "--get", "remote.origin.url"],
+        ["git", "-C", str(repo_source), "config", "--get", "remote.origin.url"],
         capture_output=True,
         text=True,
         check=False,
     ).stdout.strip()
     branch = subprocess.run(
-        ["git", "-C", str(source), "rev-parse", "--abbrev-ref", "HEAD"],
+        ["git", "-C", str(repo_source), "rev-parse", "--abbrev-ref", "HEAD"],
         capture_output=True,
         text=True,
         check=False,
@@ -821,12 +898,43 @@ def _source_facts(source: Path) -> dict[str, Any]:
         "repository": remote or str(source),
         "revision": state["revision"],
         "tree": state["tree"],
-        "clean": bool(state["clean"]),
-        "dirty_count": len(dirty),
+        "clean": not unexpected,
+        "dirty_count": len(unexpected),
         "dirty_path_snapshot": snapshot,
+        "release_overlay": sorted(set(overlay_paths)),
         "persistent_ref": branch or "detached",
-        "persistent_tag": f"acp2-remediation-m5-01-candidate (proposed, not created; ref {branch})",
+        "persistent_tag": PERSISTENT_TAG,
     }
+
+
+def _temporary_clean_worktree(source: Path, revision: str) -> tuple[Path, Any]:
+    """Materialize the committed candidate in a throwaway clean worktree."""
+
+    root = Path(tempfile.mkdtemp(prefix="acp2-bom-clean-", dir="/tmp/opencode"))
+    directory = root / "worktree"
+    completed = subprocess.run(
+        ["git", "-C", str(source), "worktree", "add", "--detach", str(directory), revision],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        shutil.rmtree(root, ignore_errors=True)
+        raise RuntimeError(
+            "could not create a clean worktree for the Python build: "
+            + (completed.stderr or completed.stdout)[-2000:]
+        )
+
+    def cleanup() -> None:
+        subprocess.run(
+            ["git", "-C", str(source), "worktree", "remove", "--force", str(directory)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        shutil.rmtree(root, ignore_errors=True)
+
+    return directory, cleanup
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -836,10 +944,34 @@ def main(argv: list[str] | None = None) -> int:
         "--store",
         type=Path,
         default=Path(os.environ.get("ACP2_ARTIFACT_STORE", "/ACPServer/acp2-artifacts/remediation"))
-        / "m5-01",
-        help="durable artifact store for M5-01",
+        / "m5-02",
+        help="durable artifact store for the M5-02 clean-candidate rebuild",
     )
     parser.add_argument("--bom-out", type=Path, default=BOM_OUT)
+    parser.add_argument(
+        "--python-source",
+        type=Path,
+        default=None,
+        help=(
+            "clean committed worktree used to build the Python/RPH artifacts; the "
+            "release-ledger overlay is read from --source. Defaults to --source."
+        ),
+    )
+    parser.add_argument(
+        "--release-overlay",
+        default=",".join(DEFAULT_RELEASE_OVERLAY),
+        help="comma-separated worktree paths that are the M5-02 release deliverable",
+    )
+    parser.add_argument(
+        "--supersedes",
+        default=None,
+        help="comma-separated history references recorded in the BOM; defaults to the M5-01 BOM",
+    )
+    parser.add_argument(
+        "--allow-dirty",
+        action="store_true",
+        help="record clean=false instead of failing when non-overlay paths are dirty",
+    )
     parser.add_argument(
         "--skip-rph-package",
         action="store_true",
@@ -852,11 +984,52 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     source = args.source.resolve()
+    overlay = tuple(item.strip() for item in args.release_overlay.split(",") if item.strip())
+    python_source = args.python_source.resolve() if args.python_source else source
+    cleanup = None
+    if args.python_source is None:
+        preliminary = _source_facts(
+            source, overlay, allow_dirty=args.allow_dirty, overlay_source=source
+        )
+        if preliminary["release_overlay"]:
+            # The release-ledger overlay makes the main checkout physically
+            # dirty; build the wheels from a throwaway worktree at the same
+            # committed candidate instead of weakening the clean check.
+            python_source, cleanup = _temporary_clean_worktree(source, preliminary["revision"])
+            atexit.register(cleanup)
     store = args.store.resolve()
     log_dir = store / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
-    version = build_release.release_version(source)
-    source_facts = _source_facts(source)
+    if python_source != source:
+
+        def _head(path: Path) -> str:
+            return subprocess.run(
+                ["git", "-C", str(path), "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+
+        if _head(python_source) != _head(source):
+            raise RuntimeError("--python-source must be the same committed revision as --source")
+    version = build_release.release_version(python_source)
+    source_facts = _source_facts(
+        python_source, overlay, allow_dirty=args.allow_dirty, overlay_source=source
+    )
+    if args.supersedes:
+        supersedes = [item.strip() for item in args.supersedes.split(",") if item.strip()]
+    else:
+        history_bom = store.parent / "m5-01" / "bom" / "bom.current.json"
+        previous_bom = (
+            history_bom
+            if history_bom.is_file()
+            else (args.bom_out if args.bom_out.is_file() else None)
+        )
+        supersedes = (
+            [f"{previous_bom.relative_to(REPO).as_posix()} sha256:{sha256(previous_bom)}"]
+            if previous_bom is not None and previous_bom.is_relative_to(REPO)
+            else ([f"{previous_bom} sha256:{sha256(previous_bom)}"] if previous_bom else [])
+        )
     generated_at = now()
     build_python_python = ensure_build_python(store, log_dir)
 
@@ -873,7 +1046,7 @@ def main(argv: list[str] | None = None) -> int:
         }
     else:
         python_facts = build_python(
-            source,
+            python_source,
             store,
             log_dir,
             clean=bool(source_facts["clean"]),
@@ -932,6 +1105,7 @@ def main(argv: list[str] | None = None) -> int:
         toolchain=toolchain,
         bundles=bundles,
         generated_at=generated_at,
+        supersedes=supersedes,
     )
     errors = schema_validate.validate(bom, schema_validate.load(BOM_SCHEMA_PATH))
     if errors:
@@ -943,7 +1117,7 @@ def main(argv: list[str] | None = None) -> int:
     receipt = {
         "schema": RECEIPT_SCHEMA,
         "generated_at": generated_at,
-        "task_id": "M5-01",
+        "task_id": TASK_ID,
         "store": str(store),
         "bom": str(args.bom_out),
         "bom_sha256": sha256(args.bom_out),
@@ -969,6 +1143,9 @@ def main(argv: list[str] | None = None) -> int:
     for kind in receipt["component_kinds"]:
         count = sum(1 for entry in bom["artifacts"] if entry["kind"] == kind)
         print(f"  {kind}: {count}")
+    if cleanup is not None:
+        cleanup()
+        atexit.unregister(cleanup)
     return 0
 
 

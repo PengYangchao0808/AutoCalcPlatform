@@ -152,9 +152,9 @@
       "NOT_APPLICABLE"
     ]
   },
-  "contract_digest": "0b90072edf99cf68587660e1dd31ea6b1734571c22857e10ae98452e81a3efbb",
-  "contract_digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\" for delivered contracts excluding manifest.json and runtime/baseline-lock.json (self-referential files).",
-  "contract_version": "1.6.0",
+  "contract_digest": "5701101bb521213484e5ab3551814357c9342b7c1849ace944897fe712bf879b",
+  "contract_digest_rule": "sha256 over sorted lines '<path> <sha256>\\n' for delivered contracts excluding manifest.json, runtime/baseline-lock.json and release/bom.current.json (self-referential files; the BOM embeds this aggregate digest).",
+  "contract_version": "1.7.0",
   "contract_version_history": [
     {
       "note": "initial freeze",
@@ -210,6 +210,11 @@
       "note": "M1-01 contract unification (application-api 1.4.0, control-and-data 1.2.0, launch tables, implementation_status vocabulary) and the M1-02 research-session contract registration",
       "stage": "M1-02",
       "version": "1.6.0"
+    },
+    {
+      "note": "M5-02 final release registration: release/scope.json, the evidence-coverage and BOM schemas flip from planned to delivered, and the generated bom.current.json / evidence-coverage.current.json instances register as delivered B26 contracts. contract_version is bumped because the release namespace is now a delivered consumer-visible contract family. The BOM instance itself is excluded from contract_digest (it embeds the aggregate digest); both release schemas and the coverage instance stay inside it.",
+      "stage": "B26",
+      "version": "1.7.0"
     }
   ],
   "contracts": [
@@ -219,7 +224,7 @@
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/manifest.json",
-      "sha256": "ed69327cc9fe28acf53491a2b2504eb30a96f0bb1f20c519e36d9d8858cf08f2",
+      "sha256": "b00a06f0ba38656ee07ae0b4ab7fc1628280fa749cb19b9e10af3915b5ef8fca",
       "status": "delivered"
     },
     {
@@ -401,28 +406,31 @@
       "status": "delivered"
     },
     {
+      "delivered_by": "B26",
       "id": "release-scope",
       "note": "M0-01b: single authority for IN_SCOPE/DEFERRED/OUT_OF_SCOPE, the G01–G26 index and the H0–H7 mapping. Registered by B; only the M5-02 release stage may flip it to delivered.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/release/scope.json",
-      "planned_by": "M0-01",
-      "status": "planned"
+      "sha256": "180509e071b4e33fe7de05105e704b87c26ba6c1735c6528e47b716f38dae110",
+      "status": "delivered"
     },
     {
+      "delivered_by": "B26",
       "id": "release-evidence-coverage-schema",
       "note": "M0-01b: acp2.release.evidence-coverage.v1 schema for tasks, a/b/c/d checkpoints, G01–G26 gaps and H0–H7 required rows. Registered by B; M5-02 freezes the ledger against it.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/release/evidence-coverage.schema.json",
-      "planned_by": "M0-01",
-      "status": "planned"
+      "sha256": "39e191053691020c42a472c39d2a9b43879bb24010775c998706053582a72b94",
+      "status": "delivered"
     },
     {
+      "delivered_by": "B26",
       "id": "release-bom-schema",
       "note": "M0-01b/M0-03a: acp2.release.bom.v1 skeleton (source revision, artifacts with URI+sha256+size, toolchain locks, coverage digest reference). Registered by B.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/release/bom.schema.json",
-      "planned_by": "M0-01",
-      "status": "planned"
+      "sha256": "1db78ac355bdfac6aeab30bf561c7a94544330babf694ae4991c98fcc9df6aba",
+      "status": "delivered"
     },
     {
       "delivered_by": "M0-07",
@@ -458,6 +466,24 @@
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/research-session.v1.md",
       "sha256": "80b23340bd92c41dd0c918de274b93473ead20fcce149354a433000a40fc5c21",
+      "status": "delivered"
+    },
+    {
+      "delivered_by": "B26",
+      "id": "release-bom-current",
+      "note": "M5-02 clean-candidate BOM: 27 artifacts with URI+sha256+size, toolchain/DSH locks, contract digest and coverage canonical digest. Self-referential: excluded from contract_digest because it embeds that aggregate digest.",
+      "owner": "B",
+      "path": "docs/reference/next-change/acp2-contracts/release/bom.current.json",
+      "sha256": "538f573b523a6511057be0954fb80ef58e96cf86bcabf71f5317d0f9a7a8cf60",
+      "status": "delivered"
+    },
+    {
+      "delivered_by": "B26",
+      "id": "release-evidence-coverage-current",
+      "note": "M5-02 final coverage ledger: 39 tasks / 32 checkpoints / 26 gaps / 8 H rows + 3 DEFERRED rows, each with a receipt+sha256, candidate, reuse and required_observations. Delivery status lives only here, never in the BOM.",
+      "owner": "B",
+      "path": "docs/reference/next-change/acp2-contracts/release/evidence-coverage.current.json",
+      "sha256": "d92a9fb3de5a0d472d3d7d8d9eca6fbf1e9a83276d959ff6293a22cfa7f79f97",
       "status": "delivered"
     }
   ],
@@ -522,7 +548,7 @@
     "delivered_contracts": "sha256 of the file bytes; for a directory contract the digest is over its digest_target (runtime/samples/manifest.json), and that file itself lists every sample sha256.",
     "final_debug_bundle": "sha256 of runtime/final-debug-patch/manifest.json.",
     "manifest_self": "sha256 of canonical compact JSON (json.dumps(sort_keys=True, separators=(\",\", \":\"), ensure_ascii=False)) of this manifest with contracts[id=\"manifest\"].sha256 set to \"\".",
-    "merged_contract_digest": "contract_digest = sha256 over sorted lines '<repo-root-relative path> <sha256>\\n' for every contract with status=delivered, excluding the two self-referential files manifest.json and runtime/baseline-lock.json. Recompute at every stage freeze; the validator enforces it."
+    "merged_contract_digest": "sha256 over sorted lines '<path> <sha256>\\n' for delivered contracts excluding manifest.json, runtime/baseline-lock.json and release/bom.current.json (self-referential files; the BOM embeds this aggregate digest)."
   },
   "drift": [
     {

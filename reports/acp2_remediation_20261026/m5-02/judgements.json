@@ -1,0 +1,1570 @@
+{
+  "candidate": "f6b6153070bae9fee175b0c98b840ee7e5f1515a",
+  "checkpoints": {
+    "M0-01a": {
+      "kind": "aggregate",
+      "notes": "Baseline, plan graph and coverage ledger frozen; validator re-run at the candidate.",
+      "obs": {
+        "baseline": "present",
+        "coverage": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m0-closeout.json",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "M0-01b": {
+      "kind": "aggregate",
+      "notes": "B registered the release namespace as three planned contracts at M0-01; M5-02 flips them to delivered at B26.",
+      "obs": {
+        "manifest_registration": "present",
+        "validator_tests": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m0-closeout.json",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "M0-02a": {
+      "kind": "fixture",
+      "notes": "CI matrix, RPH package job, frontend module tests and wall-clock rules landed.",
+      "obs": {
+        "ci_matrix": "present",
+        "toolchain": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m0-02a-local-toolchain.json",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "M0-02b": {
+      "kind": "fixture",
+      "notes": "mcp-conformance owns -m contract with JUnit skip accounting and DSH_DECLARED_BUT_UNRESOLVED.",
+      "obs": {
+        "contract_lane": "present",
+        "dsh_declaration": "present",
+        "junit_accounting": "present"
+      },
+      "receipt": ".github/workflows/ci.yml",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "M0-02c": {
+      "kind": "fixture",
+      "notes": "Ruff 0.15.22 hygiene/ratchet is still pending. D-INT-06 freezes it out of the G01-G26 required chain: it cannot close or keep open any gap and is not a candidate_full blocker.",
+      "obs": {
+        "required_chain": "absent",
+        "ruff_ratchet": "absent"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m0-closeout.json",
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required"
+    },
+    "M0-03a": {
+      "kind": "fixture",
+      "notes": "B runtime evidence labels and required-observation enforcement.",
+      "obs": {
+        "evidence_labels": "present",
+        "required_observations": "present"
+      },
+      "receipt": "tests/test_acp2_runtime_acceptance_harness.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M0-03b": {
+      "kind": "fixture",
+      "notes": "C experience/live harness labels and static live-port probes; no live row is upgraded by a probe.",
+      "obs": {
+        "experience_harness": "present",
+        "live_port_probe": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m0-03b-live-observations.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M0-03c": {
+      "kind": "aggregate",
+      "notes": "INT/REL BOM/coverage skeleton reached the M5-01 durable store; M5-02 rebuilds it from the clean candidate.",
+      "obs": {
+        "artifact_store": "present",
+        "bom": "present",
+        "coverage": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m5-01/summary.json",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "M1-01a": {
+      "kind": "fixture",
+      "notes": "Extension negotiation/version axis frozen and consumed.",
+      "obs": {
+        "negotiation": "present",
+        "version_axis": "present"
+      },
+      "receipt": "tests/test_acp2_runtime_contracts.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M1-01b": {
+      "kind": "fixture",
+      "notes": "Operation/artifact/status schemas with one table per tool and three readers.",
+      "obs": {
+        "artifact_schema": "present",
+        "operation_schema": "present"
+      },
+      "receipt": "tests/test_acp2_runtime_contracts.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M1-01c": {
+      "kind": "fixture",
+      "notes": "Wire-id deobfuscation and the reviewed allowlist; acp_services isolation guard stays green.",
+      "obs": {
+        "isolation": "present",
+        "wire_id_allowlist": "present"
+      },
+      "receipt": "tests/test_acp_services_isolation.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M1-04a": {
+      "kind": "fixture",
+      "notes": "Science input, multi-digest and definition/execution identity vectors.",
+      "obs": {
+        "multi_digest": "present",
+        "science_inputs": "present"
+      },
+      "receipt": "tests/test_acp2_submit_policy.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M1-04b": {
+      "kind": "fixture",
+      "notes": "SubmitPolicy, clock and QC deduction vectors.",
+      "obs": {
+        "qc_deduction": "present",
+        "submit_policy": "present"
+      },
+      "receipt": "tests/test_acp2_planning_reservation.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M1-04c": {
+      "kind": "fixture",
+      "notes": "Planning reservation, historical usage and execution_limits vectors.",
+      "obs": {
+        "historical_usage": "present",
+        "planning_reservation": "present"
+      },
+      "receipt": "tests/test_acp2_execution_limits.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M2-01a": {
+      "kind": "fixture",
+      "notes": "Minimal ResearchResource writer used by M1-06.",
+      "obs": {
+        "minimal_writer": "present"
+      },
+      "receipt": "tests/test_acp2_research_saga.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M2-01b": {
+      "kind": "fixture",
+      "notes": "Business-write + local-outbox transaction API and cross-db idempotent saga.",
+      "obs": {
+        "cross_db_idempotency": "present",
+        "outbox": "present"
+      },
+      "receipt": "tests/test_acp2_research_saga.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M2-01c": {
+      "kind": "fixture",
+      "notes": "HTTP/P2/MCP tools and recovery path.",
+      "obs": {
+        "p2_tools": "present",
+        "recovery": "present"
+      },
+      "receipt": "tests/test_acp2_p2_tools.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M2-03a": {
+      "kind": "fixture",
+      "notes": "Approval policy and double-digest binding.",
+      "obs": {
+        "approval_policy": "present",
+        "double_digest": "present"
+      },
+      "receipt": "tests/test_acp2_m203_approval_policy.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M2-03b": {
+      "kind": "fixture",
+      "notes": "Task/attempt and recipe/QC worst-case budget reservations.",
+      "obs": {
+        "planning_reservation": "present",
+        "task_attempt_budget": "present"
+      },
+      "receipt": "tests/test_acp2_planning_reservation.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M2-03c": {
+      "kind": "fixture",
+      "notes": "Deadline/usage/capability projection.",
+      "obs": {
+        "deadline": "present",
+        "usage_projection": "present"
+      },
+      "receipt": "tests/test_acp2_execution_limits.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M2-04a": {
+      "kind": "fixture",
+      "notes": "Recipe compile and metering port.",
+      "obs": {
+        "compile": "present",
+        "metering": "present"
+      },
+      "receipt": "tests/test_acp2_runtime_bounded_recipe_dag_a.py",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "M2-04b": {
+      "kind": "fixture",
+      "notes": "Fenced commit and lost-right competition.",
+      "obs": {
+        "fenced_commit": "present",
+        "lost_right": "present"
+      },
+      "receipt": "tests/test_acp2_runtime_bounded_recipe_dag_b.py",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "M2-04c": {
+      "kind": "fixture",
+      "notes": "Execution resource precheck and recovery; missing binaries block before dispatch.",
+      "obs": {
+        "recovery": "present",
+        "resource_precheck": "present"
+      },
+      "receipt": "tests/test_acp2_runtime_bounded_recipe_dag_c.py",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "M2-04d": {
+      "kind": "fixture",
+      "notes": "DA public entry is declared but not closed: M4-04 records unsupported_step_kind for endpoint_prep, so G15/H4 stay open.",
+      "obs": {
+        "da_public_entry": "NOT_VERIFIED"
+      },
+      "receipt": "tests/test_acp2_runtime_bounded_recipe_dag_d.py",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "M3-01a": {
+      "kind": "fixture",
+      "notes": "Minimal real MCP PlatformClient used by M1-06.",
+      "obs": {
+        "mcp_client": "present"
+      },
+      "receipt": "rph/test/m3-01-bridge-surface.test.ts",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M3-01b": {
+      "kind": "fixture",
+      "notes": "Bridge parameter and TaskRef findings closed.",
+      "obs": {
+        "bridge_findings": "present",
+        "taskref": "present"
+      },
+      "receipt": "rph/test/m3-01-findings.test.ts",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M3-02a": {
+      "kind": "fixture",
+      "notes": "Composition root and a supported CLI start from the release package.",
+      "obs": {
+        "cli_bin": "present",
+        "composition": "present"
+      },
+      "receipt": "rph/test/m3-02-cli.test.ts",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M3-02b": {
+      "kind": "fixture",
+      "notes": "Portable profile and product fail-fast matrix.",
+      "obs": {
+        "fail_fast": "present",
+        "profile": "present"
+      },
+      "receipt": "rph/test/m3-02-profile.test.ts",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M3-05a": {
+      "kind": "fixture",
+      "notes": "Minimal read-only evidence consumer for M1-06.",
+      "obs": {
+        "read_only_consumer": "present"
+      },
+      "receipt": "frontend/js/module_tests/research_evidence_view.test.js",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M3-05b": {
+      "kind": "fixture",
+      "notes": "Research commands, product mount, approval and submit; real browser is M4-02.",
+      "obs": {
+        "approval_submit": "present",
+        "no_fallback": "present",
+        "research_commands": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m3-05b-research-commands.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M4-06a": {
+      "kind": "aggregate",
+      "notes": "Previous->candidate upgrade, backup/restore, rollback and legacy read-only history; no bare DELETE.",
+      "obs": {
+        "failure_recovery": "present",
+        "legacy_readonly": "present",
+        "rollback": "present",
+        "upgrade": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-06a/summary.json",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "M4-06b": {
+      "kind": "aggregate",
+      "notes": "Cross-domain reuse, multi-project/multi-user isolation and three-face revocation.",
+      "obs": {
+        "multitenant": "present",
+        "nmr_reuse": "present",
+        "revocation": "present",
+        "thermochemistry_reuse": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-06b/summary.json",
+      "result": "PASS",
+      "reuse": "exact"
+    }
+  },
+  "deferred_rows": {
+    "DEF-01": {
+      "capability": "SCOPE-DEF-01",
+      "id": "DEF-01",
+      "notes": "Separate DEFERRED row: the M2-05/M4-05 pure-analysis evidence never covers worker-hosted third-party COMPUTE. No handler/worker freeze group exists.",
+      "obs": {
+        "pure_analysis_plugin": "present",
+        "worker_hosted_compute": "NOT_VERIFIED"
+      },
+      "receipt": "docs/reference/next-change/acp2-contracts/release/scope.json",
+      "statement": "worker-hosted 第三方 COMPUTE"
+    },
+    "DEF-02": {
+      "capability": "SCOPE-DEF-02",
+      "id": "DEF-02",
+      "notes": "CDXML stays DEFERRED; the fallback/deferral contract records the typed refusal.",
+      "obs": {
+        "cdxml": "NOT_VERIFIED",
+        "fallback": "present"
+      },
+      "receipt": "docs/reference/next-change/acp2-contracts/release/scope.json",
+      "statement": "CDXML"
+    },
+    "DEF-03": {
+      "capability": "SCOPE-DEF-03",
+      "id": "DEF-03",
+      "notes": "Per-request/attempt budgets are enforced; cumulative core-hours/token hard enforcement stays DEFERRED.",
+      "obs": {
+        "cumulative_core_hours": "NOT_VERIFIED",
+        "per_request_limits": "present"
+      },
+      "receipt": "docs/reference/next-change/acp2-contracts/release/scope.json",
+      "statement": "累计 core-hours/token 硬强制"
+    }
+  },
+  "gaps": {
+    "G01": {
+      "kind": "live",
+      "notes": "Real SDK handshake present; G01 still requires the independent M5-03 install/handshake, which is NOT_VERIFIED.",
+      "obs": {
+        "m5_03_independent_install": "absent",
+        "real_sdk": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m0-08/summary.json",
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required"
+    },
+    "G02": {
+      "kind": "live",
+      "notes": "Real SDK/DSH extension path and the full P2 call surface; M0-13 conditional task is NOT_APPLICABLE and excluded from the closure check.",
+      "obs": {
+        "dsh_extension": "present",
+        "p2_tools": "present",
+        "permission_negatives": "present",
+        "real_sdk": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m0-09/summary.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "G03": {
+      "kind": "fixture",
+      "notes": "Bridge->MCP->Controller prepare/read with digest and attempt negatives on the full chain.",
+      "obs": {
+        "digest_negatives": "present",
+        "jobspec_equivalence": "present",
+        "prepare_read": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-01/summary.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "G04": {
+      "kind": "live",
+      "notes": "Descriptor tri-state and shared public analysis path; pure-analysis plugin uses the same path.",
+      "obs": {
+        "descriptor_tristate": "present",
+        "digest": "present",
+        "public_path": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-02/summary.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "G05": {
+      "kind": "live",
+      "notes": "Real DSH and model rounds landed; the production model-gateway credential/authorization row is NOT_VERIFIED until rotation, so G05 stays open with M3-03.",
+      "obs": {
+        "production_credential": "NOT_VERIFIED",
+        "real_dsh": "present",
+        "real_model": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-02/summary.json",
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required"
+    },
+    "G06": {
+      "kind": "live",
+      "notes": "Another-directory scoped-key profile/doctor/install is proven by M5-01; the independent operator run is M5-03 and absent.",
+      "obs": {
+        "clean_install": "present",
+        "independent_operator": "absent",
+        "profile_doctor": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m5-01/summary.json",
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required"
+    },
+    "G07": {
+      "kind": "live",
+      "notes": "CCCP native artifact -> one adapter -> RPH; missing checks never upgrade. The DA science proposition itself is refuted, which is a G15/H4 matter.",
+      "obs": {
+        "missing_check": "present",
+        "native_artifact": "present",
+        "single_adapter": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-04-route-a/summary.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "G08": {
+      "kind": "live",
+      "notes": "Full identity/digest negatives and correct attribution on the real DA report; the controlled digest-prefix normalisation is recorded in the report.",
+      "obs": {
+        "attribution": "present",
+        "identity_negatives": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-04-route-a/summary.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "G09": {
+      "kind": "live",
+      "notes": "Crash/restart and cross-process same-TaskRef non-duplication; M4-03 adds the real Controller/LSF restart.",
+      "obs": {
+        "crash_recovery": "present",
+        "multi_crash": "present",
+        "same_taskref": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-01/summary.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "G10": {
+      "kind": "live",
+      "notes": "Science-input vectors passed; M3-03's production credential row keeps G10 open.",
+      "obs": {
+        "charged_open_shell": "present",
+        "clarification": "present",
+        "multi_input": "present",
+        "production_credential": "NOT_VERIFIED"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-02/summary.json",
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required"
+    },
+    "G11": {
+      "kind": "live",
+      "notes": "Real Chromium network, platform approval/TaskRef and two-identity refresh; no screenshot-only claim.",
+      "obs": {
+        "approval": "present",
+        "chromium": "present",
+        "refresh": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-02/summary.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "G12": {
+      "kind": "fixture",
+      "notes": "Agent omit-all/budget-only and real entry negatives; one admission under concurrency.",
+      "obs": {
+        "budget_only": "present",
+        "omit_all": "present",
+        "real_entry_negatives": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-01/summary.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "G13": {
+      "kind": "live",
+      "notes": "Real LSF limits/rescue/restart/deadline landed, but M3-03's production model credential keeps G13 open; historical attempt settlement is covered.",
+      "obs": {
+        "deadline": "present",
+        "pre_dispatch_limit": "present",
+        "production_credential": "NOT_VERIFIED",
+        "rescue": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-03/summary.json",
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required"
+    },
+    "G14": {
+      "kind": "fixture",
+      "notes": "Empty-project writer -> CAS -> recovery with no seed fixture; M4-01 re-runs the chain.",
+      "obs": {
+        "empty_project": "present",
+        "no_seed": "present",
+        "writer_cas_recovery": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/candidate-contracts/summary.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "G15": {
+      "kind": "live",
+      "notes": "Production DAG adapter/completion/eligibility/fencing/recovery are present, but the frozen nine-step DA recipe is not reachable as one bounded attempt (compile_step_dag_definition rejects endpoint_prep; nine attempts share one release, not one TaskRef). ADR-008 required DA-ENV-LSF is NOT_VERIFIED. G15 stays open and H4 with it.",
+      "obs": {
+        "DA-ENV-LSF": "NOT_VERIFIED",
+        "bounded_recipe_public_entry": "absent",
+        "completion_eligibility": "present",
+        "dag_adapter": "present",
+        "native_recipe": "absent"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-04-route-a/summary.json",
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required"
+    },
+    "G16": {
+      "kind": "live",
+      "notes": "Pure-analysis install/enable/execute and a real browser form are PASS; worker-hosted COMPUTE is DEFERRED/NOT_VERIFIED and M5-03 is outstanding, so G16 cannot close.",
+      "obs": {
+        "browser": "present",
+        "history_readonly": "present",
+        "independent_operator": "absent",
+        "pure_analysis_plugin": "present",
+        "worker_hosted_compute": "NOT_VERIFIED"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-05/summary.json",
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required"
+    },
+    "G17": {
+      "kind": "aggregate",
+      "notes": "Every component artifact and the store-only install are verified; the independent BOM-driven install is M5-03 and absent.",
+      "obs": {
+        "artifacts": "present",
+        "independent_install": "absent",
+        "rph_bin": "present",
+        "static_assets": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m5-01/summary.json",
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required"
+    },
+    "G18": {
+      "kind": "aggregate",
+      "notes": "All current-candidate live rows except DA-ENV-LSF are present; H4 stays open and M5-03 independent install is absent, so the cross-cutting G18 cannot close.",
+      "obs": {
+        "DA-ENV-LSF": "NOT_VERIFIED",
+        "cross_domain": "present",
+        "da_execution": "present",
+        "independent_install": "absent",
+        "live_browser": "present",
+        "live_lsf": "present",
+        "live_model": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m5-02/judgements.json",
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required"
+    },
+    "G19": {
+      "kind": "aggregate",
+      "notes": "Persistent candidate ref/artifacts/coverage/reuse are machine-checked by walk_bom; the independent retrieval and install remain M5-03.",
+      "obs": {
+        "independent_install": "absent",
+        "ledger": "present",
+        "reuse_audit": "present",
+        "walker": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m5-02/judgements.json",
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required"
+    },
+    "G20": {
+      "kind": "fixture",
+      "notes": "Producer->consumer resident gates are wired; five evidence layers are declared. M0-02c Ruff is excluded by D-INT-06 and is not a G20 condition.",
+      "obs": {
+        "ci_matrix": "present",
+        "contract_lane": "present",
+        "five_evidence_layers": "present",
+        "frontend_module_tests": "present",
+        "rph_job": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m0-02a-local-toolchain.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "G21": {
+      "kind": "fixture",
+      "notes": "Cross-operation/target/concurrency/new-instance retry without double calls.",
+      "obs": {
+        "cross_operation": "present",
+        "new_instance_retry": "present",
+        "no_double_call": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-01/summary.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "G22": {
+      "kind": "fixture",
+      "notes": "Prepare->submit real submission with a complete TaskRef and no false success.",
+      "obs": {
+        "no_false_success": "present",
+        "prepare_submit": "present",
+        "taskref": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-01/summary.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "G23": {
+      "kind": "live",
+      "notes": "HTTP/CLI/MCP share the effective JobSpec; real remote target constraints refuse at the entry.",
+      "obs": {
+        "application_refusal": "present",
+        "http_cli_mcp": "present",
+        "remote_constraints": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-03/summary.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "G24": {
+      "kind": "live",
+      "notes": "Two users in one project do not leak tasks; explicit conflict/isolation and same-user replay on the real LSF path.",
+      "obs": {
+        "admission_principal": "present",
+        "replay": "present",
+        "same_project_two_users": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-03/summary.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "G25": {
+      "kind": "live",
+      "notes": "Active-session revocation refuses write/control/read consistently with no side effects.",
+      "obs": {
+        "all_faces": "present",
+        "no_side_effect": "present",
+        "revocation": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-03/summary.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "G26": {
+      "kind": "live",
+      "notes": "Member forgery refusal, history/current receipt separation, execution identity binding and idempotent duplicate receipts.",
+      "obs": {
+        "history_context": "present",
+        "idempotent_receipt": "present",
+        "member_forgery": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-01/summary.json",
+      "result": "PASS",
+      "reuse": "reused"
+    }
+  },
+  "generated_at": "2026-10-28T00:00:00Z",
+  "h_rows": {
+    "H0": {
+      "kind": "aggregate",
+      "notes": "Baseline/boundary row PASS in handoff-H7 and reproduced by the M0-01 ledger and B26 registration.",
+      "obs": {
+        "handoff_H0": "present",
+        "ledger": "present"
+      },
+      "receipt": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "H1": {
+      "kind": "fixture",
+      "notes": "Contracts are consumable: the contract manifest, consumer scanners and real consumers are green.",
+      "obs": {
+        "consumer_gates": "present",
+        "handoff_H1": "present"
+      },
+      "receipt": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "H2": {
+      "kind": "live",
+      "notes": "Real MCP/DSH handshake row: real client 2.2.0, real DSH extension negotiation and an M4-02 real DSH/model round. G05's production credential row stays open but does not reopen the handshake evidence.",
+      "obs": {
+        "handoff_H2": "present",
+        "real_dsh": "present",
+        "real_model_round": "present",
+        "real_sdk": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m0-09/summary.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "H3": {
+      "kind": "live",
+      "notes": "Local/LSF basic closure is not closed: the DA-ENV-LSF row is required and NOT_VERIFIED, and the shipped execution_limits rows remain NOT_VERIFIED.",
+      "obs": {
+        "execution_limits": "NOT_VERIFIED",
+        "handoff_H3": "NOT_VERIFIED",
+        "lsf_submission": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-03/summary.json",
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required"
+    },
+    "H4": {
+      "kind": "live",
+      "notes": "H4 stays OPEN. Route-a execution chain PASS and the scientific proposition is refuted (DA-C05 endpoint identity; path connectivity refuted, activation energy supported). The Local row still lacks walltime_process_termination and terminal_usage_receipt, the LSF DA row is NOT_VERIFIED, and the bounded recipe public entry is unsupported. The two h4_closeout location-dependent tests are pre-existing path-relocation failures and are not used as H4 evidence.",
+      "obs": {
+        "DA-ENV-LOCAL": "present",
+        "DA-ENV-LSF": "NOT_VERIFIED",
+        "bounded_recipe_public_entry": "absent",
+        "budget_timing_basis": "NOT_VERIFIED",
+        "handoff_H4": "NOT_VERIFIED"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-04/h4.json",
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required"
+    },
+    "H5": {
+      "kind": "live",
+      "notes": "Plugin extension row PASS for pure-analysis; worker-hosted COMPUTE is a separate DEFERRED row and is not claimed here.",
+      "obs": {
+        "browser_form": "present",
+        "handoff_H5": "present",
+        "plugin_execute": "present",
+        "plugin_install": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-05/summary.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "H6": {
+      "kind": "aggregate",
+      "notes": "H6 CLOSED on both required parts: M4-06a upgrade/rollback/recovery and M4-06b NMR/thermochemistry reuse, multi-project/multi-user isolation and revocation. science_state still mirrors handoff-H7 NOT_VERIFIED because the handoff predates M4-06; the receipt-backed coverage result is the current judgment.",
+      "obs": {
+        "cross_domain_nmr": "present",
+        "cross_domain_thermochemistry": "present",
+        "multitenant": "present",
+        "revocation": "present",
+        "upgrade_rollback": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-06b/summary.json",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "H7": {
+      "kind": "live",
+      "notes": "H7 remains OPEN: the BOM and walker are ready, but the independent operator/clean-host install and the final supported/recorded-only/NOT_VERIFIED declaration are M5-03.",
+      "obs": {
+        "bom": "present",
+        "handoff_H7": "NOT_VERIFIED",
+        "independent_operator": "absent",
+        "walker": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/environment-readiness.json",
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required"
+    }
+  },
+  "not_used_as_evidence": [
+    "tests/test_acp2_runtime_h4_closeout.py::test_closeout_input_set_excludes_its_own_digest",
+    "tests/test_acp2_runtime_h4_closeout.py::test_final_reference_digest_and_index_chain"
+  ],
+  "rule": "Every row cites an existing receipt (+sha256). exact = the evidence revision's impacted paths are byte-identical to the candidate; reused = later additive diffs do not touch the row's evidence and the final full suite at 6cbf725 is green apart from the two documented h4_closeout location-dependent tests; rerun_required = no current-candidate run, result NOT_VERIFIED.",
+  "schema": "acp2.m5-02.coverage-judgements.v1",
+  "task_id": "M5-02",
+  "tasks": {
+    "M0-01": {
+      "evidence": "working-tree",
+      "globs": [
+        "docs/reference/next-change/acp2-contracts/release/**",
+        "scripts/acceptance/build_acp2_plan_graph.py",
+        "scripts/acceptance/validate_acp2_gap_coverage.py",
+        "tests/test_acp2_gap_coverage.py",
+        "tests/test_acp2_plan_graph.py"
+      ],
+      "kind": "aggregate",
+      "notes": "M0-01a baseline/coverage + M0-01b B registration. The ledger, plan graph and validator are re-run at the candidate; the skeleton alone closes no G row.",
+      "obs": {
+        "ledger": "present",
+        "plan_graph": "present",
+        "validator": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m0-closeout.json",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "M0-02": {
+      "evidence": null,
+      "globs": [
+        ".github/workflows/ci.yml",
+        "tests/test_frontend_module_tests_gate.py"
+      ],
+      "kind": "fixture",
+      "notes": "M0-02a CI matrix/toolchain and M0-02b contract lane landed. M0-02c Ruff ratchet is an independent pending hygiene row per D-INT-06: it never closes or keeps open a G row and is not part of the required chain.",
+      "obs": {
+        "ci_matrix": "present",
+        "contract_lane": "present",
+        "frontend_module_tests": "present",
+        "rph_job": "present",
+        "ruff_ratchet": "absent"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m0-02a-local-toolchain.json",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "M0-03": {
+      "evidence": null,
+      "globs": [
+        "scripts/acceptance/acp2_runtime.py",
+        "scripts/acceptance/acp2_experience.py",
+        "tests/test_acp2_runtime_acceptance_harness.py",
+        "tests/test_acp2_experience_observations.py"
+      ],
+      "kind": "fixture",
+      "notes": "Live evidence requires declared observations; offline diagnostics never yield PASS. Later M4 harness edits extended the same scripts; the recorded contract is unchanged. The two h4_closeout failures are pre-existing path-relocation failures and are not used against this row.",
+      "obs": {
+        "controller": "present",
+        "live_rows": "NOT_VERIFIED",
+        "observation_contract": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m0-03b-live-observations.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M0-04": {
+      "evidence": null,
+      "globs": [
+        "src/acp_services/workspace/command_identity.py",
+        "src/acp_services/runtime/idempotency.py",
+        "src/acp_services/runtime/local_admission.py",
+        "src/acp/api/v1_routes.py",
+        "tests/test_acp2_runtime_command_identity.py"
+      ],
+      "kind": "fixture",
+      "notes": "Verified HTTP/server/explicit-local CommandIdentity; two principals reusing one key return a typed 409; migration 024 versions legacy idempotency. Later additive work touched the same runtime files and the final full suite at 6cbf725 is green apart from the documented h4_closeout location pair.",
+      "obs": {
+        "command_identity": "present",
+        "idempotency_conflict": "present",
+        "migration_024": "present"
+      },
+      "receipt": "tests/test_acp2_runtime_command_identity.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M0-05": {
+      "evidence": null,
+      "globs": [
+        "src/acp_services/entrypoints/mcp.py",
+        "src/acp_services/runtime/idempotency.py",
+        "tests/test_acp2_runtime_mcp_process.py",
+        "tests/test_acp2_runtime_mcp_backends.py"
+      ],
+      "kind": "fixture",
+      "notes": "MCP idempotency now routes through CommandIdentity; prepare key v2 and lookup-only auto_ keys are covered by the process/backends tests. Revocation is re-tested on the remote path by M4-03.",
+      "obs": {
+        "auto_lookup_only": "present",
+        "mcp_idempotency": "present",
+        "prepare_key_v2": "present",
+        "revocation": "present"
+      },
+      "receipt": "tests/test_acp2_runtime_mcp_process.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M0-06": {
+      "evidence": null,
+      "globs": [
+        "src/acp/api/v1_routes.py",
+        "src/acp_services/contracts/envelope.py",
+        "tests/test_acp2_runtime_contracts.py"
+      ],
+      "kind": "fixture",
+      "notes": "Exhaustive v1 field policy and cross-entry JobSpec equivalence with digest v2; the HTTP prepare route is the single prepare-field authority (M0-06 followup 927d92f).",
+      "obs": {
+        "digest_v2": "present",
+        "jobspec_equivalence": "present",
+        "v1_field_policy": "present"
+      },
+      "receipt": "tests/test_acp2_runtime_contracts.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M0-07": {
+      "evidence": null,
+      "globs": [
+        "src/acp_services/runtime/attempt_completion.py",
+        "src/acp_services/runtime/receipt_identity.py",
+        "src/acp_services/store/migrations.py",
+        "tests/test_acp2_runtime_usage_receipts.py"
+      ],
+      "kind": "fixture",
+      "notes": "Trusted usage receipts bind settlement to the producing attempt; migrations 025/026 and the late-attempt path are covered.",
+      "obs": {
+        "migrations_025_026": "present",
+        "producer_capability": "present",
+        "trusted_usage_receipt": "present"
+      },
+      "receipt": "tests/test_acp2_runtime_usage_receipts.py",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "M0-08": {
+      "evidence": null,
+      "globs": [
+        "src/acp/mcp_extension.py",
+        "tests/test_services_mcp.py",
+        "tests/test_acp2_mcp_sdk_contract.py",
+        "scripts/acceptance/acp2_mcp_negotiation_probe.py"
+      ],
+      "kind": "live",
+      "notes": "Real @modelcontextprotocol/client 2.2.0 default negotiation and server/discover probe; malformed shapes stay -32602. ADR-006 records the decision.",
+      "obs": {
+        "protocol": "present",
+        "real_sdk_client": "present",
+        "server_discover": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m0-08/summary.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M0-09": {
+      "evidence": null,
+      "globs": [
+        "src/acp/mcp_extension.py",
+        "scripts/acceptance/acp2_mcp_live_client.mjs",
+        "rph/test/mcp-handshake.test.ts"
+      ],
+      "kind": "live",
+      "notes": "Path selected: research_extension negotiated in tools/call acp_capabilities with implemented=false/negotiated=false; the unmodified DSH client observes it. M0-13 is NOT_APPLICABLE (external_change_not_required).",
+      "obs": {
+        "extension_negotiated": "present",
+        "m0_13": "NOT_APPLICABLE",
+        "real_dsh_client": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m0-09/summary.json",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "M0-10": {
+      "evidence": null,
+      "globs": [
+        "scripts/acceptance/acp2_environment_readiness.py",
+        "reports/acp2_remediation_20261026/environment-readiness.json"
+      ],
+      "kind": "live",
+      "notes": "Environment readiness ledger (21 PASS / 0 FAIL / 3 NOT_VERIFIED) and the prepared ARM64 clean host. The independent operator itself is M5-03 and remains NOT_VERIFIED.",
+      "obs": {
+        "clean_host": "present",
+        "environment_ledger": "present",
+        "independent_operator": "NOT_VERIFIED"
+      },
+      "receipt": "reports/acp2_remediation_20261026/environment-readiness.json",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "M0-11": {
+      "evidence": null,
+      "globs": [
+        "docs/reference/next-change/acp2-contracts/decision-freeze/identity.v1.json",
+        "scripts/acceptance/check_decision_consumers.py",
+        "tests/test_acp2_decision_freeze_identity.py"
+      ],
+      "kind": "fixture",
+      "notes": "decision-freeze/identity.v1.json (10 decisions) plus the mechanical consumer scanner; later additive decisions did not remove a frozen field.",
+      "obs": {
+        "consumer_scanner": "present",
+        "identity_decisions": "present"
+      },
+      "receipt": "tests/test_acp2_decision_freeze_identity.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M0-12": {
+      "evidence": null,
+      "globs": [
+        "docs/reference/next-change/acp2-contracts/decision-freeze/integration.v1.json",
+        "scripts/acceptance/validate_acp2_decision_freeze.py",
+        "tests/test_acp2_decision_freeze_integration.py"
+      ],
+      "kind": "fixture",
+      "notes": "decision-freeze/integration.v1.json (8 decisions) and dual-freeze validation. D-INT-06 excludes Ruff hygiene from the G01-G26 chain; D-INT-04/05/07 remain pending implementation by their named tasks.",
+      "obs": {
+        "dual_freeze_validator": "present",
+        "integration_decisions": "present"
+      },
+      "receipt": "tests/test_acp2_decision_freeze_integration.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M0-13": {
+      "evidence": null,
+      "globs": [
+        "docs/reference/next-change/acp2-contracts/decision-freeze/integration.v1.json"
+      ],
+      "kind": "live",
+      "notes": "Conditional task NOT_APPLICABLE: M0-09 selected application_level_handshake_tools_call, so no upstream DSH client fork/patch/BOM entry is required. Recorded as CLOSED with result NOT_VERIFIED because the schema has no NOT_APPLICABLE result.",
+      "obs": {
+        "decision": "NOT_APPLICABLE",
+        "external_change": "NOT_APPLICABLE",
+        "m0_09_decision": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m0-09/summary.json",
+      "result": "NOT_VERIFIED",
+      "reuse": "exact"
+    },
+    "M1-01": {
+      "evidence": null,
+      "globs": [
+        "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+        "docs/reference/next-change/acp2-contracts/runtime/science-binding.v1.json",
+        "docs/reference/next-change/acp2-contracts/runtime/control-and-data.v1.json",
+        "src/acp_services/entrypoints/mcp.py"
+      ],
+      "kind": "fixture",
+      "notes": "Application/MCP/artifact/analysis contract unification and the reviewed wire-id allowlist (M1-01a/b/c). Later additive contract versions are registered in the manifest.",
+      "obs": {
+        "application_api": "present",
+        "operation_schema": "present",
+        "wire_id_allowlist": "present"
+      },
+      "receipt": "tests/test_acp2_runtime_contracts.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M1-02": {
+      "evidence": null,
+      "globs": [
+        "docs/reference/next-change/acp2-contracts/runtime/research-session.v1.md",
+        "src/acp_services/runtime/research_writer.py",
+        "rph/packages/bridge/src/index.ts"
+      ],
+      "kind": "fixture",
+      "notes": "ResearchRecord identity, round/submit-intent ledger and cross-session recovery contract; the events-recovery contract is separately registered by B19.",
+      "obs": {
+        "event_recovery": "present",
+        "research_identity": "present",
+        "submit_intent": "present"
+      },
+      "receipt": "tests/test_acp2_research_session_contract.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M1-03": {
+      "evidence": null,
+      "globs": [
+        "src/cccp/analysis/research/**",
+        "src/acp_services/runtime/science_binding.py",
+        "tests/test_acp2_evidence_projection.py"
+      ],
+      "kind": "fixture",
+      "notes": "One evidence projection with normalised TaskRefs and a separate ResearchDecision; missing checks never upgrade. The M4-04 real report is consumed through this projection.",
+      "obs": {
+        "decision_contract": "present",
+        "single_projection": "present",
+        "taskref_normalisation": "present"
+      },
+      "receipt": "tests/test_acp2_evidence_projection.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M1-04": {
+      "evidence": null,
+      "globs": [
+        "src/acp_services/runtime/research_budget.py",
+        "src/acp/calculations/contracts/**",
+        "docs/reference/next-change/acp2-contracts/runtime/admission-approval.v1.json",
+        "tests/test_acp2_submit_policy.py"
+      ],
+      "kind": "fixture",
+      "notes": "Typed science inputs, single SubmitPolicy and planning reservations (M1-04a/b/c); execution-limit vectors are re-run by M2-03c/M4-03.",
+      "obs": {
+        "planning_reservation": "present",
+        "submit_policy": "present",
+        "typed_science_inputs": "present"
+      },
+      "receipt": "tests/test_acp2_submit_policy.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M1-05": {
+      "evidence": null,
+      "globs": [
+        "docs/reference/next-change/adr/ADR-008-limited-diels-alder-criteria.md",
+        "src/cccp/analysis/research/science_criteria.py",
+        "tests/fixtures/acp2/science/diels_alder/**"
+      ],
+      "kind": "fixture",
+      "notes": "ADR-008 and the limited DA criteria/fixtures are frozen; the criteria fingerprint is unchanged by the M4-04 route amendment. This row proves the frozen criteria, not a supported scientific claim.",
+      "obs": {
+        "adr_008": "present",
+        "criteria_digest": "present",
+        "fixtures_frozen": "present"
+      },
+      "receipt": "docs/reference/next-change/adr/ADR-008-limited-diels-alder-criteria.md",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "M1-06": {
+      "evidence": null,
+      "globs": [
+        "scripts/acceptance/acp2_thin_slice.py",
+        "rph/packages/dsh-bundle/src/thin-slice.ts",
+        "frontend/js/workbench/features/research-evidence-view.js"
+      ],
+      "kind": "fixture",
+      "notes": "14/14 thin-slice steps and seven typed negatives on an empty project; Candidate-Contracts evidence is fixture-kind and the go/no-go decision was left to the user.",
+      "obs": {
+        "empty_project_chain": "present",
+        "go_no_go_inputs": "present",
+        "negative_cases": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/candidate-contracts/summary.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M2-01": {
+      "evidence": null,
+      "globs": [
+        "src/acp_services/runtime/research_writer.py",
+        "src/acp/api/v2_research.py",
+        "src/acp_services/data/research_resources.py",
+        "tests/test_acp2_research_saga.py"
+      ],
+      "kind": "fixture",
+      "notes": "Research writer, cross-database idempotent saga and the ten P2 tools (M2-01a/b/c); replay/outbox attribution is exercised by M4-01.",
+      "obs": {
+        "cross_db_saga": "present",
+        "p2_tools": "present",
+        "research_writer": "present"
+      },
+      "receipt": "tests/test_acp2_research_saga.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M2-02": {
+      "evidence": null,
+      "globs": [
+        "src/cccp/calculation/**",
+        "src/acp/storage/**",
+        "src/acp/results/**",
+        "tests/test_acp2_runtime_artifact.py"
+      ],
+      "kind": "fixture",
+      "notes": "Artifact chain and vibration.analyze over the single science catalog; native artifact digests are linked by M4-02/M4-04.",
+      "obs": {
+        "artifact_chain": "present",
+        "science_catalog": "present",
+        "vibration_analyze": "present"
+      },
+      "receipt": "tests/test_acp2_runtime_artifact.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M2-03": {
+      "evidence": null,
+      "globs": [
+        "src/acp_services/runtime/approvals.py",
+        "src/acp_services/runtime/research_budget.py",
+        "src/acp_services/runtime/step_dag.py",
+        "tests/test_acp2_m203_approval_policy.py"
+      ],
+      "kind": "fixture",
+      "notes": "Server-side approval policy with double-digest binding, durable budget reservations and deadline/capability projection (M2-03a/b/c).",
+      "obs": {
+        "approval_policy": "present",
+        "budget_reservation": "present",
+        "deadline_projection": "present",
+        "double_digest": "present"
+      },
+      "receipt": "tests/test_acp2_m203_approval_policy.py",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M2-04": {
+      "evidence": null,
+      "globs": [
+        "src/cccp/calculation/recipes/**",
+        "src/cccp/calculation/tasks/**",
+        "src/acp/calculations/**",
+        "tests/test_acp2_runtime_bounded_recipe_dag_*.py"
+      ],
+      "kind": "fixture",
+      "notes": "Bounded recipe DAG wiring with fencing and dispatch-time resource precheck (M2-04a-d). The DA nine-step public entry is not closed here: M4-04 records unsupported_step_kind for endpoint_prep and nine attempts sharing one release.",
+      "obs": {
+        "bounded_dag": "present",
+        "da_public_entry": "NOT_VERIFIED",
+        "fencing": "present",
+        "resource_precheck": "present"
+      },
+      "receipt": "tests/test_acp2_runtime_bounded_recipe_dag_a.py",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "M2-05": {
+      "evidence": null,
+      "globs": [
+        "src/cccp/plugin/**",
+        "src/acp_services/runtime/adapter_registry.py",
+        "src/acp_services/runtime/analysis_capabilities.py",
+        "tests/test_acp2_science_plugin_production.py"
+      ],
+      "kind": "fixture",
+      "notes": "Production assembly for pure-analysis third-party plugins only. worker-hosted third-party COMPUTE stays a separate DEFERRED/NOT_VERIFIED row (see deferred_rows) and is never closed by this pure-analysis evidence.",
+      "obs": {
+        "computed_distribution_digest": "present",
+        "pure_analysis_plugin": "present",
+        "worker_hosted_compute": "NOT_VERIFIED"
+      },
+      "receipt": "tests/test_acp2_science_plugin_production.py",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "M3-01": {
+      "evidence": null,
+      "globs": [
+        "rph/packages/bridge/src/**",
+        "rph/packages/dsh-bundle/src/**",
+        "rph/test/m3-01-bridge-surface.test.ts",
+        "rph/test/m3-01-findings.test.ts"
+      ],
+      "kind": "fixture",
+      "notes": "Real MCP PlatformClient and bridge parameter/TaskRef path; the full-chain M4-01 run exercises it across CLI/MCP/Workbench. Later RPH additions kept the frozen bridge boundary.",
+      "obs": {
+        "bridge_params": "present",
+        "mcp_platform_client": "present",
+        "taskref": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-01/summary.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M3-02": {
+      "evidence": null,
+      "globs": [
+        "rph/packages/cli/src/**",
+        "rph/packages/dsh-bundle/src/**",
+        "rph/test/m3-02-cli.test.ts",
+        "rph/test/m3-02-profile.test.ts"
+      ],
+      "kind": "fixture",
+      "notes": "CLI composition root, portable profiles and doctor; M5-01 re-runs rph doctor from the artifact-store install surface. Product fail-fast matrix (M3-02b) is covered by the CLI/profile tests.",
+      "obs": {
+        "composition_root": "present",
+        "doctor": "present",
+        "portable_profile": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m5-01/rph-install.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M3-03": {
+      "evidence": null,
+      "globs": [
+        "src/acp_services/runtime/model_gateway.py",
+        "rph/test/model-planner.test.ts",
+        "rph/test/supervisor-gateway.test.ts"
+      ],
+      "kind": "fixture",
+      "notes": "M3-03 model smoke executed no provider call (no credential in the process) and is NOT_VERIFIED. M4-02 later ran a live deepseek-chat round through the production gateway with provider-reported usage, but the exposed development credential still requires rotation and production authorization/ceilings before this row can be PASS. Keep rerun_required.",
+      "obs": {
+        "production_credential": "NOT_VERIFIED",
+        "provider_calls": "absent",
+        "real_gateway_round": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m3-03-model-smoke.json",
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required"
+    },
+    "M3-04": {
+      "evidence": null,
+      "globs": [
+        "rph/packages/dsh-bundle/src/**",
+        "rph/test/supervisor-recovery.test.ts"
+      ],
+      "kind": "fixture",
+      "notes": "Recoverable Supervisor with bound evidence and durable decisions; M4-01/M4-03 re-exercise restart/recovery across the platform path.",
+      "obs": {
+        "durable_decisions": "present",
+        "evidence_binding": "present",
+        "supervisor_recovery": "present"
+      },
+      "receipt": "rph/test/supervisor-recovery.test.ts",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M3-05": {
+      "evidence": null,
+      "globs": [
+        "frontend/js/workbench/**",
+        "frontend/js/client/**",
+        "frontend/js/module_tests/research_evidence_view.test.js"
+      ],
+      "kind": "fixture",
+      "notes": "Workbench research commands, platform approval and submit; fixture + real-controller-HTTP, no browser/model/QC/LSF. Real Chromium approvals are M4-02.",
+      "obs": {
+        "no_local_fallback": "present",
+        "platform_approval": "present",
+        "submit": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m3-05b-research-commands.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M3-06": {
+      "evidence": null,
+      "globs": [
+        "frontend/js/workbench/features/capability-form.js",
+        "src/acp/api/server.py",
+        "tests/test_acp2_m306_capability_form_live.py"
+      ],
+      "kind": "fixture",
+      "notes": "Schema-driven capability form over the frozen ui-subset; M4-05 exercises the real browser form. Numeric DOM edits are refused as ui_value_type and recorded as M4-05-F1.",
+      "obs": {
+        "capability_form": "present",
+        "ui_subset": "present",
+        "unknown_keyword_refusal": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-05/form.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M4-01": {
+      "evidence": null,
+      "globs": [
+        "scripts/acceptance/acp2_full_chain_mcp.mjs",
+        "src/acp_services/**",
+        "src/acp/api/**"
+      ],
+      "kind": "fixture",
+      "notes": "19/19 low-cost fault cases and the full product chain on real Controller/SQLite/MCP/Bridge/Supervisor; science/model/browser are declared seams (fixture kind).",
+      "obs": {
+        "browser": "absent",
+        "controller": "present",
+        "fault_matrix": "present",
+        "full_chain": "present",
+        "model": "absent",
+        "qc": "absent"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-01/summary.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M4-02": {
+      "evidence": null,
+      "globs": [
+        "scripts/acceptance/acp2_m402_real_rounds.py",
+        "src/acp_services/runtime/model_gateway.py",
+        "src/acp/api/**"
+      ],
+      "kind": "live",
+      "notes": "Real model rounds through the Controller gateway, real Local singlepoint/optimize/frequency with native receipts, and two Chromium identities plus injection and same-TaskRef legs. LSF is M4-03; the model credential governance caveat stays on M3-03.",
+      "obs": {
+        "browser": "present",
+        "controller": "present",
+        "lsf": "absent",
+        "model": "present",
+        "qc": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-02/summary.json",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "M4-03": {
+      "evidence": null,
+      "globs": [
+        "scripts/acceptance/acp2_m403_lsf.py",
+        "src/acp/scheduler/remote/**",
+        "src/acp_services/runtime/execution_limits.py"
+      ],
+      "kind": "live",
+      "notes": "15/15 real-LSF rows PASS with native bsub/bjobs/bhist evidence, termination, queue deadline, pause/cancel race, restart and publication recovery. The shipped execution_limits rows stay NOT_VERIFIED for the DA lane; the DA-ENV-LSF row remains NOT_VERIFIED in M4-04, so H3/H4 do not close.",
+      "obs": {
+        "browser": "absent",
+        "controller": "present",
+        "da_lsf_row": "NOT_VERIFIED",
+        "lsf": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-03/summary.json",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "M4-04": {
+      "evidence": null,
+      "globs": [
+        "scripts/acceptance/acp2_m404_da.py",
+        "tests/fixtures/acp2/science/diels_alder/**",
+        "src/cccp/analysis/research/**"
+      ],
+      "kind": "live",
+      "notes": "Route-a execution chain PASS on real ORCA 6.1.1 at r2SCAN-3c/def2-mTZVPP (ADR-008 Amendment A): real TS, frequency, bidirectional IRC and deterministic analysis. claim_status=refuted on DA-C05 endpoint identity; path connectivity refuted, activation energy supported. The task row records the execution-chain result, not a supported scientific claim. H4 stays OPEN (LSF row NOT_VERIFIED, Local row missing walltime/terminal-usage receipts, bounded recipe entry unsupported). The two h4_closeout location-dependent tests are not evidence for this row.",
+      "obs": {
+        "DA-ENV-LSF": "NOT_VERIFIED",
+        "bounded_recipe_public_entry": "absent",
+        "claim_refuted": "present",
+        "execution_chain": "present",
+        "qc": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-04-route-a/summary.json",
+      "result": "PASS",
+      "reuse": "reused"
+    },
+    "M4-05": {
+      "evidence": null,
+      "globs": [
+        "scripts/acceptance/acp2_m405_plugin.py",
+        "src/cccp/plugin/**",
+        "src/acp_services/runtime/**"
+      ],
+      "kind": "live",
+      "notes": "Third-party pure-analysis plugin install/enable/discover/form/preflight/execute/uninstall with a live schema-form browser row; upgrade/uninstall require a new Controller process (M4-05-F2), numeric DOM edits are refused (M4-05-F1). worker-hosted COMPUTE is not claimed.",
+      "obs": {
+        "browser": "present",
+        "history_readonly": "present",
+        "plugin_execute": "present",
+        "plugin_install": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-05/summary.json",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "M4-06": {
+      "evidence": null,
+      "globs": [
+        "scripts/acceptance/acp2_m406a_upgrade.py",
+        "scripts/acceptance/acp2_m406b.py",
+        "src/acp_services/store/migrations.py",
+        "src/acp_services/runtime/**"
+      ],
+      "kind": "aggregate",
+      "notes": "M4-06a previous->candidate upgrade/rollback with recovery and read-only history; M4-06b NMR/thermochemistry reuse plus multi-project/multi-user isolation and three-face revocation. H6 closes on both receipts.",
+      "obs": {
+        "cross_domain_nmr": "present",
+        "cross_domain_thermochemistry": "present",
+        "multitenant_isolation": "present",
+        "revocation": "present",
+        "upgrade_rollback": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m4-06b/summary.json",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "M5-01": {
+      "evidence": null,
+      "globs": [
+        "scripts/release/**",
+        "scripts/build_release.py",
+        "src/acp/api/static_assets.py",
+        "src/acp/api/server.py"
+      ],
+      "kind": "live",
+      "notes": "M5-01 built every component into the durable store and installed from the store alone in fresh venvs: root/roles matrix, MCP 2025-06-18 eight tools, Workbench read-only mounts with digest verification, RPH offline install/doctor and the plugin wheel entry point. M5-02 rebuilds the BOM from the clean candidate and re-verifies every artifact byte.",
+      "obs": {
+        "artifact_store": "present",
+        "clean_install": "present",
+        "mcp_handshake": "present",
+        "plugin_wheel": "present",
+        "rph_offline_install": "present",
+        "workbench": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m5-01/summary.json",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "M5-02": {
+      "evidence": "working-tree",
+      "globs": [
+        "docs/reference/next-change/acp2-contracts/release/**",
+        "scripts/release/**",
+        "scripts/acceptance/validate_acp2_gap_coverage.py",
+        "scripts/acceptance/validate_acp2_contracts.py"
+      ],
+      "kind": "aggregate",
+      "notes": "This sign-off task: clean-candidate BOM, 39/32/26/8 + 3 deferred coverage judgments, B26 manifest registration, and walk_bom.py traversal of every artifact URI and coverage receipt. Full release stays NOT_VERIFIED because H4/H7 and the model-credential row are still open.",
+      "obs": {
+        "b26_registration": "present",
+        "clean_bom": "present",
+        "coverage_mechanical_counts": "present",
+        "walker": "present"
+      },
+      "receipt": "reports/acp2_remediation_20261026/m5-02/judgements.json",
+      "result": "PASS",
+      "reuse": "exact"
+    },
+    "M5-03": {
+      "evidence": null,
+      "globs": [
+        "reports/acp2_remediation_20261026/clean-host-prep.json",
+        "reports/acp2_remediation_20261026/environment-readiness.json"
+      ],
+      "kind": "live",
+      "notes": "No independent operator run yet. The second operator and the prepared ARM64 clean host are registered, but M5-03 must install from the BOM/runbook in another absolute directory with no checkout/PYTHONPATH and re-run doctor/DSH/P2/approval/LSF/DA/plugin/H6 rows. Keep NOT_VERIFIED.",
+      "obs": {
+        "clean_machine": "present",
+        "final_release": "absent",
+        "independent_operator": "absent",
+        "install": "absent"
+      },
+      "receipt": "reports/acp2_remediation_20261026/environment-readiness.json",
+      "result": "NOT_VERIFIED",
+      "reuse": "rerun_required"
+    }
+  }
+}

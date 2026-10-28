@@ -43,7 +43,7 @@ CONTRACT_MANIFEST = CONTRACTS / "manifest.json"
 STATIC_MANIFEST = CONTRACTS / "experience" / "static-assets.manifest.json"
 EXPERIENCE_MANIFEST = CONTRACTS / "experience" / "release-manifest.json"
 STORE = (
-    Path(os.environ.get("ACP2_ARTIFACT_STORE", "/ACPServer/acp2-artifacts/remediation")) / "m5-01"
+    Path(os.environ.get("ACP2_ARTIFACT_STORE", "/ACPServer/acp2-artifacts/remediation")) / "m5-02"
 )
 CHECKER = ROOT / "scripts" / "acceptance" / "check_release_artifacts.py"
 INSTALLER = ROOT / "scripts" / "acceptance" / "acp2_m501_install.py"
@@ -116,8 +116,9 @@ def test_bom_validates_against_the_frozen_schema() -> None:
     errors = _validator().validate(bom, _load(BOM_SCHEMA))
     assert errors == [], "BOM violates bom.schema.json:\n" + "\n".join(errors)
     assert bom["schema"] == "acp2.release.bom.v1"
-    assert bom["task_id"] == "M5-01"
+    assert bom["task_id"] == "M5-02"
     assert bom["owner"] == "REL"
+    assert bom["source"]["clean"] is True
 
 
 def test_bom_covers_every_required_component_class() -> None:

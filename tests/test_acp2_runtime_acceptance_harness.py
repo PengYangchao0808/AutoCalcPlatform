@@ -60,7 +60,8 @@ def test_contract_version_tracks_delivered_manifest() -> None:
     # annotated delivery set, so the frozen manifest version is 1.4.0.
     # M0-12 (2026-10-27): the decision-freeze registrations move it to 1.5.0.
     # M1-01/M1-02: contract unification + research-session -> 1.6.0.
-    assert harness.contract_version() == "1.6.0"
+    # M5-02: final B26 release registration -> 1.7.0.
+    assert harness.contract_version() == "1.7.0"
 
 
 def test_scenario_registry_completeness() -> None:

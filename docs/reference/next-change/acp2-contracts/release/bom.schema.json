@@ -47,7 +47,11 @@
         "clean": {"type": "boolean"},
         "persistent_ref": {"type": "string", "minLength": 1},
         "persistent_tag": {"type": "string", "minLength": 1},
-        "dirty_path_snapshot": {"type": ["string", "null"]}
+        "dirty_path_snapshot": {"type": ["string", "null"]},
+        "release_overlay": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
       }
     },
     "evidence": {

@@ -17,7 +17,7 @@
       "SCOPE-OUT-06",
       "SCOPE-OUT-07"
     ],
-    "reason": "全部 G 项、任务与子检查点当前为 OPEN；任何 IN_SCOPE required 行非 PASS 即不放行完整 ACP2。",
+    "reason": "完整 ACP2 仍不放行：H4 保持 OPEN（DA-ENV-LSF NOT_VERIFIED、Local DA 行缺 walltime/usage 回执、bounded recipe 公开入口未闭合）；H7/M5-03 独立操作者尚未执行；M3-03 生产模型凭据轮换前 NOT_VERIFIED；M4-04 科学命题 refuted 已如实记录。M0-02c Ruff 卫生为独立 pending 流，按 D-INT-06 不进入 required 链，也不作为 gap 关闭依据。DEFERRED 行（worker-hosted COMPUTE、CDXML、累计 core-hours/token）不计作已实现。",
     "required_classes": [
       "IN_SCOPE"
     ],

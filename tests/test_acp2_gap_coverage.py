@@ -23,6 +23,7 @@ PLAN = REPO_ROOT / "reports/acp2_delivery_gap_audit_20261026/EXECUTION_PLAN.md"
 RELEASE = REPO_ROOT / "docs/reference/next-change/acp2-contracts/release"
 COVERAGE = RELEASE / "evidence-coverage.current.json"
 SCOPE = RELEASE / "scope.json"
+BOM = RELEASE / "bom.current.json"
 MANIFEST = REPO_ROOT / "docs/reference/next-change/acp2-contracts/manifest.json"
 
 EXPECTED_SCOPE_ITEMS = {
@@ -157,6 +158,11 @@ def scope() -> dict:
     return json.loads(SCOPE.read_text(encoding="utf-8"))
 
 
+@pytest.fixture()
+def bom() -> dict:
+    return json.loads(BOM.read_text(encoding="utf-8"))
+
+
 def test_full_ledger_validates(validator) -> None:
     summary = validator.run(REPO_ROOT)
     assert summary.startswith("VALID:")
@@ -172,18 +178,76 @@ def test_validator_cli_exits_zero() -> None:
     assert completed.stdout.startswith("VALID:")
 
 
-def test_nothing_is_closed_and_nothing_claims_pass(coverage) -> None:
-    for row in [*coverage["tasks"], *coverage["checkpoints"], *coverage["gaps"]]:
-        assert row["status"] == "OPEN", row["id"]
-        assert row["result"] == "NOT_VERIFIED", row["id"]
-        assert row["receipt"] is None, row["id"]
-    for row in coverage["h_rows"]:
-        assert row["result"] == "NOT_VERIFIED", row["id"]
-    assert coverage["summary"]["full_release_status"] == "NOT_VERIFIED"
+def test_final_ledger_rows_are_terminal_and_evidence_backed(coverage, bom) -> None:
+    summary = coverage["summary"]
+    assert summary["tasks_total"] == 39
+    assert summary["checkpoints_total"] == 32
+    assert summary["gaps_total"] == 26
+    assert summary["h_rows_total"] == 8
+    assert summary["tasks_open"] == 2
+    assert summary["checkpoints_open"] == 1
+    assert summary["gaps_open"] == 10
+    assert summary["h_rows_open"] == 3
+    assert summary["full_release_status"] == "NOT_VERIFIED"
     assert coverage["candidate_full"]["allowed"] is False
-    assert coverage["candidate_full"]["blocking_rows"] == [
-        f"G{index:02d}" for index in range(1, 27)
-    ]
+    assert len(coverage["deferred_rows"]) == 3
+    for section in ("tasks", "checkpoints", "gaps", "h_rows", "deferred_rows"):
+        for row in coverage[section]:
+            assert row["candidate"] == bom["source"]["revision"], (section, row["id"])
+            assert row["receipt"], (section, row["id"])
+            assert row["receipt_sha256"], (section, row["id"])
+            assert row["impact_globs"], (section, row["id"])
+            assert row["required_observations"], (section, row["id"])
+            assert row["reuse"] in {"exact", "reused", "rerun_required"}, (section, row["id"])
+
+
+def test_open_rows_are_the_documented_final_state(coverage) -> None:
+    tasks = {row["id"]: row for row in coverage["tasks"]}
+    assert {row["id"] for row in coverage["tasks"] if row["status"] == "OPEN"} == {
+        "M3-03",
+        "M5-03",
+    }
+    checkpoints = {row["id"]: row for row in coverage["checkpoints"]}
+    assert {row["id"] for row in coverage["checkpoints"] if row["status"] == "OPEN"} == {"M0-02c"}
+    assert {row["id"] for row in coverage["gaps"] if row["status"] == "OPEN"} == {
+        "G01",
+        "G05",
+        "G06",
+        "G10",
+        "G13",
+        "G15",
+        "G16",
+        "G17",
+        "G18",
+        "G19",
+    }
+    assert {row["id"] for row in coverage["h_rows"] if row["status"] == "OPEN"} == {
+        "H3",
+        "H4",
+        "H7",
+    }
+    assert tasks["M0-13"]["scope"] == "NOT_APPLICABLE"
+    assert tasks["M0-13"]["status"] == "CLOSED"
+    assert tasks["M0-13"]["result"] == "NOT_VERIFIED"
+    assert checkpoints["M0-02c"]["result"] == "NOT_VERIFIED"
+    assert tasks["M3-03"]["reuse"] == "rerun_required"
+    assert tasks["M5-03"]["reuse"] == "rerun_required"
+    assert tasks["M4-04"]["result"] == "PASS"
+    assert "refuted" in tasks["M4-04"]["notes"]
+    h4 = next(row for row in coverage["h_rows"] if row["id"] == "H4")
+    h6 = next(row for row in coverage["h_rows"] if row["id"] == "H6")
+    assert (h4["status"], h4["result"]) == ("OPEN", "NOT_VERIFIED")
+    assert (h6["status"], h6["result"]) == ("CLOSED", "PASS")
+    g15 = next(row for row in coverage["gaps"] if row["id"] == "G15")
+    assert g15["status"] == "OPEN"
+    assert g15["required_observations"]["bounded_recipe_public_entry"] == "absent"
+    g20 = next(row for row in coverage["gaps"] if row["id"] == "G20")
+    assert (g20["status"], g20["result"]) == ("CLOSED", "PASS")
+    deferred = {row["capability"]: row for row in coverage["deferred_rows"]}
+    assert set(deferred) == {"SCOPE-DEF-01", "SCOPE-DEF-02", "SCOPE-DEF-03"}
+    for row in deferred.values():
+        assert row["scope"] == "DEFERRED"
+        assert row["result"] == "NOT_VERIFIED"
 
 
 def test_every_gap_row_matches_the_frozen_section_10_vectors(coverage) -> None:
@@ -267,28 +331,27 @@ def test_scope_gap_index_covers_every_gap_as_required(scope) -> None:
     assert scope["conditional_tasks"][0]["scope"] == "NOT_APPLICABLE"
 
 
-def test_release_contracts_are_registered_as_planned_and_owned_by_b() -> None:
+def test_release_contracts_are_registered_as_delivered_by_b26() -> None:
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     contracts = {entry["id"]: entry for entry in manifest["contracts"]}
     for contract_id in (
         "release-scope",
         "release-evidence-coverage-schema",
         "release-bom-schema",
+        "release-bom-current",
+        "release-evidence-coverage-current",
     ):
         entry = contracts[contract_id]
-        assert entry["status"] == "planned"
+        assert entry["status"] == "delivered"
+        assert entry["delivered_by"] == "B26"
         assert entry["owner"] == "B"
-        assert "sha256" not in entry
+        assert len(entry["sha256"]) == 64
         assert (REPO_ROOT / entry["path"]).is_file()
-    # M0-12 (2026-10-27): the decision-freeze registration bumps the manifest
-    # to 1.5.0 and appends the M0-12 history entry; the release namespace above
-    # stays planned/owner-B until the M5-02 release stage.
-    # M1-01/M1-02: contract unification + research-session -> 1.6.0 / M1-02.
-    assert manifest["contract_version"] == "1.6.0"
-    assert manifest["contract_version_history"][-1]["stage"] == "M1-02"
+    # M5-02 is the recorded final release stage: the manifest moves to 1.7.0
+    # and appends the B26 history entry; no new stage name is invented.
+    assert manifest["contract_version"] == "1.7.0"
+    assert manifest["contract_version_history"][-1]["stage"] == "B26"
     release_files = {path.name for path in RELEASE.iterdir() if path.is_file()}
-    # M5-01 adds the generated BOM instance (schema registered as
-    # release-bom-schema; the instance itself is M5-02's registration).
     assert release_files == {
         "scope.json",
         "evidence-coverage.schema.json",
@@ -303,12 +366,12 @@ def test_release_contracts_are_registered_as_planned_and_owned_by_b() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_defective_coverage_rows_are_rejected(validator, coverage, scope, model) -> None:
+def test_defective_coverage_rows_are_rejected(validator, coverage, scope, model, bom) -> None:
     def reject(mutator, match: str) -> None:
         mutated = copy.deepcopy(coverage)
         mutator(mutated)
         with pytest.raises(validator.CoverageError, match=match):
-            validator.validate_coverage_against_plan(REPO_ROOT, mutated, model)
+            validator.validate_coverage_against_plan(REPO_ROOT, mutated, model, bom, scope)
 
     reject(lambda data: data["tasks"].pop(), "must cover exactly the plan tasks")
     reject(
@@ -333,12 +396,6 @@ def test_defective_coverage_rows_are_rejected(validator, coverage, scope, model)
 
     reject(deferred_pass, "DEFERRED and may never claim PASS")
 
-    def close_task(data: dict) -> None:
-        data["tasks"][0]["status"] = "CLOSED"
-        data["tasks"][0]["result"] = "PASS"
-
-    reject(close_task, "is CLOSED while gap")
-
     def h_mapping(data: dict) -> None:
         data["h_rows"][0]["gaps"] = ["G01"]
 
@@ -348,6 +405,46 @@ def test_defective_coverage_rows_are_rejected(validator, coverage, scope, model)
     drifted["gaps"][0]["scope"] = "DEFERRED"
     with pytest.raises(validator.CoverageError, match="disagrees with scope.gap_index"):
         validator.validate_scope_coverage_alignment(drifted, scope)
+
+    def missing_receipt(data: dict) -> None:
+        data["tasks"][0]["receipt"] = None
+
+    reject(missing_receipt, "has no receipt")
+
+    def wrong_candidate(data: dict) -> None:
+        data["tasks"][0]["candidate"] = "0" * 40
+
+    reject(wrong_candidate, "candidate must be the BOM source revision")
+
+    def rerun_pass(data: dict) -> None:
+        row = next(row for row in data["tasks"] if row["id"] == "M5-03")
+        row["reuse"] = "rerun_required"
+        row["status"] = "CLOSED"
+        row["result"] = "PASS"
+
+    reject(rerun_pass, "rerun_required but claims PASS")
+
+    def gap_pass_with_open_task(data: dict) -> None:
+        gap = next(row for row in data["gaps"] if row["id"] == "G20")
+        gap["status"] = "CLOSED"
+        gap["result"] = "PASS"
+        task = next(row for row in data["tasks"] if row["id"] == "M0-02")
+        task["status"] = "OPEN"
+        task["result"] = "NOT_VERIFIED"
+
+    reject(gap_pass_with_open_task, "is PASS while closing task")
+
+    def gap_pass_with_absent_observation(data: dict) -> None:
+        gap = next(row for row in data["gaps"] if row["id"] == "G20")
+        gap["required_observations"]["worker_hosted_compute"] = "NOT_VERIFIED"
+
+    reject(gap_pass_with_absent_observation, "is PASS while required observation")
+
+    def deferred_claims_pass(data: dict) -> None:
+        data["deferred_rows"][0]["result"] = "PASS"
+        data["deferred_rows"][0]["status"] = "CLOSED"
+
+    reject(deferred_claims_pass, "DEFERRED and may never claim PASS")
 
 
 def test_scope_defects_are_rejected(validator, scope, model) -> None:
@@ -397,12 +494,18 @@ def test_release_registration_is_checked(validator) -> None:
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     validator.validate_release_registration(REPO_ROOT, manifest, RELEASE)
 
-    delivered = copy.deepcopy(manifest)
-    next(row for row in delivered["contracts"] if row["id"] == "release-scope")["status"] = (
-        "delivered"
+    missing_stage = copy.deepcopy(manifest)
+    next(row for row in missing_stage["contracts"] if row["id"] == "release-scope").pop(
+        "delivered_by"
     )
-    with pytest.raises(validator.CoverageError, match="must stay status=planned"):
-        validator.validate_release_registration(REPO_ROOT, delivered, RELEASE)
+    with pytest.raises(validator.CoverageError, match="delivered_by=B26"):
+        validator.validate_release_registration(REPO_ROOT, missing_stage, RELEASE)
+
+    planned_with_digest = copy.deepcopy(manifest)
+    entry = next(row for row in planned_with_digest["contracts"] if row["id"] == "release-scope")
+    entry["status"] = "planned"
+    with pytest.raises(validator.CoverageError, match="must not carry a delivered sha256"):
+        validator.validate_release_registration(REPO_ROOT, planned_with_digest, RELEASE)
 
     missing = copy.deepcopy(manifest)
     missing["contracts"] = [

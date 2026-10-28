@@ -12,9 +12,10 @@ every registered row is re-derived from ``EXECUTION_PLAN.md`` instead of trusted
   ``release/scope.json``, DEFERRED rows may never claim PASS;
 * the H0–H7 rows must match the H7 handoff prerequisites and the recorded
   handoff/execution-index digests;
-* the three release contracts must be registered as ``status=planned`` owned by
-  B, and every file under ``release/`` must appear in the manifest (a missing
-  ``scope.json`` registration is exactly what this check exists for).
+* the three release contracts must be registered by B (planned before the B26
+  release stage, delivered by M5-02), and every file under ``release/`` must
+  appear in the manifest (a missing ``scope.json`` registration is exactly what
+  this check exists for).
 
 The coverage file identifies itself with a canonical-bytes ``coverage_sha256``;
 ``--print-digest`` prints the digest a hand edit would have to write back.
@@ -47,6 +48,7 @@ COVERAGE_RELATIVE = f"{CONTRACTS_RELATIVE}/release/evidence-coverage.current.jso
 SCOPE_RELATIVE = f"{CONTRACTS_RELATIVE}/release/scope.json"
 SCHEMA_RELATIVE = f"{CONTRACTS_RELATIVE}/release/evidence-coverage.schema.json"
 BOM_SCHEMA_RELATIVE = f"{CONTRACTS_RELATIVE}/release/bom.schema.json"
+BOM_RELATIVE = f"{CONTRACTS_RELATIVE}/release/bom.current.json"
 MANIFEST_RELATIVE = f"{CONTRACTS_RELATIVE}/manifest.json"
 H_INDEX_RELATIVE = "docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md"
 H7_RELATIVE = f"{CONTRACTS_RELATIVE}/science/handoff-H7.json"
@@ -55,6 +57,7 @@ COVERAGE_SCHEMA_ID = "acp2.release.evidence-coverage.v1"
 SCOPE_SCHEMA_ID = "acp2.release.scope.v1"
 BOM_SCHEMA_ID = "acp2.release.bom.v1"
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
+HEX40 = re.compile(r"^[0-9a-f]{40}$")
 TASK_ID = re.compile(r"^M[0-5]-[0-9]{2}$")
 H_ID = re.compile(r"^H[0-7]$")
 EVIDENCE_LEVELS = ("L0", "L1", "L2", "L3", "L4", "L5")
@@ -65,11 +68,16 @@ SCOPE_CLASSES = ("IN_SCOPE", "DEFERRED", "OUT_OF_SCOPE")
 ROW_SCOPE_CLASSES = ("IN_SCOPE", "DEFERRED", "NOT_APPLICABLE")
 ROW_STATUSES = ("OPEN", "CLOSED")
 ROW_RESULTS = ("PASS", "FAIL", "NOT_VERIFIED")
+REUSE_CLASSES = ("exact", "reused", "rerun_required")
+OBSERVATION_VALUES = ("present", "absent", "NOT_VERIFIED", "declared_absent", "NOT_APPLICABLE")
+#: M5-02 is the recorded final release stage (B26) that flips the release
+#: contracts to delivered.  No new stage name may be invented here.
+RELEASE_STAGE = "B26"
 
-#: Release contracts M0-01 registers as planned (owner B).  M5-02 later flips
-#: them through a recorded release stage; this gate only proves they are
-#: registered, not that they are delivered.
-PLANNED_RELEASE_CONTRACTS = (
+#: Release contracts M0-01 registered as planned (owner B).  M5-02 flips them
+#: to delivered through the recorded B26 release stage; the gate accepts either
+#: state but a delivered entry must name B26 and carry a matching digest.
+RELEASE_CONTRACTS = (
     "release-scope",
     "release-evidence-coverage-schema",
     "release-bom-schema",
@@ -439,7 +447,134 @@ def validate_scope(root: Path, scope: dict[str, Any], model: Any) -> dict[str, A
 # ---------------------------------------------------------------------------
 
 
-def validate_coverage_against_plan(root: Path, coverage: dict[str, Any], model: Any) -> None:
+def validate_row_evidence(
+    root: Path,
+    row: dict[str, Any],
+    label: str,
+    *,
+    candidate: str,
+    live: bool,
+) -> None:
+    """Every final row must cite a retrievable receipt and a reuse decision."""
+
+    row_candidate = row.get("candidate")
+    if row_candidate != candidate:
+        fail(f"{label}.candidate must be the BOM source revision {candidate}")
+    revision = row.get("evidence_revision")
+    if not isinstance(revision, str) or not revision:
+        fail(f"{label}.evidence_revision must be a non-empty commit or working-tree")
+    reuse = require_enum(row.get("reuse"), REUSE_CLASSES, f"{label}.reuse")
+    result = row.get("result")
+    if reuse == "rerun_required" and result == "PASS":
+        fail(f"{label} is rerun_required but claims PASS")
+    globs = row.get("impact_globs")
+    if not isinstance(globs, list) or not globs:
+        fail(f"{label}.impact_globs must be a non-empty array")
+    for glob in globs:
+        if not isinstance(glob, str) or not glob:
+            fail(f"{label}.impact_globs entries must be non-empty strings")
+        if Path(glob).is_absolute():
+            fail(f"{label}.impact_globs must be repo-relative: {glob}")
+    observations = row.get("required_observations")
+    if not isinstance(observations, dict) or not observations:
+        fail(f"{label}.required_observations must be a non-empty object")
+    for name, value in observations.items():
+        if not isinstance(name, str) or not name:
+            fail(f"{label}.required_observations has an empty key")
+        if value not in OBSERVATION_VALUES:
+            fail(
+                f"{label}.required_observations[{name}] must be one of "
+                f"{OBSERVATION_VALUES}, got {value!r}"
+            )
+    if live and not any(value == "present" for value in observations.values()):
+        fail(f"{label} is live but declares no present observation")
+
+    receipt = row.get("receipt")
+    if receipt is None:
+        if result == "PASS" or reuse != "rerun_required":
+            fail(f"{label} has no receipt but is not a rerun_required NOT_VERIFIED row")
+        return
+    if not isinstance(receipt, str) or not receipt:
+        fail(f"{label}.receipt must be a repo-relative path or null")
+    if Path(receipt).is_absolute():
+        fail(f"{label}.receipt must be repo-relative: {receipt}")
+    require_repo_path(root, receipt, f"{label}.receipt")
+    require_digest(root, row.get("receipt_sha256"), receipt, f"{label}.receipt_sha256")
+
+
+def validate_deferred_rows(
+    root: Path,
+    coverage: dict[str, Any],
+    scope: dict[str, Any],
+    *,
+    candidate: str,
+) -> None:
+    rows = coverage.get("deferred_rows")
+    if not isinstance(rows, list) or not rows:
+        fail("coverage.deferred_rows must be a non-empty array")
+    by_id = require_unique(rows, "id", "coverage.deferred_rows")
+    deferred = {
+        capability["id"]: capability
+        for capability in scope["capabilities"]
+        if capability.get("class") == "DEFERRED"
+    }
+    if set(row.get("capability") for row in rows) != set(deferred):
+        fail("coverage.deferred_rows must be one-to-one with scope DEFERRED capabilities")
+    for row_id, row in by_id.items():
+        capability = deferred[row["capability"]]
+        if row.get("statement") != capability.get("statement"):
+            fail(f"coverage.deferred_rows[{row_id}].statement drifts from scope.json")
+        if row.get("scope") != "DEFERRED":
+            fail(f"coverage.deferred_rows[{row_id}].scope must be DEFERRED")
+        require_enum(row.get("status"), ROW_STATUSES, f"coverage.deferred_rows[{row_id}].status")
+        require_enum(row.get("result"), ROW_RESULTS, f"coverage.deferred_rows[{row_id}].result")
+        if row.get("result") == "PASS":
+            fail(f"coverage.deferred_rows[{row_id}] is DEFERRED and may never claim PASS")
+        validate_row_evidence(
+            root,
+            row,
+            f"coverage.deferred_rows[{row_id}]",
+            candidate=candidate,
+            live=False,
+        )
+
+
+def validate_bom_alignment(root: Path, coverage: dict[str, Any], bom: dict[str, Any]) -> None:
+    if bom.get("schema") != BOM_SCHEMA_ID:
+        fail(f"bom.current.json schema must be {BOM_SCHEMA_ID}")
+    source = bom.get("source")
+    if not isinstance(source, dict):
+        fail("bom.current.json source must be an object")
+    if source.get("clean") is not True:
+        fail("bom.current.json must be rebuilt from a clean committed candidate")
+    revision = source.get("revision")
+    if not isinstance(revision, str) or not HEX40.match(revision or ""):
+        fail("bom.current.json source.revision must be a full 40-hex revision")
+    evidence = bom.get("evidence")
+    if not isinstance(evidence, dict):
+        fail("bom.current.json evidence must be an object")
+    if evidence.get("coverage_path") != COVERAGE_RELATIVE:
+        fail(f"bom.current.json evidence.coverage_path must be {COVERAGE_RELATIVE}")
+    if evidence.get("coverage_sha256") != coverage.get("coverage_sha256"):
+        fail("bom.current.json coverage_sha256 does not match the coverage ledger")
+    if evidence.get("coverage_scope_rows") != len(coverage["tasks"]):
+        fail("bom.current.json coverage_scope_rows does not match the ledger")
+    if evidence.get("coverage_gap_rows") != len(coverage["gaps"]):
+        fail("bom.current.json coverage_gap_rows does not match the ledger")
+    if bom.get("task_id") != "M5-02":
+        fail("bom.current.json task_id must be M5-02")
+    if evidence.get("reuse_rule") != "exact":
+        fail("bom.current.json evidence.reuse_rule must be exact for the M5-02 rebuild")
+
+
+def validate_coverage_against_plan(
+    root: Path,
+    coverage: dict[str, Any],
+    model: Any,
+    bom: dict[str, Any],
+    scope: dict[str, Any],
+) -> None:
+    candidate = bom["source"]["revision"]
     tasks = coverage.get("tasks")
     if not isinstance(tasks, list):
         fail("coverage.tasks must be an array")
@@ -490,6 +625,13 @@ def validate_coverage_against_plan(root: Path, coverage: dict[str, Any], model: 
                 f"coverage.tasks[{task_id}].checkpoints must equal the plan declarations "
                 f"{list(spec.checkpoints)}"
             )
+        validate_row_evidence(
+            root,
+            row,
+            f"coverage.tasks[{task_id}]",
+            candidate=candidate,
+            live=row.get("evidence_kind") == "live",
+        )
 
     declared = {checkpoint: task.id for task in model.tasks for checkpoint in task.checkpoints}
     checkpoints = coverage.get("checkpoints")
@@ -520,6 +662,13 @@ def validate_coverage_against_plan(root: Path, coverage: dict[str, Any], model: 
         )
         if row.get("status") == "OPEN" and row.get("result") != "NOT_VERIFIED":
             fail(f"coverage.checkpoints[{checkpoint_id}] is OPEN but claims {row.get('result')}")
+        validate_row_evidence(
+            root,
+            row,
+            f"coverage.checkpoints[{checkpoint_id}]",
+            candidate=candidate,
+            live=row.get("evidence_kind") == "live",
+        )
 
     gaps = coverage.get("gaps")
     if not isinstance(gaps, list):
@@ -564,12 +713,34 @@ def validate_coverage_against_plan(root: Path, coverage: dict[str, Any], model: 
         )
         if row.get("evidence_kind") != expected_kind:
             fail(f"coverage.gaps[{gap_id}].evidence_kind must be {expected_kind}")
+        validate_row_evidence(
+            root,
+            row,
+            f"coverage.gaps[{gap_id}]",
+            candidate=candidate,
+            live=row.get("evidence_kind") == "live",
+        )
+        if row.get("status") == "CLOSED" and row.get("result") == "PASS":
+            conditional = set(spec.conditional_tasks)
+            for task_id in spec.tasks:
+                if task_id in conditional:
+                    continue
+                task_row = by_task[task_id]
+                if task_row.get("status") != "CLOSED" or task_row.get("result") != "PASS":
+                    fail(
+                        f"coverage.gaps[{gap_id}] is PASS while closing task {task_id} "
+                        f"is {task_row.get('status')}/{task_row.get('result')}"
+                    )
+            for name, value in row["required_observations"].items():
+                if value in {"absent", "NOT_VERIFIED", "declared_absent"}:
+                    fail(
+                        f"coverage.gaps[{gap_id}] is PASS while required observation "
+                        f"{name!r} is {value}"
+                    )
 
-    for task_id, row in by_task.items():
-        if row.get("status") == "CLOSED":
-            for gap_id in row.get("gaps", []):
-                if by_gap[gap_id].get("status") != "CLOSED":
-                    fail(f"task {task_id} is CLOSED while gap {gap_id} is still open")
+    # A gap may only PASS when every non-conditional closing task is CLOSED/PASS.
+    # The reverse is not required: a task can be complete while a gap stays open
+    # because another closing task (e.g. M5-03) is still pending.
 
     h_rows = coverage.get("h_rows")
     if not isinstance(h_rows, list):
@@ -587,6 +758,17 @@ def validate_coverage_against_plan(root: Path, coverage: dict[str, Any], model: 
         require_enum(row.get("result"), ROW_RESULTS, f"coverage.h_rows[{h_id}].result")
         if row.get("status") == "OPEN" and row.get("result") != "NOT_VERIFIED":
             fail(f"coverage.h_rows[{h_id}] is OPEN but claims {row.get('result')}")
+        if row.get("scope") not in ROW_SCOPE_CLASSES:
+            fail(f"coverage.h_rows[{h_id}].scope must be one of {ROW_SCOPE_CLASSES}")
+        validate_row_evidence(
+            root,
+            row,
+            f"coverage.h_rows[{h_id}]",
+            candidate=candidate,
+            live=row.get("evidence_kind") == "live",
+        )
+
+    validate_deferred_rows(root, coverage, scope, candidate=candidate)
 
 
 def validate_h_index(root: Path, coverage: dict[str, Any]) -> None:
@@ -675,15 +857,35 @@ def validate_summary(coverage: dict[str, Any]) -> None:
     open_required = expected["gaps_open"] + expected["tasks_open"] + expected["checkpoints_open"]
     if open_required and summary.get("full_release_status") != "NOT_VERIFIED":
         fail("coverage.summary.full_release_status must stay NOT_VERIFIED while rows are open")
+    if not open_required and summary.get("full_release_status") == "PASS":
+        # A fully closed ledger may only call the release PASS when every
+        # required row is not just CLOSED but PASS.
+        if any(row.get("result") != "PASS" for row in coverage["tasks"]):
+            fail("coverage.summary.full_release_status cannot be PASS with non-PASS tasks")
 
     candidate = coverage.get("candidate_full")
     if not isinstance(candidate, dict):
         fail("coverage.candidate_full must be an object")
+    open_gaps = [row["id"] for row in coverage["gaps"] if row["status"] == "OPEN"]
+    open_tasks = [
+        row["id"]
+        for row in coverage["tasks"]
+        if row["status"] == "OPEN" and row["scope"] != "NOT_APPLICABLE"
+    ]
+    open_h = [row["id"] for row in coverage["h_rows"] if row["status"] == "OPEN"]
+    expected_blocking = sorted(open_gaps + open_tasks + open_h)
     if open_required:
         if candidate.get("allowed") is not False:
             fail("coverage.candidate_full.allowed must be false while required rows are open")
         if not candidate.get("blocking_rows"):
             fail("coverage.candidate_full.blocking_rows must name the open required rows")
+        if sorted(candidate["blocking_rows"]) != expected_blocking:
+            fail(
+                "coverage.candidate_full.blocking_rows must be exactly the open required "
+                f"rows: {expected_blocking}"
+            )
+    elif candidate.get("allowed") is not True:
+        fail("coverage.candidate_full.allowed must be true when no required row is open")
     if not str(candidate.get("reason") or "").strip():
         fail("coverage.candidate_full.reason must explain the gate state")
 
@@ -738,19 +940,57 @@ def validate_release_registration(root: Path, manifest: dict[str, Any], release_
     if not isinstance(contracts, list):
         fail("manifest.contracts must be an array")
     by_id = {entry.get("id"): entry for entry in contracts}
-    for contract_id in PLANNED_RELEASE_CONTRACTS:
+    for contract_id in RELEASE_CONTRACTS:
         entry = by_id.get(contract_id)
         if entry is None:
             fail(f"release contract {contract_id} is not registered in the manifest")
-        if entry.get("status") != "planned":
-            fail(f"release contract {contract_id} must stay status=planned until M5-02")
+        status = entry.get("status")
+        if status not in {"planned", "delivered"}:
+            fail(f"release contract {contract_id} has an unsupported status {status!r}")
         if entry.get("owner") != "B":
             fail(f"release contract {contract_id} must be owned by B")
-        if "sha256" in entry:
-            fail(f"planned release contract {contract_id} must not carry a delivered sha256")
         path = require_repo_path(root, entry.get("path"), f"contracts[{contract_id}].path")
         if not path.is_file():
             fail(f"release contract {contract_id} must point at a file: {entry['path']}")
+        if status == "planned":
+            # Before B26 the release namespace is a planned registration and
+            # may not carry a delivered digest.
+            if "sha256" in entry:
+                fail(f"planned release contract {contract_id} must not carry a delivered sha256")
+        else:
+            if entry.get("delivered_by") != RELEASE_STAGE:
+                fail(
+                    f"delivered release contract {contract_id} must name "
+                    f"delivered_by={RELEASE_STAGE}"
+                )
+            digest = entry.get("sha256")
+            if not isinstance(digest, str) or not HEX64.match(digest):
+                fail(f"delivered release contract {contract_id} must carry a sha256")
+            if sha256_file(path) != digest:
+                fail(f"delivered release contract {contract_id} sha256 mismatch")
+
+    # M5-02 registers the two generated ledger instances as delivered
+    # contracts.  They may instead stay in the explicit instance allowlist
+    # while a release stage is still in progress.
+    for instance_id, filename in (
+        ("release-bom-current", "bom.current.json"),
+        ("release-evidence-coverage-current", "evidence-coverage.current.json"),
+    ):
+        entry = by_id.get(instance_id)
+        if entry is None:
+            continue
+        if entry.get("status") != "delivered":
+            fail(f"release instance {instance_id} must be delivered when registered")
+        if entry.get("delivered_by") != RELEASE_STAGE:
+            fail(f"release instance {instance_id} must be delivered by {RELEASE_STAGE}")
+        path = require_repo_path(root, entry.get("path"), f"contracts[{instance_id}].path")
+        if path.name != filename:
+            fail(f"release instance {instance_id} must point at {filename}")
+        digest = entry.get("sha256")
+        if not isinstance(digest, str) or not HEX64.match(digest):
+            fail(f"release instance {instance_id} must carry a sha256")
+        if sha256_file(path) != digest:
+            fail(f"release instance {instance_id} sha256 mismatch")
 
     registered = set()
     for entry in contracts:
@@ -813,6 +1053,7 @@ def run(root: Path) -> str:
     scope = load_json(root / SCOPE_RELATIVE, "release/scope.json")
     coverage_schema = load_json(root / SCHEMA_RELATIVE, "evidence-coverage.schema.json")
     bom_schema = load_json(root / BOM_SCHEMA_RELATIVE, "release/bom.schema.json")
+    bom = load_json(root / BOM_RELATIVE, "release/bom.current.json")
     manifest = load_json(root / MANIFEST_RELATIVE, "manifest.json")
 
     if coverage_schema.get("$id") != COVERAGE_SCHEMA_ID:
@@ -822,9 +1063,14 @@ def run(root: Path) -> str:
         fail(f"coverage violates its schema: {schema_errors[0]}")
 
     validate_bom_schema(bom_schema)
+    validate_bom_alignment(root, coverage, bom)
+    if bom["evidence"].get("contract_version") != manifest.get("contract_version"):
+        fail("bom.current.json contract_version does not match the manifest")
+    if bom["evidence"].get("contract_digest") != manifest.get("contract_digest"):
+        fail("bom.current.json contract_digest does not match the manifest")
     validate_source(root, coverage, model)
     gate = validate_scope(root, scope, model)
-    validate_coverage_against_plan(root, coverage, model)
+    validate_coverage_against_plan(root, coverage, model, bom, scope)
     validate_scope_coverage_alignment(coverage, scope)
     validate_h_index(root, coverage)
     validate_summary(coverage)
@@ -834,11 +1080,13 @@ def run(root: Path) -> str:
     summary = coverage["summary"]
     return (
         "VALID: {tasks} tasks / {checkpoints} checkpoints / {gaps} gaps / {h} H rows "
+        "/ {deferred} deferred rows "
         "({open_gaps} gaps open, full release {status}) | coverage_sha256 {digest}".format(
             tasks=summary["tasks_total"],
             checkpoints=summary["checkpoints_total"],
             gaps=summary["gaps_total"],
             h=summary["h_rows_total"],
+            deferred=len(coverage["deferred_rows"]),
             open_gaps=summary["gaps_open"],
             status=summary["full_release_status"],
             digest=coverage["coverage_sha256"][:12],

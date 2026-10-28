@@ -84,6 +84,13 @@ DELIVERED_IDS_BY_STAGE = {
     "M1-02": {
         "research-session",
     },
+    "B26": {
+        "release-scope",
+        "release-evidence-coverage-schema",
+        "release-bom-schema",
+        "release-bom-current",
+        "release-evidence-coverage-current",
+    },
 }
 EXPECTED_TODOS = {
     "B00",
@@ -168,7 +175,12 @@ def require(data: dict[str, Any], key: str, label: str) -> Any:
     return data[key]
 
 
-SELF_REFERENTIAL_CONTRACTS = frozenset({"manifest", "baseline-lock"})
+#: Contracts excluded from ``contract_digest`` because they either embed it or
+#: would create a fixed-point cycle.  ``release-bom-current`` records the
+#: aggregate contract digest inside the BOM itself, so its own file digest
+#: cannot be part of that aggregate; the BOM *schema* and both coverage
+#: contracts stay inside the digest.
+SELF_REFERENTIAL_CONTRACTS = frozenset({"manifest", "baseline-lock", "release-bom-current"})
 
 
 def contract_digest_for(manifest: dict[str, Any]) -> str:
