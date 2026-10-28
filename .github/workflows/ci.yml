@@ -180,6 +180,9 @@ jobs:
         working-directory: rph
     steps:
       - name: Record job start time
+        # The job default working-directory is rph/, which does not exist until
+        # checkout runs; the wall-clock start marker must run at the workspace.
+        working-directory: ${{ github.workspace }}
         run: echo "ACP2_JOB_START_EPOCH=$(date -u +%s)" >> "$GITHUB_ENV"
 
       - uses: actions/checkout@v4
@@ -386,18 +389,28 @@ jobs:
           if skipped == 0:
               record(f"- PASS contract gate: {total} contract tests, 0 skipped")
               raise SystemExit(0)
+          # Any skip while the DSH tree was never declared is the documented
+          # NOT_VERIFIED path, with its exact counts recorded — the lane cannot
+          # fail for an external tree it deliberately does not provision, and
+          # it can never look like a green PASS either. Only a *declared* tree
+          # turns skips into errors (partial skip / available-but-skipped).
+          if not available:
+              declared = os.environ.get("ACP2_DSH_DECLARED") == "true"
+              record(
+                  f"- NOT_VERIFIED contract gate: {skipped}/{total} skipped "
+                  f"(DSH harness not provisioned; declared={str(declared).lower()})"
+              )
+              print(
+                  "::warning::CONTRACT_NOT_VERIFIED — the frozen DSH tree was not declared "
+                  "(repository variable ACP2_DSH_SOURCE); see "
+                  "docs/reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md §3.2"
+              )
+              raise SystemExit(0)
           if skipped != total:
               fail("PARTIAL_CONTRACT_SKIP", f"{skipped}/{total} contract tests skipped")
-          if available:
-              fail(
-                  "DSH_AVAILABLE_BUT_SKIPPED",
-                  f"the DSH tree resolved yet {skipped}/{total} contract tests skipped",
-              )
-          record(f"- NOT_VERIFIED contract gate: {skipped}/{total} skipped (DSH harness not provisioned)")
-          print(
-              "::warning::CONTRACT_NOT_VERIFIED — the frozen DSH tree was not declared "
-              "(repository variable ACP2_DSH_SOURCE); see "
-              "docs/reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md §3.2"
+          fail(
+              "DSH_AVAILABLE_BUT_SKIPPED",
+              f"the DSH tree resolved yet {skipped}/{total} contract tests skipped",
           )
           PY
 

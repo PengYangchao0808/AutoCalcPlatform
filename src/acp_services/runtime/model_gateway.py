@@ -58,7 +58,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -705,7 +705,7 @@ class ModelGateway:
         self._environ = environ
         self._model = model
         self._base_url = base_url
-        self._clock = clock or (lambda: datetime.now(UTC).isoformat())
+        self._clock = clock or (lambda: datetime.now(timezone.utc).isoformat())
         self._lock = threading.Lock()
 
     # -- projection ------------------------------------------------------- #

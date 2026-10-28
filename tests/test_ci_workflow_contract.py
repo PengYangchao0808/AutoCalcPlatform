@@ -40,8 +40,8 @@ import yaml
 
 try:
     import tomllib
-except ModuleNotFoundError:  # py3.10 CI — tomllib is 3.11+ and tomli is not a dep
-    tomllib = None  # type: ignore[assignment]
+except ModuleNotFoundError:  # Python 3.10 (CI matrix); tomli is installed with pytest
+    tomllib = __import__("tomli")  # type: ignore[assignment]
 
 ROOT = Path(__file__).resolve().parents[1]
 CI_PATH = ROOT / ".github" / "workflows" / "ci.yml"

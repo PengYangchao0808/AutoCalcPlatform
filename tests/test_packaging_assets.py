@@ -29,7 +29,7 @@ import pytest
 
 try:
     import tomllib
-except ModuleNotFoundError:  # py3.10 CI — tomllib is 3.11+
+except ModuleNotFoundError:  # Python 3.10 (CI matrix)
     tomllib = pytest.importorskip("tomli")  # type: ignore[assignment]
 
 ROOT = Path(__file__).resolve().parents[1]
