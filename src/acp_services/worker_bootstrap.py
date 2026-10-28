@@ -53,7 +53,7 @@ import json
 import os
 import sys
 import tempfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -684,6 +684,9 @@ class WorkerRuntime:
     storage_binding: StorageBinding | None
     worker: FrozenWorker
     execution_right: ExecutionRightPort = field(default_factory=AlwaysHeldExecutionRight)
+    #: Optional control-intent poll injected into the executor (M2-04c).  A DAG
+    #: attempt polled ``cancel`` stops before the next step dispatch.
+    control_poll: Callable[[], str] | None = None
 
     def run(
         self, *, prior_steps: Sequence[Any] = (), item_symbols: Sequence[str] | None = None
@@ -702,6 +705,8 @@ class WorkerRuntime:
                 prior_steps=prior_steps,
                 item_symbols=item_symbols,
                 before_write=self._require_execution_right,
+                execution_right=self.execution_right,
+                control_poll=self.control_poll,
             )
         except _ExecutionRightLostError as exc:
             return _write_refusal(self.envelope, self.receipt_path, exc.verdict)
@@ -747,6 +752,11 @@ class WorkerRuntime:
         return receipt
 
 
+def _plan_carries_bounded_dag(plan: FrozenPlan) -> bool:
+    """True when the frozen plan declares a bounded recipe DAG (M2-04d)."""
+    return "bounded_step_dag" in dict(plan.payload or {})
+
+
 def _select_storage_binding(
     envelope: ExecutionEnvelope, binding: StorageBinding | None
 ) -> StorageBinding | None:
@@ -770,6 +780,7 @@ def assemble_worker(
     storage_binding: StorageBinding | None = None,
     executor: TaskExecutorPort | None = None,
     execution_right: ExecutionRightPort | None = None,
+    control_poll: Callable[[], str] | None = None,
 ) -> WorkerRuntime:
     """Build the Services-native worker from frozen objects (no injection)."""
     if envelope.entrypoint not in _WORKER_ENTRYPOINTS:
@@ -783,8 +794,14 @@ def assemble_worker(
         if receipt_path is not None
         else resolved_work_dir / _DEFAULT_RECEIPT_NAME
     )
+    resolved_executor = executor if executor is not None else CccpTaskExecutor()
+    if _plan_carries_bounded_dag(plan):
+        from acp_services.runtime.step_dag_worker import StepDagTaskExecutor
+
+        if executor is None:
+            resolved_executor = StepDagTaskExecutor()
     worker = FrozenWorker(
-        executor=executor if executor is not None else CccpTaskExecutor(),
+        executor=resolved_executor,
         step_requirements=ServicesStepRequirements(),
         plan_verifier=FrozenPlanVerifier(),
     )
@@ -798,6 +815,7 @@ def assemble_worker(
         execution_right=(
             execution_right if execution_right is not None else AlwaysHeldExecutionRight()
         ),
+        control_poll=control_poll,
     )
 
 
@@ -810,6 +828,7 @@ def load_and_assemble(
     binding_path: Path | str | None = None,
     executor: TaskExecutorPort | None = None,
     execution_right: ExecutionRightPort | None = None,
+    control_poll: Callable[[], str] | None = None,
 ) -> WorkerRuntime:
     """Read frozen files from disk and assemble the worker (new-process path)."""
     validate_frozen_group_inputs(envelope_path, plan_path, binding_path)
@@ -824,6 +843,7 @@ def load_and_assemble(
         storage_binding=binding,
         executor=executor,
         execution_right=execution_right,
+        control_poll=control_poll,
     )
 
 

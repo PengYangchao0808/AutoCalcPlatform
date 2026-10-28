@@ -1,0 +1,10 @@
+{
+  "candidate_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+  "contract_version": "1.0.0",
+  "generated_at": "2026-10-22T14:08:44Z",
+  "runs": [
+    "experience_client-release-main-client-release-20261022T140844Z-116732-00461d.json"
+  ],
+  "schema": "acp2.acceptance.summary.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema"
+}

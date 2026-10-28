@@ -172,9 +172,9 @@ interface, adapt or use parts of their codes:
 
   ***********************************
   * Starting time: Fri Oct 23 11:19:48 2026
-  * Host name:     redacted-host
+  * Host name:     workstation
   * Process ID:    1058357
-  * Working dir.:  <acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/WORK/04_FREQ
+  * Working dir.:  /ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/WORK/04_FREQ
   ***********************************
 
 NOTE: MaxCore=819 MB was set to SCF,MP2,MDCI,CIPSI,MRCI,RASCI and CIS
@@ -205,7 +205,7 @@ Your calculation utilizes the AutoAux generation procedure.
 ================================================================================
                                        INPUT FILE
 ================================================================================
-NAME = <acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/WORK/04_FREQ/freq.inp
+NAME = /ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/WORK/04_FREQ/freq.inp
 |  1> ! HF STO-3G Freq RIJCOSX
 |  2> %basis
 |  3>   auxJ  "AutoAux"
@@ -488,7 +488,7 @@ Hamiltonian:
 
 
 General Settings:
- Integral files         IntName         .... <acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/WORK/04_FREQ/freq
+ Integral files         IntName         .... /ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/WORK/04_FREQ/freq
  Hartree-Fock type      HFTyp           .... RHF
  Total Charge           Charge          ....    0
  Multiplicity           Mult            ....    1
@@ -576,7 +576,7 @@ Now organizing SCF variables                       ... done
                       ------------------
                       INITIAL GUESS DONE (   0.0 sec)
                       ------------------
-             **** ENERGY FILE WAS UPDATED (<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/WORK/04_FREQ/freq.en.tmp) ****
+             **** ENERGY FILE WAS UPDATED (/ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/WORK/04_FREQ/freq.en.tmp) ****
 Finished Guess after   0.0 sec
 Maximum memory used throughout the entire GUESS-calculation: 1.5 MB
 
@@ -608,7 +608,7 @@ Old exchange energy                            :     -0.674766946 Eh
 New exchange energy                            :     -0.674755950 Eh
 Exchange energy change after final integration :      0.000010996 Eh
 Total energy after final integration           :     -1.116773192 Eh
-             **** ENERGY FILE WAS UPDATED (<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/WORK/04_FREQ/freq.en.tmp) ****
+             **** ENERGY FILE WAS UPDATED (/ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/WORK/04_FREQ/freq.en.tmp) ****
 
 ----------------
 TOTAL SCF ENERGY
@@ -735,7 +735,7 @@ Maximum memory used throughout the entire LEANSCF-calculation: 1.3 MB
                          ORCA PROPERTY INTEGRAL CALCULATIONS
 ------------------------------------------------------------------------------
 
-GBWName                                   ... <acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/WORK/04_FREQ/freq.gbw
+GBWName                                   ... /ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/WORK/04_FREQ/freq.gbw
 Number of atoms                           ...      2
 Number of basis functions                 ...      2
 Max core memory                           ...    819 MB
@@ -797,7 +797,7 @@ FINAL SINGLE POINT ENERGY        -1.116773191779
                             ORCA SCF RESPONSE CALCULATION
 ------------------------------------------------------------------------------
 
-GBWName                                 ... <acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/WORK/04_FREQ/freq.gbw
+GBWName                                 ... /ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/WORK/04_FREQ/freq.gbw
 Number of atoms                         ...      2
 Number of basis functions               ...      2
 Max core memory                         ...    819 MB
@@ -855,7 +855,7 @@ Maximum memory used throughout the entire SCFRESP-calculation: 1.0 MB
                               ORCA PROPERTY CALCULATIONS
 ------------------------------------------------------------------------------
 
-GBWName                                 ... <acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/WORK/04_FREQ/freq.gbw
+GBWName                                 ... /ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/WORK/04_FREQ/freq.gbw
 Number of atoms                         ...      2
 Number of basis functions               ...      2
 Max core memory                         ...    819 MB
@@ -1136,7 +1136,7 @@ But we need these citations in order to attract the funding resources that allow
 
 Therefore, if you are a happy ORCA user, please consider citing a few of the papers listed below in the main body of your paper
 
-In addition to the list printed below, the program has created the file <acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/WORK/04_FREQ/freq.bibtex that contains the list in bibtex format
+In addition to the list printed below, the program has created the file /ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_frequency/WORK/04_FREQ/freq.bibtex that contains the list in bibtex format
 You can import this file easily into all common literature databanks and citation aid programs
 
 It goes without saying that in many instances, there are alternative algorithms to achieve similar

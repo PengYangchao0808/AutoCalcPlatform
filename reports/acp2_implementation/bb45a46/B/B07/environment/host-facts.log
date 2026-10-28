@@ -1,12 +1,12 @@
 date_utc=2026-10-22T15:17:28Z
-uname=Linux redacted-host 5.14.0-687.56.1.el9_8.x86_64 #1 SMP PREEMPT_DYNAMIC Thu Oct 8 14:47:43 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+uname=Linux workstation 5.14.0-687.56.1.el9_8.x86_64 #1 SMP PREEMPT_DYNAMIC Thu Oct 8 14:47:43 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
 os_release=NAME="Rocky Linux" VERSION="9.8 (Blue Onyx)" ID="rocky" 
 glibc=ldd (GNU libc) 2.34
 nproc=40
 cpu_model=
 mem_total_bytes=66796507136
 mem_available_bytes=59004207104
-run_root=<acp2-dev>/data/b/run-root
+run_root=/ACPServer/acp2-development/data/b/run-root
 run_root_fstype=xfs
-run_root_df=/dev/mapper/rl_redacted-host-root 75094818816 24026103808 51068715008   32% /
+run_root_df=/dev/mapper/rl_workstation-root 75094818816 24026103808 51068715008   32% /
 production_run_root=/var/lib/acp/runs (untouched)

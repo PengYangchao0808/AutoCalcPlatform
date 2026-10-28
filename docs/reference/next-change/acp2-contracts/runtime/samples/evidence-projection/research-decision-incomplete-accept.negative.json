@@ -1,0 +1,70 @@
+{
+  "sample_id": "research-decision-incomplete-accept.negative",
+  "contract": "ADR-003-taskref-evidence-decision.md",
+  "kind": "negative",
+  "payload": {
+    "evidence_view": {
+      "schema": "acp2.runtime.evidence-projection.v1",
+      "contract_version": "1.0.0",
+      "research": {
+        "principal_id": "principal-alice",
+        "project_id": "proj-m1-03",
+        "research_id": "res-m1-03",
+        "session_id": "ses-m1-03",
+        "round": 0
+      },
+      "task_ref": {
+        "project_id": "proj-m1-03",
+        "task_id": "job-m1-03-static",
+        "job_id": "job-m1-03-static",
+        "attempt": 1,
+        "release": {
+          "release_id": "release-m1-03",
+          "release_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      },
+      "report": {
+        "report_id": "report-m1-03-supported",
+        "digest": "sha256:1af392a414add30de24ec67b2e43fc309f638542610ca9e6d96f81be734c446e",
+        "schema_version": 1,
+        "subject_id": "task-m1-03-static"
+      },
+      "execution_terminal_state": "completed",
+      "qualification": "incomplete_result",
+      "evidence_status": "incomplete",
+      "claims": [
+        {
+          "claim_id": "c-true-minimum",
+          "status": "supported",
+          "validator_id": "check.imaginary_mode_count",
+          "validator_version": "1.0.0",
+          "source_ref_count": 1,
+          "blocking_missing_checks": []
+        }
+      ],
+      "overall_claim_status": "supported",
+      "blocking_missing_checks": [],
+      "evidence_refs": [
+        {
+          "evidence_id": "art-cec0e00d21f0d39a",
+          "kind": "native_output",
+          "sha256": "sha256:cec0e00d21f0d39aaccc2ad75ba6f6141f1f37030137709648d2858930cf1cfe",
+          "relative_path": "artifacts/freq.out"
+        }
+      ],
+      "limitations": [
+        "STATIC fixture only; no real QC execution."
+      ],
+      "provenance_digest": "sha256:69d6c252c9e2b169bfb7188837e021809523a26da7ad273c1c55fac2e02ebba2",
+      "normal_reuse": true,
+      "projection_digest": "sha256:4479ade8d80c8a9a6e9615a037475dfffbf59aeccdfc5780db5c40dc06da3730"
+    },
+    "decision": "accept"
+  },
+  "expected": {
+    "valid": false,
+    "code": "evidence_not_complete",
+    "violation": "evidence_not_complete",
+    "class": "invalid-parameter"
+  }
+}

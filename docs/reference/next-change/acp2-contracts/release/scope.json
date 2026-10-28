@@ -1,0 +1,566 @@
+{
+  "candidate_full_gate": {
+    "allowed": false,
+    "coverage_source": "docs/reference/next-change/acp2-contracts/release/evidence-coverage.current.json",
+    "deferred_counts_as_delivered": false,
+    "deferred_rows": [
+      "SCOPE-DEF-01",
+      "SCOPE-DEF-02",
+      "SCOPE-DEF-03"
+    ],
+    "out_of_scope_rows": [
+      "SCOPE-OUT-01",
+      "SCOPE-OUT-02",
+      "SCOPE-OUT-03",
+      "SCOPE-OUT-04",
+      "SCOPE-OUT-05",
+      "SCOPE-OUT-06",
+      "SCOPE-OUT-07"
+    ],
+    "reason": "完整 ACP2 仍不放行：H4 保持 OPEN（DA-ENV-LSF NOT_VERIFIED、Local DA 行缺 walltime/usage 回执、bounded recipe 公开入口未闭合）；H7/M5-03 独立操作者尚未执行；M3-03 生产模型凭据轮换前 NOT_VERIFIED；M4-04 科学命题 refuted 已如实记录。M0-02c Ruff 卫生为独立 pending 流，按 D-INT-06 不进入 required 链，也不作为 gap 关闭依据。DEFERRED 行（worker-hosted COMPUTE、CDXML、累计 core-hours/token）不计作已实现。",
+    "required_classes": [
+      "IN_SCOPE"
+    ],
+    "required_rows": [
+      "SCOPE-IN-01",
+      "SCOPE-IN-02",
+      "SCOPE-IN-03",
+      "SCOPE-IN-04",
+      "SCOPE-IN-05"
+    ],
+    "scope_source": "docs/reference/next-change/acp2-contracts/release/scope.json"
+  },
+  "capabilities": [
+    {
+      "class": "IN_SCOPE",
+      "detail": "26 项差距全部整改，逐项映射任务与关闭门；G 项关闭不等于 Candidate-Full 放行。",
+      "entry_condition": null,
+      "id": "SCOPE-IN-01",
+      "reason": "本期默认目标是完整 ACP2 整改，不是只修 MCP 或只补验收材料。",
+      "required": true,
+      "statement": "G01–G26 整改",
+      "tasks": [
+        "M0-01",
+        "M0-02",
+        "M0-03",
+        "M0-04",
+        "M0-05",
+        "M0-06",
+        "M0-07",
+        "M0-08",
+        "M0-09",
+        "M0-10",
+        "M0-11",
+        "M0-12",
+        "M1-01",
+        "M1-02",
+        "M1-03",
+        "M1-04",
+        "M1-05",
+        "M1-06",
+        "M2-01",
+        "M2-02",
+        "M2-03",
+        "M2-04",
+        "M3-01",
+        "M3-02",
+        "M3-03",
+        "M3-04",
+        "M3-05",
+        "M3-06",
+        "M4-01",
+        "M4-02",
+        "M4-03",
+        "M4-04",
+        "M4-05",
+        "M4-06",
+        "M5-01",
+        "M5-02",
+        "M5-03"
+      ]
+    },
+    {
+      "class": "IN_SCOPE",
+      "detail": "proposal→approval→submit→wait→prepare/read→evidence→decision→下一 round 的真实平台链，以及限定 DA 科学纵切。",
+      "entry_condition": null,
+      "id": "SCOPE-IN-02",
+      "reason": "研究/科学闭环是 ACP2 的主体能力，不能只用契约或 fixture 声明。",
+      "required": true,
+      "statement": "P0–P2 研究/科学闭环",
+      "tasks": [
+        "M1-06",
+        "M2-01",
+        "M2-02",
+        "M2-03",
+        "M2-04",
+        "M3-01",
+        "M3-02",
+        "M3-03",
+        "M3-04",
+        "M3-05",
+        "M4-01",
+        "M4-02",
+        "M4-03",
+        "M4-04"
+      ]
+    },
+    {
+      "class": "IN_SCOPE",
+      "detail": "第三方 capability 的安装/启用/发现/preflight/受控执行/表单/历史只读；worker-hosted 第三方 COMPUTE 不在本行。",
+      "entry_condition": null,
+      "id": "SCOPE-IN-03",
+      "reason": "P3 与 P2 分别验收，互不替代；纯分析插件是本期唯一声明的插件能力。",
+      "required": true,
+      "statement": "P3 纯分析插件与 Schema form",
+      "tasks": [
+        "M2-05",
+        "M3-06",
+        "M4-05"
+      ]
+    },
+    {
+      "class": "IN_SCOPE",
+      "detail": "多项目/多用户隔离、撤权后各入口一致失效、NMR/热化学跨领域复用、上一已发布制品→当前候选的迁移/升级/回滚。",
+      "entry_condition": null,
+      "id": "SCOPE-IN-04",
+      "reason": "H6 是完整 ACP2 的 required 行；不得用 singlepoint/DA 证据替代。",
+      "required": true,
+      "statement": "H6 多用户/跨领域/迁移",
+      "tasks": [
+        "M0-04",
+        "M0-05",
+        "M0-06",
+        "M0-07",
+        "M1-02",
+        "M4-06"
+      ]
+    },
+    {
+      "class": "IN_SCOPE",
+      "detail": "全组件制品、单一 BOM、coverage 机械计数与独立操作者干净环境复验。",
+      "entry_condition": null,
+      "id": "SCOPE-IN-05",
+      "reason": "没有可取回制品与独立复验就不能称可交付。",
+      "required": true,
+      "statement": "独立安装与证据移交",
+      "tasks": [
+        "M5-01",
+        "M5-02",
+        "M5-03"
+      ]
+    },
+    {
+      "class": "DEFERRED",
+      "detail": "第三方 handler 进入 worker attempt 的 distribution 冻结、required_plugins 与 worker 侧校验。",
+      "entry_condition": "另立 required_plugins/冻结组成员与 worker 校验任务，经独立评审后再纳入。",
+      "id": "SCOPE-DEF-01",
+      "reason": "本期只交付纯分析插件；worker-hosted COMPUTE 需要独立冻结组成员与 worker 校验任务，不能借纯分析结果关闭。",
+      "release_statement": "NOT_VERIFIED / DEFERRED；若发行声明包含该能力，整个完整 ACP2 保持 OPEN。",
+      "required": false,
+      "statement": "worker-hosted 第三方 COMPUTE",
+      "tasks": [
+        "M2-05",
+        "M5-02"
+      ]
+    },
+    {
+      "class": "DEFERRED",
+      "detail": "CDXML 结构导入。",
+      "entry_condition": "需要新的 scope-change 与候选评审。",
+      "id": "SCOPE-DEF-02",
+      "reason": "主方案（§0.2 规则 3）已将其固定为 DEFERRED，本计划不重新纳入。",
+      "release_statement": "NOT_APPLICABLE / DEFERRED；不得出现在发行能力声明中。",
+      "required": false,
+      "statement": "CDXML",
+      "tasks": []
+    },
+    {
+      "class": "DEFERRED",
+      "detail": "core_hours 与 input/output token 的硬上限强制。",
+      "entry_condition": "新增显式 IN_SCOPE 工作项并先实现调用前强制，再由 M1-04/M2-03 关闭。",
+      "id": "SCOPE-DEF-03",
+      "reason": "D09 默认口径为 recorded-only；翻转为 enforced 必须附调用前强制与真实回执证据。",
+      "release_statement": "recorded-only / NOT_VERIFIED；不得在 UI 或 BOM 写成 enforced。",
+      "required": false,
+      "statement": "累计 core-hours/token 硬强制",
+      "tasks": [
+        "M1-04",
+        "M2-03"
+      ]
+    },
+    {
+      "class": "OUT_OF_SCOPE",
+      "detail": "插件市场、浏览、评分与图形化安装中心。",
+      "entry_condition": "另立产品需求与安全评审。",
+      "id": "SCOPE-OUT-01",
+      "reason": "缺少商城不阻塞任何 G 项；本期只用受授权的 enable/disable 或 CLI 路径。",
+      "release_statement": "NOT_APPLICABLE",
+      "required": false,
+      "statement": "插件商城/GUI",
+      "tasks": [
+        "M2-05"
+      ]
+    },
+    {
+      "class": "OUT_OF_SCOPE",
+      "detail": "开放式 JSON Schema 2020-12 求值器；本期只允许显式白名单的 acp2.ui-subset.v1。",
+      "entry_condition": "另立 ADR 与安全评审。",
+      "id": "SCOPE-OUT-02",
+      "reason": "通用求值器扩大攻击面且不属于关闭 G16 的必要条件。",
+      "release_statement": "NOT_APPLICABLE",
+      "required": false,
+      "statement": "通用 JSON Schema 求值器",
+      "tasks": [
+        "M3-06"
+      ]
+    },
+    {
+      "class": "OUT_OF_SCOPE",
+      "detail": "跨 SQLite 库的两阶段提交。",
+      "entry_condition": "不适用；若产品要求强原子性须重新立项。",
+      "id": "SCOPE-OUT-03",
+      "reason": "采用本地事务 + outbox + 幂等 Saga + 对账，不宣称 2PC。",
+      "release_statement": "NOT_APPLICABLE",
+      "required": false,
+      "statement": "2PC",
+      "tasks": [
+        "M2-01"
+      ]
+    },
+    {
+      "class": "OUT_OF_SCOPE",
+      "detail": "新增 ORCA/xTB 之外的 QC 引擎或第二执行权威。",
+      "entry_condition": "另立任务层工作项。",
+      "id": "SCOPE-OUT-04",
+      "reason": "DAG 只组合既有 Task 核心；新计算能力一律先落 cccp 任务层。",
+      "release_statement": "NOT_APPLICABLE",
+      "required": false,
+      "statement": "第二 QC 引擎",
+      "tasks": [
+        "M2-04"
+      ]
+    },
+    {
+      "class": "OUT_OF_SCOPE",
+      "detail": "把 RPH 包发布到公共 npm registry。",
+      "entry_condition": "需要 license/发布决策与新候选。",
+      "id": "SCOPE-OUT-05",
+      "reason": "以签名 tgz 制品分发并保留 private:true，不宣称已发布公共 registry。",
+      "release_statement": "NOT_APPLICABLE",
+      "required": false,
+      "statement": "公共 npm 发布",
+      "tasks": [
+        "M5-01"
+      ]
+    },
+    {
+      "class": "OUT_OF_SCOPE",
+      "detail": "生产 acp.service 重启、生产 run_root 访问与生产数据迁移。",
+      "entry_condition": "由负责人单独授权。",
+      "id": "SCOPE-OUT-06",
+      "reason": "属于验收后的独立授权步骤，不在本计划自动动作内。",
+      "release_statement": "NOT_APPLICABLE",
+      "required": false,
+      "statement": "生产部署/重启",
+      "tasks": [
+        "M5-03"
+      ]
+    },
+    {
+      "class": "OUT_OF_SCOPE",
+      "detail": "以差距修复 PR 重排无关文件或全量格式化。",
+      "entry_condition": "独立清理 PR 重新生成基线。",
+      "id": "SCOPE-OUT-07",
+      "reason": "Ruff 只作独立 hygiene 流（0.15.22 ratchet），不进入 G01–G26 关闭的 required 主链。",
+      "release_statement": "NOT_APPLICABLE",
+      "required": false,
+      "statement": "默认全库 lint 清理",
+      "tasks": [
+        "M0-02"
+      ]
+    }
+  ],
+  "conditional_tasks": [
+    {
+      "condition": "M0-09 选择 external_change_required",
+      "default_path": "NOT_APPLICABLE；不进入默认 start/close 关键路径",
+      "id": "M0-13",
+      "label": "DSH 外部适配依赖变更（条件任务）",
+      "on_condition": "成为 M1-01 的强制前置，close 图由 19 任务/6 XL 变为 20 任务/6 XL",
+      "scope": "NOT_APPLICABLE"
+    }
+  ],
+  "gap_index": {
+    "G01": {
+      "capabilities": [
+        "SCOPE-IN-01"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G02": {
+      "capabilities": [
+        "SCOPE-IN-01",
+        "SCOPE-IN-02"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G03": {
+      "capabilities": [
+        "SCOPE-IN-01",
+        "SCOPE-IN-02"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G04": {
+      "capabilities": [
+        "SCOPE-IN-01",
+        "SCOPE-IN-02",
+        "SCOPE-IN-03"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G05": {
+      "capabilities": [
+        "SCOPE-IN-01",
+        "SCOPE-IN-02"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G06": {
+      "capabilities": [
+        "SCOPE-IN-01",
+        "SCOPE-IN-05"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G07": {
+      "capabilities": [
+        "SCOPE-IN-01",
+        "SCOPE-IN-02"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G08": {
+      "capabilities": [
+        "SCOPE-IN-01",
+        "SCOPE-IN-02"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G09": {
+      "capabilities": [
+        "SCOPE-IN-01",
+        "SCOPE-IN-04"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G10": {
+      "capabilities": [
+        "SCOPE-IN-01"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G11": {
+      "capabilities": [
+        "SCOPE-IN-01",
+        "SCOPE-IN-02"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G12": {
+      "capabilities": [
+        "SCOPE-IN-01"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G13": {
+      "capabilities": [
+        "SCOPE-IN-01",
+        "SCOPE-IN-04"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G14": {
+      "capabilities": [
+        "SCOPE-IN-01",
+        "SCOPE-IN-02"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G15": {
+      "capabilities": [
+        "SCOPE-IN-01",
+        "SCOPE-IN-02"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G16": {
+      "capabilities": [
+        "SCOPE-IN-03"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G17": {
+      "capabilities": [
+        "SCOPE-IN-05"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G18": {
+      "capabilities": [
+        "SCOPE-IN-01",
+        "SCOPE-IN-04",
+        "SCOPE-IN-05"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G19": {
+      "capabilities": [
+        "SCOPE-IN-05"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G20": {
+      "capabilities": [
+        "SCOPE-IN-01",
+        "SCOPE-IN-02"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G21": {
+      "capabilities": [
+        "SCOPE-IN-01"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G22": {
+      "capabilities": [
+        "SCOPE-IN-01"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G23": {
+      "capabilities": [
+        "SCOPE-IN-01",
+        "SCOPE-IN-04"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G24": {
+      "capabilities": [
+        "SCOPE-IN-01",
+        "SCOPE-IN-04"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G25": {
+      "capabilities": [
+        "SCOPE-IN-01",
+        "SCOPE-IN-04"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    },
+    "G26": {
+      "capabilities": [
+        "SCOPE-IN-01",
+        "SCOPE-IN-04"
+      ],
+      "required": true,
+      "scope": "IN_SCOPE"
+    }
+  },
+  "generated_at": "2026-10-26T00:00:00Z",
+  "h_mapping_ref": {
+    "checked_by": "scripts/acceptance/validate_acp2_gap_coverage.py",
+    "note": "G→H 映射只有一份机器权威（coverage.h_rows，逐条与 §10 比对）；scope.json 只登记 H0–H7 是否存在及其 required 属性。",
+    "plan_section": "§10 差距—任务—关闭证据追踪表（H 映射列）",
+    "rows": "docs/reference/next-change/acp2-contracts/release/evidence-coverage.current.json#h_rows"
+  },
+  "h_rows": [
+    {
+      "id": "H0",
+      "required": true,
+      "title": "基线与边界"
+    },
+    {
+      "id": "H1",
+      "required": true,
+      "title": "契约可消费"
+    },
+    {
+      "id": "H2",
+      "required": true,
+      "title": "真实 MCP/DSH 握手"
+    },
+    {
+      "id": "H3",
+      "required": true,
+      "title": "Local/LSF 基础闭环"
+    },
+    {
+      "id": "H4",
+      "required": true,
+      "title": "限定反应科学闭环"
+    },
+    {
+      "id": "H5",
+      "required": true,
+      "title": "插件扩展"
+    },
+    {
+      "id": "H6",
+      "required": true,
+      "title": "跨领域与可靠性"
+    },
+    {
+      "id": "H7",
+      "required": true,
+      "title": "发行与独立安装"
+    }
+  ],
+  "owner": "B",
+  "rules": {
+    "candidate_full": "Candidate-Full 只由 IN_SCOPE 且 required=true 的行计算：全部 PASS 才成立，DEFERRED/NOT_VERIFIED 不参与抵消。",
+    "deferred_is_not_delivered": "DEFERRED 行不计作已实现；若升为 required，Candidate-Full 保持 OPEN。",
+    "evidence_layers": "真实模型、QC、LSF、浏览器与独立安装是不同证据层；任何一层缺失都保持 NOT_VERIFIED，不能被其他层的 PASS 覆盖。",
+    "no_silent_pass": "DEFERRED/OUT_OF_SCOPE 行不得被写成 PASS；未执行、缺环境或缺独立操作者的行一律 NOT_VERIFIED。",
+    "single_source": "scope.json 是交付范围、DEFERRED 与关闭口径的唯一权威（EXECUTION_PLAN §0.2）；改名、缩窄或新增能力必须先出新候选并说明理由。"
+  },
+  "schema": "acp2.release.scope.v1",
+  "source": {
+    "gap_section": "§10 差距—任务—关闭证据追踪表",
+    "h7_handoff": "docs/reference/next-change/acp2-contracts/science/handoff-H7.json",
+    "h_index": "docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md",
+    "plan": "reports/acp2_delivery_gap_audit_20261026/EXECUTION_PLAN.md",
+    "plan_graph": "reports/acp2_delivery_gap_audit_20261026/plan-graph.json",
+    "plan_sha256": "87c58195b0d89301671e9bdf2eac242338ceaa52e9cd413eb5e83c8015ae00db",
+    "scope_section": "§0.2 范围规则"
+  },
+  "status": "planned",
+  "task_id": "M0-01"
+}

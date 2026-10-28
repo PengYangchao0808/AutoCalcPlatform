@@ -1,0 +1,90 @@
+{
+  "artifacts": [
+    {
+      "path": "client-fixtures.log",
+      "sha256": "f51b02a96a40925123000e24fc682adb00ef3cd7015158d1a5cf8f39c586e43a",
+      "size_bytes": 1586
+    },
+    {
+      "path": "client-fixtures.json",
+      "sha256": "7ca31712d60cf1423ff68b0854f84607cdf8785dce0e88290d79786cec106f90",
+      "size_bytes": 692
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "rc=0 passed=20 failed=0 min=10",
+      "name": "client.node_suite",
+      "status": "PASS"
+    },
+    {
+      "detail": "cross-project same resource yields distinct keys=present; cross-project same record id yields distinct keys=present",
+      "name": "client.cross_project_isolation",
+      "status": "PASS"
+    },
+    {
+      "detail": "occurrences=2",
+      "name": "client.stale_discard",
+      "status": "PASS"
+    },
+    {
+      "detail": "zero fetch( expected; observed 0 in both modules",
+      "name": "client.no_fetch",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "da01e5f156f06fc2d5be302ce4ce83a748899e49",
+    "harness_revision": "41f4e45d757142fe93dbf1af2eb95cf33db7144e942b5605983bcd3cf281a7ff",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "da01e5f156f06fc2d5be302ce4ce83a748899e49",
+  "command": [
+    "/ACPServer/acp2-development/venvs/c/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "client-fixtures",
+    "--timeout",
+    "300",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/client-fixtures/client-fixtures-20261022T144714Z-253296/main"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/acp2-development/C",
+  "evidence_kind": "fixture",
+  "exit_code": 0,
+  "extensions": {
+    "experience.client_fetch_hits": 0,
+    "experience.client_min_tests": 10,
+    "experience.client_suite_failed": 0,
+    "experience.client_suite_passed": 20,
+    "experience.harness_contract_revision": "41f4e45d757142fe93dbf1af2eb95cf33db7144e942b5605983bcd3cf281a7ff",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+    "experience.mode": "fixture",
+    "experience.product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+    "experience.run_id": "client-fixtures-20261022T144714Z-253296",
+    "experience.scenario_key": "client-fixtures",
+    "experience.subcase": null,
+    "experience.test_revision": "da01e5f156f06fc2d5be302ce4ce83a748899e49"
+  },
+  "finished_at": "2026-10-22T14:47:14Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:fixture",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "client-fixtures-20261022T144714Z-253296",
+  "scenario": "experience:client-fixtures",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T14:47:14Z",
+  "submission_id": null,
+  "usage": null
+}

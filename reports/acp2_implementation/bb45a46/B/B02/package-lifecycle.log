@@ -1,23 +1,23 @@
 # B02b install/upgrade/uninstall lifecycle — 2026-10-22T19:41:20+08:00
   Building wheel for cccp (pyproject.toml): finished with status 'done'
   Created wheel for cccp: filename=cccp-0.2.1-py3-none-any.whl size=44571974 sha256=597099d50dbb9c7be6f69bb1bc0da37c8ac18064b62f6a988da11fd8d438d60b
-  Stored in directory: /home/<user>/.cache/pip/wheels/b1/08/49/aada2b1242d040870f31b12dc9be31dd93e0b6a73eb1f03da8
+  Stored in directory: /home/xieningke/.cache/pip/wheels/b1/08/49/aada2b1242d040870f31b12dc9be31dd93e0b6a73eb1f03da8
 Successfully built cccp
 build_021_exit=0
 总用量 43528
--rw-r--r--. 1 <user> <user> 44571974 10月 22 19:41 cccp-0.2.1-py3-none-any.whl
+-rw-r--r--. 1 xieningke xieningke 44571974 10月 22 19:41 cccp-0.2.1-py3-none-any.whl
 ## install 0.2.0
-Processing <acp2-dev>/data/b/package-smoke/artifacts/cccp-0.2.0-py3-none-any.whl
+Processing /ACPServer/acp2-development/data/b/package-smoke/artifacts/cccp-0.2.0-py3-none-any.whl
 Installing collected packages: cccp
 Successfully installed cccp-0.2.0
 installed_version 0.2.0
-file <acp2-dev>/data/b/package-smoke/lifecycle-env/lib64/python3.11/site-packages/cccp/__init__.py
+file /ACPServer/acp2-development/data/b/package-smoke/lifecycle-env/lib64/python3.11/site-packages/cccp/__init__.py
 ## upgrade to 0.2.1
     Uninstalling cccp-0.2.0:
       Successfully uninstalled cccp-0.2.0
 Successfully installed cccp-0.2.1
 upgraded_version 0.2.0
-file <acp2-dev>/data/b/package-smoke/lifecycle-env/lib64/python3.11/site-packages/cccp/__init__.py
+file /ACPServer/acp2-development/data/b/package-smoke/lifecycle-env/lib64/python3.11/site-packages/cccp/__init__.py
 ## uninstall
 Found existing installation: cccp 0.2.1
 Uninstalling cccp-0.2.1:
@@ -31,14 +31,14 @@ Installing collected packages: tzdata, typing-extensions, six, pyyaml, pyparsing
 Successfully installed cccp-0.2.0 contourpy-1.3.3 cycler-0.12.1 et-xmlfile-2.0.0 fonttools-4.67.0 kiwisolver-1.5.1 matplotlib-3.11.2 numpy-2.4.6 openpyxl-3.1.5 packaging-26.3 pillow-13.0.0 pyparsing-3.3.3 python-dateutil-3.0.0 pyyaml-6.0.3 rdkit-2026.9.1 scipy-1.17.1 six-1.17.0 typing-extensions-4.16.0 tzdata-2026.5
 dist_version 0.2.0
 module___version__ 0.2.0
-file <acp2-dev>/data/b/package-smoke/lifecycle-env/lib64/python3.11/site-packages/cccp/__init__.py
+file /ACPServer/acp2-development/data/b/package-smoke/lifecycle-env/lib64/python3.11/site-packages/cccp/__init__.py
 ## upgrade to 0.2.1
     Uninstalling cccp-0.2.0:
       Successfully uninstalled cccp-0.2.0
 Successfully installed cccp-0.2.1
 dist_version 0.2.1
 module___version__ 0.2.0
-file <acp2-dev>/data/b/package-smoke/lifecycle-env/lib64/python3.11/site-packages/cccp/__init__.py
+file /ACPServer/acp2-development/data/b/package-smoke/lifecycle-env/lib64/python3.11/site-packages/cccp/__init__.py
 ## uninstall
 Found existing installation: cccp 0.2.1
 Uninstalling cccp-0.2.1:
@@ -48,4 +48,4 @@ Traceback (most recent call last):
 ModuleNotFoundError: No module named 'cccp'
 import_after_uninstall_exit=1
 ## user-site leak proof in B venv (documented hazard)
-<repo>/src
+/ACPServer/AutoCalcPlatform/src

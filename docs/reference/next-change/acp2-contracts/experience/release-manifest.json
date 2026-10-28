@@ -1,0 +1,107 @@
+{
+  "cli": {
+    "bin": "rph",
+    "link": "node_modules/.bin/rph",
+    "package": "@rph/cli",
+    "version": "0.0.0"
+  },
+  "dsh": {
+    "lock_sha256": "4637cca3b89c4c8d5a147321710e597aa62ec2444a3772ab542be5690893dfe4",
+    "package": "@deepseek-ai/dsh-mcp-client",
+    "vendored": false,
+    "version": "0.2.1-rc.2"
+  },
+  "generated_at": "2026-10-28T09:16:55Z",
+  "install_surface": {
+    "checksums": "SHA256SUMS",
+    "directory": "rph/install-surface",
+    "files": {
+      "README.md": "3a694425105142d12e961bfe8107eb2196c96c86d3603a564ebbf8704e09dc6f",
+      "package.json": "3fd1316b2595098d2c23e9d6400a67db751a4185e7c54d75dc14115a1c485c92",
+      "pnpm-lock.yaml": "0b42493977463e7cce7d948a017ebd8aac3cfff67df01b89f74f951860a66b6c",
+      "pnpm-workspace.yaml": "ad83634028dca68fa844233bb8f481423c7202d9cfbde8333b9817b54f5c78fe",
+      "rph-bridge-0.0.0.tgz": "5e662be42b61c93757ab59ff713446fb81ffafa3f26acd2e6e691d119ac1c027",
+      "rph-cli-0.0.0.tgz": "b550b90fb27aa734e6bf1ce49fdc564312d1d26e604e339ac451a64c86a70b86",
+      "rph-dsh-bundle-0.0.0.tgz": "521faca590bc4436e7ae2b7112a6f721243c541f8da4db79fa49b1f57432ae4a",
+      "rph-install.package.json": "3fd1316b2595098d2c23e9d6400a67db751a4185e7c54d75dc14115a1c485c92",
+      "rph-packages.json": "a8a8317e01e1fc72ed7f12e009856b044f8679bfb46349cf7381ca11cd6d6209",
+      "rph-research-0.0.0.tgz": "7a881b008c734ff47347337950655cebb55660d571563f523bd7d2cab1180517",
+      "verify-install.mjs": "cbfe7257ca1ba352e3383d84455b75aaee649752801dca14870069b9616c013e"
+    },
+    "lockfile": "pnpm-lock.yaml",
+    "manifest": "rph-install.package.json",
+    "verify_script": "verify-install.mjs"
+  },
+  "limitations": [
+    "RPH packages stay private:true and are distributed as tarballs; nothing is published to a public registry.",
+    "DSH lives outside this repository at $ACP2_TOOLS/deepseek-harness; the BOM records its revision and lock digest instead of vendoring it.",
+    "The versioned /experience/<release_id>/ mount is not implemented; the packaged Workbench /,/js,/css mounts are read-only and digest-verified at startup."
+  ],
+  "packages": [
+    {
+      "bin": null,
+      "file": "rph-research-0.0.0.tgz",
+      "license": "MIT",
+      "name": "@rph/research",
+      "sha256": "7a881b008c734ff47347337950655cebb55660d571563f523bd7d2cab1180517",
+      "size": 57950,
+      "version": "0.0.0"
+    },
+    {
+      "bin": null,
+      "file": "rph-bridge-0.0.0.tgz",
+      "license": "MIT",
+      "name": "@rph/bridge",
+      "sha256": "5e662be42b61c93757ab59ff713446fb81ffafa3f26acd2e6e691d119ac1c027",
+      "size": 43959,
+      "version": "0.0.0"
+    },
+    {
+      "bin": null,
+      "file": "rph-dsh-bundle-0.0.0.tgz",
+      "license": "MIT",
+      "name": "@rph/dsh-bundle",
+      "sha256": "521faca590bc4436e7ae2b7112a6f721243c541f8da4db79fa49b1f57432ae4a",
+      "size": 159162,
+      "version": "0.0.0"
+    },
+    {
+      "bin": "rph",
+      "file": "rph-cli-0.0.0.tgz",
+      "license": "MIT",
+      "name": "@rph/cli",
+      "sha256": "b550b90fb27aa734e6bf1ce49fdc564312d1d26e604e339ac451a64c86a70b86",
+      "size": 18496,
+      "version": "0.0.0"
+    }
+  ],
+  "product": {
+    "name": "acp",
+    "release_id": "acp2-experience-0.3.0",
+    "version": "0.3.0"
+  },
+  "schema": "acp2.experience.release-manifest.v1",
+  "schema_version": "1.0.0",
+  "static_assets": {
+    "bytes": 3554243,
+    "digest": "1e99be8991342cacf43b8c13af67be36c39cf3e0491afc1587ad2b7264f78ac0",
+    "files": 76,
+    "note": "regenerated after the CI-lane fixes; module_tests are Node-only doubles and are excluded from shipped assets",
+    "release_id": "acp2-experience-0.3.0"
+  },
+  "task_id": "M5-01",
+  "toolchain": {
+    "chromium": "chromium-1248 (playwright browser cache: /home/xieningke/.cache/ms-playwright)",
+    "node": "22.19.0",
+    "pnpm": "11.28.5"
+  },
+  "workspace": {
+    "lockfile": "rph/pnpm-lock.yaml",
+    "lockfile_sha256": "c3fe7afa94c878a05a5a6a27ff640f397b1a97780a64dff15dfc019aa909d716",
+    "node_engine": "^22.19.0 || >=24.0.0",
+    "package_manager": "pnpm@11.28.5",
+    "private": true,
+    "root": "rph",
+    "root_package_json": false
+  }
+}

@@ -244,11 +244,12 @@ def test_v1_job_create_defaults_node_tags_to_empty(client: TestClient) -> None:
     assert detail.json()["spec"]["node_tags"] == []
 
 
-def test_v1_job_create_mode_conflict_returns_400_code(client: TestClient) -> None:
-    """A validate_execution_request conflict shares the D12 dict detail (m4).
+def test_v1_job_create_mode_conflict_returns_422_input_invalid(client: TestClient) -> None:
+    """A validate_execution_request conflict is the shared application envelope.
 
-    Same shape as the continue endpoint and the unknown/disabled target
-    errors: a dict with a stable machine-readable ``code``.
+    M0-06/G23: HTTP, MCP and the CLI answer ``input_invalid`` with
+    ``params.field``/``params.rule`` (the fine-grained ``execution_mode_conflict``
+    survives in ``params.rule``), so one client mapping covers every entry.
     """
     response = client.post(
         "/api/v1/jobs",
@@ -261,10 +262,12 @@ def test_v1_job_create_mode_conflict_returns_400_code(client: TestClient) -> Non
             "target_node": "local",
         },
     )
-    assert response.status_code == 400
+    assert response.status_code == 422
     detail = response.json()["detail"]
     assert isinstance(detail, dict)
-    assert detail["code"] == "execution_mode_conflict"
+    assert detail["code"] == "input_invalid"
+    assert detail["params"]["rule"] == "execution_mode_conflict"
+    assert detail["params"]["field"] == "execution_mode"
     assert "conflict" in detail["message"]
 
 
@@ -516,7 +519,7 @@ def _stub_manager_submit(client: TestClient, tmp_path: Path) -> dict[str, object
     captured: dict[str, object] = {}
     original = manager.submit
 
-    def _submit(spec, group_id=None):
+    def _submit(spec, group_id=None, **_kwargs):
         captured["spec"] = spec
         work_dir = tmp_path / "captured"
         work_dir.mkdir(parents=True, exist_ok=True)

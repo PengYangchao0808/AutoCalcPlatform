@@ -1,0 +1,91 @@
+{
+  "artifacts": [
+    {
+      "path": "workspace.log",
+      "sha256": "8a5b7b084caa9072dcd16bff53be232dc5bcf4cd980cb69d33e3cb45c7f2ff47",
+      "size_bytes": 3931
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "rc=0 Scope: all 5 workspace projects\nAlready up to date\nDone in 636ms using pnpm v11.28.5",
+      "name": "workspace.install",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 $ tsc -b",
+      "name": "workspace.build",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 $ node scripts/run-tests.mjs",
+      "name": "workspace.test",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 $ node scripts/check-boundaries.mjs && tsc -b --pretty false",
+      "name": "workspace.check",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0  scanned files: 4\n  research: 1 file(s), imports -> research\n  bridge: 1 file(s), imports -> bridge, research\n  dsh-bundle: 1 file(s), imports -> dsh-bundle, bridge\n  cli: 1 file(s), imports -> cli, dsh-bundle\n  forbidden: child_process, spawn/exec/execFile, ssh2, node:net (bridge/research),\n             DSH private source paths, platform store imports, wrong-direction imports\n\nBOUNDARY CHECK PASS",
+      "name": "workspace.boundaries",
+      "status": "PASS"
+    },
+    {
+      "detail": "absent",
+      "name": "workspace.no_root_package_json",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+    "harness_revision": "906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+  "command": [
+    "/ACPServer/acp2-development/venvs/c/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "workspace",
+    "--timeout",
+    "300",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/workspace/workspace-20261022T140756Z-114553/main"
+  ],
+  "contract_version": "1.0.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "fixture",
+  "exit_code": 0,
+  "extensions": {
+    "experience.harness_contract_revision": "906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+    "experience.mode": "fixture",
+    "experience.product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+    "experience.run_id": "workspace-20261022T140756Z-114553",
+    "experience.scenario_key": "workspace",
+    "experience.subcase": null,
+    "experience.test_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec"
+  },
+  "finished_at": "2026-10-22T14:08:01Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:fixture",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "workspace-20261022T140756Z-114553",
+  "scenario": "experience:workspace",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T14:07:56Z",
+  "submission_id": null,
+  "usage": null
+}

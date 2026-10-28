@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import logging
 import os
@@ -2248,6 +2249,40 @@ Examples:
     execute.add_argument("--input", "-i", required=True, help="Input source (SMILES or file path)")
     execute.add_argument("--name", default=None, help="Task/molecule name")
     execute.add_argument("--method", default="", help="Method override")
+    # M0-06: the local operator can express the same effective JobSpec as the
+    # HTTP/MCP entries (execution target, tags, v2 naming, remark, raw retry key).
+    execute.add_argument(
+        "--execution-mode",
+        choices=["local", "remote"],
+        default=None,
+        help="Execution resource preference (per-job; overrides the server default)",
+    )
+    execute.add_argument(
+        "--target-node",
+        default=None,
+        help="Pin a specific execution target ('local' or a configured remote node)",
+    )
+    execute.add_argument(
+        "--node-tag",
+        action="append",
+        default=None,
+        dest="node_tags",
+        metavar="TAG",
+        help="Required node capability tag (repeatable; AND semantics)",
+    )
+    execute.add_argument("--tag", action="append", default=None, dest="tags", help="Free-form tag")
+    execute.add_argument("--project", default=None, help="Project id (default: server pin)")
+    execute.add_argument("--task-name", default=None, help="v2 task-directory component")
+    execute.add_argument("--molecule-name", default=None, help="v2 molecule-directory component")
+    execute.add_argument("--remark", default=None, help="v2 remark component")
+    execute.add_argument(
+        "--idempotency-key",
+        default=None,
+        help=(
+            "Raw retry key; the local ledger replays the same task for the same key and "
+            "conflicting payloads, never a second task"
+        ),
+    )
     execute.add_argument(
         "--follow",
         action="store_true",
@@ -2347,6 +2382,56 @@ process never starts or owns a Controller, scheduler or jobs database.
         help="Hard per-frame JSON-RPC byte limit (default: 1048576, minimum 1024)",
     )
 
+    science_plugin_parser = subparsers.add_parser(
+        "science-plugin",
+        help="Inspect/enable/disable installed third-party science plugin capabilities",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp science-plugin list --run-root /data/acp-runs
+  acp science-plugin enable --capability my_capability --run-root /data/acp-runs
+
+The command is the authorised operator path for M2-05: it reads the installed
+fact from the cccp.science_plugins entry-point group, reads/writes the run
+root's enablement ledger (installed/enabled/enabled_by/enabled_at) and writes an
+explicit authorization fact bound to the computed descriptor digest. It never
+installs anything, imports no plugin module and starts no Controller/task.
+
+Trust allow-list (comma separated, environment):
+  ACP_SCIENCE_PLUGIN_TRUSTED_CAPABILITIES  capability ids
+  ACP_SCIENCE_PLUGIN_TRUSTED_PLUGINS       plugin names
+        """,
+    )
+    science_plugin_sub = science_plugin_parser.add_subparsers(dest="plugin_command", required=True)
+    plugin_list = science_plugin_sub.add_parser(
+        "list",
+        help="List installed plugins, persisted enablements and executables",
+    )
+    plugin_list.add_argument(
+        "--run-root", default=None, help="Data run root (default: ACP_RUN_ROOT)"
+    )
+    for name, help_text in (
+        ("enable", "Enable one installed pure-analysis capability (persisted)"),
+        ("disable", "Disable one enabled capability (frozen history stays readable)"),
+    ):
+        plugin_parser = science_plugin_sub.add_parser(name, help=help_text)
+        plugin_parser.add_argument(
+            "--capability",
+            required=True,
+            help="Declared capability id (e.g. vendor.example_native_singlepoint)",
+        )
+        plugin_parser.add_argument(
+            "--version", default=None, help="Plugin version (default: the installed one)"
+        )
+        plugin_parser.add_argument(
+            "--authorized-by",
+            default="controller",
+            help="Authorization principal recorded in the enablement fact (default: controller)",
+        )
+        plugin_parser.add_argument(
+            "--run-root", default=None, help="Data run root (default: ACP_RUN_ROOT)"
+        )
+
 
 def _configure_mcp_logging(level: str) -> None:
     logging.basicConfig(
@@ -2359,6 +2444,12 @@ def _configure_mcp_logging(level: str) -> None:
 
 
 def _handle_mcp_serve(args: argparse.Namespace) -> int:
+    from acp.install_guard import cli_guard
+
+    # F2 (M5-03): the MCP adapter is a product entry point of its own.
+    refusal = cli_guard()
+    if refusal is not None:
+        return refusal
     controller = (
         args.controller
         or os.environ.get("ACP_CONTROLLER_URL")
@@ -2426,10 +2517,175 @@ def _dispatch_mcp(args: argparse.Namespace) -> int:
     return _MCP_EXIT_USAGE
 
 
-def job_submit_command(spec: Any, *, manager: Any | None = None) -> Any:
-    """Submit a job through the shared Runtime use case (single execution owner)."""
+def _handle_science_plugin(args: argparse.Namespace) -> int:
+    """List/enable/disable installed third-party science plugin capabilities (M2-05).
+
+    The command is the authorised operator path: it reads the installed fact
+    from the environment (the ``cccp.science_plugins`` entry-point group) and
+    the enabled fact from the run root's enablement ledger, and it writes an
+    explicit server-side authorization fact bound to the *computed* descriptor
+    digest.  It never installs anything, never imports a plugin module and
+    never starts a Controller, a task or a subprocess.
+    """
+    import json as _json
+
+    from acp.core.paths import resolve_run_root
+    from acp.services_science_plugins_bootstrap import (
+        build_science_plugin_registry,
+        describe_enablements,
+    )
+    from acp_services.runtime.capability_registry import (
+        CapabilityAuthorization,
+        CapabilityError,
+        require_capability_authorization,
+    )
+
+    run_root = resolve_run_root(getattr(args, "run_root", None))
+    registry = build_science_plugin_registry(run_root=run_root)
+    command = str(getattr(args, "plugin_command", "") or "")
+    payload: dict[str, Any] = {"command": command, "run_root": str(run_root)}
+
+    def _fail(error: Exception, code: str) -> int:
+        payload.update(
+            {
+                "status": "failed",
+                "error": getattr(error, "code", code),
+                "reason": str(error),
+            }
+        )
+        print(_json.dumps(payload, sort_keys=True, default=str))
+        return 1
+
+    try:
+        if command == "list":
+            installed = registry.scan()
+            payload.update(
+                {
+                    "status": "ok",
+                    "generation": registry.generation(),
+                    "installed": [record.to_metadata() for record in installed],
+                    "enablements": describe_enablements(registry.enablements()),
+                    "executable": [
+                        record.capability_id for record in registry.authorized_capabilities()
+                    ],
+                    "refusals": list(registry.refusals()),
+                }
+            )
+            print(_json.dumps(payload, sort_keys=True, default=str))
+            return 0
+        capability_id = str(getattr(args, "capability", "") or "").strip()
+        version = getattr(args, "version", None)
+        if not capability_id:
+            payload.update(
+                {"status": "failed", "error": "usage", "reason": "--capability is required"}
+            )
+            print(_json.dumps(payload, sort_keys=True, default=str))
+            return 2
+        authorized_by = str(getattr(args, "authorized_by", "controller") or "controller")
+        if command == "enable":
+            record = registry.installed_capability(capability_id, version)
+            authorization = CapabilityAuthorization(
+                action="capability.enable",
+                capability_id=record.capability_id,
+                version=record.version,
+                descriptor_digest=record.descriptor_digest,
+                authorized_by=authorized_by,
+                issued_at=_utc_now_iso(),
+            )
+            require_capability_authorization(
+                authorization,
+                action="capability.enable",
+                capability_id=record.capability_id,
+                version=record.version,
+                digest=record.descriptor_digest,
+                authorized_principals=registry.authorized_principals,
+                now=_utc_now_iso(),
+            )
+            enablement = registry.enable(
+                capability_id, authorization=authorization, version=version
+            )
+            payload.update(
+                {
+                    "status": "ok",
+                    "enabled": describe_enablements([enablement])[0],
+                    "generation": registry.generation(),
+                }
+            )
+            print(_json.dumps(payload, sort_keys=True, default=str))
+            return 0
+        if command == "disable":
+            existing = registry.enablement(capability_id, version)
+            if existing is None:
+                payload.update(
+                    {
+                        "status": "failed",
+                        "error": "capability_not_enabled",
+                        "reason": f"{capability_id} is not enabled",
+                    }
+                )
+                print(_json.dumps(payload, sort_keys=True, default=str))
+                return 1
+            authorization = CapabilityAuthorization(
+                action="capability.disable",
+                capability_id=existing.capability_id,
+                version=existing.version,
+                descriptor_digest=existing.descriptor_digest,
+                authorized_by=authorized_by,
+                issued_at=_utc_now_iso(),
+            )
+            enablement = registry.disable(
+                capability_id, authorization=authorization, version=version
+            )
+            payload.update(
+                {
+                    "status": "ok",
+                    "disabled": describe_enablements([enablement])[0],
+                    "generation": registry.generation(),
+                }
+            )
+            print(_json.dumps(payload, sort_keys=True, default=str))
+            return 0
+    except CapabilityError as exc:
+        return _fail(exc, "capability_error")
+    except (ValueError, OSError) as exc:
+        return _fail(exc, "science_plugin_error")
+    payload.update({"status": "failed", "error": "usage", "reason": "unknown command"})
+    print(_json.dumps(payload, sort_keys=True, default=str))
+    return 2
+
+
+def _utc_now_iso() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def job_submit_command(
+    spec: Any,
+    *,
+    manager: Any | None = None,
+    identity: Any | None = None,
+    idempotency: Any | None = None,
+) -> Any:
+    """Submit a job through the shared Runtime use case (single execution owner).
+
+    ``identity`` is the explicit local-operator ``CommandIdentity`` of this CLI
+    process (M0-04).  It attributes the admission reservation to the local
+    operator and is forwarded only when supplied, so callers that build the
+    Runtime command surface themselves keep the legacy call shape.
+
+    ``idempotency`` (M0-06) is the optional persistent-ledger context built from
+    the canonical effective request; the same ``(operator scope, key, payload)``
+    replays the same task, and a changed payload is a conflict.
+    """
     commands = job_runtime_commands(manager)
-    return commands.submit(spec)
+    if idempotency is None:
+        if identity is None:
+            return commands.submit(spec)
+        return commands.submit(spec, identity=identity)
+    if identity is None:
+        return commands.submit(spec, idempotency=idempotency)
+    return commands.submit(spec, idempotency=idempotency, identity=identity)
 
 
 def _task_run_root(args: argparse.Namespace) -> Path:
@@ -2438,11 +2694,49 @@ def _task_run_root(args: argparse.Namespace) -> Path:
     return resolve_run_root(getattr(args, "run_root", None))
 
 
+def _task_identity(*, project_id: str | None = None) -> Any:
+    """Return the explicit local-operator identity of this CLI process (M0-04).
+
+    A local CLI operator is the deployment owner, not a remote caller: the
+    identity is declared here (never inferred from a request field) and the
+    ``subject_kind`` is fixed to ``operator`` so the admission ledger and the
+    idempotency scope can never confuse it with an authenticated multi-user
+    principal.  The project is the deployment pin (``ACP_SERVER_PROJECT``).
+    """
+    from acp_services.workspace.command_identity import CommandIdentity
+    from acp_services.workspace.server_identity import resolve_server_project
+
+    return CommandIdentity.from_local(
+        project_id=resolve_server_project() if project_id is None else project_id,
+    )
+
+
 def _task_manager(run_root: Path) -> Any:
+    """Build the CLI's local job manager with the same admission as HTTP/MCP.
+
+    M0-04 removes the CLI-only bypass: the local task manager now assembles the
+    single admission composition (ledger + claim-keyed reservation port) so a
+    CLI submit is quota-checked and its reservation is attributed to the
+    explicit local operator, exactly like a Controller submit.  The ceilings are
+    the same server-side defaults (``ACP_ADMISSION_*``), so the observable
+    change is the recorded reservation/usage row, not a new limit.
+    """
     from acp.scheduler.manager import JobManager
+    from acp_services.runtime.local_admission import build_local_admission
 
     run_root.mkdir(parents=True, exist_ok=True)
-    return JobManager(run_root=run_root, reconnect_local_workers=True)
+    identity = _task_identity()
+    admission = build_local_admission(
+        run_root / "acp_admission.db",
+        verified_project=identity.project_id,
+        principal_id=identity.principal_id,
+    )
+    return JobManager(
+        run_root=run_root,
+        reconnect_local_workers=True,
+        idempotency_reservations=admission.reservation_port(),
+        admission=admission,
+    )
 
 
 def _task_store(run_root: Path) -> Any:
@@ -2496,7 +2790,12 @@ def _refuse_local_ownership(args: argparse.Namespace, run_root: Path) -> int | N
 def _task_controller_client(controller_url: str) -> Any:
     from acp_services.entrypoints.controller_client import ControllerClient
 
-    return ControllerClient(controller_url)
+    # M4-06b: the remote CLI task surface authenticates with the same
+    # ``ACP_API_KEY`` credential the stdio MCP entry uses.  Without it an
+    # api-key Controller refused every CLI request, so the CLI could neither
+    # exercise nor be tested against multi-user project scope.
+    api_key = (os.environ.get("ACP_API_KEY") or "").strip() or None
+    return ControllerClient(controller_url, api_key=api_key)
 
 
 def _emit_task(payload: dict[str, Any]) -> None:
@@ -2728,20 +3027,106 @@ def _handle_task_execute(args: argparse.Namespace) -> int:
     refusal = _refuse_local_ownership(args, run_root)
     if refusal is not None:
         return refusal
+    from acp.scheduler.capabilities import NoCapableNodeError
     from acp.scheduler.jobs import JobSpec
-
-    method: dict[str, Any] = {}
-    if args.method:
-        method["method"] = args.method
-    spec = JobSpec(
-        workflow=args.workflow,
-        name=args.name or "",
-        input=_task_input_payload(args.input),
-        method=method,
+    from acp.scheduler.nodes import (
+        ExecutionTargetError,
+        target_error_envelope,
+        validate_execution_request,
+        validate_submission_target,
     )
+    from acp_services.entrypoints.application_params import (
+        ApplicationParamError,
+        canonical_submit_request,
+    )
+    from acp_services.runtime.idempotency import (
+        ACTION_SUBMIT,
+        IdempotencyConflictError,
+        IdempotencyContext,
+    )
+
+    identity = _task_identity(project_id=getattr(args, "project", None))
     manager = _task_manager(run_root)
     try:
-        record = job_submit_command(spec, manager=manager)
+        # The effective project is the deployment pin when set, else the manager's
+        # default — the same server-side resolution the HTTP entry applies.  It is
+        # part of the canonical request (and therefore of the digest).
+        project_id = identity.project_id or manager.default_project_id
+        request: dict[str, Any] = {
+            "workflow": args.workflow,
+            "name": args.name or "",
+            "input": _task_input_payload(args.input),
+            "method": {"method": args.method} if args.method else {},
+            "tags": list(getattr(args, "tags", None) or []),
+            "node_tags": list(getattr(args, "node_tags", None) or []),
+            "task_name": args.task_name or "",
+            "molecule_name": args.molecule_name or "",
+            "remark": args.remark or "",
+        }
+        if identity.project_id:
+            # Only the *deployment pin* is part of the request (it is the value
+            # the HTTP entry resolves from its own credential); an unpinned
+            # operator keeps the request project-less and the manager default
+            # applies, exactly like HTTP.  This keeps the canonical request — and
+            # therefore the digest — identical across entries.
+            request["project_id"] = identity.project_id
+        if getattr(args, "execution_mode", None):
+            request["execution_mode"] = args.execution_mode
+        if getattr(args, "target_node", None):
+            request["target_node"] = args.target_node
+        idempotency_key = str(getattr(args, "idempotency_key", None) or "").strip()
+        if idempotency_key:
+            request["idempotency_key"] = idempotency_key
+        # M0-06: the CLI builds the *same* canonical request as HTTP/MCP, so the
+        # effective JobSpec and the idempotency request digest are identical for
+        # the same logical request (tests/test_acp2_request_field_equivalence).
+        try:
+            canonical = canonical_submit_request(request, entry="cli")
+        except ApplicationParamError as exc:
+            return _emit_submit_invalid(args, exc.code, exc.message, dict(exc.params))
+        spec = JobSpec(
+            workflow=canonical["workflow"],
+            name=canonical["name"],
+            input=canonical["input"],
+            method=canonical["method"],
+            resources=canonical["resources"],
+            tags=list(canonical["tags"]),
+            node_tags=list(canonical["node_tags"]),
+            # The deployment project pin (ACP_SERVER_PROJECT) applies to the local
+            # operator exactly as it does to the HTTP entry: a pinned Controller
+            # never writes a task into another project.  Unset = unchanged default.
+            project_id=project_id,
+            execution_mode=canonical.get("execution_mode"),
+            target_node=canonical.get("target_node"),
+            molecule_name=canonical["molecule_name"],
+            task_name=canonical["task_name"] or canonical["workflow"],
+            remark=canonical["remark"],
+        )
+        # Same two checks (and the same application envelope) as the Controller
+        # submit entry: an unknown remote node is one `input_invalid` with
+        # params.field/rule, never an async failure after the job is queued.
+        try:
+            validate_execution_request(spec)
+            validate_submission_target(spec, registry=manager.registry)
+        except (ExecutionTargetError, NoCapableNodeError) as exc:
+            envelope = target_error_envelope(exc)
+            return _emit_submit_invalid(
+                args,
+                str(envelope["code"]),
+                str(envelope["message"]),
+                dict(envelope["params"]),
+            )
+        context = None
+        if idempotency_key:
+            context = IdempotencyContext(
+                key=idempotency_key,
+                scope_id=identity.idempotency_scope(project_id=str(project_id)),
+                action=ACTION_SUBMIT,
+                request_payload=canonical,
+                principal_id=identity.principal_id,
+                key_id=identity.key_id,
+            )
+        record = job_submit_command(spec, manager=manager, identity=identity, idempotency=context)
         follow = bool(args.follow) or args.workflow == "fake"
         fresh = _wait_for_task(manager, record.id, terminal=follow)
         if fresh is None:
@@ -2758,14 +3143,64 @@ def _handle_task_execute(args: argparse.Namespace) -> int:
                     "job_id": fresh.id,
                     "attempt": fresh.attempt,
                 },
+                "idempotency_key": idempotency_key or None,
+                # The ledger flag lives on the record returned by submit; the
+                # follow-up read is a fresh DB row.
+                "idempotent_replay": bool(getattr(record, "_idempotent_replay", False)),
             }
         )
         return 0 if not fresh.status.is_terminal or fresh.status.value == "completed" else 1
+    except IdempotencyConflictError as exc:
+        # Same code the Controller answers (HTTP 409 ``idempotency_conflict``):
+        # the same key with a different effective request is a conflict, never a
+        # replay and never a second task.
+        from acp_services.entrypoints.machine_output import ExitCode
+
+        _emit_task(
+            {
+                "command": "execute",
+                "status": "failed",
+                "error": "idempotency_conflict",
+                "message": str(exc),
+                "params": {
+                    "field": "idempotency_key",
+                    "rule": "idempotency_key_reuse",
+                    "idempotency_key": idempotency_key or None,
+                },
+                "exit_code": ExitCode.CONFLICT,
+            }
+        )
+        return ExitCode.CONFLICT
     except (ValueError, RuntimeError) as exc:
         _emit_task({"command": "execute", "status": "failed", "error": str(exc)})
         return 1
     finally:
         manager.shutdown()
+
+
+def _emit_submit_invalid(
+    args: argparse.Namespace, code: str, message: str, params: dict[str, Any]
+) -> int:
+    """Emit one structured CLI rejection and return the usage exit code.
+
+    M0-06: the CLI reports the *same* application code and ``params`` as HTTP and
+    MCP for the same rejected field/target, so a script never parses prose.  The
+    exit code follows the frozen machine-output table (``input_invalid`` →
+    ``USAGE`` = 2).
+    """
+    from acp_services.entrypoints.machine_output import ExitCode, exit_code_for
+
+    _emit_task(
+        {
+            "command": "execute",
+            "status": "failed",
+            "error": code,
+            "message": message,
+            "params": params,
+            "exit_code": exit_code_for(code) or ExitCode.USAGE,
+        }
+    )
+    return exit_code_for(code) or ExitCode.USAGE
 
 
 def _handle_task_query(args: argparse.Namespace) -> int:
@@ -3333,10 +3768,18 @@ def _normalize_string_choices(parser: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level ACP argument parser."""
+    from acp import __version__ as acp_version
+
     parser = argparse.ArgumentParser(
         prog="acp",
         description="Auto-Calc Platform (ACP) — Computational chemistry workflows",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {acp_version}",
+        help="Print the installed ACP version and exit",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -5161,13 +5604,15 @@ def _is_local_deployment(cfg: Mapping[str, Any]) -> bool:
     return usage == "local" or tier in {"local-single", "standalone", "local"}
 
 
-def _run_local_doctor(cfg: Mapping[str, Any]) -> int:
+def _run_local_doctor(cfg: Mapping[str, Any], *, remote_note: str | None = None) -> int:
     """Report local capability (PASS/FAIL/NOT_VERIFIED) for a local tier."""
     from acp.core.paths import check_run_root_safety, resolve_run_root
 
     deployment = cfg.get("deployment")
     deployment_map = deployment if isinstance(deployment, Mapping) else {}
     checks = _doctor_software_checks(cfg)
+    if remote_note:
+        checks.append(("remote", "NOT_VERIFIED", remote_note))
     root: Path | None = None
     try:
         root = resolve_run_root(None)
@@ -5214,6 +5659,36 @@ def _run_local_doctor(cfg: Mapping[str, Any]) -> int:
     return 1 if failures else 0
 
 
+def _paramiko_available() -> bool:
+    """Whether the optional ``remote`` extra (paramiko) is importable.
+
+    ``acp doctor`` is a deployment self-check, not a remote operation: a root
+    ``acp`` install without ``[remote]`` must still report local capability
+    instead of crashing on an optional dependency (M5-03 finding F4).
+    """
+    return importlib.util.find_spec("paramiko") is not None
+
+
+def _doctor_without_paramiko(args: argparse.Namespace, cfg: Mapping[str, Any]) -> int:
+    """Report remote capability as NOT_VERIFIED when paramiko is absent."""
+    note = "paramiko 未安装（安装 acp[remote] 后可检查远程节点）"
+    cluster = cfg.get("cluster") or {}
+    nodes = cluster.get("nodes") if isinstance(cluster, Mapping) else None
+    if args.node is not None or nodes:
+        print(f"remote: NOT_VERIFIED — {note}")
+        print("Doctor finished: remote checks NOT_VERIFIED (no failure)")
+        return 0
+    if _is_local_deployment(cfg):
+        print(
+            "No remote nodes configured — running local capability checks "
+            "(local/standalone deployment)."
+        )
+        return _run_local_doctor(cfg, remote_note=note)
+    print(f"remote: NOT_VERIFIED — {note}")
+    print("No remote nodes configured (cluster.nodes is empty).")
+    return 1
+
+
 def _handle_doctor(args: argparse.Namespace) -> int:
     """``acp doctor`` — deployment self-check for remote nodes and local tiers.
 
@@ -5225,9 +5700,6 @@ def _handle_doctor(args: argparse.Namespace) -> int:
     """
     logging.basicConfig(level=getattr(logging, str(args.log_level).upper(), logging.INFO))
 
-    from acp.scheduler.remote.config import RemoteExecutionConfig
-    from acp.scheduler.remote.node_manager import doctor_node
-    from acp.scheduler.remote.ssh import SSHConnectionPool
     from cccp.config import load_config
 
     try:
@@ -5235,6 +5707,13 @@ def _handle_doctor(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(f"FAIL config — {exc}")
         return 1
+    if not _paramiko_available():
+        return _doctor_without_paramiko(args, cfg)
+
+    from acp.scheduler.remote.config import RemoteExecutionConfig
+    from acp.scheduler.remote.node_manager import doctor_node
+    from acp.scheduler.remote.ssh import SSHConnectionPool
+
     cluster = cfg.get("cluster") or {}
     remote_cfg = RemoteExecutionConfig.from_config_dict(cluster)
     if not remote_cfg.nodes:
@@ -5414,6 +5893,12 @@ def main(argv: list[str] | None = None) -> int:
     Returns:
         Exit code.
     """
+    from acp.install_guard import cli_guard
+
+    # F2 (M5-03): refuse a mixed root/roles install before any subcommand runs.
+    refusal = cli_guard()
+    if refusal is not None:
+        return refusal
     argv_values = list(sys.argv[1:] if argv is None else argv)
     if (
         len(argv_values) > 1
@@ -5467,6 +5952,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "mcp":
         return _dispatch_mcp(args)
+
+    if args.command == "science-plugin":
+        return _handle_science_plugin(args)
 
     if args.command != "run":
         parser.print_help()

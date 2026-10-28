@@ -2522,6 +2522,11 @@ MIGRATION_STATION_PREFIXES = (
     # Four-site version lockstep (ANTI-PATTERN #2): every release commit bumps
     # this file, so the audit must not flag it as unaudited.
     "src/acp/__init__.py",
+    # M0-09 (remediation 2026-10-26): the single ACP-side declaration of the
+    # research MCP extension id/version, injected into the Services server so
+    # ``acp_services`` never carries an ``acp.*`` wire literal (isolation
+    # gate). Exact file only — a version bump is a contract change.
+    "src/acp/mcp_extension.py",
     # todo 19: the frequency-science delegation target (single parse in cccp).
     "src/acp/results/orca_parser.py",
     # todo 25: CENSO template-line construction points (translation-layer consumers).
@@ -2645,6 +2650,21 @@ MIGRATION_STATION_PREFIXES = (
     # ``acp_services.entrypoints.mcp``; registered as an exact file so the
     # R1 boundary keeps auditing it (no whole-directory exemption).
     "src/acp/services_mcp_bootstrap.py",
+    # M2-02 (remediation 2026-10-27): the application-level analysis registry
+    # composition root.  It builds the injected registry and registers the real
+    # ``vibration.analyze`` handler (prepared-artifact read + A's declared pure
+    # analysis binding).  Exact file: it deliberately imports
+    # ``cccp.calculation.capabilities`` (the analysis binding, never a task
+    # core), so it is registered here for the R1 boundary only and is NOT added
+    # to ``SERVICES_BOOTSTRAP_STATIONS`` (that tuple bans the calculation
+    # package prefix for the pure port-wiring seams).
+    "src/acp/services_analysis_bootstrap.py",
+    # M2-05: the third-party science plugin composition root (installed/enable
+    # facts -> registry injection); exact file only, same rule as above.
+    "src/acp/services_science_plugins_bootstrap.py",
+    # M5-03 F2: the four-distribution mutual-exclusion guard checked at the
+    # CLI/server/MCP entries (exact file only).
+    "src/acp/install_guard.py",
     # todo 36/37: the whole ``init_wizard`` package is the single ``acp init``
     # station (unified answers/plan/persist + pure node validation); the
     # package-wide module-level-paramiko ban below is the added tooth.

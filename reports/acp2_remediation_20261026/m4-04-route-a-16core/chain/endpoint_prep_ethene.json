@@ -1,0 +1,148 @@
+{
+  "actual_orca_resources": [
+    {
+      "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_prep_ethene/optimize.inp",
+      "maxcore": 2000,
+      "pal_nprocs": 16
+    }
+  ],
+  "adr_step_index": 1,
+  "adr_task_kind": "conformer_search",
+  "attempt": 1,
+  "bounded_alternative": "alt_endpoint_prep_single_conformation",
+  "complete": true,
+  "duration_seconds": 20.3,
+  "entry": "legacy_task_core",
+  "error": null,
+  "executed_task_kind": "optimize",
+  "level": {
+    "basis": "def2-mTZVPP",
+    "charge": 0,
+    "method": "r2SCAN-3c",
+    "multiplicity": 1
+  },
+  "native_files": [
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_prep_ethene/optimize.out",
+      "path": "optimize.out",
+      "sha256": "370579ad0313fc949f17edec7cf82ba9a16f17666990355e60b1c261f9f9873c",
+      "size_bytes": 175449
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_prep_ethene/optimize.xyz",
+      "path": "optimize.xyz",
+      "sha256": "9910fc8f192085935cecc2bba64bca606931674268d1cd4051f920844670e925",
+      "size_bytes": 581
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_prep_ethene/optimize_trj.xyz",
+      "path": "optimize_trj.xyz",
+      "sha256": "d8446c679c9c061452785895fc9a8548097f1ecfae18c2b47d8c28e08dbe79ea",
+      "size_bytes": 2478
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_prep_ethene/optimize.inp",
+      "path": "optimize.inp",
+      "sha256": "73c003c90c570911ea370e899ff0ad11192def300f5e4bc94889ab847f503ba1",
+      "size_bytes": 378
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_prep_ethene/optimize.property.txt",
+      "path": "optimize.property.txt",
+      "sha256": "a2056b5f84b356bd5297d8bd448b621ec22f33449b5801afd2daddaab7efbc44",
+      "size_bytes": 43819
+    }
+  ],
+  "products": [],
+  "receipt": null,
+  "release_digest": "813583bdcaae20ef900a99180f433b34a7dfa730fb47c1efea5c9435919a061b",
+  "release_id": "2d1ab37a0f988933",
+  "resources": {
+    "cores": 16,
+    "maxcore": 2000,
+    "mem": "32GB",
+    "nproc": 16
+  },
+  "schema": "acp2.m4-04.step.v1",
+  "status": "completed",
+  "step_id": "endpoint_prep_ethene",
+  "task_ref": "20261028_940_endpoint_prep_ethene",
+  "task_result": {
+    "artifacts": [
+      {
+        "checksum": "sha256:73c003c90c570911ea370e899ff0ad11192def300f5e4bc94889ab847f503ba1",
+        "path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_prep_ethene/optimize.inp",
+        "source": "orca",
+        "type": "output"
+      },
+      {
+        "checksum": "sha256:370579ad0313fc949f17edec7cf82ba9a16f17666990355e60b1c261f9f9873c",
+        "path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_prep_ethene/optimize.out",
+        "source": "orca",
+        "type": "log"
+      }
+    ],
+    "complete": true,
+    "coordinates": [
+      [
+        6.006586,
+        1.0,
+        -0.0
+      ],
+      [
+        7.333414,
+        1.0,
+        -0.0
+      ],
+      [
+        5.437003,
+        1.925401,
+        0.0
+      ],
+      [
+        5.437003,
+        0.074599,
+        0.0
+      ],
+      [
+        7.902997,
+        1.925401,
+        0.0
+      ],
+      [
+        7.902997,
+        0.074599,
+        0.0
+      ]
+    ],
+    "energy_hartree": -78.557039654389,
+    "errors": [],
+    "frequencies": [],
+    "metadata": {},
+    "payload": {
+      "optimization_status": "converged",
+      "trajectory_ref": {
+        "path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_prep_ethene/optimization_trajectory.json",
+        "source": "optimization_trajectory",
+        "type": "trajectory"
+      }
+    },
+    "provenance": {
+      "backend": "orca",
+      "input_signature": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/inputs/ethene.xyz",
+      "method": "r2SCAN-3c",
+      "version": "unknown"
+    },
+    "schema_version": 1,
+    "status": "completed",
+    "symbols": [
+      "C",
+      "C",
+      "H",
+      "H",
+      "H",
+      "H"
+    ],
+    "task": "optimize"
+  }
+}

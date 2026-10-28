@@ -1,4 +1,4 @@
-$ <repo>/reports/acp2_implementation/bb45a46/B/B25/venvs/root/bin/python -m acp --help
+$ /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/root/bin/python -m acp --help
 exit=0
 --- stdout ---
 usage: acp [-h] {run,doctor,init,task,mcp} ...

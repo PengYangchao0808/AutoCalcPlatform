@@ -18,7 +18,7 @@
 ## G1 — 版本 lockstep（4 文件同一版本）
 
 ```bash
-cd <repo>
+cd /ACPServer/AutoCalcPlatform
 grep -n '__version__' src/acp/__init__.py src/cccp/__init__.py src/cccp/version.py
 grep -n '^version' pyproject.toml
 # 期望：四处均为同一版本号（当前 0.2.0；发布新版本时先同步 4 处再执行）
@@ -45,7 +45,7 @@ ls -la "$RUN_ROOT"/pre_release_${COMMIT}*
 ## G3 — 候选提交守卫套件（精确命令，全绿才发布）
 
 ```bash
-cd <repo>
+cd /ACPServer/AutoCalcPlatform
 python3.11 -m pytest tests/test_services_*.py -q
 # 基线参考：1348 passed / 1 failed（F-3 runtime sqlite3 守卫，closure §6；发布时 F-3 状态：____）
 python3.11 -m pytest tests/test_acp_services_isolation.py tests/test_architecture_invariants.py -q
@@ -75,9 +75,9 @@ python3.11 -m pytest tests/test_acp_api_v1.py -q   # 旧 GET 兼容面（M1 行�
 # 核对当前 drift（只读）与决策路径
 systemctl cat acp
 # 路径 A：定制行并入 scripts/install_systemd.sh 模板后重新生成
-# 路径 B：接受模板现状（核对 start_acp.sh 能否解析生产 venv <venv>）
-sudo bash scripts/install_systemd.sh --user <user>
-systemctl cat acp > <repo>/.omo/evidence/acp-parallel-plan-2-services/task-76-unit-snapshot.txt
+# 路径 B：接受模板现状（核对 start_acp.sh 能否解析生产 venv /opt/acp/venv）
+sudo bash scripts/install_systemd.sh --user xieningke
+systemctl cat acp > /ACPServer/AutoCalcPlatform/.omo/evidence/acp-parallel-plan-2-services/task-76-unit-snapshot.txt
 ```
 
 - [ ] 路径选择：A / B（圈一）；模板变更 commit：____________（A 时）

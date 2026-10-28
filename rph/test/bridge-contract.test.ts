@@ -329,6 +329,7 @@ test("read without prepare returns structured not_prepared and never calls the t
     attempt: 0,
     generation: 2,
     resource: "freq.out",
+    artifactDigest: "sha256:" + "e".repeat(64),
   });
   assert.equal(client.calls.length, 0);
   assert.equal(result.isError, true);
@@ -353,6 +354,7 @@ test("prepare registers the artifact and read forwards the artifact identity", T
     task: "job-1",
     attempt: 1,
     resource: "freq.out",
+    generation: 2,
     idempotencyKey: "idem-prepare",
   });
   assert.equal(prepare.isError, false);
@@ -362,16 +364,34 @@ test("prepare registers the artifact and read forwards the artifact identity", T
     attempt: 1,
     generation: 9,
     resource: "freq.out",
+    artifactDigest: "sha256:" + "e".repeat(64),
   });
   assert.equal(read.isError, false);
   assert.deepEqual(
     client.calls.map((call) => call.name),
     ["acp_prepare_artifact", "acp_read_artifact"],
   );
+  // M1-01 frozen read table: the complete artifact_ref, never the pre-M1-01
+  // flat `job_id`/`resource_id` spelling.
   assert.deepEqual(client.calls[1]?.params, {
+    artifact_ref: {
+      task_id: "job-1",
+      attempt: 1,
+      artifact_id: "freq.out",
+      generation: 9,
+      digest: "sha256:" + "e".repeat(64),
+    },
+  });
+  // D-IDENT-10 (M0-11): the prepare arguments are the v1 HTTP prepare body. The
+  // artifact is `artifact_id` (`resource_id` is server-derived and would be an
+  // unknown field), and `purpose` is the Controller-required field.
+  assert.deepEqual(client.calls[0]?.params, {
+    purpose: "artifact",
     job_id: "job-1",
     attempt: 1,
-    resource_id: "freq.out",
+    artifact_id: "freq.out",
+    generation: 2,
+    idempotency_key: "idem-prepare",
   });
   assert.equal(artifactKey({ task: "job-1", attempt: 1, resource: "freq.out" }), artifactKey({ task: "job-1", attempt: 1, resource: "freq.out" }));
 });
@@ -454,7 +474,7 @@ test("project and attempt ownership are forwarded and never inferred", TEST_OPTI
       attempt: 3,
       resource: "freq.out",
     }),
-    { job_id: "job-1", attempt: 3, resource_id: "freq.out" },
+    { purpose: "artifact", job_id: "job-1", attempt: 3, artifact_id: "freq.out" },
   );
 });
 
@@ -592,9 +612,16 @@ const POSITIVE_REQUESTS: Record<BridgeOperation, BridgeRequest> = {
   status: { operation: "status", task: "job-1", attempt: 0 },
   evidence: {
     operation: "evidence",
-    task: "job-1",
-    attempt: 0,
-    resource: "freq.out",
+    analysisId: "vibration.analyze",
+    inputRefs: [
+      {
+        task_id: "job-1",
+        attempt: 1,
+        artifact_id: "freq.out",
+        generation: 1,
+        digest: "sha256:" + "e".repeat(64),
+      },
+    ],
     explicit: true,
   },
   prepare: {
@@ -609,6 +636,7 @@ const POSITIVE_REQUESTS: Record<BridgeOperation, BridgeRequest> = {
     attempt: 0,
     generation: 1,
     resource: "freq.out",
+    artifactDigest: "sha256:" + "e".repeat(64),
   },
 };
 
@@ -695,6 +723,7 @@ test("read before prepare returns the exact not_prepared envelope without prepar
     attempt: 2,
     generation: 4,
     resource: "freq.out",
+    artifactDigest: "sha256:" + "e".repeat(64),
   };
   const result = await new Bridge(client).execute(request);
   assert.equal(client.calls.length, 0);
@@ -917,6 +946,7 @@ test("cross-project and cross-attempt reads are refused", TEST_OPTIONS, async ()
         attempt: 0,
         generation: 3,
         resource: "freq.out",
+        artifactDigest: "sha256:" + "e".repeat(64),
       }),
     (error: unknown) => {
       assert.equal(contractCode(error), "access_denied");
@@ -935,6 +965,7 @@ test("cross-project and cross-attempt reads are refused", TEST_OPTIONS, async ()
         attempt: 1,
         generation: 3,
         resource: "freq.out",
+        artifactDigest: "sha256:" + "e".repeat(64),
       }),
     (error: unknown) => {
       assert.equal(contractCode(error), "access_denied");
@@ -951,6 +982,7 @@ test("cross-project and cross-attempt reads are refused", TEST_OPTIONS, async ()
     attempt: 0,
     generation: 3,
     resource: "freq.out",
+    artifactDigest: "sha256:" + "e".repeat(64),
   });
   assert.equal(read.isError, false);
   assert.deepEqual(

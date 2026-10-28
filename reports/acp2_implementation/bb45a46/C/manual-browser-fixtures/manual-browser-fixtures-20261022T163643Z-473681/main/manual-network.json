@@ -1,0 +1,744 @@
+[
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/vendor/3Dmol-2.5.5.min.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/css/workbench/base.css"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/css/workbench/layout.css"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/css/workbench/queue-detail.css"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/css/workbench/energy.css"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/css/workbench/wizard.css"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/css/workbench/features.css"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/css/structure_viewer.css"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/css/structure_source_picker.css?v=20261001-two-color"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/css/task_input_workspace.css?v=20261001-unified-recalc"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/css/tsmode_editor.css"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/geometry_store.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/structure_viewer.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/structure_editor.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/vibration_viewer.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/structure_source_picker.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/tsmode_editor.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/memory_input.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/contracts/batch_role_defaults.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/job_editor.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/task_input_workspace.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/candidate_details.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/client/transport.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/client/resource-store.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/contracts/task_view_contract.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/contracts/experience_contract.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/client/task-view-query.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/client/job-detail-query.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/client/event-stream.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/client/event-invalidation.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/client/polling-strategy.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/client/job-commands.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/client/wizard-endpoints.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/client/science-query.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/client/system-endpoints.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/controllers/task_list_controller.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/controllers/job_detail_controller.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/controllers/task_session_controller.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/controllers/candidate_review_controller.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/controllers/system_resources_controller.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/visualization/framing.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/visualization/mol3d_adapter.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/visualization/scene_instance.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/visualization/energy_chart_renderer.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/compat/shared-state.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/i18n.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/compat/api.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/features/molecule-view.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/features/energy.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/features/queue.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/features/job-detail.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/features/files-logs.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/features/reaction-builder.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/features/nmr.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/features/wizard/upload-parse.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/features/wizard/preview-validate.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/features/wizard/draft-form.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/features/wizard/submit-edit.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/features/wizard.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/features/science-question.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/features/scan-s2.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/js/workbench/bootstrap.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/css/workbench/base.css"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/css/workbench/layout.css"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/css/workbench/queue-detail.css"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/css/workbench/energy.css"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/css/workbench/wizard.css"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/css/workbench/features.css"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/css/tsmode_editor.css"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/css/structure_source_picker.css?v=20261001-two-color"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/css/structure_viewer.css"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/css/task_input_workspace.css?v=20261001-unified-recalc"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/geometry_store.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/structure_source_picker.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/memory_input.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/tsmode_editor.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/structure_viewer.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/vendor/3Dmol-2.5.5.min.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/structure_editor.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/contracts/batch_role_defaults.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/vibration_viewer.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/task_input_workspace.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/job_editor.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/candidate_details.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/client/transport.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/client/resource-store.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/contracts/task_view_contract.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/contracts/experience_contract.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/client/task-view-query.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/client/job-detail-query.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/client/event-stream.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/client/event-invalidation.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/client/polling-strategy.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/client/job-commands.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/client/wizard-endpoints.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/client/system-endpoints.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/client/science-query.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/controllers/task_list_controller.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/controllers/job_detail_controller.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/controllers/task_session_controller.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/controllers/candidate_review_controller.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/controllers/system_resources_controller.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/visualization/framing.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/visualization/mol3d_adapter.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/visualization/scene_instance.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/visualization/energy_chart_renderer.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/compat/shared-state.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/compat/api.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/i18n.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/features/molecule-view.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/features/queue.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/features/job-detail.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/features/files-logs.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/features/nmr.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/features/energy.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/features/reaction-builder.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/features/wizard/upload-parse.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/features/wizard/preview-validate.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/features/wizard/submit-edit.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/features/wizard/draft-form.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/features/science-question.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/features/scan-s2.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/bootstrap.js"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/js/workbench/features/wizard.js"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/api/v2/science/capabilities?project_id=demo-project"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/api/v2/science/capabilities?project_id=demo-project"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/api/v1/status"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/api/v1/status"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/api/v1/projects"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/api/v1/projects"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/api/v1/workflow-catalog"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/api/v1/workflow-catalog"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/api/v1/method-catalog"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/api/v1/method-catalog"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/api/v2/task-view?group_by=molecule&sort=created_desc&group_limit=200&max_total=200&offset=0&include_facets=true"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/api/v2/task-view?group_by=molecule&sort=created_desc&group_limit=200&max_total=200&offset=0&include_facets=true"
+  },
+  {
+    "phase": "request",
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/api/v1/maintenance/disk-usage"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:39427/api/v1/maintenance/disk-usage"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/api/v2/science/capabilities?project_id=demo-project"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/api/v1/status"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/api/v1/projects"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/api/v1/workflow-catalog"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/api/v1/method-catalog"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/api/v2/task-view?group_by=molecule&sort=created_desc&group_limit=200&max_total=200&offset=0&include_facets=true"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/api/v1/maintenance/disk-usage"
+  },
+  {
+    "phase": "request",
+    "method": "POST",
+    "url": "http://127.0.0.1:39427/api/v2/science/preflight?project_id=demo-project"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:39427/api/v2/science/preflight?project_id=demo-project"
+  },
+  {
+    "phase": "response",
+    "status": 200,
+    "url": "http://127.0.0.1:39427/api/v2/science/preflight?project_id=demo-project"
+  }
+]

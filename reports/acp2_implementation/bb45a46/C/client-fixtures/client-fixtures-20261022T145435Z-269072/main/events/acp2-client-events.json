@@ -1,0 +1,17 @@
+{
+  "command": [
+    "/ACPServer/acp2-tools/node-v22.19.0-linux-x64/bin/node",
+    "/ACPServer/acp2-development/C/frontend/js/module_tests/run_all.js",
+    "acp2_client_events"
+  ],
+  "exit_code": 0,
+  "failed": 0,
+  "filter": "acp2_client_events",
+  "min_tests": 8,
+  "passed": 10,
+  "summary": {
+    "prepare_calls": 0,
+    "replay_entry_points": 0,
+    "stale_revision_guard": true
+  }
+}

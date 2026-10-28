@@ -1,0 +1,13 @@
+# T-04 route matrix (T-04a rerun)
+ARGV=[baseline 60 --dry-run] RC=0 ELAPSED_MS=6 OUT=interpreter=/ACPServer/acp2-development/venvs/c/bin/python source=/ACPServer/acp2-development/C mode=fixture|
+ARGV=[evidence-browser-live 60 --mode fixture] RC=0 ELAPSED_MS=6 OUT=interpreter=/ACPServer/acp2-development/venvs/c/bin/python source=/ACPServer/acp2-development/C mode=fixture|
+ARGV=[mcp-live 60 --dry-run] RC=0 ELAPSED_MS=6 OUT=interpreter=/ACPServer/acp2-development/venvs/c/bin/python source=/ACPServer/acp2-development/C mode=fixture|
+ARGV=[mcp-live 60 --mode live --dry-run] RC=0 ELAPSED_MS=6 OUT=interpreter=/ACPServer/acp2-development/venvs/c/bin/python source=/ACPServer/acp2-development/C mode=fixture|
+ARGV=[mcp-live 60] RC=0 ELAPSED_MS=6 OUT=interpreter=/ACPServer/acp2-development/venvs/integration/bin/python source=/ACPServer/acp2-development/integration mode=live|
+ARGV=[mcp-live 60 --mode live] RC=0 ELAPSED_MS=6 OUT=interpreter=/ACPServer/acp2-development/venvs/integration/bin/python source=/ACPServer/acp2-development/integration mode=live|
+ARGV=[mcp-live 60 --mode] RC=3 ELAPSED_MS=6 OUT=route_select: option --mode requires a value|exit=3|
+ARGV=[mcp-live 60 --phase] RC=3 ELAPSED_MS=6 OUT=route_select: option --phase requires a value|exit=3|
+ARGV=[mcp-live 60 --subcase] RC=3 ELAPSED_MS=6 OUT=route_select: option --subcase requires a value|exit=3|
+ARGV=[bogus-scenario 60] RC=3 ELAPSED_MS=6 OUT=route_select: unknown scenario: bogus-scenario|exit=3|
+ARGV=[mcp-live 60 --bogus] RC=3 ELAPSED_MS=6 OUT=route_select: unknown argument: --bogus|exit=3|
+ARGV=[mcp-live] RC=3 ELAPSED_MS=6 OUT=route_select: usage: route_select <scenario> <timeout> [flags...]|exit=3|

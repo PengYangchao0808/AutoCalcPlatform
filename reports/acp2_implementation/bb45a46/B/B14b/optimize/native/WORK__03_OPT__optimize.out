@@ -172,9 +172,9 @@ interface, adapt or use parts of their codes:
 
   ***********************************
   * Starting time: Fri Oct 23 11:16:54 2026
-  * Host name:     redacted-host
+  * Host name:     workstation
   * Process ID:    1054310
-  * Working dir.:  <acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT
+  * Working dir.:  /ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT
   ***********************************
 
 NOTE: MaxCore=819 MB was set to SCF,MP2,MDCI,CIPSI,MRCI,RASCI and CIS
@@ -209,7 +209,7 @@ WARNING: Geometry Optimization
 ================================================================================
                                        INPUT FILE
 ================================================================================
-NAME = <acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.inp
+NAME = /ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.inp
 |  1> ! HF STO-3G Opt RIJCOSX
 |  2> %basis
 |  3>   auxJ  "AutoAux"
@@ -538,7 +538,7 @@ Hamiltonian:
 
 
 General Settings:
- Integral files         IntName         .... <acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize
+ Integral files         IntName         .... /ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize
  Hartree-Fock type      HFTyp           .... RHF
  Total Charge           Charge          ....    0
  Multiplicity           Mult            ....    1
@@ -626,7 +626,7 @@ Now organizing SCF variables                       ... done
                       ------------------
                       INITIAL GUESS DONE (   0.0 sec)
                       ------------------
-             **** ENERGY FILE WAS UPDATED (<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.en.tmp) ****
+             **** ENERGY FILE WAS UPDATED (/ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.en.tmp) ****
 Finished Guess after   0.0 sec
 Maximum memory used throughout the entire GUESS-calculation: 1.5 MB
 
@@ -658,7 +658,7 @@ Old exchange energy                            :     -0.674766946 Eh
 New exchange energy                            :     -0.674755950 Eh
 Exchange energy change after final integration :      0.000010996 Eh
 Total energy after final integration           :     -1.116773192 Eh
-             **** ENERGY FILE WAS UPDATED (<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.en.tmp) ****
+             **** ENERGY FILE WAS UPDATED (/ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.en.tmp) ****
 
 ----------------
 TOTAL SCF ENERGY
@@ -828,7 +828,7 @@ Maximum memory used throughout the entire SCFGRAD-calculation: 2.5 MB
                          ORCA PROPERTY INTEGRAL CALCULATIONS
 ------------------------------------------------------------------------------
 
-GBWName                                   ... <acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.gbw
+GBWName                                   ... /ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.gbw
 Number of atoms                           ...      2
 Number of basis functions                 ...      2
 Max core memory                           ...    819 MB
@@ -884,7 +884,7 @@ Maximum memory used throughout the entire PROPINT-calculation: 2.5 MB
                             ORCA SCF RESPONSE CALCULATION
 ------------------------------------------------------------------------------
 
-GBWName                                 ... <acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.gbw
+GBWName                                 ... /ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.gbw
 Number of atoms                         ...      2
 Number of basis functions               ...      2
 Max core memory                         ...    819 MB
@@ -942,7 +942,7 @@ Maximum memory used throughout the entire SCFRESP-calculation: 1.0 MB
                               ORCA PROPERTY CALCULATIONS
 ------------------------------------------------------------------------------
 
-GBWName                                 ... <acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.gbw
+GBWName                                 ... /ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.gbw
 Number of atoms                         ...      2
 Number of basis functions               ...      2
 Max core memory                         ...    819 MB
@@ -1127,7 +1127,7 @@ G-E(el)                           ...     -0.00000175 Eh     -0.00 kcal/mol
 
 
 Maximum memory used throughout the entire PROP-calculation: 2.7 MB
-Actual Hessian File stored as <acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.001.hess
+Actual Hessian File stored as /ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.001.hess
 ------------------------------------------------------------------------------
                          ORCA GEOMETRY RELAXATION STEP
 ------------------------------------------------------------------------------
@@ -1149,7 +1149,7 @@ Maximum allowed component of the step   ....  0.300
 Current trust radius                    ....  0.300
 Evaluating the initial hessian          ....  (read) 
 (Reading Exact Hessian)...  
-InHessName: <acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.hess	The file <<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.hess> is opened as a .hess file
+InHessName: /ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.hess	The file </ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.hess> is opened as a .hess file
 done
 done
 Projecting the Hessian                  .... done
@@ -1427,7 +1427,7 @@ SHARK setup successfully completed in   0.1 seconds
 
 Maximum memory used throughout the entire STARTUP-calculation: 3.1 MB
 Occupation numbers will be reassigned to an Aufbau configuration
-             **** ENERGY FILE WAS UPDATED (<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.en.tmp) ****
+             **** ENERGY FILE WAS UPDATED (/ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.en.tmp) ****
 Finished Guess after   0.0 sec
 Maximum memory used throughout the entire GUESS-calculation: 1.4 MB
 ----------------------------------------D-I-I-S--------------------------------------------
@@ -1453,7 +1453,7 @@ Old exchange energy                            :     -0.680503576 Eh
 New exchange energy                            :     -0.680497409 Eh
 Exchange energy change after final integration :      0.000006166 Eh
 Total energy after final integration           :     -1.117511413 Eh
-             **** ENERGY FILE WAS UPDATED (<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.en.tmp) ****
+             **** ENERGY FILE WAS UPDATED (/ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.en.tmp) ****
 
 ----------------
 TOTAL SCF ENERGY
@@ -1831,7 +1831,7 @@ SHARK setup successfully completed in   0.1 seconds
 
 Maximum memory used throughout the entire STARTUP-calculation: 3.1 MB
 Occupation numbers will be reassigned to an Aufbau configuration
-             **** ENERGY FILE WAS UPDATED (<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.en.tmp) ****
+             **** ENERGY FILE WAS UPDATED (/ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.en.tmp) ****
 Finished Guess after   0.0 sec
 Maximum memory used throughout the entire GUESS-calculation: 1.4 MB
 ----------------------------------------D-I-I-S--------------------------------------------
@@ -1857,7 +1857,7 @@ Old exchange energy                            :     -0.680015938 Eh
 New exchange energy                            :     -0.680009367 Eh
 Exchange energy change after final integration :      0.000006571 Eh
 Total energy after final integration           :     -1.117517056 Eh
-             **** ENERGY FILE WAS UPDATED (<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.en.tmp) ****
+             **** ENERGY FILE WAS UPDATED (/ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.en.tmp) ****
 
 ----------------
 TOTAL SCF ENERGY
@@ -2287,7 +2287,7 @@ Hamiltonian:
 
 
 General Settings:
- Integral files         IntName         .... <acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize
+ Integral files         IntName         .... /ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize
  Hartree-Fock type      HFTyp           .... RHF
  Total Charge           Charge          ....    0
  Multiplicity           Mult            ....    1
@@ -2360,7 +2360,7 @@ Convergence Tolerance:
 ---------------------
 INITIAL GUESS: MOREAD
 ---------------------
-Guess MOs are being read from file: <acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.gbw
+Guess MOs are being read from file: /ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.gbw
 Input Geometry matches current geometry (good)
 Input basis set matches current basis set (good)
 Occupation numbers will be reassigned to an Aufbau configuration
@@ -2369,7 +2369,7 @@ MOs were reorthogonalized (Cholesky)
                       ------------------
                       INITIAL GUESS DONE (   0.0 sec)
                       ------------------
-             **** ENERGY FILE WAS UPDATED (<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.en.tmp) ****
+             **** ENERGY FILE WAS UPDATED (/ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.en.tmp) ****
 Finished Guess after   0.0 sec
 Maximum memory used throughout the entire GUESS-calculation: 1.4 MB
 
@@ -2401,7 +2401,7 @@ Old exchange energy                            :     -0.680054200 Eh
 New exchange energy                            :     -0.680047661 Eh
 Exchange energy change after final integration :      0.000006539 Eh
 Total energy after final integration           :     -1.117517099 Eh
-             **** ENERGY FILE WAS UPDATED (<acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.en.tmp) ****
+             **** ENERGY FILE WAS UPDATED (/ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.en.tmp) ****
 
 ----------------
 TOTAL SCF ENERGY
@@ -2535,7 +2535,7 @@ FINAL SINGLE POINT ENERGY        -1.117517098820
                               ORCA PROPERTY CALCULATIONS
 ------------------------------------------------------------------------------
 
-GBWName                                 ... <acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.gbw
+GBWName                                 ... /ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.gbw
 Number of atoms                         ...      2
 Number of basis functions               ...      2
 Max core memory                         ...    819 MB
@@ -2640,7 +2640,7 @@ But we need these citations in order to attract the funding resources that allow
 
 Therefore, if you are a happy ORCA user, please consider citing a few of the papers listed below in the main body of your paper
 
-In addition to the list printed below, the program has created the file <acp2-dev>/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.bibtex that contains the list in bibtex format
+In addition to the list printed below, the program has created the file /ACPServer/acp2-development/data/b/run-root-b14b/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_optimize/WORK/03_OPT/optimize.bibtex that contains the list in bibtex format
 You can import this file easily into all common literature databanks and citation aid programs
 
 It goes without saying that in many instances, there are alternative algorithms to achieve similar

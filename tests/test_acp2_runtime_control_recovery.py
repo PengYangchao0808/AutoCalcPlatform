@@ -63,7 +63,7 @@ def _envelope(**overrides: object) -> ExecutionEnvelope:
         "submission_id": expected_submission_id("20261023_000000_001_singlepoint", 1),
         "release_id": "rel-b13",
         "release_digest": "sha256:" + "1" * 64,
-        "owner": "local:redacted-host:1:1",
+        "owner": "local:workstation:1:1",
         "fencing_token": "fence-b13",
         "plan_digest": "v2:" + "2" * 32,
         "plan_identity": "v2:" + "3" * 32,

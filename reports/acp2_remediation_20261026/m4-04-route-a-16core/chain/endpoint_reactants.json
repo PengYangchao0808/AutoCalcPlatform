@@ -1,0 +1,259 @@
+{
+  "actual_orca_resources": [
+    {
+      "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_reactants/endpoint_reactants/sp.inp",
+      "maxcore": 2000,
+      "pal_nprocs": 16,
+      "sha256": "21b39d8526b6449e0e8a9b0bbfe3412164a9f32e6a172cacf0516a98a1bc0680"
+    }
+  ],
+  "adr_step_index": 7,
+  "adr_task_kind": "singlepoint",
+  "attempt": 1,
+  "bounded_alternative": null,
+  "complete": true,
+  "direction_label_is_not_trusted": true,
+  "duration_seconds": 5.34,
+  "entry": "bounded_recipe_envelope",
+  "error": null,
+  "executed_task_kind": "singlepoint",
+  "irc_direction_label": "forward",
+  "level": {
+    "basis": "def2-mTZVPP",
+    "charge": 0,
+    "method": "r2SCAN-3c",
+    "multiplicity": 1
+  },
+  "native_files": [
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_reactants/WORK/00_RUNTIME/frozen/frozen_group.json",
+      "path": "WORK/00_RUNTIME/frozen/frozen_group.json",
+      "sha256": "4e144b0569ff6efa8a4760b411f570adc41a4e43007f405a3c2f4474ec8a53db",
+      "size_bytes": 771
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_reactants/WORK/00_RUNTIME/frozen/envelope.json",
+      "path": "WORK/00_RUNTIME/frozen/envelope.json",
+      "sha256": "0236222b88b91dc290b00bc7afc4b266f9ac8f34b02a564b2d08f7976a77f9c2",
+      "size_bytes": 1401
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_reactants/WORK/00_RUNTIME/steps/endpoint_reactants/publication.json",
+      "path": "WORK/00_RUNTIME/steps/endpoint_reactants/publication.json",
+      "sha256": "30ddd4500194093fac96532c2d683e3fd86977fec7990212afa264c772728f0e",
+      "size_bytes": 569
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_reactants/WORK/00_RUNTIME/steps/endpoint_reactants/step_result.json",
+      "path": "WORK/00_RUNTIME/steps/endpoint_reactants/step_result.json",
+      "sha256": "0e2950eb5115f2bb13e6b34efd0a936874a79f1e6390e0281ac5637078f06ee4",
+      "size_bytes": 5656
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_reactants/execution_receipt.json",
+      "path": "execution_receipt.json",
+      "sha256": "0a37885380598c8cefa8865236737050916c8d9f612c9af918a92b2f6d386d6b",
+      "size_bytes": 1636
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_reactants/input.xyz",
+      "path": "input.xyz",
+      "sha256": "c0b5058e3350f3fc37d0c5e5173704ed49411d7006ff58bb8804c8d1dd994ffd",
+      "size_bytes": 888
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_reactants/WORK/00_RUNTIME/frozen/binding.json",
+      "path": "WORK/00_RUNTIME/frozen/binding.json",
+      "sha256": "726f3998b88903c75003fbc095495b8c85cda85a964f2ab3f2a02c934d30c902",
+      "size_bytes": 397
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_reactants/WORK/00_RUNTIME/frozen/plan.json",
+      "path": "WORK/00_RUNTIME/frozen/plan.json",
+      "sha256": "b3259d2cb8dd6e6c1dd2f79b55fc297ba4f8b1e0f56edf51f48f5d36e353d0f7",
+      "size_bytes": 5210
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_reactants/WORK/00_RUNTIME/quota/quota_reservation.json",
+      "path": "WORK/00_RUNTIME/quota/quota_reservation.json",
+      "sha256": "3327edb82ca7df804e62b142993dbc8cc0c0f76bf1e4f4d21ff2096bc6c01888",
+      "size_bytes": 420
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_reactants/WORK/00_RUNTIME/step_dag_state.json",
+      "path": "WORK/00_RUNTIME/step_dag_state.json",
+      "sha256": "372eed1229414c7da6f358dfcbf984e29568f85fb5685392b52651ead8a1ef31",
+      "size_bytes": 7390
+    }
+  ],
+  "products": [
+    {
+      "digest": "sha256:21b39d8526b6449e0e8a9b0bbfe3412164a9f32e6a172cacf0516a98a1bc0680",
+      "path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_reactants/endpoint_reactants/sp.inp",
+      "product_kind": "output",
+      "size_bytes": 877
+    }
+  ],
+  "qualification": "complete",
+  "receipt": {
+    "chain_digest": "sha256:fcf27d8520958c3c8fd0f58979c5e0ef64158cf590afbf083525ea305c5ec2b4",
+    "frozen_group": {
+      "attempt": 1,
+      "job_id": "20261028_941_endpoint_reactants",
+      "member_digests": {
+        "binding.json": "726f3998b88903c75003fbc095495b8c85cda85a964f2ab3f2a02c934d30c902",
+        "envelope.json": "0236222b88b91dc290b00bc7afc4b266f9ac8f34b02a564b2d08f7976a77f9c2",
+        "plan.json": "b3259d2cb8dd6e6c1dd2f79b55fc297ba4f8b1e0f56edf51f48f5d36e353d0f7"
+      },
+      "release_id": "2d1ab37a0f988933",
+      "submission_id": "sub_0f3bd846d13452f3",
+      "workflow": "BoundedRecipe"
+    },
+    "state": "completed",
+    "submission_id": "sub_0f3bd846d13452f3",
+    "task_result_digest": null
+  },
+  "release_digest": "813583bdcaae20ef900a99180f433b34a7dfa730fb47c1efea5c9435919a061b",
+  "release_id": "2d1ab37a0f988933",
+  "resources": {
+    "cores": 16,
+    "maxcore": 2000,
+    "mem": "32GB",
+    "nproc": 16
+  },
+  "schema": "acp2.m4-04.step.v1",
+  "status": "completed",
+  "step_id": "endpoint_reactants",
+  "task_ref": "20261028_941_endpoint_reactants",
+  "task_result": {
+    "artifacts": [
+      {
+        "checksum": "sha256:21b39d8526b6449e0e8a9b0bbfe3412164a9f32e6a172cacf0516a98a1bc0680",
+        "path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_reactants/endpoint_reactants/sp.inp",
+        "source": "orca",
+        "type": "output"
+      },
+      {
+        "checksum": "sha256:833b964a2a3728474181d18c52b939037178e6a89934f953fcee3afacc9223ec",
+        "path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_reactants/endpoint_reactants/sp.out",
+        "source": "orca",
+        "type": "log"
+      }
+    ],
+    "complete": true,
+    "coordinates": [
+      [
+        1.1795940498,
+        0.6505196625,
+        0.3223945954
+      ],
+      [
+        0.0278788163,
+        1.3189900797,
+        -0.3715210954
+      ],
+      [
+        -1.1494923428,
+        0.6907565722,
+        -0.329167755
+      ],
+      [
+        -1.1960043307,
+        -0.6162276666,
+        0.408676118
+      ],
+      [
+        0.9891961382,
+        0.6243719174,
+        1.4065972085
+      ],
+      [
+        2.1219978407,
+        1.1876125091,
+        0.1837730521
+      ],
+      [
+        0.1747777248,
+        2.2413263389,
+        -0.9281547019
+      ],
+      [
+        -2.0276685891,
+        1.0663356457,
+        -0.8486338467
+      ],
+      [
+        -2.172519378,
+        -1.1033983499,
+        0.3387509245
+      ],
+      [
+        -1.0090865397,
+        -0.4389076076,
+        1.4791934209
+      ],
+      [
+        -0.0763731867,
+        -1.536488447,
+        -0.1330862863
+      ],
+      [
+        1.2898518541,
+        -0.8062438171,
+        -0.1867480941
+      ],
+      [
+        -0.0102403712,
+        -2.4388674391,
+        0.4849699518
+      ],
+      [
+        -0.3653298043,
+        -1.8611627698,
+        -1.1386571869
+      ],
+      [
+        1.6549815928,
+        -0.7736001525,
+        -1.2191017979
+      ],
+      [
+        2.0423458363,
+        -1.345706777,
+        0.3992436892
+      ]
+    ],
+    "energy_hartree": -234.562005464946,
+    "errors": [],
+    "frequencies": [],
+    "metadata": {},
+    "payload": {},
+    "provenance": {
+      "backend": "orca",
+      "input_signature": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_reactants/input.xyz",
+      "method": "r2SCAN-3c",
+      "version": "unknown"
+    },
+    "schema_version": 1,
+    "status": "completed",
+    "symbols": [
+      "C",
+      "C",
+      "C",
+      "C",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H",
+      "C",
+      "C",
+      "H",
+      "H",
+      "H",
+      "H"
+    ],
+    "task": "singlepoint"
+  }
+}

@@ -1,0 +1,183 @@
+{
+  "scope": "Real Bridge, recording PlatformClient; no MCP transport/model/QC",
+  "validate_then_submit": {
+    "calls": [
+      {
+        "tool": "acp_preflight",
+        "args": {
+          "workflow": "singlepoint",
+          "input": {
+            "source": "C"
+          },
+          "method": {},
+          "project_id": "r3-project",
+          "idempotency_key": "r3-shared-key"
+        }
+      }
+    ],
+    "validate": {
+      "operation": "validate",
+      "tool": "acp_preflight",
+      "isError": false,
+      "structuredContent": {
+        "status": "ok",
+        "data": {
+          "reference": {
+            "kind": "operation",
+            "id": "ref-1"
+          }
+        }
+      },
+      "projection": {
+        "tool": "acp_preflight",
+        "outcome": "ok",
+        "isError": false,
+        "reference": {
+          "kind": "operation",
+          "id": "ref-1"
+        },
+        "digest": null,
+        "errorCode": null
+      }
+    },
+    "submit": {
+      "operation": "validate",
+      "tool": "acp_preflight",
+      "isError": false,
+      "structuredContent": {
+        "status": "ok",
+        "data": {
+          "reference": {
+            "kind": "operation",
+            "id": "ref-1"
+          }
+        }
+      },
+      "projection": {
+        "tool": "acp_preflight",
+        "outcome": "ok",
+        "isError": false,
+        "reference": {
+          "kind": "operation",
+          "id": "ref-1"
+        },
+        "digest": null,
+        "errorCode": null
+      }
+    }
+  },
+  "evidence_different_task_attempt_resource": {
+    "calls": [
+      {
+        "tool": "acp_analyze",
+        "args": {
+          "project_id": "r3-project",
+          "idempotency_key": "r3-evidence-key"
+        }
+      }
+    ],
+    "first": {
+      "operation": "evidence",
+      "tool": "acp_analyze",
+      "isError": false,
+      "structuredContent": {
+        "status": "ok",
+        "data": {
+          "reference": {
+            "kind": "operation",
+            "id": "ref-1"
+          }
+        }
+      },
+      "projection": {
+        "tool": "acp_analyze",
+        "outcome": "ok",
+        "isError": false,
+        "reference": {
+          "kind": "operation",
+          "id": "ref-1"
+        },
+        "digest": null,
+        "errorCode": null
+      }
+    },
+    "other": {
+      "operation": "evidence",
+      "tool": "acp_analyze",
+      "isError": false,
+      "structuredContent": {
+        "status": "ok",
+        "data": {
+          "reference": {
+            "kind": "operation",
+            "id": "ref-1"
+          }
+        }
+      },
+      "projection": {
+        "tool": "acp_analyze",
+        "outcome": "ok",
+        "isError": false,
+        "reference": {
+          "kind": "operation",
+          "id": "ref-1"
+        },
+        "digest": null,
+        "errorCode": null
+      }
+    }
+  },
+  "control_different_key": {
+    "calls": [
+      {
+        "tool": "acp_preflight",
+        "args": {
+          "workflow": "singlepoint",
+          "input": {
+            "source": "C"
+          },
+          "method": {},
+          "project_id": "r3-project",
+          "idempotency_key": "r3-shared-key"
+        }
+      },
+      {
+        "tool": "acp_submit",
+        "args": {
+          "workflow": "singlepoint",
+          "input": {
+            "source": "C"
+          },
+          "method": {},
+          "project_id": "r3-project",
+          "idempotency_key": "r3-different-key"
+        }
+      }
+    ],
+    "submit": {
+      "operation": "submit",
+      "tool": "acp_submit",
+      "isError": false,
+      "structuredContent": {
+        "status": "ok",
+        "data": {
+          "reference": {
+            "kind": "job",
+            "id": "ref-2"
+          }
+        }
+      },
+      "projection": {
+        "tool": "acp_submit",
+        "outcome": "ok",
+        "isError": false,
+        "reference": {
+          "kind": "job",
+          "id": "ref-2"
+        },
+        "digest": null,
+        "errorCode": null
+      }
+    }
+  }
+}

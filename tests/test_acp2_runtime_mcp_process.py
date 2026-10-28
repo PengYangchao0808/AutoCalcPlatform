@@ -181,10 +181,17 @@ class _McpProcess:
         )
         self._buffer = b""
         self._stderr: bytes | None = None
+        self._stderr_buffer = bytearray()
+        self._stderr_lock = threading.Lock()
         self.lines: list[str] = []
         assert self.proc.stdin is not None
         assert self.proc.stdout is not None
         assert self.proc.stderr is not None
+        # Drain stderr continuously.  The server logs at DEBUG and a loaded
+        # runner can fill the OS pipe while the test is waiting for shutdown;
+        # that manifests as a false timeout because the child blocks in logging.
+        self._stderr_thread = threading.Thread(target=self._drain_stderr, daemon=True)
+        self._stderr_thread.start()
 
     def __enter__(self) -> _McpProcess:
         return self
@@ -261,12 +268,24 @@ class _McpProcess:
         except OSError:
             pass
 
-    def wait(self, timeout: float = 60.0) -> int:
+    def wait(self, timeout: float = 120.0) -> int:
         return self.proc.wait(timeout=timeout)
+
+    def _drain_stderr(self) -> None:
+        assert self.proc.stderr is not None
+        while True:
+            chunk = self.proc.stderr.read(65536)
+            if not chunk:
+                return
+            with self._stderr_lock:
+                self._stderr_buffer.extend(chunk)
 
     def stderr_text(self) -> str:
         if self._stderr is None:
-            self._stderr = self.proc.stderr.read() if self.proc.stderr else b""
+            if self.proc.poll() is not None:
+                self._stderr_thread.join(timeout=5)
+            with self._stderr_lock:
+                self._stderr = bytes(self._stderr_buffer)
         return self._stderr.decode("utf-8", errors="replace")
 
     def close(self) -> None:
@@ -419,15 +438,13 @@ def test_same_version_negotiation(controller: Any, tmp_path: Path) -> None:
         assert process.wait() == 0
 
 
-def test_different_preferred_version_with_common_support_negotiates(
+def test_unsupported_preferred_version_returns_server_version(
     controller: Any, tmp_path: Path
 ) -> None:
+    """M0-08: the client's offered version (2025-11-25) is not a server error."""
     _, url = controller
     with _McpProcess(url, tmp_path / "run-root") as process:
-        response = process.handshake(
-            version="2025-03-26",
-            declared=["2025-03-26", PROTOCOL_VERSION],
-        )
+        response = process.handshake(version="2025-11-25")
         assert "error" not in response, response
         assert response["result"]["protocolVersion"] == PROTOCOL_VERSION
         assert response["result"]["supportedProtocolVersions"] == [PROTOCOL_VERSION]
@@ -438,13 +455,48 @@ def test_different_preferred_version_with_common_support_negotiates(
         assert process.wait() == 0
 
 
-def test_no_common_version_fails_and_blocks_tools(controller: Any, tmp_path: Path) -> None:
-    _, url = controller
+def test_unknown_version_with_declared_hint_still_initializes(
+    controller: Any, tmp_path: Path
+) -> None:
+    """No ``protocolVersions`` gate: an unknown declared set is recorded, not refused."""
+    state, url = controller
     with _McpProcess(url, tmp_path / "run-root") as process:
         response = process.handshake(version="1999-01-01", declared=["1999-01-01"])
-        assert response["error"]["code"] == -32602
-        assert response["error"]["data"]["code"] == "unsupported_protocol_version"
-        assert response["error"]["data"]["supported"] == [PROTOCOL_VERSION]
+        assert "error" not in response, response
+        result = response["result"]
+        assert result["protocolVersion"] == PROTOCOL_VERSION
+        guidance = result["capabilities"]["extensions"]["acp.negotiation.v1"]
+        assert guidance["requested_version"] == "1999-01-01"
+        assert guidance["client_declared_versions"] == ["1999-01-01"]
+        assert "extensions" not in result
+        assert "negotiated" not in json.dumps(result["capabilities"])
+        process.notify_initialized()
+        listed = process.request(2, "tools/list", {})
+        assert {tool["name"] for tool in listed["result"]["tools"]} == EXPECTED_TOOLS
+        process.close_stdin()
+        assert process.wait() == 0
+    assert state.submit_posts == 0
+
+
+def test_malformed_protocol_version_is_invalid_params_and_blocks_tools(
+    controller: Any, tmp_path: Path
+) -> None:
+    _, url = controller
+    with _McpProcess(url, tmp_path / "run-root") as process:
+        process.send(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": 20250618,
+                    "clientInfo": {"name": "x", "version": "1"},
+                },
+            }
+        )
+        malformed = json.loads(process.read_line())
+        assert malformed["error"]["code"] == -32602
+        assert malformed["error"]["data"]["code"] == "invalid_protocol_version"
         blocked = process.request(2, "tools/list", {})
         assert blocked["error"]["data"]["code"] == "not_initialized"
         assert "result" not in blocked
@@ -455,6 +507,27 @@ def test_no_common_version_fails_and_blocks_tools(controller: Any, tmp_path: Pat
         assert {tool["name"] for tool in listed["result"]["tools"]} == EXPECTED_TOOLS
         process.close_stdin()
         assert process.wait() == 0
+
+
+def test_server_discover_probe_is_plain_unknown_method(controller: Any, tmp_path: Path) -> None:
+    """An era-probing client must get -32601 before initialize (not not_initialized)."""
+    state, url = controller
+    with _McpProcess(url, tmp_path / "run-root") as process:
+        probe = process.request(
+            1,
+            "server/discover",
+            {"protocolVersions": [PROTOCOL_VERSION], "clientInfo": {"name": "x", "version": "1"}},
+        )
+        assert probe["error"]["code"] == -32601
+        assert (probe["error"].get("data") or {}).get("code") != "not_initialized"
+        assert "result" not in probe
+        assert "error" not in process.handshake(request_id=2)
+        process.notify_initialized()
+        listed = process.request(3, "tools/list", {})
+        assert {tool["name"] for tool in listed["result"]["tools"]} == EXPECTED_TOOLS
+        process.close_stdin()
+        assert process.wait() == 0
+    assert state.submit_posts == 0
 
 
 def test_tools_before_initialize_are_rejected(controller: Any, tmp_path: Path) -> None:
@@ -551,7 +624,7 @@ def test_signal_shutdown_is_clean(controller: Any, tmp_path: Path, signum: int) 
 
 
 def test_protocol_negotiation_matrix(controller: Any, tmp_path: Path) -> None:
-    _, url = controller
+    state, url = controller
     cases: list[tuple[str, dict[str, Any]]] = []
 
     with _McpProcess(url, tmp_path / "matrix-same") as process:
@@ -569,32 +642,41 @@ def test_protocol_negotiation_matrix(controller: Any, tmp_path: Path) -> None:
         process.close_stdin()
         assert process.wait() == 0
 
-    with _McpProcess(url, tmp_path / "matrix-different") as process:
-        response = process.handshake(
-            version="2025-03-26", declared=["2025-03-26", PROTOCOL_VERSION]
-        )
+    with _McpProcess(url, tmp_path / "matrix-unsupported") as process:
+        response = process.handshake(version="2025-11-25", declared=["2025-11-25"])
+        guidance = response["result"]["capabilities"]["extensions"]["acp.negotiation.v1"]
         cases.append(
             (
-                "different-supported",
+                "unsupported-version",
                 {
-                    "requested": "2025-03-26",
+                    "requested": "2025-11-25",
                     "negotiated": response["result"]["protocolVersion"],
                     "error": None,
+                    "client_declared_versions": guidance["client_declared_versions"],
                 },
             )
         )
         process.close_stdin()
         assert process.wait() == 0
 
-    with _McpProcess(url, tmp_path / "matrix-none") as process:
-        response = process.handshake(version="1999-01-01", declared=["1999-01-01"])
+    with _McpProcess(url, tmp_path / "matrix-malformed") as process:
+        process.send(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {"protocolVersion": ["2025-06-18"]},
+            }
+        )
+        response = json.loads(process.read_line())
         cases.append(
             (
-                "no-common",
+                "malformed-version",
                 {
-                    "requested": "1999-01-01",
+                    "requested": None,
                     "negotiated": None,
                     "error": response["error"]["data"]["code"],
+                    "error_code": response["error"]["code"],
                 },
             )
         )
@@ -638,6 +720,10 @@ def test_protocol_negotiation_matrix(controller: Any, tmp_path: Path) -> None:
 
     assert cases[0][1]["negotiated"] == PROTOCOL_VERSION
     assert cases[1][1]["negotiated"] == PROTOCOL_VERSION
-    assert cases[2][1]["error"] == "unsupported_protocol_version"
+    assert cases[1][1]["client_declared_versions"] == ["2025-11-25"]
+    assert cases[2][1]["error"] == "invalid_protocol_version"
+    assert cases[2][1]["error_code"] == -32602
     assert cases[3][1]["error"] == "not_initialized"
     assert cases[4][1]["exit_code"] == 0
+    # Zero task side effects across the whole matrix (no process called a tool).
+    assert state.submit_posts == 0

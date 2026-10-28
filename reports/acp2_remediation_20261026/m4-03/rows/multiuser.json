@@ -1,0 +1,35 @@
+{
+  "data": {
+    "alice_job": "20261028_012855_001_m403-multiuser",
+    "alice_status": "completed",
+    "cross_project_http": 403,
+    "cross_project_payload": {
+      "detail": {
+        "code": "access_denied",
+        "message": "entry 'scope' denied for principal 'principal_m403_bob': no_grant",
+        "params": {
+          "reason_code": "no_grant",
+          "requested_project": "f4a6e319-1c0a-4f60-bd2e-908ae1fa0aab"
+        },
+        "retryable": false
+      }
+    },
+    "cross_read_http": 404,
+    "duration_s": 78.91,
+    "new_lsf_jobs": [
+      "109"
+    ],
+    "read_only_submit_http": 403,
+    "revoked_submit_http": 401,
+    "usage_write_http": 404,
+    "usage_write_route_exists": false
+  },
+  "detail": "project isolation, action ceiling, revocation and the absent usage-write surface hold on the remote submit path",
+  "evidence": [
+    "native/multiuser.json"
+  ],
+  "name": "multiuser",
+  "recorded_at": "2026-10-27T17:29:56.663663Z",
+  "schema": "acp2.m403.acceptance.v1",
+  "status": "PASS"
+}

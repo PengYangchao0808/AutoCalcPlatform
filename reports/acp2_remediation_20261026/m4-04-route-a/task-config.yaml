@@ -1,0 +1,9 @@
+executables:
+  orca:
+    path: "/home/xieningke/orca611/orca"
+    nproc: 4
+    maxcore: 3000
+  xtb:
+    path: "/home/xieningke/xtb-dist/bin/xtb"
+resources:
+  nproc: 4

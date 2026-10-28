@@ -89,6 +89,13 @@ from acp_services.data.operations import (
     PrepareState,
 )
 from acp_services.runtime.attempt_freeze import ATTEMPT_LOCK_FILENAME
+from acp_services.runtime.deadline_enforcement import (
+    DECISION_EXPIRE_QUEUE,
+    DECISION_NONE,
+    attempt_clock_from_record,
+    evaluate_deadline,
+    receipt_from_decision,
+)
 from acp_services.runtime.execution_chain import (
     ATTEMPT_PROTOCOL_FILENAME,
     BINDING_FILENAME,
@@ -120,6 +127,7 @@ from acp_services.runtime.worker import (
     ReceiptConflictError,
     read_receipt,
 )
+from acp_services.workspace.command_identity import CommandIdentity
 
 logger = logging.getLogger(__name__)
 
@@ -503,6 +511,12 @@ class JobManager:
         # Background poller thread.
         self._poll_stop = threading.Event()
         self._poll_thread = threading.Thread(target=self._poll_loop, daemon=True, name="acp-poller")
+        #: Deadline enforcement has its own thread: a slow/unresponsive batch
+        #: system must never starve the platform clock (M4-03 — an openlava
+        #: mbatchd crash blocked the sweep and left local deadlines unenforced).
+        self._deadline_thread = threading.Thread(
+            target=self._deadline_loop, daemon=True, name="acp-deadlines"
+        )
         # Background reconcile thread (categories outside the poll scan set:
         # STARTING+pending submission, terminal side-effect retries).
         self._reconcile_thread = threading.Thread(
@@ -556,6 +570,7 @@ class JobManager:
         self._sweep_outbox()
         self._poll_thread.start()
         self._reconcile_thread.start()
+        self._deadline_thread.start()
         self._activate_run_root()
 
     # ------------------------------------------------------------------ #
@@ -928,6 +943,7 @@ class JobManager:
         *,
         idempotency: IdempotencyContext | None = None,
         budget: dict[str, Any] | None = None,
+        identity: CommandIdentity | None = None,
     ) -> JobRecord:
         """Validate, persist, and enqueue a new job. Returns immediately.
 
@@ -942,11 +958,20 @@ class JobManager:
                 (self-rooted); pass an ancestor's id to link a clone (e.g.
                 a ``rerun_job``) into the same group.
             idempotency: Optional verified-scope idempotency context.
+            identity: Optional server-verified ``CommandIdentity`` (M0-04).
+                The HTTP and CLI entries pass it so the admission reservation
+                (and the persisted ``result["admission"]`` projection) is
+                attributed to the real principal.  The idempotent path takes the
+                same attribution from ``idempotency.principal_id``.
         """
         if idempotency is None:
-            return self._submit_legacy(spec, group_id=group_id, budget=budget)
+            return self._submit_legacy(spec, group_id=group_id, budget=budget, identity=identity)
         return self._submit_idempotent(
-            spec, group_id=group_id, idempotency=idempotency, budget=budget
+            spec,
+            group_id=group_id,
+            idempotency=idempotency,
+            budget=budget,
+            identity=identity,
         )
 
     def _submit_legacy(
@@ -955,6 +980,7 @@ class JobManager:
         group_id: str | None = None,
         *,
         budget: dict[str, Any] | None = None,
+        identity: CommandIdentity | None = None,
     ) -> JobRecord:
         """Original submit path (unchanged for legacy callers)."""
         if spec.workflow not in ALL_WORKFLOWS:
@@ -977,14 +1003,23 @@ class JobManager:
 
         admission_result: dict[str, Any] | None = None
         if self._admission is not None:
+            identity_principal = None if identity is None else identity.principal_id
+            identity_key = None if identity is None else identity.key_id
             decision = self._admission.admit_job(
-                job_id, spec, project_id=spec.project_id, budget=budget
+                job_id,
+                spec,
+                project_id=spec.project_id,
+                budget=budget,
+                principal_id=identity_principal,
+                key_id=identity_key,
             )
             if not decision.allowed:
                 raise AdmissionRefusedError(decision)
             admission_result = self._admission.result_for_reservation(
                 decision.reservation_id,
                 decision=decision,
+                principal_id=identity_principal,
+                key_id=identity_key,
             )
         try:
             work_dir = self._allocate_work_dir(spec, job_id)
@@ -1063,6 +1098,7 @@ class JobManager:
         group_id: str | None,
         idempotency: IdempotencyContext,
         budget: dict[str, Any] | None = None,
+        identity: CommandIdentity | None = None,
     ) -> JobRecord:
         if spec.workflow not in ALL_WORKFLOWS:
             raise ValueError(
@@ -1077,6 +1113,16 @@ class JobManager:
             project_id=spec.project_id or self.default_project_id,
             input_hash=spec.input_hash or compute_input_hash(spec),
         )
+        # M0-04: the verified identity of the claim (context wins; the explicit
+        # submit identity is the fallback for a legacy caller that built the
+        # context itself).
+        fallback_principal = None if identity is None else identity.principal_id
+        principal_id = idempotency.principal or fallback_principal
+        key_id = (
+            idempotency.key_id
+            if idempotency.key_id is not None
+            else (None if identity is None else identity.key_id)
+        )
 
         digest = idempotency.digest()
         outcome = self.store.claim_idempotency(
@@ -1085,6 +1131,10 @@ class JobManager:
             idempotency.key,
             digest,
             lease_seconds=idempotency.lease_seconds,
+            principal_id=principal_id,
+            project_id=spec.project_id,
+            request_digest_version=idempotency.request_digest_version,
+            request_payload=idempotency.request_payload,
         )
         self._fault_point("idempotency.after_claim")
         if outcome.in_progress:
@@ -1111,9 +1161,15 @@ class JobManager:
                     idempotency_key=idempotency.key,
                     spec=spec,
                     budget=budget,
+                    principal_id=principal_id,
+                    key_id=key_id,
                 )
                 if self._admission is not None:
-                    admission_result = self._admission.result_for_reservation(reservation_id)
+                    admission_result = self._admission.result_for_reservation(
+                        reservation_id,
+                        principal_id=principal_id,
+                        key_id=key_id,
+                    )
             self._fault_point("idempotency.after_reservation")
 
             staging.mkdir(parents=True, exist_ok=True)
@@ -1195,6 +1251,9 @@ class JobManager:
                 idempotency.key,
                 digest,
                 lease_seconds=idempotency.lease_seconds,
+                principal_id=idempotency.principal,
+                request_digest_version=idempotency.request_digest_version,
+                request_payload=idempotency.request_payload,
             )
             if not outcome.in_progress:
                 return outcome
@@ -5806,6 +5865,44 @@ class JobManager:
             # started the job (PEND/PSUSP jobs do not count toward the node's
             # running-jobs probe); terminal transitions release below.
             self._release_reservation(job_id)
+            self._persist_remote_start(job_id)
+
+    def _persist_remote_start(self, job_id: str) -> None:
+        """Persist the batch-system start time of a remote attempt (M4-03).
+
+        The wall clock must not consume queue waiting: a remote attempt's wall
+        deadline starts at the RUN observation, not at dispatch.  The timestamp
+        is written once (idempotent) into ``result["remote"]["started_at"]`` and
+        survives a restart, so the remaining time is restored, never reset.
+        """
+        for _ in range(3):
+            fresh = self.store.get(job_id)
+            if fresh is None:
+                return
+            result = dict(fresh.result or {})
+            remote = dict(result.get("remote") or {})
+            if remote.get("started_at"):
+                return
+            remote["started_at"] = _utc_now_iso()
+            result["remote"] = remote
+            try:
+                self.store.update_progress(
+                    job_id,
+                    expected_revision=fresh.revision,
+                    result=result,
+                )
+            except JobStateConflictError:
+                continue
+            try:
+                self._event_log(fresh).append(
+                    "remote.started_observed",
+                    job_id=job_id,
+                    attempt=fresh.attempt,
+                    started_at=remote["started_at"],
+                )
+            except OSError:
+                logger.debug("remote start event failed for %s", job_id)
+            return
 
     def _try_envelope_completion(
         self,
@@ -6436,6 +6533,427 @@ class JobManager:
             except Exception:
                 logger.exception("Poll loop iteration failed")
         logger.info("Poll loop stopped")
+
+    # ------------------------------------------------------------------ #
+    # Execution deadlines (M4-03)
+    # ------------------------------------------------------------------ #
+
+    def _enforce_execution_deadlines(self) -> None:
+        """Act on the queue/wall clocks of every active attempt (M4-03).
+
+        Runs in the poll thread before observations.  The clock is rebuilt from
+        the durable row (``created_at``/``started_at``) plus the persisted
+        admission projection, so a Controller restart evaluates the *same*
+        absolute deadlines — a restart restores the remaining time and never
+        extends it.
+        """
+        statuses = (
+            JobStatus.QUEUED,
+            JobStatus.STARTING,
+            JobStatus.PENDING,
+            JobStatus.RUNNING,
+            JobStatus.PAUSED,
+        )
+        for status in statuses:
+            if self._poll_stop.is_set():
+                return
+            try:
+                records = self.store.list(status=status.value, limit=10000)
+            except OSError:
+                logger.warning("deadline sweep could not list %s jobs", status.value)
+                continue
+            for record in records:
+                if self._poll_stop.is_set():
+                    return
+                try:
+                    self._enforce_one_deadline(record)
+                except Exception:
+                    logger.exception("deadline enforcement failed for job %s", record.id)
+
+    def _verify_pending_deadline_receipts(self, limit: int = 50) -> None:
+        """Upgrade unconfirmed deadline receipts once the cluster answers.
+
+        A deadline transition never blocks on the batch system.  When the
+        confirmation could not be obtained at the deadline (unreachable cluster),
+        this pass re-checks the native LSF state and flips ``verified`` to true —
+        evidence recovered later is still evidence, never assumed.
+        """
+        runner = self.remote_runner
+        if runner is None or self._remote_config is None:
+            return
+        for status in (JobStatus.FAILED, JobStatus.COMPLETED, JobStatus.CANCELLED):
+            try:
+                records = self.store.list(status=status.value, limit=limit)
+            except OSError:
+                return
+            for record in records:
+                result = record.result or {}
+                receipt = result.get("execution_deadline")
+                if not isinstance(receipt, dict) or receipt.get("verified"):
+                    continue
+                native = dict(receipt.get("native") or {})
+                node_name = str(native.get("node") or result.get("node") or "")
+                lsf_job_id = str(native.get("lsf_job_id") or record.remote_job_id or "")
+                if not node_name or not lsf_job_id:
+                    continue
+                node = self._remote_config.get_node(node_name)
+                if node is None:
+                    continue
+                try:
+                    observed = runner._monitor.get_lsf_status(  # noqa: SLF001
+                        node, lsf_job_id, timeout=4.0
+                    )
+                except Exception:
+                    continue
+                if observed not in {"done", "failed", "not_found"}:
+                    continue
+                native["confirmed_late"] = True
+                native["confirmed_status"] = observed
+                receipt["native"] = native
+                receipt["verified"] = True
+                result["execution_deadline"] = receipt
+                try:
+                    self.store.update_progress(
+                        record.id, expected_revision=record.revision, result=result
+                    )
+                except JobStateConflictError:
+                    continue
+                try:
+                    self._event_log(record).append(
+                        "job.deadline_receipt_confirmed",
+                        job_id=record.id,
+                        attempt=record.attempt,
+                        lsf_job_id=lsf_job_id,
+                        lsf_status=observed,
+                    )
+                except OSError:
+                    logger.debug("receipt confirmation event failed for %s", record.id)
+
+    def _enforce_one_deadline(self, record: JobRecord) -> None:
+        """Evaluate one row's clock and act exactly once when it expired."""
+        now = datetime.now(timezone.utc)
+        clock = attempt_clock_from_record(record)
+        decision = evaluate_deadline(clock, now)
+        if decision.decision == DECISION_NONE:
+            return
+        if record.status.is_terminal:
+            return
+        self._apply_deadline(record, decision, clock, now)
+
+    def _apply_deadline(
+        self,
+        record: JobRecord,
+        decision: Any,
+        clock: Any,
+        now: datetime,
+    ) -> None:
+        """Claim the deadline, then terminate — in that order.
+
+        The status CAS happens *first* (with a provisional receipt), so a runner
+        that notices its killed process at the same moment can never finalise
+        the row as an ordinary failure and erase the deadline evidence.  The
+        termination and its native confirmation then upgrade the receipt.  A
+        crash between the two leaves a truthful ``verified=False`` receipt and a
+        process the normal orphan/cleanup paths still stop — never a silent
+        "completed".
+        """
+        is_remote = self._is_remote_job(record)
+        native: dict[str, Any] = {
+            "surface": "lsf" if is_remote else "local-process-group",
+            "node": str((record.result or {}).get("node") or ""),
+            "lsf_job_id": str(record.remote_job_id or ""),
+            "phase": "claimed-before-termination",
+        }
+        observed_at = now
+        receipt = receipt_from_decision(
+            job_id=record.id,
+            attempt=record.attempt,
+            decision=decision,
+            clock=clock,
+            observed_at=observed_at,
+            surface=native["surface"],
+            native=native,
+            verified=False,
+        ).to_dict()
+        reason = (
+            "[QUEUE_DEADLINE_EXPIRED] the queued attempt did not start before its deadline"
+            if decision.decision == DECISION_EXPIRE_QUEUE
+            else "[WALLTIME_EXCEEDED] the attempt was terminated at its wall deadline"
+        )
+        receipt_path = runtime_file(Path(record.work_dir), "deadline_receipt.json")
+        result_payload = dict(record.result or {})
+        result_payload["execution_deadline"] = receipt
+        result_payload["deadline_receipt_path"] = str(receipt_path)
+        result_payload["terminal_side_effects_done"] = False
+        event_log = self._event_log(record)
+        try:
+            stored = self.store.transition(
+                record.id,
+                expected_status=(
+                    JobStatus.QUEUED,
+                    JobStatus.STARTING,
+                    JobStatus.PENDING,
+                    JobStatus.RUNNING,
+                    JobStatus.PAUSED,
+                ),
+                expected_revision=record.revision,
+                expected_attempt=record.attempt,
+                status=JobStatus.FAILED,
+                exit_code=143,
+                completed_at=_utc_now_iso(),
+                error=reason,
+                result=result_payload,
+                pid=record.pid,
+            )
+        except JobStateConflictError as exc:
+            # A concurrent control intention (pause/cancel/rerun) or a newer
+            # attempt already owns the row: never overwrite it.
+            self._drop_stale_poll(record.id, exc, event_log, context="deadline")
+            return
+
+        # The attempt is now terminal: stop the execution and record what the
+        # native surface shows.  Every call below is bounded.
+        if is_remote:
+            terminated, native = self._terminate_remote_for_deadline(record, native)
+        else:
+            terminated, native = self._terminate_local_for_deadline(record, native)
+        native["phase"] = "terminated"
+        receipt = receipt_from_decision(
+            job_id=record.id,
+            attempt=record.attempt,
+            decision=decision,
+            clock=clock,
+            observed_at=datetime.now(timezone.utc),
+            surface=native.get("surface", decision.surface),
+            native=native,
+            verified=bool(terminated and native.get("confirmed_stopped")),
+        ).to_dict()
+        try:
+            receipt_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = receipt_path.with_suffix(".json.tmp")
+            tmp_path.write_text(json.dumps(receipt, indent=2, sort_keys=True), encoding="utf-8")
+            os.replace(tmp_path, receipt_path)
+        except OSError:
+            logger.warning("deadline receipt write failed for job %s", record.id, exc_info=True)
+        current = self.store.get(record.id)
+        if current is not None and current.attempt == record.attempt:
+            updated = dict(current.result or {})
+            updated["execution_deadline"] = receipt
+            updated["deadline_receipt_path"] = str(receipt_path)
+            try:
+                self.store.update_progress(
+                    record.id, expected_revision=current.revision, result=updated
+                )
+            except JobStateConflictError:
+                logger.debug("deadline receipt upgrade lost a CAS race for %s", record.id)
+        # Signal the runner's own stop channel only after the deadline is
+        # claimed, so the cancel path cannot re-label the row.
+        cancel_event = self._cancel_events.get(record.id)
+        if cancel_event is not None:
+            cancel_event.set()
+        try:
+            event_log.append(
+                "job.deadline_expired",
+                job_id=record.id,
+                attempt=record.attempt,
+                decision=decision.decision,
+                clock=decision.clock,
+                deadline_at=receipt.get("deadline_at"),
+                verified=receipt.get("verified"),
+                surface=receipt.get("surface"),
+            )
+        except OSError:
+            logger.debug("deadline event append failed for %s", record.id)
+        self._run_terminal_side_effects(stored, record.id, event_log, is_remote, None)
+
+    def _terminate_local_for_deadline(
+        self, record: JobRecord, native: dict[str, Any]
+    ) -> tuple[bool, dict[str, Any]]:
+        """Terminate the attempt's local process group (SIGCONT → TERM → KILL)."""
+        work_dir = Path(record.work_dir)
+        extra = [int(record.pid)] if record.pid else []
+        try:
+            killed = terminate_task_processes(work_dir, extra_pids=extra)
+        except OSError:
+            logger.warning("process-group termination failed for %s", record.id, exc_info=True)
+            killed = []
+        still_alive = [pid for pid in killed if pid_is_alive(pid)]
+        native.update(
+            {
+                "killed_pids": killed,
+                "still_alive_pids": still_alive,
+                "confirmed_stopped": not still_alive,
+                "signals": "SIGCONT,SIGTERM,SIGKILL (process group via acp.scheduler.processctl)",
+            }
+        )
+        return not still_alive, native
+
+    def _terminate_remote_for_deadline(
+        self, record: JobRecord, native: dict[str, Any]
+    ) -> tuple[bool, dict[str, Any]]:
+        """Stop the LSF job (bkill) with a **bounded** budget.
+
+        A cluster whose batch daemon is unresponsive must never keep the attempt
+        alive: every call here has a hard timeout and the state transition does
+        not depend on the confirmation (the receipt records
+        ``verified=False`` and the reconcile pass upgrades it when the cluster
+        answers again).
+        """
+        runner = self.remote_runner
+        if runner is None:
+            native.update({"confirmed_stopped": False, "error": "remote_runner_unavailable"})
+            return False, native
+        node = None
+        if self._remote_config is not None:
+            node_name = str((record.result or {}).get("node") or "")
+            node = self._remote_config.get_node(node_name) if node_name else None
+        lsf_job_id = str(record.remote_job_id or "")
+        if node is None or not lsf_job_id:
+            native.update({"confirmed_stopped": False, "error": "remote_identity_unavailable"})
+            return False, native
+        monitor = runner._monitor  # noqa: SLF001 - the runner owns the monitor
+        detail_before = ""
+        try:
+            detail_before = monitor.job_detail_text(node, lsf_job_id, timeout=6.0)
+        except Exception:
+            logger.debug("native bjobs -l capture failed for %s", record.id, exc_info=True)
+        # A suspended job cannot act on bkill: mirror the local cancel order
+        # (SIGCONT → SIGTERM → SIGKILL) with bresume → bkill.
+        try:
+            if monitor.get_lsf_status(node, lsf_job_id, timeout=6.0) == "paused":
+                native["bresume_delivered"] = bool(
+                    monitor.bresume_job(node, lsf_job_id, timeout=6.0)
+                )
+        except Exception:
+            logger.debug("bresume before deadline kill failed for %s", record.id)
+        delivered = False
+        try:
+            delivered = bool(monitor.cancel_job(node, lsf_job_id, timeout=8.0))
+        except Exception:
+            logger.warning("remote deadline bkill failed for %s", record.id, exc_info=True)
+        # Short confirmation window: the deadline transition is not blocked on a
+        # cluster that may be down (openlava mbatchd crashed during M4-03).
+        confirmed = False
+        deadline = time.monotonic() + 12.0
+        while time.monotonic() < deadline:
+            try:
+                status = monitor.get_lsf_status(node, lsf_job_id, timeout=4.0)
+            except Exception:
+                status = "unknown"
+            if status in {"done", "failed", "not_found"}:
+                confirmed = True
+                break
+            time.sleep(0.5)
+        detail_after = ""
+        try:
+            detail_after = monitor.job_detail_text(node, lsf_job_id, timeout=6.0)
+        except Exception:
+            logger.debug("native bjobs -l (after) capture failed for %s", record.id, exc_info=True)
+        native.update(
+            {
+                "bkill_delivered": delivered,
+                "confirmed_stopped": confirmed,
+                "bjobs_l_before": detail_before[-4000:],
+                "bjobs_l_after": detail_after[-4000:],
+            }
+        )
+        return confirmed, native
+
+    def _terminate_local_for_deadline(
+        self, record: JobRecord, native: dict[str, Any]
+    ) -> tuple[bool, dict[str, Any]]:
+        """Terminate the attempt's local process group (SIGCONT → TERM → KILL)."""
+        work_dir = Path(record.work_dir)
+        extra = [int(record.pid)] if record.pid else []
+        try:
+            killed = terminate_task_processes(work_dir, extra_pids=extra)
+        except OSError:
+            logger.warning("process-group termination failed for %s", record.id, exc_info=True)
+            killed = []
+        still_alive = [pid for pid in killed if pid_is_alive(pid)]
+        native.update(
+            {
+                "killed_pids": killed,
+                "still_alive_pids": still_alive,
+                "confirmed_stopped": not still_alive,
+                "signals": "SIGCONT,SIGTERM,SIGKILL (process group via acp.scheduler.processctl)",
+            }
+        )
+        return not still_alive, native
+
+    def _terminate_remote_for_deadline(
+        self, record: JobRecord, native: dict[str, Any]
+    ) -> tuple[bool, dict[str, Any]]:
+        """Stop the LSF job (bkill) and capture the native ``bjobs -l`` record."""
+        runner = self.remote_runner
+        if runner is None:
+            native.update({"confirmed_stopped": False, "error": "remote_runner_unavailable"})
+            return False, native
+        detail_before = ""
+        try:
+            detail_before = runner.job_detail_text(record.id, record)
+        except Exception:
+            logger.debug("native bjobs -l capture failed for %s", record.id, exc_info=True)
+        node = None
+        if self._remote_config is not None:
+            node_name = str((record.result or {}).get("node") or "")
+            node = self._remote_config.get_node(node_name) if node_name else None
+        lsf_job_id = str(record.remote_job_id or "")
+        if node is not None and lsf_job_id:
+            # A suspended job cannot act on bkill: mirror the local cancel
+            # order (SIGCONT → SIGTERM → SIGKILL) with bresume → bkill.
+            try:
+                if runner._monitor.get_lsf_status(node, lsf_job_id) == "paused":  # noqa: SLF001
+                    native["bresume_delivered"] = bool(
+                        runner._monitor.bresume_job(node, lsf_job_id)  # noqa: SLF001
+                    )
+            except Exception:
+                logger.debug("bresume before deadline kill failed for %s", record.id)
+        delivered = False
+        try:
+            delivered = bool(runner.cancel_remote(record.id, record))
+        except Exception:
+            logger.warning("remote deadline bkill failed for %s", record.id, exc_info=True)
+        confirmed = False
+        if node is not None and lsf_job_id:
+            deadline = time.monotonic() + 60.0
+            while time.monotonic() < deadline:
+                status = runner._monitor.get_lsf_status(node, lsf_job_id)  # noqa: SLF001
+                if status in {"done", "failed", "not_found"}:
+                    confirmed = True
+                    break
+                time.sleep(1.0)
+        detail_after = ""
+        try:
+            detail_after = runner.job_detail_text(record.id, record)
+        except Exception:
+            logger.debug("native bjobs -l (after) capture failed for %s", record.id, exc_info=True)
+        native.update(
+            {
+                "bkill_delivered": delivered,
+                "confirmed_stopped": confirmed,
+                "bjobs_l_before": detail_before[-4000:],
+                "bjobs_l_after": detail_after[-4000:],
+            }
+        )
+        return confirmed, native
+
+    def _deadline_loop(self) -> None:
+        """Background daemon: enforce the attempt clocks independently (M4-03).
+
+        Kept out of ``_poll_loop`` on purpose: polling talks to the batch system,
+        and an unresponsive cluster used to block the sweep (a crashed openlava
+        ``mbatchd`` left a local deadline unenforced).  The clock must be
+        enforced even when every remote observation hangs.
+        """
+        logger.info("Deadline loop started (interval=%ds)", min(max(1, self.poll_interval), 5))
+        while not self._poll_stop.wait(min(max(1, self.poll_interval), 5)):
+            try:
+                self._enforce_execution_deadlines()
+                self._verify_pending_deadline_receipts()
+            except Exception:
+                logger.exception("Deadline loop iteration failed")
+        logger.info("Deadline loop stopped")
 
     def _reconcile_loop(self) -> None:
         """Background daemon: converge categories outside the regular scan.

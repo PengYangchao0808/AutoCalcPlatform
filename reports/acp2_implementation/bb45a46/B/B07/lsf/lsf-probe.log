@@ -1,7 +1,7 @@
 # B07 LSF/SSH read-only probe (acceptance controller config cwd)
 timestamp_utc=2026-10-22T15:17:57Z
-cwd=<acp2-dev>/data/b/controller-config
-hostname=redacted-host
+cwd=/ACPServer/acp2-development/data/b/controller-config
+hostname=workstation
 LSF_ENVDIR=<unset>
 LSF_LIBDIR=<unset>
 ACP_LSF_NODE=<unset>

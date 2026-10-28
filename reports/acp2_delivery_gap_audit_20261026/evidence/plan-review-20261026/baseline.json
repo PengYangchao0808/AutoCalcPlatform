@@ -1,0 +1,6 @@
+{
+  "head": "0d739b2fba01cd11c8e5342396a6e085e301a89b",
+  "plan_sha256": "83e1a212e48c8c210554defabd2aa2c554fcadd276450f1a40dc1aa0c236ae55",
+  "plan_lines": 747,
+  "diff_from_audit": " .gitignore | 12 ++++++++++++\n 1 file changed, 12 insertions(+)\n"
+}

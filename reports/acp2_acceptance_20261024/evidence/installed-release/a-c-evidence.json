@@ -1,0 +1,30 @@
+[
+  {
+    "id": "A-27b",
+    "note": "raw evidence present; scientific/experience sign-off stays with its owner",
+    "path": "/ACPServer/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z",
+    "present": true,
+    "status": "PASS"
+  },
+  {
+    "id": "A-28",
+    "note": "raw evidence present; scientific/experience sign-off stays with its owner",
+    "path": "/ACPServer/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z",
+    "present": true,
+    "status": "PASS"
+  },
+  {
+    "id": "C33",
+    "note": "evidence absent at the registered path",
+    "path": "/ACPServer/acp2-development/evidence/C/clean-install-live",
+    "present": false,
+    "status": "NOT_VERIFIED"
+  },
+  {
+    "id": "C34",
+    "note": "evidence absent at the registered path",
+    "path": "/ACPServer/acp2-development/evidence/C/operator-runbook-live",
+    "present": false,
+    "status": "NOT_VERIFIED"
+  }
+]

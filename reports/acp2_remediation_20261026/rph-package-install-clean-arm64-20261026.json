@@ -1,0 +1,60 @@
+{
+  "claims": {
+    "closes": "The clean-ARM64 rerun residual of the standalone RPH install defect.",
+    "does_not_close": [
+      "M5-01 as a whole",
+      "independent-operator acceptance",
+      "release PASS"
+    ]
+  },
+  "environment": {
+    "fresh_home": "/home/ACPtest/acp2-package-smoke/fresh-home-rph",
+    "install_directory": "/home/ACPtest/acp2-package-smoke/rph-install-surface",
+    "node": "22.19.0",
+    "node_path": "/home/ACPtest/acp2-tools/node-v22.19.0-linux-arm64/bin",
+    "pnpm": "11.28.5 via corepack",
+    "registry": "http://127.0.0.1:9/ (intentionally unreachable)",
+    "source_checkout_used": false
+  },
+  "generated_on": "2026-10-26T23:35:00Z",
+  "host": {
+    "access": "ephemeral implementation-side SSH key; no password stored",
+    "alias": "clean-arm64-01",
+    "arch": "aarch64",
+    "os": "Debian 13 Raspberry Pi OS environment",
+    "user": "ACPtest"
+  },
+  "original_failure_preserved": "reports/acp2_remediation_20261026/rph-package-install-probe.json",
+  "owner": "REL + C-RPH",
+  "procedure": [
+    "Copy only /ACPServer/acp2-artifacts/remediation/rph-install-fix-local to the clean host.",
+    "sha256sum -c SHA256SUMS over all 11 shipped files.",
+    "With env -i, a fresh HOME, empty pnpm store/cache, and dead registry URL, run corepack pnpm@11.28.5 install --offline --frozen-lockfile.",
+    "Run node verify-install.mjs from the same isolated environment."
+  ],
+  "remaining_m5_01_work": [
+    "Wire the CI-artifacted install surface into the final release BOM/artifact store.",
+    "Produce release manifests/static assets/root Python roles and verify mutually exclusive installations.",
+    "Have an independent operator repeat the procedure from the final BOM."
+  ],
+  "results": {
+    "checksums": "PASS (11/11)",
+    "downloaded": 0,
+    "offline_install_exit": 0,
+    "packages_added": 4,
+    "registry_access_required": false,
+    "resolved_packages": [
+      "@rph/research -> node_modules/.pnpm/@rph+research@file+rph-research-0.0.0.tgz",
+      "@rph/bridge -> node_modules/.pnpm/@rph+bridge@file+rph-bridge-0.0.0.tgz",
+      "@rph/dsh-bundle -> node_modules/.pnpm/@rph+dsh-bundle@file+rph-dsh-bundle-0.0.0.tgz",
+      "@rph/cli -> node_modules/.pnpm/@rph+cli@file+rph-cli-0.0.0.tgz"
+    ],
+    "verify_exit": 0,
+    "verify_output": "RPH INSTALL VERIFY PASS"
+  },
+  "schema": "acp2.remediation.package_install_probe.v2",
+  "secret_free": true,
+  "status": "PASS_CLEAN_ARM64_IMPLEMENTATION_SIDE",
+  "supersedes_local_simulation": "reports/acp2_remediation_20261026/rph-package-install-probe-retest-20261026.json",
+  "task": "M5-01 pre-finding — standalone RPH install defect"
+}

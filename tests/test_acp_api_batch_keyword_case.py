@@ -372,7 +372,7 @@ def test_create_job_canonicalizes_batch_optimize_keywords(
     captured: dict[str, object] = {}
     original = manager.submit
 
-    def _submit(spec, group_id=None):
+    def _submit(spec, group_id=None, **_kwargs):
         captured["spec"] = spec
         work_dir = tmp_path / "captured-batch-kw"
         work_dir.mkdir(parents=True, exist_ok=True)
@@ -431,7 +431,7 @@ def test_create_job_leaves_non_batchoptimize_keywords_untouched(
     captured: dict[str, object] = {}
     original = manager.submit
 
-    def _submit(spec, group_id=None):
+    def _submit(spec, group_id=None, **_kwargs):
         captured["spec"] = spec
         work_dir = tmp_path / "captured-fake-kw"
         work_dir.mkdir(parents=True, exist_ok=True)

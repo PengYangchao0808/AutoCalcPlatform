@@ -34,7 +34,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from acp.results.frame_candidate_store import (
     FRAME_CANDIDATES_SCHEMA,
@@ -42,7 +42,6 @@ from acp.results.frame_candidate_store import (
     write_authority,
 )
 from acp.results.remote_structure_cache import RemoteStructureCache
-from acp.scheduler.structure_source_store import StructureSourceStore, source_uid_for
 from acp.storage.manifest import ResultManifest
 from acp_services.data.archive import (
     ArchiveManifest,
@@ -204,14 +203,14 @@ class _DataResourceAdapter:
         affected = self._source_store.upsert_index_entries([entry])
         return InputRecord(
             input_id=request.input_id,
-            source_uid=source_uid_for(request.job_id, request.relative_path),
+            source_uid=structure_source_uid(request.job_id, request.relative_path),
             job_id=request.job_id,
             relative_path=request.relative_path,
             registered=bool(affected),
         )
 
     def validate_input(self, request: InputValidationRequest) -> InputValidation:
-        uid = source_uid_for(request.job_id, request.relative_path)
+        uid = structure_source_uid(request.job_id, request.relative_path)
         row = self._source_store.get(uid)
         if row is None:
             return InputValidation(
@@ -260,7 +259,7 @@ class _DataResourceAdapter:
         return tuple(self._source_store.list_by_job(job_id))
 
     def source_uid(self, job_id: str, relative_path: str) -> str:
-        return source_uid_for(job_id, relative_path)
+        return structure_source_uid(job_id, relative_path)
 
     # --- candidates ----------------------------------------------------
     def save_candidates(self, request: CandidateWrite) -> CandidateSnapshot:
@@ -382,9 +381,31 @@ def build_data_resource_port(
     """
     run_root_path = Path(run_root)
     resolved_db = Path(db_path) if db_path is not None else run_root_path / "acp_jobs.db"
-    store = source_store or StructureSourceStore(resolved_db)
+    if source_store is None:
+        from acp.scheduler.structure_source_store import StructureSourceStore
+
+        source_store = StructureSourceStore(resolved_db)
+    store = source_store
     structure_cache = cache or RemoteStructureCache(run_root_path)
     return _DataResourceAdapter(source_store=store, cache=structure_cache)
+
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from acp.scheduler.structure_source_store import StructureSourceStore
+
+
+def structure_source_uid(job_id: str, relative_path: str) -> str:
+    """Stable structure-source identity (lazy import, execution-node safe).
+
+    ``acp/scheduler`` is deliberately NOT part of the remote execution release
+    (the node runs workflows, not the scheduler API).  A module-level import of
+    the structure-source store made every workflow that touches the publication
+    bootstrap un-importable on a real node (M4-03 finding); the identity helper
+    is imported where it is actually used instead.
+    """
+    from acp.scheduler.structure_source_store import source_uid_for
+
+    return source_uid_for(job_id, relative_path)
 
 
 # --------------------------------------------------------------------------- #

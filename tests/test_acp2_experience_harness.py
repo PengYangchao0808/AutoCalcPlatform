@@ -30,7 +30,6 @@ import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace
-from unittest import mock
 
 import pytest
 
@@ -40,7 +39,7 @@ SCENARIOS_PATH = REPO_ROOT / "scripts/acceptance/acp2_experience_scenarios.py"
 CONTRACTS_DIR = REPO_ROOT / "docs/reference/next-change/acp2-contracts/experience"
 ROUTE_PROBE = REPO_ROOT / "scripts/acceptance/acp2_route_probe.sh"
 ACCEPTANCE_ENV = Path(
-    os.environ.get("ACP2_ACCEPTANCE_ENV", "<acp2-dev>/data/acceptance-env-c.sh")
+    os.environ.get("ACP2_ACCEPTANCE_ENV", "/ACPServer/acp2-development/data/acceptance-env-c.sh")
 )
 
 
@@ -67,8 +66,15 @@ def scenarios():
 def runtime_path():
     candidates = [
         os.environ.get("ACP2_RUNTIME_PATH"),
-        str(Path(os.environ.get("ACP2_PROJECT_ROOT", "/nonexistent")) / "scripts/acceptance/acp2_runtime.py"),
-        "<repo>/scripts/acceptance/acp2_runtime.py",
+        # The in-repo validator is the contract under test: a stale sibling
+        # checkout must never shadow it (M0-03 moved the required-observation
+        # contract into this file).
+        str(REPO_ROOT / "scripts/acceptance/acp2_runtime.py"),
+        str(
+            Path(os.environ.get("ACP2_PROJECT_ROOT", "/nonexistent"))
+            / "scripts/acceptance/acp2_runtime.py"
+        ),
+        "/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py",
     ]
     for candidate in candidates:
         if candidate and Path(candidate).is_file():
@@ -485,19 +491,27 @@ def test_append_only_refuses_second_run(harness, runtime_env, tmp_path):
 
 def test_verify_receipt_positive(harness, runtime_env, tmp_path):
     out = _out(tmp_path, "baseline", "verify-positive")
-    assert harness.main(["--scenario", "baseline", "--out", str(out), "--timeout", "60", "--dry-run"]) == 0
+    assert (
+        harness.main(["--scenario", "baseline", "--out", str(out), "--timeout", "60", "--dry-run"])
+        == 0
+    )
     receipt_path, _ = _one_receipt(out)
     assert harness.main(["--verify-receipt", str(receipt_path)]) == 0
 
 
 def test_verify_receipt_rejects_sha_mismatch(harness, runtime_env, tmp_path):
     out = _out(tmp_path, "baseline", "verify-negative")
-    assert harness.main(["--scenario", "baseline", "--out", str(out), "--timeout", "60", "--dry-run"]) == 0
+    assert (
+        harness.main(["--scenario", "baseline", "--out", str(out), "--timeout", "60", "--dry-run"])
+        == 0
+    )
     receipt_path, document = _one_receipt(out)
     tampered = json.loads(json.dumps(document))
     tampered["artifacts"][0]["sha256"] = "0" * 64
     tampered_path = out / "tampered-receipt.json"
-    tampered_path.write_text(json.dumps(tampered, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tampered_path.write_text(
+        json.dumps(tampered, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     assert harness.main(["--verify-receipt", str(tampered_path)]) == 1
 
 
@@ -570,36 +584,42 @@ def test_evidence_browser_live_mode_live_dry_run(harness, runtime_env, tmp_path)
 
 def test_subcase_whitelist_positive(harness, runtime_env, tmp_path):
     nmr_out = _out(tmp_path, "cross-domain-live", "subcase-nmr", suffix="main/live/nmr")
-    assert harness.main(
-        [
-            "--scenario",
-            "cross-domain-live",
-            "--out",
-            str(nmr_out),
-            "--timeout",
-            "60",
-            "--subcase",
-            "nmr",
-            "--dry-run",
-        ]
-    ) == 0
+    assert (
+        harness.main(
+            [
+                "--scenario",
+                "cross-domain-live",
+                "--out",
+                str(nmr_out),
+                "--timeout",
+                "60",
+                "--subcase",
+                "nmr",
+                "--dry-run",
+            ]
+        )
+        == 0
+    )
     _, document = _one_receipt(nmr_out)
     assert document["phase"] == "experience:nmr"
 
     loop_out = _out(tmp_path, "research-loop-live", "subcase-control", suffix="main/live/control")
-    assert harness.main(
-        [
-            "--scenario",
-            "research-loop-live",
-            "--out",
-            str(loop_out),
-            "--timeout",
-            "60",
-            "--subcase",
-            "control",
-            "--dry-run",
-        ]
-    ) == 0
+    assert (
+        harness.main(
+            [
+                "--scenario",
+                "research-loop-live",
+                "--out",
+                str(loop_out),
+                "--timeout",
+                "60",
+                "--subcase",
+                "control",
+                "--dry-run",
+            ]
+        )
+        == 0
+    )
     _, loop_document = _one_receipt(loop_out)
     assert loop_document["phase"] == "experience:control"
 
@@ -625,7 +645,15 @@ def test_subcase_whitelist_negative(harness, runtime_env, tmp_path, scenario, su
     assert code == 3
 
 
-def test_approval_budget_live_phase_alias_writes_fixture(harness, runtime_env, tmp_path):
+def test_approval_budget_live_is_a_live_browser_row(harness, runtime_env, tmp_path):
+    """M4-02: the row is no longer fixture-only — a live run is the real thing.
+
+    The registered id and the ``--phase approval`` invocation are unchanged;
+    what changed is the honest classification: the row runs two real browsers
+    against a real Controller, so ``approval`` resolves to a live phase and
+    ``--mode live`` is accepted.  A dry run still executes nothing.
+    """
+
     out = _out(tmp_path, "approval-budget-live", "alias-approval", suffix="approval")
     assert (
         harness.main(
@@ -644,10 +672,11 @@ def test_approval_budget_live_phase_alias_writes_fixture(harness, runtime_env, t
         == 0
     )
     _, document = _one_receipt(out)
-    assert document["phase"] == "experience:fixture"
-    assert document["evidence_kind"] == "fixture"
-    assert document["extensions"]["experience.mode"] == "fixture"
-    assert document["result"] == "NOT_VERIFIED"
+    assert document["phase"] == "approval"
+    assert document["evidence_kind"] == "live"
+    assert document["extensions"]["experience.mode"] == "live"
+    assert document["result"] == "NOT_VERIFIED"  # dry run: nothing executed
+    assert "dry_run" in json.dumps(document["assertions"])
 
     budget_out = _out(tmp_path, "approval-budget-live", "alias-budget", suffix="budget")
     assert (
@@ -668,25 +697,30 @@ def test_approval_budget_live_phase_alias_writes_fixture(harness, runtime_env, t
     )
     _, budget = _one_receipt(budget_out)
     assert budget["phase"] == "budget"
-    assert budget["evidence_kind"] == "fixture"
     assert budget["result"] == "NOT_VERIFIED"
 
-    live_out = _out(tmp_path, "approval-budget-live", "alias-live", suffix="live")
+    mode_out = _out(tmp_path, "approval-budget-live", "mode-live", suffix="approval")
     assert (
         harness.main(
             [
                 "--scenario",
                 "approval-budget-live",
                 "--out",
-                str(live_out),
+                str(mode_out),
                 "--timeout",
                 "60",
                 "--mode",
                 "live",
+                "--phase",
+                "approval",
+                "--dry-run",
             ]
         )
-        == 3
+        == 0
     )
+    _, mode_document = _one_receipt(mode_out)
+    assert mode_document["evidence_kind"] == "live"
+    assert mode_document["phase"] == "approval"
 
 
 # ---------------------------------------------------------------------------
@@ -718,12 +752,12 @@ def test_route_dry_run_live_uses_c_environment():
     )
     assert result.returncode == 0
     environment: dict[str, str] = {}
+    probe_script = (
+        f'source "{ACCEPTANCE_ENV}" >/dev/null; '
+        'printf "%s\\n" "$ACP2_C_PYTHON" "$ACP2_INTEGRATION_PYTHON"'
+    )
     probe = subprocess.run(
-        [
-            "bash",
-            "-c",
-            f'source "{ACCEPTANCE_ENV}" >/dev/null; printf "%s\\n" "$ACP2_C_PYTHON" "$ACP2_INTEGRATION_PYTHON"',
-        ],
+        ["bash", "-c", probe_script],
         capture_output=True,
         text=True,
         timeout=30,
@@ -886,7 +920,9 @@ def test_workspace_scenario_fails_on_build_error(scenarios, tmp_path, monkeypatc
 
     def fake_run(argv, **_kwargs):
         calls["count"] += 1
-        return _completed(argv, 1 if calls["count"] == 2 else 0, "boom" if calls["count"] == 2 else "ok")
+        return _completed(
+            argv, 1 if calls["count"] == 2 else 0, "boom" if calls["count"] == 2 else "ok"
+        )
 
     monkeypatch.setattr(scenarios, "_run", fake_run)
     context = _fake_context(tmp_path / "workspace-fail-out")
@@ -899,7 +935,9 @@ def test_harness_selftest_scenario_with_fake_pytest(scenarios, tmp_path, monkeyp
     (source / "tests/test_acp2_experience_harness.py").write_text("", encoding="utf-8")
     monkeypatch.setenv("ACP2_C_SOURCE", str(source))
     monkeypatch.delenv("ACP2_EXPERIENCE_SELFTEST", raising=False)
-    monkeypatch.setattr(scenarios, "_run", lambda argv, **_kwargs: _completed(argv, 0, "20 passed in 0.2s\n"))
+    monkeypatch.setattr(
+        scenarios, "_run", lambda argv, **_kwargs: _completed(argv, 0, "20 passed in 0.2s\n")
+    )
     context = _fake_context(tmp_path / "selftest-out")
     assert scenarios.scenario_harness_selftest(context) == 0, context.assertions
 

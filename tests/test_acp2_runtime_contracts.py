@@ -51,6 +51,20 @@ MCP_TOOL_NAMES = {
     "acp_read_artifact",
     "acp_analyze",
 }
+#: The ten P2 research promise names (M1-01a).  A promise is not implemented:
+#: none of them is in the P1 allowlist, so the extension never reports negotiated.
+RESEARCH_TOOL_NAMES = {
+    "acp_research_proposal_create_v1",
+    "acp_research_proposal_read_v1",
+    "acp_research_proposal_update_cas_v1",
+    "acp_research_approval_request_v1",
+    "acp_research_approval_query_v1",
+    "acp_research_approval_decide_v1",
+    "acp_research_approval_revoke_v1",
+    "acp_research_wait_v1",
+    "acp_research_snapshot_v1",
+    "acp_research_resume_v1",
+}
 DIGEST_FIELDS = {"plan_digest", "proposal_digest", "contract_digest", "artifact_digest"}
 
 
@@ -98,6 +112,65 @@ def sample_payloads() -> dict[str, dict[str, Any]]:
         entry["path"]: load_json(SAMPLES / entry["path"].removeprefix("samples/"))
         for entry in index["entries"]
     }
+
+
+def _evidence_projection_violations(
+    payload: dict[str, Any], expected: dict[str, Any]
+) -> list[tuple[str, str]]:
+    """Corpus validator for the ADR-003 evidence-projection sample set.
+
+    Dispatches by payload family exactly as ADR-003 §D1–D4 defines them and
+    replays each vector through the single platform projection module — no
+    second report model (the corpus test itself is one of the guards).
+    """
+    from acp_services.runtime import evidence_projection as ep
+    from acp_services.runtime.research_session import ResearchIdentity
+
+    def run(fn: Any) -> list[tuple[str, str]]:
+        try:
+            fn()
+        except ep.TaskRefError as exc:
+            return [(exc.code, "task_ref")]
+        except ep.EvidenceProjectionError as exc:
+            return [(exc.code, "evidence_view")]
+        except ep.ResearchDecisionError as exc:
+            return [(exc.code, "decision")]
+        return []
+
+    # Decision family: an evidence view plus a decision (or a decision record).
+    if "evidence_view" in payload:
+        view = ep.EvidenceView.from_dict(payload["evidence_view"])
+        if "decision_record" in payload:
+            return run(lambda: ep.decision_from_dict(payload["decision_record"], view=view))
+        return run(lambda: ep.decide_evidence(view, payload["decision"]))
+
+    # Evidence-view family: a full projection document (digest re-checked by
+    # from_dict); negatives are attribution failures verified against the
+    # trusted research identity the sample declares.
+    if "report" in payload:
+        view = ep.EvidenceView.from_dict(payload)
+        research = expected.get("research") or payload.get("research") or {}
+        identity = ResearchIdentity(
+            principal_id=research["principal_id"],
+            project_id=research["project_id"],
+            research_id=research["research_id"],
+            session_id=research["session_id"],
+        )
+        return run(lambda: ep.verify_attribution(view, identity, research.get("round", 0)))
+
+    # Attribution family: research identity + task ref; the project must match
+    # (ADR-003 D1: foreign attribution is refused, never silently adopted).
+    if "research" in payload and "task_ref" in payload:
+        violations = run(lambda: ep.parse_task_ref(payload["task_ref"]))
+        if violations:
+            return violations
+        ref = ep.parse_task_ref(payload["task_ref"])
+        if ref.project_id != payload["research"]["project_id"]:
+            return [("foreign_project", "task_ref")]
+        return []
+
+    # Bare TaskRef vectors (ADR-003 D1 normalisation table).
+    return run(lambda: ep.parse_task_ref(payload))
 
 
 # ---------------------------------------------------------------------------
@@ -347,6 +420,78 @@ def test_mcp_launch_schema_freezes_protocol_and_tools(launch_schema: dict[str, A
     assert constraints["properties"]["tool_call_state_authority"]["const"] == "none"
 
 
+def test_mcp_launch_tool_inputs_match_the_runtime_and_application_tables() -> None:
+    """M1-01b 1:1 guard: one declared table per tool, three readers.
+
+    The launch descriptor (``$defs.tool_inputs`` + the template instance), the
+    runtime ``tools/list`` schemas and the application request tables must name
+    the same fields, so a client cannot discover a schema the adapter does not
+    enforce (or vice versa).
+    """
+    from acp_services.entrypoints import mcp
+
+    schema = load_json(RUNTIME / "mcp-launch.schema.json")
+    template = load_json(RUNTIME / "mcp-launch.template.json")
+    api = load_json(RUNTIME / "application-api.v1.json")
+    tool_inputs = schema["$defs"]["tool_inputs"]
+    runtime = {tool["name"]: tool["inputSchema"] for tool in mcp._tool_specs()}
+
+    submit = tool_inputs["acp_submit"]
+    assert set(submit["properties"]) == set(runtime["acp_submit"]["properties"])
+    assert (
+        submit["required"]
+        == runtime["acp_submit"]["required"]
+        == [
+            "workflow",
+            "input",
+            "idempotency_key",
+        ]
+    )
+    assert submit["additionalProperties"] is False
+    assert runtime["acp_submit"]["additionalProperties"] is False
+    assert "idempotency_key" in api["operations"]["submit"]["request"]["required"]
+
+    prepare = tool_inputs["acp_prepare_artifact"]
+    prepare_fields = set(api["operations"]["prepare"]["request"]["fields"])
+    assert len(prepare_fields) == 17
+    assert (
+        set(prepare["properties"])
+        == set(runtime["acp_prepare_artifact"]["properties"])
+        == (prepare_fields)
+    )
+    assert prepare["required"] == runtime["acp_prepare_artifact"]["required"] == ["purpose"]
+    assert prepare["additionalProperties"] is False
+
+    for name, required in (
+        ("acp_read_artifact", ["artifact_ref"]),
+        ("acp_analyze", ["analysis_id", "input_refs", "explicit"]),
+    ):
+        assert tool_inputs[name]["required"] == runtime[name]["required"] == required
+        assert set(tool_inputs[name]["properties"]) == set(runtime[name]["properties"])
+        assert tool_inputs[name]["additionalProperties"] is False
+
+    # Per-tool input table version: the four moved tables say 2, the rest 1.
+    versions = {
+        tool["name"]: tool.get("input_schema_version") for tool in template["instance"]["tools"]
+    }
+    assert versions == {
+        "acp_capabilities": 1,
+        "acp_preflight": 1,
+        "acp_submit": 2,
+        "acp_status": 1,
+        "acp_cancel": 1,
+        "acp_prepare_artifact": 2,
+        "acp_read_artifact": 2,
+        "acp_analyze": 2,
+    }
+    declared = schema["$defs"]["tool"]["properties"]["input_schema_version"]
+    assert declared["type"] == "integer"
+    assert declared["minimum"] == 1
+    # The value lives on the tool entry, the input table stays the pure schema.
+    for tool in template["instance"]["tools"]:
+        assert tool["inputSchema"] == tool_inputs[tool["name"]]
+
+
 def test_mcp_tool_names_match_the_runtime_allowlist() -> None:
     from acp_services.entrypoints.mcp import McpTool
 
@@ -531,6 +676,34 @@ def test_p2_research_operations_are_complete_and_owned() -> None:
         "task/approval/budget waiting",
         "research resume",
     }
+    # M1-01a: the existing implementation_status field is reused; ``verified`` is
+    # the only additive value (no 'implemented' migration, no second field).
+    vocabulary = contract["implementation_status_vocabulary"]
+    assert vocabulary["field"] == "rows[].implementation_status"
+    assert vocabulary["values"] == ["planned", "delivered", "verified"]
+    assert vocabulary["required_fields"] == {
+        "delivered": ["delivered_by"],
+        "verified": ["delivered_by", "verified_by", "evidence"],
+    }
+    for row in rows:
+        assert row["implementation_status"] in vocabulary["values"], row["id"]
+        assert "implemented" not in row, row["id"]
+        if row["implementation_status"] in {"delivered", "verified"}:
+            assert row["delivered_by"], row["id"]
+    # Advertised is never implemented: only a covering registered set negotiates.
+    tool_sets = contract["client_path"]["tool_sets"]
+    assert len(tool_sets["p1_advertised"]) == 8
+    assert set(tool_sets["p1_advertised"]) == MCP_TOOL_NAMES
+    promised = tool_sets["p2_promised"]
+    assert len(promised) == 10
+    assert set(promised) == set(RESEARCH_TOOL_NAMES)
+    assert not set(promised) & set(MCP_TOOL_NAMES)
+    assert (
+        "implemented=true AND the requested version equals extension_version"
+        in (tool_sets["negotiated"])
+    )
+    assert "implemented=false" in tool_sets["implemented"]
+    assert tool_sets["partial_implementation"].startswith("refused with unsupported_capability")
 
 
 def test_fallback_deferral_records_cdxml_scope_change() -> None:
@@ -812,13 +985,22 @@ def _contract_digest(manifest: dict[str, Any]) -> str:
     lines = [
         f"{entry['path']} {entry['sha256']}\n"
         for entry in manifest["contracts"]
-        if entry["status"] == "delivered" and entry["id"] not in {"manifest", "baseline-lock"}
+        if entry["status"] == "delivered"
+        and entry["id"] not in {"manifest", "baseline-lock", "release-bom-current"}
     ]
     return sha256_bytes("".join(sorted(lines)).encode("utf-8"))
 
 
 def test_manifest_delivers_every_delivered_contract(manifest: dict[str, Any]) -> None:
-    assert manifest["contract_version"] == "1.3.0"
+    # M0-01 review vector: the release namespace was registered inside the
+    # existing delivery set, so the manifest contract version moved to 1.4.0.
+    # M0-12 (2026-10-27): the decision-freeze registrations and the
+    # application-api 1.3.0 prepare table move it to 1.5.0.
+    # M1-01/M1-02 (2026-10-27): contract unification + research-session
+    # registration move it to 1.6.0.
+    # M5-02 (2026-10-28): the final B26 release registration moves it to 1.7.0.
+    # Kept as an explicit expectation instead of reading the value back.
+    assert manifest["contract_version"] == "1.7.0"
     delivered = {entry["id"]: entry for entry in manifest["contracts"]}
     b03_ids = {
         "application-api",
@@ -844,9 +1026,49 @@ def test_manifest_delivers_every_delivered_contract(manifest: dict[str, Any]) ->
         assert sha256_bytes(path.read_bytes()) == entry["sha256"], contract_id
     for entry in manifest["contracts"]:
         if entry["status"] == "delivered":
-            assert entry["delivered_by"] in {"B00", "B01", "B03", "B04a", "B06", "B19"}
+            # M0-07 (2026-10-27): the trusted-usage-receipts contract is the
+            # first delivered contract registered under a remediation stage id
+            # instead of a B-stage; the set grows only through a new manifest
+            # registration with its DELIVERED_IDS_BY_STAGE mapping.
+            # M0-12 (2026-10-27): the two decision-freeze documents register
+            # with owner INT (the aggregated integration lane).
+            assert entry["delivered_by"] in {
+                "B00",
+                "B01",
+                "B03",
+                "B04a",
+                "B06",
+                "B19",
+                "M0-07",
+                "M0-12",
+                "M1-02",
+                "B26",
+            }
         else:
             assert "sha256" not in entry
+
+    # M0-01b registered the release namespace as planned contracts owned by B;
+    # M5-02 is the recorded final release stage (B26) that flips them to
+    # delivered and registers the two generated ledger instances.
+    release_ids = {
+        "release-scope",
+        "release-evidence-coverage-schema",
+        "release-bom-schema",
+        "release-bom-current",
+        "release-evidence-coverage-current",
+    }
+    assert release_ids <= set(delivered)
+    for contract_id in release_ids:
+        entry = delivered[contract_id]
+        assert entry["status"] == "delivered", contract_id
+        assert entry["delivered_by"] == "B26", contract_id
+        assert entry["owner"] == "B", contract_id
+        assert entry["path"].startswith("docs/reference/next-change/acp2-contracts/release/"), (
+            contract_id
+        )
+        target = REPO_ROOT / entry["path"]
+        assert target.is_file(), contract_id
+        assert sha256_bytes(target.read_bytes()) == entry["sha256"], contract_id
 
 
 def test_cross_track_requests_are_recorded_and_owned(manifest: dict[str, Any]) -> None:
@@ -871,17 +1093,120 @@ def test_cross_track_requests_are_recorded_and_owned(manifest: dict[str, Any]) -
 
 def test_application_api_v1_1_research_fields_are_additive() -> None:
     api = load_json(RUNTIME / "application-api.v1.json")
-    assert api["contract_version"] == "1.1.0"
+    # 1.2.0 (M0-06/G23): additive execution-decision fields (name/tags/node_tags/
+    # execution_mode/target_node/molecule_name/task_name/remark/
+    # preflight_fingerprint) plus the exhaustive ``submit_field_policy`` block.
+    # 1.3.0 (D-IDENT-10/M0-11): the prepare request field table becomes the one
+    # authority the HTTP route consumes (additive: job_id/relative_path/
+    # expected_*/schema_ref/source_refs/evidence_report/media_type/
+    # expected_revision; ``extensions`` was never a prepare field and is gone).
+    # 1.4.0 (M1-01a/b): the research-extension projection names the
+    # advertised/implemented/negotiated relation and submit requires the
+    # idempotency key (client-visible request-schema change).
+    # 1.5.0 (M2-01c): the research extension projection flips to
+    # implemented=true with the tool-visibility rule (additive; no P1 change).
+    # 1.6.0 (M2-02): analysis_capabilities and product_digest are declared
+    # response fields (single science catalog projection).
+    # 1.1.0's research fields stay untouched.
+    assert api["contract_version"] == "1.6.0"
     submit = api["operations"]["submit"]
     for name in ("proposal_ref", "plan_digest", "budget"):
         assert name in submit["request"]["fields"], name
+    for name in (
+        "name",
+        "tags",
+        "node_tags",
+        "execution_mode",
+        "target_node",
+        "molecule_name",
+        "task_name",
+        "remark",
+        "preflight_fingerprint",
+    ):
+        assert name in submit["request"]["fields"], name
+    assert api["submit_field_policy"]["freeze"].startswith("v1 extra=forbid")
+    assert api["submit_field_policy"]["legacy_allowlist"] == {}
+    documented = api["submit_field_policy"]["fields"]
+    # The policy block also documents the two *rejected* server-path fields, which
+    # are deliberately absent from the declared request fields.
+    assert set(documented) - {"output_dir", "config_path"} == set(submit["request"]["fields"])
+    assert documented["output_dir"]["disposition"] == "server_path_rejected"
+    assert documented["config_path"]["entries"] == []
+    for name in ("execution_mode", "target_node", "node_tags"):
+        assert name in api["operations"]["preflight"]["request"]["fields"], name
     assert submit["request"]["fields"]["budget"]["required"] == ["unit", "timeout_s"]
+    # D-IDENT-10 (M0-11): the prepare field table is the HTTP route's own body.
+    prepare = api["operations"]["prepare"]["request"]
+    assert prepare["required"] == ["purpose"]
+    assert prepare["additional_properties"] is False
+    assert set(prepare["fields"]) == {
+        "schema_version",
+        "purpose",
+        "task_ref",
+        "job_id",
+        "artifact_id",
+        "attempt",
+        "generation",
+        "expected_revision",
+        "relative_path",
+        "expected_digest",
+        "content_digest",
+        "expected_size_bytes",
+        "schema_ref",
+        "source_refs",
+        "evidence_report",
+        "media_type",
+        "idempotency_key",
+    }
+    assert "resource_id" not in prepare["fields"]
+    assert "extensions" not in prepare["fields"]
+    assert "resource_id" in prepare["server_derived_fields"]
     for name in ("task_ref", "result", "approval_ref"):
         assert name in submit["response"]["fields"], name
     extension = api["mcp_extensions"]["acp.research.v1"]
-    assert extension["negotiated_in"] == "initialize"
-    assert extension["version"] == "1.1.0"
+    # M0-09/ADR-006 D7: negotiation moved out of initialize into the P1
+    # discovery tool; the version is the extension authority (1.0.0), not the
+    # application contract version (1.1.0).
+    assert extension["negotiated_in"] == "tools/call"
+    assert extension["negotiation_tool"] == "acp_capabilities"
+    assert extension["negotiation_request_field"] == "research_extension"
+    assert extension["initialize_claim"] == "none"
+    assert extension["version"] == "1.0.0"
     assert extension["p1_tool_allowlist_unchanged"] is True
+    # M2-01c registers all ten promised tools: implemented=true, while a session
+    # that never negotiates is still never negotiated (negotiated_default false)
+    # and never sees the research tools in tools/list.
+    assert extension["implemented"] is True
+    assert extension["implemented_by"] == "M2-01c"
+    assert set(extension["implemented_tools"]) == set(extension["promised_tools"])
+    assert extension["negotiated_default"] is False
+    assert "extension_not_negotiated" in extension["tool_visibility"]
+
+
+def test_extension_version_authority_is_the_p2_contract() -> None:
+    """One authority for the extension id/version, projected everywhere else."""
+    api = load_json(RUNTIME / "application-api.v1.json")
+    p2 = load_json(RUNTIME / "p2-research-operations.v1.json")
+    negotiation = p2["client_path"]["negotiation"]
+    assert negotiation["extension_id"] == "acp.research.v1"
+    assert negotiation["extension_version"] == "1.0.0"
+    assert negotiation["request_carrier"] == "tools/call"
+    assert negotiation["request_tool"] == "acp_capabilities"
+    assert negotiation["request_field"] == "research_extension"
+    assert negotiation["initialize_claim"] == "none"
+    assert negotiation["implemented"] is True
+    assert negotiation["implemented_by"] == "M2-01c"
+    assert negotiation["negotiated_default"] is False
+    assert "initialize_param" not in negotiation
+    projection = api["mcp_extensions"]["acp.research.v1"]
+    assert projection["version"] == negotiation["extension_version"]
+    assert projection["negotiated_in"] == negotiation["request_carrier"]
+    assert projection["negotiation_tool"] == negotiation["request_tool"]
+    # The frozen RPH bridge declares the same pair; the M0-09 server spec must
+    # project the same authority (checked in test_acp2_mcp_research_handshake).
+    bridge = (REPO_ROOT / "rph/packages/bridge/src/index.ts").read_text(encoding="utf-8")
+    assert 'BRIDGE_EXTENSION_ID = "acp.research.v1"' in bridge
+    assert f'BRIDGE_EXTENSION_VERSION = "{negotiation["extension_version"]}"' in bridge
 
 
 def test_manifest_contract_digest_and_self_digest(manifest: dict[str, Any]) -> None:
@@ -1011,7 +1336,33 @@ def _application_api_violations(payload: dict[str, Any], operation: str) -> list
             violations.append(("unknown_field", name))
             continue
         check(value, spec["fields"][name], name)
+    if operation == "capabilities":
+        violations.extend(_extension_request_violations(payload, api))
     return violations
+
+
+def _extension_request_violations(
+    payload: dict[str, Any], api: dict[str, Any]
+) -> list[tuple[str, str]]:
+    """Semantic checks for the M0-09 handshake request (shape is checked above).
+
+    The request is accepted only for an advertised extension at the supported
+    version; a version mismatch or an unknown id is refused, never adopted by
+    inference.  The 1.1.0 value is the historical B06 mistake (the application
+    contract version) and exists here as a permanent negative.
+    """
+    extension = payload.get("research_extension")
+    if not isinstance(extension, dict):
+        return []
+    advertised = api.get("mcp_extensions") or {}
+    extension_id = extension.get("id")
+    if extension_id not in advertised:
+        return [("unknown_extension", "research_extension.id")]
+    expected = advertised[extension_id]["version"]
+    requested = extension.get("version")
+    if requested is not None and requested != expected:
+        return [("extension_version_mismatch", "research_extension.version")]
+    return []
 
 
 def _launch_violations(payload: dict[str, Any]) -> list[tuple[str, str]]:
@@ -1058,9 +1409,30 @@ def _control_data_violations(
     if operation == "read" and payload.get("served_digest"):
         if payload["served_digest"] != payload["artifact_ref"]["digest"]:
             return [("digest_mismatch", "artifact_ref.digest")]
+    if operation == "read" and "artifact_ref" not in payload:
+        # M1-01b: a read is addressed by the frozen artifact_ref tuple only.
+        return [("missing_artifact_ref", "artifact_ref")]
     if payload.get("idempotency_key") and payload.get("existing_plan_digest"):
         if payload["plan_digest"] != payload["existing_plan_digest"]:
             return [("idempotency_key_reuse", "idempotency_key")]
+    if (
+        payload.get("key_entropy")
+        and payload.get("namespace") == "global-per-action"
+        and payload.get("existing_owner_project") != payload.get("requesting_project")
+    ):
+        # M1-01b: one global key namespace per action — a short key reused by
+        # another tenant is a typed conflict, never a replay.
+        return [("idempotency_scope_conflict", "idempotency_key")]
+    if operation == "submit" and payload.get("entry") == "http-manual-legacy":
+        if "idempotency_key" not in payload:
+            return [("keyless_submit_non_idempotent_duplicate", "idempotency_key")]
+    if operation == "analyze":
+        states = contract["analyze"]["capability_states"]["values"]
+        state = payload.get("capability_state", "executable")
+        if state not in states:
+            return [("unknown_capability_state", "capability_state")]
+        if state != "executable":
+            return [("analysis_capability_not_executable", "analysis_id")]
     if operation == "prepare":
         return _required_field_violations(
             payload, contract["artifacts"]["prepare"]["request_fields"]
@@ -1163,6 +1535,8 @@ def test_samples_accept_or_reject_exactly_as_declared() -> None:
         elif contract == "dependencies.json":
             errors = _graph_errors(payload)
             violations = [(error, "") for error in sorted(errors)]
+        elif contract == "ADR-003-taskref-evidence-decision.md":
+            violations = _evidence_projection_violations(payload, data["expected"])
         else:
             raise AssertionError(f"no validator for {contract}")
         violations_by_contract.setdefault(contract, {})[path] = violations

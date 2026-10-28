@@ -1,0 +1,84 @@
+{
+  "generated_at": "2026-10-27T15:15:27Z",
+  "release": {
+    "built": true,
+    "manifest_path": "",
+    "release_digest": "813583bdcaae20ef900a99180f433b34a7dfa730fb47c1efea5c9435919a061b",
+    "release_id": "2d1ab37a0f988933"
+  },
+  "schema": "acp2.m4-04.chain.v1",
+  "steps": [
+    {
+      "adr_step_index": 1,
+      "digest": "1acc94a9bb5f8c223bf56e7a1af1d5d2a5dace8e855642bdb788bce46d4a8117",
+      "duration_seconds": 2543.09,
+      "entry": "legacy_task_core",
+      "status": "completed",
+      "step_id": "endpoint_prep"
+    },
+    {
+      "adr_step_index": 2,
+      "digest": "c572ee8de056a905f8d1a033d7e6b98ed0384cdfd6192b82dc26f823937323e2",
+      "duration_seconds": 9.64,
+      "entry": "legacy_task_core",
+      "status": "failed",
+      "step_id": "candidate_path"
+    },
+    {
+      "adr_step_index": 3,
+      "digest": "c297548d2054d9854f6462b7c1a288767984444c879bb874b715c49210811ae3",
+      "duration_seconds": null,
+      "entry": null,
+      "status": "skipped",
+      "step_id": "candidate_frequency"
+    },
+    {
+      "adr_step_index": 4,
+      "digest": "4eca19b9eff2281223d51b7dd77be2af7b6ec1933c0eb1fa3764608b4702fc8b",
+      "duration_seconds": null,
+      "entry": null,
+      "status": "skipped",
+      "step_id": "ts_optimize"
+    },
+    {
+      "adr_step_index": 5,
+      "digest": "a5508f4dab4538ed78540865330f64ac1044a99a838f001f410861813eb40e88",
+      "duration_seconds": null,
+      "entry": null,
+      "status": "skipped",
+      "step_id": "ts_frequency"
+    },
+    {
+      "adr_step_index": 6,
+      "digest": "0ce27975f0c09adbedca549696da0bc0af5309ea5f1eaab69569145ac1a1fe5d",
+      "duration_seconds": null,
+      "entry": null,
+      "status": "skipped",
+      "step_id": "irc"
+    },
+    {
+      "adr_step_index": 7,
+      "digest": "be851ea56d90ddf826e11bdb57202deffc8eef249c1cfadc53b0354fb466d4b0",
+      "duration_seconds": null,
+      "entry": null,
+      "status": "skipped",
+      "step_id": "endpoint_reactants"
+    },
+    {
+      "adr_step_index": 8,
+      "digest": "4f678ad1c67133c5a786594403764b6f3ec3b3fde5fe80c03710f1e2d597013c",
+      "duration_seconds": null,
+      "entry": null,
+      "status": "skipped",
+      "step_id": "endpoint_product"
+    },
+    {
+      "adr_step_index": 9,
+      "digest": "6743cee41bc54c0aed962c11833f020ca8d9853e053092440638d6248818a93e",
+      "duration_seconds": 0.0,
+      "entry": "deterministic_analysis",
+      "status": "partial",
+      "step_id": "energy_thermochemistry"
+    }
+  ]
+}

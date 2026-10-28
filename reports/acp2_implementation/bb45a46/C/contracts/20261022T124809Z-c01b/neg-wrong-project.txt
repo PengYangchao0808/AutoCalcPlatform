@@ -1,0 +1,2 @@
+PASS wrong-project.valid.json (project scopes agree)
+REJECTED wrong-project: view-model consistency: view_model.project_id='proj-alpha' != task_refs[0].project_id='proj-beta'

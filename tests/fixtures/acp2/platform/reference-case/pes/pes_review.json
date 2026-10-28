@@ -1,0 +1,28 @@
+{
+  "attempt": 1,
+  "confirmed_at": "2026-10-14T16:59:45+08:00",
+  "job_id": "20261014_165743_003_PESsearch",
+  "note": "",
+  "profile_sha256": "044fcbe426814699b66a98ed633a79572707a3e0c5cd2758b5f0b65b2191f8bb",
+  "revision": 1,
+  "schema_version": "pes_review_v1",
+  "selected": [
+    {
+      "candidate_id": "pes_ts_frame_005",
+      "frame_converged": true,
+      "frame_index": 5,
+      "name": "pes_ts_frame_005",
+      "role": "TS",
+      "selection_source": "manual",
+      "structure_path": "structures/pes_ts_frame_005.xyz"
+    }
+  ],
+  "source": {
+    "data_sha256": "044fcbe426814699b66a98ed633a79572707a3e0c5cd2758b5f0b65b2191f8bb",
+    "data_source": "RESULT/pes_search/pes_profile.json",
+    "frame_source": "final_profile",
+    "scan_complete": true,
+    "task_status": "COMPLETED"
+  },
+  "status": "confirmed"
+}

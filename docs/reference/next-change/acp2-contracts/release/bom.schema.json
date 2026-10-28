@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "acp2.release.bom.v1",
+  "title": "ACP 2.0 release bill of materials (skeleton)",
+  "description": "Planned M0-01 skeleton for the single release BOM frozen by M5-02. The BOM references the evidence-coverage digest instead of repeating delivered status, lists every retrievable artifact with URI + sha256 + size, and records toolchain/dependency locks. No secret may appear in any field.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "bom_version",
+    "generated_at",
+    "task_id",
+    "owner",
+    "source",
+    "evidence",
+    "artifacts",
+    "toolchain",
+    "scientific_software",
+    "limitations"
+  ],
+  "properties": {
+    "schema": {"const": "acp2.release.bom.v1"},
+    "bom_version": {"type": "integer", "minimum": 1},
+    "generated_at": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "task_id": {"type": "string", "pattern": "^M[0-5]-[0-9]{2}$"},
+    "owner": {"type": "string", "enum": ["REL", "B", "INT"]},
+    "source": {"$ref": "#/$defs/source"},
+    "evidence": {"$ref": "#/$defs/evidence"},
+    "artifacts": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/artifact"}},
+    "toolchain": {"$ref": "#/$defs/toolchain"},
+    "scientific_software": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/scientific_software"}
+    },
+    "limitations": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+  },
+  "$defs": {
+    "hex64": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "revision", "tree", "clean", "persistent_ref", "persistent_tag"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "clean": {"type": "boolean"},
+        "persistent_ref": {"type": "string", "minLength": 1},
+        "persistent_tag": {"type": "string", "minLength": 1},
+        "dirty_path_snapshot": {"type": ["string", "null"]},
+        "release_overlay": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_version",
+        "contract_digest",
+        "coverage_path",
+        "coverage_sha256",
+        "coverage_scope_rows",
+        "coverage_gap_rows",
+        "reuse_rule"
+      ],
+      "properties": {
+        "contract_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "contract_digest": {"$ref": "#/$defs/hex64"},
+        "coverage_path": {"type": "string", "minLength": 1},
+        "coverage_sha256": {"$ref": "#/$defs/hex64"},
+        "coverage_scope_rows": {"type": "integer", "minimum": 1},
+        "coverage_gap_rows": {"type": "integer", "minimum": 26},
+        "reuse_rule": {
+          "type": "string",
+          "enum": ["exact", "reused", "rerun_required", "not_verified"]
+        },
+        "supersedes": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "reused_from": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "name", "version", "uri", "sha256", "size_bytes", "retrievable"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "kind": {
+          "type": "string",
+          "enum": [
+            "python-wheel",
+            "python-sdist",
+            "rph-package",
+            "static-asset-bundle",
+            "plugin-wheel",
+            "science-asset",
+            "contract-bundle",
+            "document"
+          ]
+        },
+        "name": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "uri": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/hex64"},
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "retrievable": {"type": "boolean"},
+        "built_at": {"type": "string", "minLength": 1},
+        "build_script_sha256": {"$ref": "#/$defs/hex64"},
+        "notes": {"type": "string"}
+      }
+    },
+    "toolchain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["python", "node", "pnpm", "ruff"],
+      "properties": {
+        "python": {"type": "string", "minLength": 1},
+        "node": {"type": "string", "minLength": 1},
+        "pnpm": {"type": "string", "minLength": 1},
+        "ruff": {"type": "string", "minLength": 1},
+        "chromium": {"type": ["string", "null"]},
+        "dsh": {"$ref": "#/$defs/locked_dependency"},
+        "dependency_locks": {"type": "array", "items": {"$ref": "#/$defs/locked_dependency"}}
+      }
+    },
+    "locked_dependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "lock_sha256"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "lock_sha256": {"$ref": "#/$defs/hex64"},
+        "source": {"type": "string"}
+      }
+    },
+    "scientific_software": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "path", "digest"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "path": {"type": "string", "minLength": 1},
+        "digest": {"type": "string", "minLength": 1},
+        "verified": {"type": "string", "enum": ["PASS", "FAIL", "NOT_VERIFIED"]},
+        "config_sha256": {"$ref": "#/$defs/hex64"}
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "schema": "acp2.experience.research-loop.offline-proof.v1",
+  "schema_version": "1.0.0",
+  "run_id": "research-loop-live-r1",
+  "generated_at": "2026-10-22T23:12:33Z",
+  "presenter": "rph/packages/dsh-bundle/skills/supervisor.ts",
+  "live_model_calls": 0,
+  "controller_calls": 0,
+  "cases": [
+    "happy_path",
+    "no_evidence",
+    "duplicate_terminal",
+    "round_cap",
+    "preflight_failed",
+    "advice_cannot_override_refuted",
+    "wait_never_calls_model"
+  ],
+  "assertions": 30,
+  "failed": 0,
+  "all_passed": true
+}

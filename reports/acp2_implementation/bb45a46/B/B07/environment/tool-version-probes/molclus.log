@@ -1,5 +1,5 @@
-argv: /home/<user>/molclus_1.14_Linux/molclus --version
-cwd: <repo>
+argv: /home/xieningke/molclus_1.14_Linux/molclus --version
+cwd: /ACPServer/AutoCalcPlatform
  Molclus: A flexible program for searching cluster configurations and molecular conformations
  Official website: http://www.keinsci.com/research/molclus.html
  Developed by Tian Lu (sobereva@sina.com)     Last update: 2026-Apr-1

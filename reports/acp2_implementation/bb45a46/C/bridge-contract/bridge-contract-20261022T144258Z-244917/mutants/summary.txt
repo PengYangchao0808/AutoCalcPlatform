@@ -1,0 +1,14 @@
+MUTANT iserror_to_ok rc=1
+not ok 11 - read without prepare returns structured not_prepared and never calls the tool
+not ok 20 - p2 execution keeps isError and projects the reference
+not ok 6 - tool isError is never promoted to success
+not ok 7 - a projection reporting ok for isError=true is rejected
+MUTANT mutated_method rc=1
+not ok 15 - submit with a mutated method under one idempotency key is a conflict
+MUTANT read_without_prepare rc=1
+not ok 11 - read without prepare returns structured not_prepared and never calls the tool
+MUTANT raw_prefix rc=1
+not ok 13 - raw mcp__acp__ tool names are rejected
+not ok 29 - raw tool names reject the model-visible prefix
+MUTANT sn_extension rc=1
+not ok 4 - p2 operation is refused when acp.research.v1 is not negotiated

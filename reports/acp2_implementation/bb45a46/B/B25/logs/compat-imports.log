@@ -1,4 +1,4 @@
-$ <repo>/reports/acp2_implementation/bb45a46/B/B25/venvs/web/bin/python -c 
+$ /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/bin/python -c 
 import importlib, json
 from acp.calculations import primitives
 from acp import backends
@@ -18,7 +18,7 @@ print(json.dumps(facts))
 
 exit=0
 --- stdout ---
-{"modules": {"acp.calculations.primitives": "<repo>/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/acp/calculations/primitives/__init__.py", "acp.backends": "<repo>/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/acp/backends/__init__.py", "acp.compat.legacy.manifests": "<repo>/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/acp/compat/legacy/manifests.py"}, "store_identity": true, "contracts_identity": true}
+{"modules": {"acp.calculations.primitives": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/acp/calculations/primitives/__init__.py", "acp.backends": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/acp/backends/__init__.py", "acp.compat.legacy.manifests": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/acp/compat/legacy/manifests.py"}, "store_identity": true, "contracts_identity": true}
 
 --- stderr ---
 

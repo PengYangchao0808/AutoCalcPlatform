@@ -1,0 +1,150 @@
+{
+  "exit_code": 0,
+  "failed_steps": [],
+  "findings": [
+    {
+      "after": "not fixed in this task (Workbench source is frozen): the typed refusal is recorded as the correct fail-closed behaviour, and the rows keep the typed defaults for numeric fields while committing the string field through the real control",
+      "before": "capability-form.js renderField() commits input.value (a string) for every non-checkbox control; the ui-subset validator requires a JSON number for type integer/number",
+      "evidence": "form.json form.numeric_edit_refused / browser row 04-*.png",
+      "found_by": "the headless Workbench driver and the schema-form-live browser row",
+      "id": "M4-05-F1",
+      "title": "integer fields edited through the rendered DOM are refused as ui_value_type"
+    },
+    {
+      "after": "each lifecycle leg starts a new Controller process; the evidence records the process boundary instead of claiming in-process invalidation",
+      "before": "SciencePluginRegistry caches its installed scan; a running Controller keeps the capability it started with",
+      "evidence": "upgrade.json / uninstall.json controller logs",
+      "found_by": "the upgrade and uninstall legs",
+      "id": "M4-05-F2",
+      "title": "plugin discovery is per-process; upgrade/uninstall need a new Controller"
+    },
+    {
+      "after": "not fixed in this task (Workbench source is frozen): the browser row collapses the neighbouring panels through the page's own control (a real user action, persisted by the page) before interacting with the form",
+      "before": "the capability-form panel shares the right sidebar's flex space with the science-question, evidence, approval and info panels; with every panel expanded its bounding box is about one pixel tall, so a user cannot see or operate the form without collapsing neighbours",
+      "evidence": "browser/schema-form-live/schema-form-live.json layout before/after",
+      "found_by": "the schema-form-live browser row",
+      "id": "M4-05-F3",
+      "title": "the capability-form panel is squeezed when every panel is expanded"
+    },
+    {
+      "after": "declared as a scope limitation: the product is surfaced by the analyze response with its digests; adding a panel would be a Workbench source change, which this task forbids",
+      "before": "capability-form.js displays the preflight ViewModel; there is no feature module for acp2.science.plugin_analysis.v1 products",
+      "evidence": "execution.json product/provenance",
+      "found_by": "the slice scope review",
+      "id": "M4-05-F4",
+      "title": "no Workbench panel renders a third-party analysis product"
+    }
+  ],
+  "generated_at": "2026-10-28T00:06:04Z",
+  "git": {
+    "dirty_paths": 8,
+    "head": "a5a833b2ef4623309d96b5b699373924e5db0b15"
+  },
+  "limitations": [
+    "upstream science is a seeded completed task row (fixed native record)",
+    "the A-23 upgrade pair ships no UI form; forms come from the A-22 plugin",
+    "no Workbench panel renders the plugin analysis product itself",
+    "browser row uses the bundled Chromium (Edge is covered by M4-02 rows)"
+  ],
+  "not_verified": [],
+  "reasons": [],
+  "records": {
+    "browser": {
+      "digest": "sha256:6d8fadb2cbe4315bb529965cb2ccd7e4cba35120989a2da5a556b8bfb6507543",
+      "path": "browser.json"
+    },
+    "discovery": {
+      "digest": "sha256:0974ea1b31e3f7e45d2c766745e91f22c49469a1b7963dbc7985be91d583b2f2",
+      "path": "discovery.json"
+    },
+    "enable": {
+      "digest": "sha256:a111c206eca9b2dd413a7b5fce78568076c5fcfc954d75f09b293032a5ca8694",
+      "path": "enable.json"
+    },
+    "environment": {
+      "digest": "sha256:ed18dddefa582853b6fbae6f4bddf3d3e900f83ebfefb2e38e77f68ba6b0e08d",
+      "path": "environment.json"
+    },
+    "execution": {
+      "digest": "sha256:01a08922de313777b72a7dcc8accc1a718e91170fb880a92fedc688ca37ce920",
+      "path": "execution.json"
+    },
+    "form": {
+      "digest": "sha256:3b63c897a835f0feaaab7be17d53c0240298faefbfe9d775edcd6806bf146c0b",
+      "path": "form.json"
+    },
+    "negatives": {
+      "digest": "sha256:118cf325dfd6f2c5ffc8d3d17b592f13b043929e38d7c16914679b860cb5bae8",
+      "path": "negatives.json"
+    },
+    "uninstall": {
+      "digest": "sha256:f4888a5ada0d57d1e11312f38d22ef0fc07858ea6df6c668813e81631d1e543d",
+      "path": "uninstall.json"
+    },
+    "upgrade": {
+      "digest": "sha256:7398e36b4d88c31b799f9116f9b6fd39db71bac6e0da5777fd7fe23bbb2703c3",
+      "path": "upgrade.json"
+    },
+    "upgrade-install": {
+      "digest": "sha256:a6a887699f6ac54b7c9643e66255b8fbf7a5417019eecce27dfe689ccc9d0b61",
+      "path": "upgrade-install.json"
+    }
+  },
+  "run_root": "/ACPServer/acp2-runs/remediation/m4-05/run-root",
+  "schema": "acp2.m4-05.plugin-slice.v1",
+  "status": "PASS",
+  "steps": [
+    {
+      "duration_ms": 5048.3,
+      "name": "environment",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 1834.75,
+      "name": "enable",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 39.23,
+      "name": "discovery",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 137.49,
+      "name": "form",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 392.66,
+      "name": "execution",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 1794.45,
+      "name": "upgrade",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 3699.25,
+      "name": "upgrade.after",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 8030.37,
+      "name": "browser",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 3968.74,
+      "name": "uninstall",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 11305.45,
+      "name": "negatives",
+      "status": "PASS"
+    }
+  ],
+  "venv_python": "/ACPServer/acp2-runs/remediation/m4-05/environment/venv/bin/python",
+  "work_root": "/ACPServer/acp2-runs/remediation/m4-05"
+}

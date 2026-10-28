@@ -1,0 +1,66 @@
+{
+  "browser": {
+    "exit_code": 0,
+    "interpreter": "/ACPServer/acp2-development/venvs/browser/bin/python",
+    "network_entries": 149,
+    "payload": {
+      "chromium": "153.0.8010.12",
+      "claim_states": [
+        "supported",
+        "refuted",
+        "inconclusive",
+        "not_evaluated"
+      ],
+      "console_errors": [],
+      "dispose_detail": {
+        "after": 76,
+        "before": 76,
+        "disposed": true,
+        "lateError": null,
+        "ran": 0,
+        "ranAfterRegister": 0
+      },
+      "dispose_then_tick_fires_nothing": true,
+      "energy_save_candidate_only": true,
+      "energy_save_clicks": 1,
+      "entry_visible": true,
+      "evidence_kind": "",
+      "execution_next_to_claim": true,
+      "expand_artifacts": true,
+      "expand_decision_source": true,
+      "expand_method_version": true,
+      "expand_missing_validation": true,
+      "expand_validator": true,
+      "four_states_distinct": true,
+      "hide_pauses_ticks": true,
+      "inconclusive_marker": true,
+      "inconclusive_not_success_colored": true,
+      "ok": true,
+      "page_errors": [],
+      "port": 43091,
+      "screenshot_bytes": 362705,
+      "submit_calls": 0,
+      "switch_task_clears_claims": true
+    }
+  },
+  "bundle": "/ACPServer/acp2-development/C/frontend/js/workbench/contracts/fixtures/evidence-bundle.js",
+  "filter": "acp2_evidence",
+  "mode": "fixture",
+  "no_fetch": {
+    "feature_hits": 0,
+    "hit_lines": [],
+    "visualization_hits": 0
+  },
+  "node": {
+    "command": [
+      "/ACPServer/acp2-tools/node-v22.19.0-linux-x64/bin/node",
+      "/ACPServer/acp2-development/C/frontend/js/module_tests/run_all.js",
+      "acp2_evidence"
+    ],
+    "exit_code": 0,
+    "failed": 0,
+    "min_tests": 10,
+    "passed": 16
+  },
+  "scenario": "evidence-browser-live"
+}

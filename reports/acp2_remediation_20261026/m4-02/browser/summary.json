@@ -1,0 +1,446 @@
+{
+  "all_pass": true,
+  "root": "/ACPServer/acp2-remediation-integration/reports/acp2_remediation_20261026/m4-02/browser",
+  "rows": [
+    {
+      "artifact_digests": {
+        "01-operator-workbench.html": "de7eb62a305446b939140054418663aa581dc90e6460c98335c6d06df3010021",
+        "01-operator-workbench.png": "bb23a90c6a6c559673e953e7bdebeed611cee1bc07b461a491564684306f61aa",
+        "02-operator-submitted.png": "bb23a90c6a6c559673e953e7bdebeed611cee1bc07b461a491564684306f61aa",
+        "03-operator-job-completed.png": "bb23a90c6a6c559673e953e7bdebeed611cee1bc07b461a491564684306f61aa",
+        "04-operator-refreshed.png": "5b75759b577fbc3e7252a1b8f95c8e601283e2a33f9dfae892c016f05b84acab",
+        "05-reviewer-edge-same-task.png": "cb62dcd5697609856e7da88cbf024e0e56ed4142ed522a126586bab62fce9603",
+        "06-auditor-readonly-denied.png": "d1ecc7a151f3cf035337fd8573e6edc8616b1376e7028f228720b2224ed0a2af",
+        "auditor-denial.json": "ea85a857b317ebd2c180c3651bcf1aa86ad31789835e7da92b50f7c2e78b1032",
+        "browser-console-errors.json": "5ad856def8395eaaaca9bd9b8f9c3da3ec3b2130dd6504c94e616e920ca8e850",
+        "browser-console.json": "78786a3ade9cb2415b00139177a48b2475a3711f943707f39881a5471c9454d1",
+        "browser-network.json": "a8751baf297d9c1ac707cfc48ff602f0a36f31db1eb8efa8daab11bea03cd2e2",
+        "controller.log": "b69b3549e13c86e2f4bc8521469480e6bf83ef9792a607abb6dba00d413fb831",
+        "job-record.json": "d9ea25bcaecf5988e9698f36e489f02503f024fb1205353012669595db5b673a",
+        "model-call.json": "390fdaccd294cd47bba83c7e910c97776221b7851d93113183dd5dd8def7aa2a",
+        "same-task-browser.json": "0650cd90f893b9a835d5c88e017f249491d5f65c92fe05ddeebe729287923885"
+      },
+      "artifacts": [
+        {
+          "path": "01-operator-workbench.png",
+          "sha256": "bb23a90c6a6c559673e953e7bdebeed611cee1bc07b461a491564684306f61aa",
+          "size_bytes": 359804
+        },
+        {
+          "path": "01-operator-workbench.html",
+          "sha256": "de7eb62a305446b939140054418663aa581dc90e6460c98335c6d06df3010021",
+          "size_bytes": 102386
+        },
+        {
+          "path": "02-operator-submitted.png",
+          "sha256": "bb23a90c6a6c559673e953e7bdebeed611cee1bc07b461a491564684306f61aa",
+          "size_bytes": 359804
+        },
+        {
+          "path": "03-operator-job-completed.png",
+          "sha256": "bb23a90c6a6c559673e953e7bdebeed611cee1bc07b461a491564684306f61aa",
+          "size_bytes": 359804
+        },
+        {
+          "path": "04-operator-refreshed.png",
+          "sha256": "5b75759b577fbc3e7252a1b8f95c8e601283e2a33f9dfae892c016f05b84acab",
+          "size_bytes": 406542
+        },
+        {
+          "path": "05-reviewer-edge-same-task.png",
+          "sha256": "cb62dcd5697609856e7da88cbf024e0e56ed4142ed522a126586bab62fce9603",
+          "size_bytes": 419269
+        },
+        {
+          "path": "06-auditor-readonly-denied.png",
+          "sha256": "d1ecc7a151f3cf035337fd8573e6edc8616b1376e7028f228720b2224ed0a2af",
+          "size_bytes": 419112
+        },
+        {
+          "path": "browser-console.json",
+          "sha256": "78786a3ade9cb2415b00139177a48b2475a3711f943707f39881a5471c9454d1",
+          "size_bytes": 15026
+        },
+        {
+          "path": "browser-network.json",
+          "sha256": "a8751baf297d9c1ac707cfc48ff602f0a36f31db1eb8efa8daab11bea03cd2e2",
+          "size_bytes": 1983
+        },
+        {
+          "path": "job-record.json",
+          "sha256": "d9ea25bcaecf5988e9698f36e489f02503f024fb1205353012669595db5b673a",
+          "size_bytes": 7043
+        },
+        {
+          "path": "model-call.json",
+          "sha256": "390fdaccd294cd47bba83c7e910c97776221b7851d93113183dd5dd8def7aa2a",
+          "size_bytes": 2492
+        },
+        {
+          "path": "auditor-denial.json",
+          "sha256": "ea85a857b317ebd2c180c3651bcf1aa86ad31789835e7da92b50f7c2e78b1032",
+          "size_bytes": 424
+        },
+        {
+          "path": "browser-console-errors.json",
+          "sha256": "5ad856def8395eaaaca9bd9b8f9c3da3ec3b2130dd6504c94e616e920ca8e850",
+          "size_bytes": 1156
+        },
+        {
+          "path": "same-task-browser.json",
+          "sha256": "0650cd90f893b9a835d5c88e017f249491d5f65c92fe05ddeebe729287923885",
+          "size_bytes": 1195
+        },
+        {
+          "path": "controller.log",
+          "sha256": "b69b3549e13c86e2f4bc8521469480e6bf83ef9792a607abb6dba00d413fb831",
+          "size_bytes": 269
+        }
+      ],
+      "assertions": [
+        {
+          "detail": "ACP \u5206\u5b50\u8ba1\u7b97\u5de5\u4f5c\u53f0",
+          "name": "browser.page_loaded",
+          "status": "PASS"
+        },
+        {
+          "detail": "{\"ok\": true, \"receipt_present\": true}",
+          "name": "browser.model_call",
+          "status": "PASS"
+        },
+        {
+          "detail": "{\"ok\": true, \"status\": 200, \"value\": {\"job_id\": \"20261027_211707_001_m402-browser-singlepoint\", \"status\": \"queued\", \"workflow\": \"singlepoint\", \"project_id\": \"482b0aa0-7569-4fe4-b728-50c818a0eb8a\", \"schema_version\": 1, \"attempt\": 1, \"release_id\": null, \"release_digest\": null, \"task_ref\": {\"task_id\": \"20261027_211707_001_m402-browser-singlepoint\", \"job_id\": \"20261027_211707_001_m402-browser-singlepoint\", \"attempt\": 1}, \"operation_ref\": null, \"plan_digest\": null, \"proposal_digest\": null, \"approval_ref\": null, \"submit_class\": \"manual-legacy\", \"result\": \"accepted\", \"idempotency_key\": null, \"idempotent_replay\": false, \"admission\": {\"reservation_id\": \"res_job_20261027_211707_001_m402-browser-singlepoint\", \"enforcement\": \"local-single-enforced\", \"mode\": \"quota-only\", \"enforced\": true, \"policy_vers",
+          "name": "browser.submit",
+          "status": "PASS"
+        },
+        {
+          "detail": "completed",
+          "name": "platform.job_completed",
+          "status": "PASS"
+        },
+        {
+          "detail": "6 digest(s): ['sha256:25cc550ead880e87df5fbeedcd14bf687823a72423385f17846cd6fec7125e0e', 'sha256:6914400e9577f6655312ce4836f0ba6fbfc1dc87f0a199f8b1a0a7b2b995374b']",
+          "name": "browser.artifact_digest_read",
+          "status": "PASS"
+        },
+        {
+          "detail": "{\"job_id\": \"20261027_211707_001_m402-browser-singlepoint\", \"attempt\": 1, \"release_id\": \"910ca9d3aff95737\"}",
+          "name": "platform.task_ref_identity",
+          "status": "PASS"
+        },
+        {
+          "detail": "{\"id\": \"20261027_211707_001_m402-browser-singlepoint\", \"attempt\": 1, \"release_id\": \"910ca9d3aff95737\"}",
+          "name": "browser.refresh_same_task",
+          "status": "PASS"
+        },
+        {
+          "detail": "{\"browser\": \"156.0.4314.50\", \"id\": \"20261027_211707_001_m402-browser-singlepoint\", \"attempt\": 1, \"release_id\": \"910ca9d3aff95737\"}",
+          "name": "second_identity.same_task",
+          "status": "PASS"
+        },
+        {
+          "detail": "200",
+          "name": "auditor.read_allowed",
+          "status": "PASS"
+        },
+        {
+          "detail": "{\"status\": 403, \"code\": \"http_403\", \"message\": \"{\\\"code\\\":\\\"access_denied\\\",\\\"message\\\":\\\"entry 'scope' needs action 'write' but only ['read'] are available\\\",\\\"params\\\":{\\\"reason_code\\\":\\\"action_not_granted\\\",\\\"requested_project\\\":\\\"482b0aa0-7569-4fe4-b728-50c818a0eb8a\\\"},\\\"retryable\\\":false}\"}",
+          "name": "auditor.submit_denied",
+          "status": "PASS"
+        },
+        {
+          "detail": "[]",
+          "name": "browser.no_page_errors",
+          "status": "PASS"
+        },
+        {
+          "detail": "[]",
+          "name": "browser.no_console_errors_after_bind",
+          "status": "PASS"
+        },
+        {
+          "detail": null,
+          "name": "observations.published",
+          "status": "PASS"
+        }
+      ],
+      "browsers": {
+        "auditor": "chromium/153.0.8010.12",
+        "operator": "chromium/153.0.8010.12",
+        "reviewer": "msedge/156.0.4314.50"
+      },
+      "declared_observations": {
+        "artifact": "present",
+        "browser": "present",
+        "controller": "present",
+        "denial": "present",
+        "lsf": "absent",
+        "model": "present",
+        "qc": "present",
+        "transport": "present"
+      },
+      "dir": "/ACPServer/acp2-remediation-integration/reports/acp2_remediation_20261026/m4-02/browser/same-task-browser-live",
+      "duration_seconds": 22.9,
+      "evidence_kind": "live",
+      "exit_code": 0,
+      "failed_assertions": [],
+      "invocation": [
+        "--scenario",
+        "same-task-browser-live",
+        "--mode",
+        "live"
+      ],
+      "observations": {
+        "artifact": "present",
+        "browser": "present",
+        "controller": "present",
+        "denial": "present",
+        "lsf": "absent",
+        "model": "present",
+        "qc": "present",
+        "transport": "present"
+      },
+      "phase": "experience:live",
+      "reason": null,
+      "receipt_digest": "sha256:453f96f294644fe94db46ff3d395f6a80dfa2bfbef72b4ac8fc16526b331aac1",
+      "receipt_path": "/ACPServer/acp2-remediation-integration/reports/acp2_remediation_20261026/m4-02/browser/same-task-browser-live/experience_same-task-browser-live-experience_live-same-task-browser-live-20261027T131701Z-2619592-486101.json",
+      "result": "PASS",
+      "scenario_id": "same-task-browser-live",
+      "screenshots": [
+        "01-operator-workbench.png",
+        "02-operator-submitted.png",
+        "03-operator-job-completed.png",
+        "04-operator-refreshed.png",
+        "05-reviewer-edge-same-task.png",
+        "06-auditor-readonly-denied.png"
+      ],
+      "task_ref": {
+        "attempt": 1,
+        "job_id": "20261027_211707_001_m402-browser-singlepoint",
+        "release_id": "910ca9d3aff95737"
+      },
+      "task_ref_extension": {
+        "attempt": 1,
+        "job_id": "20261027_211707_001_m402-browser-singlepoint",
+        "release_digest": "adf3bbe51cb52ae473d29ef792aa9f9a6a10b91ed9ab8ff3d7e02de5ace3e057",
+        "release_id": "910ca9d3aff95737"
+      }
+    },
+    {
+      "artifact_digests": {
+        "01-operator-workbench.png": "bb23a90c6a6c559673e953e7bdebeed611cee1bc07b461a491564684306f61aa",
+        "02-reviewer-edge-workbench.png": "c9c72b7aeb9b39464f6d584ab4a98b71ac72d6bea73515d2163de4fcc9c54bc3",
+        "03-operator-self-approve-denied.png": "bb23a90c6a6c559673e953e7bdebeed611cee1bc07b461a491564684306f61aa",
+        "04-reviewer-edge-approved.png": "c9c72b7aeb9b39464f6d584ab4a98b71ac72d6bea73515d2163de4fcc9c54bc3",
+        "05-reviewer-edge-rejected.png": "c9c72b7aeb9b39464f6d584ab4a98b71ac72d6bea73515d2163de4fcc9c54bc3",
+        "06-reviewer-revoked.png": "c9c72b7aeb9b39464f6d584ab4a98b71ac72d6bea73515d2163de4fcc9c54bc3",
+        "07-auditor-readonly-denied.png": "bb23a90c6a6c559673e953e7bdebeed611cee1bc07b461a491564684306f61aa",
+        "08-operator-budget-denied.png": "bb23a90c6a6c559673e953e7bdebeed611cee1bc07b461a491564684306f61aa",
+        "approval-browser.json": "839b5e2af536cec63bc804ba7a0f2a0432dfa419b8298f67ec2528e9b6f97ca0",
+        "approvals.json": "eb5c38531d8d37934979b8d2e8b34e64ee9a61f748c61a605ac20765b7a4f468",
+        "browser-console.json": "2551a46103c1527a0636865c7a7b98388102b878fb7da8da66ca878e6ff56e96",
+        "browser-network.json": "962ca5fcafb24c0cdd89afaebd622b5ef7da2f9c037e584571f359fe967621b6",
+        "budget-denial.json": "963fa2602ad5d1e8701a4e5604a051a93bc7acd9b9e6b8caa4db462321f97533",
+        "controller.log": "e2a23ffed51ff95b9a3d5388b62e91b881e78f7a192a2de05d2f118921672e9d"
+      },
+      "artifacts": [
+        {
+          "path": "01-operator-workbench.png",
+          "sha256": "bb23a90c6a6c559673e953e7bdebeed611cee1bc07b461a491564684306f61aa",
+          "size_bytes": 359804
+        },
+        {
+          "path": "02-reviewer-edge-workbench.png",
+          "sha256": "c9c72b7aeb9b39464f6d584ab4a98b71ac72d6bea73515d2163de4fcc9c54bc3",
+          "size_bytes": 359961
+        },
+        {
+          "path": "03-operator-self-approve-denied.png",
+          "sha256": "bb23a90c6a6c559673e953e7bdebeed611cee1bc07b461a491564684306f61aa",
+          "size_bytes": 359804
+        },
+        {
+          "path": "04-reviewer-edge-approved.png",
+          "sha256": "c9c72b7aeb9b39464f6d584ab4a98b71ac72d6bea73515d2163de4fcc9c54bc3",
+          "size_bytes": 359961
+        },
+        {
+          "path": "05-reviewer-edge-rejected.png",
+          "sha256": "c9c72b7aeb9b39464f6d584ab4a98b71ac72d6bea73515d2163de4fcc9c54bc3",
+          "size_bytes": 359961
+        },
+        {
+          "path": "06-reviewer-revoked.png",
+          "sha256": "c9c72b7aeb9b39464f6d584ab4a98b71ac72d6bea73515d2163de4fcc9c54bc3",
+          "size_bytes": 359961
+        },
+        {
+          "path": "07-auditor-readonly-denied.png",
+          "sha256": "bb23a90c6a6c559673e953e7bdebeed611cee1bc07b461a491564684306f61aa",
+          "size_bytes": 359804
+        },
+        {
+          "path": "08-operator-budget-denied.png",
+          "sha256": "bb23a90c6a6c559673e953e7bdebeed611cee1bc07b461a491564684306f61aa",
+          "size_bytes": 359804
+        },
+        {
+          "path": "approvals.json",
+          "sha256": "eb5c38531d8d37934979b8d2e8b34e64ee9a61f748c61a605ac20765b7a4f468",
+          "size_bytes": 2547
+        },
+        {
+          "path": "budget-denial.json",
+          "sha256": "963fa2602ad5d1e8701a4e5604a051a93bc7acd9b9e6b8caa4db462321f97533",
+          "size_bytes": 479
+        },
+        {
+          "path": "browser-console.json",
+          "sha256": "2551a46103c1527a0636865c7a7b98388102b878fb7da8da66ca878e6ff56e96",
+          "size_bytes": 6517
+        },
+        {
+          "path": "browser-network.json",
+          "sha256": "962ca5fcafb24c0cdd89afaebd622b5ef7da2f9c037e584571f359fe967621b6",
+          "size_bytes": 1317
+        },
+        {
+          "path": "controller.log",
+          "sha256": "e2a23ffed51ff95b9a3d5388b62e91b881e78f7a192a2de05d2f118921672e9d",
+          "size_bytes": 267
+        },
+        {
+          "path": "approval-browser.json",
+          "sha256": "839b5e2af536cec63bc804ba7a0f2a0432dfa419b8298f67ec2528e9b6f97ca0",
+          "size_bytes": 3513
+        }
+      ],
+      "assertions": [
+        {
+          "detail": "[{\"ref\": \"ap_5345587eb1be4054b95dc02fd77abbe9\", \"requester\": \"principal_m402_operator\", \"budget\": {\"count\": 1, \"timeout_s\": 600, \"unit\": \"task_count\"}}, {\"ref\": \"ap_ea9c14ebb44a42ce8867bdd13e0e80c6\", \"requester\": \"principal_m402_operator\", \"budget\": {\"count\": 1, \"timeout_s\": 600, \"unit\": \"task_count\"}}, {\"ref\": \"ap_1db5633db5c043c9b3492099126103c4\", \"requester\": \"principal_m402_operator\", \"budget\": {\"count\": 1, \"timeout_s\": 600, \"unit\": \"task_count\"}}, {\"ref\": \"ap_7b1296c3eee04af181629be97da2cf8d\", \"requester\": \"principal_m402_operator\", \"budget\": {\"count\": 1, \"timeout_s\": 600, \"unit\": \"task_count\"}}]",
+          "name": "platform.approvals_created",
+          "status": "PASS"
+        },
+        {
+          "detail": "{\"status\": null, \"rule\": \"access_denied\", \"message\": \"access_denied: this deployment profile requires the approver to be a different verified principal from the requester\"}",
+          "name": "operator.self_approve_denied",
+          "status": "PASS"
+        },
+        {
+          "detail": "{\"first\": {\"browser\": true, \"platform\": \"approved\", \"message\": \"\", \"args\": 1}, \"second\": {\"browser\": true, \"platform\": \"approved\", \"message\": \"\", \"args\": 1}}",
+          "name": "reviewer.approve_two",
+          "status": "PASS"
+        },
+        {
+          "detail": "{\"browser\": true, \"platform\": \"rejected\"}",
+          "name": "reviewer.reject_negative",
+          "status": "PASS"
+        },
+        {
+          "detail": "{\"browser\": true, \"platform\": \"revoked\", \"rule\": \"\"}",
+          "name": "operator.revoke_negative",
+          "status": "PASS"
+        },
+        {
+          "detail": "{\"status\": null, \"rule\": \"approval_not_granted\", \"message\": \"approval_not_granted: approval status is revoked\"}",
+          "name": "revoked_approval.cannot_submit",
+          "status": "PASS"
+        },
+        {
+          "detail": "{\"status\": 0, \"rule\": \"not_found\", \"message\": \"not_found: {\\\"code\\\":\\\"not_found\\\"}\"}",
+          "name": "auditor.not_requester_not_approver",
+          "status": "PASS"
+        },
+        {
+          "detail": "{\"status\": 0, \"rule\": \"access_denied\", \"message\": \"access_denied: approval permission is required\"}",
+          "name": "auditor.decision_denied",
+          "status": "PASS"
+        },
+        {
+          "detail": "{\"status\": 0, \"rule\": \"approved_budget_mismatch\", \"message\": \"approved_budget_mismatch: the requested budget changed after approval\"}",
+          "name": "budget.over_approved_refused",
+          "status": "PASS"
+        },
+        {
+          "detail": "jobs before=0 after=0",
+          "name": "budget.no_task_created",
+          "status": "PASS"
+        },
+        {
+          "detail": "[]",
+          "name": "browser.no_page_errors",
+          "status": "PASS"
+        },
+        {
+          "detail": null,
+          "name": "observations.published",
+          "status": "PASS"
+        }
+      ],
+      "browsers": {
+        "auditor-chromium-readonly": "chromium/153.0.8010.12",
+        "operator-chromium": "chromium/153.0.8010.12",
+        "reviewer-edge": "msedge/156.0.4314.50"
+      },
+      "declared_observations": {
+        "artifact": "absent",
+        "browser": "present",
+        "controller": "present",
+        "denial": "present",
+        "lsf": "absent",
+        "model": "absent",
+        "qc": "absent",
+        "transport": "present"
+      },
+      "dir": "/ACPServer/acp2-remediation-integration/reports/acp2_remediation_20261026/m4-02/browser/approval-budget-live",
+      "duration_seconds": 9.6,
+      "evidence_kind": "live",
+      "exit_code": 0,
+      "failed_assertions": [],
+      "invocation": [
+        "--scenario",
+        "approval-budget-live",
+        "--phase",
+        "approval"
+      ],
+      "observations": {
+        "artifact": "absent",
+        "browser": "present",
+        "controller": "present",
+        "denial": "present",
+        "lsf": "absent",
+        "model": "absent",
+        "qc": "absent",
+        "transport": "present"
+      },
+      "phase": "approval",
+      "reason": null,
+      "receipt_digest": "sha256:260db6079c3ca7d3277f50ac57d8c49f65dc9b07c8beda256b7cdda4ccf61ca1",
+      "receipt_path": "/ACPServer/acp2-remediation-integration/reports/acp2_remediation_20261026/m4-02/browser/approval-budget-live/experience_approval-budget-live-approval-approval-budget-live-20261027T131724Z-2620519-29a38c.json",
+      "result": "PASS",
+      "scenario_id": "approval-budget-live",
+      "screenshots": [
+        "01-operator-workbench.png",
+        "02-reviewer-edge-workbench.png",
+        "03-operator-self-approve-denied.png",
+        "04-reviewer-edge-approved.png",
+        "05-reviewer-edge-rejected.png",
+        "06-reviewer-revoked.png",
+        "07-auditor-readonly-denied.png",
+        "08-operator-budget-denied.png"
+      ],
+      "task_ref": {
+        "attempt": null,
+        "job_id": null,
+        "release_id": null
+      },
+      "task_ref_extension": null
+    }
+  ],
+  "scenario_ids": [
+    "same-task-browser-live",
+    "approval-budget-live"
+  ],
+  "schema": "acp2.m4-02.browser-legs.v1",
+  "screenshot_note": "screenshots show what the page displayed; the platform TaskRef/attempt/release and the receipts above are the authority (a screenshot never replaces a receipt)"
+}

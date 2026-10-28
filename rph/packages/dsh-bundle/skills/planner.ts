@@ -8,18 +8,28 @@
  * the remaining budget.
  */
 
-import type { EvidenceReport, PlanBudget, PlanScience } from "./models.js";
+import type {
+  EvidenceReport,
+  PlanBudget,
+  PlanScience,
+  PlanScienceInputs,
+  ScienceSeed,
+} from "./models.js";
 import {
   DIGEST_RE,
   EVIDENCE_REPORT_SCHEMA,
   PLAN_BUDGET_SPEC,
   PLAN_SCIENCE_SPEC,
+  SCIENCE_SEED_SPEC,
 } from "./models.js";
 import type { FieldSpec, SkillSpec, ValidationIssue } from "./schema.js";
 import { validateSkillObject } from "./schema.js";
 
 export const PLANNER_SKILL = "planner";
-export const PLANNER_SKILL_VERSION = "1.0.0";
+// 1.1.0 (M1-04a): typed science seed (charge/multiplicity/electronic state/
+// structure provenance/constraints) is required; the seven-field `science`
+// projection that feeds the frozen plan_definition_digest is unchanged.
+export const PLANNER_SKILL_VERSION = "1.1.0";
 export const PLANNER_INPUT_SCHEMA = "acp2.skill.planner.input.v1";
 export const PLANNER_OUTPUT_SCHEMA = "acp2.skill.planner.output.v1";
 
@@ -39,6 +49,8 @@ export interface PlannerInput {
     readonly format: string;
     readonly role: string | null;
   };
+  /** Typed scientific values; a missing critical value is a clarification. */
+  readonly science_seed: ScienceSeed;
   readonly critique_findings: readonly string[];
   readonly evidence: EvidenceReport | null;
   readonly remaining_budget: PlanBudget;
@@ -55,6 +67,8 @@ export interface PlannerOutput {
   readonly recipe_digest: string;
   readonly plan_definition_digest: string;
   readonly science: PlanScience;
+  /** Typed science block (M1-04a); digest projection stays the seven fields. */
+  readonly science_inputs: PlanScienceInputs;
   readonly budget: PlanBudget;
   readonly notes: readonly string[];
 }
@@ -94,6 +108,7 @@ export const PLANNER_INPUT_SPEC: SkillSpec = {
     recipe_digest: stringField({ pattern: DIGEST_RE }),
     plan_definition_digest: stringField({ pattern: DIGEST_RE }),
     initial_input: INITIAL_INPUT_SPEC,
+    science_seed: SCIENCE_SEED_SPEC,
     critique_findings: stringArray({ unique: true }),
     evidence: { kind: "object", required: true, nullable: true, passthrough: true },
     remaining_budget: PLAN_BUDGET_SPEC,
@@ -112,6 +127,25 @@ export const PLANNER_OUTPUT_SPEC: SkillSpec = {
     recipe_digest: stringField({ pattern: DIGEST_RE }),
     plan_definition_digest: stringField({ pattern: DIGEST_RE }),
     science: PLAN_SCIENCE_SPEC,
+    science_inputs: {
+      kind: "object",
+      required: true,
+      fields: {
+        charge: { kind: "integer", required: true, min: Number.MIN_SAFE_INTEGER },
+        multiplicity: { kind: "integer", required: true, min: 1 },
+        electronic_state: { kind: "object", required: true, nullable: true, passthrough: true },
+        structure_provenance: {
+          kind: "array",
+          required: true,
+          items: { kind: "object", required: true, passthrough: true },
+        },
+        constraints: {
+          kind: "array",
+          required: true,
+          items: { kind: "object", required: true, passthrough: true },
+        },
+      },
+    },
     budget: PLAN_BUDGET_SPEC,
     notes: stringArray({ unique: true }),
   },
@@ -165,62 +199,28 @@ export function clampBudget(
   return Object.freeze(out as unknown as PlanBudget);
 }
 
-/** Deterministic offline planner; a live model may replace it only via validation. */
-export function runPlanner(input: PlannerInput): PlannerOutput {
-  const issues = validatePlannerInput(input);
-  if (issues.length > 0) {
-    throw new TypeError(
-      `planner input invalid: ${issues.map((item) => item.path).join(",")}`,
-    );
+// The deterministic offline planner is a **fixture**, not a product fallback.
+// It lives in `fixture-planner.ts` (explicit fixture module) and is rejected by
+// `composition.ts`; a product composition must inject the model adapter.
+
+/**
+ * No production planner was composed.  Thrown instead of falling back to the
+ * deterministic fixture planner (M3-03: a product start must never silently
+ * plan with a placeholder).
+ */
+export class ProductionPlannerRequiredError extends Error {
+  constructor(message = "a production (model) planner must be composed before starting") {
+    super(message);
+    this.name = "ProductionPlannerRequiredError";
   }
-  const requested: PlanBudget = {
-    model_requests: 1,
-    input_tokens: 1000,
-    output_tokens: 500,
-    task_refs: 1,
-    recipe_steps: 1,
-    qc_invocations: 1,
-    wall_seconds: 600,
-    queue_seconds: 60,
-  };
-  const budget = clampBudget(requested, input.remaining_budget);
-  return Object.freeze({
-    schema: PLANNER_OUTPUT_SCHEMA,
-    skill: PLANNER_SKILL,
-    skill_version: PLANNER_SKILL_VERSION,
-    plan_id: `plan-${input.project_id}-r${input.round}`,
-    project_id: input.project_id,
-    round: input.round,
-    hypothesis: input.hypothesis,
-    recipe_digest: input.recipe_digest,
-    plan_definition_digest: input.plan_definition_digest,
-    science: Object.freeze({
-      capability_steps: Object.freeze([
-        Object.freeze({
-          step_index: 0,
-          capability: "geometry_optimization",
-          version: "1.0.0",
-          parameters: Object.freeze({ max_cycles: 100 }),
-        }),
-      ]),
-      initial_inputs: Object.freeze([
-        Object.freeze({
-          input_id: input.initial_input.input_id,
-          sha256: input.initial_input.sha256,
-          format: input.initial_input.format,
-          role: input.initial_input.role,
-        }),
-      ]),
-      method: "r2SCAN-3c",
-      mapping: "identity",
-      charge: 0,
-      multiplicity: 1,
-      allowed_substitutions: Object.freeze([]),
-    }),
-    budget,
-    notes: Object.freeze([
-      "budget is clamped to the remaining admission budget",
-      ...input.critique_findings,
-    ]),
-  });
+}
+
+/** A composition handed the fixture planner to a product surface (fail-fast). */
+export class FixturePlannerRejectedError extends Error {
+  constructor(
+    message = "the fixture planner is test/demo-only and cannot be a product fallback",
+  ) {
+    super(message);
+    this.name = "FixturePlannerRejectedError";
+  }
 }

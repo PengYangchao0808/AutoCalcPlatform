@@ -113,3 +113,48 @@ A/C 原始证据：A-27b 与 A-28 已按登记路径汇总（不重签科学结�
 B25b 记录 `NOT_VERIFIED` 与预期路径。C 的 `experience/static-assets.manifest.json`
 未发布，静态资产只读挂载记录为 `NOT_VERIFIED(c_static_assets_absent)`。C35 不是 B25b
 前置。未重启 `acp.service`，未触碰 `/var/lib/acp/runs`。
+
+## M5-01 全组件制品与安装入口（2026-10-28）
+
+根 `acp` 发行是三角色的**互斥替代**，因此单独构建并单独验证，不进入
+`--role all`（`all` 仍只出三个角色，避免 M4-06a 的升级演练把它当第四套
+已安装发行）：
+
+```bash
+python scripts/build_release.py --out /绝对路径/roles --role all
+python scripts/build_release.py --out /绝对路径/root --role root
+```
+
+`--role root` 从同一源码树出树构建 `acp-<version>-py3-none-any.whl` +
+sdist，包含 `cccp/**`、`acp/**`、`acp_services/**`；根发行沿用历史
+extras 划分，完整安装写 `pip install 'acp[api,remote]==<version>'`。
+`acp-web` 角色是 Workbench 的发行归属（`acp_web_assets/**`，含启动期
+digest 校验用的 `static-assets.manifest.json`）；根发行不含静态资产。
+
+统一制品集与 BOM：
+
+```bash
+python scripts/release/build_release_bom.py          # 四发行 + RPH 安装面 + 插件 wheel + 静态资产 + 契约/模型/文档
+python scripts/acceptance/check_release_artifacts.py # 按 BOM 遍历，不再写死三个 wheel
+python scripts/acceptance/acp2_m501_install.py       # 仅从制品仓安装并启动 doctor/CLI/MCP/Workbench/RPH
+```
+
+- 制品落在 `$ACP2_ARTIFACT_STORE/m5-01/`（默认
+  `/ACPServer/acp2-artifacts/remediation/m5-01`），不进 git；BOM 在
+  `docs/reference/next-change/acp2-contracts/release/bom.current.json`，
+  每个组件记录 `uri` + `sha256` + `size_bytes`。
+- RPH 以自包含离线安装面分发：四个 `private:true` tgz +
+  `rph-install.package.json` / `pnpm-workspace.yaml`（`file:` overrides）/
+  `pnpm-lock.yaml` / `SHA256SUMS` / `verify-install.mjs`。目标机只需
+  `pnpm install --offline --frozen-lockfile`，不访问公共 registry。
+- `experience/static-assets.manifest.json` 与 `experience/release-manifest.json`
+  由上述构建从**安装后的 web 包**（`acp_web_assets/`）生成；服务启动时
+  按 manifest 重算 `/`,`/js`,`/css` 资产摘要，不符即 fail closed。
+  B25b 记录的 `NOT_VERIFIED(c_static_assets_absent)` 针对的是当时未发布的
+  manifest 与版本化 `/experience/<release_id>/` 挂载；当前已发布 manifest
+  并校验现有只读挂载，版本化挂载仍未实现。
+- 根 `acp` 与三角色不得装进同一环境：`acp2_m501_install.py` 的安装矩阵
+  记录 `root_only`/`roles_only` 为 PASS、混合安装为 REFUSED，并断言两者
+  同路径文件字节一致（混装不会改变字节，但仍是受支持范围之外）。
+- 证据：`reports/acp2_remediation_20261026/m5-01/`（BOM 摘要、digest 校验、
+  安装回执、互斥矩阵、静态资产服务、RPH 安装、日志）。

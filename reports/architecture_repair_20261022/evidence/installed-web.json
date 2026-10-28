@@ -1,0 +1,6 @@
+{
+  "role": "web",
+  "python": "/tmp/acp-repair-final-env-web/bin/python",
+  "verified_installed_files": 668,
+  "result": "PASS"
+}

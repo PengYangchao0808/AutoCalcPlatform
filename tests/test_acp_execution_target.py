@@ -501,16 +501,19 @@ def test_api_rejects_conflicting_execution_request(tmp_path: Path) -> None:
             "/api/v1/jobs",
             json={"workflow": "fake", "execution_mode": "remote", "target_node": "local"},
         )
-        assert resp.status_code == 400
+        # M0-06/G23: the shared application envelope (422 input_invalid with the
+        # fine-grained rule in params) is the only shape now.
+        assert resp.status_code == 422
         detail = resp.json()["detail"]
-        # Detail shape is API-version-dependent (plain string vs D12 dict).
-        assert "conflicts" in (detail["message"] if isinstance(detail, dict) else detail)
+        assert detail["code"] == "input_invalid"
+        assert detail["params"]["rule"] == "execution_mode_conflict"
+        assert "conflicts" in detail["message"]
 
         resp = client.post(
             "/api/v1/jobs",
             json={"workflow": "fake", "execution_mode": "local", "target_node": "compute-01"},
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
         # Non-conflicting request passes validation (fake workflow completes).
         resp = client.post("/api/v1/jobs", json={"workflow": "fake", "target_node": "local"})
@@ -679,15 +682,23 @@ def _app_client(tmp_path: Path):
     return TestClient(create_app(run_root=tmp_path))
 
 
-def test_api_create_job_unknown_target_node_400(tmp_path: Path) -> None:
+def test_api_create_job_unknown_target_node_422(tmp_path: Path) -> None:
+    """M0-06/G23: the target rejection is the shared application envelope.
+
+    ``input_invalid`` + ``params.field``/``params.rule`` is the same answer HTTP,
+    MCP and the CLI return, so a client maps one error surface instead of the old
+    per-entry 400 shapes.
+    """
     with _app_client(tmp_path) as client:
         resp = client.post(
             "/api/v1/jobs",
             json={"workflow": "fake", "target_node": "ghost", "name": "n"},
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 422
         body = resp.json()
-        assert body["detail"]["code"] == "unknown_target_node"
+        assert body["detail"]["code"] == "input_invalid"
+        assert body["detail"]["params"]["rule"] == "unknown_target_node"
+        assert body["detail"]["params"]["field"] == "target_node"
 
 
 @requires_remote_config
@@ -709,10 +720,11 @@ def test_api_create_job_target_node_incapable_400(tmp_path: Path) -> None:
                 "name": "n",
             },
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 422
         body = resp.json()
-        assert body["detail"]["code"] == "target_node_incapable"
-        assert body["detail"]["missing_software"] == ["crest"]
+        assert body["detail"]["code"] == "input_invalid"
+        assert body["detail"]["params"]["rule"] == "target_node_incapable"
+        assert body["detail"]["params"]["missing_software"] == ["crest"]
 
 
 @requires_remote_config
@@ -741,12 +753,14 @@ def test_api_create_job_auto_no_capable_400(tmp_path: Path) -> None:
             )
         finally:
             monkeypatch.undo()
-        assert resp.status_code == 400
+        assert resp.status_code == 422
         body = resp.json()
-        assert body["detail"]["code"] == "no_capable_node"
-        assert body["detail"]["missing_software"] == ["crest"]
-        assert body["detail"]["local_missing_software"] == ["crest"]
-        assert body["detail"]["remote_nodes_configured"] is True
+        assert body["detail"]["code"] == "input_invalid"
+        params = body["detail"]["params"]
+        assert params["rule"] == "no_capable_node"
+        assert params["missing_software"] == ["crest"]
+        assert params["local_missing_software"] == ["crest"]
+        assert params["remote_nodes_configured"] is True
 
 
 @requires_remote_config

@@ -1,0 +1,65 @@
+{
+  "rows": [
+    {
+      "artifact_count": 2,
+      "assertion_count": 5,
+      "evidence_kind": "fixture",
+      "exit_code": 0,
+      "phase": "experience:fixture",
+      "receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/baseline/baseline-20261022T140726Z-112271/main/experience_baseline-experience_fixture-baseline-20261022T140726Z-112271.json",
+      "result": "PASS",
+      "run_id": "baseline-20261022T140726Z-112271",
+      "scenario": "baseline",
+      "validate_errors": []
+    },
+    {
+      "artifact_count": 1,
+      "assertion_count": 20,
+      "evidence_kind": "fixture",
+      "exit_code": 0,
+      "phase": "experience:fixture",
+      "receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/contracts/contracts-20261022T140749Z-114132/main/experience_contracts-experience_fixture-contracts-20261022T140749Z-114132.json",
+      "result": "PASS",
+      "run_id": "contracts-20261022T140749Z-114132",
+      "scenario": "contracts",
+      "validate_errors": []
+    },
+    {
+      "artifact_count": 1,
+      "assertion_count": 6,
+      "evidence_kind": "fixture",
+      "exit_code": 0,
+      "phase": "experience:fixture",
+      "receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/workspace/workspace-20261022T140756Z-114553/main/experience_workspace-experience_fixture-workspace-20261022T140756Z-114553.json",
+      "result": "PASS",
+      "run_id": "workspace-20261022T140756Z-114553",
+      "scenario": "workspace",
+      "validate_errors": []
+    },
+    {
+      "artifact_count": 1,
+      "assertion_count": 1,
+      "evidence_kind": "fixture",
+      "exit_code": 0,
+      "phase": "experience:fixture",
+      "receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/harness-selftest/harness-selftest-20261022T140809Z-115244/main/experience_harness-selftest-experience_fixture-harness-selftest-20261022T140809Z-115244.json",
+      "result": "PASS",
+      "run_id": "harness-selftest-20261022T140809Z-115244",
+      "scenario": "harness-selftest",
+      "validate_errors": []
+    },
+    {
+      "artifact_count": 1,
+      "assertion_count": 5,
+      "evidence_kind": "fixture",
+      "exit_code": 0,
+      "phase": "experience:fixture",
+      "receipt": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/node-dsh-install/node-dsh-install-20261022T140818Z-115914/main/experience_node-dsh-install-experience_fixture-node-dsh-install-20261022T140818Z-115914.json",
+      "result": "PASS",
+      "run_id": "node-dsh-install-20261022T140818Z-115914",
+      "scenario": "node-dsh-install",
+      "validate_errors": []
+    }
+  ],
+  "validator": "B acp2_runtime.validate_receipt"
+}

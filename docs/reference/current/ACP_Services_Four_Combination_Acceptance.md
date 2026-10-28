@@ -179,18 +179,9 @@ $ python3.11 -m pytest $(cat tests/frontend_test_selection.txt | tr '\n' ' ') -q
     },
     "config": "isolated ACP_RUN_ROOT per suite (mktemp); no service restart; no config mutation; default _get_default_config()",
     "fixture_digests": {
-      "contract_samples": {
-        "files": 31,
-        "sha256_16": "367815d7cb7291bc"
-      },
-      "frames_mapping": {
-        "files": 12,
-        "sha256_16": "79d229e24101a430"
-      },
-      "cache_only_switch_matrix": {
-        "files": 1,
-        "sha256_16": "6f97e465929bb7c1"
-      }
+      "contract_samples": {"files": 31, "sha256_16": "367815d7cb7291bc"},
+      "frames_mapping": {"files": 12, "sha256_16": "79d229e24101a430"},
+      "cache_only_switch_matrix": {"files": 1, "sha256_16": "6f97e465929bb7c1"}
     }
   },
   "combinations": [

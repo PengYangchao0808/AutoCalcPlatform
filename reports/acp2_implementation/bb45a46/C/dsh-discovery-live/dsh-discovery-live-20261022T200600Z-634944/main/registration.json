@@ -1,0 +1,49 @@
+{
+  "allowlist": [
+    "acp_analyze",
+    "acp_cancel",
+    "acp_capabilities",
+    "acp_preflight",
+    "acp_prepare_artifact",
+    "acp_read_artifact",
+    "acp_status",
+    "acp_submit"
+  ],
+  "controller_reachable": false,
+  "entries": {
+    "headless": {
+      "disabled": false,
+      "failed": true,
+      "fiber_state": 3,
+      "id": "acp-mcp-acceptance",
+      "name": "@deepseek-ai/dsh-mcp-client",
+      "pending": false
+    },
+    "web": {
+      "disabled": false,
+      "failed": true,
+      "fiber_state": 3,
+      "id": "acp-mcp-acceptance",
+      "name": "@deepseek-ai/dsh-mcp-client",
+      "pending": false
+    }
+  },
+  "entry_id": "acp-mcp-acceptance",
+  "exact_stderr": {
+    "headless": [
+      "2026-10-23 04:06:10,552 [ERROR] acp.cli: Controller unavailable at http://127.0.0.1:18765: Controller unreachable at http://127.0.0.1:18765: [Errno 111] Connection refused",
+      "SdkError: Connection closed"
+    ],
+    "web": [
+      "2026-10-23 04:06:07,495 [ERROR] acp.cli: Controller unavailable at http://127.0.0.1:18765: Controller unreachable at http://127.0.0.1:18765: [Errno 111] Connection refused",
+      "SdkError: Connection closed"
+    ]
+  },
+  "headless_mcp_tools": [],
+  "model_prefix": "mcp__acp__",
+  "p2_extensions": [],
+  "p2_status": "NOT_VERIFIED(b03_handoff)",
+  "plugin": "@deepseek-ai/dsh-mcp-client",
+  "schema": "acp2.c.dsh-discovery.registration.v1",
+  "web_mcp_tools": []
+}

@@ -1,0 +1,37 @@
+{
+  "boundaries": [
+    {
+      "declared": true,
+      "id": "cccp.dispatch",
+      "real": [
+        "task/job/attempt rows and lifecycle (Controller + SQLite)",
+        "work dir, stage tasks and job events",
+        "task_result.json via acp_services.runtime.worker",
+        "execution_receipt.json via worker.write_receipt_atomic",
+        "the M1-03 evidence projection and decision policy"
+      ],
+      "stubbed": [
+        "the scientific call cccp.calculation.run_* (the synthetic `fake` workflow ran)",
+        "the energy value and report bytes (fixed fixtures per round)"
+      ],
+      "why": "M4-01 proves the product chain and the failure matrix, not science."
+    },
+    {
+      "declared": true,
+      "id": "model.adapter",
+      "real": [
+        "the Supervisor state machine (rph/packages/dsh-bundle/skills/supervisor.ts)",
+        "its approve/admission ports read the real P2 approval over MCP",
+        "its submit port replays the same M1-02 intent (one TaskRef, no second task)",
+        "its wait port is a bounded read of the authoritative job status"
+      ],
+      "stubbed": [
+        "the four skills are the explicit test adapter (deterministic skills plus adversarial model text); no provider is called",
+        "the Supervisor's evidence/decision ports are not wired in this run: the platform writer persists the digest-bound decision, and with no evidence port the Supervisor must stop (never accept) instead of inventing one"
+      ],
+      "why": "evidence_kind=fixture; the real model branch is implemented and is selected by M4-02 (--model model-gateway)."
+    }
+  ],
+  "evidence_kind": "fixture",
+  "schema": "acp2.m4-01.stub-boundaries.v1"
+}

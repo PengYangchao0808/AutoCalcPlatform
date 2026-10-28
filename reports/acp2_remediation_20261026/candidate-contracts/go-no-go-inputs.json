@@ -1,0 +1,217 @@
+{
+  "contracts": {
+    "delivered_count": 6,
+    "delivered_in_this_slice": [
+      "M2-01a minimal ResearchResource writer (proposal create/read/CAS)",
+      "M3-01a minimal real MCP PlatformClient (initialize/tools/submit/status/prepare/read)",
+      "M3-05a minimal read-only frontend consumer (proposal/record/evidence contract)",
+      "M1-03 evidence consumption at the slice end (single projection, no new adapter)",
+      "M1-04b SubmitPolicy + double-digest approval binding on the writer and submit",
+      "M1-02 research identity / round / submit-intent ledger in the real bridge"
+    ],
+    "rework_count": 6,
+    "rework_required": [
+      {
+        "detail": "The M1-02 RPH submit-intent key layout (project:record:research:round-N:submit:plan-<64 hex>) exceeds the M1-01b wire-key grammar (8..128 chars) and was refused by the MCP adapter with input_invalid/pattern. The bridge now sends a deterministic rph.<sha256> projection of the persisted intent key; the layout itself is unchanged.",
+        "id": "F1-wire-key-length",
+        "owner": "C-RPH",
+        "status": "worked_around_in_client"
+      },
+      {
+        "detail": "The bridge's model-facing redaction guard refuses the whole acp_capabilities payload because it carries an inert `authorization` projection (credential_in_result at $.data.capability_request.authorization) and absolute backend paths. Discovery therefore cannot be projected through the bridge as-is; the slice reads it on the raw transport and records the refusal.",
+        "id": "F2-bridge-redaction-blocks-discovery",
+        "owner": "C-RPH",
+        "status": "open"
+      },
+      {
+        "detail": "The prepare response names the artifact `artifact_ref.resource_id` with an empty digest and `availability=absent`, while the frozen read contract requires `artifact_ref.artifact_id` and a digest; the bridge's read builder still emits the legacy flat names unless the caller supplies a digest. The slice polls the prepare operation and maps resource_id\u2192artifact_id locally.",
+        "id": "F3-prepare-read-field-rename",
+        "owner": "C-RPH + B",
+        "status": "worked_around_in_client"
+      },
+      {
+        "detail": "Prepare operations report availability `ready`, while the C experience contract freezes `unprepared|preparing|readable|failed`. A consumer that trusts the C vocabulary sees no valid state for a successful prepare.",
+        "id": "F4-availability-vocabulary",
+        "owner": "B",
+        "status": "open"
+      },
+      {
+        "detail": "The MCP machine envelope redacts project_id/approval_ref/reservation ids as '<redacted>'. The TaskRef survives, but a client cannot reconstruct the full submit binding from the response alone.",
+        "id": "F5-submit-response-redaction",
+        "owner": "B",
+        "status": "observation"
+      },
+      {
+        "detail": "The synthetic `fake` workflow runs on the legacy path, so the Controller returns release_id=null. The slice uses the real local release builder identity for the TaskRef/receipt and declares it as a stub-boundary value.",
+        "id": "F6-legacy-job-has-no-release",
+        "owner": "B",
+        "status": "declared_boundary"
+      }
+    ]
+  },
+  "decision": "NOT_TAKEN_HERE",
+  "decision_note": "This file is decision input only. M1-06 does not decide go/no-go; the orchestrator/user decides with these numbers.",
+  "effort": {
+    "implementation_wall_clock_note": "Subagent-reported, not script-measured: first repository read 2026-10-27T08:00+08:00 -> final evidence 2026-10-27T08:50+08:00 (design+implementation+iteration); the reproducible slice run is the measured number above.",
+    "implementation_wall_clock_seconds": 3000,
+    "per_step_ms": {
+      "approval.approve": 16,
+      "controller.start": 2476,
+      "db.migrations": 97,
+      "evidence.project_local": 165,
+      "frontend.contract": 123,
+      "job.terminal": 12,
+      "mcp.runner": 4141,
+      "preflight": 25,
+      "project.create": 12,
+      "proposal.create": 16,
+      "proposal.read": 5,
+      "record.create": 14,
+      "record.read_evidence": 26,
+      "stub.dispatch": 718
+    },
+    "slice_run_wall_clock_seconds": 8.3,
+    "step_count": 14,
+    "steps_failed": [],
+    "steps_not_verified": []
+  },
+  "generated_at": "2026-10-27T00:51:42Z",
+  "observability_baseline": {
+    "controller_http_calls": 35,
+    "controller_http_max_ms": 266.99,
+    "controller_http_p50_ms": 11.03,
+    "controller_http_p95_ms": 17.87,
+    "mcp_tool_steps": 11,
+    "note": "cold 1 MiB-configured local Controller, no result cache; the p50/p95 are one run's baseline, not a throughput SLA"
+  },
+  "open_risks": [
+    "The scientific execution is the synthetic `fake` workflow plus a controlled CCCP dispatch stub: no QC, energy or chemistry claim is verified.",
+    "Evidence report bytes are A's frozen schema fixture with the subject rewritten; claim sources are static fixture artifacts.",
+    "The supervisor's approve port receives the real approval state read over HTTP by the orchestrator; it is not yet a platform call made by the supervisor itself (M3-04).",
+    "Remote/LSF evidence reads are not wired in this slice (local work dir only).",
+    "The bridge's model-facing projection currently refuses capabilities and prepare envelopes (F2/F3); M3-01b must resolve the guard/field contract."
+  ],
+  "plan_graph": {
+    "close_critical_path": [
+      "M0-01",
+      "M0-04",
+      "M0-05",
+      "M0-06",
+      "M0-11",
+      "M0-12",
+      "M1-01",
+      "M1-06",
+      "M2-01",
+      "M2-03",
+      "M3-03",
+      "M3-04",
+      "M4-01",
+      "M4-02",
+      "M4-03",
+      "M4-06",
+      "M5-01",
+      "M5-02",
+      "M5-03"
+    ],
+    "close_xl_total": 9,
+    "remaining_l_after_m1_06": 5,
+    "remaining_xl_after_m1_06": 3,
+    "source": "reports/acp2_delivery_gap_audit_20261026/plan-graph.json",
+    "source_sha256": "sha256:7931e1469d8dc320b42ed8129ece59ac6f9998cacc9fb827e57e5b8761db443d",
+    "start_critical_after_m1_06": [
+      "M2-01",
+      "M2-03",
+      "M3-03",
+      "M3-04",
+      "M4-01",
+      "M5-01",
+      "M5-02",
+      "M5-03"
+    ],
+    "start_critical_after_m1_06_detail": [
+      {
+        "id": "M2-01",
+        "owner": "B",
+        "size": "XL",
+        "title": "Research writer\u3001\u8de8\u5e93 Saga \u4e0e P2 \u5de5\u5177\uff08G02/G14\uff09"
+      },
+      {
+        "id": "M2-03",
+        "owner": "B",
+        "size": "XL",
+        "title": "\u670d\u52a1\u7aef\u5ba1\u6279\u7b56\u7565\u4e0e\u9884\u7b97\u5f3a\u5236\uff08G12/G13\uff09"
+      },
+      {
+        "id": "M3-03",
+        "owner": "C-RPH + A/B",
+        "size": "L",
+        "title": "\u751f\u4ea7 Planner\u3001\u79d1\u5b66\u786e\u8ba4\u4e0e\u6a21\u578b\u9884\u7b97 gateway\uff08G10/G13\uff09"
+      },
+      {
+        "id": "M3-04",
+        "owner": "C-RPH",
+        "size": "XL",
+        "title": "\u53ef\u6062\u590d Supervisor\u3001\u8bc1\u636e\u5f52\u5c5e\u4e0e\u7814\u7a76\u51b3\u7b56\uff08G07/G08/G09\uff09"
+      },
+      {
+        "id": "M4-01",
+        "owner": "INT",
+        "size": "L",
+        "title": "\u65e0 QC \u7684\u5168\u4ea7\u54c1\u94fe\u4e0e\u6545\u969c\u77e9\u9635\uff08G20 \u53ca\u6240\u6709\u63a5\u53e3\u9879\uff09"
+      },
+      {
+        "id": "M5-01",
+        "owner": "REL + C-RPH + B",
+        "size": "L",
+        "title": "\u5168\u7ec4\u4ef6\u5236\u54c1\u4e0e\u5b89\u88c5\u5165\u53e3\uff08G06/G17\uff09"
+      },
+      {
+        "id": "M5-02",
+        "owner": "B\uff08manifest/\u5951\u7ea6\u6ce8\u518c\uff09+ REL\uff08\u5236\u54c1/BOM\uff09+ INT\uff08coverage/\u7b7e\u6536\uff09",
+        "size": "L",
+        "title": "\u5355\u4e00 BOM\u3001\u53ef\u53d6\u56de\u5236\u54c1\u4e0e\u8bc1\u636e\u8986\u76d6\u77e9\u9635\uff08G18/G19/G20\uff09"
+      },
+      {
+        "id": "M5-03",
+        "owner": "\u72ec\u7acb\u64cd\u4f5c\u8005 + INT",
+        "size": "L",
+        "title": "\u72ec\u7acb\u64cd\u4f5c\u8005\u9a8c\u6536\u4e0e\u6700\u7ec8\u653e\u884c\uff08G17/G18/G19\uff09"
+      }
+    ],
+    "start_critical_path": [
+      "M0-01",
+      "M0-04",
+      "M0-05",
+      "M0-06",
+      "M0-11",
+      "M0-12",
+      "M1-01",
+      "M1-06",
+      "M2-01",
+      "M2-03",
+      "M3-03",
+      "M3-04",
+      "M4-01",
+      "M5-01",
+      "M5-02",
+      "M5-03"
+    ],
+    "start_xl_on_critical_path": [
+      "M2-01",
+      "M2-03",
+      "M3-04"
+    ],
+    "start_xl_total": 9
+  },
+  "quota": {
+    "local_controller_processes": 1,
+    "lsf_submissions": 0,
+    "mcp_child_processes": 1,
+    "model_calls": 0,
+    "model_tokens": 0,
+    "note": "No model, QC or LSF call was made: the supervisor used injected test skills and the scientific task is the synthetic `fake` workflow whose attempt artifacts are a declared stub.",
+    "qc_invocations": 0
+  },
+  "schema": "acp2.m1-06.go-no-go-inputs.v1",
+  "task": "M1-06"
+}

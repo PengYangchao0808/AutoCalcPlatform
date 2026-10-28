@@ -25,9 +25,10 @@
     "source_tree": "e2b23771a47e7553738ef902cc4c1b62528fe508",
     "version": "0.3.0"
   },
+  "refresh_note": "receipts/h1-r2.json re-registers the immutable H1 receipt's five artifacts at their current sha256 after acp2-final-acceptance-remediation m1 legitimately refreshed the acp2-contracts manifest; this second re-anchor makes the receipt checkout-relative (all artifact paths and cwd), refreshes B/B03/validator-happy.txt to its current digest, and re-registers the final frozen 1.7.0 manifest at its current sha256. receipts/h1.json remains byte-identical and no receipt result changed.",
   "runs": [
     "receipts/h0.json",
-    "receipts/h1.json",
+    "receipts/h1-r2.json",
     "receipts/h2.json",
     "receipts/h3.json",
     "receipts/h4.json",

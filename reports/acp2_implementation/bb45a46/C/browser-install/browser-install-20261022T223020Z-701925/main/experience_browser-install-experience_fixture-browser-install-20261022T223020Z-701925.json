@@ -1,0 +1,115 @@
+{
+  "artifacts": [
+    {
+      "path": "chromium-launch.log",
+      "sha256": "3aea5c2eb89b119a33799656d79d5031b98be8e8c69c2197a0c50f9578c6c964",
+      "size_bytes": 1468
+    },
+    {
+      "path": "chromium-page.png",
+      "sha256": "c6be7061335fe5060bcb20a457f677691b339ae659413219bdefc41ad57b5684",
+      "size_bytes": 11202
+    },
+    {
+      "path": "browser-launch.json",
+      "sha256": "d73ab2f0e21dace32e2ec46a16573d4e35322f0bbd081ffd98fbe784c56dd873",
+      "size_bytes": 1725
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "/ACPServer/acp2-tools/playwright-browsers/chromium-1243/chrome-linux64/chrome",
+      "name": "browser.executable_inside_browsers_path",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 payload=present",
+      "name": "browser.launch",
+      "status": "PASS"
+    },
+    {
+      "detail": "title='ACP2 Chromium launch probe'",
+      "name": "browser.page_title",
+      "status": "PASS"
+    },
+    {
+      "detail": "pages=1",
+      "name": "browser.pages",
+      "status": "PASS"
+    },
+    {
+      "detail": "153.0.8010.12",
+      "name": "browser.browser_version",
+      "status": "PASS"
+    },
+    {
+      "detail": "chromium-page.png bytes=11202",
+      "name": "browser.screenshot_nonempty",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"cache_home\": \"/ACPServer/acp2-development/data/browser-runtime/browser-install-20261022T223020Z-701925/cache\", \"cwd\": \"/ACPServer/acp2-development/data/browser-runtime/browser-install-20261022T223020Z-701925/cwd\", \"home\": \"/ACPServer/acp2-development/data/browser-runtime/browser-install-20261022T223020Z-701925/home\", \"tmpdir\": \"/ACPServer/acp2-development/data/browser-runtime/browser-install-20261022T223020Z-701925/tmp\", \"user_data_dir\": \"/ACPServer/acp2-development/data/browser-runtime/browser-install-20261022T223020Z-701925/user-data\"}",
+      "name": "browser.isolation_under_tools_or_data_root",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "51a71641fb3cd8465bb5b5b86b6b730edeccf86b",
+    "harness_revision": "99ac06c63b47d04745003e7765a2cc31ef988e426f9ee11a667afd9abda068c4",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "51a71641fb3cd8465bb5b5b86b6b730edeccf86b",
+  "command": [
+    "/ACPServer/acp2-development/venvs/c/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "browser-install",
+    "--timeout",
+    "300",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/browser-install/browser-install-20261022T223020Z-701925/main"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "fixture",
+  "exit_code": 0,
+  "extensions": {
+    "experience.browser_browsers_path": "/ACPServer/acp2-tools/playwright-browsers",
+    "experience.browser_cache_home": "/ACPServer/acp2-development/data/browser-runtime/browser-install-20261022T223020Z-701925/cache",
+    "experience.browser_cwd": "/ACPServer/acp2-development/data/browser-runtime/browser-install-20261022T223020Z-701925/cwd",
+    "experience.browser_executable": "/ACPServer/acp2-tools/playwright-browsers/chromium-1243/chrome-linux64/chrome",
+    "experience.browser_interpreter": "/ACPServer/acp2-development/venvs/browser/bin/python",
+    "experience.browser_pages": 1,
+    "experience.browser_screenshot_bytes": 11202,
+    "experience.browser_user_data_dir": "/ACPServer/acp2-development/data/browser-runtime/browser-install-20261022T223020Z-701925/user-data",
+    "experience.browser_version": "153.0.8010.12",
+    "experience.harness_contract_revision": "99ac06c63b47d04745003e7765a2cc31ef988e426f9ee11a667afd9abda068c4",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+    "experience.mode": "fixture",
+    "experience.product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+    "experience.run_id": "browser-install-20261022T223020Z-701925",
+    "experience.scenario_key": "browser-install",
+    "experience.subcase": null,
+    "experience.test_revision": "51a71641fb3cd8465bb5b5b86b6b730edeccf86b"
+  },
+  "finished_at": "2026-10-22T22:30:22Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:fixture",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "browser-install-20261022T223020Z-701925",
+  "scenario": "experience:browser-install",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T22:30:20Z",
+  "submission_id": null,
+  "usage": null
+}

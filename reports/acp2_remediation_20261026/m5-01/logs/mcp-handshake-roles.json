@@ -1,0 +1,633 @@
+{
+  "pre_initialize": {
+    "jsonrpc": "2.0",
+    "id": 0,
+    "error": {
+      "code": -32600,
+      "message": "MCP session is not initialized",
+      "data": {
+        "code": "not_initialized"
+      }
+    }
+  },
+  "initialize": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "protocolVersion": "2025-06-18",
+      "supportedProtocolVersions": [
+        "2025-06-18"
+      ],
+      "capabilities": {
+        "tools": {
+          "listChanged": false
+        },
+        "extensions": {
+          "acp.negotiation.v1": {
+            "id": "acp.negotiation.v1",
+            "version": "1.0.0",
+            "supported_versions": [
+              "2025-06-18"
+            ],
+            "server_preferred_version": "2025-06-18",
+            "negotiation": "server_advertises_supported_version",
+            "client_decides_compatibility": true,
+            "requested_version": "2025-06-18",
+            "client_declared_versions": [],
+            "extension_handshake": {
+              "carrier": "tools/call",
+              "tool": "acp_capabilities",
+              "result_field": "extensions"
+            }
+          }
+        }
+      },
+      "serverInfo": {
+        "name": "acp-services-mcp",
+        "version": "0.1.0"
+      },
+      "instructions": "Local stdio MCP entry (permission scope 'local-single', transport 'stdio'). Tool calls are dispatched against a closed allowlist; no shell is exposed. Long tasks return an operation/job reference that survives disconnection; query it with acp_status."
+    }
+  },
+  "tools": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": {
+      "tools": [
+        {
+          "name": "acp_capabilities",
+          "description": "List the capabilities (workflows/backends/limits) the service currently offers, including the extension handshake (extensions[]: id/version/supported/requested/negotiated_by/implemented/negotiated/refusal).",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "research_extension": {
+                "type": "object",
+                "description": "Optional application-level extension handshake. The server answers extensions[] with implemented/negotiated/refusal; a version that is not the supported one is refused in-band as unsupported_capability, never accepted by implication.",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "Extension id, e.g. acp.research.v1."
+                  },
+                  "version": {
+                    "type": "string",
+                    "description": "Requested extension version; omit to accept the supported one."
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "project_id": {
+                "type": "string",
+                "description": "Advisory Workspace hint checked against the server-resolved project; a mismatch is access_denied and the hint never selects the scope."
+              },
+              "client": {
+                "type": "object",
+                "description": "Client identifier recorded for audit only; never used for authorization."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "acp_preflight",
+          "description": "Preflight/estimate a request with zero side effects (no science, no metering).",
+          "inputSchema": {
+            "type": "object",
+            "description": "Preflight/estimate descriptor: the same declared fields as acp_submit, with zero side effects (no task, no reservation, no metering). idempotency_key is optional here because nothing is created.",
+            "properties": {
+              "schema_version": {
+                "type": "integer",
+                "enum": [
+                  1
+                ],
+                "default": 1,
+                "description": "Contract major version; any other value executes nothing."
+              },
+              "workflow": {
+                "type": "string",
+                "description": "Active workflow id (server-validated)."
+              },
+              "name": {
+                "type": "string",
+                "description": "Display name (never the task directory)."
+              },
+              "input": {
+                "type": "object",
+                "description": "Workflow input descriptor."
+              },
+              "method": {
+                "type": "object",
+                "description": "Method/parameter descriptor."
+              },
+              "resources": {
+                "type": "object",
+                "description": "Optional resource request (e.g. cores)."
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Filter tags."
+              },
+              "node_tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Required node capability tags (AND semantics)."
+              },
+              "project_id": {
+                "type": "string",
+                "description": "Requested Workspace hint (never the tenant)."
+              },
+              "execution_mode": {
+                "type": "string",
+                "enum": [
+                  "local",
+                  "remote"
+                ],
+                "description": "Per-request execution preference."
+              },
+              "target_node": {
+                "type": "string",
+                "description": "Pin one execution target ('local' or a configured remote node)."
+              },
+              "molecule_name": {
+                "type": "string",
+                "description": "v2 task-directory molecule part."
+              },
+              "task_name": {
+                "type": "string",
+                "description": "v2 task-directory task part."
+              },
+              "remark": {
+                "type": "string",
+                "description": "v2 task-directory remark part."
+              },
+              "preflight_fingerprint": {
+                "type": "string",
+                "description": "Optional binding to the plan digest a preflight returned."
+              },
+              "idempotency_key": {
+                "type": "string",
+                "description": "REQUIRED. Client retry key, forwarded unchanged to the Controller ledger. The raw key is a global namespace per action (across projects/users): use a high-entropy UUID or a namespaced key (e.g. '<client>:<project>:<round>:<call>'). A short human key reused by two tenants is a typed conflict (revision_conflict), never a replay. Same key + same verified identity + same request = exactly one operation. Omitting it is refused with input_invalid (rule=idempotency_key_required)."
+              },
+              "extensions": {
+                "type": "object",
+                "description": "Namespaced extension metadata (never used for execution)."
+              },
+              "plan_digest": {
+                "type": "string",
+                "description": "Research-launch switch (sha256:<64 hex>). Its presence makes this a research submit, which requires proposal_ref plus a matching server approval; a bare plan_digest without proposal_ref is denied with 403 approval_required. Omit it, together with proposal_ref/proposal_digest/budget, for a legacy launch."
+              },
+              "proposal_ref": {
+                "type": "string",
+                "description": "Approval-bound proposal reference required for a research launch; must have an approved record for this plan_digest and project (server-verified)."
+              },
+              "proposal_digest": {
+                "type": "string",
+                "description": "Optional research binding (sha256:<64 hex>); when supplied it must equal the approved proposal projection digest."
+              },
+              "budget": {
+                "type": "object",
+                "description": "Optional research budget request; when supplied it must equal the approved budget binding (the effective limits come from the approval, never the client)."
+              }
+            },
+            "required": [
+              "workflow",
+              "input"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "acp_submit",
+          "description": "Controlled submit; returns an operation/job reference immediately (long task).",
+          "inputSchema": {
+            "type": "object",
+            "description": "Submit descriptor. Legacies and research launches share this schema; the field relations below are documented for callers, never enforced here \u2014 the Controller remains the gate. idempotency_key is required (M1-01b): an undeclared field is a typed input_invalid (rule=unknown_field) and a missing key is input_invalid (rule=idempotency_key_required) before any budget or Controller call. plan_digest is the research-launch switch: supplying it (or any of proposal_ref/proposal_digest/budget) makes the submit a research launch, which additionally requires proposal_ref bound to a server-side approval and optionally proposal_digest/budget. Omitting all four keeps the legacy path. A research submit without proposal_ref is refused by the Controller with access_denied (rule=approval_required) before idempotency or admission.",
+            "properties": {
+              "schema_version": {
+                "type": "integer",
+                "enum": [
+                  1
+                ],
+                "default": 1,
+                "description": "Contract major version; any other value executes nothing."
+              },
+              "workflow": {
+                "type": "string",
+                "description": "Active workflow id (server-validated)."
+              },
+              "name": {
+                "type": "string",
+                "description": "Display name (never the task directory)."
+              },
+              "input": {
+                "type": "object",
+                "description": "Workflow input descriptor."
+              },
+              "method": {
+                "type": "object",
+                "description": "Method/parameter descriptor."
+              },
+              "resources": {
+                "type": "object",
+                "description": "Optional resource request (e.g. cores)."
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Filter tags."
+              },
+              "node_tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Required node capability tags (AND semantics)."
+              },
+              "project_id": {
+                "type": "string",
+                "description": "Requested Workspace hint (never the tenant)."
+              },
+              "execution_mode": {
+                "type": "string",
+                "enum": [
+                  "local",
+                  "remote"
+                ],
+                "description": "Per-request execution preference."
+              },
+              "target_node": {
+                "type": "string",
+                "description": "Pin one execution target ('local' or a configured remote node)."
+              },
+              "molecule_name": {
+                "type": "string",
+                "description": "v2 task-directory molecule part."
+              },
+              "task_name": {
+                "type": "string",
+                "description": "v2 task-directory task part."
+              },
+              "remark": {
+                "type": "string",
+                "description": "v2 task-directory remark part."
+              },
+              "preflight_fingerprint": {
+                "type": "string",
+                "description": "Optional binding to the plan digest a preflight returned."
+              },
+              "idempotency_key": {
+                "type": "string",
+                "description": "REQUIRED. Client retry key, forwarded unchanged to the Controller ledger. The raw key is a global namespace per action (across projects/users): use a high-entropy UUID or a namespaced key (e.g. '<client>:<project>:<round>:<call>'). A short human key reused by two tenants is a typed conflict (revision_conflict), never a replay. Same key + same verified identity + same request = exactly one operation. Omitting it is refused with input_invalid (rule=idempotency_key_required)."
+              },
+              "extensions": {
+                "type": "object",
+                "description": "Namespaced extension metadata (never used for execution)."
+              },
+              "plan_digest": {
+                "type": "string",
+                "description": "Research-launch switch (sha256:<64 hex>). Its presence makes this a research submit, which requires proposal_ref plus a matching server approval; a bare plan_digest without proposal_ref is denied with 403 approval_required. Omit it, together with proposal_ref/proposal_digest/budget, for a legacy launch."
+              },
+              "proposal_ref": {
+                "type": "string",
+                "description": "Approval-bound proposal reference required for a research launch; must have an approved record for this plan_digest and project (server-verified)."
+              },
+              "proposal_digest": {
+                "type": "string",
+                "description": "Optional research binding (sha256:<64 hex>); when supplied it must equal the approved proposal projection digest."
+              },
+              "budget": {
+                "type": "object",
+                "description": "Optional research budget request; when supplied it must equal the approved budget binding (the effective limits come from the approval, never the client)."
+              }
+            },
+            "required": [
+              "workflow",
+              "input",
+              "idempotency_key"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "acp_status",
+          "description": "Query the status of an operation/job reference. Holds no connection state.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "reference": {
+                "description": "Operation/job reference returned by acp_submit (id or {kind,id}).",
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "object"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "reference"
+            ],
+            "additionalProperties": true
+          }
+        },
+        {
+          "name": "acp_cancel",
+          "description": "Request cancellation of an operation/job reference.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "reference": {
+                "description": "Operation/job reference returned by acp_submit (id or {kind,id}).",
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "object"
+                  }
+                ]
+              },
+              "expected_revision": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "reference"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "acp_prepare_artifact",
+          "description": "Prepare an artifact for read; idempotent and budget-checked server-side.",
+          "inputSchema": {
+            "type": "object",
+            "description": "Explicit prepare request, identical to POST /api/v1/jobs/{job_id}/prepare. purpose is required; artifact_id is required when purpose=artifact. The Controller derives resource_id from artifact_id, never from the caller. A prepare never starts science and is never implied by a read or a status query.",
+            "properties": {
+              "schema_version": {
+                "type": "integer",
+                "enum": [
+                  1
+                ],
+                "default": 1
+              },
+              "purpose": {
+                "type": "string",
+                "enum": [
+                  "artifact",
+                  "structure-input"
+                ],
+                "description": "Required. artifact = fetch/commit one artifact revision; structure-input = local parse+register with no task."
+              },
+              "task_ref": {
+                "type": "object",
+                "description": "Alternate task reference; task_ref.task_id must equal the job id in the route path and supplies the default attempt."
+              },
+              "job_id": {
+                "type": "string",
+                "description": "Must equal the job id in the route path; a mismatch is revision_conflict."
+              },
+              "artifact_id": {
+                "type": "string",
+                "description": "Required when purpose=artifact. Safe artifact token; the Controller derives resource_id from it."
+              },
+              "attempt": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "generation": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "expected_revision": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Declared and normalised for CAS-style callers; the prepare route does not act on it."
+              },
+              "relative_path": {
+                "type": "string"
+              },
+              "expected_digest": {
+                "type": "string",
+                "description": "Trusted sha256:<64 hex> expectation; a mismatch is conflict."
+              },
+              "content_digest": {
+                "type": "string",
+                "description": "Fallback spelling of expected_digest (expected_digest wins)."
+              },
+              "expected_size_bytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "schema_ref": {
+                "type": "string"
+              },
+              "source_refs": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "evidence_report": {
+                "type": "object"
+              },
+              "media_type": {
+                "type": "string"
+              },
+              "idempotency_key": {
+                "type": "string",
+                "description": "Client retry key for the prepare operation, forwarded unchanged. The server derives the versioned key from (principal, project, client key, epoch). Omitting it is NOT idempotent: a retry may re-prepare."
+              }
+            },
+            "required": [
+              "purpose"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "acp_read_artifact",
+          "description": "Read an already-prepared artifact (bounded; no fetch on miss).",
+          "inputSchema": {
+            "type": "object",
+            "description": "Bounded read of an already-prepared artifact. artifact_ref is required; a miss is resource_not_ready and a read never fetches, prepares or starts computation (M1-01b). max_bytes above the frozen max_read_bytes bound is refused (input_invalid, rule=max_read_bytes_exceeded) instead of served.",
+            "properties": {
+              "schema_version": {
+                "type": "integer",
+                "enum": [
+                  1
+                ],
+                "default": 1
+              },
+              "artifact_ref": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "task_id",
+                  "attempt",
+                  "artifact_id",
+                  "generation",
+                  "digest"
+                ],
+                "properties": {
+                  "task_id": {
+                    "type": "string"
+                  },
+                  "attempt": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "artifact_id": {
+                    "type": "string"
+                  },
+                  "generation": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "digest": {
+                    "type": "string"
+                  },
+                  "size_bytes": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "media_type": {
+                    "type": "string"
+                  },
+                  "relative_path": {
+                    "type": "string"
+                  }
+                }
+              },
+              "max_bytes": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1048576,
+                "description": "Requested response bound (<= 1048576 bytes). A larger request is refused rather than silently clamped."
+              },
+              "encoding": {
+                "type": "string",
+                "enum": [
+                  "identity",
+                  "base64"
+                ]
+              },
+              "extensions": {
+                "type": "object",
+                "description": "Namespaced extension metadata (never used for execution)."
+              }
+            },
+            "required": [
+              "artifact_ref"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "acp_analyze",
+          "description": "Run an explicit analysis request (requires analysis_id, input_refs, explicit=true).",
+          "inputSchema": {
+            "type": "object",
+            "description": "Explicit analysis request. analysis_id, input_refs and explicit=true are required: an implicit/heuristic trigger is refused (input_invalid, rule=explicit_required); an unregistered capability is unsupported_capability (rule=analysis_capability_not_registered) and a declared-but-not-executable one is unsupported_capability (rule=analysis_capability_not_executable). Each input_refs entry must be the full ArtifactRef identity tuple (task_id/attempt/artifact_id/generation/digest) of an already prepared artifact. vibration.analyze reads existing evidence and starts no QC; vibration.compute is a compute capability (submit it as a frequency task) and is never a read-only analysis.",
+            "properties": {
+              "schema_version": {
+                "type": "integer",
+                "enum": [
+                  1
+                ],
+                "default": 1
+              },
+              "analysis_id": {
+                "type": "string"
+              },
+              "input_refs": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "task_id",
+                    "attempt",
+                    "artifact_id",
+                    "generation",
+                    "digest"
+                  ],
+                  "properties": {
+                    "task_id": {
+                      "type": "string"
+                    },
+                    "attempt": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "artifact_id": {
+                      "type": "string"
+                    },
+                    "generation": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "digest": {
+                      "type": "string"
+                    },
+                    "size_bytes": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "media_type": {
+                      "type": "string"
+                    },
+                    "relative_path": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "minItems": 1,
+                "description": "Frozen ArtifactRef inputs (full identity tuple)."
+              },
+              "explicit": {
+                "type": "boolean",
+                "description": "Must be exactly true; there is no implicit analysis."
+              },
+              "parameters": {
+                "type": "object"
+              },
+              "plan_digest": {
+                "type": "string",
+                "description": "Required for vibration.compute (it starts exactly one task)."
+              },
+              "idempotency_key": {
+                "type": "string",
+                "description": "Optional retry key for analysis; omitting it is not idempotent."
+              },
+              "extensions": {
+                "type": "object",
+                "description": "Namespaced extension metadata (never used for execution)."
+              }
+            },
+            "required": [
+              "analysis_id",
+              "input_refs",
+              "explicit"
+            ],
+            "additionalProperties": false
+          }
+        }
+      ]
+    }
+  }
+}
+[stderr]
+2026-10-28 10:35:54,455 [WARNING] acp_services.entrypoints.mcp_stdio: rejected 'tools/list' before initialize

@@ -1,0 +1,100 @@
+{
+  "identity": {
+    "plan_digest": "v2:9c863c4ca99513c9d56a66a8c0d799fe",
+    "plan_identity": "v2:real-worker-xtb",
+    "step_identities": [
+      "v2:real-worker-xtb:0"
+    ]
+  },
+  "item_symbols": [
+    "H",
+    "H"
+  ],
+  "payload": {
+    "backend": "xtb",
+    "charge": 0,
+    "level": {
+      "basis": "",
+      "method": "GFN2-xTB"
+    },
+    "multiplicity": 1,
+    "options": {
+      "max_cycles": 30,
+      "mode": "unconstrained",
+      "rescue": {
+        "policy": "adaptive"
+      }
+    },
+    "resources": {
+      "nproc": 1
+    },
+    "schema_version": 1,
+    "structure": {
+      "coordinates": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.74
+        ]
+      ],
+      "role": "minimum",
+      "source": "",
+      "symbols": [
+        "H",
+        "H"
+      ]
+    },
+    "task": "optimize"
+  },
+  "steps": [
+    {
+      "kind": "optimize",
+      "payload": {
+        "backend": "xtb",
+        "charge": 0,
+        "level": {
+          "basis": "",
+          "method": "GFN2-xTB"
+        },
+        "multiplicity": 1,
+        "options": {
+          "max_cycles": 30,
+          "mode": "unconstrained",
+          "rescue": {
+            "policy": "adaptive"
+          }
+        },
+        "resources": {
+          "nproc": 1
+        },
+        "schema_version": 1,
+        "structure": {
+          "coordinates": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.74
+            ]
+          ],
+          "role": "minimum",
+          "source": "",
+          "symbols": [
+            "H",
+            "H"
+          ]
+        },
+        "task": "optimize"
+      }
+    }
+  ]
+}

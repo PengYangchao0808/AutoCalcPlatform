@@ -1,0 +1,53 @@
+{
+  "tree": {
+    "c_baseline_commit": "75a8f08a06b5528b310b26bd309940e99d9cd9bd",
+    "c_baseline_tree": "1a1b4b23c554acaf2818db1dcee336b69494a887",
+    "b_materialized_commit": "a0185b15c546fbd07919326d581fab13e05000fa",
+    "b_materialized_tree": "1a1b4b23c554acaf2818db1dcee336b69494a887",
+    "equal": true
+  },
+  "b00_committed_blobs": {
+    "commit": "ac43c16",
+    "manifest.json": "b83919a71f55c4131b4daa7e82b13369863aa495e951665178f9be63c1b78769",
+    "runtime/baseline-lock.json": "fe13e474b8bd0acec19c84a3569324036bd4514d0d67633947d72d3592a12dc5",
+    "runtime/dependencies.json": "96862edd6534614bfa64620f170161c7cbad6c2117d941dd215e49ab9131c4ac"
+  },
+  "b02a_environment": {
+    "commit": "0dee16f",
+    "acceptance-env.sh": "d16b1d70f5e840637252a3b34c46057c3b4440aca7428e7b44052118c13ddbf7",
+    "role-interpreters.json": "4ed3f5b76ce7e20822841d125c97426b9e8e838ec03f8749c5ffc993e3d04cd7"
+  },
+  "c_environment": {
+    "acceptance-env-c.sh": "5a8cd765be256730f776c9a3149660386c9bf0a4f1545a5749b286cd98dd241b"
+  },
+  "artifacts": {
+    "argv.json": {
+      "sha256": "504f19451d451c3f97e83df6273ed40b7409e50e025ee626dc1b32743971caf1",
+      "size": 4858
+    },
+    "cwd.txt": {
+      "sha256": "8c7c3f73929045a850559e20696c55a8c9327a5d3bfe03313aa5a91b4ed192af",
+      "size": 28
+    },
+    "tree-equality.txt": {
+      "sha256": "99eecd434c177eb9940dc52d72817716ccce814e0c5341a7c7204550c19074da",
+      "size": 266
+    },
+    "env.txt": {
+      "sha256": "6338083290e39d80373ed7e91366b707494783a105b403b0740a8a513fe9e79f",
+      "size": 421
+    },
+    "matrix.txt": {
+      "sha256": "bbfae6b8961cc46d8ed65d1e4f50238f13da0157928b4804347e1b128137d8f7",
+      "size": 1678
+    },
+    "negatives.txt": {
+      "sha256": "d8db3c055050e4a1263c7d54dc552cdfbaf53c0ff233ff571ba069551aee8c51",
+      "size": 1241
+    },
+    "real-caccept.txt": {
+      "sha256": "a04e630068df3cca6941ea3d895d528081327d063160b84f8767b621e31bf82b",
+      "size": 183
+    }
+  }
+}

@@ -1,0 +1,254 @@
+{
+  "dsh": {
+    "declared_sdk_range": "2.2.0",
+    "plugin_name": "@deepseek-ai/dsh-mcp-client",
+    "plugin_version": "0.2.1-rc.2",
+    "sdk_version": "2.2.0"
+  },
+  "generated_at": "2026-10-26T15:08:43Z",
+  "git_head": "c46370639fae48f8dab286b4f3baa63affc26af2",
+  "node": "/ACPServer/acp2-tools/node-v22.19.0-linux-x64/bin/node",
+  "passed": true,
+  "phases": {
+    "live_client_default": {
+      "capabilities_call": {
+        "isError": false,
+        "operation": "acp_capabilities",
+        "status": "ok",
+        "tools": [
+          "acp_analyze",
+          "acp_cancel",
+          "acp_capabilities",
+          "acp_preflight",
+          "acp_prepare_artifact",
+          "acp_read_artifact",
+          "acp_status",
+          "acp_submit"
+        ]
+      },
+      "client_options": {
+        "capabilities": {},
+        "client_info": {
+          "name": "dsh-mcp-client",
+          "version": "0.0.1"
+        },
+        "versionNegotiation": {
+          "mode": "auto"
+        }
+      },
+      "counters": {
+        "capabilities_reads": 1,
+        "health_reads": 2,
+        "other_requests": [],
+        "submit_posts": 0
+      },
+      "error": null,
+      "exit_code": 0,
+      "negotiated_protocol": "2025-06-18",
+      "package_versions": {
+        "@deepseek-ai/dsh-mcp-client": {
+          "name": "@deepseek-ai/dsh-mcp-client",
+          "version": "0.2.1-rc.2"
+        },
+        "@modelcontextprotocol/client": {
+          "name": "@modelcontextprotocol/client",
+          "version": "2.2.0"
+        }
+      },
+      "requested_protocol": "2025-11-25",
+      "status": "ok",
+      "tools": [
+        "acp_capabilities",
+        "acp_preflight",
+        "acp_submit",
+        "acp_status",
+        "acp_cancel",
+        "acp_prepare_artifact",
+        "acp_read_artifact",
+        "acp_analyze"
+      ],
+      "wire_methods": [
+        "initialize",
+        "notifications/initialized",
+        "tools/list",
+        "tools/call"
+      ]
+    },
+    "live_client_incompatible": {
+      "counters": {
+        "capabilities_reads": 0,
+        "health_reads": 2,
+        "other_requests": [],
+        "submit_posts": 0
+      },
+      "error_message": "Server's protocol version is not supported: 2025-06-18",
+      "exit_code": 0,
+      "negotiated_protocol": "2025-06-18",
+      "requested_protocol": "2025-11-25",
+      "status": "refused",
+      "tools_listed": null
+    },
+    "negotiation_probe": {
+      "counters": {
+        "capabilities_reads": 0,
+        "health_reads": 7,
+        "other_requests": [],
+        "submit_posts": 0
+      },
+      "matrix": {
+        "launch_path": "/tmp/opencode/m008/work/mcp-launch.json",
+        "launch_protocol_version": "2025-06-18",
+        "passed": true,
+        "rows": [
+          {
+            "error": null,
+            "guidance": {
+              "client_decides_compatibility": true,
+              "client_declared_versions": [],
+              "id": "acp.negotiation.v1",
+              "negotiation": "server_advertises_supported_version",
+              "requested_version": "2025-06-18",
+              "server_preferred_version": "2025-06-18",
+              "supported_versions": [
+                "2025-06-18"
+              ],
+              "version": "1.0.0"
+            },
+            "negotiated": "2025-06-18",
+            "requested": "2025-06-18",
+            "result_shape_problems": [],
+            "row": "same",
+            "status": "PASS",
+            "tool_count": 8,
+            "tools_call_frames": 0
+          },
+          {
+            "declared": null,
+            "error": null,
+            "guidance": {
+              "client_decides_compatibility": true,
+              "client_declared_versions": [],
+              "id": "acp.negotiation.v1",
+              "negotiation": "server_advertises_supported_version",
+              "requested_version": "2025-11-25",
+              "server_preferred_version": "2025-06-18",
+              "supported_versions": [
+                "2025-06-18"
+              ],
+              "version": "1.0.0"
+            },
+            "negotiated": "2025-06-18",
+            "requested": "2025-11-25",
+            "result_shape_problems": [],
+            "row": "unsupported_version",
+            "status": "PASS",
+            "tool_count": 8,
+            "tools_call_frames": 0
+          },
+          {
+            "declared": [
+              "1999-01-01"
+            ],
+            "error": null,
+            "guidance": {
+              "client_decides_compatibility": true,
+              "client_declared_versions": [
+                "1999-01-01"
+              ],
+              "id": "acp.negotiation.v1",
+              "negotiation": "server_advertises_supported_version",
+              "requested_version": "1999-01-01",
+              "server_preferred_version": "2025-06-18",
+              "supported_versions": [
+                "2025-06-18"
+              ],
+              "version": "1.0.0"
+            },
+            "negotiated": "2025-06-18",
+            "requested": "1999-01-01",
+            "result_shape_problems": [],
+            "row": "private_versions",
+            "status": "PASS",
+            "tool_count": 8,
+            "tools_call_frames": 0
+          },
+          {
+            "error": {
+              "code": -32602,
+              "data": {
+                "code": "invalid_protocol_version",
+                "received_type": "int"
+              },
+              "message": "protocolVersion must be a non-empty version string"
+            },
+            "error_code": "invalid_protocol_version",
+            "jsonrpc_code": -32602,
+            "requested": 20250618,
+            "row": "malformed_version",
+            "status": "PASS",
+            "tools_call_frames": 0
+          },
+          {
+            "discover_error_code": null,
+            "discover_jsonrpc_code": -32601,
+            "discover_result_present": false,
+            "negotiated": "2025-06-18",
+            "result_shape_problems": [],
+            "row": "server_discover",
+            "status": "PASS",
+            "tool_count": 8,
+            "tools_call_frames": 0
+          },
+          {
+            "error": {
+              "code": -32600,
+              "data": {
+                "code": "not_initialized"
+              },
+              "message": "MCP session is not initialized"
+            },
+            "error_code": "not_initialized",
+            "row": "tools_before_init",
+            "status": "PASS",
+            "tools_call_frames": 0
+          },
+          {
+            "exit_code": 0,
+            "fabricated_frames_after_notification": 0,
+            "negotiated": "2025-06-18",
+            "requested": "2025-06-18",
+            "row": "notification_eof",
+            "status": "PASS",
+            "submitted_job": null,
+            "tools_call_frames": 0
+          }
+        ],
+        "schema": "acp2.c.mcp-live.negotiation-matrix.v2",
+        "semantics": "mcp-2025-06-18 standard handshake (ADR-006): server answers its own version, client decides compatibility, private protocolVersions recorded only; malformed shapes are -32602",
+        "server_version": "2025-06-18",
+        "tools_call_frames": 0
+      },
+      "process": {
+        "command": [
+          "/ACPServer/acp2-development/venvs/integration/bin/python",
+          "/ACPServer/acp2-remediation-integration/scripts/acceptance/acp2_mcp_negotiation_probe.py",
+          "--launch",
+          "/tmp/opencode/m008/work/mcp-launch.json",
+          "--out",
+          "/ACPServer/acp2-remediation-integration/reports/acp2_remediation_20261026/m0-08/negotiation"
+        ],
+        "returncode": 0,
+        "stderr": "",
+        "stdout": "{\"same\": \"PASS\", \"unsupported_version\": \"PASS\", \"private_versions\": \"PASS\", \"malformed_version\": \"PASS\", \"server_discover\": \"PASS\", \"tools_before_init\": \"PASS\", \"notification_eof\": \"PASS\"}\n"
+      }
+    }
+  },
+  "python": "3.11.13 (main, Jun  1 2026, 00:00:00) [GCC 11.5.0 20240719 (Red Hat 11.5.0-14)]",
+  "run_root_entries": [],
+  "task": "M0-08 standard MCP handshake (G01)",
+  "zero_side_effects": {
+    "health_reads_default_phase": 2,
+    "run_root_entries": [],
+    "submit_posts_total": 0
+  }
+}

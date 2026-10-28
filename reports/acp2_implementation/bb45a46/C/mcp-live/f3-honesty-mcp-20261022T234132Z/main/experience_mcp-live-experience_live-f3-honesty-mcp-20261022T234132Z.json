@@ -1,0 +1,288 @@
+{
+  "artifacts": [
+    {
+      "path": "launch-identity.json",
+      "sha256": "8bf2a7c4994687f43c264f1870b2a6df1939f4abb4227993180b02bff3816464",
+      "size_bytes": 27611
+    },
+    {
+      "path": "controller.json",
+      "sha256": "002ef00817c52c5aab221a1177fd8974f83fb2a58e5a89a9a6757fccc5e3fec0",
+      "size_bytes": 1197
+    },
+    {
+      "path": "schema-drift.json",
+      "sha256": "11cfc845e118572eb4948ebd9d0a26a3455a0cd23d3b4be72e593fab2f5e1d58",
+      "size_bytes": 3259
+    },
+    {
+      "path": "stdlib-probe-invocation.json",
+      "sha256": "634173ce8fa29d65ef31b9dd3cf8e1ff0757befd6cdfd4e209a9c9a12a22e6bd",
+      "size_bytes": 1526
+    },
+    {
+      "path": "stdlib-probe/wire.jsonl",
+      "sha256": "f9dd0cc94318b5df50a743716884b36b1895cf930f9ff744d7e001477a1dfe76",
+      "size_bytes": 214
+    },
+    {
+      "path": "stdlib-probe/stderr.log",
+      "sha256": "05beaa60d26e94bb50eea3920ad4f1ae2137100db829389616ee45e0f9e5ea9d",
+      "size_bytes": 172
+    },
+    {
+      "path": "stdlib-probe/process.json",
+      "sha256": "3f8905f3707eeba53f6cdbfbe12b279d4994b6037133c990c1a6169b0f6e4c39",
+      "size_bytes": 32
+    },
+    {
+      "path": "dsh-client-invocation.json",
+      "sha256": "6c6adf50c442fa1ea2f2e224db468b2c59c4da4c02902a93fbd73ba3f83a0535",
+      "size_bytes": 524
+    },
+    {
+      "path": "dsh-client/dsh-client.json",
+      "sha256": "65ca2f7b342299725c8ce5d8d454c7bb28b38ba1942decf3d7600021201e5438",
+      "size_bytes": 3298
+    },
+    {
+      "path": "dsh-client/wire.jsonl",
+      "sha256": "fe4493b19c546a899ef3e8f6e1cd736e0e3d4674107479481405118b9e236192",
+      "size_bytes": 195
+    },
+    {
+      "path": "cleanup.json",
+      "sha256": "365ede9f259d7d57d44b208a7495d20403848ad1c6663427e41206d7dfe1696f",
+      "size_bytes": 242
+    },
+    {
+      "path": "mcp-live-summary.json",
+      "sha256": "c84b3d1886c7352c90c02354e4b56d51e683d1869aa71064cdbbb3ee42a2bd60",
+      "size_bytes": 3246
+    },
+    {
+      "path": "tool-schemas.json",
+      "sha256": "6032c1d16cf341677513dbd3bddf169f550f5a32b9512350841b84b0322c84e1",
+      "size_bytes": 13621
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "both descriptors validate; sha256 recorded",
+      "name": "launch.schema_and_identity",
+      "status": "PASS"
+    },
+    {
+      "detail": "command/args/cwd/env key set identical across B05 and B06",
+      "name": "launch.args_and_env_identical",
+      "status": "PASS"
+    },
+    {
+      "detail": "controller.start_controller=false, loopback_only=true, shared_db=false",
+      "name": "launch.no_self_controller",
+      "status": "PASS"
+    },
+    {
+      "detail": "tools=['acp_analyze', 'acp_cancel', 'acp_capabilities', 'acp_preflight', 'acp_prepare_artifact', 'acp_read_artifact', 'acp_status', 'acp_submit']",
+      "name": "launch.tool_allowlist",
+      "status": "PASS"
+    },
+    {
+      "detail": "command=/ACPServer/acp2-development/venvs/b/bin/python cwd=/ACPServer/AutoCalcPlatform/src",
+      "name": "launch.command_cwd_present",
+      "status": "PASS"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "controller.reachable",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "controller.pid",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "controller.task_count_before",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "controller_unavailable; B05 archived tools/list differs from the descriptor: acp_analyze,acp_cancel,acp_capabilities,acp_preflight,acp_prepare_artifact,acp_read_artifact,acp_status,acp_submit",
+      "name": "schema.live_snapshot",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "probe.stdlib_exit",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "probe.stdlib_protocol",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "official.client_handshake",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "official.tool_allowlist",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "official.tool_schemas",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "official.capabilities_read",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "matrix.same",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "matrix.different_supported",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "matrix.no_common",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "matrix.tools_before_init",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "matrix.notification_eof",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "no_side_effect.task_count_unchanged",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "no_side_effect.controller_alive_after",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "leftovers=0 probe_pid_alive=False",
+      "name": "no_side_effect.no_serving_process_left",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "e03a9dd9f6897ca0a8d43e69a10b22a20097f05d",
+    "harness_revision": "9c2523d35a884272807c6857794886eeedd43e728da0d695fd2a26244ddaa433",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "e03a9dd9f6897ca0a8d43e69a10b22a20097f05d",
+  "command": [
+    "/ACPServer/acp2-development/venvs/integration/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "mcp-live",
+    "--timeout",
+    "120",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/mcp-live/f3-honesty-mcp-20261022T234132Z/main"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "live",
+  "exit_code": 2,
+  "extensions": {
+    "experience.harness_contract_revision": "9c2523d35a884272807c6857794886eeedd43e728da0d695fd2a26244ddaa433",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/integration/bin/python",
+    "experience.mcp_live.closes_h2": false,
+    "experience.mcp_live.controller_pid": null,
+    "experience.mcp_live.controller_reachable": false,
+    "experience.mcp_live.controller_task_count_after": null,
+    "experience.mcp_live.controller_task_count_before": null,
+    "experience.mcp_live.evidence_kind": "live",
+    "experience.mcp_live.launch_b05_sha256": "ca807cc4b8014af265fac64c9b84ca3c4050df9bfbab3b5dc408ce068b548046",
+    "experience.mcp_live.launch_b06_sha256": "867d25a6e5757ded401006e2c51f3512fcce551299a3221e7b892e3b82c9a7f6",
+    "experience.mcp_live.launch_contract_versions": {
+      "B05": "1.0.0",
+      "B06": "1.1.0"
+    },
+    "experience.mcp_live.negotiated_protocol": null,
+    "experience.mcp_live.negotiation_matrix": {
+      "different_supported": "NOT_VERIFIED",
+      "no_common": "NOT_VERIFIED",
+      "notification_eof": "NOT_VERIFIED",
+      "same": "NOT_VERIFIED",
+      "tools_before_init": "NOT_VERIFIED"
+    },
+    "experience.mcp_live.not_verified_rows": [
+      "controller.reachable",
+      "controller.pid",
+      "controller.task_count_before",
+      "schema.live_snapshot",
+      "probe.stdlib_exit",
+      "probe.stdlib_protocol",
+      "official.client_handshake",
+      "official.tool_allowlist",
+      "official.tool_schemas",
+      "official.capabilities_read",
+      "matrix.same",
+      "matrix.different_supported",
+      "matrix.no_common",
+      "matrix.tools_before_init",
+      "matrix.notification_eof",
+      "no_side_effect.task_count_unchanged",
+      "no_side_effect.controller_alive_after"
+    ],
+    "experience.mcp_live.official_client_versions": {
+      "@deepseek-ai/dsh-mcp-client": {
+        "name": "@deepseek-ai/dsh-mcp-client",
+        "version": "0.2.1-rc.2"
+      },
+      "@modelcontextprotocol/client": {
+        "name": "@modelcontextprotocol/client",
+        "version": "2.2.0"
+      }
+    },
+    "experience.mcp_live.requested_protocol": "2025-11-25",
+    "experience.mcp_live.tool_count": 0,
+    "experience.mcp_live.tools": [],
+    "experience.mode": "live",
+    "experience.product_import": "/ACPServer/acp2-development/integration/src/acp/__init__.py",
+    "experience.run_id": "f3-honesty-mcp-20261022T234132Z",
+    "experience.scenario_key": "mcp-live",
+    "experience.subcase": null,
+    "experience.test_revision": "e03a9dd9f6897ca0a8d43e69a10b22a20097f05d"
+  },
+  "finished_at": "2026-10-22T23:41:34Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:live",
+  "reason": "controller_unavailable",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "f3-honesty-mcp-20261022T234132Z",
+  "scenario": "experience:mcp-live",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T23:41:32Z",
+  "submission_id": null,
+  "usage": null
+}

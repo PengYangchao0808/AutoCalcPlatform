@@ -1,0 +1,14 @@
+{
+  "rph/packages/bridge/src/index.ts": "d74190cfdbcc9062c6c2cf6f85600eb64abc59db614ce19fa7e798711b9ffb92",
+  "src/acp_services/entrypoints/mcp.py": "23686522c6d7391d95c8a35d688c219c0e0aecfa400bb223bcea9cdb00fa7102",
+  "src/acp_services/entrypoints/application_params.py": "7f3b424f59d32573e46b3296cc56dc04ecce072bef33e31f198a5021eb727690",
+  "src/acp/services_mcp_bootstrap.py": "bdbcc51361adc8b3c1d37ab724832298deb933ed7813a59d34ffc9ef8644b3ca",
+  "src/acp/api/v1_routes.py": "cb236c01dcfa6cc7fd2693d3f737de46ae5f19314be64ab650ccba360bda358b",
+  "src/acp/api/v2_budgets.py": "45d4e0e0dfcef72d55ffbaf086d9fabf7a1fda09c80c444c42b24c537e796a7e",
+  "src/acp_services/runtime/admission.py": "fc11b5a635930ec419da665208f03de37817ad121dfd62b633bebb371bbc7c2f",
+  "src/acp_services/runtime/idempotency.py": "a16e9ec8ceb3adacb3ee65abe22d1697ed14f20910dd0b6401522b5dad66150e",
+  "src/acp_services/runtime/research_budget.py": "309f5ae31e96bab354d78dda1da59eb50136addb61670132375774137a275acf",
+  "src/acp_services/runtime/local_admission.py": "5df26af67db0c01bbf28a9334701c1b9bffb7fe3d3b86d517a648bba6ebaf531",
+  "scripts/acceptance/acp2_experience_scenario_approval_budget_live.py": "eb505645b6ac60cc5c32d9e3edfb607a85fa43772296185094440b2b43cedd19",
+  "scripts/acceptance/acp2_experience_scenario_research_loop_live.py": "c882635684e6168525ec5c5602082782a806e72162766c013df38d9dddf37ec2"
+}

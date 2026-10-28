@@ -1,5 +1,5 @@
-argv: /home/<user>/Shermo_2.6.1/Shermo
-cwd: <repo>
+argv: /home/xieningke/Shermo_2.6.1/Shermo
+cwd: /ACPServer/AutoCalcPlatform
  Shermo: A general code for calculating molecular thermochemistry properties
  Version 2.6.1  Release date: 2025-Oct-20
  Developer: Tian Lu (sobereva@sina.com)

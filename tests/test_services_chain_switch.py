@@ -47,8 +47,6 @@ from pathlib import Path
 
 import pytest
 
-from tests.conftest import requires_orca
-
 from acp.calculations import attempt_freeze as acp_freeze
 from acp.calculations.attempt_publication import (
     AttemptResultPublication,
@@ -125,6 +123,7 @@ from acp_services.worker_bootstrap import (
     frozen_plan_body_digest,
 )
 from cccp.calculation.requests import TaskRequest
+from tests.conftest import requires_orca
 from tests.test_acp_services_isolation import (
     _code_only_text,
     scan_for_acp_imports,
@@ -238,8 +237,16 @@ def _record(workflow: str, *, attempt: int = 1, input_payload: dict | None = Non
 
 
 def test_capability_table_marks_c01_eight_enabled_and_seven_legacy() -> None:
-    assert set(chain.FROZEN_WORKFLOW_CAPABILITY_TABLE) == _C01_EIGHT | _LEGACY_SEVEN
-    assert set(chain.ENABLED_WORKFLOWS) == _C01_EIGHT
+    # M2-04d adds one envelope-only recipe workflow.  It is NOT a sixteenth
+    # catalog workflow and it does not change the C01 scientific closure: the
+    # C01 eight stay the enabled *catalog* scope, and the recipe row is
+    # envelope-only (``requires_envelope``), never a legacy fallback.
+    assert set(chain.FROZEN_WORKFLOW_CAPABILITY_TABLE) == (
+        _C01_EIGHT | _LEGACY_SEVEN | chain.RECIPE_WORKFLOWS
+    )
+    assert set(chain.ENABLED_WORKFLOWS) == _C01_EIGHT | chain.RECIPE_WORKFLOWS
+    for workflow in chain.RECIPE_WORKFLOWS:
+        assert chain.capability_for(workflow).requires_envelope is True
     for workflow in _C01_EIGHT:
         assert chain.capability_for(workflow).closure == "integrated"
     for workflow in _LEGACY_SEVEN:
@@ -548,9 +555,24 @@ def _legacy_cli_hits(source: str, rel: str = "<mem>") -> list[str]:
     code = _code_only_text(source)
     if "acp.cli" in code:
         hits.append(f"{rel}: code references the legacy CLI")
-    if "subprocess" in code:
-        hits.append(f"{rel}: code references subprocess")
     tree = ast.parse(source)
+    # "subprocess" is matched at the *usage* level, not as a substring: the
+    # frozen cccp plugin-manifest field ``requires_subprocess`` is data a
+    # service may legitimately read (cccp/plugin/metadata.py), while an
+    # import/attribute/name use is always a real spawn surface.
+    subprocess_used = any(
+        (isinstance(node, ast.Import) and any(alias.name == "subprocess" for alias in node.names))
+        or (isinstance(node, ast.ImportFrom) and node.module == "subprocess")
+        or (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "subprocess"
+        )
+        or (isinstance(node, ast.Name) and node.id == "subprocess")
+        for node in ast.walk(tree)
+    )
+    if subprocess_used:
+        hits.append(f"{rel}: code references subprocess")
     doc_ids = _docstring_ids(tree)
     for node in ast.walk(tree):
         if (
@@ -568,7 +590,11 @@ def test_services_never_reference_legacy_cli_or_subprocess() -> None:
     for path in _services_sources():
         source = path.read_text(encoding="utf-8")
         rel = path.relative_to(_REPO_ROOT).as_posix()
-        assert scan_for_acp_imports(source) == [], rel
+        # module= wires the M1-01c wire-literal allowlist (value scoped to the
+        # single reviewed station) into this shared scanner as well; imports
+        # and reflection are still refused everywhere, station included.
+        module = rel.removesuffix(".py").removeprefix("src/").replace("/", ".")
+        assert scan_for_acp_imports(source, module=module) == [], rel
         violations.extend(_legacy_cli_hits(source, rel))
     assert violations == []
 
@@ -2575,8 +2601,11 @@ def test_t32_completed_job_is_rerun_not_continue(tmp_path: Path) -> None:
 
 
 def test_t29_default_envelope_scope_is_singlepoint_only() -> None:
-    assert chain.DEFAULT_ENVELOPE_WORKFLOWS == frozenset({"singlepoint"})
-    assert chain.ENABLED_WORKFLOWS == _C01_EIGHT  # scientific closure unchanged
+    # M2-04d adds the envelope-only recipe workflow to the default freeze scope;
+    # the ordinary singlepoint default is unchanged and the C01 catalog closure
+    # stays exactly the eight (``RECIPE_WORKFLOWS`` is not a catalog workflow).
+    assert chain.DEFAULT_ENVELOPE_WORKFLOWS == frozenset({"singlepoint"}) | chain.RECIPE_WORKFLOWS
+    assert chain.ENABLED_WORKFLOWS == _C01_EIGHT | chain.RECIPE_WORKFLOWS
     assert set(acp_freeze.FREEZE_BUILDERS) == {
         "singlepoint",
         "optimize",
@@ -2586,6 +2615,7 @@ def test_t29_default_envelope_scope_is_singlepoint_only() -> None:
         "casscf",
         "xtb_optimize",
         "OrcaGradient",
+        "BoundedRecipe",  # M2-04d envelope-only recipe builder
     }
 
 

@@ -1,0 +1,118 @@
+{
+  "artifacts": [
+    {
+      "path": "negative/negative-cases.json",
+      "sha256": "cec28f7a5411ce1bd2a6a54c293a506d50acf8a15c3ad818fbe0da6aaeb65d21",
+      "size_bytes": 3554
+    },
+    {
+      "path": "negative/negative-cases.log",
+      "sha256": "d2a622d20f44d581c36638e394b6f7c8ca2412ccf7807b3cc45017d2d232c76b",
+      "size_bytes": 470
+    },
+    {
+      "path": "question-reaction-fixtures.log",
+      "sha256": "0ffccb491e87019b855936c5e730eac353b21afcacf7beb150283dd7a1b9b500",
+      "size_bytes": 1597
+    },
+    {
+      "path": "question-reaction-fixtures.json",
+      "sha256": "95cb2f26fd794485db6d3403480a95650a0ef580badf8607bf14be282be9f89e",
+      "size_bytes": 2873
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "rc=0 passed=21 failed=0 min=18",
+      "name": "question_reaction.node_suite",
+      "status": "PASS"
+    },
+    {
+      "detail": "passing negative fixtures for: duplicate atom map, missing product, charge non-conservation",
+      "name": "question_reaction.negative_rejections",
+      "status": "PASS"
+    },
+    {
+      "detail": "net-reaction-as-single-TS must yield a clarification item, not a submit; fragment='clarification item' present=True",
+      "name": "question_reaction.clarification_not_submit",
+      "status": "PASS"
+    },
+    {
+      "detail": "CDXML input must stay DEFERRED and never parse to an empty structure; fragment='DEFERRED' present=True",
+      "name": "question_reaction.cdxml_deferred",
+      "status": "PASS"
+    },
+    {
+      "detail": "stable view-model clarification field names present and passing: missing_stereo, missing_conditions, mapping_ambiguity, unknown_multiplicity, reaction.candidate_steps",
+      "name": "question_reaction.clarification_matrix",
+      "status": "PASS"
+    },
+    {
+      "detail": "chemistry-ambiguity negatives passing: 6/6 (require >=5, all declared)",
+      "name": "question_reaction.ambiguity_negatives",
+      "status": "PASS"
+    },
+    {
+      "detail": "negative bundle at negative/negative-cases.json and stable copy /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/question-reaction-fixtures/negative/negative-cases.json",
+      "name": "question_reaction.negative_evidence",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "3dc1a8c22dbcb9f3495cea41941f7ee22dcb853a",
+    "harness_revision": "56b1b60cbc023c90ae569482a23b202bf7bca3bc85e352f1188e2ae4094f2ae9",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "3dc1a8c22dbcb9f3495cea41941f7ee22dcb853a",
+  "command": [
+    "/ACPServer/acp2-development/venvs/c/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "question-reaction-fixtures",
+    "--timeout",
+    "300",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/question-reaction-fixtures/question-reaction-fixtures-20261022T200703Z-636142/main"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/acp2-development/C",
+  "evidence_kind": "fixture",
+  "exit_code": 0,
+  "extensions": {
+    "experience.harness_contract_revision": "56b1b60cbc023c90ae569482a23b202bf7bca3bc85e352f1188e2ae4094f2ae9",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+    "experience.mode": "fixture",
+    "experience.product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+    "experience.question_reaction_ambiguity_negatives": 6,
+    "experience.question_reaction_clarification_matrix": true,
+    "experience.question_reaction_min_tests": 18,
+    "experience.question_reaction_negative_evidence": "negative/negative-cases.json",
+    "experience.question_reaction_negative_rejections": true,
+    "experience.question_reaction_suite_failed": 0,
+    "experience.question_reaction_suite_passed": 21,
+    "experience.run_id": "question-reaction-fixtures-20261022T200703Z-636142",
+    "experience.scenario_key": "question-reaction-fixtures",
+    "experience.subcase": null,
+    "experience.test_revision": "3dc1a8c22dbcb9f3495cea41941f7ee22dcb853a"
+  },
+  "finished_at": "2026-10-22T20:07:04Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:fixture",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "question-reaction-fixtures-20261022T200703Z-636142",
+  "scenario": "experience:question-reaction-fixtures",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T20:07:04Z",
+  "submission_id": null,
+  "usage": null
+}

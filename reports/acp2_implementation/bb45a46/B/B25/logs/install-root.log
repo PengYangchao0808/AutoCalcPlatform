@@ -1,7 +1,7 @@
-$ <repo>/reports/acp2_implementation/bb45a46/B/B25/venvs/root/bin/python -m pip install --disable-pip-version-check --no-input --find-links <repo>/reports/acp2_implementation/bb45a46/B/B25/release <repo>/reports/acp2_implementation/bb45a46/B/B25/root-build/acp-0.3.0-py3-none-any.whl --find-links <repo>/reports/acp2_implementation/bb45a46/B/B25/root-build
+$ /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/root/bin/python -m pip install --disable-pip-version-check --no-input --find-links /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/root-build/acp-0.3.0-py3-none-any.whl --find-links /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/root-build
 exit=0
 --- stdout ---
-Looking in links: <repo>/reports/acp2_implementation/bb45a46/B/B25/release, <repo>/reports/acp2_implementation/bb45a46/B/B25/root-build
+Looking in links: /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release, /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/root-build
 Processing ./root-build/acp-0.3.0-py3-none-any.whl
 Collecting numpy>=2.1.0
   Using cached numpy-2.4.6-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.9 MB)

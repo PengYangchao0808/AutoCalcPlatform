@@ -1,0 +1,475 @@
+{
+  "budget": {
+    "budget_id": "rb_c1f29b3b1fad344bbc27ce52",
+    "reservation": {
+      "admitted": true,
+      "budget_id": "rb_c1f29b3b1fad344bbc27ce52",
+      "detail": "",
+      "exhausted_unit": null,
+      "reason_code": "budget_admitted",
+      "remaining": {
+        "attempt": 4,
+        "qc_invocation": 7,
+        "task_ref": 2
+      },
+      "requested": {
+        "task_ref": 1
+      },
+      "reservation_id": "rbr-m406b-thermo-h1"
+    },
+    "settlement": {
+      "applied": true,
+      "budget_id": "rb_c1f29b3b1fad344bbc27ce52",
+      "consumed": {
+        "attempt": 0,
+        "bsub": 0,
+        "model_request": 0,
+        "qc_invocation": 4,
+        "recipe_step": 0,
+        "task_ref": 2
+      },
+      "counters": {
+        "attempt": 0,
+        "bsub": 0,
+        "model_request": 0,
+        "qc_invocation": 3,
+        "recipe_step": 0,
+        "task_ref": 1
+      },
+      "duplicate": false,
+      "reason_code": "budget_settled",
+      "receipt_id": "rcpt-m406b-thermo-crossdomain",
+      "remaining": {
+        "attempt": 4,
+        "qc_invocation": 4,
+        "task_ref": 2
+      },
+      "reservation_id": "rbr-m406b-thermo-h1"
+    }
+  },
+  "capability": {
+    "analysis_ids": [
+      "vibration.analyze",
+      "vibration.compute"
+    ],
+    "catalog_sha256": "sha256:d08dcd07c38ae0b080269f395880bec3d6f6430958e6cc8f3c9e0be4181b5959",
+    "descriptor_ids": [
+      "electronic.energy",
+      "geometry.optimize",
+      "vibration.analyze",
+      "vibration.compute"
+    ],
+    "domain_ids": [
+      "electronic.energy",
+      "geometry.optimize",
+      "nmr.compare",
+      "nmr.shielding",
+      "thermochemistry.ensemble",
+      "vibration.analyze",
+      "vibration.compute"
+    ],
+    "domain_version": null,
+    "http_status": 200
+  },
+  "capability_binding": {
+    "capability_id": "thermochemistry.ensemble",
+    "delegation_target": "cccp.analysis.ensemble.science.build_ensemble_thermochemistry",
+    "execution_kind": "pure_analysis",
+    "implementation_id": "cccp.analysis.ensemble.science",
+    "preflight_ready": true,
+    "registry": "domain_registry()",
+    "selection_mode": "BindingSelectionMode.CAPABILITY"
+  },
+  "capability_forms": {
+    "entry_count": 4,
+    "forms_sha256": "sha256:46ccc1dc75afba7633f0ccec2daceca1446f58e1fb72b242e4cb506aea808374",
+    "http_status": 200,
+    "nmr_states": [],
+    "subset_digest": "sha256:870d59473be275fa52785896cdb7e09d03aa15855a8a29dc69b90839fbf08b06",
+    "subset_version": "acp2.ui-subset.v1",
+    "thermo_states": []
+  },
+  "declared_boundaries": [
+    "the frequency log and the single-point energy are the M4-04 route-a native artifacts; this row does not recompute them",
+    "the ensemble weights are supplied (single component, weight 1.0) and recorded, never re-derived"
+  ],
+  "digest_chain": {
+    "ensemble": "sha256:0096191c05ed5a75672e635e9ff66743a539bff16a5f092c6838ded3d5697a76",
+    "ensemble_input": "sha256:0fc68495f561e16142442267f51810180d027c3e152f4695ee6bd82ca76e898d",
+    "projection": "sha256:96d1960e1cd39cfe6ff7ad7fb70053cc1ff23e24a18d31c11e5dd22eb0faf4d3",
+    "report": "sha256:ac4eb9ffa5670adf18105a1080afc0bf8e60afb4d6f5530d149f5d126f2523b0",
+    "route_a_frequency": "sha256:3a9e9fc8fdb1d7f2b9eadf91669f51fd3eeb301c51192f87524ac61d6781d33d",
+    "task_result": "sha256:7b705df0e9de7d95c559d4b0a5c9ec2e07d8ed158b0c1f04a73b7feda9efc6df",
+    "viewmodel_product": "sha256:309f7f4a9ebf4421ed4e72263198dd0d511419a2969b5426da00e8f1cb394818",
+    "viewmodel_projection": "sha256:e5ec6932aca46e0c4a8861fdb994555dac481d78cea6d5b519dd9556e2fc60b2"
+  },
+  "domain": "thermochemistry",
+  "ensemble": {
+    "claim_status": "supported",
+    "report_id": "ensemble-thermo:m406b-thermo-crossdomain-ensemble",
+    "status": "supported",
+    "total_gibbs_hartree": -234.3646781
+  },
+  "evidence_kind": "native: M4-04 route-a inputs (digest-verified) + real Shermo 2.6.1",
+  "evidence_view": {
+    "blocking_missing_checks": [],
+    "claims": [
+      {
+        "blocking_missing_checks": [],
+        "claim_id": "thermochemistry.weight_policy",
+        "source_ref_count": 1,
+        "status": "supported",
+        "validator_id": "check.ensemble_weight_policy",
+        "validator_version": "1.0.0"
+      },
+      {
+        "blocking_missing_checks": [],
+        "claim_id": "thermochemistry.ensemble_completeness",
+        "source_ref_count": 1,
+        "status": "supported",
+        "validator_id": "check.ensemble_completeness",
+        "validator_version": "1.0.0"
+      },
+      {
+        "blocking_missing_checks": [],
+        "claim_id": "thermochemistry.conditions",
+        "source_ref_count": 1,
+        "status": "supported",
+        "validator_id": "check.ensemble_conditions",
+        "validator_version": "1.0.0"
+      },
+      {
+        "blocking_missing_checks": [],
+        "claim_id": "thermochemistry.total_gibbs",
+        "source_ref_count": 1,
+        "status": "supported",
+        "validator_id": "check.ensemble_total_gibbs",
+        "validator_version": "1.0.0"
+      }
+    ],
+    "contract_version": "1.0.0",
+    "evidence_refs": [
+      {
+        "evidence_id": "art-0fc68495f561e161",
+        "kind": "component_energy_table",
+        "relative_path": "component_energy_table.json",
+        "sha256": "sha256:0fc68495f561e16142442267f51810180d027c3e152f4695ee6bd82ca76e898d"
+      }
+    ],
+    "evidence_status": "complete",
+    "execution_terminal_state": "completed",
+    "limitations": [
+      "This report applies the supplied component weights and the existing rank-1 total-Gibbs formula. It does not re-derive Boltzmann weights, re-optimize conformers or claim a new thermochemistry calculation."
+    ],
+    "normal_reuse": false,
+    "overall_claim_status": "supported",
+    "projection_digest": "sha256:96d1960e1cd39cfe6ff7ad7fb70053cc1ff23e24a18d31c11e5dd22eb0faf4d3",
+    "provenance_digest": "sha256:2dc150cabc82d03efe08d766fa4715fc43dd59c207bc7e9c00079567b5cde765",
+    "qualification": "complete",
+    "report": {
+      "digest": "sha256:ac4eb9ffa5670adf18105a1080afc0bf8e60afb4d6f5530d149f5d126f2523b0",
+      "report_id": "report-m406b-thermo-crossdomain",
+      "schema_version": 1,
+      "subject_id": "m406b-thermo-crossdomain"
+    },
+    "research": {
+      "principal_id": "principal_m406b_alice",
+      "project_id": "project_m406b_alpha",
+      "research_id": "res-m406b-thermo",
+      "round": 0,
+      "session_id": "ses-m406b-thermo"
+    },
+    "schema": "acp2.runtime.evidence-projection.v1",
+    "task_ref": {
+      "attempt": 1,
+      "job_id": "m406b-thermo-crossdomain",
+      "project_id": "project_m406b_alpha",
+      "release": {
+        "release_digest": "sha256:a9fc2614b92fed53a66ea43933ce92ffbfc09179a0d93d28d3a2d1bea383b8ea",
+        "release_id": "a9fc2614b92fed53"
+      },
+      "task_id": "m406b-thermo-crossdomain"
+    }
+  },
+  "execution": {
+    "duration_s": 0.03,
+    "route_a_freq_log": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/ts_frequency/ts_frequency/freq.out",
+    "route_a_freq_log_sha256": "sha256:3a9e9fc8fdb1d7f2b9eadf91669f51fd3eeb301c51192f87524ac61d6781d33d",
+    "runs": [
+      {
+        "artifacts": [
+          {
+            "bytes": 6242,
+            "path": "freq.sum",
+            "sha256": "sha256:b616560a1b5110015f1164729af1123b67be7d7197298aae16c30bca8a463fa0",
+            "type": "thermochemistry"
+          }
+        ],
+        "enthalpy_hartree": -234.3286207,
+        "entropy_au": 317.239,
+        "gibbs_hartree": -234.3616254,
+        "gibbs_source": "g_sum",
+        "standard_state": "1atm",
+        "temperature_k": 273.15
+      },
+      {
+        "artifacts": [
+          {
+            "bytes": 6242,
+            "path": "freq.sum",
+            "sha256": "sha256:400f1897ac997889ccabf7fd76c67d8ce820c2794643e5fac9fcd6f7f8d19518",
+            "type": "thermochemistry"
+          }
+        ],
+        "enthalpy_hartree": -234.3275845,
+        "entropy_au": 326.644,
+        "gibbs_hartree": -234.3646781,
+        "gibbs_source": "g_sum",
+        "standard_state": "1atm",
+        "temperature_k": 298.15
+      },
+      {
+        "artifacts": [
+          {
+            "bytes": 6242,
+            "path": "freq.sum",
+            "sha256": "sha256:d477df6fce8345318ac6167d63ffbbffbdee918797c4b6a4b3feb6958aa7f756",
+            "type": "thermochemistry"
+          }
+        ],
+        "enthalpy_hartree": -234.3264609,
+        "entropy_au": 336.03,
+        "gibbs_hartree": -234.3678199,
+        "gibbs_source": "g_sum",
+        "standard_state": "1atm",
+        "temperature_k": 323.15
+      }
+    ],
+    "sp_energy_hartree": -234.472954154901
+  },
+  "input_digests": {
+    "component_energy_table.json": "sha256:0fc68495f561e16142442267f51810180d027c3e152f4695ee6bd82ca76e898d",
+    "frequency/freq.out": "sha256:3a9e9fc8fdb1d7f2b9eadf91669f51fd3eeb301c51192f87524ac61d6781d33d",
+    "thermochemistry_ensemble.json": "sha256:0096191c05ed5a75672e635e9ff66743a539bff16a5f092c6838ded3d5697a76"
+  },
+  "product": {
+    "manifest": "RESULT/result_manifest.json",
+    "manifest_sha256": "sha256:01a9fdbdce0ae63a1a1def3b8f515fedeeb59761527c0c124cfcfe4daea93108",
+    "products": [
+      {
+        "id": "thermo_report",
+        "kind": "thermo_report",
+        "label": "Thermochemistry report",
+        "path": "thermo.json"
+      },
+      {
+        "id": "thermo_ensemble",
+        "kind": "report",
+        "label": "Ensemble thermochemistry",
+        "path": "thermochemistry_ensemble.json"
+      }
+    ],
+    "thermo_view": {
+      "enthalpy_hartree": -234.3275845,
+      "entropy": 326.644,
+      "gibbs_hartree": -234.3646781,
+      "scf_energy_hartree": -234.472954154901,
+      "temperature_k": 298.15,
+      "unit_note": "hartree unless noted",
+      "zpe_included": true
+    }
+  },
+  "project": "project_m406b_alpha",
+  "research_decision": {
+    "basis": "defer because the GIAO shielding table and the experimental spectrum are declared fixtures; the projection itself is complete",
+    "decision": "accept",
+    "evidence": {
+      "blocking_missing_checks": [],
+      "overall_claim_status": "supported",
+      "status": "complete"
+    },
+    "evidence_refs": [
+      {
+        "evidence_id": "art-0fc68495f561e161",
+        "kind": "component_energy_table",
+        "relative_path": "component_energy_table.json",
+        "sha256": "sha256:0fc68495f561e16142442267f51810180d027c3e152f4695ee6bd82ca76e898d"
+      }
+    ],
+    "project_id": "project_m406b_alpha",
+    "projection_digest": "sha256:96d1960e1cd39cfe6ff7ad7fb70053cc1ff23e24a18d31c11e5dd22eb0faf4d3",
+    "rationale_codes": [
+      "execution_completed",
+      "evidence_complete",
+      "claim_supported",
+      "digest_bound_evidence"
+    ],
+    "research_id": "res-m406b-thermo",
+    "round": 0,
+    "schema": "acp2.runtime.research-decision.v1",
+    "task_ref": {
+      "attempt": 1,
+      "job_id": "m406b-thermo-crossdomain",
+      "project_id": "project_m406b_alpha",
+      "release": {
+        "release_digest": "sha256:a9fc2614b92fed53a66ea43933ce92ffbfc09179a0d93d28d3a2d1bea383b8ea",
+        "release_id": "a9fc2614b92fed53"
+      },
+      "schema": "acp2.runtime.task-ref.v1",
+      "task_id": "m406b-thermo-crossdomain"
+    }
+  },
+  "row": "cross_domain_thermochemistry",
+  "task_id": "m406b-thermo-crossdomain",
+  "viewmodel": {
+    "annotation_keys": [
+      "frame_index",
+      "geometry_ref",
+      "id",
+      "label",
+      "selected",
+      "status",
+      "type",
+      "x",
+      "y"
+    ],
+    "node_keys": [
+      "energy",
+      "frame_index",
+      "geometry_ref",
+      "id",
+      "label",
+      "metadata",
+      "status",
+      "type",
+      "x"
+    ],
+    "product": {
+      "complete": true,
+      "errors": [],
+      "identity": {
+        "algorithm": "thermochemistry.gibbs_curve",
+        "algorithm_version": "1",
+        "generator": "cccp.calculation.products.curve.build_curve_scatter_product",
+        "input_digest": "sha256:70af4c909a570d388036635dc97df9588849e7a45f46a3c89452483a80b8cada",
+        "params_digest": "",
+        "product_kind": "curve_scatter",
+        "schema_version": 1
+      },
+      "payload": {
+        "reference_frame": {
+          "axes": "cartesian",
+          "origin": "native_input"
+        },
+        "series": [
+          {
+            "label": "Gibbs free energy vs temperature",
+            "points": [
+              {
+                "point_id": "thermo-t0",
+                "x": 273.15,
+                "y": -234.3616254
+              },
+              {
+                "point_id": "thermo-t1",
+                "x": 298.15,
+                "y": -234.3646781
+              },
+              {
+                "point_id": "thermo-t2",
+                "x": 323.15,
+                "y": -234.3678199
+              }
+            ],
+            "reference_frame": {
+              "axes": "cartesian",
+              "origin": "native_input"
+            },
+            "series_id": "thermochemistry.gibbs.vs.temperature",
+            "x_unit": "kelvin",
+            "y_unit": "hartree"
+          }
+        ]
+      },
+      "product_kind": "curve_scatter",
+      "schema_version": 1,
+      "state": "available"
+    },
+    "product_digest": "sha256:309f7f4a9ebf4421ed4e72263198dd0d511419a2969b5426da00e8f1cb394818",
+    "projection": {
+      "annotations": [
+        {
+          "frame_index": 2,
+          "geometry_ref": "",
+          "id": "minimum_0",
+          "label": "最低能量",
+          "selected": false,
+          "status": "completed",
+          "type": "minimum",
+          "x": 323.15,
+          "y": -234.3678199
+        }
+      ],
+      "migrations": [],
+      "node_type": "frame",
+      "nodes": [
+        {
+          "energy": -234.3616254,
+          "frame_index": 0,
+          "geometry_ref": "",
+          "id": "thermo-t0",
+          "label": "Point 0",
+          "metadata": {
+            "series_id": "thermochemistry.gibbs.vs.temperature",
+            "x_unit": "kelvin",
+            "y_unit": "hartree"
+          },
+          "status": "completed",
+          "type": "frame",
+          "x": 273.15
+        },
+        {
+          "energy": -234.3646781,
+          "frame_index": 1,
+          "geometry_ref": "",
+          "id": "thermo-t1",
+          "label": "Point 1",
+          "metadata": {
+            "series_id": "thermochemistry.gibbs.vs.temperature",
+            "x_unit": "kelvin",
+            "y_unit": "hartree"
+          },
+          "status": "completed",
+          "type": "frame",
+          "x": 298.15
+        },
+        {
+          "energy": -234.3678199,
+          "frame_index": 2,
+          "geometry_ref": "",
+          "id": "thermo-t2",
+          "label": "Point 2",
+          "metadata": {
+            "series_id": "thermochemistry.gibbs.vs.temperature",
+            "x_unit": "kelvin",
+            "y_unit": "hartree"
+          },
+          "status": "completed",
+          "type": "frame",
+          "x": 323.15
+        }
+      ],
+      "skipped_points": [],
+      "unavailable": null,
+      "view_type": "scan"
+    },
+    "projection_digest": "sha256:e5ec6932aca46e0c4a8861fdb994555dac481d78cea6d5b519dd9556e2fc60b2",
+    "view_type": "scan"
+  },
+  "worker": {
+    "receipt_state": "completed",
+    "report_digest": "sha256:ac4eb9ffa5670adf18105a1080afc0bf8e60afb4d6f5530d149f5d126f2523b0",
+    "report_relative_path": "RESULT/evidence_report.json",
+    "task_result_digest": "sha256:7b705df0e9de7d95c559d4b0a5c9ec2e07d8ed158b0c1f04a73b7feda9efc6df"
+  }
+}

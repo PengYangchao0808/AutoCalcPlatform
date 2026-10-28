@@ -1849,7 +1849,7 @@
     "tests/test_services_cache_only_switch.py": "f4c120d184794fc00d4c6e0a9af5cfa223d92e1604b29ddac12dc676e093a773",
     "tests/test_services_cas_fidelity.py": "2175aac3443b8d3b8421d24cce2224a80dc148008a4d98c06b3d1f2622602675",
     "tests/test_services_cgroup_attempt_recovery.py": "7f183c07c8e84a14daf41ac4213728ada64fefb2daf77191c4485588209a1aa4",
-    "tests/test_services_chain_switch.py": "e3ee835cc668173bc82beb6065c570c93c5a367a769e4f7467c8f53bb2a55d52",
+    "tests/test_services_chain_switch.py": "0ca7c69aeb4f0050c9c1354d949b71ecd69e177ef7276b2a026f55bac3b748ae",
     "tests/test_services_cli_full_loop.py": "f99140e9e09a4ba9006b6fa8f55a3cfe046b4a8d801a473061a98f368a3ad40d",
     "tests/test_services_cli_offline_loop.py": "72f0b3e28e921e6358dd5428dbae81625c881ae0b9db979e2161c1498ce20e72",
     "tests/test_services_closure_record.py": "b4e579b9e2d6229ba15dc48f00c77849674e23d24567bc4ea44c1e032247abf7",

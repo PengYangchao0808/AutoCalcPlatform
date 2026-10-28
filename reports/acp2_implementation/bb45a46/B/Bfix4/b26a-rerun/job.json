@@ -51,7 +51,7 @@
   "remote_job_id": null,
   "group_id": "20261023_223703_002_b26a-fix4-http",
   "node_id": "local",
-  "host": "redacted-host",
+  "host": "workstation",
   "result": {
     "admission": {
       "reservation_id": "res_job_20261023_223703_002_b26a-fix4-http",
@@ -146,7 +146,7 @@
       "basis": null,
       "solvent": null,
       "command_line": "",
-      "hostname": "redacted-host",
+      "hostname": "workstation",
       "ncores": 1,
       "memory_gb": 1.0,
       "wall_time_seconds": 6.977221,

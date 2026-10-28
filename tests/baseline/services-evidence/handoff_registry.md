@@ -73,11 +73,11 @@
 
 | track | task | registered path | observed | B25b treatment |
 |---|---|---|---|---|
-| A | A-27b | `<server-root>/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z` | raw result present; its own `platform_row` still records `NOT_VERIFIED` because it was produced before the B25a candidate | aggregated as raw evidence; no science re-sign-off |
-| A | A-28 | `<server-root>/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z` | raw result `PASS` on the A-built cccp-0.2.0 wheel | aggregated; does not replace B25b's 0.3.0 install |
-| C | C33 | `<acp2-dev>/evidence/C/clean-install-live` | absent | `NOT_VERIFIED` at the registered path |
-| C | C34 | `<acp2-dev>/evidence/C/operator-runbook-live` | absent | `NOT_VERIFIED` at the registered path |
-| C | static assets | `<repo>/docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json` | absent | `NOT_VERIFIED(c_static_assets_absent)`; no mount fabricated |
+| A | A-27b | `/ACPServer/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z` | raw result present; its own `platform_row` still records `NOT_VERIFIED` because it was produced before the B25a candidate | aggregated as raw evidence; no science re-sign-off |
+| A | A-28 | `/ACPServer/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z` | raw result `PASS` on the A-built cccp-0.2.0 wheel | aggregated; does not replace B25b's 0.3.0 install |
+| C | C33 | `/ACPServer/acp2-development/evidence/C/clean-install-live` | absent | `NOT_VERIFIED` at the registered path |
+| C | C34 | `/ACPServer/acp2-development/evidence/C/operator-runbook-live` | absent | `NOT_VERIFIED` at the registered path |
+| C | static assets | `/ACPServer/AutoCalcPlatform/docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json` | absent | `NOT_VERIFIED(c_static_assets_absent)`; no mount fabricated |
 | C | C35 | n/a | not a B25b prerequisite | not signed |
 
 ## Deferred capability handoffs (T36)

@@ -819,10 +819,18 @@ def test_prepare_migration_new_db_standalone(tmp_path: Path) -> None:
     db = tmp_path / "prepare.db"
     service = ops.PrepareOperationService(db, clock=FakeClock())
     columns, indexes, tables = _prepare_schema(db)
-    assert columns[-3:] == ("content_identity", "client_idempotency_key", "dedup_epoch")
+    assert columns[-6:] == (
+        "content_identity",
+        "client_idempotency_key",
+        "dedup_epoch",
+        "principal_id",
+        "project_id",
+        "identity_version",
+    )
     assert "idx_data_operations_client_key" in indexes
-    assert "WHERE client_idempotency_key <> ''" in str(indexes["idx_data_operations_client_key"])
-    assert _prepare_version(db) == 1
+    assert "identity_version = '1'" in str(indexes["idx_data_operations_client_key"])
+    assert "idx_data_operations_identity_client_key" in indexes
+    assert _prepare_version(db) == 2
     assert "data_operations" in tables
     assert "jobs" not in tables and "tasks" not in tables, tables
     service.close()
@@ -843,9 +851,16 @@ def test_prepare_migration_old_prepare_only_db_is_conservative(tmp_path: Path) -
         # one canonical shape regardless of create-then-migrate vs migrate-old
         assert columns == reference_columns
         assert set(indexes) == set(reference_indexes)
-        assert columns[-3:] == ("content_identity", "client_idempotency_key", "dedup_epoch")
+        assert columns[-6:] == (
+            "content_identity",
+            "client_idempotency_key",
+            "dedup_epoch",
+            "principal_id",
+            "project_id",
+            "identity_version",
+        )
         assert "idx_data_operations_client_key" in indexes
-        assert _prepare_version(db) == 1
+        assert _prepare_version(db) == 2
         assert "jobs" not in tables and "tasks" not in tables
 
         legacy = service.get("op_legacy")
@@ -853,6 +868,10 @@ def test_prepare_migration_old_prepare_only_db_is_conservative(tmp_path: Path) -
         assert legacy.content_identity == ""
         assert legacy.client_idempotency_key == ""
         assert legacy.dedup_epoch == 0
+        # M0-05: a pre-existing row keeps the frozen v1 prepare-key attribution.
+        assert legacy.identity_version == ops.LEGACY_PREPARE_IDENTITY_VERSION
+        assert legacy.principal_id == "" and legacy.project_id == ""
+        assert legacy.is_legacy_key is True
         assert legacy.state is ops.PrepareState.SUCCEEDED
         assert service.availability("op_legacy").availability is dc.Availability.UNAVAILABLE
         assert service.availability("op_legacy").availability is not dc.Availability.READY
@@ -895,7 +914,7 @@ def test_prepare_migration_mixed_jobs_db_migrates_once(tmp_path: Path) -> None:
             assert jobs_rows == jobs_version
         finally:
             conn.close()
-        assert _prepare_version(db) == 1
+        assert _prepare_version(db) == 2
         op = first.enqueue(_request())
         assert second.find(job_id="j1", attempt=1, resource_id="catalog:Confsearch") is not None
         assert op.content_identity != ""
@@ -908,11 +927,18 @@ def test_prepare_migration_before_create_and_missing_table_not_marked(tmp_path: 
     migrated_first = tmp_path / "migrated-first.db"
     assert migrate_prepare_schema(migrated_first) is True
     canonical = _prepare_schema(migrated_first)
-    assert canonical[0][-3:] == ("content_identity", "client_idempotency_key", "dedup_epoch")
+    assert canonical[0][-6:] == (
+        "content_identity",
+        "client_idempotency_key",
+        "dedup_epoch",
+        "principal_id",
+        "project_id",
+        "identity_version",
+    )
     service = ops.PrepareOperationService(migrated_first, clock=FakeClock())
     service.close()
     assert _prepare_schema(migrated_first) == canonical
-    assert _prepare_version(migrated_first) == 1
+    assert _prepare_version(migrated_first) == 2
 
     missing = tmp_path / "missing.db"
     assert migrate_prepare_schema(missing, create_table=False) is False
@@ -949,10 +975,17 @@ def test_two_concurrent_initializers_converge(tmp_path: Path) -> None:
                 process.wait(timeout=10)
 
     columns, indexes, tables = _prepare_schema(db)
-    assert columns[-3:] == ("content_identity", "client_idempotency_key", "dedup_epoch")
+    assert columns[-6:] == (
+        "content_identity",
+        "client_idempotency_key",
+        "dedup_epoch",
+        "principal_id",
+        "project_id",
+        "identity_version",
+    )
     assert "idx_data_operations_client_key" in indexes
     assert "jobs" not in tables and "tasks" not in tables
-    assert _prepare_version(db) == 1
+    assert _prepare_version(db) == 2
     conn = _sqlite(db)
     try:
         assert conn.execute("SELECT COUNT(*) FROM _prepare_schema_migrations").fetchone()[0] == 1

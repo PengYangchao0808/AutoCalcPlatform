@@ -1,0 +1,60 @@
+{
+  "artifacts": [],
+  "assertions": [
+    {
+      "detail": "upstream_not_delivered",
+      "name": "prerequisite:upstream_not_delivered",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "e03a9dd9f6897ca0a8d43e69a10b22a20097f05d",
+    "harness_revision": "9c2523d35a884272807c6857794886eeedd43e728da0d695fd2a26244ddaa433",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "e03a9dd9f6897ca0a8d43e69a10b22a20097f05d",
+  "command": [
+    "/ACPServer/acp2-development/venvs/integration/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "evidence-browser-live",
+    "--timeout",
+    "120",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/evidence-browser-live/f3-honesty-eblive-20261022T234209Z/main/live"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "live",
+  "exit_code": 2,
+  "extensions": {
+    "experience.harness_contract_revision": "9c2523d35a884272807c6857794886eeedd43e728da0d695fd2a26244ddaa433",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/integration/bin/python",
+    "experience.mode": "live",
+    "experience.product_import": "/ACPServer/acp2-development/integration/src/acp/__init__.py",
+    "experience.run_id": "f3-honesty-eblive-20261022T234209Z",
+    "experience.scenario_key": "evidence-browser-live",
+    "experience.subcase": null,
+    "experience.test_revision": "e03a9dd9f6897ca0a8d43e69a10b22a20097f05d"
+  },
+  "finished_at": "2026-10-22T23:42:10Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:live",
+  "reason": "upstream_not_delivered",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "f3-honesty-eblive-20261022T234209Z",
+  "scenario": "experience:evidence-browser-live",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T23:42:10Z",
+  "submission_id": null,
+  "usage": null
+}

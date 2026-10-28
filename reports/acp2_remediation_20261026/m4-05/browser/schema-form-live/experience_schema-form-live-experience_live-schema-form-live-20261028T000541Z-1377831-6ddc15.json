@@ -1,0 +1,212 @@
+{
+  "artifacts": [
+    {
+      "path": "01-workbench-loaded.png",
+      "sha256": "c812648c8c9a147096872c84962ce117f39ac447000dd823a0deee6309d60fa2",
+      "size_bytes": 359950
+    },
+    {
+      "path": "02-third-party-form-rendered.png",
+      "sha256": "51e4113b8f2c3917add0bcbca76fed27e5484185899e900f36dabe1694195b51",
+      "size_bytes": 402729
+    },
+    {
+      "path": "02-third-party-form-panel.png",
+      "sha256": "3e18e5098c43aa58316d5528cdc75a837e4d7d7c088f4c7c0c2d7f9c9e510a79",
+      "size_bytes": 53723
+    },
+    {
+      "path": "03-form-filled.png",
+      "sha256": "45c317f37e569cf1c9d6a2e5dbd2b691466b6991ce35d2b456eb4f750cacc669",
+      "size_bytes": 393492
+    },
+    {
+      "path": "04-numeric-edit-typed-refusal.png",
+      "sha256": "e8b2f2b7a1850c0533e4c6e2ae1e2e2a16da3f0761d9978ea0092628d3321428",
+      "size_bytes": 401719
+    },
+    {
+      "path": "05-preflight-view-model.png",
+      "sha256": "ed6e292a92a0ca22ac9b613a7928f358e841ba0bd00152abf5dd7654b8314425",
+      "size_bytes": 404601
+    },
+    {
+      "path": "05-preflight-view-model-panel.png",
+      "sha256": "679386fb2555ff2ae95fe98a69576313db71654e940accacf1e1bb7b04d81a65",
+      "size_bytes": 55008
+    },
+    {
+      "path": "schema-form-page.html",
+      "sha256": "1f1c2d38721f8e5eac0cbae82ca1fe01a0ffbf08a2edd57257d24abaea2c08ab",
+      "size_bytes": 101362
+    },
+    {
+      "path": "browser-console.json",
+      "sha256": "fcaa95e8d444374938c966e698aa6b23bfbae24efba9409c7e9e48e20df090a0",
+      "size_bytes": 1579
+    },
+    {
+      "path": "browser-network.json",
+      "sha256": "c986b72f099b0ba25ffb105f299a261d58c7becfc4a3ebfe2c113b99d9712818",
+      "size_bytes": 1298
+    },
+    {
+      "path": "schema-form-live.json",
+      "sha256": "f9480048b33dda6a757d4e406cf352d64799104971defe692a36c73c1d8d0722",
+      "size_bytes": 4754
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "{\"exit\": 0, \"status\": \"ok\", \"capability_id\": \"acp2_external_native_singlepoint\", \"enabled\": true}",
+      "name": "plugin.enabled_by_operator_cli",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"status\": 200, \"state\": \"available\", \"origin\": \"plugin:acp2-external-science-validator\", \"form_digest\": \"sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0\"}",
+      "name": "discovery.plugin_form_served",
+      "status": "PASS"
+    },
+    {
+      "detail": "ACP \u5206\u5b50\u8ba1\u7b97\u5de5\u4f5c\u53f0",
+      "name": "browser.page_loaded",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"before\": {\"x\": 1201, \"y\": 3255.3125, \"width\": 224, \"height\": 1}, \"collapsed\": [\"science_question\", \"scientific_evidence\", \"research_approval\", \"info\"], \"failed\": [], \"after_form\": {\"x\": 1201, \"y\": 523.75, \"width\": 224, \"height\": 421.25}}",
+      "name": "browser.form_panel_visible",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"title\": \"Native single-point record validator\", \"bindings\": [\"task.charge\", \"task.multiplicity\", \"task.resources.nproc\", \"task.structure.source\"], \"options\": [{\"value\": \"electronic.energy\", \"text\": \"electronic.energy\"}, {\"value\": \"geometry.optimize\", \"text\": \"geometry.optimize\"}, {\"value\": \"vibration.analyze\", \"text\": \"vibration.analyze\"}, {\"value\": \"vibration.compute\", \"text\": \"vibration.compute \\u2014 \\u4e0d\\u53ef\\u7528\"}, {\"value\": \"acp2_external_native_singlepoint\", \"text\": \"acp2_external_native_singlepoint\"}], \"selected\": \"acp2_external_native_singlepoint\"}",
+      "name": "browser.form_rendered_from_discovery",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"state_subset_digest\": \"sha256:870d59473be275fa52785896cdb7e09d03aa15855a8a29dc69b90839fbf08b06\", \"state_form_digest\": \"sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0\", \"served_form_digest\": \"sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0\", \"state_selected\": \"acp2_external_native_singlepoint\"}",
+      "name": "browser.form_matches_served_digest",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"source_length\": 273}",
+      "name": "browser.value_committed_from_dom",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"stored\": \"2\", \"stored_type\": \"string\", \"refusal\": {\"code\": \"ui_value_type\", \"text\": \"\\u503c\\u7684\\u7c7b\\u578b\\u4e0d\\u7b26\\u5408\\u7ea6\\u675f\"}}",
+      "name": "browser.numeric_edit_typed_refusal",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"plan_digest\": \"sha256:d57b6986198d317597d3beaa96e0a8cbdbc4df603bf94b6498391542f2a3e101\", \"preflight_fingerprint\": \"sha256:d57b6986198d317597d3beaa96e0a8cbdbc4df603bf94b6498391542f2a3e101\", \"form_digest\": \"sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0\", \"descriptor_digest\": \"sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780\", \"subset_version\": \"acp2.ui-subset.v1\", \"subset_digest\": \"sha256:870d59473be275fa52785896cdb7e09d03aa15855a8a29dc69b90839fbf08b06\", \"workflow\": \"singlepoint\", \"fields\": [\"task.charge=charge\", \"task.multiplicity=multiplicity\", \"task.resources.nproc=resources.nproc\", \"task.structure.source=structure.source\"], \"human_edits\": [{\"edited_at\": \"2026-10-28T00:05:47.840Z\", \"field_path\": \"task.structure.source\", \"editor_ref\": \"workbench-local\", \"note\": \"capability=acp2_external_native_singlepoint; task_request=structure.source; descriptor_digest=sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780; form_digest=sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0\"}, {\"edited_at\": \"2026-10-28T00:05:48.472Z\", \"field_path\": \"task.charge\", \"editor_ref\": \"workbench-local\", \"note\": \"capability=acp2_external_native_singlepoint; task_request=charge; descriptor_digest=sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780; form_digest=sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0\"}]}",
+      "name": "browser.preflight_real_response",
+      "status": "PASS"
+    },
+    {
+      "detail": "\u80fd\u529belectronic.energygeometry.optimizevibration.analyzevibration.compute \u2014 \u4e0d\u53ef\u7528acp2_external_native_singlepointNative single-point record validatorThird-party (fixture) form shipped inside the installed distribution as cccp_ui_form.json. The platform validates it against acp2.ui-subset.v1 and serves it through discovery; the Workbench renders it with no frontend source change.ChargeMultiplicityProces",
+      "name": "browser.view_model_displayed",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"submit_disabled\": true, \"hint_present\": true, \"hint_text\": \"\\u63d0\\u4ea4\\u524d\\u9700\\u8981\\u5df2\\u6279\\u51c6\\u7684\\u8ba1\\u5212\", \"module_refusal\": {\"ok\": true, \"code\": \"approval_required\", \"message\": \"approval_required: an approved record is required to submit\"}}",
+      "name": "browser.submit_requires_approval",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"console_errors\": [], \"page_errors\": []}",
+      "name": "browser.zero_console_and_page_errors",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"forms\": [{\"status\": 200, \"method\": \"GET\", \"url\": \":60557/api/v2/science/capability-forms?project_id=adc02a9b-736c-47f7-9e15-9dc1d18c4608\"}], \"preflight\": [{\"status\": 200, \"method\": \"POST\", \"url\": \":60557/api/v2/science/preflight?project_id=adc02a9b-736c-47f7-9e15-9dc1d18c4608\"}]}",
+      "name": "browser.network_form_and_preflight",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "a5a833b2ef4623309d96b5b699373924e5db0b15",
+    "harness_revision": "652db2e01129cbaa4afe83b5270abbfa2070165ae2d5d8352aefa7d10fa02df3",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "a5a833b2ef4623309d96b5b699373924e5db0b15",
+  "command": [
+    "/usr/bin/python3.11",
+    "/ACPServer/acp2-remediation-integration/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "schema-form-live",
+    "--mode",
+    "live",
+    "--out",
+    "/ACPServer/acp2-remediation-integration/reports/acp2_remediation_20261026/m4-05/browser/schema-form-live",
+    "--timeout",
+    "1200"
+  ],
+  "contract_version": "1.6.0",
+  "cwd": "/ACPServer/acp2-remediation-integration",
+  "evidence_kind": "live",
+  "exit_code": 0,
+  "extensions": {
+    "experience.declared_observations": {
+      "artifact": "absent",
+      "browser": "present",
+      "controller": "present",
+      "denial": "absent",
+      "lsf": "absent",
+      "model": "absent",
+      "qc": "absent",
+      "transport": "present"
+    },
+    "experience.harness_contract_revision": "652db2e01129cbaa4afe83b5270abbfa2070165ae2d5d8352aefa7d10fa02df3",
+    "experience.harness_path": "/ACPServer/acp2-remediation-integration/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/usr/bin/python3.11",
+    "experience.mode": "live",
+    "experience.observations": {
+      "model_calls": 0,
+      "model_evidence": "schema-form-live drives the Workbench capability-form panel in a real Chromium against the real Controller; no model client is invoked (0 calls)",
+      "observed": {
+        "artifact": "absent",
+        "browser": "present",
+        "controller": "present",
+        "denial": "absent",
+        "lsf": "absent",
+        "model": "absent",
+        "qc": "absent",
+        "transport": "present"
+      },
+      "offline_fixture_content": false,
+      "schema": "acp2.experience.observations.v1"
+    },
+    "experience.product_import": "/ACPServer/acp2-remediation-integration/src/acp/__init__.py",
+    "experience.run_id": "schema-form-live-20261028T000541Z-1377831-6ddc15",
+    "experience.scenario_key": "schema-form-live",
+    "experience.schema_form_approval_gate": "approval_required",
+    "experience.schema_form_browser": "chromium/153.0.8010.12",
+    "experience.schema_form_capability": "acp2_external_native_singlepoint",
+    "experience.schema_form_descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+    "experience.schema_form_duration_seconds": 7.8,
+    "experience.schema_form_form_digest": "sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0",
+    "experience.schema_form_plan_digest": "sha256:d57b6986198d317597d3beaa96e0a8cbdbc4df603bf94b6498391542f2a3e101",
+    "experience.schema_form_submit_disabled": true,
+    "experience.subcase": null,
+    "experience.test_revision": "a5a833b2ef4623309d96b5b699373924e5db0b15"
+  },
+  "finished_at": "2026-10-28T00:05:49Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:live",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "schema-form-live-20261028T000541Z-1377831-6ddc15",
+  "scenario": "experience:schema-form-live",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-28T00:05:41Z",
+  "submission_id": null,
+  "usage": null
+}

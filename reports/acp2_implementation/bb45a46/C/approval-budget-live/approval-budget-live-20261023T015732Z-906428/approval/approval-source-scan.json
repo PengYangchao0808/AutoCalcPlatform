@@ -1,0 +1,11 @@
+{
+  "file": "frontend/js/workbench/features/research-approval.js",
+  "forbidden_hits": [],
+  "rules": [
+    "fetch_call",
+    "xhr",
+    "viewer_create",
+    "child_process"
+  ],
+  "scanned": true
+}

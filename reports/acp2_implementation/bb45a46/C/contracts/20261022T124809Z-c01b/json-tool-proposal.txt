@@ -1,0 +1,526 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://acp.local/acp2/experience/proposal.schema.json",
+    "title": "ACP 2.0 research Proposal (minimal reference v1)",
+    "description": "Minimal reference Proposal contract frozen by T-03 / C01b. A Proposal is a scientific hypothesis plus a reproducible plan definition and its approval binding. It is NOT a task/job state machine: it carries no job_id, attempt, lifecycle, queue or running state, and status-like task fields are rejected by the schema's `not` clause. The only state it names is the research decision (proposed/approved/rejected/superseded/deferred) and, as display metadata only, the approval projection. plan_definition_digest is the canonical projection of the scientific definition (recipe_digest, science, budget, allowed_change_scope) and deliberately excludes approval_ref, approval status, timestamps, display names and later-appended TaskRef/evidence references. The full P2 resource envelope is versioned later; this document freezes names, not the P2 field superset.",
+    "$comment": "Executable vocabulary is JSON Schema 2020-12 only. range/nullable exist solely inside ui_dialect as non-executable UI annotations with a written standard equivalent. TaskRef/evidence refs are intentionally absent: a Proposal precedes execution, so appending them must never change plan_definition_digest.",
+    "schema": "acp2.experience.proposal.v1",
+    "schema_version": "1.0.0",
+    "schema_dialect": "json-schema-2020-12",
+    "ui_dialect": {
+        "version": "acp2.ui-subset.v1",
+        "supported_keywords": [
+            "$schema",
+            "$id",
+            "$ref",
+            "$comment",
+            "$defs",
+            "schema",
+            "schema_version",
+            "schema_dialect",
+            "ui_dialect",
+            "title",
+            "description",
+            "type",
+            "enum",
+            "const",
+            "required",
+            "properties",
+            "additionalProperties",
+            "items",
+            "minItems",
+            "maxItems",
+            "uniqueItems",
+            "minimum",
+            "maximum",
+            "exclusiveMinimum",
+            "exclusiveMaximum",
+            "minLength",
+            "maxLength",
+            "pattern",
+            "oneOf",
+            "anyOf",
+            "allOf",
+            "not",
+            "if",
+            "then",
+            "else",
+            "dependentRequired",
+            "default",
+            "examples",
+            "format"
+        ],
+        "non_standard_keywords": {
+            "range": {
+                "standard_equivalent": "minimum and maximum",
+                "executable": false,
+                "scope": "UI annotation only; a generic 2020-12 validator must not execute it"
+            },
+            "nullable": {
+                "standard_equivalent": "type array that contains \"null\"",
+                "executable": false,
+                "scope": "UI annotation only; a generic 2020-12 validator must not execute it"
+            }
+        },
+        "rule": "Only supported_keywords are executable. range/nullable must never appear outside this ui_dialect block."
+    },
+    "type": "object",
+    "required": [
+        "proposal_id",
+        "project_id",
+        "question_ref",
+        "question_revision",
+        "reaction_ref",
+        "reaction_revision",
+        "hypothesis",
+        "recipe_digest",
+        "plan_definition_digest",
+        "science",
+        "budget",
+        "approval_ref",
+        "allowed_change_scope",
+        "round",
+        "decision",
+        "created_at",
+        "human_edits"
+    ],
+    "properties": {
+        "proposal_id": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^prop-[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "description": "Stable proposal identity. Project-scoped; never reused for a different plan definition."
+        },
+        "project_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Project scope resolved server-side. A client must not assert a different project in a task/evidence reference."
+        },
+        "question_ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Reference to the frozen QuestionSpec this proposal answers."
+        },
+        "question_revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "QuestionSpec revision the hypothesis was formed against."
+        },
+        "reaction_ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Reference to the frozen reaction/species definition supplied by A; C never infers endo/exo from a name."
+        },
+        "reaction_revision": {
+            "type": "integer",
+            "minimum": 0
+        },
+        "hypothesis": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Falsifiable hypothesis. A model narrative is not a substitute for the scientific plan below."
+        },
+        "recipe_digest": {
+            "$ref": "#/$defs/digest",
+            "description": "Digest of the A-owned Recipe/capability definition. C references it; C does not copy the science schema."
+        },
+        "plan_definition_digest": {
+            "$ref": "#/$defs/digest",
+            "description": "Canonical digest over ONLY recipe_digest, science.{capability_steps,initial_inputs,method,mapping,charge,multiplicity,allowed_substitutions} and budget.{model_requests,input_tokens,output_tokens,task_refs,recipe_steps,qc_invocations,wall_seconds,queue_seconds}. See plan-identity.md. Excludes approval_ref, approval_status, updated_at, display_name, decision, human_edits, allowed_change_scope, budget.unit_basis/notes and all later TaskRef/evidence refs."
+        },
+        "science": {
+            "$ref": "#/$defs/science"
+        },
+        "budget": {
+            "$ref": "#/$defs/budget"
+        },
+        "approval_ref": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "Reference to the runtime Approval bound to plan_definition_digest + project_id + budget + allowed_change_scope. Null before approval is requested. The reference itself is excluded from plan_definition_digest."
+        },
+        "allowed_change_scope": {
+            "$ref": "#/$defs/allowed_change_scope"
+        },
+        "round": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Research round index. A research iteration counter, not a task attempt or a job lifecycle state."
+        },
+        "decision": {
+            "enum": [
+                "proposed",
+                "approved",
+                "rejected",
+                "superseded",
+                "deferred"
+            ],
+            "description": "Research decision about the hypothesis. It is not a task/job status enum."
+        },
+        "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp. Never part of plan_definition_digest."
+        },
+        "human_edits": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/human_edit"
+            },
+            "description": "Auditable human edits. Never part of plan_definition_digest."
+        },
+        "approval_status": {
+            "enum": [
+                "pending",
+                "approved",
+                "rejected",
+                "revoked"
+            ],
+            "description": "Display projection of the Approval. Never part of plan_definition_digest and never authority to dispatch."
+        },
+        "updated_at": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "format": "date-time",
+            "description": "Display/volatile update timestamp. Never part of plan_definition_digest."
+        },
+        "display_name": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "description": "Human-facing label only. Never part of plan_definition_digest."
+        }
+    },
+    "not": {
+        "anyOf": [
+            {
+                "required": [
+                    "status"
+                ]
+            },
+            {
+                "required": [
+                    "state"
+                ]
+            },
+            {
+                "required": [
+                    "lifecycle"
+                ]
+            },
+            {
+                "required": [
+                    "job_id"
+                ]
+            },
+            {
+                "required": [
+                    "attempt"
+                ]
+            },
+            {
+                "required": [
+                    "queue_position"
+                ]
+            },
+            {
+                "required": [
+                    "running"
+                ]
+            },
+            {
+                "required": [
+                    "queued"
+                ]
+            }
+        ],
+        "description": "A Proposal must not carry task/job state-machine fields. Task state lives only in the platform task record; the Workbench must not derive or store a second one."
+    },
+    "additionalProperties": false,
+    "$defs": {
+        "digest": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "description": "Lowercase sha256 with the sha256: prefix. Never a mutable value."
+        },
+        "science": {
+            "type": "object",
+            "required": [
+                "capability_steps",
+                "initial_inputs",
+                "method",
+                "mapping",
+                "charge",
+                "multiplicity",
+                "allowed_substitutions"
+            ],
+            "properties": {
+                "capability_steps": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "object",
+                        "required": [
+                            "step_index",
+                            "capability",
+                            "version"
+                        ],
+                        "properties": {
+                            "step_index": {
+                                "type": "integer",
+                                "minimum": 0
+                            },
+                            "capability": {
+                                "type": "string",
+                                "minLength": 1,
+                                "description": "A-owned capability identifier from the Recipe. Not the MCP transport tool name."
+                            },
+                            "tool": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ],
+                                "description": "Optional transport/MCP tool name used for the step; never the scientific capability identity."
+                            },
+                            "version": {
+                                "type": "string",
+                                "minLength": 1,
+                                "description": "Capability/recipe step version actually selected."
+                            },
+                            "parameters": {
+                                "type": "object",
+                                "description": "Resolved capability parameters. Quantity values are {value, unit}; see plan-identity.md."
+                            }
+                        },
+                        "additionalProperties": false
+                    }
+                },
+                "initial_inputs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "object",
+                        "required": [
+                            "input_id",
+                            "sha256",
+                            "format"
+                        ],
+                        "properties": {
+                            "input_id": {
+                                "type": "string",
+                                "minLength": 1
+                            },
+                            "sha256": {
+                                "$ref": "#/$defs/digest",
+                                "description": "Actual input bytes digest. Changing the bytes changes plan_definition_digest."
+                            },
+                            "format": {
+                                "type": "string",
+                                "minLength": 1,
+                                "description": "Declared input format (e.g. xyz, gjf, smiles). Changing it changes plan_definition_digest."
+                            },
+                            "role": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            }
+                        },
+                        "additionalProperties": false
+                    }
+                },
+                "method": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "QC method/level identity, e.g. r2SCAN-3c. A normalization or fallback silently changing it is forbidden."
+                },
+                "mapping": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Atom/geometry mapping identity (A-owned). C must not infer it from a molecule name."
+                },
+                "charge": {
+                    "type": "integer",
+                    "description": "Total charge. Explicitly part of the scientific identity; never defaulted by a model."
+                },
+                "multiplicity": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Spin multiplicity. Explicitly part of the scientific identity; never defaulted by a model."
+                },
+                "allowed_substitutions": {
+                    "type": "array",
+                    "description": "Finite post-approval substitution set inside this science block. May be empty. Fully part of plan_definition_digest.",
+                    "items": {
+                        "type": "object",
+                        "required": [
+                            "field_path",
+                            "allowed_values"
+                        ],
+                        "properties": {
+                            "field_path": {
+                                "type": "string",
+                                "minLength": 1,
+                                "description": "Stable machine field path inside science."
+                            },
+                            "allowed_values": {
+                                "type": "array",
+                                "minItems": 1,
+                                "items": {
+                                    "type": "string"
+                                },
+                                "uniqueItems": true
+                            }
+                        },
+                        "additionalProperties": false
+                    }
+                }
+            },
+            "additionalProperties": false
+        },
+        "budget": {
+            "type": "object",
+            "required": [
+                "model_requests",
+                "input_tokens",
+                "output_tokens",
+                "task_refs",
+                "recipe_steps",
+                "qc_invocations",
+                "wall_seconds",
+                "queue_seconds"
+            ],
+            "properties": {
+                "model_requests": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Allowed count of model/LLM requests for the scenario round."
+                },
+                "input_tokens": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Allowed count of model input tokens."
+                },
+                "output_tokens": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Allowed count of model output tokens."
+                },
+                "task_refs": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Allowed count of new platform TaskRefs."
+                },
+                "recipe_steps": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Allowed count of Recipe/capability steps."
+                },
+                "qc_invocations": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Allowed count of QC backend invocations."
+                },
+                "wall_seconds": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Allowed wall-clock seconds."
+                },
+                "queue_seconds": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Allowed queue seconds, accounted separately from the science wall clock."
+                },
+                "unit_basis": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Counting basis label, e.g. per_scenario or per_round. NOT part of plan_definition_digest."
+                },
+                "notes": {
+                    "type": "string",
+                    "description": "Human-readable budget note. NOT part of plan_definition_digest."
+                }
+            },
+            "additionalProperties": false
+        },
+        "allowed_change_scope": {
+            "type": "object",
+            "required": [
+                "mode",
+                "finite_substitutions"
+            ],
+            "properties": {
+                "mode": {
+                    "enum": [
+                        "none",
+                        "finite_list"
+                    ],
+                    "description": "none = no substitution after approval. finite_list = only the enumerated finite substitutions in science.allowed_substitutions are allowed; any other change requires a new proposal and approval."
+                },
+                "finite_substitutions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "required": [
+                            "field_path",
+                            "allowed_values"
+                        ],
+                        "properties": {
+                            "field_path": {
+                                "type": "string",
+                                "minLength": 1,
+                                "description": "Stable machine field path inside science."
+                            },
+                            "allowed_values": {
+                                "type": "array",
+                                "minItems": 1,
+                                "items": {
+                                    "type": "string"
+                                },
+                                "uniqueItems": true
+                            }
+                        },
+                        "additionalProperties": false
+                    }
+                }
+            },
+            "additionalProperties": false,
+            "description": "Approval-facing summary of the allowed change scope. Excluded from plan_definition_digest; the authoritative scientific substitution set is science.allowed_substitutions, which IS in the digest and is bound through approval_ref together with project_id and budget."
+        },
+        "human_edit": {
+            "type": "object",
+            "required": [
+                "edited_at",
+                "field_path",
+                "editor_ref"
+            ],
+            "properties": {
+                "edited_at": {
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "field_path": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "editor_ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Opaque principal reference; never a credential value."
+                },
+                "note": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                }
+            },
+            "additionalProperties": false
+        }
+    }
+}

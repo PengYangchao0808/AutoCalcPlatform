@@ -3,7 +3,7 @@ INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:18776 (Press CTRL+C to quit)
 ACP Workbench starting at http://127.0.0.1:18776
-  Run root      : <acp2-dev>/data/b/run-root-b16
+  Run root      : /ACPServer/acp2-development/data/b/run-root-b16
   Poll interval : 1s
   Docs (Swagger): http://127.0.0.1:18776/docs
   Reload        : off
@@ -14,28 +14,28 @@ INFO:     127.0.0.1:49844 - "POST /api/v2/research/approvals/ap_610f54c9a14b4621
 INFO:     127.0.0.1:49860 - "POST /api/v1/jobs HTTP/1.1" 201 Created
 Submission failed for job 20261023_130324_001_b16-approved-display-name
 Traceback (most recent call last):
-  File "<repo>/src/acp/scheduler/manager.py", line 3723, in _execute_submission_impl
+  File "/ACPServer/AutoCalcPlatform/src/acp/scheduler/manager.py", line 3723, in _execute_submission_impl
     submitted = self._submit_job(job_id)
                 ^^^^^^^^^^^^^^^^^^^^^^^^
-  File "<repo>/src/acp/scheduler/manager.py", line 4916, in _submit_job
+  File "/ACPServer/AutoCalcPlatform/src/acp/scheduler/manager.py", line 4916, in _submit_job
     self.runner.submit(record, event_log, cancel_event)
-  File "<repo>/src/acp/scheduler/runner.py", line 597, in submit
+  File "/ACPServer/AutoCalcPlatform/src/acp/scheduler/runner.py", line 597, in submit
     self._prepare_and_launch(record, work_dir, storage, event_log)
-  File "<repo>/src/acp/scheduler/runner.py", line 642, in _prepare_and_launch
+  File "/ACPServer/AutoCalcPlatform/src/acp/scheduler/runner.py", line 642, in _prepare_and_launch
     self._ensure_default_frozen_attempt(record, work_dir, effective_input_path, event_log)
-  File "<repo>/src/acp/scheduler/runner.py", line 1366, in _ensure_default_frozen_attempt
+  File "/ACPServer/AutoCalcPlatform/src/acp/scheduler/runner.py", line 1366, in _ensure_default_frozen_attempt
     spec = build_freeze_spec(record, work_dir, input_path, release)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "<repo>/src/acp/calculations/attempt_freeze.py", line 1141, in build_freeze_spec
+  File "/ACPServer/AutoCalcPlatform/src/acp/calculations/attempt_freeze.py", line 1141, in build_freeze_spec
     return builder(record, work_dir, input_path, release)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "<repo>/src/acp/calculations/attempt_freeze.py", line 890, in build_singlepoint_freeze_spec
+  File "/ACPServer/AutoCalcPlatform/src/acp/calculations/attempt_freeze.py", line 890, in build_singlepoint_freeze_spec
     return build_simple_freeze_spec(
            ^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "<repo>/src/acp/calculations/attempt_freeze.py", line 833, in build_simple_freeze_spec
+  File "/ACPServer/AutoCalcPlatform/src/acp/calculations/attempt_freeze.py", line 833, in build_simple_freeze_spec
     input_file = _materialize_input(work, input_path)
                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "<repo>/src/acp/calculations/attempt_freeze.py", line 623, in _materialize_input
+  File "/ACPServer/AutoCalcPlatform/src/acp/calculations/attempt_freeze.py", line 623, in _materialize_input
     raise FreezeSpecError(f"singlepoint input file not found: {source}")
 acp.calculations.attempt_freeze.FreezeSpecError: singlepoint input file not found: .
 INFO:     127.0.0.1:49874 - "POST /api/v1/jobs/20261023_130324_001_b16-approved-display-name/cancel HTTP/1.1" 200 OK

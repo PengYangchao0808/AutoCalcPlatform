@@ -1,0 +1,523 @@
+{
+  "artifacts": [
+    {
+      "build_script_sha256": "48596dac983c2c83275a0dc099dec57e8f37f61e5197f9ecf470fee7125644a1",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "python-roles-acp_web-0.3.0-py3-none-any.whl",
+      "kind": "python-wheel",
+      "name": "acp_web-0.3.0-py3-none-any.whl",
+      "notes": "three disjoint release roles (cccp/acp-worker/acp-web)",
+      "retrievable": true,
+      "sha256": "7759d6e905b7ab3f5c557ab902d1e96b12d07a1c58cabacefbf9011907a61e4c",
+      "size_bytes": 2533168,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/python/roles/acp_web-0.3.0-py3-none-any.whl",
+      "version": "0.3.0"
+    },
+    {
+      "build_script_sha256": "48596dac983c2c83275a0dc099dec57e8f37f61e5197f9ecf470fee7125644a1",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "python-roles-acp_worker-0.3.0-py3-none-any.whl",
+      "kind": "python-wheel",
+      "name": "acp_worker-0.3.0-py3-none-any.whl",
+      "notes": "three disjoint release roles (cccp/acp-worker/acp-web)",
+      "retrievable": true,
+      "sha256": "16212a8a9e6599112b33e40b3e58db1e6fb1a9c1af57b6f6cf3fbc7ae33ffaab",
+      "size_bytes": 892356,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/python/roles/acp_worker-0.3.0-py3-none-any.whl",
+      "version": "0.3.0"
+    },
+    {
+      "build_script_sha256": "48596dac983c2c83275a0dc099dec57e8f37f61e5197f9ecf470fee7125644a1",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "python-roles-cccp-0.3.0-py3-none-any.whl",
+      "kind": "python-wheel",
+      "name": "cccp-0.3.0-py3-none-any.whl",
+      "notes": "three disjoint release roles (cccp/acp-worker/acp-web)",
+      "retrievable": true,
+      "sha256": "d7734a02685b1269b9929e8c14533caacb06b9649527879895614f1b439e9cf8",
+      "size_bytes": 44851911,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/python/roles/cccp-0.3.0-py3-none-any.whl",
+      "version": "0.3.0"
+    },
+    {
+      "build_script_sha256": "48596dac983c2c83275a0dc099dec57e8f37f61e5197f9ecf470fee7125644a1",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "python-roles-acp-web-0.3.0.tar.gz",
+      "kind": "python-sdist",
+      "name": "acp-web-0.3.0.tar.gz",
+      "notes": "three disjoint release roles (cccp/acp-worker/acp-web)",
+      "retrievable": true,
+      "sha256": "2994bf12504968c984a0abbd4ad4dc1c4b1ad9e383b9b6b69c0dd4cacea1c5c6",
+      "size_bytes": 2337220,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/python/roles/acp-web-0.3.0.tar.gz",
+      "version": "0.3.0"
+    },
+    {
+      "build_script_sha256": "48596dac983c2c83275a0dc099dec57e8f37f61e5197f9ecf470fee7125644a1",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "python-roles-acp-worker-0.3.0.tar.gz",
+      "kind": "python-sdist",
+      "name": "acp-worker-0.3.0.tar.gz",
+      "notes": "three disjoint release roles (cccp/acp-worker/acp-web)",
+      "retrievable": true,
+      "sha256": "88fc4ce24f310c01218970a73b37b2ff19c2b999df306f61982a2d70e5b14552",
+      "size_bytes": 852639,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/python/roles/acp-worker-0.3.0.tar.gz",
+      "version": "0.3.0"
+    },
+    {
+      "build_script_sha256": "48596dac983c2c83275a0dc099dec57e8f37f61e5197f9ecf470fee7125644a1",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "python-roles-cccp-0.3.0.tar.gz",
+      "kind": "python-sdist",
+      "name": "cccp-0.3.0.tar.gz",
+      "notes": "three disjoint release roles (cccp/acp-worker/acp-web)",
+      "retrievable": true,
+      "sha256": "09d732db76f7c2b1df9db422ab95818e5f36848036c14b8cdcb6f8f12e7b8f1a",
+      "size_bytes": 44703721,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/python/roles/cccp-0.3.0.tar.gz",
+      "version": "0.3.0"
+    },
+    {
+      "build_script_sha256": "48596dac983c2c83275a0dc099dec57e8f37f61e5197f9ecf470fee7125644a1",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "python-root-acp-0.3.0-py3-none-any.whl",
+      "kind": "python-wheel",
+      "name": "acp-0.3.0-py3-none-any.whl",
+      "notes": "root acp distribution (mutually exclusive with the roles)",
+      "retrievable": true,
+      "sha256": "0960edfc3ba51a74415cf09eac5abb12e97bcc31b4010d45f8ae0607b74e75c7",
+      "size_bytes": 47117685,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/python/root/acp-0.3.0-py3-none-any.whl",
+      "version": "0.3.0"
+    },
+    {
+      "build_script_sha256": "48596dac983c2c83275a0dc099dec57e8f37f61e5197f9ecf470fee7125644a1",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "python-root-acp-0.3.0.tar.gz",
+      "kind": "python-sdist",
+      "name": "acp-0.3.0.tar.gz",
+      "notes": "root acp distribution (mutually exclusive with the roles)",
+      "retrievable": true,
+      "sha256": "08ae6dbe251f0027efff94c061c1394ae8495a48218e3b0b87a96cff479f799b",
+      "size_bytes": 46726995,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/python/root/acp-0.3.0.tar.gz",
+      "version": "0.3.0"
+    },
+    {
+      "build_script_sha256": "652f160bb6f5cb3f55baf0e7c0b70584f2bb997c4dccb6a9153476785a54a5de",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "rph-research",
+      "kind": "rph-package",
+      "name": "rph-research-0.0.0.tgz",
+      "notes": "@rph/research release tarball (private, not published)",
+      "retrievable": true,
+      "sha256": "7a881b008c734ff47347337950655cebb55660d571563f523bd7d2cab1180517",
+      "size_bytes": 57950,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/rph/install-surface/rph-research-0.0.0.tgz",
+      "version": "0.0.0"
+    },
+    {
+      "build_script_sha256": "652f160bb6f5cb3f55baf0e7c0b70584f2bb997c4dccb6a9153476785a54a5de",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "rph-bridge",
+      "kind": "rph-package",
+      "name": "rph-bridge-0.0.0.tgz",
+      "notes": "@rph/bridge release tarball (private, not published)",
+      "retrievable": true,
+      "sha256": "5e662be42b61c93757ab59ff713446fb81ffafa3f26acd2e6e691d119ac1c027",
+      "size_bytes": 43959,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/rph/install-surface/rph-bridge-0.0.0.tgz",
+      "version": "0.0.0"
+    },
+    {
+      "build_script_sha256": "652f160bb6f5cb3f55baf0e7c0b70584f2bb997c4dccb6a9153476785a54a5de",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "rph-dsh-bundle",
+      "kind": "rph-package",
+      "name": "rph-dsh-bundle-0.0.0.tgz",
+      "notes": "@rph/dsh-bundle release tarball (private, not published)",
+      "retrievable": true,
+      "sha256": "521faca590bc4436e7ae2b7112a6f721243c541f8da4db79fa49b1f57432ae4a",
+      "size_bytes": 159162,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/rph/install-surface/rph-dsh-bundle-0.0.0.tgz",
+      "version": "0.0.0"
+    },
+    {
+      "build_script_sha256": "652f160bb6f5cb3f55baf0e7c0b70584f2bb997c4dccb6a9153476785a54a5de",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "rph-cli",
+      "kind": "rph-package",
+      "name": "rph-cli-0.0.0.tgz",
+      "notes": "@rph/cli release tarball (private, not published)",
+      "retrievable": true,
+      "sha256": "b550b90fb27aa734e6bf1ce49fdc564312d1d26e604e339ac451a64c86a70b86",
+      "size_bytes": 18496,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/rph/install-surface/rph-cli-0.0.0.tgz",
+      "version": "0.0.0"
+    },
+    {
+      "build_script_sha256": "a88cfdce11fd85437777015190d3c5bd5bfaf7b9456b2bb2f84329dfa8cc0656",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "rph-surface-rph-install-package-json",
+      "kind": "rph-package",
+      "name": "rph-install.package.json",
+      "notes": "RPH self-contained offline install surface file (required alongside the tarballs)",
+      "retrievable": true,
+      "sha256": "3fd1316b2595098d2c23e9d6400a67db751a4185e7c54d75dc14115a1c485c92",
+      "size_bytes": 530,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/rph/install-surface/rph-install.package.json",
+      "version": "0.0.0"
+    },
+    {
+      "build_script_sha256": "a88cfdce11fd85437777015190d3c5bd5bfaf7b9456b2bb2f84329dfa8cc0656",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "rph-surface-package-json",
+      "kind": "rph-package",
+      "name": "package.json",
+      "notes": "RPH self-contained offline install surface file (required alongside the tarballs)",
+      "retrievable": true,
+      "sha256": "3fd1316b2595098d2c23e9d6400a67db751a4185e7c54d75dc14115a1c485c92",
+      "size_bytes": 530,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/rph/install-surface/package.json",
+      "version": "0.0.0"
+    },
+    {
+      "build_script_sha256": "a88cfdce11fd85437777015190d3c5bd5bfaf7b9456b2bb2f84329dfa8cc0656",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "rph-surface-pnpm-workspace-yaml",
+      "kind": "rph-package",
+      "name": "pnpm-workspace.yaml",
+      "notes": "RPH self-contained offline install surface file (required alongside the tarballs)",
+      "retrievable": true,
+      "sha256": "ad83634028dca68fa844233bb8f481423c7202d9cfbde8333b9817b54f5c78fe",
+      "size_bytes": 617,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/rph/install-surface/pnpm-workspace.yaml",
+      "version": "0.0.0"
+    },
+    {
+      "build_script_sha256": "a88cfdce11fd85437777015190d3c5bd5bfaf7b9456b2bb2f84329dfa8cc0656",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "rph-surface-pnpm-lock-yaml",
+      "kind": "rph-package",
+      "name": "pnpm-lock.yaml",
+      "notes": "RPH self-contained offline install surface file (required alongside the tarballs)",
+      "retrievable": true,
+      "sha256": "0b42493977463e7cce7d948a017ebd8aac3cfff67df01b89f74f951860a66b6c",
+      "size_bytes": 2109,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/rph/install-surface/pnpm-lock.yaml",
+      "version": "0.0.0"
+    },
+    {
+      "build_script_sha256": "a88cfdce11fd85437777015190d3c5bd5bfaf7b9456b2bb2f84329dfa8cc0656",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "rph-surface-rph-packages-json",
+      "kind": "rph-package",
+      "name": "rph-packages.json",
+      "notes": "RPH self-contained offline install surface file (required alongside the tarballs)",
+      "retrievable": true,
+      "sha256": "a8a8317e01e1fc72ed7f12e009856b044f8679bfb46349cf7381ca11cd6d6209",
+      "size_bytes": 1400,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/rph/install-surface/rph-packages.json",
+      "version": "0.0.0"
+    },
+    {
+      "build_script_sha256": "a88cfdce11fd85437777015190d3c5bd5bfaf7b9456b2bb2f84329dfa8cc0656",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "rph-surface-SHA256SUMS",
+      "kind": "rph-package",
+      "name": "SHA256SUMS",
+      "notes": "RPH self-contained offline install surface file (required alongside the tarballs)",
+      "retrievable": true,
+      "sha256": "a579e7610724c7c963904b0ec846f3bf8f584e2104f28b90218b3073272a2bab",
+      "size_bytes": 933,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/rph/install-surface/SHA256SUMS",
+      "version": "0.0.0"
+    },
+    {
+      "build_script_sha256": "a88cfdce11fd85437777015190d3c5bd5bfaf7b9456b2bb2f84329dfa8cc0656",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "rph-surface-README-md",
+      "kind": "rph-package",
+      "name": "README.md",
+      "notes": "RPH self-contained offline install surface file (required alongside the tarballs)",
+      "retrievable": true,
+      "sha256": "3a694425105142d12e961bfe8107eb2196c96c86d3603a564ebbf8704e09dc6f",
+      "size_bytes": 2016,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/rph/install-surface/README.md",
+      "version": "0.0.0"
+    },
+    {
+      "build_script_sha256": "a88cfdce11fd85437777015190d3c5bd5bfaf7b9456b2bb2f84329dfa8cc0656",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "rph-surface-verify-install-mjs",
+      "kind": "rph-package",
+      "name": "verify-install.mjs",
+      "notes": "RPH self-contained offline install surface file (required alongside the tarballs)",
+      "retrievable": true,
+      "sha256": "cbfe7257ca1ba352e3383d84455b75aaee649752801dca14870069b9616c013e",
+      "size_bytes": 3986,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/rph/install-surface/verify-install.mjs",
+      "version": "0.0.0"
+    },
+    {
+      "build_script_sha256": "6268f6183ddef181f71e20fc5a9b1a790720b97822a06c907d16cb86f7a63605",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "plugin-external",
+      "kind": "plugin-wheel",
+      "name": "acp2_external_science_validator-1.0.0-py3-none-any.whl",
+      "notes": "M4-05 fixture plugin built from tests/fixtures/acp2/science/external_plugin",
+      "retrievable": true,
+      "sha256": "77f48f8e7b5327e9fb339a46004573a1af08160c6c348242dfb6c0d6dfceb39b",
+      "size_bytes": 12635,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/plugins/acp2_external_science_validator-1.0.0-py3-none-any.whl",
+      "version": "1.0.0"
+    },
+    {
+      "build_script_sha256": "8e350099fe354b2c65015575613dd27a4fdc49de8961b432122d2546b6128407",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "plugin-upgrade-v1",
+      "kind": "plugin-wheel",
+      "name": "acp2_upgrade_science_validator-1.0.0-py3-none-any.whl",
+      "notes": "M4-05 fixture plugin built from tests/fixtures/acp2/science/plugin_upgrade/v1",
+      "retrievable": true,
+      "sha256": "deddfc42ca326352b66fef2d7440b063c482955b8dbde25ccefa01c0db878956",
+      "size_bytes": 9338,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/plugins/acp2_upgrade_science_validator-1.0.0-py3-none-any.whl",
+      "version": "1.0.0"
+    },
+    {
+      "build_script_sha256": "54d7648027bedd4a72f4cecb5a14dac2c9549fdbb4ec07923674a3b5644c5a16",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "plugin-upgrade-v2",
+      "kind": "plugin-wheel",
+      "name": "acp2_upgrade_science_validator-2.0.0-py3-none-any.whl",
+      "notes": "M4-05 fixture plugin built from tests/fixtures/acp2/science/plugin_upgrade/v2",
+      "retrievable": true,
+      "sha256": "c3c6dfaa2eefb97d1a4e51b337bb6d3007ef86d2b3cba11dc50e88abda1ecd3a",
+      "size_bytes": 9340,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/plugins/acp2_upgrade_science_validator-2.0.0-py3-none-any.whl",
+      "version": "2.0.0"
+    },
+    {
+      "build_script_sha256": "592139a6a8a57f0c96c0d40e20adce893e8997435050089dd3ea55c3669b76fc",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "static-assets-workbench",
+      "kind": "static-asset-bundle",
+      "name": "static-assets.manifest.json",
+      "notes": "122 files / 4225129 bytes rebuilt from the installed acp_web-0.3.0-py3-none-any.whl; embedded manifest equals this copy. Repo copy regenerated after the CI-lane fixes (module_tests excluded from the shipped asset set).",
+      "retrievable": true,
+      "sha256": "34ada6eec004bb51b2381e43918544ed5607bb7e0f0726f6c0d79521c98b571d",
+      "size_bytes": 16543,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/static-assets/static-assets.manifest.json",
+      "version": "0.3.0"
+    },
+    {
+      "build_script_sha256": "eaa4be9da9b2786f186e2d6cfd84b77b69e9a401968381c91ea369d46bdb5410",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "contracts-acp2",
+      "kind": "contract-bundle",
+      "name": "acp2-contracts.tar.gz",
+      "notes": "acp2-contracts corpus (manifest, schemas, release/experience/runtime/science)",
+      "retrievable": true,
+      "sha256": "e43aaffc830af474bbeab375cbfff1f69f2abda016b404dd966da2c154c1f5cb",
+      "size_bytes": 3234686,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/contracts/acp2-contracts.tar.gz",
+      "version": "1.7.0"
+    },
+    {
+      "build_script_sha256": "eaa4be9da9b2786f186e2d6cfd84b77b69e9a401968381c91ea369d46bdb5410",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "science-nmr-model-assets",
+      "kind": "science-asset",
+      "name": "cccp-nmr-model-assets.tar.gz",
+      "notes": "DP5/FCHL model assets (also shipped inside cccp/acp wheels)",
+      "retrievable": true,
+      "sha256": "e93274569ef8106e95b3c0677f0f09671bf4a0ddf812d9edefde4ccab4e02ef5",
+      "size_bytes": 43695851,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/science/cccp-nmr-model-assets.tar.gz",
+      "version": "0.3.0"
+    },
+    {
+      "build_script_sha256": "eaa4be9da9b2786f186e2d6cfd84b77b69e9a401968381c91ea369d46bdb5410",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "docs-release",
+      "kind": "document",
+      "name": "acp-release-docs.tar.gz",
+      "notes": "docs/reference/current + packaging/README.md release documentation",
+      "retrievable": true,
+      "sha256": "6de4a2e405e59abbf98e8fd507fa499a98e97e89f32592d66b076e0870b063bd",
+      "size_bytes": 398645,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/docs/acp-release-docs.tar.gz",
+      "version": "0.3.0"
+    },
+    {
+      "build_script_sha256": "eaa4be9da9b2786f186e2d6cfd84b77b69e9a401968381c91ea369d46bdb5410",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "python-wheelhouse",
+      "kind": "document",
+      "name": "wheelhouse-manifest.json",
+      "notes": "Offline third-party dependency wheelhouse index (M5-03 F1): 54 wheels / 238553385 bytes under /ACPServer/acp2-artifacts/remediation/m5-03/python/wheelhouse; platforms manylinux2014_x86_64, manylinux2014_aarch64; install with '--no-index --find-links <store>/python/wheelhouse'",
+      "retrievable": true,
+      "sha256": "3f8cfb33243581a8da0aa82fa64861a2c408b0aaf7bd89f896f00d5e814aad08",
+      "size_bytes": 15934,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/python/wheelhouse-manifest.json",
+      "version": "0.3.0"
+    },
+    {
+      "build_script_sha256": "eaa4be9da9b2786f186e2d6cfd84b77b69e9a401968381c91ea369d46bdb5410",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "python-wheelhouse-checksums",
+      "kind": "document",
+      "name": "wheelhouse-SHA256SUMS",
+      "notes": "Per-wheel SHA-256 list for the offline dependency wheelhouse",
+      "retrievable": true,
+      "sha256": "e7e4f96e535bb2bf13f44e2fc4be9baeafcbe7573767882dfa4e71d674222bdf",
+      "size_bytes": 6622,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/python/wheelhouse/SHA256SUMS",
+      "version": "0.3.0"
+    },
+    {
+      "build_script_sha256": "eaa4be9da9b2786f186e2d6cfd84b77b69e9a401968381c91ea369d46bdb5410",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "evidence-receipts",
+      "kind": "document",
+      "name": "coverage-receipts.tar.gz",
+      "notes": "Every receipt referenced by the evidence-coverage ledger, laid out by repository-relative path (54 files / 1302166 bytes); extracted copy under /ACPServer/acp2-artifacts/remediation/m5-03/evidence/receipts",
+      "retrievable": true,
+      "sha256": "be28991e63259eca572346bc25acaab7704b0a14f09588c1ea47ddd278dc7c59",
+      "size_bytes": 282697,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/evidence/coverage-receipts.tar.gz",
+      "version": "0.3.0"
+    },
+    {
+      "build_script_sha256": "eaa4be9da9b2786f186e2d6cfd84b77b69e9a401968381c91ea369d46bdb5410",
+      "built_at": "2026-10-28T09:16:23Z",
+      "id": "evidence-receipts-manifest",
+      "kind": "document",
+      "name": "coverage-receipts-manifest.json",
+      "notes": "SHA-256 manifest of the coverage receipts shipped in the store",
+      "retrievable": true,
+      "sha256": "2ca8a2446a95f088612e9235b4e39f1333576753e90dc379b8143f91a31028a5",
+      "size_bytes": 10435,
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/evidence/coverage-receipts-manifest.json",
+      "version": "0.3.0"
+    }
+  ],
+  "bom_version": 1,
+  "evidence": {
+    "contract_digest": "d3df46182ffb7e16dcbf260108b5ef7bfcdfed4e2f80dcd2ed61111912057a89",
+    "contract_version": "1.7.0",
+    "coverage_gap_rows": 26,
+    "coverage_path": "docs/reference/next-change/acp2-contracts/release/evidence-coverage.current.json",
+    "coverage_scope_rows": 39,
+    "coverage_sha256": "df8400319a0521d0172b79541109a868142d8b1dad92104af04d3d85cb455bc6",
+    "reuse_rule": "exact",
+    "reused_from": [
+      "reports/acp2_remediation_20261026/m5-01/summary.json",
+      "reports/acp2_remediation_20261026/m5-01/bom-summary.json"
+    ],
+    "supersedes": [
+      "/ACPServer/acp2-artifacts/remediation/m5-01/bom/bom.current.json sha256:ee23e7b0c26a9351dda8727d31f48ca520930f8368fcb61cb405e5c5c3b62e18"
+    ]
+  },
+  "generated_at": "2026-10-28T09:16:23Z",
+  "limitations": [
+    "Built from the clean committed candidate 5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5 (tree fed1717c325fdbe524cf720c5ee86fb51c01567c). The only worktree differences are the M5-02 release-ledger overlay recorded in source.release_overlay; no business source changed.",
+    "RPH packages remain private:true at version 0.0.0 and are distributed as tarballs; no public npm publication is claimed.",
+    "The versioned /experience/<release_id>/ read-only mount from B-req-06 is not implemented here; the packaged Workbench /, /js and /css mounts are verified read-only with startup digest verification (B25 static-assets row stays NOT_VERIFIED).",
+    "BOM evidence reuse_rule is exact for this M5-02 rebuild: every artifact is rebuilt from the clean candidate and every URI/receipt is re-fetched by scripts/release/walk_bom.py --verify. Rows whose receipts predate the candidate use coverage row reuse=reused or rerun_required; they are never silently upgraded.",
+    "The contract bundle is a build-time snapshot of acp2-contracts and deliberately excludes release/bom.current.json; the manifest snapshot inside the bundle predates the final BOM sha registration. The live manifest and this BOM are the authoritative pair.",
+    "No QC or model invocation was performed by the BOM build; scientific software entries record binary version probes only. M4 receipts remain the scientific evidence.",
+    "persistent_tag is a proposal only: no tag, commit or push was performed by this task.",
+    "The offline dependency wheelhouse targets CPython 3.11 on manylinux2014 (glibc >= 2.17) x86_64 and aarch64. Other interpreters/older glibc need a wheelhouse rebuild; the manifest records the covered platforms.",
+    "Coverage receipts ship both as coverage-receipts.tar.gz and as an extracted receipts/ tree; walk_bom --verify hashes the extracted files against the ledger and checks tar membership, so neither copy can drift."
+  ],
+  "owner": "REL",
+  "schema": "acp2.release.bom.v1",
+  "scientific_software": [
+    {
+      "digest": "sha256:d65fe8fe3136e0008de9e5784ab8d853b0ef51a02635d7d6fb0f6a1c95d648d1",
+      "name": "ORCA",
+      "path": "/home/xieningke/orca611/orca (source=env)",
+      "verified": "PASS",
+      "version": "6.1.1"
+    },
+    {
+      "digest": "sha256:debf27a9e0fa4bfb5ca75aafe4b90d8211f08ec2f4a482f375a4987212eaa12a",
+      "name": "xTB",
+      "path": "/home/xieningke/xtb-dist/bin/xtb (source=env)",
+      "verified": "PASS",
+      "version": "6.7.1"
+    },
+    {
+      "digest": "sha256:45ad4e82016f2805c05373c1494f97096365a438d0bdbe1e556be09d91d92a03",
+      "name": "CREST",
+      "path": "/home/xieningke/crest/crest (source=env)",
+      "verified": "PASS",
+      "version": "3.0.2"
+    },
+    {
+      "digest": "sha256:82c607f9703ffb41a79143b0df4c2a5ec7e716fbb2870eeda830e70eb733b2dd",
+      "name": "Shermo",
+      "path": "/home/xieningke/Shermo_2.6.1/Shermo (source=env)",
+      "verified": "PASS",
+      "version": "2.6.1"
+    }
+  ],
+  "source": {
+    "clean": true,
+    "dirty_path_snapshot": null,
+    "persistent_ref": "acp2/integration-remediation",
+    "persistent_tag": "acp2-remediation-m5-02-candidate (proposed, not created; ref acp2/integration-remediation)",
+    "release_overlay": [
+      "docs/reference/next-change/acp2-contracts/experience/release-manifest.json",
+      "docs/reference/next-change/acp2-contracts/manifest.json",
+      "docs/reference/next-change/acp2-contracts/release/bom.current.json",
+      "docs/reference/next-change/acp2-contracts/release/evidence-coverage.current.json"
+    ],
+    "repository": "https://github.com/PengYangchao0808/AutoCalcPlatform.git",
+    "revision": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
+    "tree": "fed1717c325fdbe524cf720c5ee86fb51c01567c"
+  },
+  "task_id": "M5-02",
+  "toolchain": {
+    "chromium": "chromium-1248 (playwright browser cache: /home/xieningke/.cache/ms-playwright)",
+    "dependency_locks": [
+      {
+        "lock_sha256": "c3fe7afa94c878a05a5a6a27ff640f397b1a97780a64dff15dfc019aa909d716",
+        "name": "rph/pnpm-lock.yaml",
+        "source": "rph pnpm workspace (private, dependency-free packages)",
+        "version": "workspace"
+      },
+      {
+        "lock_sha256": "0fb360452b0231d114d0b0ad6cc76bb48fe528382f55827cf93739bf64ec79e1",
+        "name": "rph/pnpm-workspace.yaml",
+        "source": "rph workspace settings",
+        "version": "workspace"
+      },
+      {
+        "lock_sha256": "f21f3a327cb1d581ffaf54ee5bb2b9e1916948156e3f48e52a68269f28cc3758",
+        "name": "requirements-node.txt",
+        "source": "python >=3.10 compute-node dependencies",
+        "version": "3.11.13"
+      },
+      {
+        "lock_sha256": "8012c89167a2885aef9eebc4094760e3eaf5bd0769ad4018fad8edb9537ea235",
+        "name": "pyproject.toml",
+        "source": "root acp distribution",
+        "version": "0.3.0"
+      }
+    ],
+    "dsh": {
+      "lock_sha256": "4637cca3b89c4c8d5a147321710e597aa62ec2444a3772ab542be5690893dfe4",
+      "name": "@deepseek-ai/dsh-mcp-client",
+      "source": "https://github.com/deepseek-ai/deepseek-harness.git rev 687f282e8625c6b8d11ff58211a90524be2e4317 at /ACPServer/acp2-tools/deepseek-harness (external, not vendored)",
+      "version": "0.2.1-rc.2"
+    },
+    "node": "22.19.0",
+    "pnpm": "11.28.5",
+    "python": "3.11.13",
+    "ruff": "0.15.22"
+  }
+}

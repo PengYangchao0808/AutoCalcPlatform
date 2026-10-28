@@ -1,0 +1,157 @@
+{
+  "mode": "create",
+  "controller_url": "http://127.0.0.1:38099",
+  "project_id": "eac04e7b-fa5a-4074-a379-1174087d0707",
+  "session_seed": "m4-01-session",
+  "proposal_ref": "prop-m4-01-rounds",
+  "proposal_idempotency_key": "m4-01-proposal-create-0",
+  "approval_action": "approve",
+  "approval_ref": null,
+  "approval_idempotency_key": "m4-01-approval-0",
+  "submit": {
+    "workflow": "fake",
+    "input": {
+      "source": "CCO",
+      "source_type": "smiles"
+    },
+    "method": {},
+    "resources": {
+      "cores": 1
+    },
+    "budget": {
+      "unit": "task_count",
+      "count": 3,
+      "timeout_s": 120
+    }
+  },
+  "artifact": {
+    "resource": "input_preview",
+    "generation": 1,
+    "relative_path": "RESULT/input_preview.xyz",
+    "idempotency_key": "m4-01-prepare-r0"
+  },
+  "launch": {
+    "command": "/usr/bin/python3.11",
+    "args": [
+      "-m",
+      "acp.cli",
+      "mcp",
+      "serve",
+      "--controller",
+      "http://127.0.0.1:38099"
+    ],
+    "cwd": "/ACPServer/acp2-remediation-integration",
+    "env": {
+      "PYTHONPATH": "/ACPServer/acp2-remediation-integration/src",
+      "ACP_RUN_ROOT": "/tmp/opencode/acp2-m4-01-ten15saw/runs"
+    },
+    "timeoutMs": 30000
+  },
+  "model": {
+    "adapter": "model-gateway",
+    "gateway_url": "http://127.0.0.1:38099/api/v2/model/plan",
+    "usage_url": "http://127.0.0.1:38099/api/v2/model/usage?project_id=eac04e7b-fa5a-4074-a379-1174087d0707",
+    "model": "deepseek-chat",
+    "max_output_tokens": 2000,
+    "repair_attempts": 2
+  },
+  "question": "M4-01 round 0: does the stub evidence support the hypothesis?",
+  "recipe_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "initial_input": {
+    "input_id": "in-m4-01",
+    "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "format": "smiles",
+    "role": "minimum"
+  },
+  "science_seed": {
+    "method": "r2SCAN-3c",
+    "mapping": "canonical",
+    "charge": 0,
+    "multiplicity": 1,
+    "electronic_state": null,
+    "structure_provenance": [
+      {
+        "input_id": "in-m4-01",
+        "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "format": "smiles",
+        "role": "minimum"
+      }
+    ],
+    "constraints": []
+  },
+  "task_ref_release": {
+    "release_id": "910ca9d3aff95737",
+    "release_digest": "sha256:adf3bbe51cb52ae473d29ef792aa9f9a6a10b91ed9ab8ff3d7e02de5ace3e057"
+  },
+  "research": {
+    "research_id": "",
+    "round": 0
+  },
+  "digests": {},
+  "proposal": {
+    "proposal_id": "prop-m4-01-rounds",
+    "project_id": "eac04e7b-fa5a-4074-a379-1174087d0707",
+    "question_ref": "question-m4-01",
+    "question_revision": 0,
+    "reaction_ref": "reaction-m4-01",
+    "reaction_revision": 0,
+    "hypothesis": "round 0: the stub proves the chain",
+    "recipe_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "plan_definition_digest": "",
+    "science": {
+      "capability_steps": [
+        "singlepoint"
+      ],
+      "initial_inputs": [
+        {
+          "input_id": "in-m4-01",
+          "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "format": "smiles",
+          "role": "minimum"
+        }
+      ],
+      "method": "r2SCAN-3c",
+      "mapping": "canonical",
+      "charge": 0,
+      "multiplicity": 1,
+      "allowed_substitutions": []
+    },
+    "budget": {
+      "model_requests": 4,
+      "input_tokens": 1000,
+      "output_tokens": 1000,
+      "task_refs": 1,
+      "recipe_steps": 1,
+      "qc_invocations": 1,
+      "wall_seconds": 60,
+      "queue_seconds": 60
+    },
+    "approval_ref": null,
+    "allowed_change_scope": {
+      "fields": [
+        "method"
+      ],
+      "max_delta": 0
+    },
+    "round": 0,
+    "decision": "proposed",
+    "created_at": "2026-10-27T13:15:10Z",
+    "human_edits": []
+  },
+  "plan": {
+    "workflow": "fake",
+    "input": {
+      "source": "CCO",
+      "source_type": "smiles"
+    },
+    "method": {},
+    "resources": {
+      "cores": 1
+    }
+  },
+  "budget": {
+    "unit": "task_count",
+    "count": 3,
+    "timeout_s": 120
+  }
+}

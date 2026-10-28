@@ -1,0 +1,22 @@
+[
+  {
+    "origin": "http://testserver",
+    "status": 403,
+    "body": {
+      "detail": {
+        "code": "cross_origin",
+        "message": "Origin does not match the server Host (cross-site write rejected)"
+      }
+    }
+  },
+  {
+    "origin": "http://127.0.0.1:8765",
+    "status": 403,
+    "body": {
+      "detail": {
+        "code": "cross_origin",
+        "message": "Origin does not match the server Host (cross-site write rejected)"
+      }
+    }
+  }
+]

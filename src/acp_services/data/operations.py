@@ -104,11 +104,16 @@ __all__ = [
     "PrepareExecutorPort",
     "PrepareOperationService",
     "PrepareOperationWorker",
+    "PREPARE_IDENTITY_VERSION",
+    "LEGACY_PREPARE_IDENTITY_VERSION",
+    "PREPARE_KEY_PREFIX",
+    "LEGACY_PREPARE_KEY_PREFIX",
     "idempotency_key_for",
     "content_identity_for",
     "workflow_from_resource_id",
     "default_resource_key",
     "resolve_operation_state",
+    "resolve_prepare_identity_version",
 ]
 
 
@@ -207,6 +212,33 @@ class PrepareOperationConflictError(PrepareOperationError):
 # ---------------------------------------------------------------------------
 
 
+#: Prepare-key identity versions (M0-05).  Version ``2`` names a preparation by
+#: ``(principal, project, logical resource key, content identity, epoch)``; a
+#: row written before M0-05 keeps version ``1`` (the scope-folded formula) and is
+#: read through the frozen v1 predicate, never adopted silently by a verified
+#: caller.  ``op_`` is the *operation reference* namespace
+#: (``operation_id``) — only legacy v1 keys and operation ids carry it.
+PREPARE_IDENTITY_VERSION = "2"
+LEGACY_PREPARE_IDENTITY_VERSION = "1"
+#: Key prefix of a v2 (verified identity) prepare key.
+PREPARE_KEY_PREFIX = "prep_"
+#: Frozen v1 key prefix (legacy rows only; never written for a verified identity).
+LEGACY_PREPARE_KEY_PREFIX = "op_"
+
+
+def resolve_prepare_identity_version(principal_id: str, project_id: str) -> str:
+    """Return the prepare-key identity version for the supplied attribution.
+
+    A preparation is only version ``2`` when both the verified principal and the
+    resolved project are known.  A caller without a verified identity stays on
+    the frozen version ``1`` formula (the pre-M0-05 shape), so the local
+    ``local-single`` path keeps its exact previous keys.
+    """
+    if str(principal_id or "").strip() and str(project_id or "").strip():
+        return PREPARE_IDENTITY_VERSION
+    return LEGACY_PREPARE_IDENTITY_VERSION
+
+
 def default_resource_key(job_id: str, attempt: int, resource_id: str) -> str:
     """Return the stable dedup resource key for a job-attempt resource."""
     return f"{job_id}\x1f{int(attempt)}\x1f{resource_id}"
@@ -218,20 +250,48 @@ def idempotency_key_for(
     resource_key: str,
     content_identity: str = "",
     dedup_epoch: int = 0,
+    principal_id: str = "",
+    project_id: str = "",
+    identity_version: str = "",
 ) -> str:
-    """Return the idempotency key of one scoped prepare content.
+    """Return the idempotency key of one prepared content (M0-05 v2).
 
     ``resource_key`` stays the logical ``job/attempt/resource`` lookup key; the
     content identity and dedup epoch make the key name one *preparation* of
-    that resource.  Omitting the content identity keeps the legacy formula for
-    callers that only need a scope-folded key (e.g. MCP request idempotency).
-    The permission scope is folded in so one observer's cancel can never kill
-    another legitimate consumer's preparation.
+    that resource.
+
+    Version ``2`` (verified identity) names the preparation by
+    ``(principal, project, resource_key, content_identity, dedup_epoch)`` and
+    prefixes the digest with :data:`PREPARE_KEY_PREFIX`.  The permission scope
+    is still recorded on the row (transport attribute) but no longer folds into
+    the key: two users sharing one deployment scope must never share a
+    preparation key.
+
+    Version ``1`` (frozen, legacy rows only) keeps the pre-M0-05 formula
+    ``op_`` + ``sha256(permission_scope, resource_key[, content, epoch])``; it is
+    emitted only when the caller has no verified principal/project attribution,
+    so existing ``local-single`` rows are read with the same predicate they were
+    written with.
     """
+    principal = str(principal_id or "").strip()
+    project = str(project_id or "").strip()
+    version = str(identity_version or "") or resolve_prepare_identity_version(principal, project)
+    if version == PREPARE_IDENTITY_VERSION and principal and project:
+        material = "\x1f".join(
+            (
+                "v2",
+                principal,
+                project,
+                str(resource_key),
+                str(content_identity),
+                str(int(dedup_epoch)),
+            )
+        )
+        return PREPARE_KEY_PREFIX + hashlib.sha256(material.encode("utf-8")).hexdigest()[:32]
     material = f"{permission_scope}\x1f{resource_key}"
     if content_identity:
         material += f"\x1f{content_identity}\x1f{int(dedup_epoch)}"
-    return "op_" + hashlib.sha256(material.encode("utf-8")).hexdigest()[:32]
+    return LEGACY_PREPARE_KEY_PREFIX + hashlib.sha256(material.encode("utf-8")).hexdigest()[:32]
 
 
 # ---------------------------------------------------------------------------
@@ -265,6 +325,9 @@ class PrepareRequest:
     client_idempotency_key: str = ""
     dedup_epoch: int = 0
     content_identity: str = ""
+    principal_id: str = ""
+    project_id: str = ""
+    identity_version: str = ""
 
     def __post_init__(self) -> None:
         if not str(self.job_id).strip():
@@ -277,6 +340,12 @@ class PrepareRequest:
             raise ValueError("max_attempts must be >= 1")
         if int(self.dedup_epoch) < 0:
             raise ValueError("dedup_epoch must be >= 0")
+        object.__setattr__(
+            self,
+            "identity_version",
+            str(self.identity_version or "").strip()
+            or resolve_prepare_identity_version(self.principal_id, self.project_id),
+        )
         object.__setattr__(
             self,
             "content_identity",
@@ -309,6 +378,9 @@ class PrepareRequest:
             resource_key=self.key,
             content_identity=self.content_identity,
             dedup_epoch=self.dedup_epoch,
+            principal_id=self.principal_id,
+            project_id=self.project_id,
+            identity_version=self.identity_version,
         )
 
 
@@ -347,6 +419,9 @@ class PrepareOperationRecord:
     content_identity: str = ""
     client_idempotency_key: str = ""
     dedup_epoch: int = 0
+    principal_id: str = ""
+    project_id: str = ""
+    identity_version: str = LEGACY_PREPARE_IDENTITY_VERSION
 
     @property
     def is_terminal(self) -> bool:
@@ -356,6 +431,13 @@ class PrepareOperationRecord:
     def is_legacy_identity(self) -> bool:
         """True for pre-D05 rows: no content identity, never current-ready."""
         return not self.content_identity
+
+    @property
+    def is_legacy_key(self) -> bool:
+        """True for a pre-M0-05 prepare key (version ``1`` attribution)."""
+        return str(self.identity_version or LEGACY_PREPARE_IDENTITY_VERSION) == (
+            LEGACY_PREPARE_IDENTITY_VERSION
+        )
 
     def to_contract(self) -> PrepareOperation:
         """Project the row onto the frozen ``PrepareOperation`` wire shape."""
@@ -527,6 +609,9 @@ _RECORD_COLUMNS = (
     "content_identity",
     "client_idempotency_key",
     "dedup_epoch",
+    "principal_id",
+    "project_id",
+    "identity_version",
 )
 
 
@@ -699,6 +784,9 @@ class PrepareOperationService:
             content_identity=str(row["content_identity"] or ""),
             client_idempotency_key=str(row["client_idempotency_key"] or ""),
             dedup_epoch=int(row["dedup_epoch"] or 0),
+            principal_id=str(row["principal_id"] or ""),
+            project_id=str(row["project_id"] or ""),
+            identity_version=str(row["identity_version"] or LEGACY_PREPARE_IDENTITY_VERSION),
         )
 
     def _lease_from_row(self, row: sqlite3.Row) -> PrepareLease:
@@ -913,19 +1001,69 @@ class PrepareOperationService:
 
     def _latest_identity_row_locked(
         self, *, request: PrepareRequest, client_key: str
-    ) -> sqlite3.Row | None:
+    ) -> tuple[sqlite3.Row | None, bool]:
+        """Return ``(row, is_legacy)`` for the current request's dedup predicate.
+
+        M0-05 versioning: a verified request (``identity_version = 2``) looks up
+        the v2 predicate ``(principal, project, client_key|resource_key,
+        identity_version='2')`` first.  Only when that has no row does it fall
+        back to the frozen v1 predicate
+        ``(permission_scope, client_key|resource_key, identity_version='1')`` so
+        pre-M0-05 preparations stay readable.  The caller decides whether the
+        legacy attribution is verifiable for *this* request.
+        """
+        version = request.identity_version
         if client_key:
-            return self._conn.execute(
-                "SELECT * FROM data_operations WHERE permission_scope=? "
-                "AND client_idempotency_key=? "
+            row = self._conn.execute(
+                "SELECT * FROM data_operations WHERE principal_id=? AND project_id=? "
+                "AND client_idempotency_key=? AND identity_version=? "
                 "ORDER BY dedup_epoch DESC, rowid DESC LIMIT 1",
-                (request.permission_scope, client_key),
+                (request.principal_id, request.project_id, client_key, version),
             ).fetchone()
-        return self._conn.execute(
-            "SELECT * FROM data_operations WHERE permission_scope=? AND resource_key=? "
+            if row is not None:
+                return row, False
+            if version == PREPARE_IDENTITY_VERSION:
+                legacy = self._conn.execute(
+                    "SELECT * FROM data_operations WHERE permission_scope=? "
+                    "AND client_idempotency_key=? AND identity_version=? "
+                    "ORDER BY dedup_epoch DESC, rowid DESC LIMIT 1",
+                    (request.permission_scope, client_key, LEGACY_PREPARE_IDENTITY_VERSION),
+                ).fetchone()
+                return legacy, legacy is not None
+            return None, False
+        row = self._conn.execute(
+            "SELECT * FROM data_operations WHERE principal_id=? AND project_id=? "
+            "AND resource_key=? AND identity_version=? "
             "ORDER BY dedup_epoch DESC, rowid DESC LIMIT 1",
-            (request.permission_scope, request.key),
+            (request.principal_id, request.project_id, request.key, version),
         ).fetchone()
+        if row is not None:
+            return row, False
+        if version == PREPARE_IDENTITY_VERSION:
+            legacy = self._conn.execute(
+                "SELECT * FROM data_operations WHERE permission_scope=? AND resource_key=? "
+                "AND identity_version=? "
+                "ORDER BY dedup_epoch DESC, rowid DESC LIMIT 1",
+                (request.permission_scope, request.key, LEGACY_PREPARE_IDENTITY_VERSION),
+            ).fetchone()
+            return legacy, legacy is not None
+        return None, False
+
+    @staticmethod
+    def _legacy_row_is_verifiable(record: PrepareOperationRecord, request: PrepareRequest) -> bool:
+        """Whether a pre-M0-05 row's attribution may be reused by *request*.
+
+        A legacy row carries no principal/project, so it can only be reused when
+        the current request *is* the same attributable scope: the explicit
+        ``local-single`` operator deployment that wrote it.  An authenticated
+        caller never inherits an unattributed preparation — it is a typed
+        conflict, not a silent adoption.
+        """
+        from acp_services.contracts.access import LOCAL_PRINCIPAL_ID
+
+        if str(request.permission_scope) != str(record.permission_scope):
+            return False
+        return str(request.principal_id or "").strip() == LOCAL_PRINCIPAL_ID
 
     def _merge_existing(
         self,
@@ -1001,9 +1139,20 @@ class PrepareOperationService:
         content_identity = request.content_identity
         payload_json = _json_dumps(request.payload)
         epoch = int(request.dedup_epoch)
-        latest = self._latest_identity_row_locked(request=request, client_key=client_key)
+        latest, latest_is_legacy = self._latest_identity_row_locked(
+            request=request, client_key=client_key
+        )
         if latest is not None:
             latest_identity = str(latest["content_identity"] or "")
+            latest_record = self._record_from_row(latest)
+            if latest_is_legacy and not self._legacy_row_is_verifiable(latest_record, request):
+                # A pre-M0-05 row whose attribution this caller cannot prove is
+                # reconciled, never adopted (R09 rule; same as the submit ledger).
+                raise PrepareOperationConflictError(
+                    "legacy prepare operation cannot be attributed to the verified "
+                    f"caller (scope={request.permission_scope!r}, epoch={epoch}); reconcile "
+                    "instead of re-preparing under the same client key"
+                )
             if client_key and latest_identity != content_identity:
                 # A client idempotency key names one request content forever.
                 # Reusing it for different content is a conflict at any epoch,
@@ -1013,7 +1162,6 @@ class PrepareOperationService:
                     f"(scope={request.permission_scope!r}, epoch={epoch})"
                 )
             if epoch == 0 and latest_identity == content_identity:
-                latest_record = self._record_from_row(latest)
                 if latest_record.state is PrepareState.EXPIRED:
                     epoch = latest_record.dedup_epoch + 1
                 else:
@@ -1028,6 +1176,9 @@ class PrepareOperationService:
                 resource_key=resource_key,
                 content_identity=content_identity,
                 dedup_epoch=epoch,
+                principal_id=request.principal_id,
+                project_id=request.project_id,
+                identity_version=request.identity_version,
             )
             existing = self._conn.execute(
                 "SELECT * FROM data_operations WHERE idempotency_key=?", (idem,)
@@ -1076,6 +1227,9 @@ class PrepareOperationService:
                 content_identity,
                 client_key,
                 epoch,
+                request.principal_id,
+                request.project_id,
+                request.identity_version,
             )
             columns = ", ".join(_RECORD_COLUMNS)
             placeholders = ", ".join("?" for _ in _RECORD_COLUMNS)
@@ -1091,6 +1245,9 @@ class PrepareOperationService:
                     client_key=client_key,
                     epoch=epoch,
                     content_identity=content_identity,
+                    principal_id=request.principal_id,
+                    project_id=request.project_id,
+                    identity_version=request.identity_version,
                 )
                 if winner.state is PrepareState.EXPIRED:
                     epoch = winner.dedup_epoch + 1
@@ -1111,6 +1268,9 @@ class PrepareOperationService:
         client_key: str,
         epoch: int,
         content_identity: str,
+        principal_id: str = "",
+        project_id: str = "",
+        identity_version: str = LEGACY_PREPARE_IDENTITY_VERSION,
     ) -> PrepareOperationRecord:
         """Resolve a unique-constraint race: same content merges, else conflict."""
         row = self._conn.execute(
@@ -1125,10 +1285,16 @@ class PrepareOperationService:
             )
         if client_key:
             row = self._conn.execute(
-                "SELECT * FROM data_operations WHERE permission_scope=? "
-                "AND client_idempotency_key=? AND dedup_epoch=?",
-                (permission_scope, client_key, epoch),
+                "SELECT * FROM data_operations WHERE principal_id=? AND project_id=? "
+                "AND client_idempotency_key=? AND dedup_epoch=? AND identity_version=?",
+                (principal_id, project_id, client_key, epoch, identity_version),
             ).fetchone()
+            if row is None and identity_version == PREPARE_IDENTITY_VERSION:
+                row = self._conn.execute(
+                    "SELECT * FROM data_operations WHERE permission_scope=? "
+                    "AND client_idempotency_key=? AND dedup_epoch=? AND identity_version=?",
+                    (permission_scope, client_key, epoch, LEGACY_PREPARE_IDENTITY_VERSION),
+                ).fetchone()
             if row is not None:
                 record = self._record_from_row(row)
                 if record.content_identity == content_identity:

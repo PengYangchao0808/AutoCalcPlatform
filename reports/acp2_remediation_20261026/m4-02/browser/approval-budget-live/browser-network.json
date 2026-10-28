@@ -1,0 +1,61 @@
+{
+  "auditor": {
+    "failures": [
+      {
+        "method": "GET",
+        "status": 404,
+        "url": ":40845/api/v2/science/capabilities?project_id=demo-project"
+      },
+      {
+        "method": "GET",
+        "status": 404,
+        "url": ":40845/api/v2/research/approvals/ap_5345587eb1be4054b95dc02fd77abbe9?project_id=bc01b027-2c81-4074-9be5-840ff5d674a7"
+      },
+      {
+        "method": "POST",
+        "status": 403,
+        "url": ":40845/api/v2/research/approvals/ap_7b1296c3eee04af181629be97da2cf8d/approve"
+      }
+    ],
+    "requests_failed": [],
+    "statuses": [
+      200,
+      403,
+      404
+    ]
+  },
+  "operator": {
+    "failures": [
+      {
+        "method": "GET",
+        "status": 404,
+        "url": ":40845/api/v2/science/capabilities?project_id=demo-project"
+      },
+      {
+        "method": "POST",
+        "status": 403,
+        "url": ":40845/api/v2/research/approvals/ap_5345587eb1be4054b95dc02fd77abbe9/approve"
+      }
+    ],
+    "requests_failed": [],
+    "statuses": [
+      200,
+      403,
+      404
+    ]
+  },
+  "reviewer": {
+    "failures": [
+      {
+        "method": "GET",
+        "status": 404,
+        "url": ":40845/api/v2/science/capabilities?project_id=demo-project"
+      }
+    ],
+    "requests_failed": [],
+    "statuses": [
+      200,
+      404
+    ]
+  }
+}

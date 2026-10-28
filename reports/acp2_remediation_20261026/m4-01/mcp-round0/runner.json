@@ -1,0 +1,182 @@
+{
+  "schema": "acp2.m4-01.full-chain.mcp.v1",
+  "status": "ok",
+  "mode": "create",
+  "model_adapter": "test-fixture",
+  "evidence_kind": "fixture",
+  "protocol_version": "2025-06-18",
+  "tools": [
+    "acp_analyze",
+    "acp_cancel",
+    "acp_capabilities",
+    "acp_preflight",
+    "acp_prepare_artifact",
+    "acp_read_artifact",
+    "acp_research_approval_decide_v1",
+    "acp_research_approval_query_v1",
+    "acp_research_approval_request_v1",
+    "acp_research_approval_revoke_v1",
+    "acp_research_proposal_create_v1",
+    "acp_research_proposal_read_v1",
+    "acp_research_proposal_update_cas_v1",
+    "acp_research_resume_v1",
+    "acp_research_snapshot_v1",
+    "acp_research_wait_v1",
+    "acp_status",
+    "acp_submit"
+  ],
+  "proposal": {
+    "proposal_id": "prop-m4-01-rounds",
+    "revision": 1,
+    "round": 0,
+    "digests": {
+      "canonical_digest_version": "1.0.0",
+      "science_digest": "sha256:5444684f852645353007615c8cccdd77ad594a2061577b79ea520c20d2f25e49",
+      "plan_digest": "sha256:982125c6d24106652327445819b1b53f65161c49ed3e7e2df1476ad442e4b673",
+      "proposal_digest": "sha256:e79c0d2bb301f04c8be2d6bd2aa2711331b185931a2ff52f3cf4f69d34184ae5"
+    },
+    "approval_ref": "ap_007322bf7d63477eb57342de4b177c6b",
+    "research": {
+      "principal_id": "principal_local",
+      "project_id": "934f5edb-53e8-4d1b-8717-41b089e5198e",
+      "research_id": "res-2e3811a850b801a3369be874",
+      "session_id": "ses-f5b45d8cdcd6121b1ece8fa2",
+      "round": 0
+    }
+  },
+  "approval": {
+    "approval_ref": "ap_007322bf7d63477eb57342de4b177c6b",
+    "state": "approved",
+    "revision": 2,
+    "binding_status": "full"
+  },
+  "wait": {
+    "first_timed_out": false,
+    "first_events": 1,
+    "cursor_present": true,
+    "cursor_roundtrip": false,
+    "replay_timed_out": null,
+    "replay_error": {
+      "code": "backend_failure",
+      "category": "failed",
+      "message": "cursor is not decodable: 'utf-8' codec can't decode byte 0xad in position 0: invalid start byte",
+      "retryable": false,
+      "params": {
+        "operation": "wait",
+        "rule": "input_invalid"
+      },
+      "diagnostic_ref": null
+    }
+  },
+  "snapshot": {
+    "snapshot_revision": "sha256:a089ae169bc3344c9901d9ac9d4690457e5ec0219e2096aa608d735b9f33c1d7",
+    "refs": [
+      {
+        "ref": "ap_007322bf7d63477eb57342de4b177c6b",
+        "state": "approved"
+      },
+      {
+        "ref": "prop-m4-01-rounds",
+        "state": "stored"
+      }
+    ],
+    "approval_state": "approved"
+  },
+  "task_ref": {
+    "task_id": "20261027_183103_001_fake",
+    "job_id": "20261027_183103_001_fake",
+    "attempt": 1
+  },
+  "task_ref_normalized": {
+    "project_id": "934f5edb-53e8-4d1b-8717-41b089e5198e",
+    "task_id": "20261027_183103_001_fake",
+    "job_id": "20261027_183103_001_fake",
+    "attempt": 1,
+    "release": {
+      "release_id": "cfea0aae4416275e",
+      "release_digest": "sha256:d27a05b75c6b9181860e1f12311e8e1c8430de0775778c92b15c737468b51d04"
+    }
+  },
+  "task_ref_source": "status+declared_release",
+  "prepare": {
+    "passes": [
+      {
+        "pass": 0,
+        "availability": "readable",
+        "operation_reference": "op_0a22b49473a043c58e07713141ff5796",
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+        "read": {
+          "is_error": false,
+          "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+          "body_bytes": 400,
+          "body_sha256": "e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+          "error": null
+        }
+      },
+      {
+        "pass": 1,
+        "availability": "readable",
+        "operation_reference": "op_0a22b49473a043c58e07713141ff5796",
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+        "read": {
+          "is_error": false,
+          "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+          "body_bytes": 400,
+          "body_sha256": "e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+          "error": null
+        }
+      }
+    ],
+    "same_operation": true,
+    "same_digest": true,
+    "same_body": true
+  },
+  "read": {
+    "is_error": false,
+    "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+    "body_bytes": 400,
+    "body_sha256": "e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+    "error": null
+  },
+  "supervisor": {
+    "status": "stopped",
+    "stop_reason": "no_evidence",
+    "rounds_completed": 0,
+    "submits": 1,
+    "submit_port_calls": 1,
+    "task_refs": [
+      {
+        "job_id": "20261027_183103_001_fake",
+        "attempt": 1,
+        "release_id": "cfea0aae4416275e",
+        "release_digest": "sha256:d27a05b75c6b9181860e1f12311e8e1c8430de0775778c92b15c737468b51d04",
+        "project_id": "934f5edb-53e8-4d1b-8717-41b089e5198e"
+      }
+    ],
+    "model_invocations": 4,
+    "wait_invocations": 1,
+    "phases": [
+      "understand@0",
+      "hypothesize@0",
+      "critique@0",
+      "plan@0",
+      "approve@0",
+      "wait@0",
+      "stop@0"
+    ],
+    "decision": null,
+    "reports": 0
+  },
+  "errors": [],
+  "findings": [
+    {
+      "id": "F7-session-tools-list-order",
+      "detail": "openMcpSession(mode=product) lists tools before the application handshake, while the server hides the ten P2 tools until negotiation; product mode can therefore never observe the negotiated surface on this server"
+    },
+    {
+      "id": "F8-wait-cursor-redacted",
+      "detail": "the P2 `research.wait` cursor is redacted by the machine envelope, so a bounded wait cannot be resumed over MCP: {\"code\":\"backend_failure\",\"category\":\"failed\",\"message\":\"cursor is not decodable: 'utf-8' codec can't decode byte 0xad in position 0: invalid start byte\",\"retryable\":false,\"params\":{\"operation\":\"wait\",\"rule\":\"input_invalid\"},\"diagnostic_ref\":null}"
+    }
+  ],
+  "trace_path": "/ACPServer/acp2-remediation-integration/reports/acp2_remediation_20261026/m4-01/mcp-round0/mcp-trace.jsonl"
+}

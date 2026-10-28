@@ -1,0 +1,18 @@
+{
+  "pytest_exit_code": 0,
+  "report_links": "PASS",
+  "historical_evidence": [
+    {
+      "archive": "architecture_debug_20261021",
+      "files_verified": 29,
+      "result": "PASS"
+    },
+    {
+      "archive": "architecture_quality_review_20261022",
+      "files_verified": 14,
+      "result": "PASS"
+    }
+  ],
+  "production_restarted": false,
+  "git_commit_created": false
+}

@@ -103,3 +103,31 @@ Also rejected: `da-submit` without the `run_spec`, or a submit whose
 
 `$ACP2_EVIDENCE/C/da-research-live/<run_id>/main/da-preflight/` and
 `.../da-submit/`, plus the B18a/B20a receipts referenced by digest.
+
+## D06 amendment (M1-04a, 2026-10-27)
+
+The `run_spec` and submit identity now separate three clocks; a client may not
+substitute one for another (frozen in
+`src/acp_services/runtime/execution_limits.py::CLOCK_CONTRACT`):
+
+| clock | starts | persistence | PAUSED / restart | authority |
+| --- | --- | --- | --- | --- |
+| queue deadline | admission/queue | absolute timestamp from `queue_seconds` | n/a (not running) | platform (admission) |
+| per-attempt wall deadline | dispatch (`started_at`) | absolute timestamp from `wall_seconds` | PAUSED time is included by default; a restart restores only the remainder | platform + worker receipt |
+| science runtime | worker science start | measured on the usage receipt | re-measured per attempt | recorded-only |
+
+Precedence: a queued attempt is governed by the queue deadline only; once
+started it is terminated by the wall deadline; the science runtime only
+records. A conflict is resolved by the platform in that order — an RPH/DSH wait
+timeout is **not** a platform clock and never replaces `science_runtime_s`.
+
+Consequences for `da-preflight`/`da-submit`:
+
+- `run_spec.science_deadline_seconds` is the wall bound of the attempt; it is
+  mapped through the one resource resolver (local termination, CCCP
+  `resources.timeout_s`, LSF `-W`) and is never re-derived per phase;
+- an unbounded cluster default (empty walltime) is **not** a limited run and
+  must not be reported as one;
+- the preflight/submit pair keeps the same `run_spec_id`, and `started_at` is an
+  absolute instant, so a restarted Controller restores the remaining time
+  instead of restarting the clock.

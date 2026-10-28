@@ -1,0 +1,83 @@
+{
+  "auditor": {
+    "failures": [
+      {
+        "method": "GET",
+        "status": 404,
+        "url": ":52349/api/v2/science/capabilities?project_id=demo-project"
+      },
+      {
+        "method": "POST",
+        "status": 403,
+        "url": ":52349/api/v1/jobs"
+      }
+    ],
+    "requests_failed": [
+      {
+        "failure": "net::ERR_ABORTED",
+        "url": ":52349/api/v1/jobs/20261027_211707_001_m402-browser-singlepoint/structure-viewer"
+      },
+      {
+        "failure": "net::ERR_ABORTED",
+        "url": ":52349/api/v1/jobs/20261027_211707_001_m402-browser-singlepoint/events?history=200"
+      }
+    ],
+    "statuses": [
+      200,
+      403,
+      404
+    ]
+  },
+  "operator": {
+    "failures": [
+      {
+        "method": "GET",
+        "status": 404,
+        "url": ":52349/api/v2/science/capabilities?project_id=demo-project"
+      },
+      {
+        "method": "GET",
+        "status": 404,
+        "url": ":52349/api/v2/science/capabilities?project_id=demo-project"
+      }
+    ],
+    "requests_failed": [
+      {
+        "failure": "net::ERR_ABORTED",
+        "url": ":52349/api/v1/jobs/20261027_211707_001_m402-browser-singlepoint/structure-viewer"
+      },
+      {
+        "failure": "net::ERR_ABORTED",
+        "url": ":52349/api/v1/jobs/20261027_211707_001_m402-browser-singlepoint/events?history=200"
+      }
+    ],
+    "statuses": [
+      200,
+      201,
+      404
+    ]
+  },
+  "reviewer": {
+    "failures": [
+      {
+        "method": "GET",
+        "status": 404,
+        "url": ":52349/api/v2/science/capabilities?project_id=demo-project"
+      }
+    ],
+    "requests_failed": [
+      {
+        "failure": "net::ERR_ABORTED",
+        "url": ":52349/api/v1/jobs/20261027_211707_001_m402-browser-singlepoint/structure-viewer"
+      },
+      {
+        "failure": "net::ERR_ABORTED",
+        "url": ":52349/api/v1/jobs/20261027_211707_001_m402-browser-singlepoint/events?history=200"
+      }
+    ],
+    "statuses": [
+      200,
+      404
+    ]
+  }
+}

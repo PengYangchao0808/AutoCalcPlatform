@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="2" time="5.042" timestamp="2026-10-24T15:41:57.541232+08:00" hostname="workstation"><testcase classname="tests.test_acp2_runtime_persistent_idempotency" name="test_two_real_mcp_processes_replay_one_task_and_restart" time="2.775"><failure message="AssertionError: [{'content': [{'type': 'text', 'text': '{&quot;schema_version&quot;: 1, &quot;operation&quot;: &quot;acp_submit&quot;, &quot;status&quot;: &quot;error&quot;, &quot;exit_code&quot;: 5, &quot;dry_run&quot;: false, &quot;operation_identity&quot;: null, &quot;diagnostic_ref&quot;: null, &quot;data&quot;: null, &quot;error&quot;: {&quot;code&quot;: &quot;access_denied&quot;, &quot;category&quot;: &quot;denied&quot;, &quot;message&quot;: &quot;a research launch requires a proposal reference with a server approval&quot;, &quot;retryable&quot;: false, &quot;params&quot;: {&quot;command&quot;: &quot;submit&quot;, &quot;rule&quot;: &quot;approval_required&quot;}, &quot;diagnostic_ref&quot;: null}}'}], 'structuredContent': {'schema_version': 1, 'operation': 'acp_submit', 'status': 'error', 'exit_code': 5, ...}, 'isError': True}, {'content': [{'type': 'text', 'text': '{&quot;schema_version&quot;: 1, &quot;operation&quot;: &quot;acp_submit&quot;, &quot;status&quot;: &quot;error&quot;, &quot;exit_code&quot;: 5, &quot;dry_run&quot;: false, &quot;operation_identity&quot;: null, &quot;diagnostic_ref&quot;: null, &quot;data&quot;: null, &quot;error&quot;: {&quot;code&quot;: &quot;access_denied&quot;, &quot;category&quot;: &quot;denied&quot;, &quot;message&quot;: &quot;a research launch requires a proposal reference with a server approval&quot;, &quot;retryable&quot;: false, &quot;params&quot;: {&quot;command&quot;: &quot;submit&quot;, &quot;rule&quot;: &quot;approval_required&quot;}, &quot;diagnostic_ref&quot;: null}}'}], 'structuredContent': {'schema_version': 1, 'operation': 'acp_submit', 'status': 'error', 'exit_code': 5, ...}, 'isError': True}]&#10;assert False&#10; +  where False = all([None, None])">tmp_path = PosixPath('/tmp/pytest-of-xieningke/pytest-5882/test_two_real_mcp_processes_re0')
+
+    def test_two_real_mcp_processes_replay_one_task_and_restart(tmp_path: Path) -&gt; None:
+        run_root = tmp_path / "run-root"
+        run_root.mkdir(parents=True, exist_ok=True)
+        port = _free_port()
+        base = f"http://127.0.0.1:{port}"
+        key = "b08-" + uuid.uuid4().hex[:24]
+        xyz_text = "2\nH2\nH 0 0 0\nH 0 0 0.74\n"
+        arguments = {
+            "workflow": "singlepoint",
+            "input": {"source_type": "xyz_text", "source": xyz_text},
+            "method": {"method": "r2SCAN-3c", "charge": 0, "multiplicity": 1},
+            "plan_digest": "sha256:" + "0" * 64,
+            "idempotency_key": key,
+        }
+        launch = _launch_descriptor(run_root, base)
+    
+        controller = _start_controller(run_root, port)
+        probes: list[_McpProcess] = []
+        try:
+            _wait_health(base)
+            before = len(_http_json(base + "/api/v1/jobs?limit=1000")["jobs"])
+            probes = [_McpProcess(launch) for _ in range(2)]
+            for probe in probes:
+                probe.initialize()
+            barrier = threading.Barrier(2)
+            results: list[dict[str, Any]] = [{} for _ in probes]
+            errors: list[str] = ["" for _ in probes]
+    
+            def submit(index: int) -&gt; None:
+                try:
+                    barrier.wait(timeout=30)
+                    results[index] = probes[index].submit(arguments)
+                except Exception as exc:  # noqa: BLE001 - recorded as an assertion detail
+                    errors[index] = f"{type(exc).__name__}: {exc}"
+    
+            threads = [threading.Thread(target=submit, args=(index,)) for index in range(2)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=60)
+    
+            assert errors == ["", ""], errors
+            task_ids = []
+            for result in results:
+                data = result.get("structuredContent", {}).get("data") or {}
+                ref = data.get("task_ref") or {}
+                task_ids.append(ref.get("task_id") or data.get("reference", {}).get("id"))
+&gt;           assert all(task_ids), results
+E           AssertionError: [{'content': [{'type': 'text', 'text': '{"schema_version": 1, "operation": "acp_submit", "status": "error", "exit_code": 5, "dry_run": false, "operation_identity": null, "diagnostic_ref": null, "data": null, "error": {"code": "access_denied", "category": "denied", "message": "a research launch requires a proposal reference with a server approval", "retryable": false, "params": {"command": "submit", "rule": "approval_required"}, "diagnostic_ref": null}}'}], 'structuredContent': {'schema_version': 1, 'operation': 'acp_submit', 'status': 'error', 'exit_code': 5, ...}, 'isError': True}, {'content': [{'type': 'text', 'text': '{"schema_version": 1, "operation": "acp_submit", "status": "error", "exit_code": 5, "dry_run": false, "operation_identity": null, "diagnostic_ref": null, "data": null, "error": {"code": "access_denied", "category": "denied", "message": "a research launch requires a proposal reference with a server approval", "retryable": false, "params": {"command": "submit", "rule": "approval_required"}, "diagnostic_ref": null}}'}], 'structuredContent': {'schema_version': 1, 'operation': 'acp_submit', 'status': 'error', 'exit_code': 5, ...}, 'isError': True}]
+E           assert False
+E            +  where False = all([None, None])
+
+arguments  = {'idempotency_key': 'b08-32562745902749cb9d0930cf',
+ 'input': {'source': '2\nH2\nH 0 0 0\nH 0 0 0.74\n', 'source_type': 'xyz_text'},
+ 'method': {'charge': 0, 'method': 'r2SCAN-3c', 'multiplicity': 1},
+ 'plan_digest': 'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+ 'workflow': 'singlepoint'}
+barrier    = &lt;threading.Barrier at 0x147fe80dc550: waiters=0/2&gt;
+base       = 'http://127.0.0.1:60979'
+before     = 0
+controller = &lt;Popen: returncode: -15 args: ['/usr/bin/python3.11', '-m', 'uvicorn', 'acp....&gt;
+data       = {}
+errors     = ['', '']
+key        = 'b08-32562745902749cb9d0930cf'
+launch     = {'args': ['-m',
+          'acp',
+          'mcp',
+          'serve',
+          '--transport',
+          'stdio',
+          '--controller',
+          'http://127.0.0.1:60979'],
+ 'command': '/usr/bin/python3.11',
+ 'cwd': '/tmp/acp2-acceptance-20261024/current',
+ 'env': {'ACP_RUN_ROOT': '/tmp/pytest-of-xieningke/pytest-5882/test_two_real_mcp_processes_re0/run-root',
+         'PYTHONPATH': '/tmp/acp2-acceptance-20261024/current/src'},
+ 'launch_version': 1,
+ 'protocol_version': '2025-06-18'}
+port       = 60979
+probe      = &lt;tests.test_acp2_runtime_persistent_idempotency._McpProcess object at 0x147fe74faad0&gt;
+probes     = [&lt;tests.test_acp2_runtime_persistent_idempotency._McpProcess object at 0x147fe74fac90&gt;,
+ &lt;tests.test_acp2_runtime_persistent_idempotency._McpProcess object at 0x147fe74faad0&gt;]
+ref        = {}
+result     = {'content': [{'text': '{"schema_version": 1, "operation": "acp_submit", '
+                      '"status": "error", "exit_code": 5, "dry_run": false, '
+                      '"operation_identity": null, "diagnostic_ref": null, '
+                      '"data": null, "error": {"code": "access_denied", '
+                      '"category": "denied", "message": "a research launch '
+                      'requires a proposal reference with a server approval", '
+                      '"retryable": false, "params": {"command": "submit", '
+                      '"rule": "approval_required"}, "diagnostic_ref": null}}',
+              'type': 'text'}],
+ 'isError': True,
+ 'structuredContent': {'data': None,
+                       'diagnostic_ref': None,
+                       'dry_run': False,
+                       'error': {'category': 'denied',
+                                 'code': 'access_denied',
+                                 'diagnostic_ref': None,
+                                 'message': 'a research launch requires a '
+                                            'proposal reference with a server '
+                                            'approval',
+                                 'params': {'command': 'submit',
+                                            'rule': 'approval_required'},
+                                 'retryable': False},
+                       'exit_code': 5,
+                       'operation': 'acp_submit',
+                       'operation_identity': None,
+                       'schema_version': 1,
+                       'status': 'error'}}
+results    = [{'content': [{'text': '{"schema_version": 1, "operation": "acp_submit", '
+                       '"status": "error", "exit_code": 5, "dry_run": false, '
+                       '"operation_identity": null, "diagnostic_ref": null, '
+                       '"data": null, "error": {"code": "access_denied", '
+                       '"category": "denied", "message": "a research launch '
+                       'requires a proposal reference with a server approval", '
+                       '"retryable": false, "params": {"command": "submit", '
+                       '"rule": "approval_required"}, "diagnostic_ref": null}}',
+               'type': 'text'}],
+  'isError': True,
+  'structuredContent': {'data': None,
+                        'diagnostic_ref': None,
+                        'dry_run': False,
+                        'error': {'category': 'denied',
+                                  'code': 'access_denied',
+                                  'diagnostic_ref': None,
+                                  'message': 'a research launch requires a '
+                                             'proposal reference with a server '
+                                             'approval',
+                                  'params': {'command': 'submit',
+                                             'rule': 'approval_required'},
+                                  'retryable': False},
+                        'exit_code': 5,
+                        'operation': 'acp_submit',
+                        'operation_identity': None,
+                        'schema_version': 1,
+                        'status': 'error'}},
+ {'content': [{'text': '{"schema_version": 1, "operation": "acp_submit", '
+                       '"status": "error", "exit_code": 5, "dry_run": false, '
+                       '"operation_identity": null, "diagnostic_ref": null, '
+                       '"data": null, "error": {"code": "access_denied", '
+                       '"category": "denied", "message": "a research launch '
+                       'requires a proposal reference with a server approval", '
+                       '"retryable": false, "params": {"command": "submit", '
+                       '"rule": "approval_required"}, "diagnostic_ref": null}}',
+               'type': 'text'}],
+  'isError': True,
+  'structuredContent': {'data': None,
+                        'diagnostic_ref': None,
+                        'dry_run': False,
+                        'error': {'category': 'denied',
+                                  'code': 'access_denied',
+                                  'diagnostic_ref': None,
+                                  'message': 'a research launch requires a '
+                                             'proposal reference with a server '
+                                             'approval',
+                                  'params': {'command': 'submit',
+                                             'rule': 'approval_required'},
+                                  'retryable': False},
+                        'exit_code': 5,
+                        'operation': 'acp_submit',
+                        'operation_identity': None,
+                        'schema_version': 1,
+                        'status': 'error'}}]
+run_root   = PosixPath('/tmp/pytest-of-xieningke/pytest-5882/test_two_real_mcp_processes_re0/run-root')
+submit     = &lt;function test_two_real_mcp_processes_replay_one_task_and_restart.&lt;locals&gt;.submit at 0x147fe845f600&gt;
+task_ids   = [None, None]
+thread     = &lt;Thread(Thread-6 (submit), stopped 22539561576000)&gt;
+threads    = [&lt;Thread(Thread-5 (submit), stopped 22539563677248)&gt;,
+ &lt;Thread(Thread-6 (submit), stopped 22539561576000)&gt;]
+tmp_path   = PosixPath('/tmp/pytest-of-xieningke/pytest-5882/test_two_real_mcp_processes_re0')
+xyz_text   = '2\nH2\nH 0 0 0\nH 0 0 0.74\n'
+
+tests/test_acp2_runtime_persistent_idempotency.py:684: AssertionError</failure></testcase><testcase classname="tests.test_services_local_boundary" name="test_same_origin_write_passes" time="1.305"><failure message="assert 403 != 403&#10; +  where 403 = &lt;Response [403 Forbidden]&gt;.status_code">client = &lt;starlette.testclient.TestClient object at 0x147fcd2c0050&gt;
+
+    def test_same_origin_write_passes(client: TestClient) -&gt; None:
+        same_origin = str(client.base_url).rstrip("/")
+        response = client.post(
+            "/api/v1/projects",
+            json={"name": "Boundary", "description": "same origin", "tags": []},
+            headers={"Origin": same_origin},
+        )
+&gt;       assert response.status_code != 403
+E       assert 403 != 403
+E        +  where 403 = &lt;Response [403 Forbidden]&gt;.status_code
+
+client     = &lt;starlette.testclient.TestClient object at 0x147fcd2c0050&gt;
+response   = &lt;Response [403 Forbidden]&gt;
+same_origin = 'http://testserver'
+
+tests/test_services_local_boundary.py:481: AssertionError</failure></testcase></testsuite></testsuites>

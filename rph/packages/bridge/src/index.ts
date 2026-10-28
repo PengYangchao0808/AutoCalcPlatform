@@ -8,7 +8,32 @@
  * DSH plugin) in a later task.
  */
 
+import { createHash } from "node:crypto";
+
+import {
+  MemorySubmitIntentStore,
+  SubmitIntentConflict,
+  SubmitIntentLedger,
+  ResearchStore,
+  type SubmitIntentStore,
+} from "@rph/research";
 import type { ResearchRecordRef } from "@rph/research";
+import {
+  assertEvidenceView,
+  buildDecisionRecord,
+  evaluateDecision,
+  isAcceptableEvidence,
+  parseTaskRef,
+  taskRefKey,
+  type ClaimStatus,
+  type DecisionEvaluation,
+  type DecisionRationaleCode,
+  type DecisionRecord,
+  type EvidenceStatus,
+  type EvidenceView,
+  type ResearchDecision,
+  type TaskRef,
+} from "@rph/research";
 
 /** DSH exposes MCP tools to the model with exactly this prefix. */
 export const BRIDGE_MODEL_PREFIX = "mcp__acp__";
@@ -42,18 +67,27 @@ export type BridgeField =
   | "task"
   | "attempt"
   | "generation"
-  | "resource";
+  | "resource"
+  | "artifactDigest"
+  | "analysisId"
+  | "inputRefs";
 
 /**
  * Per-operation required-field matrix (frozen contract, see
- * `tool-semantics.md` and plan C T-10).
+ * `tool-semantics.md`, the M1-01 frozen operation table and plan C T-10).
  *
  * - discovery needs none of task/generation;
  * - validate/submit need project + input + idempotency key, and never the
  *   result generation;
  * - status needs task + attempt;
- * - evidence/prepare need task + attempt + resource;
- * - read needs task + attempt + generation + resource.
+ * - prepare needs task + attempt + resource (the artifact token);
+ * - read needs the **full frozen `artifact_ref` identity**: task + attempt +
+ *   generation + resource + digest.  A read without the digest is refused
+ *   locally, never downgraded to the pre-M1-01 flat `resource_id` spelling the
+ *   frozen read schema rejects;
+ * - evidence is the **analysis** direction (`acp_analyze`): it needs
+ *   `analysis_id` + `input_refs` and `explicit: true`.  Reading an existing
+ *   evidence artifact is the `read` operation, which never starts computation.
  */
 export const OPERATION_FIELDS: Readonly<
   Record<BridgeOperation, readonly BridgeField[]>
@@ -62,14 +96,15 @@ export const OPERATION_FIELDS: Readonly<
   validate: Object.freeze(["project", "input", "idempotencyKey"] as const),
   submit: Object.freeze(["project", "input", "idempotencyKey"] as const),
   status: Object.freeze(["task", "attempt"] as const),
-  evidence: Object.freeze(["task", "attempt", "resource"] as const),
   prepare: Object.freeze(["task", "attempt", "resource"] as const),
   read: Object.freeze([
     "task",
     "attempt",
     "generation",
     "resource",
+    "artifactDigest",
   ] as const),
+  evidence: Object.freeze(["analysisId", "inputRefs"] as const),
 });
 
 /** Required fields for a single bridge operation. */
@@ -94,6 +129,65 @@ export interface BridgeRequest {
   readonly resources?: unknown;
   readonly explicit?: boolean;
   readonly phase?: BridgePhase;
+  /**
+   * Research identity of a submit (M1-02 / D-IDENT-07).
+   *
+   * `research` + `round` + `planDigest` let the bridge derive the stable
+   * submit idempotency key (`project + research + round + plan_digest`) and
+   * persist it before the call.  They never replace `idempotencyKey`: a
+   * caller-supplied key is forwarded verbatim.
+   */
+  readonly research?: string;
+  readonly round?: number;
+  readonly planDigest?: string;
+  /**
+   * Research-launch binding forwarded to `acp_submit` (M1-06).
+   *
+   * `planDigest` is the frozen *execution* plan digest; `proposalRef` /
+   * `proposalDigest` name the approved proposal.  Without them the submit is a
+   * legacy launch: the platform would accept it without an approval, so the
+   * bridge forwards them verbatim and never fabricates a value.
+   */
+  readonly proposalRef?: string;
+  readonly proposalDigest?: string;
+  /** Approved launch budget (`{unit, count, timeout_s}`), forwarded verbatim. */
+  readonly budget?: unknown;
+  /** Artifact body path relative to the attempt work dir (prepare only). */
+  readonly relativePath?: string;
+  /** `sha256:<64 hex>` of the prepared body; with it a read sends `artifact_ref`. */
+  readonly artifactDigest?: string;
+  /**
+   * Explicit prepare purpose (M1-01 frozen prepare table).
+   *
+   * `artifact` is the only purpose the RPH bridge uses; `structure-input` is
+   * forwarded verbatim when a caller explicitly asks for it.  A default is
+   * never invented for a caller that omitted it: the builder sends `artifact`
+   * because that is what "prepare this artifact" means on this surface.
+   */
+  readonly purpose?: "artifact" | "structure-input";
+  /** Trusted digest expectation for prepare (`sha256:<64 hex>`), forwarded verbatim. */
+  readonly expectedDigest?: string;
+  /** Trusted size expectation for prepare, forwarded verbatim. */
+  readonly expectedSizeBytes?: number;
+  /**
+   * Frozen analysis identity (M1-01 analyze table): `analysis_id`, `input_refs`
+   * and `explicit: true`.  They are what separates "execute an analysis" from
+   * "read an existing evidence artifact" (the `read` operation).
+   */
+  readonly analysisId?: string;
+  readonly inputRefs?: readonly unknown[];
+  /** Analysis parameters forwarded unchanged to the A-owned analyzer. */
+  readonly parameters?: unknown;
+  /**
+   * Status/cancel reference.  A string is the historical job id; the object
+   * form addresses an operation (`{kind:"operation", id}`) returned by a
+   * prepare.  When absent, `task` is the reference.
+   */
+  readonly reference?: string | { readonly kind: string; readonly id: string };
+  /** Bounded read size (frozen read table); never silently clamped by the bridge. */
+  readonly maxBytes?: number;
+  /** Read encoding (`identity` default, `base64` for binary bodies). */
+  readonly encoding?: "identity" | "base64";
 }
 
 /** One tool result as returned by a platform client (public envelope only). */
@@ -144,14 +238,65 @@ function isPresent(field: BridgeField, request: BridgeRequest): boolean {
       return (
         typeof request.resource === "string" && request.resource.length > 0
       );
+    case "artifactDigest":
+      return (
+        typeof request.artifactDigest === "string" &&
+        request.artifactDigest.length > 0
+      );
+    case "analysisId":
+      return (
+        typeof request.analysisId === "string" && request.analysisId.length > 0
+      );
+    case "inputRefs":
+      return Array.isArray(request.inputRefs) && request.inputRefs.length > 0;
   }
+}
+
+/** One research-round submit identity (all four segments are required). */
+export interface SubmitIntentIdentity {
+  readonly project: string;
+  readonly research: string;
+  readonly round: number;
+  readonly planDigest: string;
+}
+
+/** The research-round dimensions of a request, or `null` when incomplete. */
+export function resolveSubmitIntentIdentity(
+  request: BridgeRequest,
+): SubmitIntentIdentity | null {
+  if (request.operation !== "submit") {
+    return null;
+  }
+  const { project, research, round, planDigest } = request;
+  if (
+    typeof project !== "string" ||
+    project.length === 0 ||
+    typeof research !== "string" ||
+    research.length === 0 ||
+    typeof round !== "number" ||
+    !Number.isInteger(round) ||
+    round < 0 ||
+    typeof planDigest !== "string" ||
+    planDigest.length === 0
+  ) {
+    return null;
+  }
+  return Object.freeze({ project, research, round, planDigest });
+}
+
+/** Whether a submit can derive (and persist) its own idempotency key. */
+export function canDeriveSubmitKey(request: BridgeRequest): boolean {
+  return resolveSubmitIntentIdentity(request) !== null;
 }
 
 /** Fields required by the operation but absent/invalid on the request. */
 export function missingFieldsFor(request: BridgeRequest): BridgeField[] {
-  return requiredFieldsFor(request.operation).filter(
-    (field) => !isPresent(field, request),
-  );
+  return requiredFieldsFor(request.operation).filter((field) => {
+    if (field === "idempotencyKey" && canDeriveSubmitKey(request)) {
+      return false;
+    }
+    return !isPresent(field, request);
+  });
 }
 
 /**
@@ -183,6 +328,16 @@ export function stripModelPrefix(modelVisible: string): string {
 
 /** A research record may be referenced by the bridge without owning storage. */
 export type BridgeRecordRef = ResearchRecordRef;
+
+/**
+ * Re-export of the single ADR-003 task reference type (owned by
+ * `@rph/research`).
+ *
+ * A re-export, never a second declaration: the dependency direction is
+ * `dsh-bundle -> bridge -> research`, so consumers of the bridge must be able to
+ * name the reference without importing `@rph/research` themselves.
+ */
+export type { TaskRef } from "@rph/research";
 
 // ---------------------------------------------------------------------------
 // Structured contract errors
@@ -638,7 +793,11 @@ export function mapP2Operation(operation: P2Operation): P2OperationMapping {
 
 /**
  * A negotiated extension is either the bare id (`"acp.research.v1"`) or the
- * `{id, version}` pair a client sends in `capabilities.extensions`.
+ * `{id, version}` pair a client asks for. M0-09 (ADR-006 D7) carries that
+ * request in a `tools/call` to `acp_capabilities`
+ * (`research_extension: {id, version}`), never in `initialize`: the frozen DSH
+ * client sends `capabilities: {}` and discards a top-level `initialize`
+ * extensions block.
  */
 export type NegotiatedExtension =
   | string
@@ -688,6 +847,330 @@ export function assertOperationAllowed(
       observed_version: version,
     });
   }
+}
+
+// ---------------------------------------------------------------------------
+// M0-09: application-level research-extension handshake (tools/call carrier)
+// ---------------------------------------------------------------------------
+
+/**
+ * The tool that carries the extension handshake.
+ *
+ * `initialize` makes no extension claim (M0-09/ADR-006 D7); this P1 discovery
+ * tool answers `extensions[]` for every capability extension, and the client
+ * decides what to do with `implemented=false` / `negotiated=false`.
+ */
+export const RESEARCH_HANDSHAKE_TOOL = "acp_capabilities";
+
+/** One advertised extension as the server reports it (never inferred). */
+export interface ExtensionAdvertisement {
+  readonly id: string;
+  readonly version: string;
+  readonly supported: boolean;
+  readonly supportedVersions: readonly string[];
+  readonly requestedId: string | null;
+  readonly requestedVersion: string | null;
+  readonly negotiatedBy: string | null;
+  readonly implemented: boolean;
+  readonly negotiated: boolean;
+  readonly refusal: BridgeErrorObject | null;
+}
+
+/**
+ * Handshake outcomes.
+ *
+ * - `negotiated`: the server reports implemented **and** negotiated for the
+ *   requested version — the only state that unlocks P2 calls;
+ * - `advertised`: the extension is advertised but not negotiable (today: the ten
+ *   research tools are a promise, not a registration);
+ * - `refused`: the server answered a typed in-band refusal
+ *   (`unsupported_capability` / `access_denied`);
+ * - `absent`: the server does not advertise this extension at all.
+ */
+export type ResearchHandshakeStatus =
+  | "negotiated"
+  | "advertised"
+  | "refused"
+  | "absent";
+
+/** What a caller asks the server to negotiate (audit facts only besides id). */
+export interface ResearchHandshakeRequest {
+  readonly id?: string;
+  readonly version?: string;
+  /** Advisory Workspace hint; the server binding still decides the scope. */
+  readonly projectId?: string;
+  /** Client identifier recorded by the server for audit only. */
+  readonly client?: {
+    readonly name: string;
+    readonly version?: string;
+  };
+}
+
+/** Deterministic handshake result; feeds `BridgeOptions.negotiatedExtensions`. */
+export interface ResearchHandshake {
+  readonly status: ResearchHandshakeStatus;
+  readonly extension: ExtensionAdvertisement | null;
+  readonly advertised: readonly ExtensionAdvertisement[];
+  /** Extensions a `Bridge`/`callP2Operation` may treat as negotiated. */
+  readonly negotiatedExtensions: readonly NegotiatedExtension[];
+  readonly refusal: BridgeErrorObject | null;
+  /** The effective request (id/version actually asked for). */
+  readonly requested: { readonly id: string; readonly version: string };
+}
+
+function errorClassOf(code: string, rawClass: unknown): BridgeErrorClass {
+  if (
+    rawClass === "unsupported" ||
+    rawClass === "invalid-parameter" ||
+    rawClass === "authorization" ||
+    rawClass === "conflict" ||
+    rawClass === "not-prepared" ||
+    rawClass === "retryable"
+  ) {
+    return rawClass;
+  }
+  if (code === "access_denied") {
+    return "authorization";
+  }
+  if (code === "unsupported_capability") {
+    return "unsupported";
+  }
+  return "invalid-parameter";
+}
+
+function errorObjectFrom(value: unknown): BridgeErrorObject | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const code = value["code"];
+  if (typeof code !== "string" || code.length === 0) {
+    return null;
+  }
+  return {
+    class: errorClassOf(code, value["class"]),
+    code,
+    params: isRecord(value["params"]) ? value["params"] : {},
+  };
+}
+
+function advertisementFrom(value: unknown): ExtensionAdvertisement | null {
+  if (!isRecord(value) || typeof value["id"] !== "string") {
+    return null;
+  }
+  const version = value["version"];
+  if (typeof version !== "string" || version.length === 0) {
+    return null;
+  }
+  const requested = isRecord(value["requested"]) ? value["requested"] : null;
+  const supportedVersions = Array.isArray(value["supported_versions"])
+    ? value["supported_versions"].filter(
+        (item): item is string => typeof item === "string",
+      )
+    : [version];
+  return {
+    id: value["id"],
+    version,
+    supported: value["supported"] !== false,
+    supportedVersions,
+    requestedId:
+      requested !== null && typeof requested["id"] === "string"
+        ? requested["id"]
+        : null,
+    requestedVersion:
+      requested !== null && typeof requested["version"] === "string"
+        ? requested["version"]
+        : null,
+    negotiatedBy:
+      typeof value["negotiated_by"] === "string"
+        ? value["negotiated_by"]
+        : null,
+    implemented: value["implemented"] === true,
+    negotiated: value["negotiated"] === true,
+    refusal: errorObjectFrom(value["refusal"]),
+  };
+}
+
+/**
+ * Parse the `extensions[]` projection out of a `tools/call` result payload.
+ *
+ * The projection is read from `data.extensions`; a payload whose `extensions`
+ * key is not an array is a server/contract bug and is refused locally instead of
+ * being silently treated as "no extensions".
+ */
+export function parseExtensionAdvertisements(
+  structuredContent: Readonly<Record<string, unknown>>,
+): readonly ExtensionAdvertisement[] {
+  const data = structuredContent["data"];
+  if (!isRecord(data) || !Object.hasOwn(data, "extensions")) {
+    return Object.freeze([]);
+  }
+  const raw = data["extensions"];
+  if (!Array.isArray(raw)) {
+    contractError("invalid-parameter", "bridge_payload_invalid", {
+      rule: "extensions_not_an_array",
+      tool: RESEARCH_HANDSHAKE_TOOL,
+    });
+  }
+  const entries: ExtensionAdvertisement[] = [];
+  for (const item of raw) {
+    const advertisement = advertisementFrom(item);
+    if (advertisement === null) {
+      contractError("invalid-parameter", "bridge_payload_invalid", {
+        rule: "extension_entry_invalid",
+        tool: RESEARCH_HANDSHAKE_TOOL,
+      });
+    }
+    entries.push(advertisement);
+  }
+  return Object.freeze(entries);
+}
+
+/**
+ * Interpret one `acp_capabilities` result as a research handshake.
+ *
+ * `negotiated` is taken **only** from the server advertisement, and only when
+ * the server also reports `implemented: true` at the requested version. A request
+ * is therefore never upgraded into a claim by the client, and a typed server
+ * refusal (`isError` + `unsupported_capability`/`access_denied`) is surfaced in
+ * the result instead of thrown, so a supervisor can continue on P1.
+ */
+export function parseResearchHandshake(
+  result: BridgeToolResult,
+  requested: ResearchHandshakeRequest = {},
+): ResearchHandshake {
+  const advertised = parseExtensionAdvertisements(result.structuredContent);
+  const extension =
+    advertised.find((entry) => entry.id === BRIDGE_EXTENSION_ID) ?? null;
+  const effective = Object.freeze({
+    id: requested.id ?? BRIDGE_EXTENSION_ID,
+    version: requested.version ?? BRIDGE_EXTENSION_VERSION,
+  });
+  const serverError = errorObjectFrom(
+    isRecord(result.structuredContent["error"])
+      ? result.structuredContent["error"]
+      : null,
+  );
+
+  if (extension === null) {
+    return Object.freeze({
+      status: "absent" as const,
+      extension: null,
+      advertised,
+      negotiatedExtensions: Object.freeze([]),
+      refusal:
+        serverError ??
+        Object.freeze({
+          class: "unsupported" as const,
+          code: "unsupported_capability",
+          params: Object.freeze({
+            rule: "extension_not_advertised",
+            extension: BRIDGE_EXTENSION_ID,
+          }),
+        }),
+      requested: effective,
+    });
+  }
+
+  const negotiated =
+    !result.isError &&
+    extension.implemented &&
+    extension.negotiated &&
+    effective.id === extension.id &&
+    effective.version === extension.version;
+
+  if (negotiated) {
+    return Object.freeze({
+      status: "negotiated" as const,
+      extension,
+      advertised,
+      negotiatedExtensions: Object.freeze([
+        Object.freeze({ id: extension.id, version: extension.version }),
+      ]),
+      refusal: null,
+      requested: effective,
+    });
+  }
+
+  const refusal =
+    serverError ??
+    extension.refusal ??
+    Object.freeze({
+      class: "unsupported" as const,
+      code: "unsupported_capability",
+      params: Object.freeze({
+        rule: "extension_not_implemented",
+        extension: BRIDGE_EXTENSION_ID,
+        supported_version: extension.version,
+      }),
+    });
+  return Object.freeze({
+    status: result.isError || extension.refusal !== null
+      ? ("refused" as const)
+      : ("advertised" as const),
+    extension,
+    advertised,
+    negotiatedExtensions: Object.freeze([]),
+    refusal,
+    requested: effective,
+  });
+}
+
+/**
+ * Ask the server to negotiate the research extension through `tools/call`.
+ *
+ * Builds the one legal request (`research_extension{id,version}` plus optional
+ * audit facts), calls the P1 discovery tool and parses the answer. It never
+ * throws for a server refusal: an un-negotiated extension is a normal, typed
+ * outcome, because `acp_capabilities` is always callable when the tool exists.
+ */
+export async function negotiateResearch(
+  client: PlatformClient,
+  request: ResearchHandshakeRequest = {},
+): Promise<ResearchHandshake> {
+  const raw = assertRawToolName(RESEARCH_HANDSHAKE_TOOL);
+  const args: Record<string, unknown> = {
+    research_extension: {
+      id: request.id ?? BRIDGE_EXTENSION_ID,
+      version: request.version ?? BRIDGE_EXTENSION_VERSION,
+    },
+  };
+  if (request.projectId !== undefined) {
+    args["project_id"] = request.projectId;
+  }
+  if (request.client !== undefined) {
+    args["client"] = {
+      name: request.client.name,
+      ...(request.client.version === undefined
+        ? {}
+        : { version: request.client.version }),
+    };
+  }
+
+  let result: BridgeToolResult;
+  try {
+    result = await client.callTool(raw, Object.freeze(args));
+  } catch (error) {
+    return Object.freeze({
+      status: "refused" as const,
+      extension: null,
+      advertised: Object.freeze([]),
+      negotiatedExtensions: Object.freeze([]),
+      refusal: Object.freeze({
+        class: "retryable" as const,
+        code: "backend_unavailable",
+        params: Object.freeze({
+          rule: "handshake_call_failed",
+          tool: raw,
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      }),
+      requested: Object.freeze({
+        id: request.id ?? BRIDGE_EXTENSION_ID,
+        version: request.version ?? BRIDGE_EXTENSION_VERSION,
+      }),
+    });
+  }
+  return parseResearchHandshake(result, request);
 }
 
 const PAYLOAD_IDENTITY_KEYS: readonly string[] = Object.freeze([
@@ -895,6 +1378,34 @@ const SENSITIVE_RESULT_KEY_RE =
 const CREDENTIAL_VALUE_RE =
   /(?:Bearer\s+[A-Za-z0-9._~+/=-]{8,})|(?:sk-[A-Za-z0-9]{16,})|(?:AKIA[0-9A-Z]{16})/;
 
+/**
+ * Published status vocabulary that may legitimately live under a
+ * credential-sounding key.
+ *
+ * `data.admission.model_token_enforcement = "NOT_VERIFIED"` and
+ * `data.capability_request.authorization = "none: audit and advisory hints
+ * only"` are *policy statements*, not secrets (M2-01c/F2).  The exemption is
+ * value-shaped and deliberately narrow: an all-caps enum token, or a phrase
+ * that contains whitespace.  A single opaque run under a sensitive key (a real
+ * credential) is still refused, and `Bearer`/`sk-`/`AKIA` values are refused by
+ * `CREDENTIAL_VALUE_RE` regardless of the key.
+ */
+const PUBLISHED_ENUM_VALUE_RE = /^[A-Z][A-Z0-9_]*$/;
+
+function isPublishedEnumValue(value: unknown): boolean {
+  if (typeof value === "boolean" || value === null || typeof value === "number") {
+    return true;
+  }
+  if (typeof value !== "string") {
+    return false;
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return true;
+  }
+  return PUBLISHED_ENUM_VALUE_RE.test(trimmed) || /\s/.test(trimmed);
+}
+
 /** POSIX absolute path or Windows drive path embedded in a result string. */
 const ABSOLUTE_PATH_RE =
   /(?:^|[\s"'`=:([{])((?:\/(?:[A-Za-z0-9._-]+\/)+[A-Za-z0-9._-]+)|(?:[A-Za-z]:[\\/][^\s"'`)\]}]+))/;
@@ -903,19 +1414,59 @@ const ABSOLUTE_PATH_RE =
 const REMOTE_URI_RE = /\b(?:sftp|ssh|file):\/\/\S+/i;
 
 /**
+ * Published reference/id shapes that may appear inside an inert projection.
+ *
+ * A projection such as `artifact_ref.authorization` names a principal, a
+ * project, a scope and an action version — those are identifiers and enums,
+ * never key material, so a sensitive-looking *parent* key must not make them
+ * unreadable.
+ */
+const PUBLISHED_REFERENCE_RE =
+  /^(?:sha256:[0-9a-f]{64}|acp[_a-z0-9]*|rph[_a-z0-9]*|acp\.[a-z0-9_.]+|rph\.[a-z0-9_.]+|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|(?:ap|rsv|res|proj|project|proposal|prop|approval|reservation|research|session|principal|account|workspace|record|release|rel|attempt|epoch|idc|key|op|operation|job|task)_[A-Za-z0-9_.:-]+)$/;
+
+/** A short, readable enum/word (`local-single`, `read`, `NOT_VERIFIED`). */
+function isPublishedWord(value: string): boolean {
+  return (
+    /^[a-z][a-z0-9_-]{0,31}$/.test(value) ||
+    PUBLISHED_ENUM_VALUE_RE.test(value) ||
+    /\s/.test(value.slice(0, 64))
+  );
+}
+
+/**
  * Refuse a result that leaks a credential or an absolute remote path.
  *
  * The bridge is a model-facing surface: IDs, digests and platform references
  * are allowed, but a secret value or a server filesystem path is not. The
  * guard is a **refusal** (never a silent rewrite), so a caller can decide
  * whether to redact at the transport layer.
+ *
+ * A credential is **material**: a scalar.  A *record* under a
+ * sensitive-sounding key is an inert platform projection
+ * (`artifact_ref.authorization = {principal_id, project_id, scope, action,
+ * allowed, authorization_version}`), so it is recursed instead of refused, and
+ * inside it only material (long, unstructured, non-identifier) strings are
+ * refused.  M3-01b/F2: refusing the projection itself made the prepare/read
+ * path unreadable while adding no protection.
  */
 export function assertResultRedacted(
   value: unknown,
   path = "$",
+  inProjection = false,
 ): void {
   if (typeof value === "string") {
     if (CREDENTIAL_VALUE_RE.test(value)) {
+      contractError("authorization", "access_denied", {
+        rule: "credential_in_result",
+        path,
+      });
+    }
+    if (
+      inProjection &&
+      value.trim().length >= 24 &&
+      !PUBLISHED_REFERENCE_RE.test(value.trim()) &&
+      !isPublishedWord(value.trim())
+    ) {
       contractError("authorization", "access_denied", {
         rule: "credential_in_result",
         path,
@@ -931,7 +1482,7 @@ export function assertResultRedacted(
   }
   if (Array.isArray(value)) {
     value.forEach((child, index) =>
-      assertResultRedacted(child, `${path}[${index}]`),
+      assertResultRedacted(child, `${path}[${index}]`, inProjection),
     );
     return;
   }
@@ -939,7 +1490,17 @@ export function assertResultRedacted(
     return;
   }
   for (const [key, child] of Object.entries(value)) {
-    if (SENSITIVE_RESULT_KEY_RE.test(key)) {
+    const sensitive = SENSITIVE_RESULT_KEY_RE.test(key);
+    if (sensitive && isRecord(child)) {
+      // An inert projection: recurse with the material-only rule.
+      assertResultRedacted(child, `${path}.${key}`, true);
+      continue;
+    }
+    if (
+      sensitive &&
+      !isPublishedEnumValue(child) &&
+      !CREDENTIAL_VALUE_RE.test(typeof child === "string" ? child : "")
+    ) {
       contractError("authorization", "access_denied", {
         rule: "credential_in_result",
         path: `${path}.${key}`,
@@ -983,6 +1544,17 @@ export interface BridgeResult {
   readonly isError: boolean;
   readonly structuredContent: Readonly<Record<string, unknown>>;
   readonly projection: BridgeProjection;
+  /**
+   * The full ADR-003 TaskRef when the payload carried a complete one
+   * (`submit`/`status`), else `null`.  An idempotent replay returns the very
+   * same reference: a retry never re-derives it from a projection.
+   */
+  readonly taskRef: TaskRef | null;
+  /**
+   * Set when the platform returned a reference the bridge refused to complete
+   * on its own; `acp_status` is the reconciliation authority.
+   */
+  readonly taskRefReconciliation: TaskRefReconciliation;
 }
 
 /** P2 execution result (same envelope, operation is a P2 name). */
@@ -999,13 +1571,33 @@ export interface P2BridgeResult {
  *
  * Only caller-provided scientific values are forwarded. The bridge never fills
  * or switches `method`, charge, spin or resources; an absent value stays
- * absent so the server decides. `generation` is never a server argument: it is
- * a client staleness counter (`tool-semantics.md` §5).
+ * absent so the server decides. `generation` is a frozen `artifact_ref` field
+ * (M1-01), so it is forwarded on prepare and read — it is never stripped as a
+ * client-only counter.
+ *
+ * The three artifact/analysis shapes follow the M1-01 frozen table exactly
+ * (`docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json`):
+ *
+ * - `prepare` is the v1 HTTP prepare body (`purpose`/`artifact_id`/
+ *   `generation`/`expected_digest`), so the RPH `resource` is sent as
+ *   `artifact_id` and never as `resource_id` (D-IDENT-10: `resource_id` is
+ *   server-derived and an unknown request field);
+ * - `read` sends the complete frozen `artifact_ref`
+ *   (`task_id`/`attempt`/`artifact_id`/`generation`/`digest`).  A read without
+ *   the digest is a typed local refusal, never the pre-M1-01 flat
+ *   `job_id`/`resource_id` spelling (that shape is `input_invalid` on the
+ *   frozen schema);
+ * - `evidence` is the explicit analyze direction: `analysis_id` + `input_refs`
+ *   + `explicit`, with `parameters`/`plan_digest`/`idempotency_key`.  It never
+ *   carries the submit fields (`workflow`/`input`/`method`/`resources`), which
+ *   the frozen analyze schema rejects as unknown fields.
  */
 export function buildToolArguments(
   request: BridgeRequest,
+  idempotencyKeyOverride?: string,
 ): Readonly<Record<string, unknown>> {
   const args: Record<string, unknown> = {};
+  const idempotencyKey = idempotencyKeyOverride ?? request.idempotencyKey;
   const put = (key: string, value: unknown): void => {
     if (value !== undefined) {
       args[key] = value;
@@ -1016,32 +1608,86 @@ export function buildToolArguments(
       return Object.freeze(args);
     case "validate":
     case "submit":
-    case "evidence":
       put("workflow", request.workflow);
       put("input", request.input);
       put("method", request.method);
       put("project_id", request.project);
       put("resources", request.resources);
-      put("idempotency_key", request.idempotencyKey);
-      if (request.operation === "evidence") {
-        put("explicit", request.explicit);
-      }
+      put("idempotency_key", idempotencyKey);
+      put("plan_digest", request.planDigest);
+      put("proposal_ref", request.proposalRef);
+      put("proposal_digest", request.proposalDigest);
+      put("budget", request.budget);
+      return Object.freeze(args);
+    case "evidence":
+      // M1-01 analyze table: an explicit analysis, never an evidence read.
+      put("analysis_id", request.analysisId);
+      put("input_refs", request.inputRefs);
+      put("explicit", request.explicit);
+      put("parameters", request.parameters);
+      put("plan_digest", request.planDigest);
+      put("idempotency_key", idempotencyKey);
       return Object.freeze(args);
     case "status":
-      put("reference", request.task);
+      put("reference", request.reference ?? request.task);
       return Object.freeze(args);
     case "prepare":
+      put("purpose", request.purpose ?? "artifact");
       put("job_id", request.task);
       put("attempt", request.attempt);
-      put("resource_id", request.resource);
-      put("idempotency_key", request.idempotencyKey);
+      put("artifact_id", request.resource);
+      put("generation", request.generation);
+      put("relative_path", request.relativePath);
+      put("expected_digest", request.expectedDigest);
+      put("expected_size_bytes", request.expectedSizeBytes);
+      put("idempotency_key", idempotencyKey);
       return Object.freeze(args);
     case "read":
-      put("job_id", request.task);
-      put("attempt", request.attempt);
-      put("resource_id", request.resource);
+      if (!isDigest(request.artifactDigest)) {
+        contractError("invalid-parameter", "artifact_ref_incomplete", {
+          rule: "artifact_digest_required",
+          operation: "read",
+          field: "artifact_ref.digest",
+          job_id: request.task ?? null,
+          attempt: request.attempt ?? null,
+          artifact_id: request.resource ?? null,
+          generation: request.generation ?? null,
+          why: "the frozen artifact_ref requires the digest returned by prepare; a read never guesses it",
+        });
+      }
+      put("artifact_ref", {
+        task_id: request.task,
+        attempt: request.attempt,
+        artifact_id: request.resource,
+        generation: request.generation,
+        digest: request.artifactDigest,
+      });
+      put("max_bytes", request.maxBytes);
+      put("encoding", request.encoding);
       return Object.freeze(args);
   }
+}
+
+const DIGEST_PATTERN_RE = /^sha256:[0-9a-f]{64}$/;
+
+function isDigest(value: unknown): value is string {
+  return typeof value === "string" && DIGEST_PATTERN_RE.test(value);
+}
+
+const RAW_SHA256_RE = /^[0-9a-f]{64}$/;
+
+/**
+ * Accept a digest as the frozen `sha256:<64 hex>` wire value or as the bare
+ * 64-hex `sha256` member the status projection carries; never invent one.
+ */
+function asDigest(value: unknown): string | null {
+  if (isDigest(value)) {
+    return value;
+  }
+  if (typeof value === "string" && RAW_SHA256_RE.test(value)) {
+    return `sha256:${value}`;
+  }
+  return null;
 }
 
 /** Artifact identity: `(job, attempt, resource)`; `generation` is client-only. */
@@ -1055,6 +1701,469 @@ export function artifactKey(input: {
     input.attempt ?? null,
     input.resource ?? null,
   ]);
+}
+
+// ---------------------------------------------------------------------------
+// F4 (M3-01b): the explicit availability vocabulary bridge
+// ---------------------------------------------------------------------------
+//
+// The platform `Data Availability` vocabulary (application-api.v1
+// `operations.prepare.response.availability`) is
+// `absent | preparing | ready | unavailable`, while the frozen experience view
+// model (`experience/view-model.schema.json`) speaks
+// `unprepared | preparing | readable | failed`.  Before M3-01b a consumer that
+// trusted the C vocabulary saw no valid state for a successful prepare
+// (`ready`), so a prepared artifact looked unreadable.  The mapping is defined
+// **once**, here, and is asserted by `rph/test/m3-01-findings.test.ts`.
+
+/** The four observable availability states of the experience view model. */
+export const C_AVAILABILITY_STATES = Object.freeze([
+  "unprepared",
+  "preparing",
+  "readable",
+  "failed",
+] as const);
+
+/** The platform Data Availability vocabulary (server-owned). */
+export const PLATFORM_AVAILABILITY_STATES = Object.freeze([
+  "absent",
+  "preparing",
+  "ready",
+  "unavailable",
+] as const);
+
+export type ArtifactAvailability = (typeof C_AVAILABILITY_STATES)[number];
+export type PlatformAvailability =
+  (typeof PLATFORM_AVAILABILITY_STATES)[number];
+
+/**
+ * Platform → experience availability, one frozen table.
+ *
+ * - `absent` → `unprepared` (nothing was prepared yet);
+ * - `preparing` → `preparing`;
+ * - `ready` → `readable` (this is the F4 miss: the words differ, the fact does
+ *   not);
+ * - `unavailable` → `failed`.
+ */
+export const AVAILABILITY_MAP: Readonly<
+  Record<PlatformAvailability, ArtifactAvailability>
+> = Object.freeze({
+  absent: "unprepared",
+  preparing: "preparing",
+  ready: "readable",
+  unavailable: "failed",
+});
+
+/**
+ * Map one platform availability value onto the experience vocabulary.
+ *
+ * A value outside both vocabularies is a typed refusal (`availability_unknown`):
+ * a fifth state is never invented and an unknown state is never mapped to
+ * `readable`.
+ */
+export function mapAvailability(value: unknown): ArtifactAvailability {
+  if (typeof value === "string" && Object.hasOwn(AVAILABILITY_MAP, value)) {
+    return AVAILABILITY_MAP[value as PlatformAvailability];
+  }
+  contractError("invalid-parameter", "bridge_payload_invalid", {
+    rule: "availability_unknown",
+    observed: value ?? null,
+    platform_states: [...PLATFORM_AVAILABILITY_STATES],
+  });
+}
+
+/** The `availability` member of a tool result payload (or `null`). */
+export function availabilityOf(result: BridgeToolResult): unknown {
+  const data = result.structuredContent["data"];
+  return isRecord(data) ? (data["availability"] ?? null) : null;
+}
+
+// ---------------------------------------------------------------------------
+// F3 (M3-01b): prepare response → frozen artifact_ref
+// ---------------------------------------------------------------------------
+//
+// The prepare response carries `artifact_ref` in the Controller's prepare
+// projection: `resource_id` (the server-derived name), an empty `digest` and
+// `availability` before the body exists.  The frozen read contract requires
+// `artifact_id` + a digest + the generation.  The rename and the "digest only
+// appears once the operation ran" rule are one client mapping, recorded here
+// instead of being re-derived (and re-guessed) by every caller.
+
+/** One artifact identity as the client tracks it between prepare and read. */
+export interface ArtifactRefView {
+  readonly task_id: string;
+  readonly attempt: number;
+  readonly artifact_id: string;
+  /** Monotonic artifact generation within the attempt (`>= 1`). */
+  readonly generation: number;
+  /** `sha256:<64 hex>` once the prepare operation produced the body. */
+  readonly digest: string | null;
+  readonly availability: ArtifactAvailability;
+  /** Operation reference a caller polls with `status` until `readable`. */
+  readonly operation_reference: PlatformReference | null;
+}
+
+/**
+ * Read one prepare result as an artifact view.
+ *
+ * Returns `null` when the payload carries no artifact identity at all (a
+ * structure-input prepare has none).  The returned view is **not** a fabricated
+ * read handle: `digest` stays `null` and `availability` is `unprepared` until
+ * the platform reports the body, and `readRequestFor` refuses to build a read
+ * from an incomplete view.
+ */
+export function preparedArtifactView(
+  result: BridgeToolResult,
+  expected: {
+    readonly task: string;
+    readonly attempt: number;
+    readonly resource: string;
+  },
+): ArtifactRefView | null {
+  const data = result.structuredContent["data"];
+  if (!isRecord(data)) {
+    return null;
+  }
+  const raw = isRecord(data["artifact_ref"]) ? data["artifact_ref"] : null;
+  const artifactId =
+    raw !== null && typeof raw["artifact_id"] === "string"
+      ? raw["artifact_id"]
+      : raw !== null && typeof raw["resource_id"] === "string"
+        ? raw["resource_id"]
+        : expected.resource;
+  const taskId =
+    raw !== null && typeof raw["task_id"] === "string"
+      ? raw["task_id"]
+      : raw !== null && typeof raw["job_id"] === "string"
+        ? raw["job_id"]
+        : expected.task;
+  if (artifactId.length === 0 || taskId.length === 0) {
+    return null;
+  }
+  const rawAttempt = raw?.["attempt"];
+  const attempt =
+    typeof rawAttempt === "number" && Number.isInteger(rawAttempt) && rawAttempt >= 1
+      ? rawAttempt
+      : expected.attempt;
+  const rawGeneration = raw?.["generation"];
+  const generation =
+    typeof rawGeneration === "number" &&
+    Number.isInteger(rawGeneration) &&
+    rawGeneration >= 1
+      ? rawGeneration
+      : 1;
+  const digest = asDigest(raw?.["digest"]);
+  const availability =
+    data["availability"] === undefined || data["availability"] === null
+      ? digest === null
+        ? "unprepared"
+        : "readable"
+      : mapAvailability(data["availability"]);
+  const operation = extractReference(data["operation_ref"] ?? data["reference"]);
+  return Object.freeze({
+    task_id: taskId,
+    attempt,
+    artifact_id: artifactId,
+    generation,
+    digest,
+    availability,
+    operation_reference:
+      operation !== null && typeof operation !== "string" ? operation : null,
+  });
+}
+
+/**
+ * Apply a `status` answer (operation or job) to an artifact view.
+ *
+ * The poll is how the digest/generation become known; the update never invents
+ * them (`digest` stays `null` while the platform has none) and never upgrades
+ * an unknown availability.
+ */
+export function applyArtifactStatus(
+  view: ArtifactRefView,
+  result: BridgeToolResult,
+): ArtifactRefView {
+  const data = result.structuredContent["data"];
+  if (!isRecord(data)) {
+    return view;
+  }
+  const digest = asDigest(data["sha256"] ?? data["digest"]) ?? view.digest;
+  const rawGeneration = data["generation"] ?? data["expected_revision"];
+  const generation =
+    typeof rawGeneration === "number" &&
+    Number.isInteger(rawGeneration) &&
+    rawGeneration >= 1
+      ? rawGeneration
+      : view.generation;
+  const availability =
+    data["availability"] === undefined || data["availability"] === null
+      ? view.availability
+      : mapAvailability(data["availability"]);
+  return Object.freeze({ ...view, digest, generation, availability });
+}
+
+/**
+ * Build the read request for a prepared artifact view.
+ *
+ * A view without a digest is `artifact_ref_incomplete`: the read target must
+ * come from the platform, never from a guessed generation or digest.
+ */
+export function readRequestFor(
+  view: ArtifactRefView,
+  options: {
+    readonly project?: string;
+    readonly maxBytes?: number;
+    readonly encoding?: "identity" | "base64";
+  } = {},
+): BridgeRequest {
+  if (view.digest === null) {
+    contractError("invalid-parameter", "artifact_ref_incomplete", {
+      rule: "artifact_digest_required",
+      task_id: view.task_id,
+      attempt: view.attempt,
+      artifact_id: view.artifact_id,
+      generation: view.generation,
+      availability: view.availability,
+      why: "the prepare operation has not reported a digest yet",
+    });
+  }
+  if (view.availability !== "readable") {
+    contractError("not-prepared", "resource_not_ready", {
+      rule: "artifact_not_readable",
+      task_id: view.task_id,
+      attempt: view.attempt,
+      artifact_id: view.artifact_id,
+      availability: view.availability,
+    });
+  }
+  return Object.freeze({
+    operation: "read" as const,
+    ...(options.project === undefined ? {} : { project: options.project }),
+    task: view.task_id,
+    attempt: view.attempt,
+    resource: view.artifact_id,
+    generation: view.generation,
+    artifactDigest: view.digest,
+    ...(options.maxBytes === undefined ? {} : { maxBytes: options.maxBytes }),
+    ...(options.encoding === undefined ? {} : { encoding: options.encoding }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// TaskRef (ADR-003): one normalizer, no defaulted attempt/release
+// ---------------------------------------------------------------------------
+//
+// `@rph/research` owns the `TaskRef` type and `parseTaskRef`.  The bridge only
+// locates the reference inside a tool payload and reports whether it is
+// complete; a missing attempt is never attempt 1, a missing release is never
+// an empty release, and a legacy non-release job reference is reconciled
+// through `status` instead of being guessed.
+
+/** Why a payload is not (yet) a TaskRef. */
+export type TaskRefReconciliation = "not_required" | "required" | "failed";
+
+/** The outcome of reading one task reference out of a tool payload. */
+export interface TaskRefOutcome {
+  readonly taskRef: TaskRef | null;
+  /**
+   * `not_required`: the payload is complete (or carries no reference at all);
+   * `required`: a reference exists but is incomplete, so the caller must
+   * reconcile it through `status`; `failed`: the status answer was still
+   * incomplete and no further guess is allowed.
+   */
+  readonly reconciliation: TaskRefReconciliation;
+  /** The missing/invalid reference fields, when `reconciliation !== "not_required"`. */
+  readonly missing: readonly string[];
+}
+
+function taskReferencePayload(
+  result: BridgeToolResult,
+): Readonly<Record<string, unknown>> | null {
+  const data = result.structuredContent["data"];
+  if (!isRecord(data)) {
+    return null;
+  }
+  for (const key of ["task_ref", "reference"]) {
+    const value = data[key];
+    if (isRecord(value)) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function missingReferenceFields(error: unknown): readonly string[] {
+  const message = error instanceof Error ? error.message : String(error);
+  const fields: string[] = [];
+  for (const match of message.matchAll(/\$([.[\]\w]+):/g)) {
+    const field = match[1];
+    if (field !== undefined) {
+      fields.push(field.replace(/^\./, ""));
+    }
+  }
+  return fields;
+}
+
+/**
+ * Normalize a task reference out of one tool payload.
+ *
+ * Never throws for an incomplete reference: an incomplete reference is a
+ * `required` reconciliation result, because the platform `status` answer is the
+ * only authority that can complete it.
+ */
+export function taskRefFromPayload(
+  payload: unknown,
+  projectId = "",
+  reconciliation: TaskRefReconciliation = "required",
+): TaskRefOutcome {
+  if (payload === null || payload === undefined) {
+    return Object.freeze({
+      taskRef: null,
+      reconciliation: "not_required" as const,
+      missing: Object.freeze([]),
+    });
+  }
+  try {
+    const taskRef = parseTaskRef(payload, projectId);
+    return Object.freeze({
+      taskRef,
+      reconciliation: "not_required" as const,
+      missing: Object.freeze([]),
+    });
+  } catch (error) {
+    return Object.freeze({
+      taskRef: null,
+      reconciliation,
+      missing: Object.freeze(missingReferenceFields(error)),
+    });
+  }
+}
+
+/** Normalize the TaskRef of a `submit` result (never defaults a field). */
+export function submitTaskRef(
+  result: BridgeToolResult,
+  projectId = "",
+): TaskRefOutcome {
+  return taskRefFromPayload(
+    taskReferencePayload(result),
+    projectId,
+    "required",
+  );
+}
+
+/**
+ * Reconcile an incomplete submit reference through a `status` answer.
+ *
+ * The known identity (`project`, `attempt`) narrows the parse; anything the
+ * status answer still does not carry stays missing (`failed`) instead of being
+ * defaulted.
+ */
+export function reconcileTaskRef(
+  status: BridgeToolResult,
+  expected: {
+    readonly projectId?: string;
+    readonly taskId?: string;
+    readonly attempt?: number;
+    /**
+     * Release identity the caller *declared* (a real release builder fact).
+     *
+     * It completes the reference only when neither the submit answer nor the
+     * status answer carries one; when it is absent the outcome stays `failed`
+     * rather than inventing an empty/pending release.
+     */
+    readonly release?: { readonly release_id: string; readonly release_digest: string };
+  } = {},
+): TaskRefOutcome {
+  const payload = taskReferencePayload(status);
+  if (payload === null) {
+    return Object.freeze({
+      taskRef: null,
+      reconciliation: "failed" as const,
+      missing: Object.freeze(["task_ref"]),
+    });
+  }
+  const merged: Record<string, unknown> = { ...payload };
+  if (!Object.hasOwn(merged, "task_id") && expected.taskId !== undefined) {
+    merged["task_id"] = expected.taskId;
+  }
+  if (!Object.hasOwn(merged, "attempt") && expected.attempt !== undefined) {
+    merged["attempt"] = expected.attempt;
+  }
+  const hasRelease =
+    isRecord(merged["release"]) ||
+    Object.hasOwn(merged, "release_id") ||
+    Object.hasOwn(merged, "release_digest");
+  if (!hasRelease && expected.release !== undefined) {
+    merged["release"] = {
+      release_id: expected.release.release_id,
+      release_digest: expected.release.release_digest,
+    };
+  }
+  return taskRefFromPayload(merged, expected.projectId ?? "", "failed");
+}
+
+/**
+ * The complete research binding of one submit (F5, M3-01b).
+ *
+ * RPH attribution never depends on the plaintext `project_id`/`approval_ref`
+ * members of the MCP response (the machine envelope redacts long opaque ids):
+ * the project comes from the digest-bound **TaskRef**, the research identity and
+ * approval reference from the caller's own records, and the response is only
+ * ever read for the attempt identity.
+ */
+export interface ResearchSubmitBinding {
+  readonly project_id: string;
+  readonly research_id: string;
+  readonly round: number;
+  readonly approval_ref: string | null;
+  readonly task_ref: TaskRef;
+}
+
+/** Attribution the caller already knows (never taken from a response body). */
+export interface SubmitBindingExpectation {
+  readonly project_id: string;
+  readonly research_id: string;
+  readonly round: number;
+  readonly approval_ref?: string | null;
+}
+
+/**
+ * Bind one submit result to the expected research scope.
+ *
+ * A foreign project in the TaskRef is refused (`foreign_project`); a redacted
+ * `project_id`/`approval_ref` member in `data` is ignored rather than treated
+ * as a mismatch, because the TaskRef — not the response summary — is the
+ * platform's attribution fact.
+ */
+export function attributedSubmitBinding(
+  result: BridgeToolResult,
+  expected: SubmitBindingExpectation,
+): ResearchSubmitBinding {
+  const outcome = submitTaskRef(result, expected.project_id);
+  if (outcome.taskRef === null) {
+    contractError("invalid-parameter", "task_ref_incomplete", {
+      rule: "task_ref_reconciliation_required",
+      missing: [...outcome.missing],
+      reconciliation: outcome.reconciliation,
+      project_id: expected.project_id,
+      why: "reconcile the reference through acp_status; the bridge never defaults attempt/release",
+    });
+  }
+  const taskRef = outcome.taskRef;
+  if (taskRef.project_id !== expected.project_id) {
+    contractError("authorization", "foreign_project", {
+      expected_project: expected.project_id,
+      observed_project: taskRef.project_id,
+      task_id: taskRef.task_id,
+    });
+  }
+  return Object.freeze({
+    project_id: taskRef.project_id,
+    research_id: expected.research_id,
+    round: expected.round,
+    approval_ref: expected.approval_ref ?? null,
+    task_ref: taskRef,
+  });
 }
 
 function canonicalJson(value: unknown): string {
@@ -1076,6 +2185,36 @@ function canonicalJson(value: unknown): string {
 export interface BridgeOptions {
   readonly negotiatedExtensions?: readonly NegotiatedExtension[];
   readonly requirePreparedRead?: boolean;
+  /**
+   * Storage for derived submit intents (M1-02 / D-IDENT-07).
+   *
+   * The bridge persists the derived key here *before* it calls the platform, so
+   * a crash between derive and call replays the same key.  Defaults to an
+   * in-memory store (a cache, not a durable database); a durable caller injects
+   * its own `SubmitIntentStore`.
+   */
+  readonly submitIntentStore?: SubmitIntentStore;
+}
+
+/** M1-01b wire-key grammar: 8..128 chars from `[A-Za-z0-9._:-]`. */
+const WIRE_IDEMPOTENCY_KEY_RE = /^[A-Za-z0-9._:-]{8,128}$/;
+
+/**
+ * Project the M1-02 intent key onto the M1-01b wire-key grammar.
+ *
+ * The RPH intent key is the durable, human-auditable identity
+ * (`project:record:research:round-N:submit:plan-<hex>`); the wire only needs a
+ * stable high-entropy opaque key.  The frozen layout can exceed the 128-char
+ * wire limit, so when it does the bridge sends a deterministic `rph.<sha256>`
+ * projection of the *persisted* intent key.  The same intent always maps to the
+ * same wire key, a changed plan digest still conflicts before any call, and the
+ * platform never sees a truncated or re-derived value.
+ */
+export function submitWireKey(intentKey: string): string {
+  if (WIRE_IDEMPOTENCY_KEY_RE.test(intentKey)) {
+    return intentKey;
+  }
+  return "rph." + createHash("sha256").update(intentKey).digest("hex");
 }
 
 function notPreparedResult(request: BridgeRequest): BridgeResult {
@@ -1108,6 +2247,8 @@ function notPreparedResult(request: BridgeRequest): BridgeResult {
     isError: true,
     structuredContent,
     projection: projectToolResult("acp_read_artifact", result),
+    taskRef: null,
+    taskRefReconciliation: "not_required" as const,
   });
 }
 
@@ -1158,15 +2299,29 @@ export class Bridge {
   private readonly prepared = new Set<string>();
   private readonly ownership = new Map<string, PreparedArtifact>();
   private readonly idempotency = new Map<string, IdempotencyEntry>();
+  /**
+   * In-flight executions per `(operation, key)`.
+   *
+   * Two concurrent identical writes join one platform call instead of racing
+   * two: the platform ledger would replay the second one anyway, but a client
+   * that "calls twice" is exactly what G21 forbids observing as success.
+   */
+  private readonly inFlight = new Map<string, Promise<BridgeResult>>();
+  /** Derived submit intents: persisted before the platform call (M1-02). */
+  readonly submitIntents: SubmitIntentLedger;
 
   constructor(client: PlatformClient, options: BridgeOptions = {}) {
     this.client = client;
     this.negotiated = options.negotiatedExtensions ?? [];
     this.requirePreparedRead = options.requirePreparedRead ?? true;
+    this.submitIntents = new SubmitIntentLedger(
+      options.submitIntentStore ?? new MemorySubmitIntentStore(),
+    );
   }
 
   /** Execute one P1 operation; throws a `BridgeContractError` on a guard hit. */
   async execute(request: BridgeRequest): Promise<BridgeResult> {
+    this.assertEvidenceIsAnalysis(request);
     const mapping = mapOperationToTool(request.operation, request.phase);
     const missing = missingFieldsFor(request);
     if (missing.length > 0) {
@@ -1182,25 +2337,151 @@ export class Bridge {
         return notPreparedResult(request);
       }
     }
-    const replay = this.replayIdempotentResult(request);
+    const key = this.resolveSubmitKey(request);
+    const replay = this.replayIdempotentResult(request, key);
     if (replay !== null) {
       return replay;
     }
-    const params = buildToolArguments(request);
+    // An empty key means "no key": never send `idempotency_key: ""`.
+    const params = buildToolArguments(request, key.length > 0 ? key : undefined);
     const raw = assertRawToolName(mapping.tool);
+    const flightKey = key.length > 0 ? `${request.operation}:${key}` : "";
+    if (flightKey.length > 0) {
+      const joined = this.inFlight.get(flightKey);
+      if (joined !== undefined) {
+        return joined;
+      }
+    }
+    const flight = this.dispatch(request, raw, params, key);
+    if (flightKey.length > 0) {
+      this.inFlight.set(flightKey, flight);
+    }
+    try {
+      return await flight;
+    } finally {
+      if (flightKey.length > 0) {
+        this.inFlight.delete(flightKey);
+      }
+    }
+  }
+
+  /** One platform call plus the ledger/ownership/result bookkeeping. */
+  private async dispatch(
+    request: BridgeRequest,
+    raw: string,
+    params: Readonly<Record<string, unknown>>,
+    key: string,
+  ): Promise<BridgeResult> {
     const result = await this.client.callTool(raw, params);
+    if (request.operation === "submit" && !result.isError) {
+      // The key was already persisted by `resolveSubmitKey`; marking the
+      // intent submitted is a second durable fact, not a new key.  A
+      // caller-supplied opaque key never went through `prepare`, so the
+      // ledger simply reports a miss.
+      const identity = resolveSubmitIntentIdentity(request);
+      if (identity !== null && key.length > 0) {
+        this.submitIntents.markSubmitted({
+          project_id: identity.project,
+          research_id: identity.research,
+          round: identity.round,
+        });
+      }
+    }
     if (request.operation === "prepare" && !result.isError) {
       this.rememberPreparedArtifact(request);
     }
+    const reference =
+      request.operation === "submit" || request.operation === "status"
+        ? submitTaskRef(result, request.project ?? "")
+        : Object.freeze({
+            taskRef: null,
+            reconciliation: "not_required" as const,
+            missing: Object.freeze([]),
+          });
     const bridgeResult: BridgeResult = Object.freeze({
       operation: request.operation,
       tool: raw,
       isError: result.isError,
       structuredContent: result.structuredContent,
       projection: projectToolResult(raw, result),
+      taskRef: reference.taskRef,
+      taskRefReconciliation: reference.reconciliation,
     });
-    this.rememberIdempotentResult(request, bridgeResult);
+    this.rememberIdempotentResult(request, key, bridgeResult);
     return bridgeResult;
+  }
+
+  /**
+   * Keep "read an existing evidence artifact" and "execute an analysis" apart.
+   *
+   * `evidence` maps to `acp_analyze` (the only explicit analysis entry), so it
+   * must state the frozen analysis identity.  A caller that only names a task
+   * is reading evidence, which is the `read` operation; the bridge refuses the
+   * ambiguous request instead of letting a read start computation.
+   */
+  private assertEvidenceIsAnalysis(request: BridgeRequest): void {
+    if (request.operation !== "evidence") {
+      return;
+    }
+    if (request.analysisId === undefined && request.inputRefs === undefined) {
+      if (request.task !== undefined || request.resource !== undefined) {
+        contractError("invalid-parameter", "evidence_read_is_not_analysis", {
+          rule: "use_read_operation",
+          operation: "evidence",
+          why: "reading an existing evidence artifact is `read` with a complete artifact_ref; `evidence` is an explicit analysis",
+          field: "analysis_id",
+        });
+      }
+      return;
+    }
+    // The frozen analyze table requires `explicit: true`; a heuristic/implicit
+    // analysis is refused locally as well as on the server.
+    if (request.explicit !== true) {
+      contractError("invalid-parameter", "input_invalid", {
+        rule: "explicit_required",
+        operation: "evidence",
+        field: "explicit",
+      });
+    }
+  }
+
+  /**
+   * Resolve the idempotency key a submit will send.
+   *
+   * A caller key is opaque and forwarded verbatim.  Without one, the bridge
+   * derives the D-IDENT-07 key from the research identity and persists it
+   * **before** the call; a changed plan digest for the same round is a typed
+   * conflict that opens a new round instead of reusing the old key.
+   */
+  private resolveSubmitKey(request: BridgeRequest): string {
+    if (request.operation !== "submit") {
+      return request.idempotencyKey ?? "";
+    }
+    if (request.idempotencyKey !== undefined && request.idempotencyKey.length > 0) {
+      return request.idempotencyKey;
+    }
+    const identity = resolveSubmitIntentIdentity(request);
+    if (identity === null) {
+      contractError("invalid-parameter", "input_invalid", {
+        rule: "missing_required_field",
+        operation: "submit",
+        fields: ["idempotencyKey"],
+      });
+    }
+    try {
+      const prepared = this.submitIntents.prepare({
+        project_id: identity.project,
+        research_id: identity.research,
+        round: identity.round,
+        plan_definition_digest: identity.planDigest,
+      });
+      return submitWireKey(prepared.intent.key);
+    } catch (error) {
+      if (error instanceof SubmitIntentConflict) {
+        return contractError("conflict", "revision_conflict", error.toParams());
+      }
+      throw error;
+    }
   }
 
   private rememberPreparedArtifact(request: BridgeRequest): void {
@@ -1260,38 +2541,66 @@ export class Bridge {
     }
   }
 
-  private signatureFor(request: BridgeRequest): string | null {
-    const key = request.idempotencyKey;
-    if (key === undefined || key.length === 0) {
+  private signatureFor(request: BridgeRequest, key?: string): string | null {
+    const resolved = key ?? request.idempotencyKey;
+    if (resolved === undefined || resolved.length === 0) {
       return null;
     }
     return canonicalJson({
+      operation: request.operation,
       workflow: request.workflow ?? null,
       input: request.input ?? null,
       method: request.method ?? null,
       resources: request.resources ?? null,
       project: request.project ?? null,
+      plan_digest: request.planDigest ?? null,
+      proposal_ref: request.proposalRef ?? null,
+      proposal_digest: request.proposalDigest ?? null,
+      budget: request.budget ?? null,
+      analysis_id: request.analysisId ?? null,
+      input_refs: request.inputRefs ?? null,
+      parameters: request.parameters ?? null,
     });
   }
 
-  private replayIdempotentResult(request: BridgeRequest): BridgeResult | null {
+  /**
+   * Namespace of one idempotent operation: `(operation, key)`.
+   *
+   * The raw key is a **global** namespace on the platform (M1-01b), so reusing
+   * one key for a preflight and then a submit must not replay the preflight
+   * result as if it were a submit.  The bridge keys its replay cache by
+   * operation too, so two different operations never share a result.
+   */
+  private idempotencyScope(request: BridgeRequest, key: string): string {
+    return `${request.operation}:${key}`;
+  }
+
+  private replayIdempotentResult(
+    request: BridgeRequest,
+    key?: string,
+  ): BridgeResult | null {
     if (!isIdempotentOperation(request.operation)) {
       return null;
     }
-    const key = request.idempotencyKey;
-    const signature = this.signatureFor(request);
-    if (key === undefined || signature === null) {
+    const resolvedKey = key ?? request.idempotencyKey;
+    if (resolvedKey === undefined || resolvedKey.length === 0) {
       return null;
     }
-    const previous = this.idempotency.get(key);
+    const signature = this.signatureFor(request, resolvedKey);
+    if (signature === null) {
+      return null;
+    }
+    const scope = this.idempotencyScope(request, resolvedKey);
+    const previous = this.idempotency.get(scope);
     if (previous === undefined) {
-      this.idempotency.set(key, { signature, result: null });
+      this.idempotency.set(scope, { signature, result: null });
       return null;
     }
     if (previous.signature !== signature) {
       contractError("conflict", "revision_conflict", {
         rule: "idempotency_key_reuse",
-        idempotency_key: key,
+        idempotency_key: resolvedKey,
+        operation: request.operation,
       });
     }
     return previous.result;
@@ -1299,17 +2608,17 @@ export class Bridge {
 
   private rememberIdempotentResult(
     request: BridgeRequest,
+    key: string,
     result: BridgeResult,
   ): void {
     if (!isIdempotentOperation(request.operation) || result.isError) {
       return;
     }
-    const key = request.idempotencyKey;
-    const signature = this.signatureFor(request);
-    if (key === undefined || signature === null) {
+    const signature = this.signatureFor(request, key);
+    if (key.length === 0 || signature === null) {
       return;
     }
-    this.idempotency.set(key, { signature, result });
+    this.idempotency.set(this.idempotencyScope(request, key), { signature, result });
   }
 
   /** Execute one P2 operation (negotiation is checked before any call). */
@@ -1355,4 +2664,184 @@ export async function callP2Operation(
     structuredContent: result.structuredContent,
     projection: projectToolResult(raw, result),
   });
+}
+
+// ---------------------------------------------------------------------------
+// Evidence attribution (M1-03, G07/G08): parse and attribute — nothing else
+// ---------------------------------------------------------------------------
+//
+// The bridge is not an evidence model. It parses the platform's
+// `acp2.runtime.evidence-projection.v1` payload into the single
+// `@rph/research` `EvidenceView` and refuses any view that names a foreign
+// project / research / round / task attempt. It never derives a claim status,
+// never upgrades an execution status and never persists anything.
+
+/** Attribution the caller knows before it has seen the view. */
+export interface EvidenceAttribution {
+  readonly project_id: string;
+  readonly research_id: string;
+  readonly round: number;
+}
+
+/**
+ * Attribute a task reference to the expected research scope.
+ *
+ * A foreign project is a typed conflict, never a projection the caller may
+ * silently adopt.
+ */
+export function attributeTaskRef(
+  ref: TaskRef,
+  expected: EvidenceAttribution,
+): TaskRef {
+  if (ref.project_id !== expected.project_id) {
+    contractError("authorization", "foreign_project", {
+      expected_project: expected.project_id,
+      observed_project: ref.project_id,
+    });
+  }
+  return ref;
+}
+
+/**
+ * Parse and attribute one evidence-projection payload.
+ *
+ * The view must already carry a digest-bound task reference; a foreign
+ * project/research/round is refused before any consumer sees a status.
+ */
+export function attributeEvidenceView(
+  payload: unknown,
+  expected: EvidenceAttribution,
+): EvidenceView {
+  const view = assertEvidenceView(payload);
+  attributeTaskRef(view.task_ref, expected);
+  if (view.research.research_id !== expected.research_id) {
+    contractError("authorization", "foreign_research", {
+      expected_research: expected.research_id,
+      observed_research: view.research.research_id,
+    });
+  }
+  if (view.research.round !== expected.round) {
+    contractError("conflict", "foreign_round", {
+      expected_round: expected.round,
+      observed_round: view.research.round,
+    });
+  }
+  return view;
+}
+
+/** Stable key of the attributed attempt (`project|task|attempt|release|digest`). */
+export function attributedTaskRefKey(ref: TaskRef): string {
+  return taskRefKey(ref);
+}
+
+/** Parse a platform task reference through the single normalisation. */
+export function parsePlatformTaskRef(
+  payload: unknown,
+  projectId = "",
+): TaskRef {
+  return parseTaskRef(payload, projectId);
+}
+
+// ---------------------------------------------------------------------------
+// M3-04: the research policy and the durable submit-intent port
+// ---------------------------------------------------------------------------
+//
+// The Supervisor (`@rph/dsh-bundle`) sits above the bridge in the frozen
+// direction, so it may not import `@rph/research` directly.  The bridge is the
+// only seam that passes the *single* evidence/decision model and its frozen
+// policy through; it adds no rule of its own (no second vocabulary, no local
+// accept test).
+//
+// `createSubmitIntentPort` is the one client-side port the Supervisor needs
+// before a submit: the M1-02 ledger row is persisted **before** the platform
+// call, and the wire key is the M1-01b projection of that persisted key.  A
+// crash between derive and call therefore replays the same key instead of
+// inventing a second task.
+
+export type {
+  ClaimStatus,
+  DecisionEvaluation,
+  DecisionRationaleCode,
+  DecisionRecord,
+  EvidenceStatus,
+  EvidenceView,
+  ResearchDecision,
+};
+export type { TaskRef as ResearchTaskRef } from "@rph/research";
+
+export { buildDecisionRecord, evaluateDecision, isAcceptableEvidence };
+// M3-02/M3-04: the single-hop re-export that lets the composition root build a
+// durable research writer without dsh-bundle importing @rph/research directly
+// (the frozen direction stays cli -> dsh-bundle -> bridge -> research).
+export { ResearchStore };
+
+/** The submit identity the ledger keys on (M1-02 / D-IDENT-07). */
+export interface BridgeSubmitIntentIdentity {
+  readonly project_id: string;
+  readonly research_id: string;
+  readonly round: number;
+  readonly plan_definition_digest: string;
+}
+
+/** A persisted intent: the durable key and its stable wire projection. */
+export interface BridgeSubmitIntentRef {
+  readonly key: string;
+  readonly wire_key: string;
+  readonly created: boolean;
+}
+
+/**
+ * The pre-submit intent port (`SupervisorPorts.submitIntent`).
+ *
+ * `prepare` persists (or replays) the row and returns the key pair; a changed
+ * plan digest for the same round throws `SubmitIntentConflict`
+ * (`code: "plan_digest_changed"`) instead of re-deriving a key.
+ */
+export interface BridgeSubmitIntentPort {
+  prepare(identity: BridgeSubmitIntentIdentity): BridgeSubmitIntentRef;
+  markSubmitted(identity: {
+    readonly project_id: string;
+    readonly research_id: string;
+    readonly round: number;
+  }): boolean;
+}
+
+/**
+ * Adapt the M1-02 ledger into the Supervisor's pre-submit port.
+ *
+ * A caller injects the ledger that owns durability (a `Bridge` instance already
+ * holds one at `bridge.submitIntents`); the default in-memory ledger is a cache
+ * for tests and single-process callers.
+ */
+export function createSubmitIntentPort(
+  ledger: SubmitIntentLedger = new SubmitIntentLedger(),
+): BridgeSubmitIntentPort {
+  return {
+    prepare(identity: BridgeSubmitIntentIdentity): BridgeSubmitIntentRef {
+      const prepared = ledger.prepare({
+        project_id: identity.project_id,
+        research_id: identity.research_id,
+        round: identity.round,
+        plan_definition_digest: identity.plan_definition_digest,
+      });
+      return Object.freeze({
+        key: prepared.intent.key,
+        wire_key: submitWireKey(prepared.intent.key),
+        created: prepared.created,
+      });
+    },
+    markSubmitted(identity: {
+      readonly project_id: string;
+      readonly research_id: string;
+      readonly round: number;
+    }): boolean {
+      return (
+        ledger.markSubmitted({
+          project_id: identity.project_id,
+          research_id: identity.research_id,
+          round: identity.round,
+        }) !== null
+      );
+    },
+  };
 }

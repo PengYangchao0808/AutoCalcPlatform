@@ -1,5 +1,5 @@
-Processing <repo>/reports/acp2_implementation/bb45a46/B/B25/release/cccp-0.3.0-py3-none-any.whl
-Processing <repo>/reports/acp2_implementation/bb45a46/B/B25/release/acp_worker-0.3.0-py3-none-any.whl
+Processing /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release/cccp-0.3.0-py3-none-any.whl
+Processing /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release/acp_worker-0.3.0-py3-none-any.whl
 Collecting numpy>=2.1.0 (from cccp==0.3.0)
   Using cached numpy-2.4.6-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (6.6 kB)
 Collecting rdkit>=2022.09.1 (from cccp==0.3.0)

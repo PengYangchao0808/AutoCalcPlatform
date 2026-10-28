@@ -1,0 +1,65 @@
+{
+  "acceptance_env": "/ACPServer/acp2-development/data/acceptance-env-c.sh",
+  "authoritative": false,
+  "diagnostic": true,
+  "generated_at": "2026-10-22T14:09:18Z",
+  "note": "NON-AUTHORITATIVE diagnostic route record. It records which interpreter and product import the shared C acceptance environment selects for four representative routes. It does not replace B's validate_receipt and no acceptance PASS is derived from this file.",
+  "rows": [
+    {
+      "dry_run": true,
+      "exit_code": 0,
+      "harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+      "interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+      "lane": "C",
+      "product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+      "receipt": "route-runs/baseline-dry-run/evidence/main/experience_baseline-experience_fixture-baseline-20261022T140918Z-117589-4296e4.json",
+      "result": "NOT_VERIFIED",
+      "route": "baseline --dry-run",
+      "run_id": "baseline-20261022T140918Z-117589-4296e4",
+      "scenario": "baseline",
+      "test_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec"
+    },
+    {
+      "dry_run": true,
+      "exit_code": 0,
+      "harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+      "interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+      "lane": "C",
+      "product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+      "receipt": "route-runs/evidence-browser-fixture/evidence/main/experience_evidence-browser-live-experience_fixture-evidence-browser-live-20261022T140918Z-117595-72eab4.json",
+      "result": "NOT_VERIFIED",
+      "route": "evidence-browser-live --mode fixture",
+      "run_id": "evidence-browser-live-20261022T140918Z-117595-72eab4",
+      "scenario": "evidence-browser-live",
+      "test_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec"
+    },
+    {
+      "dry_run": true,
+      "exit_code": 0,
+      "harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+      "interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+      "lane": "C",
+      "product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+      "receipt": "route-runs/mcp-live-dry-run/evidence/main/experience_mcp-live-experience_live-mcp-live-20261022T140918Z-117600-482108.json",
+      "result": "NOT_VERIFIED",
+      "route": "mcp-live --dry-run",
+      "run_id": "mcp-live-20261022T140918Z-117600-482108",
+      "scenario": "mcp-live",
+      "test_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec"
+    },
+    {
+      "dry_run": false,
+      "exit_code": 2,
+      "harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+      "interpreter": "/ACPServer/acp2-development/venvs/integration/bin/python",
+      "lane": "integration",
+      "product_import": "/ACPServer/acp2-development/integration/src/acp/__init__.py",
+      "receipt": "route-runs/mcp-live-integration/evidence/main/live/experience_mcp-live-experience_live-mcp-live-20261022T140918Z-117605-d5594d.json",
+      "result": "NOT_VERIFIED",
+      "route": "mcp-live --mode live",
+      "run_id": "mcp-live-20261022T140918Z-117605-d5594d",
+      "scenario": "mcp-live",
+      "test_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec"
+    }
+  ]
+}

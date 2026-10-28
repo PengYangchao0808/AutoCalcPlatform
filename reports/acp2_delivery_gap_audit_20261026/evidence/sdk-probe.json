@@ -1,0 +1,17 @@
+{
+  "scope": "actual DSH-installed SDK to actual ACP stdio/dispatch with no-effects backend ports; no DSH Agent/model/Controller",
+  "sdk_client": "/ACPServer/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+sdk@1.31.0_supports-color@9.4.0_zod@4.4.3/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js",
+  "connected": false,
+  "code": -32602,
+  "message": "MCP error -32602: unsupported protocol version '2025-11-25'",
+  "data": {
+    "code": "unsupported_protocol_version",
+    "supported": [
+      "2025-06-18"
+    ],
+    "locked": "2025-06-18",
+    "requested": "2025-11-25",
+    "client_versions": []
+  },
+  "stderr": ""
+}

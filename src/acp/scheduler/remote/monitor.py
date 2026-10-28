@@ -75,7 +75,7 @@ class RemoteJobMonitor:
     # LSF status
     # ------------------------------------------------------------------ #
 
-    def get_lsf_status(self, node: RemoteNode, lsf_job_id: str) -> str:
+    def get_lsf_status(self, node: RemoteNode, lsf_job_id: str, *, timeout: float = 30.0) -> str:
         """Query ``bjobs`` and return a normalised status string.
 
         Returns one of :data:`STATUS_PENDING`, :data:`STATUS_RUNNING`,
@@ -89,7 +89,7 @@ class RemoteJobMonitor:
         """
         cmd = f"bjobs {shlex.quote(lsf_job_id)} 2>&1"
         try:
-            _code, out, _err = self._ssh.execute(node, cmd, timeout=30)
+            _code, out, _err = self._ssh.execute(node, cmd, timeout=timeout)
         except SSHExecutionError:
             logger.warning("bjobs query failed for job %s on %s", lsf_job_id, node.name)
             return STATUS_UNKNOWN
@@ -128,6 +128,24 @@ class RemoteJobMonitor:
     def is_terminal(status: str) -> bool:
         """True for LSF states that will not transition further."""
         return status in _TERMINAL_LSF_STATUSES
+
+    def job_detail_text(self, node: RemoteNode, lsf_job_id: str, *, timeout: float = 30.0) -> str:
+        """Return the native ``bjobs -l`` detail of one LSF job (M4-03 evidence).
+
+        ``bjobs -l`` is the cluster's own record: the ``-W``/RUNLIMIT directive,
+        ``Started on``, the terminal ``Exited with exit code`` line and the
+        PENDING REASONS.  Deadline enforcement persists this text in the
+        receipt so a wall/queue limit is closed by native evidence, not by the
+        platform's own opinion.  An unreachable node returns ``""`` (the caller
+        records ``verified=False`` rather than inventing a reason).
+        """
+        cmd = f"bjobs -l {shlex.quote(str(lsf_job_id))} 2>&1"
+        try:
+            _code, out, _err = self._ssh.execute(node, cmd, timeout=timeout)
+        except SSHExecutionError:
+            logger.warning("bjobs -l query failed for job %s on %s", lsf_job_id, node.name)
+            return ""
+        return out or ""
 
     # ------------------------------------------------------------------ #
     # Exit code
@@ -284,7 +302,7 @@ class RemoteJobMonitor:
     # Cancellation
     # ------------------------------------------------------------------ #
 
-    def cancel_job(self, node: RemoteNode, lsf_job_id: str) -> bool:
+    def cancel_job(self, node: RemoteNode, lsf_job_id: str, *, timeout: float = 30.0) -> bool:
         """Send ``bkill`` to cancel a remote LSF job, with SSH ``pkill`` fallback.
 
         Returns ``True`` if the cancellation signal was delivered successfully
@@ -294,7 +312,7 @@ class RemoteJobMonitor:
         """
         cmd = f"bkill {lsf_job_id} 2>&1"
         try:
-            code, out, _err = self._ssh.execute(node, cmd, timeout=30)
+            code, out, _err = self._ssh.execute(node, cmd, timeout=timeout)
         except SSHExecutionError as exc:
             logger.warning("bkill %s failed on %s: %s (SSH error)", lsf_job_id, node.name, exc)
             return False
@@ -318,13 +336,9 @@ class RemoteJobMonitor:
         the job ID and sends SIGTERM followed by SIGKILL to their process groups.
         """
         # Find PIDs of acp run processes tied to this job ID.
-        find_cmd = shlex.quote(
-            f"pgrep -f 'acp.cli run.*{lsf_job_id}'"
-        )
+        find_cmd = shlex.quote(f"pgrep -f 'acp.cli run.*{lsf_job_id}'")
         try:
-            code, out, _err = self._ssh.execute(
-                node, f"{find_cmd} 2>/dev/null || true", timeout=15
-            )
+            code, out, _err = self._ssh.execute(node, f"{find_cmd} 2>/dev/null || true", timeout=15)
         except SSHExecutionError as exc:
             logger.warning("pkill fallback SSH error on %s: %s", node.name, exc)
             return False
@@ -335,15 +349,22 @@ class RemoteJobMonitor:
 
         pids = out.strip().split()
         logger.info("Killing %d acp processes for job %s on %s", len(pids), lsf_job_id, node.name)
-        kill_cmd = shlex.quote(f"kill -TERM {' '.join(pids)} 2>/dev/null; sleep 5; "
-                               f"kill -KILL {' '.join(pids)} 2>/dev/null || true")
+        kill_cmd = shlex.quote(
+            f"kill -TERM {' '.join(pids)} 2>/dev/null; sleep 5; "
+            f"kill -KILL {' '.join(pids)} 2>/dev/null || true"
+        )
         try:
             code, out2, _err = self._ssh.execute(node, kill_cmd, timeout=15)
             if code == 0:
                 logger.info("pkill fallback succeeded for job %s on %s", lsf_job_id, node.name)
                 return True
-            logger.warning("pkill fallback exited %d for job %s on %s: %s",
-                           code, lsf_job_id, node.name, out2.strip())
+            logger.warning(
+                "pkill fallback exited %d for job %s on %s: %s",
+                code,
+                lsf_job_id,
+                node.name,
+                out2.strip(),
+            )
         except SSHExecutionError as exc:
             logger.warning("pkill fallback SSH error on %s: %s", node.name, exc)
         return False
@@ -378,7 +399,7 @@ class RemoteJobMonitor:
         )
         return False
 
-    def bresume_job(self, node: RemoteNode, lsf_job_id: str) -> bool:
+    def bresume_job(self, node: RemoteNode, lsf_job_id: str, *, timeout: float = 30.0) -> bool:
         """Send ``bresume`` to resume a suspended remote LSF job.
 
         Returns ``True`` if the resume signal was delivered successfully,
@@ -386,7 +407,7 @@ class RemoteJobMonitor:
         """
         cmd = f"bresume {lsf_job_id} 2>&1"
         try:
-            code, out, _err = self._ssh.execute(node, cmd, timeout=30)
+            code, out, _err = self._ssh.execute(node, cmd, timeout=timeout)
         except SSHExecutionError as exc:
             logger.warning("bresume %s failed on %s: %s (SSH error)", lsf_job_id, node.name, exc)
             return False

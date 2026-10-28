@@ -1,0 +1,50 @@
+{
+  "controller_url": "http://127.0.0.1:60605",
+  "project_id": "ca5fafd3-a566-424a-b5de-2b01c95e312d",
+  "proposal_ref": "prop-m1-06-001",
+  "approval_ref": "ap_218d62f1a777443eb0a3fbe3b86392ef",
+  "research": {
+    "research_id": "res-dd750138f09691f961016dbd",
+    "session_id": "ses-db04db4ceb1ea9f30be9eb13",
+    "round": 0
+  },
+  "digests": {
+    "plan_digest": "sha256:982125c6d24106652327445819b1b53f65161c49ed3e7e2df1476ad442e4b673",
+    "proposal_digest": "sha256:23d2040904fc6653face8a1f54bbcca0fcffd5e9358f359f7296d13ddee4416a",
+    "science_digest": "sha256:da18795f8688381b8ad8c771576e2bfd6dfa608d11896fc66cc54f5b87a33e87"
+  },
+  "submit": {
+    "workflow": "fake",
+    "input": {
+      "source": "CCO",
+      "source_type": "smiles"
+    },
+    "method": {},
+    "resources": {
+      "cores": 1
+    },
+    "budget": {
+      "unit": "task_count",
+      "count": 1,
+      "timeout_s": 120
+    }
+  },
+  "launch": {
+    "command": "/usr/bin/python3.11",
+    "args": [
+      "-m",
+      "acp.cli",
+      "mcp",
+      "serve",
+      "--controller",
+      "http://127.0.0.1:60605"
+    ],
+    "cwd": "/ACPServer/acp2-remediation-integration",
+    "env": {
+      "PYTHONPATH": "/ACPServer/acp2-remediation-integration/src",
+      "ACP_RUN_ROOT": "/tmp/opencode/acp2-m1-06-8db57s8o/runs"
+    },
+    "timeoutMs": 30000
+  },
+  "out_dir": "/ACPServer/acp2-remediation-integration/reports/acp2_remediation_20261026/candidate-contracts/mcp-runner"
+}

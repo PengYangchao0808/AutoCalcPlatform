@@ -1,0 +1,62 @@
+{
+  "all_unique": true,
+  "count": 7,
+  "expected_counts": {
+    "cross_domain_live": 3,
+    "evidence_browser_live": 2,
+    "research_loop_live": 2
+  },
+  "rows": [
+    {
+      "owner": "C",
+      "phase": "experience:fixture",
+      "receipt": "four-tuple/ebl-fixture/experience_evidence-browser-live-experience_fixture-20261022T141500Z-c03a-harness-selftest.json",
+      "run_id": "20261022T141500Z-c03a-harness-selftest",
+      "scenario": "experience:evidence-browser-live"
+    },
+    {
+      "owner": "C",
+      "phase": "experience:live",
+      "receipt": "four-tuple/ebl-live/experience_evidence-browser-live-experience_live-20261022T141500Z-c03a-harness-selftest.json",
+      "run_id": "20261022T141500Z-c03a-harness-selftest",
+      "scenario": "experience:evidence-browser-live"
+    },
+    {
+      "owner": "C",
+      "phase": "experience:control",
+      "receipt": "four-tuple/rl-control/experience_research-loop-live-experience_control-20261022T141500Z-c03a-harness-selftest.json",
+      "run_id": "20261022T141500Z-c03a-harness-selftest",
+      "scenario": "experience:research-loop-live"
+    },
+    {
+      "owner": "C",
+      "phase": "experience:search",
+      "receipt": "four-tuple/rl-search/experience_research-loop-live-experience_search-20261022T141500Z-c03a-harness-selftest.json",
+      "run_id": "20261022T141500Z-c03a-harness-selftest",
+      "scenario": "experience:research-loop-live"
+    },
+    {
+      "owner": "C",
+      "phase": "experience:nmr",
+      "receipt": "four-tuple/cd-nmr/experience_cross-domain-live-experience_nmr-20261022T141500Z-c03a-harness-selftest.json",
+      "run_id": "20261022T141500Z-c03a-harness-selftest",
+      "scenario": "experience:cross-domain-live"
+    },
+    {
+      "owner": "C",
+      "phase": "experience:thermo",
+      "receipt": "four-tuple/cd-thermo/experience_cross-domain-live-experience_thermo-20261022T141500Z-c03a-harness-selftest.json",
+      "run_id": "20261022T141500Z-c03a-harness-selftest",
+      "scenario": "experience:cross-domain-live"
+    },
+    {
+      "owner": "C",
+      "phase": "experience:selectivity",
+      "receipt": "four-tuple/cd-selectivity/experience_cross-domain-live-experience_selectivity-20261022T141500Z-c03a-harness-selftest.json",
+      "run_id": "20261022T141500Z-c03a-harness-selftest",
+      "scenario": "experience:cross-domain-live"
+    }
+  ],
+  "run_id": "20261022T141500Z-c03a-harness-selftest",
+  "unique_count": 7
+}

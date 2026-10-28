@@ -1,0 +1,32 @@
+{
+  "head": "ec4a0b39b26645139c01aa9578fbedd0c3db23a2",
+  "new_findings": [
+    "G21",
+    "G22",
+    "G23",
+    "G24",
+    "G25",
+    "G26"
+  ],
+  "existing_tests": {
+    "name": "pytest",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0",
+    "tests": "69",
+    "time": "11.610",
+    "timestamp": "2026-10-26T11:57:29.817824+08:00",
+    "hostname": "workstation"
+  },
+  "dsh_dependency": "@modelcontextprotocol/client@2.2.0 (ESM import export)",
+  "dsh_connected": false,
+  "http_cases": 4,
+  "science_dispatch_suppressed": true,
+  "baseline_preserved": true,
+  "report_links_valid": true,
+  "notes": [
+    "Probe assertions encode reproduced defects, not product PASS.",
+    "TaskRef budget bypass hypothesis disproved.",
+    "Original lane files unchanged."
+  ]
+}

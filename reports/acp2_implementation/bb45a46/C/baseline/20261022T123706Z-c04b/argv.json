@@ -1,0 +1,194 @@
+{
+  "task": "T-04a / C04-b",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "commands": [
+    {
+      "argv": [
+        "git",
+        "-C",
+        "/ACPServer/acp2-development/C",
+        "rev-parse",
+        "75a8f08^{tree}"
+      ],
+      "purpose": "tree equality (C baseline)"
+    },
+    {
+      "argv": [
+        "git",
+        "-C",
+        "/ACPServer/acp2-development/B",
+        "rev-parse",
+        "a0185b15^{tree}"
+      ],
+      "purpose": "tree equality (B materialized)"
+    },
+    {
+      "argv": [
+        "bash",
+        "-c",
+        ". /ACPServer/acp2-development/data/acceptance-env-c.sh; assert ACP2_EVIDENCE absolute == ACP2_PROJECT_ROOT/reports/acp2_implementation/bb45a46 == B02a value"
+      ],
+      "purpose": "env adoption assertions"
+    },
+    {
+      "argv": [
+        "bash",
+        "/ACPServer/acp2-development/C/scripts/acceptance/acp2_route_probe.sh",
+        "baseline",
+        "60",
+        "--dry-run"
+      ],
+      "purpose": "route matrix case 1"
+    },
+    {
+      "argv": [
+        "bash",
+        "/ACPServer/acp2-development/C/scripts/acceptance/acp2_route_probe.sh",
+        "evidence-browser-live",
+        "60",
+        "--mode",
+        "fixture"
+      ],
+      "purpose": "route matrix case 2"
+    },
+    {
+      "argv": [
+        "bash",
+        "/ACPServer/acp2-development/C/scripts/acceptance/acp2_route_probe.sh",
+        "mcp-live",
+        "60",
+        "--dry-run"
+      ],
+      "purpose": "route matrix case 3"
+    },
+    {
+      "argv": [
+        "bash",
+        "/ACPServer/acp2-development/C/scripts/acceptance/acp2_route_probe.sh",
+        "mcp-live",
+        "60",
+        "--mode",
+        "live",
+        "--dry-run"
+      ],
+      "purpose": "route matrix case 4"
+    },
+    {
+      "argv": [
+        "bash",
+        "/ACPServer/acp2-development/C/scripts/acceptance/acp2_route_probe.sh",
+        "mcp-live",
+        "60"
+      ],
+      "purpose": "route matrix case 5"
+    },
+    {
+      "argv": [
+        "bash",
+        "/ACPServer/acp2-development/C/scripts/acceptance/acp2_route_probe.sh",
+        "mcp-live",
+        "60",
+        "--mode",
+        "live"
+      ],
+      "purpose": "route matrix case 6"
+    },
+    {
+      "argv": [
+        "bash",
+        "/ACPServer/acp2-development/C/scripts/acceptance/acp2_route_probe.sh",
+        "mcp-live",
+        "60",
+        "--mode"
+      ],
+      "purpose": "route matrix case 7 (missing value)"
+    },
+    {
+      "argv": [
+        "bash",
+        "/ACPServer/acp2-development/C/scripts/acceptance/acp2_route_probe.sh",
+        "mcp-live",
+        "60",
+        "--phase"
+      ],
+      "purpose": "route matrix case 8 (missing value)"
+    },
+    {
+      "argv": [
+        "bash",
+        "/ACPServer/acp2-development/C/scripts/acceptance/acp2_route_probe.sh",
+        "mcp-live",
+        "60",
+        "--subcase"
+      ],
+      "purpose": "route matrix case 9 (missing value)"
+    },
+    {
+      "argv": [
+        "bash",
+        "/ACPServer/acp2-development/C/scripts/acceptance/acp2_route_probe.sh",
+        "bogus-scenario",
+        "60"
+      ],
+      "purpose": "route matrix case 10"
+    },
+    {
+      "argv": [
+        "bash",
+        "/ACPServer/acp2-development/C/scripts/acceptance/acp2_route_probe.sh",
+        "mcp-live",
+        "60",
+        "--bogus"
+      ],
+      "purpose": "route matrix case 11"
+    },
+    {
+      "argv": [
+        "bash",
+        "/ACPServer/acp2-development/C/scripts/acceptance/acp2_route_probe.sh",
+        "mcp-live"
+      ],
+      "purpose": "route matrix case 12"
+    },
+    {
+      "argv": [
+        "bash",
+        "-c",
+        ". /ACPServer/acp2-development/data/acceptance-env-c.sh; ACP2_RUN_ID=task47-real-accept; c_accept baseline 60"
+      ],
+      "purpose": "real B-bound c_accept (expect 2 harness_not_delivered)"
+    },
+    {
+      "argv": [
+        "bash",
+        "-c",
+        ". /ACPServer/acp2-development/data/acceptance-env-c.sh; ACP2_EVIDENCE=/ACPServer/acp2-development/evidence; c_accept baseline 60"
+      ],
+      "purpose": "negative: old provisional root"
+    },
+    {
+      "argv": [
+        "bash",
+        "-c",
+        ". /ACPServer/acp2-development/data/acceptance-env-c.sh; ACP2_BASELINE_LOCK=/tmp/acp2-t47-neg/no-evidence-root.json; c_accept baseline 60"
+      ],
+      "purpose": "negative: lock without evidence_root"
+    },
+    {
+      "argv": [
+        "bash",
+        "-c",
+        ". /ACPServer/acp2-development/data/acceptance-env-c.sh; ACP2_PROJECT_ROOT=/tmp/wrong-project-root; c_accept baseline 60"
+      ],
+      "purpose": "negative: relative lock + wrong project root"
+    },
+    {
+      "argv": [
+        "bash",
+        "-c",
+        ". /ACPServer/acp2-development/data/acceptance-env-c.sh; ACP2_BASELINE_LOCK=/tmp/acp2-t47-neg/bad-c-root.json; c_accept baseline 60"
+      ],
+      "purpose": "negative: wrong evidence_roots.C"
+    }
+  ]
+}

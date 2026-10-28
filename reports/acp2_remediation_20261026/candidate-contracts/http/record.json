@@ -1,0 +1,35 @@
+{
+  "approval_ref": "ap_218d62f1a777443eb0a3fbe3b86392ef",
+  "created_at": "2026-10-27T00:51:41Z",
+  "decision": "accept",
+  "evidence_refs": [
+    {
+      "evidence_id": "art-cec0e00d21f0d39a",
+      "kind": "native_output",
+      "relative_path": "artifacts/freq.out",
+      "sha256": "sha256:cec0e00d21f0d39aaccc2ad75ba6f6141f1f37030137709648d2858930cf1cfe"
+    },
+    {
+      "evidence_id": "report-m1-06",
+      "kind": "evidence_report",
+      "relative_path": "RESULT/evidence_report.json",
+      "sha256": "sha256:2e73121707c3d622a03798227985e3953ff7e610cee6125a012d9f9332c06a25"
+    }
+  ],
+  "human_edits": [],
+  "missing_validation": [],
+  "plan_definition_digest": "sha256:da18795f8688381b8ad8c771576e2bfd6dfa608d11896fc66cc54f5b87a33e87",
+  "project_id": "ca5fafd3-a566-424a-b5de-2b01c95e312d",
+  "record_revision": 1,
+  "research_id": "res-dd750138f09691f961016dbd",
+  "round": 0,
+  "step_identity_refs": [],
+  "task_refs": [
+    {
+      "attempt": 1,
+      "job_id": "20261027_085136_001_fake",
+      "project_id": "ca5fafd3-a566-424a-b5de-2b01c95e312d",
+      "release_id": "8d08ae54f628fcdf"
+    }
+  ]
+}

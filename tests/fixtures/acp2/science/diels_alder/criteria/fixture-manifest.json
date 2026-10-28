@@ -1,0 +1,37 @@
+{
+  "adr": "docs/reference/next-change/adr/ADR-008-limited-diels-alder-criteria.md",
+  "constructed": true,
+  "criteria_definition_digest": "f89f73da4178f4db35b5eb2b8f3958a4cad8bacc5c82490ccfc6777a2c3449d3",
+  "criteria_regime": "diels_alder.limited.v1",
+  "criteria_schema": "acp2.science.da-criteria.v1",
+  "criteria_version": "1.0.0",
+  "file_digests": {
+    "bundle.all-supported.positive.json": "cf0e2f2b0c00235025c01b389435d6522e359d335e2960d9a879bad27a44d62e",
+    "bundle.endpoint-mismatch.refuted.json": "b6046e5db7961d72a7a2fbf8e496df4c7eaa576664b35e0a07f2da773cfbad6a",
+    "bundle.energy-conditions-mismatch.refuted.json": "dcbb10f10ce45854a22f02b7288f2d966cbb42bf30758d2f72514f5281c0e9ce",
+    "bundle.irc-one-direction.inconclusive.json": "e80da9aeec051166f1fe06b2c746b6ef61932098e2616c1188fab3860674ee06",
+    "bundle.missing-frequency.not-evaluated.json": "da3c1a88b96f5a1486330060d285aa619e88a7f2f0cec22271faccff85213757",
+    "bundle.no-conclusion.completed.json": "6edfbe66d863ea92b7058ef040d7ae0dd4e18d9278f12cae9dac252b4326bbb9",
+    "bundle.status-override.negative.json": "aacad0e7e494b455aa1e4307f7893125ec7991266dd61398604bbe4e13b1bb74",
+    "bundle.supported-without-source.inconclusive.json": "f67b3856c81c4b180043a91e118e795fbb35ae5141046c8fd507ce0fbac05377",
+    "bundle.ts-two-imaginary-modes.refuted.json": "d6cd2f1b374cfc2fbe2f1005334a19301f024fa4742df18b07100d7cac516043"
+  },
+  "fixture_files": {
+    "all_supported": "bundle.all-supported.positive.json",
+    "endpoint_mismatch": "bundle.endpoint-mismatch.refuted.json",
+    "energy_conditions_mismatch": "bundle.energy-conditions-mismatch.refuted.json",
+    "irc_one_direction": "bundle.irc-one-direction.inconclusive.json",
+    "missing_frequency": "bundle.missing-frequency.not-evaluated.json",
+    "no_conclusion": "bundle.no-conclusion.completed.json",
+    "status_override": "bundle.status-override.negative.json",
+    "supported_without_source": "bundle.supported-without-source.inconclusive.json",
+    "ts_two_imaginary_modes": "bundle.ts-two-imaginary-modes.refuted.json"
+  },
+  "fixture_id": "diels-alder-criteria-constructed-m1-05",
+  "note": "Constructed ADR-008 criteria-evaluation samples. No QC run, TS, IRC or energy value exists; real_run is false and every record is labelled constructed.",
+  "real_run": false,
+  "schema": "acp2.science.fixture-manifest",
+  "schema_version": 1,
+  "source_fixture": "tests/fixtures/acp2/science/diels_alder/v1/fixture-manifest.json",
+  "validator_version": "1.0.0"
+}

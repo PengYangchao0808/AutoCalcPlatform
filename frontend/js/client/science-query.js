@@ -214,6 +214,10 @@ ACPClient.science = (function () {
     return "/science/capabilities?project_id=" + encodeURIComponent(projectId);
   }
 
+  function capabilityFormsPath(projectId) {
+    return "/science/capability-forms?project_id=" + encodeURIComponent(projectId);
+  }
+
   function preflightPath(projectId) {
     return "/science/preflight?project_id=" + encodeURIComponent(projectId);
   }
@@ -243,6 +247,87 @@ ACPClient.science = (function () {
           });
       },
     }).then(copyCapabilities);
+  }
+
+  /** Frozen schema-driven capability forms (M3-06).
+   *
+   * The client refuses a document that speaks a different subset: the served
+   * `subset` table must equal the local `ACPWorkbench.contracts.uiSubset`
+   * tables, and every served form is validated against that whitelist before
+   * it is cached. `ui_subset_drift`/`ui_*` typed errors are the only outcomes
+   * for an unknown schema — never a silently ignored field.
+   */
+  function validateCapabilityForms(body) {
+    if (!body || typeof body !== "object") {
+      throw new Error("science-query: capability-forms body is not an object");
+    }
+    var subset = (window.ACPWorkbench && ACPWorkbench.contracts &&
+      ACPWorkbench.contracts.uiSubset) || null;
+    if (!subset) {
+      throw new Error("science-query: uiSubset contract unavailable");
+    }
+    if (body.schema !== subset.FORMS_SCHEMA) {
+      throw new Error("science-query: ui_form_malformed: schema " +
+        JSON.stringify(String(body.schema)));
+    }
+    if (body.subset_version !== subset.SUBSET_VERSION) {
+      throw new Error("science-query: ui_subset_unknown_major: " +
+        JSON.stringify(String(body.subset_version)));
+    }
+    if (!subset.tablesMatch(body.subset)) {
+      throw new Error("science-query: ui_subset_drift: the served subset tables " +
+        "differ from this UI build");
+    }
+    if (!Array.isArray(body.forms) || !Array.isArray(body.read_only)) {
+      throw new Error("science-query: ui_form_malformed: forms/read_only must be arrays");
+    }
+    body.forms.forEach(function (entry) {
+      if (!entry || typeof entry !== "object" || typeof entry.capability_id !== "string") {
+        throw new Error("science-query: ui_form_malformed: form entry has no capability_id");
+      }
+      if (entry.state !== "available") return;
+      var check = subset.validateFormDocument(entry.form);
+      if (!check.ok) {
+        throw new Error("science-query: " + check.code + ": " + entry.capability_id);
+      }
+      if (typeof entry.form_digest !== "string" || entry.form_digest !== entry.form.form_digest) {
+        throw new Error("science-query: ui_form_digest_mismatch: " + entry.capability_id);
+      }
+    });
+    return body;
+  }
+
+  function copyCapabilityForms(body) {
+    var copy = JSON.parse(JSON.stringify(body));
+    copy.forms = body.forms.map(function (entry) {
+      return Object.assign({}, entry, {
+        form: entry.form ? JSON.parse(JSON.stringify(entry.form)) : entry.form,
+        error: entry.error ? Object.assign({}, entry.error) : entry.error,
+      });
+    });
+    copy.read_only = body.read_only.map(function (entry) { return Object.assign({}, entry); });
+    return copy;
+  }
+
+  /** Capability-form discovery. `opts.generation` versions the cached snapshot. */
+  function fetchCapabilityForms(scope, opts) {
+    opts = opts || {};
+    var s = normalizeScope(scope);
+    if (!adapters.v2) return Promise.reject(
+      new Error("ACPClient.science.init({v2}) not configured")
+    );
+    var identity = "forms";
+    var key = keyFor(s, "capability-forms", identity, versionOf(opts));
+    return store.query(key, {
+      group: groupFor(s, "capability-forms", identity),
+      signal: opts.signal || null,
+      loader: function (signal) {
+        return adapters.v2(capabilityFormsPath(s.projectId), requestOptions(opts, signal))
+          .then(function (body) {
+            return copyCapabilityForms(validateCapabilityForms(body));
+          });
+      },
+    }).then(copyCapabilityForms);
   }
 
   /** Preflight/estimate. Never a submit: the validated projection must prove
@@ -391,6 +476,8 @@ ACPClient.science = (function () {
     clientRequestDigest: clientRequestDigest,
     preflightKeyFor: preflightKeyFor,
     fetchCapabilities: fetchCapabilities,
+    fetchCapabilityForms: fetchCapabilityForms,
+    validateCapabilityForms: validateCapabilityForms,
     preflight: preflight,
     fetchTaskStatus: fetchTaskStatus,
     fetchView: fetchView,

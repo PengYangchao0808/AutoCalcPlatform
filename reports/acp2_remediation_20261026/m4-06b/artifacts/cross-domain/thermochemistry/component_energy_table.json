@@ -1,0 +1,14 @@
+{
+  "components": [
+    {
+      "component_id": "route-a-ts",
+      "gibbs_hartree": -234.3646781,
+      "source": "shermo:sha256:400f1897ac997889ccabf7fd76c67d8ce820c2794643e5fac9fcd6f7f8d19518",
+      "weight": 1.0
+    }
+  ],
+  "energy_kind": "gibbs_free",
+  "source": "M4-04 route-a ts_frequency native log + real Shermo 2.6.1",
+  "standard_state": "1atm",
+  "temperature_kelvin": 298.15
+}

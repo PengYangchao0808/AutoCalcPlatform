@@ -31,7 +31,7 @@
   },
   "fencing_token": "2834f88cae8594a60bb1faec2c23414a",
   "job_id": "20261023_224334_001_b25-scheduler-smoke",
-  "owner": "local:redacted-host:1698296:1",
+  "owner": "local:workstation:1698296:1",
   "plan_identity": "v2:9bc40cd8ffd921c7e9e966978f436614",
   "receipt_version": 1,
   "release_digest": "b59ec6b6b502ed70104baacb17b41873769813def34224840017792e438900b3",

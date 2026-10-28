@@ -92,8 +92,10 @@ explicitly re-owned to B10a; the CLI export manifest read is re-owned to B12.
 
 - The HTTP GET read adapters still read the authoritative store; they are
   read-only adapters explicitly re-owned to B10a, not a second writer.
-- The in-memory `WorkspaceBudget`/`IdempotencyRegistry` in the MCP adapter is a
-  test/cache adapter only and is never described as cross-process authority;
-  B08/B09 replace the production path.
+- The in-memory `IdempotencyRegistry` that once lived in the MCP adapter was
+  **removed in M0-05**: the production path is the persistent Controller ledger
+  (B08/B09), the raw client key is forwarded verbatim, and the MCP server keeps
+  no operation-result state. The remaining `WorkspaceBudget` cap is admission
+  accounting, never cross-process idempotency authority.
 - B06 ships the prepare/analyze route shells. The real artifact lifecycle and
   the negative matrix belong to B12.

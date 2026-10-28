@@ -1,0 +1,159 @@
+{
+  "adr_step_index": 1,
+  "adr_task_kind": "conformer_search",
+  "attempt": 1,
+  "bounded_alternative": "alt_endpoint_prep_single_conformation",
+  "complete": true,
+  "duration_seconds": 964.16,
+  "entry": "legacy_task_core",
+  "error": null,
+  "executed_task_kind": "optimize",
+  "level": {
+    "basis": "def2-TZVP",
+    "charge": 0,
+    "method": "wB97X-D4",
+    "multiplicity": 1
+  },
+  "native_files": [
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_butadiene/optimize.out",
+      "path": "optimize.out",
+      "sha256": "59664df763973ff2266595a6bac24d7e1f3c70aae9e1fd5ce1b5ac6d728f1385",
+      "size_bytes": 1295957
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_butadiene/optimize.xyz",
+      "path": "optimize.xyz",
+      "sha256": "0fc096d9278a3fd9d6885cfe2a4447b751bf9ba5bfe45c56f8c41f38e87cacd6",
+      "size_bytes": 874
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_butadiene/optimize_trj.xyz",
+      "path": "optimize_trj.xyz",
+      "sha256": "a2a649046d540069fc18cd09d402d9796b78a25dc66637c8188ec66e115d1d59",
+      "size_bytes": 23760
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_butadiene/optimize.inp",
+      "path": "optimize.inp",
+      "sha256": "2724a4794c2adc3dc826c0af245e7fad45fa07d4357ae523073291a6ce97c989",
+      "size_bytes": 590
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_butadiene/optimize.property.txt",
+      "path": "optimize.property.txt",
+      "sha256": "238a9fb246570cea53b93e846c799166f30c36e4252b93e41050350a415c02a5",
+      "size_bytes": 246885
+    }
+  ],
+  "products": [],
+  "receipt": null,
+  "release_digest": "50bc7eae49ab21652222b38a574b40de6ff1084ed40660b8b72400eb450257cf",
+  "release_id": "14ddbc6078bb38af",
+  "schema": "acp2.m4-04.step.v1",
+  "status": "completed",
+  "step_id": "endpoint_prep_butadiene",
+  "task_ref": "20261027_940_endpoint_prep_butadiene",
+  "task_result": {
+    "artifacts": [
+      {
+        "checksum": "sha256:2724a4794c2adc3dc826c0af245e7fad45fa07d4357ae523073291a6ce97c989",
+        "path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_butadiene/optimize.inp",
+        "source": "orca",
+        "type": "output"
+      },
+      {
+        "checksum": "sha256:59664df763973ff2266595a6bac24d7e1f3c70aae9e1fd5ce1b5ac6d728f1385",
+        "path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_butadiene/optimize.out",
+        "source": "orca",
+        "type": "log"
+      }
+    ],
+    "complete": true,
+    "coordinates": [
+      [
+        -0.76997,
+        1.052622,
+        -0.000695
+      ],
+      [
+        0.007655,
+        -0.027009,
+        -0.001651
+      ],
+      [
+        1.470943,
+        0.024954,
+        0.003575
+      ],
+      [
+        2.251428,
+        -1.052582,
+        -0.000598
+      ],
+      [
+        -0.345853,
+        2.05267,
+        0.002074
+      ],
+      [
+        -1.851188,
+        0.975276,
+        -0.002747
+      ],
+      [
+        1.91767,
+        1.017107,
+        0.009931
+      ],
+      [
+        -0.443088,
+        -1.017476,
+        -0.003342
+      ],
+      [
+        3.332415,
+        -0.971821,
+        0.001583
+      ],
+      [
+        1.829988,
+        -2.053741,
+        -0.00813
+      ]
+    ],
+    "energy_hartree": -156.125396826933,
+    "errors": [],
+    "frequencies": [],
+    "metadata": {},
+    "payload": {
+      "optimization_status": "converged",
+      "trajectory_ref": {
+        "path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_butadiene/optimization_trajectory.json",
+        "source": "optimization_trajectory",
+        "type": "trajectory"
+      }
+    },
+    "provenance": {
+      "backend": "orca",
+      "input_signature": "/ACPServer/acp2-runs/remediation/m4-04/da/inputs/butadiene.xyz",
+      "method": "wB97X-D4",
+      "version": "unknown"
+    },
+    "schema_version": 1,
+    "status": "completed",
+    "symbols": [
+      "C",
+      "C",
+      "C",
+      "C",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H"
+    ],
+    "task": "optimize"
+  }
+}

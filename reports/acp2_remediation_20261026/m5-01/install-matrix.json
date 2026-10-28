@@ -1,0 +1,30 @@
+{
+  "generated_at": "2026-10-28T02:36:04Z",
+  "matrix": {
+    "mixed": {
+      "reason": "release contract forbids mixing distributions: ['root'] already installed, refusing the 'roles' set",
+      "shared_paths_byte_identical": true,
+      "status": "REFUSED"
+    },
+    "roles_only": {
+      "distributions": [
+        "cccp",
+        "acp-worker",
+        "acp-web"
+      ],
+      "status": "PASS"
+    },
+    "root_only": {
+      "distributions": [
+        "acp"
+      ],
+      "status": "PASS"
+    },
+    "web_research_surface": {
+      "research_read_refusal": 403,
+      "science_capabilities": 200,
+      "status": "PASS"
+    }
+  },
+  "schema": "acp2.m5-01.install-matrix.v1"
+}

@@ -1,0 +1,10 @@
+{
+  "head": "ec4a0b39b26645139c01aa9578fbedd0c3db23a2",
+  "reviewed_user_files": {
+    "reports/acp2_delivery_gap_audit_20261026/GAP_REPORT.md": "d6f23c95ec968f5315e41b9a7747187dac10dddd0b2590bccdcb8b5a08b995fc",
+    "reports/acp2_delivery_gap_audit_20261026/evidence/verification-20261026/lane-c-platform.md": "13ba5133f33f125147f94397ae5b29ef9aa4defc6a690c7f721d8b982ee8b436",
+    "reports/acp2_delivery_gap_audit_20261026/evidence/verification-20261026/lane-d-assembly-evidence.md": "820764d2d30fe8a0209a091c726936c7077d61a217bf92e45c32b2fd7511276e",
+    "reports/acp2_delivery_gap_audit_20261026/evidence/verification-20261026/lane-b-rph.md": "c3ab3271e8275d1624a715e1a411e9bed74e435ee1384ab11d6072b7efd62b55",
+    "reports/acp2_delivery_gap_audit_20261026/evidence/verification-20261026/lane-a-mcp-server.md": "006840c73384a202dc79436151e391085af0a36f5db83a539d8f15715571f246"
+  }
+}

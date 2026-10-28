@@ -1,0 +1,5 @@
+  ok - parse: no resp.ok check — JSON error body resolves to the ok:false path
+  ok - H-3: late parse after invalidatePendingParse() (close) does not write
+  ok - H-3: close/reopen — a late parse from session A cannot overwrite session B
+
+329 passed, 0 failed

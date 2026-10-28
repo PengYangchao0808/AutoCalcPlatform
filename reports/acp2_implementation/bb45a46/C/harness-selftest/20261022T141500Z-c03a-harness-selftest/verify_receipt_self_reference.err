@@ -1,0 +1,4 @@
+REJECT: artifact_missing:manifest.redacted.json
+REJECT: artifact_size_bytes_mismatch:self-reference.json
+REJECT: artifact_sha256_mismatch:self-reference.json
+REJECT: artifact_self_reference:self-reference.json

@@ -1,0 +1,55 @@
+{
+  "task_count": {
+    "input": {
+      "unit": "task_count",
+      "count": 2,
+      "timeout_s": 60
+    },
+    "limits": {
+      "task_ref": 2
+    },
+    "timeouts": {
+      "queue_wait_s": 0.0,
+      "science_runtime_s": 60.0,
+      "client_request_s": 60.0,
+      "overall_acceptance_s": 3600.0
+    }
+  },
+  "core_hours": {
+    "input": {
+      "unit": "core_hours",
+      "count": 2,
+      "timeout_s": 60
+    },
+    "exception": "UsageUnitValidationError",
+    "message": "unknown usage unit 'core_hours'"
+  },
+  "walltime_s": {
+    "input": {
+      "unit": "walltime_s",
+      "count": 2,
+      "timeout_s": 60
+    },
+    "exception": "UsageUnitValidationError",
+    "message": "unknown usage unit 'walltime_s'"
+  },
+  "rph": {
+    "input": {
+      "model_requests": 2,
+      "input_tokens": 1000,
+      "output_tokens": 1000,
+      "task_refs": 1,
+      "recipe_steps": 1,
+      "qc_invocations": 1,
+      "wall_seconds": 60,
+      "queue_seconds": 60
+    },
+    "limits": {},
+    "timeouts": {
+      "queue_wait_s": 0.0,
+      "science_runtime_s": 1800.0,
+      "client_request_s": 60.0,
+      "overall_acceptance_s": 3600.0
+    }
+  }
+}

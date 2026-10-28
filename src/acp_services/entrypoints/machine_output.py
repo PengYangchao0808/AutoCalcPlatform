@@ -49,9 +49,10 @@ Author: ACP Services (B lane, todo 42).
 
 from __future__ import annotations
 
+import base64
 import json
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -64,12 +65,14 @@ __all__ = [
     "ErrorObject",
     "MachineResult",
     "ERROR_CATALOG",
+    "PASSTHROUGH_FIELD_VALUES",
     "error_object",
     "error_from_exception",
     "exit_code_for",
     "error_spec",
     "default_error_for_exit",
     "dry_run_result",
+    "is_opaque_wait_cursor",
     "redact",
     "redact_value",
 ]
@@ -347,6 +350,102 @@ _OPAQUE_RE = re.compile(
 )
 
 
+#: Public wire identifiers (MCP tool names, negotiation extension ids) are
+#: published on purpose and are longer than the opaque-token net.  They are not
+#: secrets, so the net must not rewrite them (M2-01c publishes ten research tool
+#: names in the capability/projection payloads).
+_WIRE_IDENTIFIER_RE = re.compile(
+    r"^acp[_a-z0-9]*$|^rph[_a-z0-9]*$|^acp\.[a-z0-9_.]+$|^rph\.[a-z0-9_.]+$"
+)
+#: The frozen error ``params.rule`` vocabulary is a *published enum* of lowercase
+#: snake-case tokens (``analysis_capability_not_executable``,
+#: ``max_read_bytes_exceeded``, ``extension_not_negotiated``...).  It is longer
+#: than the opaque-token net and carries no secret, so a client can still branch
+#: on the typed rule.  Deliberately narrow: lowercase ASCII words plus ``_`` and
+#: no digits (a random secret is not a dictionary-looking snake phrase).
+_RULE_IDENTIFIER_RE = re.compile(r"^[a-z]+(?:_[a-z]+){0,7}$")
+#: Published *platform* identifiers (M3-01b, F5).  A project id is a canonical
+#: UUID, an approval/reservation/record reference is a namespaced token
+#: (``ap_<hex>``, ``rsv_<hex>``, ``proj_``, ...).  The RPH attribution and the
+#: Workbench need them verbatim: rewriting them to ``<redacted>`` broke the
+#: submit binding (the TaskRef survived but the surrounding record did not).
+#: Same rule as ``_WIRE_IDENTIFIER_RE``: a short, *named* published namespace —
+#: never a general entropy exemption.
+_PUBLIC_IDENTIFIER_RE = re.compile(
+    r"^(?:"
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+    r"|(?:ap|rsv|res|proj|project|proposal|prop|approval|reservation|research|"
+    r"session|principal|account|workspace|record|release|rel|attempt|epoch|"
+    r"idc|key|sub|trace|diag)_[A-Za-z0-9_]+"
+    # M4-02: the platform task id (`YYYYMMDD_HHMMSS_NNN_<name>`).  Shape
+    # authority: `acp_services/store/naming.py::_JOB_ID_RE`.  A TaskRef id is a
+    # platform identifier that CLI, MCP and the Workbench must all read
+    # verbatim to name *the same* task; the opaque-token net used to rewrite it
+    # (it is longer than 32 characters), which made the MCP read unattributable.
+    r"|\d{8}_\d{6}_\d{3}_[A-Za-z0-9][A-Za-z0-9._\-]*"
+    r")$"
+)
+
+#: The four members of one bounded-wait cursor payload.  Shape authority:
+#: ``acp_services/runtime/research_service.py::encode_wait_cursor`` (the single
+#: encoder) and :func:`...+decode_wait_cursor` (the single decoder).  This
+#: module is stdlib-only, so the *shape* is re-derived here — never the
+#: semantics (expiry, project binding, observed revision, which stay server-side
+#: and are enforced by the decoder).
+_WAIT_CURSOR_MEMBERS = frozenset({"v", "rev", "project", "at"})
+#: ``base64url`` alphabet plus the optional ``=`` padding the encoder emits.
+_BASE64URL_RE = re.compile(r"[A-Za-z0-9_-]+={0,2}")
+_WAIT_CURSOR_MIN_LEN = 48
+_WAIT_CURSOR_MAX_LEN = 4096
+
+
+def is_opaque_wait_cursor(value: str) -> bool:
+    """True when *value* is exactly a server-issued research wait cursor.
+
+    A wait cursor is an **opaque handle**, not a credential: the server issues
+    it (`research_service.encode_wait_cursor`) and only the server decodes it,
+    but the client must send it back verbatim to continue a bounded wait
+    (``research.wait`` / ``approval.query`` continuation, F8).  The envelope
+    therefore carries it through untouched.
+
+    The predicate is the published *shape*, deliberately narrow: ``base64url``
+    text that decodes to one JSON object with exactly the four cursor members
+    (``v``, ``rev``, ``project``, ``at``).  A credential placed under the same
+    field name is still redacted, and a value that merely *looks* long and
+    opaque is not exempted.
+    """
+    text = str(value)
+    if not (_WAIT_CURSOR_MIN_LEN <= len(text) <= _WAIT_CURSOR_MAX_LEN):
+        return False
+    if _BASE64URL_RE.fullmatch(text) is None:
+        return False
+    stripped = text.rstrip("=")
+    try:
+        raw = base64.urlsafe_b64decode(stripped + "=" * (-len(stripped) % 4))
+        payload = json.loads(raw.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return False
+    if not isinstance(payload, Mapping) or set(payload) != _WAIT_CURSOR_MEMBERS:
+        return False
+    return all(
+        isinstance(item, str | int | float) and not isinstance(item, bool)
+        for item in payload.values()
+    )
+
+
+#: Field-name → value predicate for **server-issued opaque handles** that must
+#: round-trip through a machine envelope (F8, found by M4-01).
+#:
+#: The redaction net exists to stop credentials and host paths, not to rewrite
+#: handles the server itself issued for the client to send back.  The exemption
+#: is explicit (a declared field name) *and* value-shaped (the published cursor
+#: encoding), never a general entropy exception: an undeclared field, or a
+#: credential under the declared name, is still redacted.
+PASSTHROUGH_FIELD_VALUES: Mapping[str, Callable[[str], bool]] = {
+    "cursor": is_opaque_wait_cursor,
+}
+
+
 def _redact_secrets(text: str) -> str:
     value = str(text)
     value = _PEM_RE.sub(REDACTED_SECRET, value)
@@ -354,7 +453,16 @@ def _redact_secrets(text: str) -> str:
     value = _BEARER_RE.sub("Bearer " + REDACTED_SECRET, value)
     value = _URL_SECRET_RE.sub(r"\1" + REDACTED_SECRET, value)
     value = _SECRET_ASSIGN_RE.sub(lambda m: f"{m.group(1)}{m.group(2)}{REDACTED_SECRET}", value)
-    value = _OPAQUE_RE.sub(REDACTED_SECRET, value)
+    value = _OPAQUE_RE.sub(
+        lambda m: (
+            m.group(0)
+            if _WIRE_IDENTIFIER_RE.match(m.group(0))
+            or _RULE_IDENTIFIER_RE.match(m.group(0))
+            or _PUBLIC_IDENTIFIER_RE.match(m.group(0))
+            else REDACTED_SECRET
+        ),
+        value,
+    )
     return value
 
 
@@ -375,11 +483,23 @@ def redact_value(value: Any) -> Any:
     Mapping **keys** are left untouched — they are our own structured parameter
     names — while every string value (and every string inside nested
     containers) is passed through :func:`redact`.
+
+    A declared :data:`PASSTHROUGH_FIELD_VALUES` member whose value matches its
+    predicate is carried through verbatim: a server-issued opaque handle (the
+    bounded-wait ``cursor``) is not a secret and the client must be able to send
+    it back (F8).
     """
     if isinstance(value, str):
         return redact(value)
     if isinstance(value, Mapping):
-        return {key: redact_value(item) for key, item in value.items()}
+        cleaned: dict[Any, Any] = {}
+        for key, item in value.items():
+            rule = PASSTHROUGH_FIELD_VALUES.get(key) if isinstance(key, str) else None
+            if rule is not None and isinstance(item, str) and rule(item):
+                cleaned[key] = item
+            else:
+                cleaned[key] = redact_value(item)
+        return cleaned
     if isinstance(value, (list, tuple)):
         return [redact_value(item) for item in value]
     return value

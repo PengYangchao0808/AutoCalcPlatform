@@ -2,7 +2,7 @@
 =================================== FAILURES ===================================
 _______________ test_concurrent_lifespan_race_exactly_one_owner ________________
 
-tmp_path = PosixPath('/tmp/pytest-of-<user>/pytest-5390/test_concurrent_lifespan_race_0')
+tmp_path = PosixPath('/tmp/pytest-of-xieningke/pytest-5390/test_concurrent_lifespan_race_0')
 
     def test_concurrent_lifespan_race_exactly_one_owner(tmp_path: Path) -> None:
         from acp.api.server import create_app
@@ -49,7 +49,7 @@ tests/test_acp_lifespan_ownership.py:120: AssertionError
 __________________ test_prefetch_skipped_for_non_terminal_job __________________
 
 manager = <acp.scheduler.manager.JobManager object at 0x7fa2e8f3e710>
-tmp_path = PosixPath('/tmp/pytest-of-<user>/pytest-5390/test_prefetch_skipped_for_non_0')
+tmp_path = PosixPath('/tmp/pytest-of-xieningke/pytest-5390/test_prefetch_skipped_for_non_0')
 
     def test_prefetch_skipped_for_non_terminal_job(manager: JobManager, tmp_path: Path) -> None:
         """A running remote job is never prefetched (partial manifests must not cache)."""
@@ -83,7 +83,7 @@ src/acp/scheduler/manager.py:5484: AttributeError
 _____________________ test_prefetch_skipped_for_local_job ______________________
 
 manager = <acp.scheduler.manager.JobManager object at 0x7fa2f128ce90>
-tmp_path = PosixPath('/tmp/pytest-of-<user>/pytest-5390/test_prefetch_skipped_for_loca0')
+tmp_path = PosixPath('/tmp/pytest-of-xieningke/pytest-5390/test_prefetch_skipped_for_loca0')
 
     def test_prefetch_skipped_for_local_job(manager: JobManager, tmp_path: Path) -> None:
         """Local jobs keep using their own work dir; no remote cache fetch."""
@@ -116,7 +116,7 @@ E       AttributeError: '_CompositePrepareExecutor' object has no attribute 'pre
 src/acp/scheduler/manager.py:5484: AttributeError
 __________ test_v2_reads_after_terminal_prefetch_fetch_on_demand_once __________
 
-tmp_path = PosixPath('/tmp/pytest-of-<user>/pytest-5390/test_v2_reads_after_terminal_p0')
+tmp_path = PosixPath('/tmp/pytest-of-xieningke/pytest-5390/test_v2_reads_after_terminal_p0')
 monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fa2e8f92090>
 
     def test_v2_reads_after_terminal_prefetch_fetch_on_demand_once(
@@ -236,16 +236,16 @@ E         Use -v to get more diff
 
 tests/test_f4_scope_audit.py:2812: AssertionError
 =============================== warnings summary ===============================
-../../../home/<user>/.local/lib/python3.11/site-packages/fastapi/testclient.py:1
-  /home/<user>/.local/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+../../../home/xieningke/.local/lib/python3.11/site-packages/fastapi/testclient.py:1
+  /home/xieningke/.local/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
     from starlette.testclient import TestClient as TestClient  # noqa
 
-../../../home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py:53
-  /home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py:53: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+../../../home/xieningke/.local/lib/python3.11/site-packages/starlette/testclient.py:53
+  /home/xieningke/.local/lib/python3.11/site-packages/starlette/testclient.py:53: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
     _PortalFactoryType = Callable[[], AbstractContextManager[anyio.abc.BlockingPortal]]
 
 tests/test_acp_lifespan_ownership.py::test_concurrent_lifespan_race_exactly_one_owner
-  /home/<user>/.local/lib/python3.11/site-packages/_pytest/threadexception.py:58: PytestUnhandledThreadExceptionWarning: Exception in thread Thread-1 (run)
+  /home/xieningke/.local/lib/python3.11/site-packages/_pytest/threadexception.py:58: PytestUnhandledThreadExceptionWarning: Exception in thread Thread-1 (run)
   
   Traceback (most recent call last):
     File "/usr/lib64/python3.11/threading.py", line 1045, in _bootstrap_inner
@@ -254,9 +254,9 @@ tests/test_acp_lifespan_ownership.py::test_concurrent_lifespan_race_exactly_one_
       self._target(*self._args, **self._kwargs)
     File "/tmp/b14/wt-2a57/tests/test_acp_lifespan_ownership.py", line 96, in run
       with TestClient(app) as client:
-    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py", line 698, in __enter__
+    File "/home/xieningke/.local/lib/python3.11/site-packages/starlette/testclient.py", line 698, in __enter__
       portal.call(self.wait_startup)
-    File "/home/<user>/.local/lib/python3.11/site-packages/anyio/from_thread.py", line 340, in call
+    File "/home/xieningke/.local/lib/python3.11/site-packages/anyio/from_thread.py", line 340, in call
       return cast(T_Retval, self.start_task_soon(func, *args).result())
                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     File "/usr/lib64/python3.11/concurrent/futures/_base.py", line 456, in result
@@ -264,75 +264,75 @@ tests/test_acp_lifespan_ownership.py::test_concurrent_lifespan_race_exactly_one_
              ^^^^^^^^^^^^^^^^^^^
     File "/usr/lib64/python3.11/concurrent/futures/_base.py", line 401, in __get_result
       raise self._exception
-    File "/home/<user>/.local/lib/python3.11/site-packages/anyio/from_thread.py", line 265, in _call_func
+    File "/home/xieningke/.local/lib/python3.11/site-packages/anyio/from_thread.py", line 265, in _call_func
       retval = await retval_or_awaitable
                ^^^^^^^^^^^^^^^^^^^^^^^^^
-    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py", line 733, in wait_startup
+    File "/home/xieningke/.local/lib/python3.11/site-packages/starlette/testclient.py", line 733, in wait_startup
       await receive()
-    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py", line 724, in receive
+    File "/home/xieningke/.local/lib/python3.11/site-packages/starlette/testclient.py", line 724, in receive
       self.task.result()
     File "/usr/lib64/python3.11/concurrent/futures/_base.py", line 449, in result
       return self.__get_result()
              ^^^^^^^^^^^^^^^^^^^
     File "/usr/lib64/python3.11/concurrent/futures/_base.py", line 401, in __get_result
       raise self._exception
-    File "/home/<user>/.local/lib/python3.11/site-packages/anyio/from_thread.py", line 265, in _call_func
+    File "/home/xieningke/.local/lib/python3.11/site-packages/anyio/from_thread.py", line 265, in _call_func
       retval = await retval_or_awaitable
                ^^^^^^^^^^^^^^^^^^^^^^^^^
-    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py", line 714, in lifespan
+    File "/home/xieningke/.local/lib/python3.11/site-packages/starlette/testclient.py", line 714, in lifespan
       await self.app(scope, self.stream_receive.receive, self.stream_send.send)
-    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/applications.py", line 1163, in __call__
+    File "/home/xieningke/.local/lib/python3.11/site-packages/fastapi/applications.py", line 1163, in __call__
       await super().__call__(scope, receive, send)
-    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/applications.py", line 96, in __call__
+    File "/home/xieningke/.local/lib/python3.11/site-packages/starlette/applications.py", line 96, in __call__
       await self.middleware_stack(scope, receive, send)
-    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/middleware/errors.py", line 151, in __call__
+    File "/home/xieningke/.local/lib/python3.11/site-packages/starlette/middleware/errors.py", line 151, in __call__
       await self.app(scope, receive, send)
-    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/middleware/base.py", line 103, in __call__
+    File "/home/xieningke/.local/lib/python3.11/site-packages/starlette/middleware/base.py", line 103, in __call__
       await self.app(scope, receive, send)
-    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 49, in __call__
+    File "/home/xieningke/.local/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 49, in __call__
       await self.app(scope, receive, send)
-    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    File "/home/xieningke/.local/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
       await self.app(scope, receive, send)
-    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/routing.py", line 670, in __call__
+    File "/home/xieningke/.local/lib/python3.11/site-packages/starlette/routing.py", line 670, in __call__
       await self.middleware_stack(scope, receive, send)
-    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 2726, in app
+    File "/home/xieningke/.local/lib/python3.11/site-packages/fastapi/routing.py", line 2726, in app
       await self.lifespan(scope, receive, send)
-    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/routing.py", line 648, in lifespan
+    File "/home/xieningke/.local/lib/python3.11/site-packages/starlette/routing.py", line 648, in lifespan
       async with self.lifespan_context(app) as maybe_state:
     File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
       return await anext(self.gen)
              ^^^^^^^^^^^^^^^^^^^^^
-    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+    File "/home/xieningke/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
       async with original_context(app) as maybe_original_state:
     File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
       return await anext(self.gen)
              ^^^^^^^^^^^^^^^^^^^^^
-    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+    File "/home/xieningke/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
       async with original_context(app) as maybe_original_state:
     File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
       return await anext(self.gen)
              ^^^^^^^^^^^^^^^^^^^^^
-    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+    File "/home/xieningke/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
       async with original_context(app) as maybe_original_state:
     File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
       return await anext(self.gen)
              ^^^^^^^^^^^^^^^^^^^^^
-    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+    File "/home/xieningke/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
       async with original_context(app) as maybe_original_state:
     File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
       return await anext(self.gen)
              ^^^^^^^^^^^^^^^^^^^^^
-    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+    File "/home/xieningke/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
       async with original_context(app) as maybe_original_state:
     File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
       return await anext(self.gen)
              ^^^^^^^^^^^^^^^^^^^^^
-    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+    File "/home/xieningke/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
       async with original_context(app) as maybe_original_state:
     File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
       return await anext(self.gen)
              ^^^^^^^^^^^^^^^^^^^^^
-    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+    File "/home/xieningke/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
       async with original_context(app) as maybe_original_state:
     File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
       return await anext(self.gen)

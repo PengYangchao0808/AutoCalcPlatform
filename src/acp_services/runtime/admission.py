@@ -49,6 +49,7 @@ Author: ACP Services (B lane, todo 49).
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import sqlite3
@@ -61,8 +62,14 @@ from decimal import Decimal
 from typing import Any, Protocol, runtime_checkable
 
 from acp_services.contracts.access import ResourceGrantSpec
+from acp_services.contracts.envelope import ExecutionReceipt
 from acp_services.runtime.helpers import utc_now_iso
 from acp_services.runtime.idempotency import ReservationIdempotency
+from acp_services.runtime.receipts import (
+    ReceiptHistoryBinding,
+    ReceiptVerdict,
+    verify_historical_receipt,
+)
 from acp_services.runtime.research_budget import (
     RECEIPT_CONSUMED_UNITS,
     RELEASE_RULES,
@@ -77,6 +84,12 @@ from acp_services.runtime.research_budget import (
     BudgetSettlement,
     BudgetState,
     release_statement,
+)
+from acp_services.runtime.usage_authority import (
+    UntrustedUsageProducerError,
+    UsageProducer,
+    UsageSource,
+    resolve_authority,
 )
 from acp_services.runtime.usage_units import UsageUnitCounts, normalize_usage_unit
 
@@ -107,6 +120,13 @@ __all__ = [
     "ReservationLedger",
     "AdmissionController",
     "render_admission_decision",
+    # trusted usage receipts (M0-07)
+    "ADMISSION_SCHEMA_VERSION",
+    "UsageIngestOutcome",
+    "UsageReason",
+    "UsageReceiptRejectedError",
+    "get_admission_schema_version",
+    "migrate_admission_schema",
     # research budget value objects (B17)
     "BudgetDecision",
     "BudgetPolicy",
@@ -655,6 +675,134 @@ class ReserveOutcome:
     exceeded: tuple[Mapping[str, Any], ...] = ()
 
 
+class UsageReason(str):
+    """Stable settlement verdict vocabulary (usage receipts, M0-07)."""
+
+    RECORDED = "usage_recorded"
+    DUPLICATE = "usage_receipt_duplicate"
+
+    # refusals — nothing is written on any of these
+    PRODUCER_UNTRUSTED = "usage_producer_untrusted"
+    CAPABILITY_MISSING = "usage_capability_missing"
+    RECEIPT_INVALID = "usage_receipt_invalid"
+    RESERVATION_NOT_FOUND = "usage_reservation_not_found"
+    RESERVATION_JOB_MISMATCH = "usage_reservation_job_mismatch"
+    RESERVATION_MISMATCH = "usage_reservation_mismatch"
+    ATTEMPT_CONFLICT = "usage_attempt_conflict"
+    RECEIPT_CONFLICT = "usage_receipt_conflict"
+    BUDGET_MISMATCH = "usage_budget_mismatch"
+    BUDGET_RELEASED = "usage_budget_released"
+    NOT_DISPATCHED = "usage_not_dispatched"
+
+    ALL = frozenset(
+        {
+            RECORDED,
+            DUPLICATE,
+            PRODUCER_UNTRUSTED,
+            CAPABILITY_MISSING,
+            RECEIPT_INVALID,
+            RESERVATION_NOT_FOUND,
+            RESERVATION_JOB_MISMATCH,
+            RESERVATION_MISMATCH,
+            ATTEMPT_CONFLICT,
+            RECEIPT_CONFLICT,
+            BUDGET_MISMATCH,
+            BUDGET_RELEASED,
+            NOT_DISPATCHED,
+        }
+    )
+
+
+class UsageReceiptRejectedError(AdmissionError):
+    """A trusted usage receipt failed verification; no row was written.
+
+    ``code`` is a stable :class:`UsageReason` value.  The ledger raises this
+    *before* committing anything, so a forged or stale receipt can never change
+    a reservation, a remaining budget or the settlement projection.
+    """
+
+    def __init__(
+        self,
+        code: str,
+        detail: str = "",
+        *,
+        params: Mapping[str, Any] | None = None,
+    ) -> None:
+        super().__init__(f"{code}: {detail}" if detail else str(code))
+        self.code = str(code)
+        self.detail = str(detail)
+        self.params = dict(params or {})
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"code": self.code, "message": self.detail, "params": dict(self.params)}
+
+
+@dataclass(frozen=True)
+class UsageIngestOutcome:
+    """The settled result of one trusted usage receipt (never a silent pass)."""
+
+    applied: bool
+    duplicate: bool
+    reason_code: str
+    usage_id: str
+    job_id: str
+    attempt: int
+    reservation_id: str = ""
+    producer: str = ""
+    trusted_source: str = ""
+    chain_digest: str = ""
+    binding_digest: str = ""
+    counters: UsageUnitCounts = field(default_factory=UsageUnitCounts)
+    budget_id: str = ""
+    budget_reservation_id: str = ""
+    budget_applied: bool = False
+    consumed: Mapping[str, int] = field(default_factory=dict)
+    remaining: Mapping[str, int] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "applied": self.applied,
+            "duplicate": self.duplicate,
+            "reason_code": self.reason_code,
+            "receipt_id": self.usage_id,
+            "usage_id": self.usage_id,
+            "job_id": self.job_id,
+            "attempt": self.attempt,
+            "reservation_id": self.reservation_id,
+            "producer": self.producer,
+            "trusted_source": self.trusted_source,
+            "chain_digest": self.chain_digest,
+            "binding_digest": self.binding_digest,
+            "counters": self.counters.to_dict(),
+            "budget_id": self.budget_id,
+            "budget_reservation_id": self.budget_reservation_id,
+            "budget_applied": self.budget_applied,
+            "consumed": dict(self.consumed),
+            "remaining": dict(self.remaining),
+        }
+
+
+#: Admission DB schema version.  ``025`` is the identity DB migration
+#: (``api_keys.usage_capabilities``); this ledger continues the shared series at
+#: ``026`` because it is a *separate* SQLite file with its own id-versioned meta
+#: table.  Numbers are never reused, exactly like the jobs-DB 001–024 series.
+ADMISSION_SCHEMA_VERSION = 26
+_ADMISSION_MIGRATIONS: dict[int, str] = {
+    26: (
+        "trusted usage receipts (M0-07/G26): immutable per-(job, attempt) "
+        "execution identity bindings plus receipt identity/chain columns on the "
+        "usage and research-budget receipt rows"
+    ),
+}
+
+_ADMISSION_META_SQL = """
+CREATE TABLE IF NOT EXISTS admission_schema_migrations (
+    id         INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL
+)
+"""
+
+
 # ---------------------------------------------------------------------------
 # Atomic reservation ledger
 # ---------------------------------------------------------------------------
@@ -684,6 +832,21 @@ CREATE TABLE IF NOT EXISTS admission_reservations (
 CREATE INDEX IF NOT EXISTS idx_admission_scope
     ON admission_reservations(state, principal_id, project_id, key_id);
 CREATE INDEX IF NOT EXISTS idx_admission_job ON admission_reservations(job_id);
+CREATE TABLE IF NOT EXISTS admission_reservation_jobs (
+    reservation_id TEXT NOT NULL,
+    job_id         TEXT NOT NULL,
+    bound_at       TEXT NOT NULL,
+    PRIMARY KEY (reservation_id, job_id)
+);
+CREATE INDEX IF NOT EXISTS idx_admission_reservation_jobs_job
+    ON admission_reservation_jobs(job_id);
+CREATE TABLE IF NOT EXISTS admission_attempt_declarations (
+    job_id         TEXT NOT NULL,
+    attempt        INTEGER NOT NULL,
+    reservation_id TEXT NOT NULL DEFAULT '',
+    declared_at    TEXT NOT NULL,
+    PRIMARY KEY (job_id, attempt)
+);
 CREATE TABLE IF NOT EXISTS admission_reservation_claims (
     claim_id         TEXT PRIMARY KEY,
     reservation_id   TEXT NOT NULL,
@@ -702,10 +865,41 @@ CREATE TABLE IF NOT EXISTS admission_usage_receipts (
     cores           INTEGER NOT NULL DEFAULT 0,
     seconds         INTEGER NOT NULL DEFAULT 0,
     core_hours      TEXT NOT NULL,
-    recorded_at     TEXT NOT NULL
+    recorded_at     TEXT NOT NULL,
+    producer        TEXT NOT NULL DEFAULT '',
+    trusted_source  TEXT NOT NULL DEFAULT '',
+    submission_id   TEXT NOT NULL DEFAULT '',
+    release_id      TEXT NOT NULL DEFAULT '',
+    plan_identity   TEXT NOT NULL DEFAULT '',
+    step_identities_json TEXT NOT NULL DEFAULT '[]',
+    chain_digest    TEXT NOT NULL DEFAULT '',
+    binding_digest  TEXT NOT NULL DEFAULT '',
+    budget_id       TEXT NOT NULL DEFAULT '',
+    budget_reservation_id TEXT NOT NULL DEFAULT '',
+    run_id          TEXT NOT NULL DEFAULT '',
+    payload_digest  TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_admission_usage_reservation
     ON admission_usage_receipts(reservation_id);
+CREATE TABLE IF NOT EXISTS admission_attempt_bindings (
+    job_id               TEXT NOT NULL,
+    attempt              INTEGER NOT NULL,
+    reservation_id       TEXT NOT NULL DEFAULT '',
+    submission_id        TEXT NOT NULL DEFAULT '',
+    release_id           TEXT NOT NULL DEFAULT '',
+    release_digest       TEXT NOT NULL DEFAULT '',
+    owner                TEXT NOT NULL DEFAULT '',
+    fencing_token        TEXT NOT NULL DEFAULT '',
+    plan_identity        TEXT NOT NULL DEFAULT '',
+    step_identities_json TEXT NOT NULL DEFAULT '[]',
+    chain_digest         TEXT NOT NULL DEFAULT '',
+    producer             TEXT NOT NULL DEFAULT '',
+    task_ref             TEXT NOT NULL DEFAULT '',
+    budget_id            TEXT NOT NULL DEFAULT '',
+    budget_reservation_id TEXT NOT NULL DEFAULT '',
+    bound_at             TEXT NOT NULL,
+    PRIMARY KEY (job_id, attempt)
+);
 CREATE TABLE IF NOT EXISTS research_budget_policies (
     budget_id     TEXT PRIMARY KEY,
     approval_ref  TEXT NOT NULL DEFAULT '',
@@ -744,7 +938,13 @@ CREATE TABLE IF NOT EXISTS research_budget_receipts (
     usage_json      TEXT NOT NULL,
     trusted_source  TEXT NOT NULL,
     applied         INTEGER NOT NULL DEFAULT 0,
-    recorded_at     TEXT NOT NULL
+    recorded_at     TEXT NOT NULL,
+    job_id          TEXT NOT NULL DEFAULT '',
+    attempt         INTEGER NOT NULL DEFAULT 0,
+    usage_id        TEXT NOT NULL DEFAULT '',
+    chain_digest    TEXT NOT NULL DEFAULT '',
+    binding_digest  TEXT NOT NULL DEFAULT '',
+    producer        TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_research_budget_receipts_budget
     ON research_budget_receipts(budget_id);
@@ -756,6 +956,179 @@ CREATE TABLE IF NOT EXISTS research_budget_events (
     created_at TEXT NOT NULL
 );
 """
+
+
+def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return {str(row["name"]) for row in rows}
+
+
+_ADDITIVE_COLUMNS: dict[str, tuple[tuple[str, str], ...]] = {
+    "admission_usage_receipts": (
+        ("producer", "TEXT NOT NULL DEFAULT ''"),
+        ("trusted_source", "TEXT NOT NULL DEFAULT ''"),
+        ("submission_id", "TEXT NOT NULL DEFAULT ''"),
+        ("release_id", "TEXT NOT NULL DEFAULT ''"),
+        ("plan_identity", "TEXT NOT NULL DEFAULT ''"),
+        ("step_identities_json", "TEXT NOT NULL DEFAULT '[]'"),
+        ("chain_digest", "TEXT NOT NULL DEFAULT ''"),
+        ("binding_digest", "TEXT NOT NULL DEFAULT ''"),
+        ("budget_id", "TEXT NOT NULL DEFAULT ''"),
+        ("budget_reservation_id", "TEXT NOT NULL DEFAULT ''"),
+        ("run_id", "TEXT NOT NULL DEFAULT ''"),
+        ("payload_digest", "TEXT NOT NULL DEFAULT ''"),
+    ),
+    "research_budget_receipts": (
+        ("job_id", "TEXT NOT NULL DEFAULT ''"),
+        ("attempt", "INTEGER NOT NULL DEFAULT 0"),
+        ("usage_id", "TEXT NOT NULL DEFAULT ''"),
+        ("chain_digest", "TEXT NOT NULL DEFAULT ''"),
+        ("binding_digest", "TEXT NOT NULL DEFAULT ''"),
+        ("producer", "TEXT NOT NULL DEFAULT ''"),
+    ),
+    "research_budget_reservations": (
+        ("attempt", "INTEGER NOT NULL DEFAULT 0"),
+        ("receipt_id", "TEXT NOT NULL DEFAULT ''"),
+        ("chain_digest", "TEXT NOT NULL DEFAULT ''"),
+        ("release_id", "TEXT NOT NULL DEFAULT ''"),
+        ("plan_identity", "TEXT NOT NULL DEFAULT ''"),
+    ),
+}
+
+#: Indexes that name an **additive** column.  They cannot live in
+#: :data:`_CREATE_TABLE_SQL`: on an upgrade the table already exists (so
+#: ``CREATE TABLE IF NOT EXISTS`` is a no-op) and the index would be created
+#: before :func:`migrate_admission_schema` adds its column, which fails the
+#: Controller startup with "no such column".  They are therefore applied by the
+#: migration, after the columns, for fresh and upgraded databases alike.
+_ADDITIVE_INDEXES: dict[str, tuple[str, ...]] = {
+    "admission_usage_receipts": (
+        "CREATE INDEX IF NOT EXISTS idx_admission_usage_job "
+        "ON admission_usage_receipts(job_id, attempt)",
+    ),
+    "research_budget_receipts": (
+        "CREATE INDEX IF NOT EXISTS idx_research_budget_receipts_job "
+        "ON research_budget_receipts(job_id, attempt)",
+    ),
+}
+
+
+def get_admission_schema_version(conn: sqlite3.Connection) -> int:
+    """Return the highest applied admission-DB migration id (``0`` when none)."""
+    row = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='admission_schema_migrations'"
+    ).fetchone()
+    if row is None:
+        return 0
+    highest = conn.execute("SELECT MAX(id) AS v FROM admission_schema_migrations").fetchone()
+    return 0 if highest is None or highest["v"] is None else int(highest["v"])
+
+
+def migrate_admission_schema(conn: sqlite3.Connection) -> int:
+    """Apply the additive admission-DB migrations (idempotent, ``026`` newest).
+
+    The admission ledger is a separate SQLite file from the jobs DB, so it keeps
+    its own id-versioned ``admission_schema_migrations`` table.  The numbering
+    continues the repository-wide series (``025`` belongs to the identity DB's
+    ``api_keys.usage_capabilities``); ids are never renumbered or reused.
+    """
+    conn.executescript(_ADMISSION_META_SQL)
+    for table, columns in _ADDITIVE_COLUMNS.items():
+        existing = _table_columns(conn, table)
+        if not existing:
+            continue
+        for name, definition in columns:
+            if name in existing:
+                continue
+            try:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
+            except sqlite3.OperationalError as exc:
+                # A concurrent initialiser may have added the same additive
+                # column between our PRAGMA read and this ALTER; that is the
+                # only accepted conflict (anything else fails closed).
+                if "duplicate column name" not in str(exc).lower():
+                    raise
+        # The index names an additive column, so it is created only after the
+        # column exists (an upgrade keeps the pre-migration table definition).
+        for statement in _ADDITIVE_INDEXES.get(table, ()):
+            conn.execute(statement)
+    conn.execute(
+        "INSERT OR IGNORE INTO admission_schema_migrations (id, applied_at) VALUES (?, ?)",
+        (ADMISSION_SCHEMA_VERSION, utc_now_iso()),
+    )
+    return ADMISSION_SCHEMA_VERSION
+
+
+def _row_to_binding(row: sqlite3.Row) -> ReceiptHistoryBinding:
+    """Rebuild a persisted immutable attempt identity."""
+    try:
+        step_identities = tuple(json.loads(row["step_identities_json"]) or [])
+    except (json.JSONDecodeError, TypeError):
+        step_identities = ()
+    return ReceiptHistoryBinding(
+        job_id=str(row["job_id"]),
+        attempt=int(row["attempt"]),
+        submission_id=str(row["submission_id"] or ""),
+        release_id=str(row["release_id"] or ""),
+        release_digest=str(row["release_digest"] or ""),
+        owner=str(row["owner"] or ""),
+        fencing_token=str(row["fencing_token"] or ""),
+        plan_identity=str(row["plan_identity"] or ""),
+        step_identities=step_identities,
+        reservation_id=str(row["reservation_id"] or ""),
+        chain_digest=str(row["chain_digest"] or ""),
+    )
+
+
+def _receipt_for_binding(binding: ReceiptHistoryBinding) -> ExecutionReceipt:
+    """Project a binding onto the receipt shape the history verifier consumes."""
+    return ExecutionReceipt(
+        receipt_version=1,
+        job_id=binding.job_id,
+        attempt=int(binding.attempt),
+        submission_id=binding.submission_id,
+        state="completed",
+        release_id=binding.release_id,
+        release_digest=binding.release_digest,
+        owner=binding.owner,
+        fencing_token=binding.fencing_token,
+        plan_identity=binding.plan_identity,
+        step_identities=tuple(binding.step_identities),
+    )
+
+
+def _usage_payload_digest(
+    usage_id: str,
+    *,
+    job_id: str,
+    attempt: int,
+    reservation_id: str,
+    cores: int,
+    seconds: int,
+    counters: UsageUnitCounts,
+    producer: str,
+    chain_digest: str,
+    budget_id: str,
+    budget_reservation_id: str,
+    run_id: str,
+) -> str:
+    """Stable digest of one receipt's payload (same id + different payload = conflict)."""
+    payload = {
+        "usage_id": str(usage_id),
+        "job_id": str(job_id),
+        "attempt": int(attempt),
+        "reservation_id": str(reservation_id),
+        "cores": int(cores),
+        "seconds": int(seconds),
+        "counters": counters.to_dict(),
+        "producer": str(producer),
+        "chain_digest": str(chain_digest),
+        "budget_id": str(budget_id),
+        "budget_reservation_id": str(budget_reservation_id),
+        "run_id": str(run_id),
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def _row_to_reservation(row: sqlite3.Row) -> Reservation:
@@ -951,6 +1324,7 @@ class ReservationLedger:
             try:
                 self._enable_wal(conn)
                 conn.executescript(_CREATE_TABLE_SQL)
+                migrate_admission_schema(conn)
             finally:
                 conn.close()
 
@@ -1217,50 +1591,34 @@ class ReservationLedger:
                 conn.close()
         return None if row is None else str(row["reservation_id"])
 
-    # -- trusted usage receipts (idempotent by usage id) --------------------
+    def bind_reservation_job(self, reservation_id: str, job_id: str) -> bool:
+        """Bind a claim-keyed reservation to the task it admitted (idempotent).
 
-    def record_usage_once(
-        self,
-        usage_id: str,
-        *,
-        reservation_id: str,
-        job_id: str,
-        attempt: int = 1,
-        cores: int = 0,
-        seconds: int = 0,
-    ) -> bool:
-        """Insert one trusted usage receipt; return ``True`` only the first time.
-
-        The receipt id is the stable ``(job, attempt, submission)`` identity, so
-        a duplicate delivery (Controller retry, replay, double terminal
-        observation) is ignored and can never double-charge.  The write is a
-        short ``BEGIN IMMEDIATE`` transaction on the admission ledger.
+        An idempotent submit reserves **before** the task id exists, so the
+        reservation row carries the claim id.  The Controller records the real
+        task id here at dispatch; trusted usage settlement then verifies that the
+        reservation and the receipt's job are the same execution.
         """
-        identifier = str(usage_id or "").strip()
-        if not identifier:
-            raise AdmissionValidationError("usage_id must be non-empty")
-        core_seconds = max(0, int(cores)) * max(0, int(seconds))
-        core_hours = (Decimal(core_seconds) / Decimal(3600)).quantize(Decimal("0.000001"))
+        reservation = str(reservation_id or "").strip()
+        job = str(job_id or "").strip()
+        if not reservation or not job:
+            raise AdmissionValidationError("bind_reservation_job needs reservation_id and job_id")
         now = self._clock()
         with self._lock:
             conn = self._connect()
             try:
                 conn.execute("BEGIN IMMEDIATE")
-                cursor = conn.execute(
-                    """INSERT OR IGNORE INTO admission_usage_receipts (
-                           usage_id, reservation_id, job_id, attempt, cores,
-                           seconds, core_hours, recorded_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (
-                        identifier,
-                        str(reservation_id),
-                        str(job_id),
-                        int(attempt),
-                        max(0, int(cores)),
-                        max(0, int(seconds)),
-                        str(core_hours),
-                        now,
-                    ),
+                row = conn.execute(
+                    "SELECT job_id FROM admission_reservations WHERE reservation_id=?",
+                    (reservation,),
+                ).fetchone()
+                if row is None:
+                    conn.execute("ROLLBACK")
+                    return False
+                conn.execute(
+                    "INSERT OR IGNORE INTO admission_reservation_jobs "
+                    "(reservation_id, job_id, bound_at) VALUES (?, ?, ?)",
+                    (reservation, job, now),
                 )
                 conn.execute("COMMIT")
             except BaseException:
@@ -1269,7 +1627,720 @@ class ReservationLedger:
                 raise
             finally:
                 conn.close()
-        return cursor.rowcount == 1
+        return True
+
+    def declare_attempt(self, job_id: str, attempt: int, *, reservation_id: str = "") -> bool:
+        """Record that the Controller dispatched ``(job, attempt)`` (idempotent).
+
+        This is the server-side execution fact a trusted external usage receipt
+        is checked against: an attempt number that was never dispatched cannot be
+        the first receipt to invent usage.  A late receipt for an *earlier*
+        dispatched attempt is unaffected (the declaration is per attempt).
+        """
+        job = str(job_id or "").strip()
+        attempt_value = int(attempt)
+        if not job or attempt_value < 1:
+            raise AdmissionValidationError("declare_attempt needs job_id and attempt >= 1")
+        now = self._clock()
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                row = conn.execute(
+                    "SELECT reservation_id FROM admission_attempt_declarations "
+                    "WHERE job_id=? AND attempt=?",
+                    (job, attempt_value),
+                ).fetchone()
+                if row is not None:
+                    stored = str(row["reservation_id"] or "")
+                    if stored and reservation_id and stored != str(reservation_id):
+                        conn.execute("ROLLBACK")
+                        return False
+                    conn.execute("COMMIT")
+                    return False
+                conn.execute(
+                    "INSERT INTO admission_attempt_declarations "
+                    "(job_id, attempt, reservation_id, declared_at) VALUES (?, ?, ?, ?)",
+                    (job, attempt_value, str(reservation_id), now),
+                )
+                conn.execute("COMMIT")
+            except BaseException:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
+            finally:
+                conn.close()
+        return True
+
+    def _attempt_declared(self, conn: sqlite3.Connection, job_id: str, attempt: int) -> bool:
+        row = conn.execute(
+            "SELECT 1 FROM admission_attempt_declarations WHERE job_id=? AND attempt=?",
+            (str(job_id), int(attempt)),
+        ).fetchone()
+        return row is not None
+
+    def _reservation_job_ids(self, conn: sqlite3.Connection, reservation_id: str) -> set[str]:
+        rows = conn.execute(
+            "SELECT job_id FROM admission_reservation_jobs WHERE reservation_id=?",
+            (str(reservation_id),),
+        ).fetchall()
+        return {str(row["job_id"]) for row in rows}
+
+    # -- trusted usage receipts (M0-07/G26) ---------------------------------
+    #
+    # The admission DB is the single settlement ledger.  Two receipt contexts
+    # are deliberately distinct:
+    #
+    # * the **current-attempt** guard (``runtime/receipts.verify_receipt``)
+    #   gates a job state advance;
+    # * the **historical** guard (``verify_historical_receipt``) re-checks a late
+    #   receipt against the immutable identity bound for its own attempt.  It
+    #   books usage only and never advances task state.
+
+    def _bind_attempt_in(
+        self,
+        conn: sqlite3.Connection,
+        binding: ReceiptHistoryBinding,
+        *,
+        now: str,
+        producer: str = "",
+        budget_id: str = "",
+        budget_reservation_id: str = "",
+    ) -> bool:
+        """Insert one immutable ``(job, attempt)`` identity (idempotent, same txn)."""
+        candidate = binding.with_chain_digest()
+        row = conn.execute(
+            "SELECT * FROM admission_attempt_bindings WHERE job_id=? AND attempt=?",
+            (candidate.job_id, int(candidate.attempt)),
+        ).fetchone()
+        if row is not None:
+            stored = _row_to_binding(row)
+            if stored.chain_digest != candidate.chain_digest:
+                raise UsageReceiptRejectedError(
+                    UsageReason.ATTEMPT_CONFLICT,
+                    f"job {candidate.job_id!r} attempt {candidate.attempt} is already bound to "
+                    "a different execution identity",
+                    params={
+                        "field": "chain_digest",
+                        "expected": stored.chain_digest,
+                        "actual": candidate.chain_digest,
+                    },
+                )
+            if (
+                stored.reservation_id
+                and candidate.reservation_id
+                and stored.reservation_id != candidate.reservation_id
+            ):
+                raise UsageReceiptRejectedError(
+                    UsageReason.RESERVATION_MISMATCH,
+                    f"bound reservation {stored.reservation_id!r} != {candidate.reservation_id!r}",
+                    params={
+                        "field": "reservation_id",
+                        "expected": stored.reservation_id,
+                        "actual": candidate.reservation_id,
+                    },
+                )
+            return False
+        conn.execute(
+            """INSERT INTO admission_attempt_bindings (
+                   job_id, attempt, reservation_id, submission_id, release_id,
+                   release_digest, owner, fencing_token, plan_identity,
+                   step_identities_json, chain_digest, producer, task_ref,
+                   budget_id, budget_reservation_id, bound_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                candidate.job_id,
+                int(candidate.attempt),
+                str(candidate.reservation_id),
+                str(candidate.submission_id),
+                str(candidate.release_id),
+                str(candidate.release_digest),
+                str(candidate.owner),
+                str(candidate.fencing_token),
+                str(candidate.plan_identity),
+                json.dumps(list(candidate.step_identities)),
+                candidate.chain_digest,
+                str(producer),
+                str(candidate.job_id),
+                str(budget_id),
+                str(budget_reservation_id),
+                now,
+            ),
+        )
+        return True
+
+    def bind_attempt_identity(self, binding: ReceiptHistoryBinding) -> bool:
+        """Persist the immutable execution identity of one ``(job, attempt)``.
+
+        Called by the Controller seam when an attempt is frozen/dispatched (and
+        implicitly by :meth:`record_usage_once`).  A re-bind with a different
+        identity raises :class:`UsageReceiptRejectedError`; an identical re-bind is a
+        no-op.  Nothing here depends on a work directory.
+        """
+        identifier = str(binding.job_id or "").strip()
+        if not identifier or int(binding.attempt) < 1:
+            raise AdmissionValidationError("attempt binding needs job_id and attempt >= 1")
+        now = self._clock()
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                inserted = self._bind_attempt_in(conn, binding, now=now)
+                conn.execute("COMMIT")
+            except BaseException:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
+            finally:
+                conn.close()
+        return inserted
+
+    def attempt_binding(self, job_id: str, attempt: int) -> ReceiptHistoryBinding | None:
+        """Return the persisted immutable identity for ``(job, attempt)``."""
+        with self._lock:
+            conn = self._connect()
+            try:
+                row = conn.execute(
+                    "SELECT * FROM admission_attempt_bindings WHERE job_id=? AND attempt=?",
+                    (str(job_id), int(attempt)),
+                ).fetchone()
+            finally:
+                conn.close()
+        return None if row is None else _row_to_binding(row)
+
+    def _settle_budget_in(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        budget_row: sqlite3.Row,
+        receipt_id: str,
+        counters: UsageUnitCounts,
+        run_id: str,
+        trusted_source: str,
+        job_id: str,
+        attempt: int,
+        usage_id: str,
+        chain_digest: str,
+        binding_digest: str,
+        producer: str,
+        now: str,
+        release_id: str = "",
+        plan_identity: str = "",
+    ) -> bool:
+        """Insert the budget receipt + settle the reservation inside *conn*.
+
+        The receipt id is the idempotency key: a duplicate delivery is a no-op,
+        so usage and its budget settlement move together in one transaction.
+        Returns ``True`` when the receipt was applied.
+        """
+        budget_id = str(budget_row["budget_id"])
+        reservation_id = str(budget_row["reservation_id"])
+        cursor = conn.execute(
+            """INSERT OR IGNORE INTO research_budget_receipts (
+                   receipt_id, budget_id, reservation_id, run_id, usage_json,
+                   trusted_source, applied, recorded_at, job_id, attempt, usage_id,
+                   chain_digest, binding_digest, producer)
+               VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                str(receipt_id),
+                budget_id,
+                reservation_id,
+                str(run_id),
+                json.dumps(counters.to_dict(), sort_keys=True),
+                str(trusted_source),
+                now,
+                str(job_id),
+                int(attempt),
+                str(usage_id),
+                str(chain_digest),
+                str(binding_digest),
+                str(producer),
+            ),
+        )
+        if cursor.rowcount != 1:
+            return False
+        conn.execute(
+            "UPDATE research_budget_reservations SET state=?, updated_at=?, attempt=?, "
+            "receipt_id=?, chain_digest=?, release_id=?, plan_identity=? "
+            "WHERE reservation_id=? AND state != ?",
+            (
+                BudgetState.SETTLED,
+                now,
+                int(attempt),
+                str(receipt_id),
+                str(chain_digest),
+                str(release_id),
+                str(plan_identity),
+                reservation_id,
+                BudgetState.RELEASED,
+            ),
+        )
+        conn.execute(
+            "INSERT INTO research_budget_events (subject, event, detail, created_at) "
+            "VALUES (?, ?, ?, ?)",
+            (reservation_id, "budget_settle", str(receipt_id), now),
+        )
+        return True
+
+    def record_usage_once(
+        self,
+        usage_id: str,
+        *,
+        reservation_id: str = "",
+        job_id: str,
+        attempt: int = 1,
+        cores: int = 0,
+        seconds: int = 0,
+        producer: str = "",
+        receipt: ExecutionReceipt | None = None,
+        binding: ReceiptHistoryBinding | None = None,
+        counters: UsageUnitCounts | None = None,
+        budget_id: str = "",
+        budget_reservation_id: str = "",
+        run_id: str = "",
+    ) -> UsageIngestOutcome:
+        """Book one trusted usage receipt exactly once — the settlement wire point.
+
+        Verification (all inside one ``BEGIN IMMEDIATE`` transaction, so a
+        refusal writes nothing):
+
+        1. the **producer** must be a known producer; the trusted source is
+           derived from it (a caller-supplied source string is never accepted);
+        2. an **external** producer must present the receipt identity (job,
+           attempt, deterministic submission, release/plan/step digests) and the
+           job must already be dispatched — no execution fact, no settlement;
+        3. the ``(job, attempt)`` identity is bound immutably on first sight and
+           every later receipt is verified against that binding (wrong
+           reservation / attempt / release are refused);
+        4. the admission reservation must exist and belong to the job; the budget
+           reservation must belong to the same job;
+        5. the usage row and the research-budget receipt are inserted in the
+           **same** transaction; the receipt id is the idempotency key and a
+           re-delivery with a different payload is a typed conflict, never a
+           silent no-op.
+
+        A duplicate delivery returns ``duplicate=True`` and charges nothing.
+        A late receipt for an older attempt is verified against *its* binding,
+        so an already-started attempt 2 cannot make attempt 1 usage disappear —
+        and this method never advances task state.
+        """
+        identifier = str(usage_id or "").strip()
+        if not identifier:
+            raise AdmissionValidationError("usage_id must be non-empty")
+        try:
+            authority = resolve_authority(producer=producer)
+        except UntrustedUsageProducerError as exc:
+            raise UsageReceiptRejectedError(exc.code, exc.detail) from exc
+        attempt_value = int(attempt)
+        if attempt_value < 1:
+            raise UsageReceiptRejectedError(UsageReason.RECEIPT_INVALID, "attempt must be >= 1")
+        target_job = str(job_id or "").strip()
+        if not target_job:
+            raise UsageReceiptRejectedError(UsageReason.RECEIPT_INVALID, "job_id is required")
+        counter_values = counters or UsageUnitCounts()
+        core_seconds = max(0, int(cores)) * max(0, int(seconds))
+        core_hours = (Decimal(core_seconds) / Decimal(3600)).quantize(Decimal("0.000001"))
+
+        candidate = binding
+        if candidate is None and receipt is not None:
+            candidate = ReceiptHistoryBinding.from_receipt(receipt)
+        if candidate is not None:
+            if candidate.job_id and candidate.job_id != target_job:
+                raise UsageReceiptRejectedError(
+                    UsageReason.RESERVATION_JOB_MISMATCH,
+                    f"receipt job {candidate.job_id!r} != {target_job!r}",
+                )
+            if int(candidate.attempt) != attempt_value:
+                raise UsageReceiptRejectedError(
+                    UsageReason.ATTEMPT_CONFLICT,
+                    f"receipt attempt {candidate.attempt} != declared {attempt_value}",
+                )
+        if not authority.internal and (receipt is None or candidate is None):
+            raise UsageReceiptRejectedError(
+                UsageReason.RECEIPT_INVALID,
+                f"producer {authority.producer!r} must present the attempt receipt identity",
+            )
+
+        now = self._clock()
+        budget_applied = False
+        consumed: dict[str, int] = {}
+        remaining: dict[str, int] = {}
+        applied = False
+        duplicate = False
+        resolved_reservation = ""
+        resolved_budget_id = ""
+        chain_digest = ""
+        binding_digest = ""
+        identity_release = ""
+        identity_plan = ""
+
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                budget_row: sqlite3.Row | None = None
+                if budget_reservation_id:
+                    budget_row = conn.execute(
+                        "SELECT * FROM research_budget_reservations "
+                        "WHERE reservation_id=? AND budget_id=?",
+                        (str(budget_reservation_id), str(budget_id)),
+                    ).fetchone()
+                    if budget_row is None:
+                        raise UsageReceiptRejectedError(
+                            UsageReason.BUDGET_MISMATCH,
+                            f"budget reservation {budget_reservation_id!r} not found on "
+                            f"budget {budget_id!r}",
+                        )
+                    if str(budget_row["state"]) == BudgetState.RELEASED:
+                        raise UsageReceiptRejectedError(
+                            UsageReason.BUDGET_RELEASED,
+                            f"budget reservation {budget_reservation_id!r} was released",
+                        )
+                    # The reservation's ``task_ref`` may be the submit claim id
+                    # (idempotent submit reserves before the task id exists); the
+                    # durable link is ``admission_reservation_id`` → the
+                    # reservation's bound job ids, checked below.
+                    resolved_budget_id = str(budget_row["budget_id"])
+                    if not reservation_id:
+                        reservation_id = str(budget_row["admission_reservation_id"] or "")
+                resolved_reservation = str(reservation_id or "")
+                if not resolved_reservation:
+                    raise UsageReceiptRejectedError(
+                        UsageReason.RESERVATION_NOT_FOUND,
+                        "a usage receipt must name the admission reservation it settles",
+                    )
+                reservation_row = conn.execute(
+                    "SELECT * FROM admission_reservations WHERE reservation_id=?",
+                    (resolved_reservation,),
+                ).fetchone()
+                if reservation_row is None:
+                    raise UsageReceiptRejectedError(
+                        UsageReason.RESERVATION_NOT_FOUND,
+                        f"admission reservation {resolved_reservation!r} not found",
+                    )
+                known_jobs = {str(reservation_row["job_id"])}
+                known_jobs |= self._reservation_job_ids(conn, resolved_reservation)
+                if target_job not in known_jobs:
+                    if authority.internal:
+                        # The Controller owns both facts; record the task id it
+                        # admitted so later historical verification is durable.
+                        conn.execute(
+                            "INSERT OR IGNORE INTO admission_reservation_jobs "
+                            "(reservation_id, job_id, bound_at) VALUES (?, ?, ?)",
+                            (resolved_reservation, target_job, now),
+                        )
+                    else:
+                        raise UsageReceiptRejectedError(
+                            UsageReason.RESERVATION_JOB_MISMATCH,
+                            f"reservation {resolved_reservation!r} does not belong to "
+                            f"{target_job!r}",
+                        )
+
+                stored_row = conn.execute(
+                    "SELECT * FROM admission_attempt_bindings WHERE job_id=? AND attempt=?",
+                    (target_job, attempt_value),
+                ).fetchone()
+                if stored_row is not None:
+                    stored = _row_to_binding(stored_row)
+                    if stored.reservation_id and stored.reservation_id != resolved_reservation:
+                        raise UsageReceiptRejectedError(
+                            UsageReason.RESERVATION_MISMATCH,
+                            f"attempt {attempt_value} is bound to reservation "
+                            f"{stored.reservation_id!r}, not {resolved_reservation!r}",
+                            params={
+                                "field": "reservation_id",
+                                "expected": stored.reservation_id,
+                                "actual": resolved_reservation,
+                            },
+                        )
+                    if candidate is not None:
+                        if authority.internal:
+                            # The Controller's own terminal observation carries no
+                            # frozen submission derivation; its identity is the
+                            # persisted one it is re-deriving.
+                            if candidate.with_chain_digest().chain_digest != stored.chain_digest:
+                                raise UsageReceiptRejectedError(
+                                    UsageReason.ATTEMPT_CONFLICT,
+                                    "internal receipt identity disagrees with the bound "
+                                    "attempt identity",
+                                    params={"field": "chain_digest"},
+                                )
+                        else:
+                            verdict: ReceiptVerdict = verify_historical_receipt(
+                                receipt if receipt is not None else _receipt_for_binding(candidate),
+                                stored,
+                                reservation_id=resolved_reservation,
+                            )
+                            if not verdict.accepted:
+                                raise UsageReceiptRejectedError(
+                                    UsageReason.ATTEMPT_CONFLICT,
+                                    f"{verdict.code}: {verdict.reason}",
+                                    params={"field": verdict.code},
+                                )
+                    chain_digest = stored.chain_digest
+                    binding_digest = stored.chain_digest
+                    identity_release = stored.release_id
+                    identity_plan = stored.plan_identity
+                else:
+                    if not authority.internal and not self._attempt_declared(
+                        conn, target_job, attempt_value
+                    ):
+                        raise UsageReceiptRejectedError(
+                            UsageReason.NOT_DISPATCHED,
+                            f"attempt {attempt_value} was never dispatched for this task; "
+                            "trusted usage cannot invent an execution",
+                        )
+                    if (
+                        not authority.internal
+                        and budget_row is not None
+                        and str(budget_row["state"])
+                        not in (BudgetState.DISPATCHED, BudgetState.SETTLED)
+                    ):
+                        raise UsageReceiptRejectedError(
+                            UsageReason.NOT_DISPATCHED,
+                            "the budget reservation for this task was never dispatched; "
+                            "trusted usage cannot settle it",
+                        )
+                    assert candidate is not None  # external path validated above
+                    seeded = ReceiptHistoryBinding(
+                        job_id=candidate.job_id,
+                        attempt=candidate.attempt,
+                        submission_id=candidate.submission_id,
+                        release_id=candidate.release_id,
+                        release_digest=candidate.release_digest,
+                        owner=candidate.owner,
+                        fencing_token=candidate.fencing_token,
+                        plan_identity=candidate.plan_identity,
+                        step_identities=tuple(candidate.step_identities),
+                        reservation_id=resolved_reservation,
+                    ).with_chain_digest()
+                    if not authority.internal:
+                        verdict = verify_historical_receipt(
+                            receipt if receipt is not None else _receipt_for_binding(seeded),
+                            seeded,
+                            reservation_id=resolved_reservation,
+                        )
+                        if not verdict.accepted:
+                            raise UsageReceiptRejectedError(
+                                UsageReason.RECEIPT_INVALID,
+                                f"{verdict.code}: {verdict.reason}",
+                                params={"field": verdict.code},
+                            )
+                    self._bind_attempt_in(
+                        conn,
+                        seeded,
+                        now=now,
+                        producer=authority.producer,
+                        budget_id=resolved_budget_id,
+                        budget_reservation_id=str(budget_reservation_id),
+                    )
+                    chain_digest = seeded.chain_digest
+                    binding_digest = seeded.chain_digest
+                    identity_release = seeded.release_id
+                    identity_plan = seeded.plan_identity
+
+                payload_digest = _usage_payload_digest(
+                    identifier,
+                    job_id=target_job,
+                    attempt=attempt_value,
+                    reservation_id=resolved_reservation,
+                    cores=max(0, int(cores)),
+                    seconds=max(0, int(seconds)),
+                    counters=counter_values,
+                    producer=authority.producer,
+                    chain_digest=chain_digest,
+                    budget_id=resolved_budget_id,
+                    budget_reservation_id=str(budget_reservation_id),
+                    run_id=str(run_id),
+                )
+                cursor = conn.execute(
+                    """INSERT OR IGNORE INTO admission_usage_receipts (
+                           usage_id, reservation_id, job_id, attempt, cores,
+                           seconds, core_hours, recorded_at, producer, trusted_source,
+                           submission_id, release_id, plan_identity,
+                           step_identities_json, chain_digest, binding_digest,
+                           budget_id, budget_reservation_id, run_id, payload_digest)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        identifier,
+                        resolved_reservation,
+                        target_job,
+                        attempt_value,
+                        max(0, int(cores)),
+                        max(0, int(seconds)),
+                        str(core_hours),
+                        now,
+                        authority.producer,
+                        authority.trusted_source,
+                        "" if candidate is None else str(candidate.submission_id),
+                        "" if candidate is None else str(candidate.release_id),
+                        "" if candidate is None else str(candidate.plan_identity),
+                        json.dumps([] if candidate is None else list(candidate.step_identities)),
+                        chain_digest,
+                        binding_digest,
+                        resolved_budget_id,
+                        str(budget_reservation_id),
+                        str(run_id),
+                        payload_digest,
+                    ),
+                )
+                if cursor.rowcount == 1:
+                    applied = True
+                    if budget_row is not None:
+                        budget_applied = self._settle_budget_in(
+                            conn,
+                            budget_row=budget_row,
+                            receipt_id=identifier,
+                            counters=counter_values,
+                            run_id=str(run_id),
+                            trusted_source=authority.trusted_source,
+                            job_id=target_job,
+                            attempt=attempt_value,
+                            usage_id=identifier,
+                            chain_digest=chain_digest,
+                            binding_digest=binding_digest,
+                            producer=authority.producer,
+                            now=now,
+                            release_id=identity_release,
+                            plan_identity=identity_plan,
+                        )
+                else:
+                    stored_usage = conn.execute(
+                        "SELECT payload_digest FROM admission_usage_receipts WHERE usage_id=?",
+                        (identifier,),
+                    ).fetchone()
+                    if (
+                        stored_usage is None
+                        or str(stored_usage["payload_digest"] or "") != payload_digest
+                    ):
+                        raise UsageReceiptRejectedError(
+                            UsageReason.RECEIPT_CONFLICT,
+                            f"receipt {identifier!r} was already recorded with a different payload",
+                        )
+                    duplicate = True
+                if resolved_budget_id:
+                    consumed = self._budget_consumed_in(conn, resolved_budget_id)
+                    policy = self._budget_policy_in(conn, resolved_budget_id)
+                    remaining = {
+                        unit: max(0, cap - consumed.get(unit, 0))
+                        for unit, cap in (policy.limits if policy is not None else {}).items()
+                    }
+                conn.execute("COMMIT")
+            except BaseException:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
+            finally:
+                conn.close()
+
+        return UsageIngestOutcome(
+            applied=applied,
+            duplicate=duplicate,
+            reason_code=UsageReason.RECORDED if applied else UsageReason.DUPLICATE,
+            usage_id=identifier,
+            job_id=target_job,
+            attempt=attempt_value,
+            reservation_id=resolved_reservation,
+            producer=authority.producer,
+            trusted_source=authority.trusted_source,
+            chain_digest=chain_digest,
+            binding_digest=binding_digest,
+            counters=counter_values,
+            budget_id=resolved_budget_id,
+            budget_reservation_id=str(budget_reservation_id),
+            budget_applied=budget_applied,
+            consumed=consumed,
+            remaining=remaining,
+        )
+
+    def usage_by_job(self, job_id: str) -> list[dict[str, Any]]:
+        """Every usage receipt booked for *job_id* (survives task purge)."""
+        with self._lock:
+            conn = self._connect()
+            try:
+                rows = conn.execute(
+                    "SELECT * FROM admission_usage_receipts WHERE job_id=? "
+                    "ORDER BY attempt, recorded_at, usage_id",
+                    (str(job_id),),
+                ).fetchall()
+            finally:
+                conn.close()
+        return [dict(row) for row in rows]
+
+    def verify_usage_history(self, job_id: str) -> dict[str, Any]:
+        """Re-verify booked usage from persisted identities only (no work_dir).
+
+        Post-purge / post-restart evidence: every usage receipt is matched to
+        its immutable ``(job, attempt)`` binding, the binding's chain digest is
+        recomputed from its own fields, and receipts from several attempts are
+        reported separately.  This never reads a task directory and never
+        advances a task state.
+        """
+        receipts = self.usage_by_job(job_id)
+        with self._lock:
+            conn = self._connect()
+            try:
+                binding_rows = conn.execute(
+                    "SELECT * FROM admission_attempt_bindings WHERE job_id=? ORDER BY attempt",
+                    (str(job_id),),
+                ).fetchall()
+            finally:
+                conn.close()
+        bindings = {int(row["attempt"]): _row_to_binding(row) for row in binding_rows}
+        attempts: list[dict[str, Any]] = []
+        problems: list[dict[str, Any]] = []
+        for attempt, binding in sorted(bindings.items()):
+            recomputed = binding.computed_digest()
+            if binding.chain_digest != recomputed:
+                problems.append(
+                    {
+                        "attempt": attempt,
+                        "code": "binding_digest_mismatch",
+                        "expected": binding.chain_digest,
+                        "actual": recomputed,
+                    }
+                )
+            attempts.append(
+                {
+                    **binding.to_dict(),
+                    "recomputed_digest": recomputed,
+                    "receipts": [
+                        row["usage_id"] for row in receipts if int(row["attempt"]) == attempt
+                    ],
+                }
+            )
+        for row in receipts:
+            attempt = int(row["attempt"])
+            binding = bindings.get(attempt)
+            if binding is None:
+                problems.append(
+                    {"usage_id": row["usage_id"], "attempt": attempt, "code": "binding_missing"}
+                )
+                continue
+            if str(row.get("chain_digest") or "") != binding.chain_digest:
+                problems.append(
+                    {
+                        "usage_id": row["usage_id"],
+                        "attempt": attempt,
+                        "code": "receipt_chain_mismatch",
+                    }
+                )
+            if str(row.get("reservation_id") or "") != binding.reservation_id:
+                problems.append(
+                    {
+                        "usage_id": row["usage_id"],
+                        "attempt": attempt,
+                        "code": "receipt_reservation_mismatch",
+                    }
+                )
+        return {
+            "schema": "acp2.usage-history.v1",
+            "job_id": str(job_id),
+            "verified": not problems,
+            "attempts": attempts,
+            "receipts": receipts,
+            "problems": problems,
+        }
 
     def usage_totals(self) -> dict[str, Any]:
         """Return the recorded usage projection (duplicates are not charged)."""
@@ -1518,6 +2589,10 @@ class ReservationLedger:
             timeouts=payload.get("timeouts") or {},
             approval_ref=str(row["approval_ref"] or ""),
             project_id=str(row["project_id"] or ""),
+            # M2-03c: the persisted D09 shape carries the deadline surfaces, so a
+            # restart reads the same wall/queue bound instead of losing it (the
+            # pre-M2-03c reader dropped this member).
+            shape=payload.get("shape") or {},
         )
 
     @staticmethod
@@ -1546,6 +2621,9 @@ class ReservationLedger:
             "limits": dict(policy.limits),
             "approved_limits": dict(policy.approved_limits),
             "timeouts": dict(policy.timeouts),
+            # M2-03c: the D09 shape is part of the durable policy so the deadline
+            # surfaces survive a restart (additive member; old rows read ``{}``).
+            "shape": dict(policy.shape),
         }
         now = self._clock()
         with self._lock:
@@ -1746,12 +2824,40 @@ class ReservationLedger:
         reservation_id: str,
         counters: UsageUnitCounts,
         run_id: str = "",
-        trusted_source: str = "controller-receipt",
+        trusted_source: str = UsageSource.CONTROLLER_TERMINAL,
+        job_id: str = "",
+        attempt: int = 0,
+        usage_id: str = "",
+        chain_digest: str = "",
+        binding_digest: str = "",
+        producer: str = "",
     ) -> BudgetSettlement:
-        """Settle from one trusted receipt; a duplicate id changes nothing."""
+        """Settle from the Controller's own trusted receipt (internal only).
+
+        Lower-level budget API.  The settlement *wire point* for execution
+        evidence is :meth:`record_usage_once`, which resolves the producer from a
+        credential capability and verifies the attempt identity.  This method is
+        deliberately restricted to the internal
+        ``controller-terminal-receipt`` source: a caller-supplied source string
+        (and a caller-declared external producer) is **not** an authorization
+        fact and is refused rather than recorded.
+        """
         identifier = str(receipt_id or "").strip()
         if not identifier:
             raise BudgetConfigurationError("receipt_id must be non-empty")
+        source = str(trusted_source or "").strip()
+        if producer and str(producer).strip().lower() != UsageProducer.INTERNAL:
+            raise BudgetConfigurationError(
+                f"producer {producer!r} cannot settle through this internal API; "
+                "external receipts must go through record_usage_once (capability + "
+                "attempt identity)"
+            )
+        if source not in UsageSource.INTERNAL:
+            raise BudgetConfigurationError(
+                f"trusted source {source!r} is not the internal Controller source "
+                f"{sorted(UsageSource.INTERNAL)}; an external source string is not an "
+                "authorization fact"
+            )
         now = self._clock()
         with self._lock:
             conn = self._connect()
@@ -1784,40 +2890,21 @@ class ReservationLedger:
                         identifier,
                         counters,
                     )
-                cursor = conn.execute(
-                    """INSERT OR IGNORE INTO research_budget_receipts (
-                           receipt_id, budget_id, reservation_id, run_id, usage_json,
-                           trusted_source, applied, recorded_at)
-                       VALUES (?, ?, ?, ?, ?, ?, 1, ?)""",
-                    (
-                        identifier,
-                        budget_id,
-                        str(reservation_id),
-                        str(run_id),
-                        json.dumps(counters.to_dict(), sort_keys=True),
-                        str(trusted_source),
-                        now,
-                    ),
+                applied = self._settle_budget_in(
+                    conn,
+                    budget_row=row,
+                    receipt_id=identifier,
+                    counters=counters,
+                    run_id=str(run_id),
+                    trusted_source=source,
+                    job_id=str(job_id),
+                    attempt=int(attempt),
+                    usage_id=str(usage_id),
+                    chain_digest=str(chain_digest),
+                    binding_digest=str(binding_digest),
+                    producer=str(producer),
+                    now=now,
                 )
-                if cursor.rowcount == 1:
-                    conn.execute(
-                        "UPDATE research_budget_reservations SET state=?, updated_at=? "
-                        "WHERE reservation_id=? AND state != ?",
-                        (
-                            BudgetState.SETTLED,
-                            now,
-                            str(reservation_id),
-                            BudgetState.RELEASED,
-                        ),
-                    )
-                    conn.execute(
-                        "INSERT INTO research_budget_events (subject, event, detail, created_at) "
-                        "VALUES (?, ?, ?, ?)",
-                        (str(reservation_id), "budget_settle", identifier, now),
-                    )
-                    applied = True
-                else:
-                    applied = False
                 consumed = self._budget_consumed_in(conn, budget_id)
                 policy = self._budget_policy_in(conn, budget_id)
                 remaining = {
@@ -2010,6 +3097,12 @@ class ReservationLedger:
 
     @staticmethod
     def _row_to_budget_reservation(row: sqlite3.Row) -> BudgetReservation:
+        def _optional(name: str, default: Any) -> Any:
+            try:
+                return row[name]
+            except (IndexError, KeyError):
+                return default
+
         return BudgetReservation(
             reservation_id=str(row["reservation_id"]),
             budget_id=str(row["budget_id"]),
@@ -2022,6 +3115,11 @@ class ReservationLedger:
             detail=str(row["detail"] or ""),
             created_at=str(row["created_at"] or ""),
             updated_at=str(row["updated_at"] or ""),
+            attempt=int(_optional("attempt", 0) or 0),
+            receipt_id=str(_optional("receipt_id", "") or ""),
+            chain_digest=str(_optional("chain_digest", "") or ""),
+            release_id=str(_optional("release_id", "") or ""),
+            plan_identity=str(_optional("plan_identity", "") or ""),
         )
 
     def research_budget_evidence(
@@ -2046,6 +3144,12 @@ class ReservationLedger:
                         "run_id": row["run_id"],
                         "usage": json.loads(row["usage_json"]) or {},
                         "trusted_source": row["trusted_source"],
+                        "producer": row["producer"],
+                        "job_id": row["job_id"],
+                        "attempt": int(row["attempt"] or 0),
+                        "usage_id": row["usage_id"],
+                        "chain_digest": row["chain_digest"],
+                        "binding_digest": row["binding_digest"],
                         "applied": bool(row["applied"]),
                         "recorded_at": row["recorded_at"],
                     }
@@ -2318,13 +3422,64 @@ class AdmissionController:
         self,
         usage_id: str,
         *,
-        reservation_id: str,
+        reservation_id: str = "",
         job_id: str,
         attempt: int = 1,
         cores: int = 0,
         seconds: int = 0,
+        producer: str = UsageProducer.INTERNAL,
+        receipt: ExecutionReceipt | None = None,
+        binding: ReceiptHistoryBinding | None = None,
+        counters: UsageUnitCounts | None = None,
+        budget_id: str = "",
+        budget_reservation_id: str = "",
+        run_id: str = "",
     ) -> bool:
-        """Record one trusted usage receipt exactly once (idempotent by id)."""
+        """Book one trusted usage receipt exactly once (idempotent by id).
+
+        Returns ``True`` only when this delivery applied.  A rejection raises
+        :class:`UsageReceiptRejectedError` and writes nothing.
+        """
+        outcome = self.ingest_usage_receipt(
+            usage_id,
+            reservation_id=reservation_id,
+            job_id=job_id,
+            attempt=attempt,
+            cores=cores,
+            seconds=seconds,
+            producer=producer,
+            receipt=receipt,
+            binding=binding,
+            counters=counters,
+            budget_id=budget_id,
+            budget_reservation_id=budget_reservation_id,
+            run_id=run_id,
+        )
+        return outcome.applied
+
+    def ingest_usage_receipt(
+        self,
+        usage_id: str,
+        *,
+        job_id: str,
+        attempt: int = 1,
+        reservation_id: str = "",
+        cores: int = 0,
+        seconds: int = 0,
+        producer: str,
+        receipt: ExecutionReceipt | None = None,
+        binding: ReceiptHistoryBinding | None = None,
+        counters: UsageUnitCounts | None = None,
+        budget_id: str = "",
+        budget_reservation_id: str = "",
+        run_id: str = "",
+    ) -> UsageIngestOutcome:
+        """Settlement wire point: verify the producer + attempt, then book.
+
+        ``producer`` must come from a server-side authority
+        (:mod:`acp_services.runtime.usage_authority`), never from a request
+        field; the trusted source recorded on the receipt is derived from it.
+        """
         return self._ledger.record_usage_once(
             usage_id,
             reservation_id=reservation_id,
@@ -2332,7 +3487,38 @@ class AdmissionController:
             attempt=attempt,
             cores=cores,
             seconds=seconds,
+            producer=producer,
+            receipt=receipt,
+            binding=binding,
+            counters=counters,
+            budget_id=budget_id,
+            budget_reservation_id=budget_reservation_id,
+            run_id=run_id,
         )
+
+    def bind_attempt_identity(self, binding: ReceiptHistoryBinding) -> bool:
+        """Persist the immutable identity of one ``(job, attempt)``."""
+        return self._ledger.bind_attempt_identity(binding)
+
+    def bind_reservation_job(self, reservation_id: str, job_id: str) -> bool:
+        """Bind a claim-keyed reservation to the task it admitted."""
+        return self._ledger.bind_reservation_job(reservation_id, job_id)
+
+    def declare_attempt(self, job_id: str, attempt: int, *, reservation_id: str = "") -> bool:
+        """Record the Controller's dispatch of one ``(job, attempt)``."""
+        return self._ledger.declare_attempt(job_id, attempt, reservation_id=reservation_id)
+
+    def attempt_binding(self, job_id: str, attempt: int) -> ReceiptHistoryBinding | None:
+        """Return the persisted identity of one ``(job, attempt)`` (if bound)."""
+        return self._ledger.attempt_binding(job_id, attempt)
+
+    def usage_by_job(self, job_id: str) -> list[dict[str, Any]]:
+        """Booked usage receipts for *job_id* (readable after a task purge)."""
+        return self._ledger.usage_by_job(job_id)
+
+    def verify_usage_history(self, job_id: str) -> dict[str, Any]:
+        """Re-verify booked usage from persisted identities only (no work_dir)."""
+        return self._ledger.verify_usage_history(job_id)
 
     def usage_totals(self) -> dict[str, Any]:
         """Return the ledger's usage projection (duplicates never double-charge)."""

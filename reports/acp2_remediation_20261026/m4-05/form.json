@@ -1,0 +1,2344 @@
+{
+  "driver": "/ACPServer/acp2-remediation-integration/scripts/acceptance/acp2_m405_form.js",
+  "exit_code": 0,
+  "numeric_edit_refusal": {
+    "body": null,
+    "code": "ui_value_type",
+    "message": "ui_value_type: value has the wrong type (expected integer)",
+    "ok": false,
+    "problems": [
+      {
+        "code": "ui_value_type",
+        "message": "value has the wrong type (expected integer)",
+        "path": "charge"
+      }
+    ],
+    "status": null
+  },
+  "rendered_ids": [
+    "capability-form-body",
+    "capability-form-capability",
+    "capability-form-field-charge",
+    "capability-form-field-multiplicity",
+    "capability-form-field-nproc",
+    "capability-form-field-source",
+    "capability-form-preflight",
+    "capability-form-submit"
+  ],
+  "steps": [
+    {
+      "name": "discovery.capability_forms",
+      "ok": true,
+      "value": {
+        "approval_bound": false,
+        "busy": false,
+        "catalog_etag": "sha256:25f5b5674af73d47b8e5c0fc2bf6abb43ca088a9b2674ccc36c79de55168b03e",
+        "edits": [],
+        "error": null,
+        "fields": [
+          {
+            "binding": "task.structure.source",
+            "default": null,
+            "description": "Inline structure text handed to the calculation.",
+            "enum": null,
+            "maximum": null,
+            "minimum": null,
+            "name": "source",
+            "required": true,
+            "task_request": "structure.source",
+            "title": "Structure",
+            "type": "string",
+            "unit": null,
+            "unit_quantity": null,
+            "widget": "textarea"
+          },
+          {
+            "binding": "task.level.method",
+            "default": null,
+            "description": "",
+            "enum": null,
+            "maximum": null,
+            "minimum": null,
+            "name": "method",
+            "required": false,
+            "task_request": "level.method",
+            "title": "Method",
+            "type": "string",
+            "unit": null,
+            "unit_quantity": null,
+            "widget": "text"
+          },
+          {
+            "binding": "task.level.basis",
+            "default": null,
+            "description": "",
+            "enum": null,
+            "maximum": null,
+            "minimum": null,
+            "name": "basis",
+            "required": false,
+            "task_request": "level.basis",
+            "title": "Basis set",
+            "type": "string",
+            "unit": null,
+            "unit_quantity": null,
+            "widget": "text"
+          },
+          {
+            "binding": "task.charge",
+            "default": 0,
+            "description": "",
+            "enum": null,
+            "maximum": 10,
+            "minimum": -10,
+            "name": "charge",
+            "required": false,
+            "task_request": "charge",
+            "title": "Charge",
+            "type": "number",
+            "unit": null,
+            "unit_quantity": null,
+            "widget": "number"
+          },
+          {
+            "binding": "task.multiplicity",
+            "default": 1,
+            "description": "",
+            "enum": null,
+            "maximum": 10,
+            "minimum": 1,
+            "name": "multiplicity",
+            "required": false,
+            "task_request": "multiplicity",
+            "title": "Multiplicity",
+            "type": "number",
+            "unit": null,
+            "unit_quantity": null,
+            "widget": "number"
+          },
+          {
+            "binding": "task.resources.nproc",
+            "default": 1,
+            "description": "",
+            "enum": null,
+            "maximum": 128,
+            "minimum": 1,
+            "name": "nproc",
+            "required": false,
+            "task_request": "resources.nproc",
+            "title": "Processes",
+            "type": "number",
+            "unit": null,
+            "unit_quantity": null,
+            "widget": "number"
+          }
+        ],
+        "forms": [
+          {
+            "capability_id": "electronic.energy",
+            "capability_source": "builtin",
+            "descriptor_digest": null,
+            "error_code": null,
+            "form_digest": "sha256:5d3b3fc9b0702f2689919194ecca3353475ca6e0482abdc72c4a0d6314b14696",
+            "form_origin": "platform",
+            "state": "available"
+          },
+          {
+            "capability_id": "geometry.optimize",
+            "capability_source": "builtin",
+            "descriptor_digest": null,
+            "error_code": null,
+            "form_digest": "sha256:43e94751d7c18c6815ef05f510509373d87f189101932d44ef565598d30aae46",
+            "form_origin": "platform",
+            "state": "available"
+          },
+          {
+            "capability_id": "vibration.analyze",
+            "capability_source": "builtin",
+            "descriptor_digest": null,
+            "error_code": null,
+            "form_digest": "sha256:ccfc081f6637c64f67d0a796fbf410543c830da09399b2d31887a575563b57ba",
+            "form_origin": "platform",
+            "state": "available"
+          },
+          {
+            "capability_id": "vibration.compute",
+            "capability_source": "builtin",
+            "descriptor_digest": null,
+            "error_code": "ui_form_missing",
+            "form_digest": null,
+            "form_origin": null,
+            "state": "unavailable"
+          },
+          {
+            "capability_id": "acp2_external_native_singlepoint",
+            "capability_source": "science_plugin",
+            "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+            "error_code": null,
+            "form_digest": "sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0",
+            "form_origin": "plugin:acp2-external-science-validator",
+            "state": "available"
+          },
+          {
+            "capability_id": "acp2_upgrade_native_singlepoint",
+            "capability_source": "science_plugin",
+            "descriptor_digest": null,
+            "error_code": "ui_form_missing",
+            "form_digest": null,
+            "form_origin": null,
+            "state": "unavailable"
+          }
+        ],
+        "mounted": true,
+        "preflight": null,
+        "projectId": "uncategorized",
+        "read_only": [],
+        "selected": "electronic.energy",
+        "selected_state": "available",
+        "subset_digest": "sha256:870d59473be275fa52785896cdb7e09d03aa15855a8a29dc69b90839fbf08b06",
+        "subset_version": "acp2.ui-subset.v1",
+        "taskRef": null,
+        "values": {
+          "charge": 0,
+          "multiplicity": 1,
+          "nproc": 1
+        },
+        "view": null,
+        "viewModel": null
+      }
+    },
+    {
+      "name": "discovery.form_entry",
+      "ok": true,
+      "value": {
+        "capability_id": "acp2_external_native_singlepoint",
+        "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+        "fields": [],
+        "form_digest": "sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0",
+        "form_origin": "plugin:acp2-external-science-validator",
+        "state": "available"
+      }
+    },
+    {
+      "name": "form.render",
+      "ok": true,
+      "value": {
+        "buttons": [
+          {
+            "disabled": false,
+            "id": "capability-form-preflight",
+            "text": "Preflight"
+          },
+          {
+            "disabled": true,
+            "id": "capability-form-submit",
+            "text": "Submit"
+          }
+        ],
+        "ids": [
+          "capability-form-body",
+          "capability-form-capability",
+          "capability-form-field-charge",
+          "capability-form-field-multiplicity",
+          "capability-form-field-nproc",
+          "capability-form-field-source",
+          "capability-form-preflight",
+          "capability-form-submit"
+        ],
+        "select_options": [
+          {
+            "text": "electronic.energy",
+            "value": "electronic.energy"
+          },
+          {
+            "text": "geometry.optimize",
+            "value": "geometry.optimize"
+          },
+          {
+            "text": "vibration.analyze",
+            "value": "vibration.analyze"
+          },
+          {
+            "text": "vibration.compute \u2014 unavailable",
+            "value": "vibration.compute"
+          },
+          {
+            "text": "acp2_external_native_singlepoint",
+            "value": "acp2_external_native_singlepoint"
+          },
+          {
+            "text": "acp2_upgrade_native_singlepoint \u2014 unavailable",
+            "value": "acp2_upgrade_native_singlepoint"
+          }
+        ],
+        "text_head": "Capabilityelectronic.energygeometry.optimizevibration.analyzevibration.compute \u2014 unavailableacp2_external_native_singlepointacp2_upgrade_native_singlepoint \u2014 unavailableNative single-point record validatorThird-party (fixture) form shipped inside the installed distribution as cccp_ui_form.json. The platform validates it against acp2.ui-subset.v1 and serves it through discovery; the Workbench rende",
+        "title_present": true
+      }
+    },
+    {
+      "name": "form.numeric_edit_stored_verbatim",
+      "ok": true,
+      "value": {
+        "charge": "2",
+        "type": "string"
+      }
+    },
+    {
+      "name": "preflight.numeric_edit_refused",
+      "ok": true,
+      "value": {
+        "body": null,
+        "code": "ui_value_type",
+        "message": "ui_value_type: value has the wrong type (expected integer)",
+        "ok": false,
+        "problems": [
+          {
+            "code": "ui_value_type",
+            "message": "value has the wrong type (expected integer)",
+            "path": "charge"
+          }
+        ],
+        "status": null
+      }
+    },
+    {
+      "name": "preflight",
+      "ok": true,
+      "value": {
+        "capability_id": "acp2_external_native_singlepoint",
+        "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+        "estimate": {
+          "feasible": true,
+          "nproc": 1,
+          "reason": ""
+        },
+        "form_digest": "sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0",
+        "plan_digest": "sha256:d57b6986198d317597d3beaa96e0a8cbdbc4df603bf94b6498391542f2a3e101",
+        "preflight_fingerprint": "sha256:d57b6986198d317597d3beaa96e0a8cbdbc4df603bf94b6498391542f2a3e101",
+        "provenance": {
+          "capability_id": "acp2_external_native_singlepoint",
+          "capability_source": "science_plugin",
+          "capability_version": null,
+          "catalog_etag": "sha256:25f5b5674af73d47b8e5c0fc2bf6abb43ca088a9b2674ccc36c79de55168b03e",
+          "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+          "edited_fields": [
+            "task.structure.source",
+            "task.charge"
+          ],
+          "form_digest": "sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0",
+          "form_origin": "plugin:acp2-external-science-validator",
+          "human_edits": [
+            {
+              "edited_at": "2026-10-28T00:00:00.000Z",
+              "editor_ref": "m405-headless-driver",
+              "field_path": "task.structure.source",
+              "note": "capability=acp2_external_native_singlepoint; task_request=structure.source; descriptor_digest=sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780; form_digest=sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0"
+            },
+            {
+              "edited_at": "2026-10-28T00:00:00.000Z",
+              "editor_ref": "m405-headless-driver",
+              "field_path": "task.charge",
+              "note": "capability=acp2_external_native_singlepoint; task_request=charge; descriptor_digest=sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780; form_digest=sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0"
+            }
+          ],
+          "schema": "acp2.ui.capability-form.provenance.v1",
+          "subset_digest": "sha256:870d59473be275fa52785896cdb7e09d03aa15855a8a29dc69b90839fbf08b06",
+          "subset_version": "acp2.ui-subset.v1"
+        },
+        "read_only": false,
+        "request": {
+          "body": {
+            "input": {
+              "charge": 0,
+              "multiplicity": 1,
+              "source": "# ACP2 external native singlepoint record v1\nschema acp2.native.singlepoint.v1\ncharge 0\nmultiplicity 1\natoms 3\natom O 0.000000000 0.000000000 0.117300000\natom H 0.000000000 0.757200000 -0.469200000\natom H 0.000000000 -0.757200000 -0.469200000\nenergy_hartree -76.0266320000\n",
+              "source_type": "xyz_text"
+            },
+            "method": {
+              "levels": {
+                "single_point": {
+                  "engine": "orca"
+                }
+              }
+            },
+            "resources": {
+              "nproc": 1
+            },
+            "workflow": "singlepoint"
+          },
+          "fields": [
+            {
+              "binding": "task.charge",
+              "field": "charge",
+              "request_body": "input.charge",
+              "task_request": "charge",
+              "unit": null,
+              "value": 0,
+              "value_type": "integer"
+            },
+            {
+              "binding": "task.multiplicity",
+              "field": "multiplicity",
+              "request_body": "input.multiplicity",
+              "task_request": "multiplicity",
+              "unit": null,
+              "value": 1,
+              "value_type": "integer"
+            },
+            {
+              "binding": "task.resources.nproc",
+              "field": "nproc",
+              "request_body": "resources.nproc",
+              "task_request": "resources.nproc",
+              "unit": null,
+              "value": 1,
+              "value_type": "integer"
+            },
+            {
+              "binding": "task.structure.source",
+              "field": "source",
+              "request_body": "input.source",
+              "task_request": "structure.source",
+              "unit": null,
+              "value": "# ACP2 external native singlepoint record v1\nschema acp2.native.singlepoint.v1\ncharge 0\nmultiplicity 1\natoms 3\natom O 0.000000000 0.000000000 0.117300000\natom H 0.000000000 0.757200000 -0.469200000\natom H 0.000000000 -0.757200000 -0.469200000\nenergy_hartree -76.0266320000\n",
+              "value_type": "string"
+            }
+          ],
+          "workflow": "singlepoint"
+        },
+        "schema": "acp2.ui.capability-form.view.v1",
+        "subset_digest": "sha256:870d59473be275fa52785896cdb7e09d03aa15855a8a29dc69b90839fbf08b06",
+        "subset_version": "acp2.ui-subset.v1"
+      }
+    },
+    {
+      "name": "view_model",
+      "ok": true,
+      "value": {
+        "approval_hint_present": true,
+        "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+        "fields": [
+          "task.charge=charge",
+          "task.multiplicity=multiplicity",
+          "task.resources.nproc=resources.nproc",
+          "task.structure.source=structure.source"
+        ],
+        "form_digest": "sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0",
+        "human_edits": [
+          {
+            "edited_at": "2026-10-28T00:00:00.000Z",
+            "editor_ref": "m405-headless-driver",
+            "field_path": "task.structure.source",
+            "note": "capability=acp2_external_native_singlepoint; task_request=structure.source; descriptor_digest=sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780; form_digest=sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0"
+          },
+          {
+            "edited_at": "2026-10-28T00:00:00.000Z",
+            "editor_ref": "m405-headless-driver",
+            "field_path": "task.charge",
+            "note": "capability=acp2_external_native_singlepoint; task_request=charge; descriptor_digest=sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780; form_digest=sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0"
+          }
+        ],
+        "plan_digest": "sha256:d57b6986198d317597d3beaa96e0a8cbdbc4df603bf94b6498391542f2a3e101",
+        "rendered_digests": {
+          "fields": true,
+          "form": true,
+          "plan": true
+        },
+        "submit": {
+          "disabled": true,
+          "id": "capability-form-submit",
+          "text": "Submit"
+        },
+        "subset_digest": "sha256:870d59473be275fa52785896cdb7e09d03aa15855a8a29dc69b90839fbf08b06",
+        "subset_version": "acp2.ui-subset.v1"
+      }
+    },
+    {
+      "name": "discovery.capabilities",
+      "ok": true,
+      "value": {
+        "capabilities": {
+          "analysis": [
+            {
+              "analysis_id": "vibration.compute",
+              "executable": false,
+              "owner": "B12",
+              "registered": true,
+              "state": "registered",
+              "version": "1.0.0"
+            },
+            {
+              "analysis_id": "vibration.analyze",
+              "executable": true,
+              "owner": "A",
+              "registered": true,
+              "state": "executable",
+              "version": "1.0.0"
+            },
+            {
+              "analysis_id": "acp2_external_native_singlepoint",
+              "executable": true,
+              "owner": "plugin:acp2_external.native_singlepoint",
+              "registered": true,
+              "state": "executable",
+              "version": "1.0.0"
+            },
+            {
+              "analysis_id": "acp2_upgrade_native_singlepoint",
+              "executable": true,
+              "owner": "plugin:acp2_upgrade.native_singlepoint",
+              "registered": true,
+              "state": "executable",
+              "version": "1.0.0"
+            }
+          ],
+          "descriptors": {
+            "capabilities": [
+              {
+                "capability_id": "electronic.energy",
+                "compatibility": {
+                  "backward_compatible_additions": "same_major_only",
+                  "contract_version": "acp2.science.capability.v1",
+                  "declared_major": 1,
+                  "historical_unknown_fields": "preserve_read_only_no_execution_or_recovery_eligibility",
+                  "max_reader_schema_version": 1,
+                  "min_reader_schema_version": 1,
+                  "unknown_major_error_code": "unknown_major_version",
+                  "unknown_major_version": "reject_and_never_execute"
+                },
+                "completion_checks": [
+                  {
+                    "compares": [
+                      "scf_convergence",
+                      "final_energy"
+                    ],
+                    "description": "The single-point SCF converged and reported a finite final energy.",
+                    "evaluator": "cccp.calculation.tasks.singlepoint",
+                    "failure_error_code": "invalid_scientific_input",
+                    "id": "scf_converged",
+                    "required": true
+                  }
+                ],
+                "execution_semantics": {
+                  "delegates_to_task_kind": "singlepoint",
+                  "delegation_count": 1,
+                  "kind": "compute",
+                  "network_access": false,
+                  "reads_existing_artifacts_only": false,
+                  "side_effects": "artifacts_only",
+                  "starts_subprocess": true,
+                  "writes_artifacts": true
+                },
+                "implementation_id": "cccp.calculation.tasks.singlepoint",
+                "input_schema": {
+                  "ref": "cccp.calculation.requests#TaskRequest",
+                  "schema_version": 1
+                },
+                "limitations": [
+                  {
+                    "applies_to": "energies from a single supplied geometry",
+                    "id": "no_geometry_relaxation",
+                    "severity": "info",
+                    "text": "This capability evaluates one supplied structure; it does not optimize the geometry."
+                  }
+                ],
+                "output_schema": {
+                  "ref": "cccp.calculation.results#TaskResult",
+                  "schema_version": 1
+                },
+                "preconditions": [
+                  {
+                    "description": "A resolvable molecular structure is supplied.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "structure_supplied",
+                    "kind": "input",
+                    "required": true
+                  },
+                  {
+                    "description": "Charge and multiplicity are consistent with the electron count.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "charge_multiplicity_consistent",
+                    "kind": "scientific",
+                    "required": true
+                  },
+                  {
+                    "description": "A real QC executable is resolvable by the existing software seam at execution time.",
+                    "error_code": "unavailable_binary",
+                    "evaluated_by": "runtime",
+                    "id": "qc_executable_available",
+                    "kind": "environment",
+                    "required": true
+                  }
+                ],
+                "projections": {
+                  "available": {
+                    "reason": "no executable precondition is declared",
+                    "state": "unknown"
+                  },
+                  "described": {
+                    "reason": "registered in the read-only capability registry",
+                    "state": "present"
+                  },
+                  "installed": {
+                    "reason": "no executable precondition is declared",
+                    "state": "unknown"
+                  },
+                  "verified": {
+                    "state": "not_verified"
+                  }
+                },
+                "provenance_requirements": {
+                  "artifact_digests": "required",
+                  "input_digest": "required",
+                  "method_identity": "required",
+                  "software_version": "required",
+                  "units": "required"
+                },
+                "schema": "acp2.science.capability",
+                "schema_version": 1,
+                "unknown_field_policy": {
+                  "extension_namespace": "x-acp2-<owner>-<name>",
+                  "historical_read": "preserve_unknown_fields_without_execution_or_recovery_eligibility",
+                  "new_execution_request": "reject_unsupported_execution_fields",
+                  "unknown_major_version": "never_execute"
+                },
+                "validation_layers": {
+                  "cccp_scientific_semantics": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "cccp"
+                  },
+                  "json_structure": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "contract"
+                  },
+                  "runtime_platform_constraints": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "runtime"
+                  }
+                }
+              },
+              {
+                "capability_id": "geometry.optimize",
+                "compatibility": {
+                  "backward_compatible_additions": "same_major_only",
+                  "contract_version": "acp2.science.capability.v1",
+                  "declared_major": 1,
+                  "historical_unknown_fields": "preserve_read_only_no_execution_or_recovery_eligibility",
+                  "max_reader_schema_version": 1,
+                  "min_reader_schema_version": 1,
+                  "unknown_major_error_code": "unknown_major_version",
+                  "unknown_major_version": "reject_and_never_execute"
+                },
+                "completion_checks": [
+                  {
+                    "compares": [
+                      "convergence",
+                      "final_geometry"
+                    ],
+                    "description": "The geometry optimization reached its convergence criteria.",
+                    "evaluator": "cccp.calculation.tasks.optimize",
+                    "failure_error_code": "invalid_scientific_input",
+                    "id": "optimization_converged",
+                    "required": true
+                  }
+                ],
+                "execution_semantics": {
+                  "delegates_to_task_kind": "optimize",
+                  "delegation_count": 1,
+                  "kind": "compute",
+                  "network_access": false,
+                  "reads_existing_artifacts_only": false,
+                  "side_effects": "artifacts_only",
+                  "starts_subprocess": true,
+                  "writes_artifacts": true
+                },
+                "implementation_id": "cccp.calculation.tasks.optimize",
+                "input_schema": {
+                  "ref": "cccp.calculation.requests#TaskRequest",
+                  "schema_version": 1
+                },
+                "limitations": [
+                  {
+                    "applies_to": "stationary-point classification",
+                    "id": "convergence_is_not_a_minimum",
+                    "severity": "warning",
+                    "text": "A converged geometry is not proof of a minimum; a separate vibration.compute result is required to classify the stationary point."
+                  }
+                ],
+                "output_schema": {
+                  "ref": "cccp.calculation.results#TaskResult",
+                  "schema_version": 1
+                },
+                "preconditions": [
+                  {
+                    "description": "A resolvable molecular structure is supplied.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "structure_supplied",
+                    "kind": "input",
+                    "required": true
+                  },
+                  {
+                    "description": "Charge and multiplicity are consistent with the electron count.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "charge_multiplicity_consistent",
+                    "kind": "scientific",
+                    "required": true
+                  },
+                  {
+                    "description": "A real QC executable is resolvable by the existing software seam at execution time.",
+                    "error_code": "unavailable_binary",
+                    "evaluated_by": "runtime",
+                    "id": "qc_executable_available",
+                    "kind": "environment",
+                    "required": true
+                  }
+                ],
+                "projections": {
+                  "available": {
+                    "reason": "no executable precondition is declared",
+                    "state": "unknown"
+                  },
+                  "described": {
+                    "reason": "registered in the read-only capability registry",
+                    "state": "present"
+                  },
+                  "installed": {
+                    "reason": "no executable precondition is declared",
+                    "state": "unknown"
+                  },
+                  "verified": {
+                    "state": "not_verified"
+                  }
+                },
+                "provenance_requirements": {
+                  "artifact_digests": "required",
+                  "input_digest": "required",
+                  "method_identity": "required",
+                  "software_version": "required",
+                  "units": "required"
+                },
+                "schema": "acp2.science.capability",
+                "schema_version": 1,
+                "unknown_field_policy": {
+                  "extension_namespace": "x-acp2-<owner>-<name>",
+                  "historical_read": "preserve_unknown_fields_without_execution_or_recovery_eligibility",
+                  "new_execution_request": "reject_unsupported_execution_fields",
+                  "unknown_major_version": "never_execute"
+                },
+                "validation_layers": {
+                  "cccp_scientific_semantics": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "cccp"
+                  },
+                  "json_structure": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "contract"
+                  },
+                  "runtime_platform_constraints": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "runtime"
+                  }
+                }
+              },
+              {
+                "capability_id": "vibration.analyze",
+                "compatibility": {
+                  "backward_compatible_additions": "same_major_only",
+                  "contract_version": "acp2.science.capability.v1",
+                  "declared_major": 1,
+                  "historical_unknown_fields": "preserve_read_only_no_execution_or_recovery_eligibility",
+                  "max_reader_schema_version": 1,
+                  "min_reader_schema_version": 1,
+                  "unknown_major_error_code": "unknown_major_version",
+                  "unknown_major_version": "reject_and_never_execute"
+                },
+                "completion_checks": [
+                  {
+                    "compares": [
+                      "frequencies",
+                      "normal_modes"
+                    ],
+                    "description": "Existing frequency products were projected into the normal-modes report without recomputation.",
+                    "evaluator": "cccp.analysis.frequency_products",
+                    "failure_error_code": "invalid_scientific_input",
+                    "id": "frequency_products_readable",
+                    "required": true
+                  }
+                ],
+                "execution_semantics": {
+                  "delegates_to_task_kind": null,
+                  "delegation_count": 0,
+                  "kind": "pure_analysis",
+                  "network_access": false,
+                  "reads_existing_artifacts_only": true,
+                  "side_effects": "none",
+                  "starts_subprocess": false,
+                  "writes_artifacts": false
+                },
+                "implementation_id": "cccp.analysis.frequency_products",
+                "input_schema": {
+                  "ref": "cccp.analysis.orca_parser#OrcaCalculation",
+                  "schema_version": 1
+                },
+                "limitations": [
+                  {
+                    "applies_to": "all inputs",
+                    "id": "reads_existing_products_only",
+                    "severity": "hard_limit",
+                    "text": "This capability never launches a QC program; missing frequencies or vectors are reported as warnings, not recomputed."
+                  }
+                ],
+                "output_schema": {
+                  "ref": "cccp.analysis.frequency_products#build_frequency_report",
+                  "schema_version": 1
+                },
+                "preconditions": [
+                  {
+                    "description": "Existing frequency or Hessian products are supplied; the analysis layer never recomputes them.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "frequency_products_available",
+                    "kind": "artifact",
+                    "required": true
+                  }
+                ],
+                "projections": {
+                  "available": {
+                    "reason": "pure analysis requires no executable",
+                    "state": "present"
+                  },
+                  "described": {
+                    "reason": "registered in the read-only capability registry",
+                    "state": "present"
+                  },
+                  "installed": {
+                    "reason": "pure analysis reads existing artifacts; no installed executable is required",
+                    "state": "not_verified"
+                  },
+                  "verified": {
+                    "state": "not_verified"
+                  }
+                },
+                "provenance_requirements": {
+                  "artifact_digests": "required",
+                  "input_digest": "required",
+                  "method_identity": "not_applicable",
+                  "notes": [
+                    "Method identity is inherited from the source frequency products; analysis does not choose a level of theory."
+                  ],
+                  "software_version": "required",
+                  "units": "required"
+                },
+                "schema": "acp2.science.capability",
+                "schema_version": 1,
+                "unknown_field_policy": {
+                  "extension_namespace": "x-acp2-<owner>-<name>",
+                  "historical_read": "preserve_unknown_fields_without_execution_or_recovery_eligibility",
+                  "new_execution_request": "reject_unsupported_execution_fields",
+                  "unknown_major_version": "never_execute"
+                },
+                "validation_layers": {
+                  "cccp_scientific_semantics": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "cccp"
+                  },
+                  "json_structure": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "contract"
+                  },
+                  "runtime_platform_constraints": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "runtime"
+                  }
+                }
+              },
+              {
+                "capability_id": "vibration.compute",
+                "compatibility": {
+                  "backward_compatible_additions": "same_major_only",
+                  "contract_version": "acp2.science.capability.v1",
+                  "declared_major": 1,
+                  "historical_unknown_fields": "preserve_read_only_no_execution_or_recovery_eligibility",
+                  "max_reader_schema_version": 1,
+                  "min_reader_schema_version": 1,
+                  "unknown_major_error_code": "unknown_major_version",
+                  "unknown_major_version": "reject_and_never_execute"
+                },
+                "completion_checks": [
+                  {
+                    "compares": [
+                      "frequencies",
+                      "imaginary_frequencies"
+                    ],
+                    "description": "The frequency task completed and produced a finite frequency set.",
+                    "evaluator": "cccp.calculation.tasks.frequency",
+                    "failure_error_code": "invalid_scientific_input",
+                    "id": "frequency_modes_available",
+                    "required": true
+                  }
+                ],
+                "execution_semantics": {
+                  "delegates_to_task_kind": "frequency",
+                  "delegation_count": 1,
+                  "kind": "compute",
+                  "network_access": false,
+                  "reads_existing_artifacts_only": false,
+                  "side_effects": "artifacts_only",
+                  "starts_subprocess": true,
+                  "writes_artifacts": true
+                },
+                "implementation_id": "cccp.calculation.tasks.frequency",
+                "input_schema": {
+                  "ref": "cccp.calculation.requests#TaskRequest",
+                  "schema_version": 1
+                },
+                "limitations": [
+                  {
+                    "applies_to": "imaginary frequencies",
+                    "id": "imaginary_modes_are_not_a_path",
+                    "severity": "warning",
+                    "text": "An imaginary mode is a local curvature fact; it does not by itself establish a reaction path or connectivity."
+                  }
+                ],
+                "output_schema": {
+                  "ref": "cccp.calculation.results#TaskResult",
+                  "schema_version": 1
+                },
+                "preconditions": [
+                  {
+                    "description": "A resolvable molecular structure is supplied.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "structure_supplied",
+                    "kind": "input",
+                    "required": true
+                  },
+                  {
+                    "description": "Charge and multiplicity are consistent with the electron count.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "charge_multiplicity_consistent",
+                    "kind": "scientific",
+                    "required": true
+                  },
+                  {
+                    "description": "A real QC executable is resolvable by the existing software seam at execution time.",
+                    "error_code": "unavailable_binary",
+                    "evaluated_by": "runtime",
+                    "id": "qc_executable_available",
+                    "kind": "environment",
+                    "required": true
+                  }
+                ],
+                "projections": {
+                  "available": {
+                    "reason": "no executable precondition is declared",
+                    "state": "unknown"
+                  },
+                  "described": {
+                    "reason": "registered in the read-only capability registry",
+                    "state": "present"
+                  },
+                  "installed": {
+                    "reason": "no executable precondition is declared",
+                    "state": "unknown"
+                  },
+                  "verified": {
+                    "state": "not_verified"
+                  }
+                },
+                "provenance_requirements": {
+                  "artifact_digests": "required",
+                  "input_digest": "required",
+                  "method_identity": "required",
+                  "software_version": "required",
+                  "units": "required"
+                },
+                "schema": "acp2.science.capability",
+                "schema_version": 1,
+                "unknown_field_policy": {
+                  "extension_namespace": "x-acp2-<owner>-<name>",
+                  "historical_read": "preserve_unknown_fields_without_execution_or_recovery_eligibility",
+                  "new_execution_request": "reject_unsupported_execution_fields",
+                  "unknown_major_version": "never_execute"
+                },
+                "validation_layers": {
+                  "cccp_scientific_semantics": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "cccp"
+                  },
+                  "json_structure": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "contract"
+                  },
+                  "runtime_platform_constraints": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "runtime"
+                  }
+                }
+              },
+              {
+                "capability_id": "acp2_external_native_singlepoint",
+                "capability_source": "science_plugin",
+                "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+                "distribution_digest": {
+                  "algorithm": "acp2.plugin.distribution-digest.v1",
+                  "declared": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+                  "digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+                  "file_count": 5,
+                  "matches_declared": true
+                },
+                "enablement": {
+                  "enabled": true,
+                  "enabled_at": "2026-10-28T00:05:31Z",
+                  "enabled_by": "controller"
+                },
+                "execution_semantics": {
+                  "delegates_to_task_kind": null,
+                  "kind": "pure_analysis",
+                  "network_access": false,
+                  "starts_subprocess": false
+                },
+                "implementation_id": "acp2_fixture.validator.native_singlepoint",
+                "input_schema": {
+                  "ref": "acp2.science.prepared-artifact.v1",
+                  "schema_version": 1
+                },
+                "output_schema": {
+                  "ref": "acp2.science.external.native_singlepoint",
+                  "schema_version": 1
+                },
+                "plugin": {
+                  "distribution": "acp2-external-science-validator",
+                  "entry_point_group": 1,
+                  "license": "MIT",
+                  "name": "acp2_external.native_singlepoint",
+                  "trust_level": "untrusted",
+                  "version": "1.0.0"
+                },
+                "provenance": {
+                  "descriptor_digest_algorithm": "acp2.plugin.descriptor-digest.v1",
+                  "distribution_digest": {
+                    "algorithm": "acp2.plugin.distribution-digest.v1",
+                    "declared": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+                    "digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+                    "file_count": 5,
+                    "matches_declared": true
+                  },
+                  "fixture_evidence": [
+                    {
+                      "description": "Fixed water native single-point record and expected TaskResult fields; the platform owner verifies the fixture, this manifest only carries the claim.",
+                      "digest": "sha256:fc06f818967f121a98b1bf7a3db30b2f43629a5633b742919ecb0b7a52fada98",
+                      "fixture_id": "acp2-external-native-singlepoint",
+                      "verified": true
+                    }
+                  ],
+                  "recipe_refs": [],
+                  "validator_refs": [
+                    {
+                      "required": true,
+                      "validator_id": "check.acp2_native_singlepoint_schema",
+                      "validator_version": "1.0.0"
+                    }
+                  ]
+                },
+                "schema": "acp2.plugin.capability-descriptor.v1",
+                "schema_version": 1
+              },
+              {
+                "capability_id": "acp2_upgrade_native_singlepoint",
+                "capability_source": "science_plugin",
+                "descriptor_digest": "sha256:4297fd794d57e3d16ec6980ab9803ffbf1010d9c89cd070637ab1ba0462314df",
+                "distribution_digest": {
+                  "algorithm": "acp2.plugin.distribution-digest.v1",
+                  "declared": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+                  "digest": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+                  "file_count": 5,
+                  "matches_declared": true
+                },
+                "enablement": {
+                  "enabled": true,
+                  "enabled_at": "2026-10-28T00:05:32Z",
+                  "enabled_by": "controller"
+                },
+                "execution_semantics": {
+                  "delegates_to_task_kind": null,
+                  "kind": "pure_analysis",
+                  "network_access": false,
+                  "starts_subprocess": false
+                },
+                "implementation_id": "acp2_upgrade.validator.native_singlepoint",
+                "input_schema": {
+                  "ref": "acp2.science.prepared-artifact.v1",
+                  "schema_version": 1
+                },
+                "output_schema": {
+                  "ref": "acp2.science.external.upgrade_singlepoint",
+                  "schema_version": 1
+                },
+                "plugin": {
+                  "distribution": "acp2-upgrade-science-validator",
+                  "entry_point_group": 1,
+                  "license": "MIT",
+                  "name": "acp2_upgrade.native_singlepoint",
+                  "trust_level": "untrusted",
+                  "version": "1.0.0"
+                },
+                "provenance": {
+                  "descriptor_digest_algorithm": "acp2.plugin.descriptor-digest.v1",
+                  "distribution_digest": {
+                    "algorithm": "acp2.plugin.distribution-digest.v1",
+                    "declared": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+                    "digest": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+                    "file_count": 5,
+                    "matches_declared": true
+                  },
+                  "fixture_evidence": [
+                    {
+                      "description": "Constructed v1 fixed native JSON record and expected TaskResult fields; the platform owner verifies the fixture, this manifest only carries the claim.",
+                      "digest": "sha256:6e02135cecd4044ab9c9ed9696375a125587dd7e95f8be4414646a324b4cf259",
+                      "fixture_id": "acp2-upgrade-native-singlepoint",
+                      "verified": true
+                    }
+                  ],
+                  "recipe_refs": [
+                    {
+                      "digest": null,
+                      "recipe_id": "acp2.upgrade.recipe",
+                      "schema_version": 1
+                    }
+                  ],
+                  "validator_refs": [
+                    {
+                      "required": true,
+                      "validator_id": "check.acp2_upgrade_schema",
+                      "validator_version": "1.0.0"
+                    }
+                  ]
+                },
+                "schema": "acp2.plugin.capability-descriptor.v1",
+                "schema_version": 1
+              }
+            ],
+            "schema": "acp2.science.capability_catalog",
+            "schema_version": 1
+          },
+          "domain": {
+            "capabilities": [
+              {
+                "capability_id": "electronic.energy",
+                "compatibility": {
+                  "backward_compatible_additions": "same_major_only",
+                  "contract_version": "acp2.science.capability.v1",
+                  "declared_major": 1,
+                  "historical_unknown_fields": "preserve_read_only_no_execution_or_recovery_eligibility",
+                  "max_reader_schema_version": 1,
+                  "min_reader_schema_version": 1,
+                  "unknown_major_error_code": "unknown_major_version",
+                  "unknown_major_version": "reject_and_never_execute"
+                },
+                "completion_checks": [
+                  {
+                    "compares": [
+                      "scf_convergence",
+                      "final_energy"
+                    ],
+                    "description": "The single-point SCF converged and reported a finite final energy.",
+                    "evaluator": "cccp.calculation.tasks.singlepoint",
+                    "failure_error_code": "invalid_scientific_input",
+                    "id": "scf_converged",
+                    "required": true
+                  }
+                ],
+                "execution_semantics": {
+                  "delegates_to_task_kind": "singlepoint",
+                  "delegation_count": 1,
+                  "kind": "compute",
+                  "network_access": false,
+                  "reads_existing_artifacts_only": false,
+                  "side_effects": "artifacts_only",
+                  "starts_subprocess": true,
+                  "writes_artifacts": true
+                },
+                "implementation_id": "cccp.calculation.tasks.singlepoint",
+                "input_schema": {
+                  "ref": "cccp.calculation.requests#TaskRequest",
+                  "schema_version": 1
+                },
+                "limitations": [
+                  {
+                    "applies_to": "energies from a single supplied geometry",
+                    "id": "no_geometry_relaxation",
+                    "severity": "info",
+                    "text": "This capability evaluates one supplied structure; it does not optimize the geometry."
+                  }
+                ],
+                "output_schema": {
+                  "ref": "cccp.calculation.results#TaskResult",
+                  "schema_version": 1
+                },
+                "preconditions": [
+                  {
+                    "description": "A resolvable molecular structure is supplied.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "structure_supplied",
+                    "kind": "input",
+                    "required": true
+                  },
+                  {
+                    "description": "Charge and multiplicity are consistent with the electron count.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "charge_multiplicity_consistent",
+                    "kind": "scientific",
+                    "required": true
+                  },
+                  {
+                    "description": "A real QC executable is resolvable by the existing software seam at execution time.",
+                    "error_code": "unavailable_binary",
+                    "evaluated_by": "runtime",
+                    "id": "qc_executable_available",
+                    "kind": "environment",
+                    "required": true
+                  }
+                ],
+                "projections": {
+                  "available": {
+                    "reason": "no executable precondition is declared",
+                    "state": "unknown"
+                  },
+                  "described": {
+                    "reason": "registered in the read-only capability registry",
+                    "state": "present"
+                  },
+                  "installed": {
+                    "reason": "no executable precondition is declared",
+                    "state": "unknown"
+                  },
+                  "verified": {
+                    "state": "not_verified"
+                  }
+                },
+                "provenance_requirements": {
+                  "artifact_digests": "required",
+                  "input_digest": "required",
+                  "method_identity": "required",
+                  "software_version": "required",
+                  "units": "required"
+                },
+                "schema": "acp2.science.capability",
+                "schema_version": 1,
+                "unknown_field_policy": {
+                  "extension_namespace": "x-acp2-<owner>-<name>",
+                  "historical_read": "preserve_unknown_fields_without_execution_or_recovery_eligibility",
+                  "new_execution_request": "reject_unsupported_execution_fields",
+                  "unknown_major_version": "never_execute"
+                },
+                "validation_layers": {
+                  "cccp_scientific_semantics": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "cccp"
+                  },
+                  "json_structure": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "contract"
+                  },
+                  "runtime_platform_constraints": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "runtime"
+                  }
+                }
+              },
+              {
+                "capability_id": "geometry.optimize",
+                "compatibility": {
+                  "backward_compatible_additions": "same_major_only",
+                  "contract_version": "acp2.science.capability.v1",
+                  "declared_major": 1,
+                  "historical_unknown_fields": "preserve_read_only_no_execution_or_recovery_eligibility",
+                  "max_reader_schema_version": 1,
+                  "min_reader_schema_version": 1,
+                  "unknown_major_error_code": "unknown_major_version",
+                  "unknown_major_version": "reject_and_never_execute"
+                },
+                "completion_checks": [
+                  {
+                    "compares": [
+                      "convergence",
+                      "final_geometry"
+                    ],
+                    "description": "The geometry optimization reached its convergence criteria.",
+                    "evaluator": "cccp.calculation.tasks.optimize",
+                    "failure_error_code": "invalid_scientific_input",
+                    "id": "optimization_converged",
+                    "required": true
+                  }
+                ],
+                "execution_semantics": {
+                  "delegates_to_task_kind": "optimize",
+                  "delegation_count": 1,
+                  "kind": "compute",
+                  "network_access": false,
+                  "reads_existing_artifacts_only": false,
+                  "side_effects": "artifacts_only",
+                  "starts_subprocess": true,
+                  "writes_artifacts": true
+                },
+                "implementation_id": "cccp.calculation.tasks.optimize",
+                "input_schema": {
+                  "ref": "cccp.calculation.requests#TaskRequest",
+                  "schema_version": 1
+                },
+                "limitations": [
+                  {
+                    "applies_to": "stationary-point classification",
+                    "id": "convergence_is_not_a_minimum",
+                    "severity": "warning",
+                    "text": "A converged geometry is not proof of a minimum; a separate vibration.compute result is required to classify the stationary point."
+                  }
+                ],
+                "output_schema": {
+                  "ref": "cccp.calculation.results#TaskResult",
+                  "schema_version": 1
+                },
+                "preconditions": [
+                  {
+                    "description": "A resolvable molecular structure is supplied.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "structure_supplied",
+                    "kind": "input",
+                    "required": true
+                  },
+                  {
+                    "description": "Charge and multiplicity are consistent with the electron count.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "charge_multiplicity_consistent",
+                    "kind": "scientific",
+                    "required": true
+                  },
+                  {
+                    "description": "A real QC executable is resolvable by the existing software seam at execution time.",
+                    "error_code": "unavailable_binary",
+                    "evaluated_by": "runtime",
+                    "id": "qc_executable_available",
+                    "kind": "environment",
+                    "required": true
+                  }
+                ],
+                "projections": {
+                  "available": {
+                    "reason": "no executable precondition is declared",
+                    "state": "unknown"
+                  },
+                  "described": {
+                    "reason": "registered in the read-only capability registry",
+                    "state": "present"
+                  },
+                  "installed": {
+                    "reason": "no executable precondition is declared",
+                    "state": "unknown"
+                  },
+                  "verified": {
+                    "state": "not_verified"
+                  }
+                },
+                "provenance_requirements": {
+                  "artifact_digests": "required",
+                  "input_digest": "required",
+                  "method_identity": "required",
+                  "software_version": "required",
+                  "units": "required"
+                },
+                "schema": "acp2.science.capability",
+                "schema_version": 1,
+                "unknown_field_policy": {
+                  "extension_namespace": "x-acp2-<owner>-<name>",
+                  "historical_read": "preserve_unknown_fields_without_execution_or_recovery_eligibility",
+                  "new_execution_request": "reject_unsupported_execution_fields",
+                  "unknown_major_version": "never_execute"
+                },
+                "validation_layers": {
+                  "cccp_scientific_semantics": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "cccp"
+                  },
+                  "json_structure": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "contract"
+                  },
+                  "runtime_platform_constraints": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "runtime"
+                  }
+                }
+              },
+              {
+                "capability_id": "nmr.compare",
+                "compatibility": {
+                  "backward_compatible_additions": "same_major_only",
+                  "contract_version": "acp2.science.capability.v1",
+                  "declared_major": 1,
+                  "historical_unknown_fields": "preserve_read_only_no_execution_or_recovery_eligibility",
+                  "max_reader_schema_version": 1,
+                  "min_reader_schema_version": 1,
+                  "unknown_major_error_code": "unknown_major_version",
+                  "unknown_major_version": "reject_and_never_execute"
+                },
+                "completion_checks": [
+                  {
+                    "compares": [
+                      "atom_mapping_digest",
+                      "atom_labels"
+                    ],
+                    "description": "Every computed signal label follows the declared structure-order mapping and the ordered assignment key is recorded.",
+                    "evaluator": "cccp.analysis.nmr.comparison",
+                    "failure_error_code": "invalid_scientific_input",
+                    "id": "atom_mapping_consistent",
+                    "required": true
+                  },
+                  {
+                    "compares": [
+                      "peak_count",
+                      "paired_peak_count"
+                    ],
+                    "description": "Every experimental peak and every computed signal was paired exactly once; unmatched entries are reported, never dropped.",
+                    "evaluator": "cccp.analysis.nmr.comparison",
+                    "failure_error_code": "invalid_scientific_input",
+                    "id": "assignment_coverage_complete",
+                    "required": true
+                  },
+                  {
+                    "compares": [
+                      "reference_shieldings",
+                      "solvent",
+                      "scaling_mode"
+                    ],
+                    "description": "Every required nucleus has a declared TMS reference and the solvent/method/basis/scaling conditions are recorded in provenance.",
+                    "evaluator": "cccp.analysis.nmr.comparison",
+                    "failure_error_code": "invalid_scientific_input",
+                    "id": "reference_conditions_bound",
+                    "required": true
+                  },
+                  {
+                    "compares": [
+                      "model_asset_version",
+                      "model_assets_available"
+                    ],
+                    "description": "The model-asset version is content-addressed and the DP5 assets are present before any model-based claim is made.",
+                    "evaluator": "cccp.analysis.nmr.comparison",
+                    "failure_error_code": "invalid_scientific_input",
+                    "id": "model_assets_present",
+                    "required": true
+                  }
+                ],
+                "execution_semantics": {
+                  "delegates_to_task_kind": null,
+                  "delegation_count": 0,
+                  "kind": "pure_analysis",
+                  "network_access": false,
+                  "reads_existing_artifacts_only": true,
+                  "side_effects": "none",
+                  "starts_subprocess": false,
+                  "writes_artifacts": false
+                },
+                "implementation_id": "cccp.analysis.nmr.comparison",
+                "input_schema": {
+                  "ref": "cccp.analysis.nmr.comparison#NmrShieldingComparisonInput",
+                  "schema_version": 1
+                },
+                "limitations": [
+                  {
+                    "applies_to": "all inputs",
+                    "id": "comparison_reads_existing_products",
+                    "severity": "hard_limit",
+                    "text": "This capability never launches GIAO or conformer sampling; it compares an existing shielding table with a supplied experimental peak list."
+                  },
+                  {
+                    "applies_to": "reference and coverage checks",
+                    "id": "incomplete_reference_blocks_confidence",
+                    "severity": "warning",
+                    "text": "A missing required reference, partial coverage or a missing model asset downgrades the report to inconclusive/unavailable; it is never filled with a gas-phase or placeholder value."
+                  },
+                  {
+                    "applies_to": "scientific interpretation",
+                    "id": "no_experimental_quantitative_claim",
+                    "severity": "info",
+                    "text": "The comparison reports assignment and calibration facts; it does not claim a quantitative experimental prediction."
+                  }
+                ],
+                "output_schema": {
+                  "ref": "cccp.analysis.nmr.comparison#NmrComparisonOutcome",
+                  "schema_version": 1
+                },
+                "preconditions": [
+                  {
+                    "description": "A structure-order atom mapping (symbols, unique labels and index base) is declared for the shielding table.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "atom_mapping_declared",
+                    "kind": "scientific",
+                    "required": true
+                  },
+                  {
+                    "description": "The experimental peak list is recorded as a digested source artifact; peaks are never invented or silently dropped.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "experimental_spectrum_recorded",
+                    "kind": "artifact",
+                    "required": true
+                  },
+                  {
+                    "description": "The method/basis, solvent, TMS reference and scaling mode in force are declared for every required nucleus.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "reference_conditions_declared",
+                    "kind": "scientific",
+                    "required": true
+                  },
+                  {
+                    "description": "The packaged DP5/FCHL model assets are resolvable and content-addressed; a missing asset is reported as unavailable, never ignored.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "model_assets_available",
+                    "kind": "artifact",
+                    "required": true
+                  }
+                ],
+                "projections": {
+                  "available": {
+                    "reason": "pure analysis requires no executable",
+                    "state": "present"
+                  },
+                  "described": {
+                    "reason": "registered in the read-only capability registry",
+                    "state": "present"
+                  },
+                  "installed": {
+                    "reason": "pure analysis reads existing artifacts; no installed executable is required",
+                    "state": "not_verified"
+                  },
+                  "verified": {
+                    "state": "not_verified"
+                  }
+                },
+                "provenance_requirements": {
+                  "artifact_digests": "required",
+                  "input_digest": "required",
+                  "method_identity": "required",
+                  "notes": [
+                    "Provenance records the molecule/atom mapping and its ordered assignment key, the digested experimental-spectrum source, the solvent/TMS reference/scaling conditions, the model-asset version and the model-asset availability."
+                  ],
+                  "software_version": "required",
+                  "units": "required"
+                },
+                "schema": "acp2.science.capability",
+                "schema_version": 1,
+                "unknown_field_policy": {
+                  "extension_namespace": "x-acp2-<owner>-<name>",
+                  "historical_read": "preserve_unknown_fields_without_execution_or_recovery_eligibility",
+                  "new_execution_request": "reject_unsupported_execution_fields",
+                  "unknown_major_version": "never_execute"
+                },
+                "validation_layers": {
+                  "cccp_scientific_semantics": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "cccp"
+                  },
+                  "json_structure": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "contract"
+                  },
+                  "runtime_platform_constraints": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "runtime"
+                  }
+                }
+              },
+              {
+                "capability_id": "nmr.shielding",
+                "compatibility": {
+                  "backward_compatible_additions": "same_major_only",
+                  "contract_version": "acp2.science.capability.v1",
+                  "declared_major": 1,
+                  "historical_unknown_fields": "preserve_read_only_no_execution_or_recovery_eligibility",
+                  "max_reader_schema_version": 1,
+                  "min_reader_schema_version": 1,
+                  "unknown_major_error_code": "unknown_major_version",
+                  "unknown_major_version": "reject_and_never_execute"
+                },
+                "completion_checks": [
+                  {
+                    "compares": [
+                      "shieldings",
+                      "atom_index_base"
+                    ],
+                    "description": "The task completed and produced a finite shielding table keyed in the declared atom-index base.",
+                    "evaluator": "cccp.calculation.tasks.nmr_shielding",
+                    "failure_error_code": "invalid_scientific_input",
+                    "id": "shielding_table_available",
+                    "required": true
+                  }
+                ],
+                "execution_semantics": {
+                  "delegates_to_task_kind": "nmr_shielding",
+                  "delegation_count": 1,
+                  "kind": "compute",
+                  "network_access": false,
+                  "reads_existing_artifacts_only": false,
+                  "side_effects": "artifacts_only",
+                  "starts_subprocess": true,
+                  "writes_artifacts": true
+                },
+                "implementation_id": "cccp.calculation.tasks.nmr_shielding",
+                "input_schema": {
+                  "ref": "cccp.calculation.requests#TaskRequest",
+                  "schema_version": 1
+                },
+                "limitations": [
+                  {
+                    "applies_to": "all shielding results",
+                    "id": "shielding_table_only",
+                    "severity": "hard_limit",
+                    "text": "The task stops at the GIAO shielding table. TMS conversion, atom mapping, assignment, calibration and model-asset evidence belong to nmr.compare."
+                  }
+                ],
+                "output_schema": {
+                  "ref": "cccp.calculation.results#TaskResult",
+                  "schema_version": 1
+                },
+                "preconditions": [
+                  {
+                    "description": "A resolvable molecular structure is supplied.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "structure_supplied",
+                    "kind": "input",
+                    "required": true
+                  },
+                  {
+                    "description": "Charge and multiplicity are consistent with the electron count.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "charge_multiplicity_consistent",
+                    "kind": "scientific",
+                    "required": true
+                  },
+                  {
+                    "description": "A real QC executable is resolvable by the existing software seam at execution time.",
+                    "error_code": "unavailable_binary",
+                    "evaluated_by": "runtime",
+                    "id": "qc_executable_available",
+                    "kind": "environment",
+                    "required": true
+                  },
+                  {
+                    "description": "The atom-index base of the shielding table is declared so the table keys keep their identity between the task and the comparison.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "atom_index_base_declared",
+                    "kind": "scientific",
+                    "required": true
+                  }
+                ],
+                "projections": {
+                  "available": {
+                    "reason": "no executable precondition is declared",
+                    "state": "unknown"
+                  },
+                  "described": {
+                    "reason": "registered in the read-only capability registry",
+                    "state": "present"
+                  },
+                  "installed": {
+                    "reason": "no executable precondition is declared",
+                    "state": "unknown"
+                  },
+                  "verified": {
+                    "state": "not_verified"
+                  }
+                },
+                "provenance_requirements": {
+                  "artifact_digests": "required",
+                  "input_digest": "required",
+                  "method_identity": "required",
+                  "software_version": "required",
+                  "units": "required"
+                },
+                "schema": "acp2.science.capability",
+                "schema_version": 1,
+                "unknown_field_policy": {
+                  "extension_namespace": "x-acp2-<owner>-<name>",
+                  "historical_read": "preserve_unknown_fields_without_execution_or_recovery_eligibility",
+                  "new_execution_request": "reject_unsupported_execution_fields",
+                  "unknown_major_version": "never_execute"
+                },
+                "validation_layers": {
+                  "cccp_scientific_semantics": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "cccp"
+                  },
+                  "json_structure": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "contract"
+                  },
+                  "runtime_platform_constraints": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "runtime"
+                  }
+                }
+              },
+              {
+                "capability_id": "thermochemistry.ensemble",
+                "compatibility": {
+                  "backward_compatible_additions": "same_major_only",
+                  "contract_version": "acp2.science.capability.v1",
+                  "declared_major": 1,
+                  "historical_unknown_fields": "preserve_read_only_no_execution_or_recovery_eligibility",
+                  "max_reader_schema_version": 1,
+                  "min_reader_schema_version": 1,
+                  "unknown_major_error_code": "unknown_major_version",
+                  "unknown_major_version": "reject_and_never_execute"
+                },
+                "completion_checks": [
+                  {
+                    "compares": [
+                      "weight_mode_supplied",
+                      "weight_tolerance",
+                      "weights_normalized"
+                    ],
+                    "description": "The supplied weight form, declared tolerance, supplied sum and the resulting normalized weights are recorded in provenance.",
+                    "evaluator": "cccp.analysis.ensemble.science",
+                    "failure_error_code": "invalid_scientific_input",
+                    "id": "weights_policy_recorded",
+                    "required": true
+                  },
+                  {
+                    "compares": [
+                      "weights_normalized_sum",
+                      "weight_tolerance"
+                    ],
+                    "description": "The resulting normalized weights sum to 1 within the declared tolerance.",
+                    "evaluator": "cccp.analysis.ensemble.science",
+                    "failure_error_code": "invalid_scientific_input",
+                    "id": "weights_normalized",
+                    "required": true
+                  },
+                  {
+                    "compares": [
+                      "components_used",
+                      "components_missing"
+                    ],
+                    "description": "Every declared component contributes a weight and a Gibbs value; a missing component is reported as incomplete.",
+                    "evaluator": "cccp.analysis.ensemble.science",
+                    "failure_error_code": "invalid_scientific_input",
+                    "id": "ensemble_complete",
+                    "required": true
+                  },
+                  {
+                    "compares": [
+                      "rank1_component_id",
+                      "rank1_weight",
+                      "total_gibbs_hartree"
+                    ],
+                    "description": "The ensemble total Gibbs energy is finite and derived from the rank-1 component and its normalized weight.",
+                    "evaluator": "cccp.analysis.ensemble.science",
+                    "failure_error_code": "invalid_scientific_input",
+                    "id": "total_gibbs_finite",
+                    "required": true
+                  }
+                ],
+                "execution_semantics": {
+                  "delegates_to_task_kind": null,
+                  "delegation_count": 0,
+                  "kind": "pure_analysis",
+                  "network_access": false,
+                  "reads_existing_artifacts_only": true,
+                  "side_effects": "none",
+                  "starts_subprocess": false,
+                  "writes_artifacts": false
+                },
+                "implementation_id": "cccp.analysis.ensemble.science",
+                "input_schema": {
+                  "ref": "cccp.analysis.ensemble.science#EnsembleThermochemistryInput",
+                  "schema_version": 1
+                },
+                "limitations": [
+                  {
+                    "applies_to": "all ensemble weights",
+                    "id": "supplied_weights_not_rederived",
+                    "severity": "info",
+                    "text": "The component weights are supplied by the caller and recorded; they are not re-derived from the Gibbs values or replaced by Boltzmann weights."
+                  },
+                  {
+                    "applies_to": "incomplete component sets",
+                    "id": "missing_component_blocks_total",
+                    "severity": "hard_limit",
+                    "text": "A component without a weight or Gibbs value makes the ensemble incomplete; no partial total is presented as the ensemble total."
+                  },
+                  {
+                    "applies_to": "all results",
+                    "id": "single_temperature_only",
+                    "severity": "warning",
+                    "text": "The result applies to the declared temperature only; a different temperature requires a new evaluation and provenance record."
+                  }
+                ],
+                "output_schema": {
+                  "ref": "cccp.analysis.ensemble.science#EnsembleThermochemistryOutcome",
+                  "schema_version": 1
+                },
+                "preconditions": [
+                  {
+                    "description": "At least one ensemble component with a unique component_id is declared.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "components_declared",
+                    "kind": "input",
+                    "required": true
+                  },
+                  {
+                    "description": "Every component carries a finite positive weight; the supplied form is raw or explicitly normalized, never silently converted.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "component_weights_declared",
+                    "kind": "scientific",
+                    "required": true
+                  },
+                  {
+                    "description": "A positive finite ensemble temperature is declared.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "temperature_declared",
+                    "kind": "scientific",
+                    "required": true
+                  },
+                  {
+                    "description": "The standard state in force is declared; an unspecified state is reported instead of being fabricated.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "standard_state_declared",
+                    "kind": "scientific",
+                    "required": true
+                  }
+                ],
+                "projections": {
+                  "available": {
+                    "reason": "pure analysis requires no executable",
+                    "state": "present"
+                  },
+                  "described": {
+                    "reason": "registered in the read-only capability registry",
+                    "state": "present"
+                  },
+                  "installed": {
+                    "reason": "pure analysis reads existing artifacts; no installed executable is required",
+                    "state": "not_verified"
+                  },
+                  "verified": {
+                    "state": "not_verified"
+                  }
+                },
+                "provenance_requirements": {
+                  "artifact_digests": "required",
+                  "input_digest": "required",
+                  "method_identity": "not_applicable",
+                  "notes": [
+                    "Provenance records the temperature, the supplied and normalized standard state, the supplied weight form and tolerance, the supplied/normalized weights, the component ids (including missing ones) and the resulting rank-1 total Gibbs value."
+                  ],
+                  "software_version": "required",
+                  "units": "required"
+                },
+                "schema": "acp2.science.capability",
+                "schema_version": 1,
+                "unknown_field_policy": {
+                  "extension_namespace": "x-acp2-<owner>-<name>",
+                  "historical_read": "preserve_unknown_fields_without_execution_or_recovery_eligibility",
+                  "new_execution_request": "reject_unsupported_execution_fields",
+                  "unknown_major_version": "never_execute"
+                },
+                "validation_layers": {
+                  "cccp_scientific_semantics": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "cccp"
+                  },
+                  "json_structure": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "contract"
+                  },
+                  "runtime_platform_constraints": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "runtime"
+                  }
+                }
+              },
+              {
+                "capability_id": "vibration.analyze",
+                "compatibility": {
+                  "backward_compatible_additions": "same_major_only",
+                  "contract_version": "acp2.science.capability.v1",
+                  "declared_major": 1,
+                  "historical_unknown_fields": "preserve_read_only_no_execution_or_recovery_eligibility",
+                  "max_reader_schema_version": 1,
+                  "min_reader_schema_version": 1,
+                  "unknown_major_error_code": "unknown_major_version",
+                  "unknown_major_version": "reject_and_never_execute"
+                },
+                "completion_checks": [
+                  {
+                    "compares": [
+                      "frequencies",
+                      "normal_modes"
+                    ],
+                    "description": "Existing frequency products were projected into the normal-modes report without recomputation.",
+                    "evaluator": "cccp.analysis.frequency_products",
+                    "failure_error_code": "invalid_scientific_input",
+                    "id": "frequency_products_readable",
+                    "required": true
+                  }
+                ],
+                "execution_semantics": {
+                  "delegates_to_task_kind": null,
+                  "delegation_count": 0,
+                  "kind": "pure_analysis",
+                  "network_access": false,
+                  "reads_existing_artifacts_only": true,
+                  "side_effects": "none",
+                  "starts_subprocess": false,
+                  "writes_artifacts": false
+                },
+                "implementation_id": "cccp.analysis.frequency_products",
+                "input_schema": {
+                  "ref": "cccp.analysis.orca_parser#OrcaCalculation",
+                  "schema_version": 1
+                },
+                "limitations": [
+                  {
+                    "applies_to": "all inputs",
+                    "id": "reads_existing_products_only",
+                    "severity": "hard_limit",
+                    "text": "This capability never launches a QC program; missing frequencies or vectors are reported as warnings, not recomputed."
+                  }
+                ],
+                "output_schema": {
+                  "ref": "cccp.analysis.frequency_products#build_frequency_report",
+                  "schema_version": 1
+                },
+                "preconditions": [
+                  {
+                    "description": "Existing frequency or Hessian products are supplied; the analysis layer never recomputes them.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "frequency_products_available",
+                    "kind": "artifact",
+                    "required": true
+                  }
+                ],
+                "projections": {
+                  "available": {
+                    "reason": "pure analysis requires no executable",
+                    "state": "present"
+                  },
+                  "described": {
+                    "reason": "registered in the read-only capability registry",
+                    "state": "present"
+                  },
+                  "installed": {
+                    "reason": "pure analysis reads existing artifacts; no installed executable is required",
+                    "state": "not_verified"
+                  },
+                  "verified": {
+                    "state": "not_verified"
+                  }
+                },
+                "provenance_requirements": {
+                  "artifact_digests": "required",
+                  "input_digest": "required",
+                  "method_identity": "not_applicable",
+                  "notes": [
+                    "Method identity is inherited from the source frequency products; analysis does not choose a level of theory."
+                  ],
+                  "software_version": "required",
+                  "units": "required"
+                },
+                "schema": "acp2.science.capability",
+                "schema_version": 1,
+                "unknown_field_policy": {
+                  "extension_namespace": "x-acp2-<owner>-<name>",
+                  "historical_read": "preserve_unknown_fields_without_execution_or_recovery_eligibility",
+                  "new_execution_request": "reject_unsupported_execution_fields",
+                  "unknown_major_version": "never_execute"
+                },
+                "validation_layers": {
+                  "cccp_scientific_semantics": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "cccp"
+                  },
+                  "json_structure": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "contract"
+                  },
+                  "runtime_platform_constraints": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "runtime"
+                  }
+                }
+              },
+              {
+                "capability_id": "vibration.compute",
+                "compatibility": {
+                  "backward_compatible_additions": "same_major_only",
+                  "contract_version": "acp2.science.capability.v1",
+                  "declared_major": 1,
+                  "historical_unknown_fields": "preserve_read_only_no_execution_or_recovery_eligibility",
+                  "max_reader_schema_version": 1,
+                  "min_reader_schema_version": 1,
+                  "unknown_major_error_code": "unknown_major_version",
+                  "unknown_major_version": "reject_and_never_execute"
+                },
+                "completion_checks": [
+                  {
+                    "compares": [
+                      "frequencies",
+                      "imaginary_frequencies"
+                    ],
+                    "description": "The frequency task completed and produced a finite frequency set.",
+                    "evaluator": "cccp.calculation.tasks.frequency",
+                    "failure_error_code": "invalid_scientific_input",
+                    "id": "frequency_modes_available",
+                    "required": true
+                  }
+                ],
+                "execution_semantics": {
+                  "delegates_to_task_kind": "frequency",
+                  "delegation_count": 1,
+                  "kind": "compute",
+                  "network_access": false,
+                  "reads_existing_artifacts_only": false,
+                  "side_effects": "artifacts_only",
+                  "starts_subprocess": true,
+                  "writes_artifacts": true
+                },
+                "implementation_id": "cccp.calculation.tasks.frequency",
+                "input_schema": {
+                  "ref": "cccp.calculation.requests#TaskRequest",
+                  "schema_version": 1
+                },
+                "limitations": [
+                  {
+                    "applies_to": "imaginary frequencies",
+                    "id": "imaginary_modes_are_not_a_path",
+                    "severity": "warning",
+                    "text": "An imaginary mode is a local curvature fact; it does not by itself establish a reaction path or connectivity."
+                  }
+                ],
+                "output_schema": {
+                  "ref": "cccp.calculation.results#TaskResult",
+                  "schema_version": 1
+                },
+                "preconditions": [
+                  {
+                    "description": "A resolvable molecular structure is supplied.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "structure_supplied",
+                    "kind": "input",
+                    "required": true
+                  },
+                  {
+                    "description": "Charge and multiplicity are consistent with the electron count.",
+                    "error_code": "invalid_scientific_input",
+                    "evaluated_by": "cccp",
+                    "id": "charge_multiplicity_consistent",
+                    "kind": "scientific",
+                    "required": true
+                  },
+                  {
+                    "description": "A real QC executable is resolvable by the existing software seam at execution time.",
+                    "error_code": "unavailable_binary",
+                    "evaluated_by": "runtime",
+                    "id": "qc_executable_available",
+                    "kind": "environment",
+                    "required": true
+                  }
+                ],
+                "projections": {
+                  "available": {
+                    "reason": "no executable precondition is declared",
+                    "state": "unknown"
+                  },
+                  "described": {
+                    "reason": "registered in the read-only capability registry",
+                    "state": "present"
+                  },
+                  "installed": {
+                    "reason": "no executable precondition is declared",
+                    "state": "unknown"
+                  },
+                  "verified": {
+                    "state": "not_verified"
+                  }
+                },
+                "provenance_requirements": {
+                  "artifact_digests": "required",
+                  "input_digest": "required",
+                  "method_identity": "required",
+                  "software_version": "required",
+                  "units": "required"
+                },
+                "schema": "acp2.science.capability",
+                "schema_version": 1,
+                "unknown_field_policy": {
+                  "extension_namespace": "x-acp2-<owner>-<name>",
+                  "historical_read": "preserve_unknown_fields_without_execution_or_recovery_eligibility",
+                  "new_execution_request": "reject_unsupported_execution_fields",
+                  "unknown_major_version": "never_execute"
+                },
+                "validation_layers": {
+                  "cccp_scientific_semantics": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "cccp"
+                  },
+                  "json_structure": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "contract"
+                  },
+                  "runtime_platform_constraints": {
+                    "checks": [],
+                    "does_not_cover": [],
+                    "owner": "runtime"
+                  }
+                }
+              }
+            ],
+            "schema": "acp2.science.capability_catalog",
+            "schema_version": 1
+          },
+          "questions": [
+            {
+              "basis": "def2-TZVPP",
+              "defaults": {
+                "charge": {
+                  "source": "TaskRequest.charge",
+                  "value": 0
+                },
+                "method": {
+                  "source": "METHOD_SCHEMAS.dft_singlepoint.profiles[0].levels.single_point.functional",
+                  "value": "wB97M-V"
+                },
+                "multiplicity": {
+                  "source": "TaskRequest.multiplicity",
+                  "value": 1
+                },
+                "solvent": {
+                  "source": "FIELD_DEFINITIONS.solvent.default",
+                  "value": "none"
+                },
+                "standardState": {
+                  "source": "not_applicable",
+                  "value": null
+                },
+                "temperature": {
+                  "source": "FIELD_DEFINITIONS.temperature.default",
+                  "value": 298.15
+                }
+              },
+              "engine": "orca",
+              "label": "\u5355\u70b9\u80fd\u8ba1\u7b97",
+              "level_id": "single_point",
+              "limitations": [
+                "This capability evaluates one supplied structure; it does not optimize the geometry."
+              ],
+              "method_schema_id": "dft_singlepoint",
+              "question_id": "single_point_energy",
+              "workflow": "singlepoint"
+            },
+            {
+              "basis": "",
+              "defaults": {
+                "charge": {
+                  "source": "TaskRequest.charge",
+                  "value": 0
+                },
+                "method": {
+                  "source": "METHOD_SCHEMAS.dft_optimize.profiles[0].levels.optimize.functional",
+                  "value": "r2SCAN-3c"
+                },
+                "multiplicity": {
+                  "source": "TaskRequest.multiplicity",
+                  "value": 1
+                },
+                "solvent": {
+                  "source": "FIELD_DEFINITIONS.solvent.default",
+                  "value": "none"
+                },
+                "standardState": {
+                  "source": "not_applicable",
+                  "value": null
+                },
+                "temperature": {
+                  "source": "FIELD_DEFINITIONS.temperature.default",
+                  "value": 298.15
+                }
+              },
+              "engine": "orca",
+              "label": "\u51e0\u4f55\u4f18\u5316",
+              "level_id": "optimize",
+              "limitations": [
+                "A converged geometry is not proof of a minimum; a separate vibration.compute result is required to classify the stationary point."
+              ],
+              "method_schema_id": "dft_optimize",
+              "question_id": "geometry_optimization",
+              "workflow": "optimize"
+            },
+            {
+              "basis": null,
+              "defaults": {
+                "charge": {
+                  "source": "TaskRequest.charge",
+                  "value": 0
+                },
+                "method": {
+                  "source": "no published default",
+                  "value": null
+                },
+                "multiplicity": {
+                  "source": "TaskRequest.multiplicity",
+                  "value": 1
+                },
+                "solvent": {
+                  "source": "FIELD_DEFINITIONS.solvent.default",
+                  "value": "none"
+                },
+                "standardState": {
+                  "source": "not_applicable",
+                  "value": null
+                },
+                "temperature": {
+                  "source": "FIELD_DEFINITIONS.temperature.default",
+                  "value": 298.15
+                }
+              },
+              "engine": "orca",
+              "label": "\u9891\u7387\u8ba1\u7b97",
+              "level_id": "frequency",
+              "limitations": [
+                "An imaginary mode is a local curvature fact; it does not by itself establish a reaction path or connectivity."
+              ],
+              "method_schema_id": "dft_frequency",
+              "question_id": "frequency_analysis",
+              "workflow": "frequency"
+            }
+          ]
+        },
+        "protocol_version": "acp2.science.capabilities.v1",
+        "tools": [
+          "acp_analyze",
+          "acp_cancel",
+          "acp_capabilities",
+          "acp_preflight",
+          "acp_prepare_artifact",
+          "acp_read_artifact",
+          "acp_status",
+          "acp_submit"
+        ]
+      }
+    },
+    {
+      "name": "descriptor_cross_check",
+      "ok": true,
+      "value": {
+        "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+        "distribution_digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+        "plugin": {
+          "distribution": "acp2-external-science-validator",
+          "entry_point_group": 1,
+          "license": "MIT",
+          "name": "acp2_external.native_singlepoint",
+          "trust_level": "untrusted",
+          "version": "1.0.0"
+        }
+      }
+    }
+  ],
+  "submit": {
+    "disabled": true,
+    "id": "capability-form-submit",
+    "text": "Submit"
+  },
+  "view_model": {
+    "approval_hint_present": true,
+    "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+    "fields": [
+      "task.charge=charge",
+      "task.multiplicity=multiplicity",
+      "task.resources.nproc=resources.nproc",
+      "task.structure.source=structure.source"
+    ],
+    "form_digest": "sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0",
+    "human_edits": [
+      {
+        "edited_at": "2026-10-28T00:00:00.000Z",
+        "editor_ref": "m405-headless-driver",
+        "field_path": "task.structure.source",
+        "note": "capability=acp2_external_native_singlepoint; task_request=structure.source; descriptor_digest=sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780; form_digest=sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0"
+      },
+      {
+        "edited_at": "2026-10-28T00:00:00.000Z",
+        "editor_ref": "m405-headless-driver",
+        "field_path": "task.charge",
+        "note": "capability=acp2_external_native_singlepoint; task_request=charge; descriptor_digest=sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780; form_digest=sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0"
+      }
+    ],
+    "plan_digest": "sha256:d57b6986198d317597d3beaa96e0a8cbdbc4df603bf94b6498391542f2a3e101",
+    "rendered_digests": {
+      "fields": true,
+      "form": true,
+      "plan": true
+    },
+    "submit": {
+      "disabled": true,
+      "id": "capability-form-submit",
+      "text": "Submit"
+    },
+    "subset_digest": "sha256:870d59473be275fa52785896cdb7e09d03aa15855a8a29dc69b90839fbf08b06",
+    "subset_version": "acp2.ui-subset.v1"
+  }
+}

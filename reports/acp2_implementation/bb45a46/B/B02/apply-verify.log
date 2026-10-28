@@ -1,8 +1,8 @@
 # B02 materialize candidate — 2026-10-22T19:34:34+08:00
 ## bundle digests
-4578405dc1b99d9a884c651a8ea064a6eed311128b9564966200b33e95aa9242  <repo>/docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/tracked-changes.patch
-95b5ee79f5772c436d5da7646693346b1605f1122f5b37d9a2ad672008e8e181  <repo>/docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/manifest.json
-33861de7d5578a8cfa5b48bcde27e7bd2b25ac3427c4dacb47c4eca921ae872c  <repo>/docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/candidate-snapshot.json
+4578405dc1b99d9a884c651a8ea064a6eed311128b9564966200b33e95aa9242  /ACPServer/AutoCalcPlatform/docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/tracked-changes.patch
+95b5ee79f5772c436d5da7646693346b1605f1122f5b37d9a2ad672008e8e181  /ACPServer/AutoCalcPlatform/docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/manifest.json
+33861de7d5578a8cfa5b48bcde27e7bd2b25ac3427c4dacb47c4eca921ae872c  /ACPServer/AutoCalcPlatform/docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/candidate-snapshot.json
 ## worktree add
 准备工作区（分离头指针 096cdff）
 HEAD 现在位于 096cdff docs(reports): re-issue scoped A/B/C and gate verdicts on the frozen candidate
@@ -27,7 +27,7 @@ verify_exit=0
 ## status before commit (count)
 75
 ## e2e marker state
--rw-r--r--. 1 <user> <user> 41 10月 22 19:34 <acp2-dev>/B/tests/baseline/refactor-evidence/e2e-task-root.txt
+-rw-r--r--. 1 xieningke xieningke 41 10月 22 19:34 /ACPServer/acp2-development/B/tests/baseline/refactor-evidence/e2e-task-root.txt
 ## commit
 [分离头指针 a0185b1] fix(debug): apply frozen 2026-10-22 final debug candidate
  150 files changed, 34502 insertions(+), 241 deletions(-)

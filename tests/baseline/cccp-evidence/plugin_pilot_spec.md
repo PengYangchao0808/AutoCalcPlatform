@@ -181,7 +181,7 @@ Reference: `tests/baseline/cccp-evidence/build_spec_first_batch.md`.
 
 ## 11. QA probes (recorded)
 
-Harness: `/usr/bin/python3.11` (3.11.13), repo root `<repo>`.
+Harness: `/usr/bin/python3.11` (3.11.13), repo root `/ACPServer/AutoCalcPlatform`.
 
 ```bash
 # 1) directed pilot tests (18 cases)

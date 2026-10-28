@@ -1,0 +1,69 @@
+{
+  "artifacts": [
+    {
+      "path": "dry-run.txt",
+      "sha256": "1355981710c98e39e944fd7639702e0df15e4b77e9340f59850a4f05533c84b2",
+      "size_bytes": 727
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "input validation only; no scenario execution",
+      "name": "dry_run",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "450f2cb8fe1f5b16264b3fe878a021e77f02eba9",
+    "harness_revision": "906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "450f2cb8fe1f5b16264b3fe878a021e77f02eba9",
+  "command": [
+    "/ACPServer/acp2-development/venvs/c/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "cross-domain-live",
+    "--subcase",
+    "nmr",
+    "--dry-run",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/harness-selftest/20261022T141500Z-c03a-harness-selftest/four-tuple/cd-nmr",
+    "--timeout",
+    "60"
+  ],
+  "contract_version": "1.0.0",
+  "cwd": "/ACPServer/acp2-development/C",
+  "evidence_kind": "live",
+  "exit_code": 0,
+  "extensions": {
+    "experience.harness_contract_revision": "906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+    "experience.mode": "live",
+    "experience.product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+    "experience.run_id": "20261022T141500Z-c03a-harness-selftest",
+    "experience.scenario_key": "cross-domain-live",
+    "experience.subcase": "nmr",
+    "experience.test_revision": "450f2cb8fe1f5b16264b3fe878a021e77f02eba9"
+  },
+  "finished_at": "2026-10-22T13:45:48Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:nmr",
+  "reason": "dry_run",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "20261022T141500Z-c03a-harness-selftest",
+  "scenario": "experience:cross-domain-live",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T13:45:48Z",
+  "submission_id": null,
+  "usage": null
+}

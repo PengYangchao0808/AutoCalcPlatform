@@ -1,0 +1,159 @@
+{
+  "schema": "acp2.c.dsh-discovery.tool-snapshot.v1",
+  "status": "ok",
+  "profile": "web",
+  "source": "real_registration",
+  "booted_via": "apps/cli/src/profile-boot.ts::runProfile",
+  "patches": [
+    "/ACPServer/acp2-development/C/rph/packages/dsh-bundle/profiles/web.cordis.yml"
+  ],
+  "web_url": {
+    "href": "http://127.0.0.1:33181/",
+    "host": "127.0.0.1",
+    "port": 33181,
+    "requested_argv": [
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "33181",
+      "--no-open"
+    ],
+    "loopback_only_requested": true,
+    "production_8765": false,
+    "loopback": {
+      "reachable": true,
+      "status": 401
+    },
+    "external": {
+      "probed": true,
+      "address": "10.16.5.157",
+      "reachable": false,
+      "error": "ECONNREFUSED"
+    },
+    "console_url_line": "dsh web: http://127.0.0.1:33181/?token=sdmyGUdVqjvGuKVBFK3-99GsHwogKg_nSeGn2D7CTr4"
+  },
+  "model_visible_scope": "agent-preset",
+  "global_tools": [
+    {
+      "name": "working_directory",
+      "description": "Read the current working directory, or change it with cd. Relative paths use the current directory. Existing shells and running processes keep their own directories.",
+      "source_plugin": "@deepseek-ai/dsh-tool-working-directory",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/session/tool-working-directory/src/index.ts",
+      "scope": "global",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "cd"
+      ]
+    }
+  ],
+  "model_visible_tools": [
+    {
+      "name": "working_directory",
+      "description": "Read the current working directory, or change it with cd. Relative paths use the current directory. Existing shells and running processes keep their own directories.",
+      "source_plugin": "@deepseek-ai/dsh-tool-working-directory",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/session/tool-working-directory/src/index.ts",
+      "scope": "agent-preset:rph-research",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "cd"
+      ]
+    },
+    {
+      "name": "todo_write",
+      "description": "Record and update a task list to plan multi-step work and show progress; skip it for trivial single-step tasks. Add one todo per concrete step before you start. While work remains, keep the todos being worked on `in_progress`, several only when work runs in parallel. Mark each todo `completed` as soon as it is done.",
+      "source_plugin": "@deepseek-ai/dsh-tool-todo",
+      "source_file": "/ACPServer/acp2-tools/deepseek-harness/packages/todo/tool-todo/src/index.ts",
+      "scope": "agent-preset:rph-research",
+      "mcp_namespaced": false,
+      "permission_class": "dsh-native",
+      "side_effects": null,
+      "parameter_keys": [
+        "todos"
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "id": "rph-research",
+      "name": "RPH research",
+      "description": "Computational-chemistry research surface backed by the ACP MCP server; no generic shell.",
+      "order": 0
+    }
+  ],
+  "bound_preset": {
+    "id": "rph-research"
+  },
+  "acp_entry": {
+    "id": "acp-mcp-acceptance",
+    "name": "@deepseek-ai/dsh-mcp-client",
+    "disabled": false,
+    "fiber_state": 3,
+    "failed": true,
+    "pending": false
+  },
+  "acp_entry_error": {
+    "name": "Error",
+    "message": "mcp-client(acp): initial connection or tool synchronization failed",
+    "stack": [
+      "Error: mcp-client(acp): initial connection or tool synchronization failed",
+      "    at Object.apply (/ACPServer/acp2-tools/deepseek-harness/packages/mcp/mcp-client/src/index.ts:201:11)",
+      "    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)",
+      "    at async Fiber._reload (/ACPServer/acp2-tools/deepseek-harness/vendor/cordis/src/fiber.ts:656:9)"
+    ]
+  },
+  "permission_policy": {
+    "approval_policy": "ask",
+    "sandbox_mode": null,
+    "note": "DSH applies approval/sandbox policy per session; the MCP allowlist is enforced server-side."
+  },
+  "stderr_lines": [
+    "dsh: warning: 1 entry did not activate",
+    "acp-mcp-acceptance (@deepseek-ai/dsh-mcp-client): Error: mcp-client(acp): initial connection or tool synchronization failed",
+    "    at Object.apply (/ACPServer/acp2-tools/deepseek-harness/packages/mcp/mcp-client/src/index.ts:201:11)",
+    "    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)",
+    "    at async Fiber._reload (/ACPServer/acp2-tools/deepseek-harness/vendor/cordis/src/fiber.ts:656:9)",
+    "SdkError: Connection closed",
+    "    at Client._onclose (/ACPServer/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/core-internal/src/shared/protocol.ts:841:23)",
+    "    at Client._onclose (/ACPServer/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/index.mjs:4167:9)",
+    "    at StdioClientTransport._transport.onclose (/ACPServer/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/core-internal/src/shared/protocol.ts:792:22)",
+    "    at ChildProcess.<anonymous> (/ACPServer/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/src/client/stdio.ts:159:22)",
+    "    at ChildProcess.emit (node:events:519:28)",
+    "    at maybeClose (node:internal/child_process:1101:16)",
+    "    at ChildProcess._handle.onexit (node:internal/child_process:304:5)",
+    "    at Process.callbackTrampoline (node:internal/async_hooks:130:17)"
+  ],
+  "launched_at": "2026-10-22T20:00:49.856Z",
+  "launch": {
+    "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B05/mcp-launch.json",
+    "server": {
+      "name": "acp",
+      "version": "0.2.0",
+      "entrypoint": "acp_services.entrypoints.mcp",
+      "contract_version": "1.0.0",
+      "contract_digest": "1944f4f06c65b13b6ef98c752aa18d8e5752139b1513ecb2c19c44bb554fc488"
+    },
+    "protocol_version": "2025-06-18",
+    "tool_names": [
+      "acp_analyze",
+      "acp_cancel",
+      "acp_capabilities",
+      "acp_preflight",
+      "acp_prepare_artifact",
+      "acp_read_artifact",
+      "acp_status",
+      "acp_submit"
+    ]
+  },
+  "inner_argv": [
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "33181",
+    "--no-open"
+  ],
+  "finished_at": "2026-10-22T20:00:54.513Z"
+}

@@ -1,0 +1,100 @@
+{
+  "allowlist": {
+    "combined": [
+      "acp_analyze",
+      "acp_cancel",
+      "acp_capabilities",
+      "acp_preflight",
+      "acp_prepare_artifact",
+      "acp_read_artifact",
+      "acp_research_approval_decide_v1",
+      "acp_research_approval_query_v1",
+      "acp_research_approval_request_v1",
+      "acp_research_approval_revoke_v1",
+      "acp_research_proposal_create_v1",
+      "acp_research_proposal_read_v1",
+      "acp_research_proposal_update_cas_v1",
+      "acp_research_resume_v1",
+      "acp_research_snapshot_v1",
+      "acp_research_wait_v1",
+      "acp_status",
+      "acp_submit"
+    ],
+    "p1": [
+      "acp_analyze",
+      "acp_cancel",
+      "acp_capabilities",
+      "acp_preflight",
+      "acp_prepare_artifact",
+      "acp_read_artifact",
+      "acp_status",
+      "acp_submit"
+    ],
+    "p2": [
+      "acp_research_approval_decide_v1",
+      "acp_research_approval_query_v1",
+      "acp_research_approval_request_v1",
+      "acp_research_approval_revoke_v1",
+      "acp_research_proposal_create_v1",
+      "acp_research_proposal_read_v1",
+      "acp_research_proposal_update_cas_v1",
+      "acp_research_resume_v1",
+      "acp_research_snapshot_v1",
+      "acp_research_wait_v1"
+    ],
+    "sha256": "d9581b450ab79e7c7c76ea0643abab40d6911c123bcfddfafeef23499c4964a9"
+  },
+  "b03": {
+    "path": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
+    "schema": "acp2.runtime.p2-research-operations.v1",
+    "sha256": "f2126a9d92aa429e1da64e1bb04c56f71b38b57c2ce4fe8110d1289fa6198c2c"
+  },
+  "boundary_cases": [
+    "iserror_never_success",
+    "raw_prefix",
+    "read_without_prepare",
+    "long_task_reference_only",
+    "artifact_reference_digest",
+    "mutated_method"
+  ],
+  "closes_h2": false,
+  "evidence_kind": "fixture",
+  "extension": {
+    "id": "acp.research.v1",
+    "version": "1.0.0"
+  },
+  "negative": {
+    "evidence_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/bridge-contract/negative/bridge-contract-20261022T150142Z-294304",
+    "guards": [
+      "raw_prefix",
+      "iserror_preserved",
+      "read_before_prepare",
+      "operation_required_matrix",
+      "artifact_ownership",
+      "credential_absolute_path"
+    ],
+    "red_mutants": 6,
+    "restored": true,
+    "sha256_after": "d74190cfdbcc9062c6c2cf6f85600eb64abc59db614ce19fa7e798711b9ffb92",
+    "sha256_before": "d74190cfdbcc9062c6c2cf6f85600eb64abc59db614ce19fa7e798711b9ffb92"
+  },
+  "p2_operations": [
+    "proposal.create",
+    "proposal.read",
+    "proposal.update_cas",
+    "approval.request",
+    "approval.query",
+    "approval.approve",
+    "approval.reject",
+    "approval.revoke",
+    "research.wait",
+    "research.events",
+    "research.snapshot",
+    "research.resume"
+  ],
+  "p2_tool_count": 10,
+  "tests": {
+    "count": 41,
+    "failures": 0
+  }
+}

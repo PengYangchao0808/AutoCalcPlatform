@@ -1,0 +1,42 @@
+{
+  "schema": "acp2.remediation.milestone_closeout.v1",
+  "milestone": "M0",
+  "generated_on": "2026-10-27T00:00:00Z",
+  "branch": "acp2/integration-remediation",
+  "head_at_closeout": "ee217fe",
+  "tasks": {
+    "M0-01": {"commit": "5be7388", "summary": "scope/coverage/BOM ledger + plan graph generator + validators"},
+    "M0-02a": {"commit": "c8bdc2a", "summary": "CI matrix/RPH package/frontend job/markers/wall-clock"},
+    "M0-02b": {"commit": "e59ce7f", "summary": "conformance lane wired to the real -m contract gate with DSH declaration"},
+    "M0-02c": {"status": "pending_implementation", "note": "Ruff 0.15.22 hygiene stream; frozen OUT of the G01-G26 required chain (D-INT-06/07)"},
+    "M0-03": {"commit": "3663d54", "summary": "live evidence requires declared observations; research-loop-live probes live ports"},
+    "M0-04": {"commit": "a1cf33b", "summary": "CommandIdentity for HTTP/CLI/admission + idempotency attribution + migration 024"},
+    "M0-05": {"commit": "17aee7a", "summary": "MCP idempotency through CommandIdentity; prepare key v2; auto_ lookup-only"},
+    "M0-06": {"commit": "96d6c81", "summary": "exhaustive v1 field policy; cross-entry JobSpec equivalence; digest v2"},
+    "M0-06-followup": {"commit": "927d92f", "summary": "D-IDENT-10: HTTP prepare route as the single prepare-field authority"},
+    "M0-07": {"commit": "5edbe3f", "summary": "trusted usage receipts; producer capability; attempt-late usage; migrations 025/026"},
+    "M0-08": {"commit": "77e4c74", "summary": "standard MCP handshake; real SDK evidence; ADR-006"},
+    "M0-09": {"commit": "77e4c74", "summary": "research extension negotiated via tools/call acp_capabilities; implemented=false honest"},
+    "M0-10": {"commit": "bce1b95", "summary": "environment readiness ledger 21 PASS / 0 FAIL / 3 NOT_VERIFIED"},
+    "M0-11": {"commit": "e82cd8a", "summary": "decision-freeze identity.v1.json (10 decisions) + mechanical consumer scanner"},
+    "M0-12": {"commit": "1b7a571", "summary": "decision-freeze integration.v1.json (8 decisions) + dual-freeze validator"},
+    "M0-13": {"status": "NOT_APPLICABLE", "note": "external_change_not_required; reopen conditions recorded in D-INT-03"}
+  },
+  "registration": {
+    "commit": "ee217fe",
+    "manifest_version": "1.5.0",
+    "registered": ["decision-freeze-identity (owner INT, stage M0-12)", "decision-freeze-integration (owner INT, stage M0-12)", "trusted-usage-receipts (owner B, stage M0-07)", "application-api 1.3.0 prepare table"],
+    "validators": ["validate_acp2_contracts.py VALID", "validate_acp2_decision_freeze.py both VALID (7/3/0 + 6/2/0)", "validate_acp2_gap_coverage.py VALID"]
+  },
+  "known_open": [
+    "h4_closeout x2: location-dependent pre-existing failure (tracked in full-suite-result-20261027.json)",
+    "production model gateway credential NOT_VERIFIED (rotation pending)",
+    "independent operator acceptance NOT_VERIFIED",
+    "optional ISOSTAT/Molclus binaries not registered",
+    "D-IDENT-04/05/07 pending_implementation -> M1-02/M1-04c",
+    "launch-descriptor prepare schema + _SUBMIT_SCHEMA sync -> M1-01",
+    "usage_capabilities server-side issuance only (no HTTP admin surface) -> M1-04"
+  ],
+  "full_suite_regression": "running at closeout; expected residual = h4_closeout x2 only; result recorded separately",
+  "pushed": false
+}

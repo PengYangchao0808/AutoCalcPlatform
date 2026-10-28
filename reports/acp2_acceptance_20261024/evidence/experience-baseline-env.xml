@@ -1,0 +1,1 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="0" skipped="0" tests="1" time="0.203" timestamp="2026-10-24T10:47:09.353812+08:00" hostname="workstation"><testcase classname="tests.test_acp2_experience_harness" name="test_baseline_scenario_with_fake_commands" time="0.059" /></testsuite></testsuites>

@@ -70,9 +70,9 @@ test("per-operation required-field matrix is exact", () => {
     validate: ["project", "input", "idempotencyKey"],
     submit: ["project", "input", "idempotencyKey"],
     status: ["task", "attempt"],
-    evidence: ["task", "attempt", "resource"],
+    evidence: ["analysisId", "inputRefs"],
     prepare: ["task", "attempt", "resource"],
-    read: ["task", "attempt", "generation", "resource"],
+    read: ["task", "attempt", "generation", "resource", "artifactDigest"],
   };
   for (const operation of BRIDGE_OPERATIONS) {
     assert.deepEqual(requiredFieldsFor(operation), expected[operation]);
@@ -124,7 +124,7 @@ test("status/prepare/read matrix matches the frozen semantics", () => {
       attempt: 0,
       resource: "r",
     }),
-    ["generation"],
+    ["generation", "artifactDigest"],
   );
   assert.deepEqual(
     missingFieldsFor({
@@ -134,8 +134,24 @@ test("status/prepare/read matrix matches the frozen semantics", () => {
       resource: "r",
       generation: 0,
     }),
+    ["artifactDigest"],
+  );
+  assert.deepEqual(
+    missingFieldsFor({
+      operation: "read",
+      task: "t",
+      attempt: 0,
+      resource: "r",
+      generation: 1,
+      artifactDigest: "sha256:" + "a".repeat(64),
+    }),
     [],
   );
+  // M1-01: the analysis direction needs its frozen identity, never a task.
+  assert.deepEqual(missingFieldsFor({ operation: "evidence", task: "t" }), [
+    "analysisId",
+    "inputRefs",
+  ]);
 });
 
 test("raw tool names reject the model-visible prefix", () => {
@@ -181,5 +197,8 @@ test("cli parser rejects unknown arguments and missing profile values", () => {
   assert.throws(() => parseArgs(["--profile", "prod"]), /unknown profile/);
   const text = usage();
   assert.equal(text.includes("--profile <web|headless>"), true);
-  assert.equal(text.includes("never starts a Controller"), true);
+  // M3-02: the CLI has real commands now; it still never starts a Controller
+  // and its single process seam is the bundle's named launcher.
+  assert.equal(text.includes("No command starts a Controller"), true);
+  assert.equal(text.includes("acp mcp serve"), true);
 });

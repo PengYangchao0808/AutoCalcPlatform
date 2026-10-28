@@ -14,7 +14,7 @@ import json
 import os
 import sys
 import time
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Iterator, Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
@@ -48,6 +48,7 @@ from acp.scheduler.jobs import ALL_WORKFLOWS, PUBLIC_WORKFLOWS
 from acp.scheduler.logs import read_log_tail
 from acp.storage.layout import runtime_file
 from acp.workflows.registry import list_workflow_entries, workflow_to_dict
+from acp_services.entrypoints.application_params import MAX_READ_BYTES
 
 router = APIRouter()
 
@@ -167,7 +168,7 @@ _MCP_TOOLS: tuple[str, ...] = (
 #: Bounded discovery limits (application-api.v1 ``capabilities.limits``).
 _CONTROLLER_LIMITS: dict[str, int] = {
     "max_artifact_bytes": 8 * 1024 * 1024,
-    "max_read_bytes": 1 << 20,
+    "max_read_bytes": MAX_READ_BYTES,
     "max_walltime_s": 7 * 24 * 60 * 60,
     "max_cores": 64,
 }
@@ -270,9 +271,30 @@ def _backend_capability_summary() -> list[dict[str, Any]]:
     return summaries
 
 
-@router.get("/capabilities")
-def get_capabilities(request: Request) -> dict[str, Any]:
-    """Read-only discovery (``capabilities`` application command)."""
+def _capabilities_payload(
+    request: Request,
+    *,
+    research_extension: Mapping[str, Any] | str | None = None,
+    project_id: str | None = None,
+    client: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build the discovery payload and answer the extension handshake.
+
+    One builder serves the credential-free ``GET`` query surface and the
+    equivalent ``POST`` body surface (``application-api.v1``
+    ``capabilities.request``), so the two can never diverge.  The
+    ``research_extension``/``project_id``/``client`` inputs are audit facts: the
+    project hint is checked against the server-resolved binding and can only
+    *narrow* (a mismatch is refused), never widen, and no input can authorize.
+    """
+    from acp.api import science_catalog
+    from acp.mcp_extension import RESEARCH_EXTENSION_SPEC
+    from acp_services.entrypoints.mcp import (
+        RESEARCH_TOOL_NAMES,
+        negotiate_research_extension,
+        normalize_extension_request,
+    )
+    from acp_services.runtime.execution_limits import execution_limits_statement
     from acp_services.workspace.http_identity import (
         IdentityMode,
         remote_identity_providers,
@@ -282,6 +304,7 @@ def get_capabilities(request: Request) -> dict[str, Any]:
     admission = getattr(request.app.state, "admission", None)
     identity = getattr(request.app.state, "server_identity", None)
     identity_mode = getattr(request.app.state, "identity_mode", IdentityMode.LOCAL_SINGLE)
+
     if admission is not None:
         admission_snapshot = admission.snapshot()
     else:
@@ -293,17 +316,57 @@ def get_capabilities(request: Request) -> dict[str, Any]:
             "model_token_enforcement": "NOT_VERIFIED",
             "multi_tenant_security": False,
         }
+    try:
+        requested = normalize_extension_request(research_extension)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "input_invalid", "message": str(exc)},
+        ) from None
+    handshake = negotiate_research_extension(RESEARCH_EXTENSION_SPEC, requested)
+    resolved = getattr(request.state, "request_identity", None)
+    bound_project = getattr(resolved, "verified_project", None) or getattr(
+        identity, "verified_project", None
+    )
     payload: dict[str, Any] = {
         "schema_version": 1,
         "task_kinds": _task_kinds(),
         "workflows": _active_workflows(),
         "backends": _backend_capability_summary(),
-        "capability_descriptors": None,
+        # M2-02: the A-owned capability descriptors are forwarded instead of
+        # returning ``None``.  The documents come from the one per-application
+        # science catalog that `/api/v2/science/capabilities` also reads, so no
+        # executable probe runs twice.  The analysis registry projection is the
+        # platform fact ("what this process can execute") and keeps the frozen
+        # registered/executable/unavailable distinction: a declared capability is
+        # never reported as executable.
+        "capability_descriptors": list(science_catalog.capability_descriptors(request.app.state)),
+        "analysis_capabilities": list(science_catalog.analysis_capabilities(request.app.state)),
         "limits": dict(_CONTROLLER_LIMITS),
-        "tools": list(_MCP_TOOLS),
+        # M2-01c: the HTTP surface mirrors tools/list — the eight P1 tools, plus
+        # the ten research tools only for a request that negotiated the extension.
+        "tools": list(_MCP_TOOLS) + ([*RESEARCH_TOOL_NAMES] if handshake.negotiated else []),
+        "research_tools": {
+            "registered": [*RESEARCH_TOOL_NAMES],
+            "visible": bool(handshake.negotiated),
+            "negotiated": bool(handshake.negotiated),
+        },
         "protocol_version": _MCP_PROTOCOL_VERSION,
+        "extensions": [dict(entry) for entry in handshake.entries],
+        "capability_request": {
+            "client": dict(client) if client is not None else None,
+            "project_id": project_id,
+            "research_extension": (
+                dict(handshake.requested) if handshake.requested is not None else None
+            ),
+            "authorization": "none: audit and advisory hints only",
+        },
         "admission": admission_snapshot,
         "admission_enforcement": admission_snapshot["enforcement"],
+        # M1-04b: the non-BudgetUnit execution limits (admission-bound /
+        # process-termination / queue-deadline) and the three clocks.  Same
+        # matrix as the release statement; never re-derived per surface.
+        "execution_limits": execution_limits_statement(),
         "model_token_enforcement": "NOT_VERIFIED",
         "multi_tenant_security": (
             False if identity_mode == IdentityMode.LOCAL_SINGLE else "api-key-scoped"
@@ -322,7 +385,114 @@ def get_capabilities(request: Request) -> dict[str, Any]:
             "project_hint_policy": "narrow-only",
             "multi_tenant_security": "api-key-scoped",
         }
+    if handshake.refusal is not None:
+        # Typed, in-band refusal: the client still receives extensions[] so it
+        # can read the supported version instead of guessing.
+        params = dict(handshake.refusal.get("params") or {})
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": str(handshake.refusal.get("code") or "unsupported_capability"),
+                "message": "research extension request refused",
+                "params": params,
+                "extensions": [dict(entry) for entry in handshake.entries],
+            },
+        )
+    if project_id is not None and bound_project is not None and project_id != bound_project:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "access_denied",
+                "message": "requested project does not match the server binding",
+                "params": {
+                    "rule": "project_scope_mismatch",
+                    "requested_project_id": project_id,
+                    "bound_project_id": bound_project,
+                },
+                "extensions": [dict(entry) for entry in handshake.entries],
+            },
+        )
     return payload
+
+
+@router.get("/capabilities")
+def get_capabilities(
+    request: Request,
+    research_extension: str | None = Query(default=None),
+    project_id: str | None = Query(default=None),
+    client: str | None = Query(default=None),
+) -> dict[str, Any]:
+    """Read-only discovery (``capabilities`` application command).
+
+    Credential-free by design.  The optional query parameters are the flat
+    spelling of the ``POST`` body surface: ``research_extension=id@version``,
+    ``project_id`` and ``client`` (``name/version``), all audit-only.
+    """
+    client_facts: dict[str, Any] | None = None
+    if client:
+        name, _, version = client.partition("/")
+        client_facts = {"name": name.strip(), "version": version.strip() or None}
+    return _capabilities_payload(
+        request,
+        research_extension=research_extension,
+        project_id=project_id,
+        client=client_facts,
+    )
+
+
+@router.post("/capabilities")
+async def post_capabilities(request: Request) -> dict[str, Any]:
+    """Body-form discovery: the exact equivalent of ``GET /api/capabilities``.
+
+    Still a read-only command in the identity-exempt discovery set; the body may
+    only add audit facts and the extension handshake request.
+    """
+    try:
+        body = await request.json()
+    except ValueError:
+        body = None
+    if body is None:
+        body = {}
+    if not isinstance(body, dict):
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "input_invalid", "message": "capabilities body must be an object"},
+        )
+    allowed_fields = {"schema_version", "extensions", "research_extension", "project_id", "client"}
+    unknown = set(body) - allowed_fields
+    if unknown:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "input_invalid",
+                "message": "unknown capabilities field",
+                "params": {"unknown_fields": sorted(unknown)},
+            },
+        )
+    research = body.get("research_extension")
+    if research is not None and not isinstance(research, dict):
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "input_invalid", "message": "research_extension must be an object"},
+        )
+    client = body.get("client")
+    if client is not None and not isinstance(client, dict):
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "input_invalid", "message": "client must be an object"},
+        )
+    project_id = body.get("project_id")
+    if project_id is not None and not isinstance(project_id, str):
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "input_invalid", "message": "project_id must be a string"},
+        )
+    return _capabilities_payload(
+        request,
+        research_extension=research,
+        project_id=project_id,
+        client=client,
+    )
 
 
 @router.get("/identity")

@@ -1,0 +1,29 @@
+{
+  "sample_id": "platform-attribution-foreign-project.negative",
+  "contract": "ADR-003-taskref-evidence-decision.md",
+  "kind": "negative",
+  "payload": {
+    "research": {
+      "principal_id": "principal-alice",
+      "project_id": "proj-m1-03",
+      "research_id": "res-m1-03",
+      "session_id": "ses-m1-03",
+      "round": 0
+    },
+    "task_ref": {
+      "project_id": "proj-other",
+      "task_id": "job-m1-03-static",
+      "attempt": 1,
+      "release": {
+        "release_id": "release-m1-03",
+        "release_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    }
+  },
+  "expected": {
+    "valid": false,
+    "code": "foreign_project",
+    "violation": "foreign_project",
+    "class": "authorization"
+  }
+}

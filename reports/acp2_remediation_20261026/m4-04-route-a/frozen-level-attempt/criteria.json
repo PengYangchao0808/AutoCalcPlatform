@@ -1,0 +1,288 @@
+{
+  "claim_status": "inconclusive",
+  "criteria_digest": "f89f73da4178f4db35b5eb2b8f3958a4cad8bacc5c82490ccfc6777a2c3449d3",
+  "evaluation": {
+    "criteria": [
+      {
+        "applied_rules": [],
+        "claim_status": "inconclusive",
+        "criterion_id": "DA-C01-ts-single-imaginary-mode",
+        "evidence_digest": "3fc03b4c98812b8ede5ba3cb3f7be58fbbc2e8438c8d0176254984d83399e646",
+        "evidence_status": "inconclusive",
+        "missing_check_ids": [
+          "artifact_missing"
+        ],
+        "notes": [],
+        "reason": "missing_evidence",
+        "validator_id": "check.ts_saddle_candidate"
+      },
+      {
+        "applied_rules": [],
+        "claim_status": "supported",
+        "criterion_id": "DA-C02-ts-mode-mapping",
+        "evidence_digest": "d4368ce8c164035855869f9b1a08d2c6a5c515fd96b2b56d20c581c0e1f6d34e",
+        "evidence_status": "supported",
+        "missing_check_ids": [],
+        "notes": [],
+        "reason": "affirmed",
+        "validator_id": "check.ts_mode_mapping"
+      },
+      {
+        "applied_rules": [],
+        "claim_status": "inconclusive",
+        "criterion_id": "DA-C03-frequency-evidence",
+        "evidence_digest": "095b9fa06f1acc4aae894c9c77349a41c170221a8e9f07f5e5eb8d965e0c1be3",
+        "evidence_status": "inconclusive",
+        "missing_check_ids": [
+          "artifact_missing"
+        ],
+        "notes": [],
+        "reason": "missing_evidence",
+        "validator_id": "check.frequency_evidence"
+      },
+      {
+        "applied_rules": [],
+        "claim_status": "not_evaluated",
+        "criterion_id": "DA-C04-irc-bidirectional",
+        "evidence_digest": "f35a056a2ca7c9dcc2bd0e055b200b765d5d3ac2438dd9ef75da3244cecf1935",
+        "evidence_status": "not_evaluated",
+        "missing_check_ids": [
+          "not_executed"
+        ],
+        "notes": [],
+        "reason": "not_checked",
+        "validator_id": "check.irc_bidirectional_completion"
+      },
+      {
+        "applied_rules": [],
+        "claim_status": "inconclusive",
+        "criterion_id": "DA-C05-endpoint-association",
+        "evidence_digest": "f15444ac7affbb6d1140d15864933453b66aff08f8d30a0d620920520b04cc8a",
+        "evidence_status": "inconclusive",
+        "missing_check_ids": [
+          "irc_not_bidirectional"
+        ],
+        "notes": [],
+        "reason": "missing_evidence",
+        "validator_id": "check.irc_endpoint_identity"
+      },
+      {
+        "applied_rules": [],
+        "claim_status": "not_evaluated",
+        "criterion_id": "DA-C06-energy-comparability",
+        "evidence_digest": "d1448a8ef6f7f593e4ab39458909cb145045539db588255ff9252f9e8548f13a",
+        "evidence_status": "not_evaluated",
+        "missing_check_ids": [
+          "not_executed"
+        ],
+        "notes": [],
+        "reason": "not_checked",
+        "validator_id": "check.activation_energy_comparability"
+      },
+      {
+        "applied_rules": [],
+        "claim_status": "inconclusive",
+        "criterion_id": "DA-C07-reactant-stoichiometry",
+        "evidence_digest": "e294a1c732582218a56a19da341bae03f73e35a10daafa058bec5a2af1165d9c",
+        "evidence_status": "inconclusive",
+        "missing_check_ids": [
+          "artifact_missing"
+        ],
+        "notes": [],
+        "reason": "missing_evidence",
+        "validator_id": "check.reactant_stoichiometry_completeness"
+      }
+    ],
+    "criteria_digest": "f89f73da4178f4db35b5eb2b8f3958a4cad8bacc5c82490ccfc6777a2c3449d3",
+    "criteria_regime": "diels_alder.limited.v1",
+    "criteria_version": "1.0.0",
+    "overall_claim_status": "inconclusive",
+    "questions": [
+      {
+        "blocked_by": [
+          "DA-C01-ts-single-imaginary-mode",
+          "DA-C03-frequency-evidence",
+          "DA-C04-irc-bidirectional",
+          "DA-C05-endpoint-association"
+        ],
+        "claim_status": "inconclusive",
+        "missing_check_ids": [
+          "artifact_missing",
+          "not_executed",
+          "irc_not_bidirectional"
+        ],
+        "question_id": "question.diels_alder.path_connectivity.v1",
+        "reason": "missing_evidence",
+        "refuted_by": []
+      },
+      {
+        "blocked_by": [
+          "DA-C01-ts-single-imaginary-mode",
+          "DA-C03-frequency-evidence",
+          "DA-C06-energy-comparability",
+          "DA-C07-reactant-stoichiometry"
+        ],
+        "claim_status": "inconclusive",
+        "missing_check_ids": [
+          "artifact_missing",
+          "not_executed"
+        ],
+        "question_id": "question.diels_alder.activation_energy.v1",
+        "reason": "missing_evidence",
+        "refuted_by": []
+      }
+    ],
+    "scenario_result": "FAIL",
+    "schema": "acp2.science.criteria-evaluation",
+    "schema_version": 1
+  },
+  "generated_at": "2026-10-27T20:16:37Z",
+  "method_deviation": null,
+  "notes": [
+    "scenario_result and claim_status are recorded separately: an execution chain can pass while the science claim stays inconclusive",
+    "the frozen criteria file was read, never edited",
+    "DA-C05 uses the weaker of the two per-direction endpoint-identity claims: a claim is never upgraded by combining directions"
+  ],
+  "records": [
+    {
+      "applied_rules": [],
+      "claim_status": "inconclusive",
+      "criterion_id": "DA-C01-ts-single-imaginary-mode",
+      "direction_statuses": null,
+      "evidence_digest": "3fc03b4c98812b8ede5ba3cb3f7be58fbbc2e8438c8d0176254984d83399e646",
+      "missing_check_ids": [
+        "artifact_missing"
+      ],
+      "source_digests": [],
+      "step_status": {
+        "ts_frequency": "skipped"
+      },
+      "validator_id": "check.ts_saddle_candidate"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "supported",
+      "criterion_id": "DA-C02-ts-mode-mapping",
+      "direction_statuses": null,
+      "evidence_digest": "d4368ce8c164035855869f9b1a08d2c6a5c515fd96b2b56d20c581c0e1f6d34e",
+      "missing_check_ids": [],
+      "source_digests": [
+        "a8c7bdc2151e633cf812799524ea9239152b6f2ceea423d5c148561509e7a6b3",
+        "e063f0fd82f26f49c1b3a353f2d192cfb3c168036e14a74068bd4b4a18e5eeca",
+        "d5bab4162cf2d7e3892a5a369d533aef234f8b326f5695926e418790906754f2",
+        "136b24724a15f4ac71d4a6463fb28a0c5b1a22efa5f55b7ce10d5d312b12bb83",
+        "481d932544b9c131da979b347a92d058c0d6d04ae00a59836987024e280dadce",
+        "ce58681a9f393e8b278c15700cf18fbb4e458d38c48341d8aa8ed704fdca918c",
+        "c56a316dd2cc5ec0e2297a1a7413fbb2910f7643289cf57a98361c8716625f23",
+        "3e85135c1d97ed3897ca46e6517dfe5675f98c5c6cf9413c2872078b12fe9248",
+        "219ac99408b17ad61880c2dd22429363db8f12f754288fd558f512d7eecd1bd2",
+        "1a42911d3d77ccb9b25790daa44ba8a9a8cf6321803c1a8fb22da4788acb86d2",
+        "2d14795519872f6b27349e5d9cde2807194478f6c12c855f672c1ef305fe28d7",
+        "480e823ed320621715c1bfc240caf3e1ab93654b0d3d26d93ecdf99aab118a4f",
+        "a1341128627c6ff253bb30c4028b799d3beb0edfff31a7d6c4c8225fa77f623a",
+        "28e86b4cdeba0bdec1f51a2bd504a8e4ba23d39a44cb67a1711f1f2bc8f6800d",
+        "127242b5cd9cd64c7656f63b238f7ee4467e4a8a4d6cf577f0b3fccf2f635c57",
+        "8434c537416bde276639c438a58ed87a2c26964f865add6bcdc9dc30ba9f942e",
+        "6c85f86471d153f172d856ada438a993847ecd4d47bed07de88c4a2e251a53d5",
+        "ce3c289a0f54499ff8eea0a8ad4123b9c75ad1a2f4343de7232adead2bd43529",
+        "f8f3e0d6ac5fd6831945c6149b37fdfec6d657809f0bf65b5fcc9636a3e53497",
+        "f8f3e0d6ac5fd6831945c6149b37fdfec6d657809f0bf65b5fcc9636a3e53497"
+      ],
+      "step_status": {
+        "candidate_frequency": "completed",
+        "ts_frequency": "skipped",
+        "ts_optimize": "failed"
+      },
+      "validator_id": "check.ts_mode_mapping"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "inconclusive",
+      "criterion_id": "DA-C03-frequency-evidence",
+      "direction_statuses": null,
+      "evidence_digest": "095b9fa06f1acc4aae894c9c77349a41c170221a8e9f07f5e5eb8d965e0c1be3",
+      "missing_check_ids": [
+        "artifact_missing"
+      ],
+      "source_digests": [],
+      "step_status": {
+        "ts_frequency": "skipped"
+      },
+      "validator_id": "check.frequency_evidence"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "not_evaluated",
+      "criterion_id": "DA-C04-irc-bidirectional",
+      "direction_statuses": null,
+      "evidence_digest": "f35a056a2ca7c9dcc2bd0e055b200b765d5d3ac2438dd9ef75da3244cecf1935",
+      "missing_check_ids": [
+        "not_executed"
+      ],
+      "source_digests": [],
+      "step_status": {
+        "irc": "skipped"
+      },
+      "validator_id": "check.irc_bidirectional_completion"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "inconclusive",
+      "criterion_id": "DA-C05-endpoint-association",
+      "direction_statuses": [
+        "inconclusive",
+        "inconclusive"
+      ],
+      "evidence_digest": "f15444ac7affbb6d1140d15864933453b66aff08f8d30a0d620920520b04cc8a",
+      "missing_check_ids": [
+        "irc_not_bidirectional"
+      ],
+      "source_digests": [],
+      "step_status": {
+        "endpoint_product": "skipped",
+        "endpoint_reactants": "skipped"
+      },
+      "validator_id": "check.irc_endpoint_identity"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "not_evaluated",
+      "criterion_id": "DA-C06-energy-comparability",
+      "direction_statuses": null,
+      "evidence_digest": "d1448a8ef6f7f593e4ab39458909cb145045539db588255ff9252f9e8548f13a",
+      "missing_check_ids": [
+        "not_executed"
+      ],
+      "source_digests": [],
+      "step_status": {
+        "endpoint_prep_butadiene": null,
+        "endpoint_prep_ethene": null,
+        "endpoint_product": "skipped",
+        "endpoint_reactants": "skipped",
+        "ts_frequency": "skipped"
+      },
+      "validator_id": "check.activation_energy_comparability"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "inconclusive",
+      "criterion_id": "DA-C07-reactant-stoichiometry",
+      "direction_statuses": null,
+      "evidence_digest": "e294a1c732582218a56a19da341bae03f73e35a10daafa058bec5a2af1165d9c",
+      "missing_check_ids": [
+        "artifact_missing"
+      ],
+      "source_digests": [],
+      "step_status": {
+        "endpoint_prep_butadiene": null,
+        "endpoint_prep_ethene": null,
+        "endpoint_product": "skipped",
+        "endpoint_reactants": "skipped",
+        "ts_frequency": "skipped"
+      },
+      "validator_id": "check.reactant_stoichiometry_completeness"
+    }
+  ],
+  "scenario_result": "FAIL",
+  "schema": "acp2.m4-04.criteria.v1"
+}

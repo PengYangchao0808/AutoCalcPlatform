@@ -16,17 +16,27 @@ revision. The machine envelope is
 | Property | Value | Reference |
 | --- | --- | --- |
 | Transport | `stdio` only; the **caller** owns stdin/stdout framing | `mcp.py:124`, `McpServer.handle_line` `mcp.py:838` |
-| Protocol version | `2025-06-18` (exactly one accepted version) | `mcp.py:120-122`, `_initialize` `mcp.py:871-885` |
+| Protocol version | `2025-06-18` is the only version the server speaks; it is also what an unsupported request receives (see the negotiation rule below) | `mcp.py:120-122`, `_initialize`, `_negotiate_protocol_version` |
 | Server identity | `acp-services-mcp` `0.1.0` | `mcp.py:132-133`, `mcp.py:886` |
 | Permission scope | local process scope; no API key/bearer token accepted or forwarded to a tool | module docstring `mcp.py:29-36` |
 | Discovery | `tools/list` advertises the closed allowlist; `tools/call` dispatches through a literal table | `mcp.py:896-931` |
 
-A client that requests any other protocol version is refused with JSON-RPC
-`-32602` and `data.code = "unsupported_protocol_version"`; it is never silently
-downgraded (`mcp.py:872-883`).
+**Amended by M0-08 / ADR-006 (2026-10-26).** A client that requests a protocol
+version other than `2025-06-18` (including `@modelcontextprotocol/client`
+2.2.0's default `2025-11-25`) is **not** refused: `initialize` answers
+`2025-06-18` and the client decides whether it can continue — that is the MCP
+2025-06-18 lifecycle rule. Only a malformed `protocolVersion` /
+`protocolVersions` shape yields JSON-RPC `-32602`
+(`data.code = "invalid_protocol_version"`), and the private `protocolVersions`
+list is recorded in `capabilities.extensions["acp.negotiation.v1"]` without ever
+gating the answer. `initialize` carries no top-level `extensions` and no
+`negotiated` claim; capability extensions are negotiated with a `tools/call` to
+`acp_capabilities` (`research_extension{id,version}` → `data.extensions[]`, M0-09/
+ADR-006 §D7). A probe with `server/discover` (sent by clients using
+`versionNegotiation: {mode:"auto"}`) receives an ordinary `-32601`.
 
 `initialize`, `tools/list`, `tools/call` and `ping` are the only methods;
-anything else is JSON-RPC `-32601` (`mcp.py:855-866`).
+anything else (including `server/discover`) is JSON-RPC `-32601`.
 
 ## 2. Raw tool names ↔ DSH model-visible names
 
@@ -129,8 +139,10 @@ immediately** and never block on the science:
 - A status observation of a terminal state releases the long-task budget slot
   (`mcp.py:1049-1052`; terminal spellings `mcp.py:250-252`).
 - The model must never poll by re-submitting. Retry uses the same
-  `idempotency_key`; the server collapses it onto one operation
-  (`mcp.py:983-1005`, `IdempotencyRegistry` `mcp.py:700-747`).
+  `idempotency_key`; the Controller's persistent idempotency ledger
+  (`JobStore.claim_idempotency`, migrations 022/024) collapses it onto one
+  attributed operation — the MCP entry forwards the raw key verbatim and holds
+  no operation-result state of its own (M0-05).
 - The bridge must surface `reference` + `query_tool` to the model, not a
   synthetic "in progress" boolean.
 

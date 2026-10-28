@@ -1,0 +1,2 @@
+PASS illegal-request.valid.json (no payload approver)
+REJECTED illegal-request: approver identity must come from the authenticated Controller channel, not payload fields ['approver']

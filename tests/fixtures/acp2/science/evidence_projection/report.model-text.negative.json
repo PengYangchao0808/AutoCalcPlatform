@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "report_id": "report-m1-03-model-text",
+  "subject": {
+    "subject_id": "task-m1-03-static",
+    "subject_kind": "calculation_result",
+    "description": "NEGATIVE fixture: a model narrative occupies the validator slot."
+  },
+  "execution": {
+    "terminal_state": "completed",
+    "argv": ["m1-03-static", "frequency"],
+    "exit_code": 0
+  },
+  "claims": [
+    {
+      "claim_id": "c-true-minimum",
+      "statement": "A model says the geometry is a true minimum.",
+      "status": "supported",
+      "scope": {
+        "subject": "stationary_point_kind",
+        "applicability": "conformer_specific",
+        "conditions": "conformer A, gas phase"
+      },
+      "source_refs": [
+        {
+          "artifact_path": "artifacts/freq.out",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "cec0e00d21f0d39aaccc2ad75ba6f6141f1f37030137709648d2858930cf1cfe"
+          },
+          "role": "native_output",
+          "units": null
+        }
+      ],
+      "missing_checks": [],
+      "validator": {
+        "kind": "software",
+        "validator_id": "llm:conclusion",
+        "validator_version": "1.0.0"
+      }
+    }
+  ],
+  "limitations": []
+}

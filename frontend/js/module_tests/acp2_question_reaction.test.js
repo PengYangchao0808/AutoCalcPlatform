@@ -179,6 +179,9 @@ module.exports.register = async function (h) {
           artifacts: [], claims: [], clarifications: [], read_only: true,
         }),
       },
+      // M5-03 F6: binding is explicit; discovery no longer defaults to a demo
+      // project id.
+      projectId: "proj-m503",
       wizardEndpoints: {
         parseStructure: (payload) => {
           parseCalls.push(payload);

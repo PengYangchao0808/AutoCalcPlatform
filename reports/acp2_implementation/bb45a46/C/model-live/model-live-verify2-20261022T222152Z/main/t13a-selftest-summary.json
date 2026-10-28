@@ -1,0 +1,483 @@
+{
+  "checks": [
+    {
+      "name": "lifecycle.start_ready",
+      "status": "PASS"
+    },
+    {
+      "name": "lifecycle.ledger_under_budget_dir",
+      "status": "PASS"
+    },
+    {
+      "name": "lifecycle.health_caps",
+      "status": "PASS"
+    },
+    {
+      "name": "lifecycle.batch_id_present",
+      "status": "PASS"
+    },
+    {
+      "name": "lifecycle.zero_requests_at_start",
+      "status": "PASS"
+    },
+    {
+      "name": "lifecycle.stop",
+      "status": "PASS"
+    },
+    {
+      "name": "count.twelve_allowed",
+      "status": "PASS"
+    },
+    {
+      "name": "count.upstream_calls_exactly_twelve",
+      "status": "PASS"
+    },
+    {
+      "name": "count.thirteenth_refused",
+      "status": "PASS"
+    },
+    {
+      "name": "count.refused_request_not_forwarded",
+      "status": "PASS"
+    },
+    {
+      "name": "count.usage_exactly_twelve",
+      "status": "PASS"
+    },
+    {
+      "name": "count.remaining_zero",
+      "status": "PASS"
+    },
+    {
+      "name": "count.refusal_recorded",
+      "status": "PASS"
+    },
+    {
+      "name": "per_request_cap.refused",
+      "status": "PASS"
+    },
+    {
+      "name": "per_request_cap.not_forwarded",
+      "status": "PASS"
+    },
+    {
+      "name": "per_request_cap.boundary_allowed",
+      "status": "PASS"
+    },
+    {
+      "name": "per_request_cap.sent_max_tokens_clamped_to_cap",
+      "status": "PASS"
+    },
+    {
+      "name": "streaming.sse_delivered",
+      "status": "PASS"
+    },
+    {
+      "name": "streaming.usage_reported",
+      "status": "PASS"
+    },
+    {
+      "name": "streaming.proxy_requested_usage_in_stream",
+      "status": "PASS"
+    },
+    {
+      "name": "missing_usage.response_ok",
+      "status": "PASS"
+    },
+    {
+      "name": "missing_usage.output_recorded_unknown",
+      "status": "PASS"
+    },
+    {
+      "name": "missing_usage.input_marked_estimated",
+      "status": "PASS"
+    },
+    {
+      "name": "missing_usage.event_sources",
+      "status": "PASS"
+    },
+    {
+      "name": "interruption.upstream_close_visible",
+      "status": "PASS"
+    },
+    {
+      "name": "interruption.upstream_settled_as_consumed",
+      "status": "PASS"
+    },
+    {
+      "name": "interruption.client_headers_received",
+      "status": "PASS"
+    },
+    {
+      "name": "interruption.client_disconnect_settled",
+      "status": "PASS"
+    },
+    {
+      "name": "interruption.both_requests_consumed",
+      "status": "PASS"
+    },
+    {
+      "name": "upstream_error.status_forwarded",
+      "status": "PASS"
+    },
+    {
+      "name": "upstream_error.consumed_with_unknown_usage",
+      "status": "PASS"
+    },
+    {
+      "name": "restart.first_stop",
+      "status": "PASS"
+    },
+    {
+      "name": "restart.inherits_settled_usage",
+      "status": "PASS"
+    },
+    {
+      "name": "restart.inherits_remaining_requests",
+      "status": "PASS"
+    },
+    {
+      "name": "restart.batch_id_stable",
+      "status": "PASS"
+    },
+    {
+      "name": "restart.nine_more_allowed",
+      "status": "PASS"
+    },
+    {
+      "name": "restart.thirteenth_overall_refused",
+      "status": "PASS"
+    },
+    {
+      "name": "run_id.change_does_not_reset_budget",
+      "status": "PASS"
+    },
+    {
+      "name": "run_id.both_recorded",
+      "status": "PASS"
+    },
+    {
+      "name": "input_cap.refused_before_upstream",
+      "status": "PASS"
+    },
+    {
+      "name": "output_cap.first_allowed",
+      "status": "PASS"
+    },
+    {
+      "name": "output_cap.second_refused",
+      "status": "PASS"
+    },
+    {
+      "name": "output_cap.settled_exactly_at_cap",
+      "status": "PASS"
+    },
+    {
+      "name": "concurrency.second_refused",
+      "status": "PASS"
+    },
+    {
+      "name": "unapproved.refused_without_fallback",
+      "status": "PASS"
+    },
+    {
+      "name": "unapproved.not_counted_against_budget",
+      "status": "PASS"
+    },
+    {
+      "name": "crash.inflight_charged_on_restart",
+      "status": "PASS"
+    },
+    {
+      "name": "caps_mismatch.refused_to_widen",
+      "status": "PASS"
+    },
+    {
+      "name": "routing.proxy_url_recorded",
+      "status": "PASS"
+    },
+    {
+      "name": "routing.dsh_env_available",
+      "status": "PASS"
+    },
+    {
+      "name": "routing.web_dump_config",
+      "status": "PASS"
+    },
+    {
+      "name": "routing.web_points_at_proxy",
+      "status": "PASS"
+    },
+    {
+      "name": "routing.web_dump_has_no_secret",
+      "status": "PASS"
+    },
+    {
+      "name": "routing.headless_dump_config",
+      "status": "PASS"
+    },
+    {
+      "name": "routing.headless_points_at_proxy",
+      "status": "PASS"
+    },
+    {
+      "name": "routing.headless_dump_has_no_secret",
+      "status": "PASS"
+    }
+  ],
+  "evidence_dir": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/model-live/a-proxy-selftest/model-live-verify2-20261022T222152Z",
+  "required_checks_present": true,
+  "schema": "acp2.model-live.t13a-summary.v1",
+  "selftest_ledger": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/model-live/a-proxy-selftest/model-live-verify2-20261022T222152Z/budget/ledger.json",
+  "status": "PASS",
+  "stub_upstream": {
+    "calls": 35,
+    "entries": [
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 4096,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": true,
+        "max_tokens": 32,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": true
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-no-usage",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": true,
+        "max_tokens": 16,
+        "model": "stub-interrupt",
+        "path": "/v1/chat/completions",
+        "stream": true
+      },
+      {
+        "include_usage": true,
+        "max_tokens": 16,
+        "model": "stub-slow",
+        "path": "/v1/chat/completions",
+        "stream": true
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-error",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-ok",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 10,
+        "model": "stub-usage10",
+        "path": "/v1/chat/completions",
+        "stream": false
+      },
+      {
+        "include_usage": false,
+        "max_tokens": 16,
+        "model": "stub-slow",
+        "path": "/v1/chat/completions",
+        "stream": false
+      }
+    ]
+  }
+}

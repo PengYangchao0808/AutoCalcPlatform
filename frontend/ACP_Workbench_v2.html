@@ -349,6 +349,12 @@
           <button class="panel-collapse-btn" data-panel-key="scientific_evidence" data-i18n-title="layout.collapse_panel" title="折叠/展开">−</button>
         </div>
         <div class="panel-body" id="scientific-evidence-body"></div>
+        <!-- M1-06: read-only platform evidence projection (single
+             acp2.runtime.evidence-projection.v1 payload; no submit/decide). -->
+        <div class="panel-subsection research-evidence" id="research-evidence-section">
+          <h3 data-i18n="research.evidence.title">平台证据投影</h3>
+          <div class="panel-body" id="research-evidence-body"></div>
+        </div>
       </section>
 
       <section class="panel-section research-approval-panel" data-panel-key="research_approval" id="research-approval-panel">
@@ -357,6 +363,17 @@
           <button class="panel-collapse-btn" data-panel-key="research_approval" data-i18n-title="layout.collapse_panel" title="折叠/展开">−</button>
         </div>
         <div class="panel-body" id="research-approval-body"></div>
+      </section>
+
+      <section class="panel-section capability-form-panel" data-panel-key="capability_form" id="capability-form-panel">
+        <div class="panel-head">
+          <h2 data-i18n="capabilityForm.title">能力表单</h2>
+          <button class="panel-collapse-btn" data-panel-key="capability_form" data-i18n-title="layout.collapse_panel" title="折叠/展开">−</button>
+        </div>
+        <!-- M3-06: schema-driven capability form (acp2.ui-subset.v1). Rendered
+             with createElement/textContent only; forms come from
+             GET /api/v2/science/capability-forms. -->
+        <div class="panel-body" id="capability-form-body"></div>
       </section>
 
       <div class="v-splitter" id="v-splitter-right"></div>
@@ -1249,6 +1266,7 @@
 <script src="js/client/resource-store.js"></script>
 <script src="js/workbench/contracts/task_view_contract.js"></script>
 <script src="js/workbench/contracts/experience_contract.js"></script>
+<script src="js/workbench/contracts/ui_subset.js"></script>
 <script src="js/client/task-view-query.js"></script>
 <script src="js/client/job-detail-query.js"></script>
 <script src="js/client/event-stream.js"></script>
@@ -1258,6 +1276,7 @@
 <script src="js/client/wizard-endpoints.js"></script>
 <script src="js/client/science-query.js"></script>
 <script src="js/client/research-query.js"></script>
+<script src="js/client/research-commands.js"></script>
 <script src="js/client/system-endpoints.js"></script>
 <script src="js/workbench/controllers/task_list_controller.js"></script>
 <script src="js/workbench/controllers/job_detail_controller.js"></script>
@@ -1285,7 +1304,9 @@
 <script src="js/workbench/features/wizard.js"></script>
 <script src="js/workbench/features/science-question.js"></script>
 <script src="js/workbench/features/scientific-evidence.js"></script>
+<script src="js/workbench/features/research-evidence-view.js"></script>
 <script src="js/workbench/features/research-approval.js"></script>
+<script src="js/workbench/features/capability-form.js"></script>
 <script src="js/workbench/features/scan-s2.js"></script>
 <script src="js/workbench/bootstrap.js"></script>
 </body>

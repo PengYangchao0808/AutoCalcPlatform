@@ -1,0 +1,103 @@
+{
+  "schema": "acp2.c.mcp-live.official-client.v1",
+  "status": "error",
+  "phase": "start",
+  "package_versions": {
+    "@deepseek-ai/dsh-mcp-client": {
+      "name": "@deepseek-ai/dsh-mcp-client",
+      "version": "0.2.1-rc.2"
+    },
+    "@modelcontextprotocol/client": {
+      "name": "@modelcontextprotocol/client",
+      "version": "2.2.0"
+    }
+  },
+  "launch_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B06/mcp-launch.json",
+  "wire": [
+    {
+      "direction": "send",
+      "message": {
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "2025-11-25",
+          "capabilities": {},
+          "clientInfo": {
+            "name": "dsh-mcp-client",
+            "version": "0.0.1"
+          }
+        },
+        "jsonrpc": "2.0",
+        "id": 0
+      }
+    }
+  ],
+  "launch_sha256": null,
+  "client_options": {
+    "client_info": {
+      "name": "dsh-mcp-client",
+      "version": "0.0.1"
+    },
+    "capabilities": {},
+    "versionNegotiation": {
+      "mode": "auto"
+    }
+  },
+  "sdk_defaults": {
+    "latest_protocol_version": "2025-11-25",
+    "supported_protocol_versions": [
+      "2025-11-25",
+      "2025-06-18",
+      "2025-03-26",
+      "2024-11-05",
+      "2024-10-07"
+    ],
+    "default_negotiated_protocol_version": "2025-03-26"
+  },
+  "launch": {
+    "command": "/ACPServer/acp2-development/venvs/b/bin/python",
+    "args": [
+      "-m",
+      "acp",
+      "mcp",
+      "serve",
+      "--transport",
+      "stdio",
+      "--controller",
+      "http://127.0.0.1:18765",
+      "--log-level",
+      "INFO"
+    ],
+    "cwd": "/ACPServer/AutoCalcPlatform/src",
+    "env_keys": [
+      "ACP2_MCP_LOG_LEVEL",
+      "ACP2_TOOLS",
+      "ACP_CONFIG",
+      "ACP_CONTROLLER_URL",
+      "ACP_RUN_ROOT",
+      "PATH"
+    ],
+    "protocol_version": "2025-06-18",
+    "server": {
+      "name": "acp",
+      "version": "0.2.0",
+      "entrypoint": "acp_services.entrypoints.mcp",
+      "contract_version": "1.1.0",
+      "contract_digest": "67073115cb0856db22d84e22215d54e4dbe2437aad964efc15d3b706641e11a4"
+    }
+  },
+  "requested_protocol": "2025-11-25",
+  "error": {
+    "name": "SdkError",
+    "message": "Connection closed",
+    "stack": [
+      "SdkError: Connection closed",
+      "    at Client._onclose (/ACPServer/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/core-internal/src/shared/protocol.ts:841:23)",
+      "    at Client._onclose (/ACPServer/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/src/client/client.ts:2283:15)",
+      "    at StdioClientTransport._transport.onclose (/ACPServer/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/core-internal/src/shared/protocol.ts:792:22)",
+      "    at ChildProcess.<anonymous> (/ACPServer/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/src/client/stdio.ts:159:22)",
+      "    at ChildProcess.emit (node:events:519:28)",
+      "    at maybeClose (node:internal/child_process:1101:16)",
+      "    at ChildProcess._handle.onexit (node:internal/child_process:304:5)"
+    ]
+  }
+}

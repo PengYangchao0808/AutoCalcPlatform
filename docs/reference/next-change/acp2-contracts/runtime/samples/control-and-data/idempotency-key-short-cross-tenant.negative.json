@@ -1,0 +1,22 @@
+{
+  "sample_id": "idempotency-key-short-cross-tenant.negative",
+  "contract": "control-and-data.v1.json",
+  "kind": "negative",
+  "operation": "submit",
+  "payload": {
+    "idempotency_key": "run1",
+    "key_entropy": "short-human",
+    "namespace": "global-per-action",
+    "existing_owner_project": "proj-alpha",
+    "requesting_project": "proj-beta",
+    "plan_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "expected": {
+    "valid": false,
+    "class": "conflict",
+    "code": "revision_conflict",
+    "violation": "idempotency_scope_conflict",
+    "field": "idempotency_key",
+    "note": "A short key reused by another tenant is a typed conflict to reconcile (never a replay of the other tenant's task). Clients must use a high-entropy UUID or a namespaced key."
+  }
+}

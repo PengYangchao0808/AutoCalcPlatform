@@ -549,41 +549,39 @@ def test_evidence_report_is_stored_verbatim_and_not_interpreted(
 
 
 def test_analyze_requires_explicit_and_registry(client: TestClient, tmp_path: Path) -> None:
+    """M2-02: explicit-only, and the *injected* registry decides executability.
+
+    ``vibration.analyze`` is executable (a real handler over prepared artifacts),
+    so an unprepared reference is the named ``resource_not_ready`` refusal;
+    ``vibration.compute`` stays a registered-not-executable compute capability.
+    Neither path creates a job or a prepare operation.
+    """
     _seed_local_job(client.app.state.job_manager, tmp_path)
+    reference = {
+        "task_id": JOB_ID,
+        "attempt": 1,
+        "artifact_id": "x",
+        "generation": 1,
+        "digest": "sha256:" + "0" * 64,
+    }
     implicit = client.post(
         f"/api/v1/jobs/{JOB_ID}/analyze",
-        json={
-            "analysis_id": "vibration.analyze",
-            "input_refs": [
-                {
-                    "task_id": JOB_ID,
-                    "attempt": 1,
-                    "artifact_id": "x",
-                    "generation": 1,
-                    "digest": "sha256:" + "0" * 64,
-                }
-            ],
-            "explicit": False,
-        },
+        json={"analysis_id": "vibration.analyze", "input_refs": [reference], "explicit": False},
     )
     assert implicit.status_code == 400
     assert implicit.json()["detail"]["code"] == "input_invalid"
     explicit = client.post(
         f"/api/v1/jobs/{JOB_ID}/analyze",
-        json={
-            "analysis_id": "vibration.analyze",
-            "input_refs": [
-                {
-                    "task_id": JOB_ID,
-                    "attempt": 1,
-                    "artifact_id": "x",
-                    "generation": 1,
-                    "digest": "sha256:" + "0" * 64,
-                }
-            ],
-            "explicit": True,
-        },
+        json={"analysis_id": "vibration.analyze", "input_refs": [reference], "explicit": True},
     )
-    assert explicit.status_code == 422
-    assert explicit.json()["detail"]["code"] == "unsupported_capability"
+    assert explicit.status_code == 409
+    assert explicit.json()["detail"]["code"] == "resource_not_ready"
+    assert "not_prepared" in explicit.json()["detail"]["message"]
+    compute = client.post(
+        f"/api/v1/jobs/{JOB_ID}/analyze",
+        json={"analysis_id": "vibration.compute", "input_refs": [reference], "explicit": True},
+    )
+    assert compute.status_code == 422
+    assert compute.json()["detail"]["code"] == "unsupported_capability"
+    assert compute.json()["detail"]["params"]["rule"] == "analysis_capability_not_executable"
     assert _operation_count(client) == 0

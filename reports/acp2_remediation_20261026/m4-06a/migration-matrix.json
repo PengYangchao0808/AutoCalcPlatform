@@ -1,0 +1,308 @@
+{
+  "items": [
+    {
+      "evidence": [
+        "upgrade.schema_migrated_to_candidate_head",
+        "upgrade.old_migration_rows_are_a_prefix"
+      ],
+      "evidence_status": {
+        "upgrade.old_migration_rows_are_a_prefix": "PASS",
+        "upgrade.schema_migrated_to_candidate_head": "PASS"
+      },
+      "id": "jobs.schema_head",
+      "new": "jobs-DB migrations 26 (025..027)",
+      "old": "jobs-DB migrations 23 (022..023)",
+      "semantics": "additive migrations 024/025/027 applied; the old rows stay a prefix",
+      "status": "PASS"
+    },
+    {
+      "evidence": [
+        "prepare.v1_unique_index_survives_v2_upgrade",
+        "prepare.legacy_v1_row_merge_is_local_only",
+        "prepare.new_row_is_v2"
+      ],
+      "evidence_status": {
+        "prepare.legacy_v1_row_merge_is_local_only": "PASS",
+        "prepare.new_row_is_v2": "PASS",
+        "prepare.v1_unique_index_survives_v2_upgrade": "PASS"
+      },
+      "id": "prepare.schema_and_keys",
+      "new": "prepare schema v2 (v1 index kept + v2 identity index)",
+      "old": "prepare schema v1 (op_ keys, no attribution)",
+      "semantics": "pre-M0-05 rows keep identity_version='1' and the frozen v1 predicate; new rows are v2 (prep_ key, principal/project attribution)",
+      "status": "PASS"
+    },
+    {
+      "evidence": [
+        "usage.historical_rows_preserved_not_fabricated"
+      ],
+      "evidence_status": {
+        "usage.historical_rows_preserved_not_fabricated": "PASS"
+      },
+      "id": "admission.schema_and_history",
+      "new": "admission schema 26 (additive columns + indexes)",
+      "old": "admission schema 0 (pre-M0-07 usage rows)",
+      "semantics": "historical usage rows are preserved verbatim and reported unverified (binding_missing), never re-labelled trusted and never invented",
+      "status": "PASS"
+    },
+    {
+      "evidence": [
+        "legacy.classified_committed_verified",
+        "legacy.replay_verified_row_returns_original_task"
+      ],
+      "evidence_status": {
+        "legacy.classified_committed_verified": "PASS",
+        "legacy.replay_verified_row_returns_original_task": "PASS"
+      },
+      "id": "idempotency.old_local_scope",
+      "new": "identity_version 1, scope_origin=legacy-local, migration_state=legacy-verified",
+      "old": "identity_version 1 / legacy local scope (no attribution columns)",
+      "semantics": "migration 024 classifies; a committed row with a resolvable TaskRef replays",
+      "status": "PASS"
+    },
+    {
+      "evidence": [
+        "legacy.classified_pending_not_replayable",
+        "legacy.classified_unattributable_unverified",
+        "legacy.unattributable_row_is_conflict_not_adopted"
+      ],
+      "evidence_status": {
+        "legacy.classified_pending_not_replayable": "PASS",
+        "legacy.classified_unattributable_unverified": "PASS",
+        "legacy.unattributable_row_is_conflict_not_adopted": "PASS"
+      },
+      "id": "idempotency.pending_and_unattributable",
+      "new": "legacy-pending / legacy-unknown + legacy-unverified",
+      "old": "claimed rows with an expired lease / no principal-project scope",
+      "semantics": "pending is retryable, an unattributable row is a typed conflict to reconcile; neither is adopted by whoever presents the key",
+      "status": "PASS"
+    },
+    {
+      "evidence": [
+        "legacy.other_scope_is_conflict_not_replay"
+      ],
+      "evidence_status": {
+        "legacy.other_scope_is_conflict_not_replay": "PASS"
+      },
+      "id": "idempotency.cross_scope",
+      "new": "verified (principal, project) scope",
+      "old": "one folded local scope for every HTTP caller",
+      "semantics": "the same key under another verified scope is a conflict, not a replay",
+      "status": "PASS"
+    },
+    {
+      "evidence": [
+        "legacy.request_digest_v1_verifies_and_rejects_tamper",
+        "new.claim_is_v2_native_and_not_legacy_namespace"
+      ],
+      "evidence_status": {
+        "legacy.request_digest_v1_verifies_and_rejects_tamper": "PASS",
+        "new.claim_is_v2_native_and_not_legacy_namespace": "PASS"
+      },
+      "id": "request_digest.v1",
+      "new": "row keeps version 1 and is verified under its own frozen field table; new rows use version 2",
+      "old": "request-digest version 1 (raw V1 DTO material)",
+      "semantics": "equal digest bytes prove the same request; a tampered payload is a typed conflict (reconcile), never a replay",
+      "status": "PASS"
+    },
+    {
+      "evidence": [
+        "legacy.auto_derivation_is_byte_frozen",
+        "previous.pre_m0_05_mcp_row_observed",
+        "upgrade.keyless_mcp_submit_refused_without_side_effect",
+        "new.no_auto_or_op_ledger_keys_written"
+      ],
+      "evidence_status": {
+        "legacy.auto_derivation_is_byte_frozen": "PASS",
+        "new.no_auto_or_op_ledger_keys_written": "PASS",
+        "previous.pre_m0_05_mcp_row_observed": "PASS",
+        "upgrade.keyless_mcp_submit_refused_without_side_effect": "PASS"
+      },
+      "id": "mcp.auto_derived_key",
+      "new": "the derivation is byte-frozen and lookup-only; keyless submit is refused",
+      "old": "frozen pre-M0-05 MCP derivation writes auto_ (and the old MCP transport folded it into an op_ ledger key)",
+      "semantics": "the historical row stays readable/verified; no second task is created and the namespace is never written again",
+      "status": "PASS"
+    },
+    {
+      "evidence": [
+        "upgrade.old_tasks_readable",
+        "state.no_legacy_row_deleted_or_rewritten"
+      ],
+      "evidence_status": {
+        "state.no_legacy_row_deleted_or_rewritten": "PASS",
+        "upgrade.old_tasks_readable": "PASS"
+      },
+      "id": "tasks.read_only",
+      "new": "readable through the candidate HTTP read path",
+      "old": "pre-upgrade jobs (HTTP keyed/keyless + pre-M0-05 MCP)",
+      "semantics": "old tasks stay read-only history; no rewrite, no revival",
+      "status": "PASS"
+    },
+    {
+      "evidence": [
+        "research.record_and_proposal_read_only_readable",
+        "upgrade.research_record_readable"
+      ],
+      "evidence_status": {
+        "research.record_and_proposal_read_only_readable": "PASS",
+        "upgrade.research_record_readable": "PASS"
+      },
+      "id": "research.read_only",
+      "new": "same revision/digest through the candidate store and HTTP read",
+      "old": "Proposal + ResearchRecord revisions at revision 1",
+      "semantics": "read-only read; no rewrite on upgrade",
+      "status": "PASS"
+    },
+    {
+      "evidence": [
+        "snapshot.capability_freeze_read_only_readable"
+      ],
+      "evidence_status": {
+        "snapshot.capability_freeze_read_only_readable": "PASS"
+      },
+      "id": "snapshot.read_only",
+      "new": "same bytes served by the candidate read-only snapshot path",
+      "old": "frozen capability/plugin descriptor snapshot (bytes)",
+      "semantics": "historical descriptor/binding/view-model bytes are never re-resolved from the active version",
+      "status": "PASS"
+    },
+    {
+      "evidence": [
+        "backup.file_copy_matches_source",
+        "rollback.restore_is_byte_identical"
+      ],
+      "evidence_status": {
+        "backup.file_copy_matches_source": "PASS",
+        "rollback.restore_is_byte_identical": "PASS"
+      },
+      "id": "backup.restore",
+      "new": "real file copy, restored byte-identically on rollback",
+      "old": "pre-upgrade run root",
+      "semantics": "backup before migration, restore before rollback",
+      "status": "PASS"
+    },
+    {
+      "evidence": [
+        "rollback.previous_schema_restored_no_half_migration",
+        "rollback.old_data_readable_after_rollback",
+        "rollback.candidate_only_rows_removed_by_restore"
+      ],
+      "evidence_status": {
+        "rollback.candidate_only_rows_removed_by_restore": "PASS",
+        "rollback.old_data_readable_after_rollback": "PASS",
+        "rollback.previous_schema_restored_no_half_migration": "PASS"
+      },
+      "id": "rollback.previous_head",
+      "new": "rolled back to 23",
+      "old": "previous head 23",
+      "semantics": "previous Controller restarts on the restored data; no half-migrated state",
+      "status": "PASS"
+    },
+    {
+      "evidence": [
+        "injection.migration_killed_before_024",
+        "injection.jobs_never_deleted_by_interrupted_migration",
+        "injection.interrupted_db_is_readable_and_intact",
+        "injection.recovery_migrates_to_head_without_losing_jobs"
+      ],
+      "evidence_status": {
+        "injection.interrupted_db_is_readable_and_intact": "PASS",
+        "injection.jobs_never_deleted_by_interrupted_migration": "PASS",
+        "injection.migration_killed_before_024": "PASS",
+        "injection.recovery_migrates_to_head_without_losing_jobs": "PASS"
+      },
+      "id": "failure.interrupted_migration",
+      "new": "SIGKILL before 024: schema 23, 5 jobs intact; recovery migrates to head",
+      "old": "pre-upgrade jobs DB (5 jobs)",
+      "semantics": "interrupted transaction leaves a readable DB, no bare job delete and no partially recorded migration; a later migrate completes",
+      "status": "PASS"
+    }
+  ],
+  "previous_ref": "acp2-baseline-20261026",
+  "schema": "acp2.upgrade-pair.migration-matrix.v1",
+  "seed_identifiers": {
+    "capability": "legacy.energy",
+    "claims": {
+      "auto": {
+        "action": "submit",
+        "claim_id": "idem_22c8cf31a518401aac0f7acdb8ba1fac",
+        "key": "auto_c7c62021c159e9f14f4a32daa8ef8d62",
+        "origin": "frozen_pre_m0_05_mcp_derivation",
+        "payload": {
+          "execution_mode": "local",
+          "input": {
+            "source": "N"
+          },
+          "molecule_name": "",
+          "name": "legacy_auto_job",
+          "node_tags": [],
+          "project_id": "uncategorized",
+          "remark": "m4-06a legacy fixture",
+          "schema_version": 1,
+          "tags": [],
+          "task_name": "",
+          "workflow": "singlepoint"
+        },
+        "request_digest": "sha256:47e89b249d10c90d866605beef7ef17c357860309c66241d8e5c7e5402863449",
+        "scope_id": "principal_local\u001funcategorized",
+        "state": "committed",
+        "task_id": "legacy_auto_job"
+      },
+      "committed": {
+        "action": "submit",
+        "claim_id": "idem_b818120fd8e941b3a74a997d988be59d",
+        "key": "legacy-submit-key",
+        "payload": {
+          "execution_mode": "local",
+          "input": {
+            "source": "O"
+          },
+          "molecule_name": "",
+          "name": "legacy_commit_job",
+          "node_tags": [],
+          "project_id": "uncategorized",
+          "remark": "m4-06a legacy fixture",
+          "schema_version": 1,
+          "tags": [],
+          "task_name": "",
+          "workflow": "singlepoint"
+        },
+        "replay_outcome": "created",
+        "request_digest": "sha256:b4cfd35e5162be0976f25dd0d4596fb4889db283dc0c459ff51d7eba4cc527aa",
+        "scope_id": "principal_local\u001funcategorized",
+        "state": "committed",
+        "task_id": "legacy_commit_job"
+      },
+      "pending": {
+        "action": "submit",
+        "claim_id": "idem_2c44efc57a2743d8bdd37bb9ae1f9cb2",
+        "key": "legacy-pending-key",
+        "lease_expires_at": "2020-01-01T00:00:01+00:00",
+        "request_digest": "sha256:1dc96990abb3cec7090661618861ea62bb5c7b0fe3f446f4114cc717fb11e68d",
+        "scope_id": "principal_local\u001funcategorized",
+        "state": "claimed"
+      },
+      "unscoped": {
+        "action": "submit",
+        "claim_id": "idem_dd1db7ca3762471089ad0566c9e9a951",
+        "key": "legacy-unscoped-key",
+        "request_digest": "sha256:a250b1dd734a571c0e7367fbd04ca91b0990ae77b7f9a337b510ef6ea8bb4fa0",
+        "scope_id": "legacy-unscoped",
+        "state": "claimed"
+      }
+    },
+    "prepare": "op_4dbbbc84328149fa897be719a764bf66",
+    "research": "legacy-research-1",
+    "usage": "usage_legacy_0001"
+  },
+  "status": "PASS",
+  "task": "M4-06a",
+  "verify_checks": {
+    "failed": 0,
+    "failing": [],
+    "passed": 20,
+    "status": "PASS",
+    "total": 20
+  }
+}

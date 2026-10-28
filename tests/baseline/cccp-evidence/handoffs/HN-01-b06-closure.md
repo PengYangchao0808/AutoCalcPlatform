@@ -98,7 +98,7 @@
 ### 9.1 本任务原始输出（fresh，provider_base=c1b3415）
 
 ```
-$ cd <repo> && /usr/bin/python3.11 scripts/verify_cccp_slice_guard.py; echo "EXIT=$?"
+$ cd /ACPServer/AutoCalcPlatform && /usr/bin/python3.11 scripts/verify_cccp_slice_guard.py; echo "EXIT=$?"
 -- check: static-reverse-dependency: PASS --   (101 python files scanned under src/cccp)
 -- check: public-api-import: PASS --           (imported 13/13 modules acp-free)
 -- check: callable-task-core: PASS --          (isolation surface: 15 task cores; RESULT: PASS)

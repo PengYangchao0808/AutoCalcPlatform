@@ -1,0 +1,339 @@
+{
+  "claim_status": "refuted",
+  "criteria": [
+    {
+      "applied_rules": [],
+      "claim_status": "supported",
+      "criterion_id": "DA-C01-ts-single-imaginary-mode",
+      "scenario_result": "PASS"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "supported",
+      "criterion_id": "DA-C02-ts-mode-mapping",
+      "scenario_result": "PASS"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "supported",
+      "criterion_id": "DA-C03-frequency-evidence",
+      "scenario_result": "PASS"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "supported",
+      "criterion_id": "DA-C04-irc-bidirectional",
+      "scenario_result": "PASS"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "refuted",
+      "criterion_id": "DA-C05-endpoint-association",
+      "scenario_result": "PASS"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "supported",
+      "criterion_id": "DA-C06-energy-comparability",
+      "scenario_result": "PASS"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "supported",
+      "criterion_id": "DA-C07-reactant-stoichiometry",
+      "scenario_result": "PASS"
+    }
+  ],
+  "degradation": {
+    "all_passed": true,
+    "scenarios": [
+      {
+        "passed": true,
+        "scenario": "single-irc-direction"
+      },
+      {
+        "passed": true,
+        "scenario": "missing-frequency"
+      },
+      {
+        "passed": true,
+        "scenario": "endpoint-mismatch"
+      },
+      {
+        "passed": true,
+        "scenario": "forged-supported-record"
+      }
+    ]
+  },
+  "evidence_chain": {
+    "attribution_verified": true,
+    "decisions_agree": true,
+    "platform_decision": "revise",
+    "report_digest": "sha256:252b1c552953b3ca7d55fa9676b62f5a00489e7b8f21112508680b5b2095c147",
+    "rph_decision": "revise",
+    "workbench_available": true
+  },
+  "executed_level": {
+    "basis": "def2-mTZVPP",
+    "declared_basis": "def2-TZVP",
+    "declared_method": "wB97X-D4",
+    "deviation_from_frozen": true,
+    "equivalence_claimed": false,
+    "method": "r2SCAN-3c",
+    "mode": "reference"
+  },
+  "generated_at": "2026-10-27T22:21:34Z",
+  "git_revision": "34b71aa8230ca7ee411456918aea90b3c84a022c",
+  "h4": {
+    "closed": false,
+    "state": "open"
+  },
+  "limitations": [
+    "one declared candidate path, one conformer per endpoint: a declared boundary",
+    "a known candidate carried through the chain is never a search result",
+    "no experimental rate, no global minimum, no general method accuracy claim",
+    "the bounded-recipe DAG cannot host the frozen nine-step recipe today: the nine steps ran as nine attempts sharing one release, so the evidence closure is per step and not yet one-TaskRef/nine-step",
+    "the bounded-DAG attempt writes per-step evidence, not a task-level task_result_digest: the platform projection is therefore bound to the single-task worker attempt (recorded separately)",
+    "Shermo is not installed on this host: the Gibbs activation barrier is not claimed (the electronic barrier is)"
+  ],
+  "notes": [
+    "executed level is the Amendment A R6 reference-case variant (r2SCAN-3c/def2-mTZVPP); no equivalence to wB97X-D4/def2-TZVP is claimed and the deviation is recorded in preflight.executed_level"
+  ],
+  "out": "/ACPServer/acp2-remediation-integration/reports/acp2_remediation_20261026/m4-04-route-a",
+  "overall_claim_status": "refuted",
+  "public_entry": {
+    "compiled": false,
+    "compiler_error": {
+      "code": "unsupported_step_kind",
+      "detail": "unsupported_step_kind: endpoint_prep: pure-analysis/non-dispatchable steps are not dispatchable bounded DAG steps",
+      "type": "StepDagError"
+    },
+    "open_steps": [
+      "endpoint_prep",
+      "candidate_path",
+      "energy_thermochemistry"
+    ]
+  },
+  "questions": [
+    {
+      "claim_status": "refuted",
+      "question_id": "question.diels_alder.path_connectivity.v1"
+    },
+    {
+      "claim_status": "supported",
+      "question_id": "question.diels_alder.activation_energy.v1"
+    }
+  ],
+  "reasons": [],
+  "release": {
+    "built": true,
+    "manifest_path": "",
+    "release_digest": "813583bdcaae20ef900a99180f433b34a7dfa730fb47c1efea5c9435919a061b",
+    "release_id": "2d1ab37a0f988933"
+  },
+  "route": {
+    "amendment": "ADR-008 Amendment A",
+    "batch_ts_frequency": {
+      "frequencies": [
+        -457.55,
+        128.75,
+        193.07,
+        279.29,
+        377.74,
+        389.74,
+        477.0,
+        589.27,
+        610.04,
+        681.44,
+        775.38,
+        824.45,
+        852.58,
+        900.17,
+        944.21,
+        963.38,
+        966.43,
+        989.71,
+        992.19,
+        1002.76,
+        1101.27,
+        1111.48,
+        1244.99,
+        1257.31,
+        1272.87,
+        1319.74,
+        1427.97,
+        1463.93,
+        1488.32,
+        1540.45,
+        1587.27,
+        1592.75,
+        3133.09,
+        3136.24,
+        3137.56,
+        3142.97,
+        3145.12,
+        3156.61,
+        3219.3,
+        3227.33,
+        3229.58,
+        3244.75
+      ],
+      "status": "completed",
+      "ts_validation": "passed"
+    },
+    "contract_step": {
+      "adr_task_kind": "xtb_path_search",
+      "executed_as": "pes_scan_frame_batch_optimize",
+      "step_id": "candidate_path"
+    },
+    "deviation": "R6 reference-level variant: the whole chain (steps 1-9) executes at r2SCAN-3c/def2-mTZVPP because the frozen-level TS optimization did not converge within the declared budget. All energy participants share this level; no equivalence to wB97X-D4/def2-TZVP is claimed. The frozen level attempt is preserved separately and its numbers are never merged into this claim.",
+    "frame_selection": {
+      "frame_count": 21,
+      "progress_threshold": 0.5,
+      "rule": "first converged, constraint-satisfied frame with reaction_progress >= 0.5",
+      "selected_frame_sha256": "4a49ca0c2514c7d1a2b51b7f23d6410f4fd548600c2214255fad8416fb7f17e9",
+      "selected_index": 5,
+      "selected_reaction_progress": 0.6329311284384961
+    },
+    "reference_case": {
+      "batch_optimize_job": "20261014_170039_004_BatchOptimize",
+      "pes_search_job": "20261014_165743_003_PESsearch",
+      "selected_frame": 5
+    },
+    "route_id": "route.diels_alder.ts_guess.pes_relaxed_scan_frame_batch_optimize_ts.v1",
+    "stages": [
+      {
+        "duration_seconds": 281.07,
+        "entry": "acp.workflows.pes_search.run_bond_length_scan",
+        "level": {
+          "scan_driver": "orca.relaxed_scan",
+          "scan_optimizer": "GFN2-xTB",
+          "single_point": "B97-3c"
+        },
+        "stage": "pes_search",
+        "status": "completed"
+      },
+      {
+        "duration_seconds": 521.33,
+        "entry": "acp.workflows.batch_optimize.run_batch_optimize",
+        "level": {
+          "basis": "def2-mTZVPP",
+          "method": "r2SCAN-3c",
+          "role": "ts",
+          "single_point": [
+            "wB97M-V",
+            "def2-TZVPP"
+          ]
+        },
+        "stage": "batch_optimize_ts",
+        "status": "completed"
+      }
+    ],
+    "step_error": null,
+    "step_status": "completed",
+    "ts_guess": {
+      "level": {
+        "basis": "def2-mTZVPP",
+        "method": "r2SCAN-3c"
+      },
+      "path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/candidate_path/ts_guess.xyz",
+      "sha256": "ce58681a9f393e8b278c15700cf18fbb4e458d38c48341d8aa8ed704fdca918c",
+      "source": "batch_optimize_ts_refined"
+    }
+  },
+  "run_root": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel",
+  "scenario_result": "PASS",
+  "schema": "acp2.m4-04.limited-diels-alder.v1",
+  "software": {
+    "orca": {
+      "executable": "/home/xieningke/orca611/orca",
+      "is_expected": true,
+      "name": "orca",
+      "source": "env:CONFSEARCH_ORCA_PATH",
+      "version": "Program Version 6.1.1  -  RELEASE   -"
+    },
+    "xtb": {
+      "executable": "/home/xieningke/xtb-dist/bin/xtb",
+      "is_expected": true,
+      "name": "xtb",
+      "source": "env:CONFSEARCH_XTB_PATH",
+      "version": "* xtb version 6.7.1 (edcfbbe) compiled by 'albert@albert-system' on 2024-07-22"
+    }
+  },
+  "software_findings": [],
+  "started_at": "2026-10-27T22:21:33Z",
+  "steps": [
+    {
+      "duration_seconds": 367.31,
+      "entry": "legacy_task_core",
+      "error": null,
+      "status": "completed",
+      "step_id": "endpoint_prep",
+      "task_ref": "20261028_940_endpoint_prep_butadiene + 20261028_940_endpoint_prep_ethene + 20261028_940_endpoint_prep_cyclohexene"
+    },
+    {
+      "duration_seconds": 802.4,
+      "entry": "platform_workflow_route",
+      "error": null,
+      "status": "completed",
+      "step_id": "candidate_path",
+      "task_ref": "20261028_945_candidate_path"
+    },
+    {
+      "duration_seconds": 94.2,
+      "entry": "bounded_recipe_envelope",
+      "error": null,
+      "status": "completed",
+      "step_id": "candidate_frequency",
+      "task_ref": "20261028_941_candidate_frequency"
+    },
+    {
+      "duration_seconds": 521.33,
+      "entry": "route_batch_optimize_ts",
+      "error": null,
+      "status": "completed",
+      "step_id": "ts_optimize",
+      "task_ref": "20261028_945_candidate_path_ts"
+    },
+    {
+      "duration_seconds": 94.51,
+      "entry": "bounded_recipe_envelope",
+      "error": null,
+      "status": "completed",
+      "step_id": "ts_frequency",
+      "task_ref": "20261028_941_ts_frequency"
+    },
+    {
+      "duration_seconds": 2454.71,
+      "entry": "legacy_task_core",
+      "error": null,
+      "status": "completed",
+      "step_id": "irc",
+      "task_ref": "20261028_940_irc"
+    },
+    {
+      "duration_seconds": 8.16,
+      "entry": "bounded_recipe_envelope",
+      "error": null,
+      "status": "completed",
+      "step_id": "endpoint_reactants",
+      "task_ref": "20261028_941_endpoint_reactants"
+    },
+    {
+      "duration_seconds": 8.17,
+      "entry": "bounded_recipe_envelope",
+      "error": null,
+      "status": "completed",
+      "step_id": "endpoint_product",
+      "task_ref": "20261028_941_endpoint_product"
+    },
+    {
+      "duration_seconds": 0.0,
+      "entry": "deterministic_analysis",
+      "error": null,
+      "status": "completed",
+      "step_id": "energy_thermochemistry",
+      "task_ref": "20261028_942_energy_thermochemistry"
+    }
+  ]
+}

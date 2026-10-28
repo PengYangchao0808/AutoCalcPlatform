@@ -1,0 +1,92 @@
+{
+  "date": "2026-10-26",
+  "generated_at": "2026-10-25T16:50:25.127595+00:00",
+  "repo_root": "/ACPServer/AutoCalcPlatform",
+  "candidate_revision": "ec4a0b39b26645139c01aa9578fbedd0c3db23a2",
+  "source_tree": "5815b19dbadc26f65b90746c290b3623bb7b1b8e",
+  "tracked_worktree_status": "M reports/acp2_implementation/bb45a46/integration/h7-index.json\n M reports/acp2_implementation/bb45a46/integration/summary.json\n M tests/baseline/refactor-evidence/e2e-task-root.txt",
+  "preexisting_modified_paths": [
+    "reports/acp2_implementation/bb45a46/integration/h7-index.json",
+    "reports/acp2_implementation/bb45a46/integration/summary.json",
+    "tests/baseline/refactor-evidence/e2e-task-root.txt"
+  ],
+  "production_service_restarted": false,
+  "real_jobs_submitted": false,
+  "model_invoked": false,
+  "audit_changes": "new audit report/probes/evidence only; RPH build may refresh ignored dist outputs; tests use temporary directories",
+  "source_fingerprint_count": 37,
+  "historical_gate_receipts": [
+    {
+      "path": "reports/acp2_implementation/bb45a46/integration/receipts/h0.json",
+      "candidate_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+      "result": "PASS",
+      "reason": null
+    },
+    {
+      "path": "reports/acp2_implementation/bb45a46/integration/receipts/h1-r2.json",
+      "candidate_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+      "result": "NOT_VERIFIED",
+      "reason": "a_science_contract_fixture_absent;c_authored_sample_absent"
+    },
+    {
+      "path": "reports/acp2_implementation/bb45a46/integration/receipts/h1.json",
+      "candidate_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+      "result": "NOT_VERIFIED",
+      "reason": "a_science_contract_fixture_absent;c_authored_sample_absent"
+    },
+    {
+      "path": "reports/acp2_implementation/bb45a46/integration/receipts/h2.json",
+      "candidate_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+      "result": "NOT_VERIFIED",
+      "reason": "c_dsh_handshake_absent;lsf_prerequisite_missing"
+    },
+    {
+      "path": "reports/acp2_implementation/bb45a46/integration/receipts/h3.json",
+      "candidate_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+      "result": "NOT_VERIFIED",
+      "reason": "lsf_prerequisite_missing;c_dsh_browser_absent;a_scientific_audit_absent"
+    },
+    {
+      "path": "reports/acp2_implementation/bb45a46/integration/receipts/h4.json",
+      "candidate_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+      "result": "NOT_VERIFIED",
+      "reason": "h4_open: A-20 absent; C25 absent; B20a-exec/B20a-search missing"
+    },
+    {
+      "path": "reports/acp2_implementation/bb45a46/integration/receipts/h5.json",
+      "candidate_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+      "result": "PASS",
+      "reason": null
+    },
+    {
+      "path": "reports/acp2_implementation/bb45a46/integration/receipts/h6.json",
+      "candidate_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+      "result": "NOT_VERIFIED",
+      "reason": "h6_open: LSF/DSH/A-readability/C-readability/selectivity/real-DA missing"
+    },
+    {
+      "path": "reports/acp2_implementation/bb45a46/integration/receipts/h7.json",
+      "candidate_revision": "abec2bc4f1d302827248d36171973df5bc1bc4dd",
+      "result": "NOT_VERIFIED",
+      "reason": "h7_open: A-29 absent; C35 absent; independent operator absent; C33/C34/LSF/DSH rows absent"
+    }
+  ],
+  "missing_release_assets": [
+    "docs/reference/next-change/acp2-contracts/experience/release-manifest.json",
+    "docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json"
+  ],
+  "external_references": [
+    "https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle",
+    "https://modelcontextprotocol.io/specification/2025-06-18/server/tools"
+  ],
+  "dsh_checkout": {
+    "path": "/ACPServer/acp2-tools/deepseek-harness",
+    "revision": "687f282e8625c6b8d11ff58211a90524be2e4317",
+    "tracked_dirty": false
+  },
+  "external_source_sha256": {
+    "/ACPServer/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+sdk@1.31.0_supports-color@9.4.0_zod@4.4.3/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js": "db6cc643f5cc095b2fd0b70bf691d1775f07a317e97555e3928559e815f5e32a",
+    "/ACPServer/acp2-tools/deepseek-harness/packages/mcp/mcp-client/src/connection.ts": "06dc1b3a1297b8b23f6ac5c44f3ba6740716c76db71c28cfb8f14d6c0340030e",
+    "/ACPServer/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+sdk@1.31.0_supports-color@9.4.0_zod@4.4.3/node_modules/@modelcontextprotocol/sdk/dist/esm/types.js": "962836b0f8dad85bcd398ad3ddb5ba81a7c7530c706955aa846dd8dfc02dd6a9"
+  }
+}

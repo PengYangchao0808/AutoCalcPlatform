@@ -9,7 +9,7 @@ run_root / DB / service / config was read or written, no product code changed.
 ## Reproduction
 
 ```bash
-cd <repo>
+cd /ACPServer/AutoCalcPlatform
 python3.11 -m pytest tests/test_services_backup_restore.py -q
 # 7 passed
 ```

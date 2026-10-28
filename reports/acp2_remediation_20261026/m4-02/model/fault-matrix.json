@@ -1,0 +1,345 @@
+{
+  "cases": [
+    {
+      "detail": {
+        "conflict_rule": "idempotency_conflict",
+        "conflict_status": 409,
+        "jobs_after": 3,
+        "jobs_before": 2,
+        "preflight_status": null,
+        "replay_same_task": true,
+        "side_effect": "one accepted submit (declared); the task is cancelled",
+        "task_id": "20261027_211525_003_fake"
+      },
+      "expected": "cross_tool_key_isolation",
+      "name": "fault.cross_tool_same_key",
+      "observed": "cross_tool_key_isolation",
+      "ok": true,
+      "status": 409
+    },
+    {
+      "detail": {
+        "alice": "created",
+        "alice_replay": "in_progress",
+        "bob": "conflict",
+        "bob_row": false,
+        "cross_project_status": 403,
+        "jobs_after": 3,
+        "jobs_before": 3
+      },
+      "expected": "cross_user_isolation",
+      "name": "fault.cross_user",
+      "observed": "cross_user_isolation",
+      "ok": true,
+      "status": 0
+    },
+    {
+      "detail": {
+        "conflict_rule": "execution_mode_conflict",
+        "conflict_status": 422,
+        "jobs_after": 3,
+        "jobs_before": 3,
+        "unknown_rule": "unknown_target_node",
+        "unknown_status": 422
+      },
+      "expected": "illegal_remote_target_refused",
+      "name": "fault.illegal_remote_target",
+      "observed": "illegal_remote_target_refused",
+      "ok": true,
+      "status": 422
+    },
+    {
+      "detail": {
+        "accepted": false,
+        "code": "wrong_owner",
+        "jobs_after": 3,
+        "jobs_before": 3
+      },
+      "expected": "wrong_owner",
+      "name": "fault.forged_receipt",
+      "observed": "wrong_owner",
+      "ok": true,
+      "status": 0
+    },
+    {
+      "detail": {
+        "jobs_after": 3,
+        "jobs_before": 3,
+        "no_binding_rule": "approval_required",
+        "no_binding_status": 403,
+        "wrong_digest_rule": "plan_digest_mismatch",
+        "wrong_digest_status": 400
+      },
+      "expected": "approval_bypass_refused",
+      "name": "fault.approval_bypass",
+      "observed": "approval_bypass_refused",
+      "ok": true,
+      "status": 403
+    },
+    {
+      "detail": {
+        "allowed": 1,
+        "denied": 1,
+        "denied_reasons": [
+          "capacity_concurrency"
+        ],
+        "jobs_after": 3,
+        "jobs_before": 3,
+        "requests": 2
+      },
+      "expected": "budget_concurrency_one_admission",
+      "name": "fault.budget_concurrency",
+      "observed": "budget_concurrency_one_admission",
+      "ok": true,
+      "status": 0
+    },
+    {
+      "detail": {
+        "detail": {
+          "detail": {
+            "code": "access_denied",
+            "message": "foreign_research: view research 'res-foreign0000000000000' != session research 'res-dcf760e391c82720be6d4bbd'",
+            "params": {
+              "rule": "foreign_research"
+            },
+            "retryable": false
+          }
+        },
+        "foreign_projection_digest": "sha256:76b443a5598b89d2b2d129373de79addad797556fe6f1a7c189dae6b5548f3c6",
+        "jobs_after": 3,
+        "jobs_before": 3
+      },
+      "expected": "foreign_research",
+      "name": "fault.wrong_evidence_identity",
+      "observed": "foreign_research",
+      "ok": true,
+      "status": 403
+    },
+    {
+      "detail": {
+        "detail": {
+          "detail": {
+            "code": "resource_not_ready",
+            "message": "the wait cursor expired; re-read the snapshot instead of replaying it",
+            "params": {
+              "max_age_s": 900,
+              "rule": "cursor_expired"
+            },
+            "retryable": true
+          }
+        },
+        "jobs_after": 3,
+        "jobs_before": 3
+      },
+      "expected": "cursor_expired",
+      "name": "fault.cursor_expiry",
+      "observed": "cursor_expired",
+      "ok": true,
+      "status": 409
+    },
+    {
+      "detail": {
+        "first_attempt_error": true,
+        "jobs_after": 3,
+        "jobs_before": 3,
+        "path": "publication-retry/result_manifest.json",
+        "products": 1,
+        "publication_state": true,
+        "retry_same_bytes": true,
+        "state_complete": true
+      },
+      "expected": "publication_retry_once",
+      "name": "fault.publication_retry",
+      "observed": "publication_retry_once",
+      "ok": true,
+      "status": 0
+    },
+    {
+      "detail": {
+        "jobs_after": 3,
+        "jobs_before": 3,
+        "old_pid": 2616783,
+        "record_after_ok": true,
+        "record_before_ok": true,
+        "resume_rule": "saga_not_found",
+        "resume_status": 409,
+        "same_job_ids": true
+      },
+      "expected": "crash_recovery_same_chain",
+      "name": "fault.crash_recovery",
+      "observed": "crash_recovery_same_chain",
+      "ok": true,
+      "status": 409
+    },
+    {
+      "detail": {
+        "job_status": "failed",
+        "jobs_after": 3,
+        "jobs_before": 3,
+        "missing_facts": [
+          "frequency_payload"
+        ],
+        "publish": false,
+        "qualification": "incomplete_result",
+        "row": "d"
+      },
+      "expected": "incomplete_result_not_published",
+      "name": "fault.r01_incomplete_task_result",
+      "observed": "incomplete_result_not_published",
+      "ok": true,
+      "status": 0
+    },
+    {
+      "detail": {
+        "blocked": [
+          [
+            "freq",
+            "budget_exceeded"
+          ]
+        ],
+        "dispatched": [
+          "relax"
+        ],
+        "jobs_after": 3,
+        "jobs_before": 3,
+        "worst_case_qc": 2
+      },
+      "expected": "qc_rescue_over_limit_blocked",
+      "name": "fault.r02_qc_rescue_over_limit",
+      "observed": "qc_rescue_over_limit_blocked",
+      "ok": true,
+      "status": 0
+    },
+    {
+      "detail": {
+        "error": "envelope step_identities != frozen plan step identities",
+        "jobs_after": 3,
+        "jobs_before": 3
+      },
+      "expected": "attempt_identity_mismatch",
+      "name": "fault.r03_runtime_identity_mismatch",
+      "observed": "attempt_identity_mismatch",
+      "ok": true,
+      "status": 0
+    },
+    {
+      "detail": {
+        "authoritative_written": false,
+        "jobs_after": 3,
+        "jobs_before": 3,
+        "refused": "fenced commit refused: execution right lost: owner moved on",
+        "staged_present": true
+      },
+      "expected": "lost_right_write_refused",
+      "name": "fault.r04_lost_right_intermediate_write",
+      "observed": "lost_right_write_refused",
+      "ok": true,
+      "status": 0
+    },
+    {
+      "detail": {
+        "current_attempt_binding": 2,
+        "first_applied": true,
+        "jobs_after": 3,
+        "jobs_before": 3,
+        "replay_duplicate": true,
+        "usage_attempts": [
+          1
+        ]
+      },
+      "expected": "historical_attempt_usage_settled_once",
+      "name": "fault.r05_historical_attempt_usage",
+      "observed": "historical_attempt_usage_settled_once",
+      "ok": true,
+      "status": 0
+    },
+    {
+      "detail": {
+        "admitted": true,
+        "claim_id": "plan|eac04e7b-fa5a-4074-a379-1174087d0707|res-dcf760e391c82720be6d4bbd|ses-8266e6f1d20009b433a8e9c4|2|1",
+        "jobs_after": 3,
+        "jobs_before": 3,
+        "model_receipt_id": "modelrcpt|eac04e7b-fa5a-4074-a379-1174087d0707|res-dcf760e391c82720be6d4bbd|ses-8266e6f1d20009b433a8e9c4|2|1|sha256:9cc840f79bd3420bcd8928df34afa96c373586ace52d23f670f756cf63f636e5",
+        "model_request_capability": "recorded-only",
+        "projection_consumed": {
+          "attempt": 0,
+          "bsub": 0,
+          "model_request": 1,
+          "qc_invocation": 0,
+          "recipe_step": 0,
+          "task_ref": 0
+        },
+        "replay_detail": "",
+        "replay_same_reservation": true,
+        "reservation_names_a_job": false
+      },
+      "expected": "planning_claim_without_taskref_is_durable",
+      "name": "fault.r06_planning_quota_without_taskref",
+      "observed": "planning_claim_without_taskref_is_durable",
+      "ok": true,
+      "status": 0
+    },
+    {
+      "detail": {
+        "current_key_prefix": "prep_",
+        "jobs_after": 3,
+        "jobs_before": 3,
+        "keys_differ": true,
+        "legacy_key_prefix": "op_",
+        "legacy_replay": "created",
+        "legacy_replay_detail": "takeover",
+        "legacy_v1_key_differs": true,
+        "live_row_key": "prep_0033df536e38454b210165e1bf70f4b6",
+        "live_row_key_is_v2": true,
+        "live_row_reproduces_v2": true,
+        "unverifiable": "conflict",
+        "unverifiable_task": null
+      },
+      "expected": "legacy_key_and_row_reconciled",
+      "name": "fault.r07_legacy_key_and_data_row",
+      "observed": "legacy_key_and_row_reconciled",
+      "ok": true,
+      "status": 0
+    },
+    {
+      "detail": {
+        "approval_state": "approved",
+        "artifact_digest": "sha256:227df18302bb1a4b1e4d44f5873b0946c0c275830f69d1da1ae35cd20f31fbf7",
+        "injection_in_record": false,
+        "jobs_after": 3,
+        "jobs_before": 3
+      },
+      "expected": "malicious_artifact_cannot_authorize",
+      "name": "fault.r08_malicious_artifact_and_receipt",
+      "observed": "malicious_artifact_cannot_authorize",
+      "ok": true,
+      "status": 0
+    },
+    {
+      "detail": {
+        "detail": {
+          "detail": {
+            "code": "access_denied",
+            "message": "the approval was revoked",
+            "params": {
+              "rule": "approval_revoked"
+            },
+            "retryable": false
+          }
+        },
+        "jobs_after": 3,
+        "jobs_before": 3
+      },
+      "expected": "approval_revoked",
+      "name": "fault.revoked_approval",
+      "observed": "approval_revoked",
+      "ok": true,
+      "status": 403
+    }
+  ],
+  "evidence_kind": "fixture",
+  "generated_at": "2026-10-27T13:15:30Z",
+  "passed": 19,
+  "schema": "acp2.m4-01.fault-matrix.v1",
+  "total": 19
+}

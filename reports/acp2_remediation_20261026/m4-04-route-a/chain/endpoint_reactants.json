@@ -1,0 +1,245 @@
+{
+  "adr_step_index": 7,
+  "adr_task_kind": "singlepoint",
+  "attempt": 1,
+  "bounded_alternative": null,
+  "complete": true,
+  "direction_label_is_not_trusted": true,
+  "duration_seconds": 8.16,
+  "entry": "bounded_recipe_envelope",
+  "error": null,
+  "executed_task_kind": "singlepoint",
+  "irc_direction_label": "forward",
+  "level": {
+    "basis": "def2-mTZVPP",
+    "charge": 0,
+    "method": "r2SCAN-3c",
+    "multiplicity": 1
+  },
+  "native_files": [
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/endpoint_reactants/WORK/00_RUNTIME/frozen/frozen_group.json",
+      "path": "WORK/00_RUNTIME/frozen/frozen_group.json",
+      "sha256": "dd9df58284facf3a50032de4b36c1f2edd0c0321bf0ebf9e41418053722c2e97",
+      "size_bytes": 771
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/endpoint_reactants/WORK/00_RUNTIME/frozen/envelope.json",
+      "path": "WORK/00_RUNTIME/frozen/envelope.json",
+      "sha256": "f355d62b1432543929c16a87ccf3c869564a5931cb32a2f532a33710c6163e4a",
+      "size_bytes": 1406
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/endpoint_reactants/WORK/00_RUNTIME/steps/endpoint_reactants/publication.json",
+      "path": "WORK/00_RUNTIME/steps/endpoint_reactants/publication.json",
+      "sha256": "61eda8f2d5c3edeb8dfc09864c049a396c2887c75fe3660dfd14ebf5c92338ee",
+      "size_bytes": 574
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/endpoint_reactants/WORK/00_RUNTIME/steps/endpoint_reactants/step_result.json",
+      "path": "WORK/00_RUNTIME/steps/endpoint_reactants/step_result.json",
+      "sha256": "e4afb1ab05f97a3f22617fc386d386f960714feed7477ef72c2560b4ae4c8d1c",
+      "size_bytes": 5686
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/endpoint_reactants/execution_receipt.json",
+      "path": "execution_receipt.json",
+      "sha256": "6640edbe1e06e08b2927fca191d31c3ea4b84c82acac191cc76d38a0d3c4ad22",
+      "size_bytes": 1641
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/endpoint_reactants/input.xyz",
+      "path": "input.xyz",
+      "sha256": "0ca077140810611e4b425d7108f8c8cd956e9ba3b702945ee3fc0b0b2736f457",
+      "size_bytes": 888
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/endpoint_reactants/WORK/00_RUNTIME/frozen/binding.json",
+      "path": "WORK/00_RUNTIME/frozen/binding.json",
+      "sha256": "341e220027ac8132f1c3327477f7db9b31105dd566813e92aa0ef7ffe225b6e6",
+      "size_bytes": 402
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/endpoint_reactants/WORK/00_RUNTIME/frozen/plan.json",
+      "path": "WORK/00_RUNTIME/frozen/plan.json",
+      "sha256": "893dc472372388acf50100fd8a5a6dc26f9b68f3fc650c4fe3e0173322f83464",
+      "size_bytes": 5108
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/endpoint_reactants/WORK/00_RUNTIME/quota/quota_reservation.json",
+      "path": "WORK/00_RUNTIME/quota/quota_reservation.json",
+      "sha256": "3327edb82ca7df804e62b142993dbc8cc0c0f76bf1e4f4d21ff2096bc6c01888",
+      "size_bytes": 420
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/endpoint_reactants/WORK/00_RUNTIME/step_dag_state.json",
+      "path": "WORK/00_RUNTIME/step_dag_state.json",
+      "sha256": "a4c04238fe17629ee00b944834e8af895f628c70c833931ab6f7c31d1d386d93",
+      "size_bytes": 7420
+    }
+  ],
+  "products": [
+    {
+      "digest": "sha256:cbe9570653123017d02f9a45199b564c256f053baa569c75e1ef328767b64450",
+      "path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/endpoint_reactants/endpoint_reactants/sp.inp",
+      "product_kind": "output",
+      "size_bytes": 876
+    }
+  ],
+  "qualification": "complete",
+  "receipt": {
+    "chain_digest": "sha256:fcf27d8520958c3c8fd0f58979c5e0ef64158cf590afbf083525ea305c5ec2b4",
+    "frozen_group": {
+      "attempt": 1,
+      "job_id": "20261028_941_endpoint_reactants",
+      "member_digests": {
+        "binding.json": "341e220027ac8132f1c3327477f7db9b31105dd566813e92aa0ef7ffe225b6e6",
+        "envelope.json": "f355d62b1432543929c16a87ccf3c869564a5931cb32a2f532a33710c6163e4a",
+        "plan.json": "893dc472372388acf50100fd8a5a6dc26f9b68f3fc650c4fe3e0173322f83464"
+      },
+      "release_id": "2d1ab37a0f988933",
+      "submission_id": "sub_0f3bd846d13452f3",
+      "workflow": "BoundedRecipe"
+    },
+    "state": "completed",
+    "submission_id": "sub_0f3bd846d13452f3",
+    "task_result_digest": null
+  },
+  "release_digest": "813583bdcaae20ef900a99180f433b34a7dfa730fb47c1efea5c9435919a061b",
+  "release_id": "2d1ab37a0f988933",
+  "schema": "acp2.m4-04.step.v1",
+  "status": "completed",
+  "step_id": "endpoint_reactants",
+  "task_ref": "20261028_941_endpoint_reactants",
+  "task_result": {
+    "artifacts": [
+      {
+        "checksum": "sha256:cbe9570653123017d02f9a45199b564c256f053baa569c75e1ef328767b64450",
+        "path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/endpoint_reactants/endpoint_reactants/sp.inp",
+        "source": "orca",
+        "type": "output"
+      },
+      {
+        "checksum": "sha256:7d407bd7840db2c7fd889fe521e41337154e7c6e8198faff7d87ebe514f9fd86",
+        "path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/endpoint_reactants/endpoint_reactants/sp.out",
+        "source": "orca",
+        "type": "log"
+      }
+    ],
+    "complete": true,
+    "coordinates": [
+      [
+        1.1795943939,
+        0.6505196449,
+        0.3223940612
+      ],
+      [
+        0.0278786327,
+        1.3189902376,
+        -0.3715210491
+      ],
+      [
+        -1.1494923593,
+        0.6907568481,
+        -0.3291677309
+      ],
+      [
+        -1.1960045176,
+        -0.6162280066,
+        0.408675597
+      ],
+      [
+        0.9891974077,
+        0.6243729749,
+        1.4065968623
+      ],
+      [
+        2.1219982667,
+        1.1876122448,
+        0.1837712325
+      ],
+      [
+        0.17477716,
+        2.2413271446,
+        -0.9281533337
+      ],
+      [
+        -2.0276688644,
+        1.0663365968,
+        -0.8486325237
+      ],
+      [
+        -2.172519508,
+        -1.1033989008,
+        0.3387491388
+      ],
+      [
+        -1.0090881095,
+        -0.4389080714,
+        1.4791931732
+      ],
+      [
+        -0.0763730925,
+        -1.5364886452,
+        -0.1330859626
+      ],
+      [
+        1.2898519611,
+        -0.8062440039,
+        -0.1867477632
+      ],
+      [
+        -0.0102404327,
+        -2.4388674262,
+        0.4849705492
+      ],
+      [
+        -0.3653292598,
+        -1.8611633107,
+        -1.138656865
+      ],
+      [
+        1.6549817447,
+        -0.7736008935,
+        -1.2191014718
+      ],
+      [
+        2.0423458875,
+        -1.3457067343,
+        0.3992442821
+      ]
+    ],
+    "energy_hartree": -234.562005492845,
+    "errors": [],
+    "frequencies": [],
+    "metadata": {},
+    "payload": {},
+    "provenance": {
+      "backend": "orca",
+      "input_signature": "/ACPServer/acp2-runs/remediation/m4-04-route-a-reflevel/da/endpoint_reactants/input.xyz",
+      "method": "r2SCAN-3c",
+      "version": "unknown"
+    },
+    "schema_version": 1,
+    "status": "completed",
+    "symbols": [
+      "C",
+      "C",
+      "C",
+      "C",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H",
+      "C",
+      "C",
+      "H",
+      "H",
+      "H",
+      "H"
+    ],
+    "task": "singlepoint"
+  }
+}

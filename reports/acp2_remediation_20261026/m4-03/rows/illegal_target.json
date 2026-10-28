@@ -1,0 +1,52 @@
+{
+  "data": {
+    "duration_s": 4.88,
+    "new_lsf_jobs": [],
+    "unknown_node": {
+      "http": 422,
+      "payload": {
+        "detail": {
+          "code": "input_invalid",
+          "message": "target_node 'no-such-node' is not a configured node",
+          "params": {
+            "field": "target_node",
+            "local_missing_software": [],
+            "missing_software": [],
+            "missing_tags": [],
+            "remote_nodes_configured": null,
+            "rule": "unknown_target_node"
+          },
+          "retryable": false
+        }
+      }
+    },
+    "unsatisfied_node_tags": {
+      "http": 422,
+      "payload": {
+        "detail": {
+          "code": "input_invalid",
+          "message": "target_node 'lsf-local' cannot run the job: missing tags: no-such-tag",
+          "params": {
+            "field": "node_tags",
+            "local_missing_software": [],
+            "missing_software": [],
+            "missing_tags": [
+              "no-such-tag"
+            ],
+            "remote_nodes_configured": null,
+            "rule": "target_node_incapable"
+          },
+          "retryable": false
+        }
+      }
+    }
+  },
+  "detail": "unknown node and unsatisfied node_tags refused at the entry with no bsub",
+  "evidence": [
+    "native/illegal-target.json"
+  ],
+  "name": "illegal_target",
+  "recorded_at": "2026-10-27T17:15:37.068201Z",
+  "schema": "acp2.m403.acceptance.v1",
+  "status": "PASS"
+}

@@ -1,0 +1,22 @@
+{
+  "attempt": 1,
+  "chain_digest": "",
+  "data_bindings": [],
+  "errors": [],
+  "evidence_digests": {
+    "task_result_digest": "sha256:7b705df0e9de7d95c559d4b0a5c9ec2e07d8ed158b0c1f04a73b7feda9efc6df"
+  },
+  "fencing_token": "",
+  "job_id": "m406b-thermo-crossdomain",
+  "owner": "m406b-acceptance",
+  "plan_identity": "",
+  "receipt_version": 1,
+  "release_digest": "sha256:a9fc2614b92fed53a66ea43933ce92ffbfc09179a0d93d28d3a2d1bea383b8ea",
+  "release_id": "a9fc2614b92fed53",
+  "result_digest": "sha256:43c227ab84e3e9e18731ee253fb47c0e1f9782e8d5ee76e60a841ccb8b29dc18",
+  "state": "completed",
+  "step_execution_chain": [],
+  "step_identities": [],
+  "submission_id": "m406b-m406b-thermo-crossdomain",
+  "written_at": "2026-10-28T00:55:49.987631Z"
+}

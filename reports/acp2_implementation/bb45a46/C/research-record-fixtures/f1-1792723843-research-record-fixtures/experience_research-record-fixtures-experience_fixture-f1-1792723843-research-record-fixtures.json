@@ -1,0 +1,198 @@
+{
+  "artifacts": [
+    {
+      "path": "research-source-scan.json",
+      "sha256": "f724493c8e42c2fdb1e3a801b032e74b8cefa3d0b0a8f3bc6154483a760f2c23",
+      "size_bytes": 455
+    },
+    {
+      "path": "research-record-matrix.json",
+      "sha256": "08b748ca96980466ad8a8257e5ef23af7bedb96f9d7c67fb2adc471fdbf44ecc",
+      "size_bytes": 1285
+    },
+    {
+      "path": "research-memory-matrix.json",
+      "sha256": "f5b1ab0257b0bae47069a79f5e7293081caf23cb5d33ccd80354ea6300380e99",
+      "size_bytes": 985
+    },
+    {
+      "path": "rph-test.log",
+      "sha256": "35370a41b012e3b52b03c0ce611689cbf2291bb88bd17959c8c0b1b25de4915e",
+      "size_bytes": 15086
+    },
+    {
+      "path": "rph-gates.log",
+      "sha256": "82ce4941226f6720b64bc4c44cafa668da28dd3ce1736e47062dd90223cb87ec",
+      "size_bytes": 16533
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "evidence_kind=fixture",
+      "name": "research.evidence_kind_fixture",
+      "status": "PASS"
+    },
+    {
+      "detail": "[]",
+      "name": "research.source_has_no_local_db_file_or_shell",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 $ tsc -b",
+      "name": "research.build",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 ide-effect free\n  ---\n  duration_ms: 0.532253\n  type: 'test'\n  ...\n# Subtest: cli parser rejects unknown arguments and missing profile values\nok 80 - cli parser rejects unknown arguments and missing profile values\n  ---\n  duration_ms: 0.429134\n  type: 'test'\n  ...\n1..80\n# tests 80\n# suites 0\n# pass 80\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 169.287572\n$ node scripts/run-tests.mjs",
+      "name": "research.test",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 $ node scripts/check-boundaries.mjs && tsc -b --pretty false",
+      "name": "research.check",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 scanned files: 17\n  research: 6 file(s), imports -> research\n  bridge: 1 file(s), imports -> bridge, research\n  dsh-bundle: 9 file(s), imports -> dsh-bundle, bridge\n  cli: 1 file(s), imports -> cli, dsh-bundle\n  forbidden: child_process, spawn/exec/execFile, ssh2, node:net (bridge/research),\n             DSH private source paths, platform store imports, wrong-direction imports\n\nBOUNDARY CHECK PASS",
+      "name": "research.boundaries",
+      "status": "PASS"
+    },
+    {
+      "detail": "research_cases=16 minimum=10",
+      "name": "research.record_cases_ge_10",
+      "status": "PASS"
+    },
+    {
+      "detail": "tests=80 research_cases=16 failures=0",
+      "name": "research.workspace_tests_green",
+      "status": "PASS"
+    },
+    {
+      "detail": "missing=[] covered=['approval_binding', 'chat_not_authority', 'digest_sensitivity', 'digest_stability', 'duplicate_round', 'event_idempotency', 'p2_allowlist', 'project_mismatch', 'revision_conflict', 'round_idempotency', 'stale_reference']",
+      "name": "research.cas_and_idempotency_matrix_present",
+      "status": "PASS"
+    },
+    {
+      "detail": "memory_cases=8 minimum=6",
+      "name": "memory.cases_ge_6",
+      "status": "PASS"
+    },
+    {
+      "detail": "executed_memory_cases=8 minimum=6",
+      "name": "memory.tests_executed",
+      "status": "PASS"
+    },
+    {
+      "detail": "missing=[] covered=['audit_fields', 'cross_project_denied', 'model_assumption', 'prompt_archive', 'revision_filter', 'same_project_hit']",
+      "name": "memory.cross_project_denied_and_audit_present",
+      "status": "PASS"
+    },
+    {
+      "detail": "NOT_VERIFIED(b18a_handoff): B18a versioned resource endpoint is not delivered; fixture evidence only",
+      "name": "record.live_resource_create",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "NOT_VERIFIED(b18a_handoff): B18a versioned resource endpoint is not delivered; fixture evidence only",
+      "name": "record.live_read_revision",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "NOT_VERIFIED(b18a_handoff): B18a versioned resource endpoint is not delivered; fixture evidence only",
+      "name": "record.live_cas_conflict",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "NOT_VERIFIED(b18a_handoff): B18a versioned resource endpoint is not delivered; fixture evidence only",
+      "name": "record.live_project_isolation",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "NOT_VERIFIED(b18a_handoff): B18a versioned resource endpoint is not delivered; fixture evidence only",
+      "name": "proposal.live_resource_create",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
+    "harness_revision": "9c2523d35a884272807c6857794886eeedd43e728da0d695fd2a26244ddaa433",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "39d4aeb20451c984e20d27e12270a15070adce12",
+  "command": [
+    "/ACPServer/acp2-development/venvs/c/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "research-record-fixtures",
+    "--timeout",
+    "300",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/research-record-fixtures/f1-1792723843-research-record-fixtures"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/acp2-development/C",
+  "evidence_kind": "fixture",
+  "exit_code": 0,
+  "extensions": {
+    "experience.harness_contract_revision": "9c2523d35a884272807c6857794886eeedd43e728da0d695fd2a26244ddaa433",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+    "experience.mode": "fixture",
+    "experience.product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+    "experience.research_memory": {
+      "audit_fields": [
+        "actor",
+        "revision",
+        "before",
+        "after"
+      ],
+      "cross_project_denied": true,
+      "evidence_kind": "fixture",
+      "executed_memory_cases": 8,
+      "live_b18a_rows": {
+        "memory.live_authorized_retrieval": "NOT_VERIFIED(b18a_handoff)",
+        "memory.live_cross_project_denial": "NOT_VERIFIED(b18a_handoff)"
+      },
+      "memory_cases": 8,
+      "model_assumption_into_evidence": false,
+      "prompt_or_cot_archived": false,
+      "source_module": "rph/packages/research/src/memory.ts",
+      "test_source": "rph/test/research-memory.test.ts"
+    },
+    "experience.research_record": {
+      "evidence_kind": "fixture",
+      "fixture_adapter": "rph/test/research-fixture-client.ts",
+      "live_b18a_rows": {
+        "proposal.live_resource_create": "NOT_VERIFIED(b18a_handoff)",
+        "record.live_cas_conflict": "NOT_VERIFIED(b18a_handoff)",
+        "record.live_project_isolation": "NOT_VERIFIED(b18a_handoff)",
+        "record.live_read_revision": "NOT_VERIFIED(b18a_handoff)",
+        "record.live_resource_create": "NOT_VERIFIED(b18a_handoff)"
+      },
+      "source_module": "rph/packages/research/src/store.ts"
+    },
+    "experience.run_id": "f1-1792723843-research-record-fixtures",
+    "experience.scenario_key": "research-record-fixtures",
+    "experience.subcase": null,
+    "experience.test_revision": "39d4aeb20451c984e20d27e12270a15070adce12"
+  },
+  "finished_at": "2026-10-23T02:50:46Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:fixture",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "f1-1792723843-research-record-fixtures",
+  "scenario": "experience:research-record-fixtures",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-23T02:50:43Z",
+  "submission_id": null,
+  "usage": null
+}

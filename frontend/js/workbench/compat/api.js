@@ -39,6 +39,12 @@ if (window.ACPClient && window.ACPClient.systemEndpoints) {
 }
 if (window.ACPClient && window.ACPClient.taskView) ACPClient.taskView.init({ v1: api, v2: apiV2 });
 if (window.ACPClient && window.ACPClient.research) ACPClient.research.init({ v2: apiV2 });
+// M3-05b: research write commands share the SAME v1/v2 chokepoints as the read
+// query. Each command carries an explicit revoke/decide/submit; do not add a
+// second transport or a direct fetch.
+if (window.ACPClient && window.ACPClient.researchCommands) {
+  ACPClient.researchCommands.init({ v1: api, v2: apiV2 });
+}
 if (window.ACPClient && window.ACPClient.eventInvalidation) ACPClient.eventInvalidation.init({ v1: api, v2: apiV2 });
 if (window.ACPClient && window.ACPClient.jobDetail) {
   // R1: single write point for the legacy-endpoint pin — the client decides

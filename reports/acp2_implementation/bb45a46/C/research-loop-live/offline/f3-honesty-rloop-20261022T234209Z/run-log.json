@@ -1,0 +1,785 @@
+{
+  "schema": "acp2.experience.research-loop.offline-proof.v1",
+  "run_id": "f3-honesty-rloop-20261022T234209Z",
+  "cases": [
+    {
+      "case": "happy_path",
+      "stop_reason": "accepted",
+      "status": "completed",
+      "submits": 1,
+      "rounds_completed": 1,
+      "model_invocations": 5,
+      "wait_invocations": 1,
+      "duplicate_terminal_events": 0,
+      "task_refs": [
+        {
+          "project_id": "proj-diels-alder",
+          "job_id": "20261023_001_Optimize",
+          "attempt": 1,
+          "release_id": "release-1"
+        }
+      ],
+      "report_ids": [
+        "report-r0"
+      ],
+      "phases": [
+        {
+          "phase": "understand",
+          "round": 0,
+          "detail": "normalize the user question"
+        },
+        {
+          "phase": "hypothesize",
+          "round": 0,
+          "detail": "hypothesis for round 0"
+        },
+        {
+          "phase": "critique",
+          "round": 0,
+          "detail": "critique the hypothesis and prior evidence"
+        },
+        {
+          "phase": "plan",
+          "round": 0,
+          "detail": "materialize the plan draft"
+        },
+        {
+          "phase": "approve",
+          "round": 0,
+          "detail": "scientific preflight and platform admission"
+        },
+        {
+          "phase": "wait",
+          "round": 0,
+          "detail": "bounded platform events; no model call"
+        },
+        {
+          "phase": "evaluate",
+          "round": 0,
+          "detail": "advise on the real EvidenceReport (advice only)"
+        },
+        {
+          "phase": "stop",
+          "round": 1,
+          "detail": "accepted"
+        }
+      ],
+      "ports": {
+        "submits": 1,
+        "preflights": 1,
+        "admissions": 1,
+        "approvals": 1,
+        "waits": 1,
+        "persisted": [
+          {
+            "project_id": "proj-diels-alder",
+            "job_id": "20261023_001_Optimize",
+            "attempt": 1,
+            "release_id": "release-1"
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "name": "happy_path.terminal_stop_phase",
+          "status": "PASS",
+          "detail": "stop"
+        },
+        {
+          "name": "happy_path.stop_reason",
+          "status": "PASS",
+          "detail": "expected=accepted actual=accepted"
+        },
+        {
+          "name": "happy_path.submits_one",
+          "status": "PASS",
+          "detail": "1"
+        },
+        {
+          "name": "happy_path.phase_order",
+          "status": "PASS",
+          "detail": "understand,hypothesize,critique,plan,approve,wait,evaluate,stop"
+        },
+        {
+          "name": "happy_path.task_ref_persisted",
+          "status": "PASS",
+          "detail": "1"
+        }
+      ]
+    },
+    {
+      "case": "no_evidence",
+      "stop_reason": "no_evidence",
+      "status": "stopped",
+      "submits": 1,
+      "rounds_completed": 0,
+      "model_invocations": 5,
+      "wait_invocations": 1,
+      "duplicate_terminal_events": 0,
+      "task_refs": [
+        {
+          "project_id": "proj-diels-alder",
+          "job_id": "20261023_001_Optimize",
+          "attempt": 1,
+          "release_id": "release-1"
+        }
+      ],
+      "report_ids": [
+        "report-r0"
+      ],
+      "phases": [
+        {
+          "phase": "understand",
+          "round": 0,
+          "detail": "normalize the user question"
+        },
+        {
+          "phase": "hypothesize",
+          "round": 0,
+          "detail": "hypothesis for round 0"
+        },
+        {
+          "phase": "critique",
+          "round": 0,
+          "detail": "critique the hypothesis and prior evidence"
+        },
+        {
+          "phase": "plan",
+          "round": 0,
+          "detail": "materialize the plan draft"
+        },
+        {
+          "phase": "approve",
+          "round": 0,
+          "detail": "scientific preflight and platform admission"
+        },
+        {
+          "phase": "wait",
+          "round": 0,
+          "detail": "bounded platform events; no model call"
+        },
+        {
+          "phase": "evaluate",
+          "round": 0,
+          "detail": "advise on the real EvidenceReport (advice only)"
+        },
+        {
+          "phase": "stop",
+          "round": 0,
+          "detail": "no_evidence"
+        }
+      ],
+      "ports": {
+        "submits": 1,
+        "preflights": 1,
+        "admissions": 1,
+        "approvals": 1,
+        "waits": 1,
+        "persisted": [
+          {
+            "project_id": "proj-diels-alder",
+            "job_id": "20261023_001_Optimize",
+            "attempt": 1,
+            "release_id": "release-1"
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "name": "no_evidence.terminal_stop_phase",
+          "status": "PASS",
+          "detail": "stop"
+        },
+        {
+          "name": "no_evidence.stop_reason",
+          "status": "PASS",
+          "detail": "expected=no_evidence actual=no_evidence"
+        },
+        {
+          "name": "no_evidence.no_second_submit",
+          "status": "PASS",
+          "detail": "1"
+        },
+        {
+          "name": "no_evidence.no_second_round",
+          "status": "PASS",
+          "detail": "1"
+        }
+      ]
+    },
+    {
+      "case": "duplicate_terminal",
+      "stop_reason": "duplicate_terminal",
+      "status": "stopped",
+      "submits": 2,
+      "rounds_completed": 1,
+      "model_invocations": 8,
+      "wait_invocations": 2,
+      "duplicate_terminal_events": 1,
+      "task_refs": [
+        {
+          "project_id": "proj-diels-alder",
+          "job_id": "20261023_001_Optimize",
+          "attempt": 1,
+          "release_id": "release-1"
+        },
+        {
+          "project_id": "proj-diels-alder",
+          "job_id": "20261023_001_Optimize",
+          "attempt": 2,
+          "release_id": "release-1"
+        }
+      ],
+      "report_ids": [
+        "report-r0"
+      ],
+      "phases": [
+        {
+          "phase": "understand",
+          "round": 0,
+          "detail": "normalize the user question"
+        },
+        {
+          "phase": "hypothesize",
+          "round": 0,
+          "detail": "hypothesis for round 0"
+        },
+        {
+          "phase": "critique",
+          "round": 0,
+          "detail": "critique the hypothesis and prior evidence"
+        },
+        {
+          "phase": "plan",
+          "round": 0,
+          "detail": "materialize the plan draft"
+        },
+        {
+          "phase": "approve",
+          "round": 0,
+          "detail": "scientific preflight and platform admission"
+        },
+        {
+          "phase": "wait",
+          "round": 0,
+          "detail": "bounded platform events; no model call"
+        },
+        {
+          "phase": "evaluate",
+          "round": 0,
+          "detail": "advise on the real EvidenceReport (advice only)"
+        },
+        {
+          "phase": "revise",
+          "round": 0,
+          "detail": "report requested another round"
+        },
+        {
+          "phase": "hypothesize",
+          "round": 1,
+          "detail": "hypothesis for round 1"
+        },
+        {
+          "phase": "critique",
+          "round": 1,
+          "detail": "critique the hypothesis and prior evidence"
+        },
+        {
+          "phase": "plan",
+          "round": 1,
+          "detail": "materialize the plan draft"
+        },
+        {
+          "phase": "approve",
+          "round": 1,
+          "detail": "scientific preflight and platform admission"
+        },
+        {
+          "phase": "wait",
+          "round": 1,
+          "detail": "bounded platform events; no model call"
+        },
+        {
+          "phase": "stop",
+          "round": 1,
+          "detail": "duplicate_terminal"
+        }
+      ],
+      "ports": {
+        "submits": 2,
+        "preflights": 2,
+        "admissions": 2,
+        "approvals": 2,
+        "waits": 2,
+        "persisted": [
+          {
+            "project_id": "proj-diels-alder",
+            "job_id": "20261023_001_Optimize",
+            "attempt": 1,
+            "release_id": "release-1"
+          },
+          {
+            "project_id": "proj-diels-alder",
+            "job_id": "20261023_001_Optimize",
+            "attempt": 2,
+            "release_id": "release-1"
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "name": "duplicate_terminal.terminal_stop_phase",
+          "status": "PASS",
+          "detail": "stop"
+        },
+        {
+          "name": "duplicate_terminal.stop_reason",
+          "status": "PASS",
+          "detail": "expected=duplicate_terminal actual=duplicate_terminal"
+        },
+        {
+          "name": "duplicate_terminal.no_extra_submit",
+          "status": "PASS",
+          "detail": "2"
+        },
+        {
+          "name": "duplicate_terminal.duplicate_counted",
+          "status": "PASS",
+          "detail": "1"
+        }
+      ]
+    },
+    {
+      "case": "round_cap",
+      "stop_reason": "round_cap",
+      "status": "stopped",
+      "submits": 2,
+      "rounds_completed": 2,
+      "model_invocations": 9,
+      "wait_invocations": 2,
+      "duplicate_terminal_events": 0,
+      "task_refs": [
+        {
+          "project_id": "proj-diels-alder",
+          "job_id": "20261023_001_Optimize",
+          "attempt": 1,
+          "release_id": "release-1"
+        },
+        {
+          "project_id": "proj-diels-alder",
+          "job_id": "20261023_001_Optimize",
+          "attempt": 2,
+          "release_id": "release-1"
+        }
+      ],
+      "report_ids": [
+        "report-r0",
+        "report-r1"
+      ],
+      "phases": [
+        {
+          "phase": "understand",
+          "round": 0,
+          "detail": "normalize the user question"
+        },
+        {
+          "phase": "hypothesize",
+          "round": 0,
+          "detail": "hypothesis for round 0"
+        },
+        {
+          "phase": "critique",
+          "round": 0,
+          "detail": "critique the hypothesis and prior evidence"
+        },
+        {
+          "phase": "plan",
+          "round": 0,
+          "detail": "materialize the plan draft"
+        },
+        {
+          "phase": "approve",
+          "round": 0,
+          "detail": "scientific preflight and platform admission"
+        },
+        {
+          "phase": "wait",
+          "round": 0,
+          "detail": "bounded platform events; no model call"
+        },
+        {
+          "phase": "evaluate",
+          "round": 0,
+          "detail": "advise on the real EvidenceReport (advice only)"
+        },
+        {
+          "phase": "revise",
+          "round": 0,
+          "detail": "report requested another round"
+        },
+        {
+          "phase": "hypothesize",
+          "round": 1,
+          "detail": "hypothesis for round 1"
+        },
+        {
+          "phase": "critique",
+          "round": 1,
+          "detail": "critique the hypothesis and prior evidence"
+        },
+        {
+          "phase": "plan",
+          "round": 1,
+          "detail": "materialize the plan draft"
+        },
+        {
+          "phase": "approve",
+          "round": 1,
+          "detail": "scientific preflight and platform admission"
+        },
+        {
+          "phase": "wait",
+          "round": 1,
+          "detail": "bounded platform events; no model call"
+        },
+        {
+          "phase": "evaluate",
+          "round": 1,
+          "detail": "advise on the real EvidenceReport (advice only)"
+        },
+        {
+          "phase": "revise",
+          "round": 1,
+          "detail": "report requested another round"
+        },
+        {
+          "phase": "stop",
+          "round": 2,
+          "detail": "round_cap"
+        }
+      ],
+      "ports": {
+        "submits": 2,
+        "preflights": 2,
+        "admissions": 2,
+        "approvals": 2,
+        "waits": 2,
+        "persisted": [
+          {
+            "project_id": "proj-diels-alder",
+            "job_id": "20261023_001_Optimize",
+            "attempt": 1,
+            "release_id": "release-1"
+          },
+          {
+            "project_id": "proj-diels-alder",
+            "job_id": "20261023_001_Optimize",
+            "attempt": 2,
+            "release_id": "release-1"
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "name": "round_cap.terminal_stop_phase",
+          "status": "PASS",
+          "detail": "stop"
+        },
+        {
+          "name": "round_cap.stop_reason",
+          "status": "PASS",
+          "detail": "expected=round_cap actual=round_cap"
+        },
+        {
+          "name": "round_cap.cap_submits",
+          "status": "PASS",
+          "detail": "2"
+        },
+        {
+          "name": "round_cap.cap_rounds",
+          "status": "PASS",
+          "detail": "2"
+        }
+      ]
+    },
+    {
+      "case": "preflight_failed",
+      "stop_reason": "preflight_failed",
+      "status": "stopped",
+      "submits": 0,
+      "rounds_completed": 0,
+      "model_invocations": 4,
+      "wait_invocations": 0,
+      "duplicate_terminal_events": 0,
+      "task_refs": [],
+      "report_ids": [],
+      "phases": [
+        {
+          "phase": "understand",
+          "round": 0,
+          "detail": "normalize the user question"
+        },
+        {
+          "phase": "hypothesize",
+          "round": 0,
+          "detail": "hypothesis for round 0"
+        },
+        {
+          "phase": "critique",
+          "round": 0,
+          "detail": "critique the hypothesis and prior evidence"
+        },
+        {
+          "phase": "plan",
+          "round": 0,
+          "detail": "materialize the plan draft"
+        },
+        {
+          "phase": "approve",
+          "round": 0,
+          "detail": "scientific preflight and platform admission"
+        },
+        {
+          "phase": "stop",
+          "round": 0,
+          "detail": "preflight_failed"
+        }
+      ],
+      "ports": {
+        "submits": 0,
+        "preflights": 1,
+        "admissions": 0,
+        "approvals": 0,
+        "waits": 0,
+        "persisted": []
+      },
+      "assertions": [
+        {
+          "name": "preflight_failed.terminal_stop_phase",
+          "status": "PASS",
+          "detail": "stop"
+        },
+        {
+          "name": "preflight_failed.stop_reason",
+          "status": "PASS",
+          "detail": "expected=preflight_failed actual=preflight_failed"
+        },
+        {
+          "name": "preflight_failed.no_submit",
+          "status": "PASS",
+          "detail": "0"
+        },
+        {
+          "name": "preflight_failed.no_admission",
+          "status": "PASS",
+          "detail": "0"
+        }
+      ]
+    },
+    {
+      "case": "advice_cannot_override_refuted",
+      "stop_reason": "refuted",
+      "status": "stopped",
+      "submits": 1,
+      "rounds_completed": 0,
+      "model_invocations": 5,
+      "wait_invocations": 1,
+      "duplicate_terminal_events": 0,
+      "task_refs": [
+        {
+          "project_id": "proj-diels-alder",
+          "job_id": "20261023_001_Optimize",
+          "attempt": 1,
+          "release_id": "release-1"
+        }
+      ],
+      "report_ids": [
+        "report-r0"
+      ],
+      "phases": [
+        {
+          "phase": "understand",
+          "round": 0,
+          "detail": "normalize the user question"
+        },
+        {
+          "phase": "hypothesize",
+          "round": 0,
+          "detail": "hypothesis for round 0"
+        },
+        {
+          "phase": "critique",
+          "round": 0,
+          "detail": "critique the hypothesis and prior evidence"
+        },
+        {
+          "phase": "plan",
+          "round": 0,
+          "detail": "materialize the plan draft"
+        },
+        {
+          "phase": "approve",
+          "round": 0,
+          "detail": "scientific preflight and platform admission"
+        },
+        {
+          "phase": "wait",
+          "round": 0,
+          "detail": "bounded platform events; no model call"
+        },
+        {
+          "phase": "evaluate",
+          "round": 0,
+          "detail": "advise on the real EvidenceReport (advice only)"
+        },
+        {
+          "phase": "stop",
+          "round": 0,
+          "detail": "refuted"
+        }
+      ],
+      "ports": {
+        "submits": 1,
+        "preflights": 1,
+        "admissions": 1,
+        "approvals": 1,
+        "waits": 1,
+        "persisted": [
+          {
+            "project_id": "proj-diels-alder",
+            "job_id": "20261023_001_Optimize",
+            "attempt": 1,
+            "release_id": "release-1"
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "name": "advice_cannot_override_refuted.terminal_stop_phase",
+          "status": "PASS",
+          "detail": "stop"
+        },
+        {
+          "name": "advice_cannot_override_refuted.stop_reason",
+          "status": "PASS",
+          "detail": "expected=refuted actual=refuted"
+        },
+        {
+          "name": "advice_cannot_override_refuted.advice_recorded",
+          "status": "PASS",
+          "detail": "continue"
+        },
+        {
+          "name": "advice_cannot_override_refuted.single_submit",
+          "status": "PASS",
+          "detail": "1"
+        }
+      ]
+    },
+    {
+      "case": "wait_never_calls_model",
+      "stop_reason": "accepted",
+      "status": "completed",
+      "submits": 1,
+      "rounds_completed": 1,
+      "model_invocations": 5,
+      "wait_invocations": 1,
+      "duplicate_terminal_events": 0,
+      "task_refs": [
+        {
+          "project_id": "proj-diels-alder",
+          "job_id": "20261023_001_Optimize",
+          "attempt": 1,
+          "release_id": "release-1"
+        }
+      ],
+      "report_ids": [
+        "report-r0"
+      ],
+      "phases": [
+        {
+          "phase": "understand",
+          "round": 0,
+          "detail": "normalize the user question"
+        },
+        {
+          "phase": "hypothesize",
+          "round": 0,
+          "detail": "hypothesis for round 0"
+        },
+        {
+          "phase": "critique",
+          "round": 0,
+          "detail": "critique the hypothesis and prior evidence"
+        },
+        {
+          "phase": "plan",
+          "round": 0,
+          "detail": "materialize the plan draft"
+        },
+        {
+          "phase": "approve",
+          "round": 0,
+          "detail": "scientific preflight and platform admission"
+        },
+        {
+          "phase": "wait",
+          "round": 0,
+          "detail": "bounded platform events; no model call"
+        },
+        {
+          "phase": "evaluate",
+          "round": 0,
+          "detail": "advise on the real EvidenceReport (advice only)"
+        },
+        {
+          "phase": "stop",
+          "round": 1,
+          "detail": "accepted"
+        }
+      ],
+      "ports": {
+        "submits": 1,
+        "preflights": 1,
+        "admissions": 1,
+        "approvals": 1,
+        "waits": 1,
+        "persisted": [
+          {
+            "project_id": "proj-diels-alder",
+            "job_id": "20261023_001_Optimize",
+            "attempt": 1,
+            "release_id": "release-1"
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "name": "wait_never_calls_model.terminal_stop_phase",
+          "status": "PASS",
+          "detail": "stop"
+        },
+        {
+          "name": "wait_never_calls_model.stop_reason",
+          "status": "PASS",
+          "detail": "expected=accepted actual=accepted"
+        },
+        {
+          "name": "wait_never_calls_model.no_skill_during_wait",
+          "status": "PASS",
+          "detail": "0"
+        },
+        {
+          "name": "wait_never_calls_model.model_invocations",
+          "status": "PASS",
+          "detail": "5"
+        },
+        {
+          "name": "wait_never_calls_model.wait_called",
+          "status": "PASS",
+          "detail": "1"
+        }
+      ]
+    }
+  ]
+}

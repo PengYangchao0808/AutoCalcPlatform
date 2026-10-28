@@ -1,0 +1,152 @@
+[
+  {
+    "name": "happy_path.terminal_stop_phase",
+    "status": "PASS",
+    "detail": "stop"
+  },
+  {
+    "name": "happy_path.stop_reason",
+    "status": "PASS",
+    "detail": "expected=accepted actual=accepted"
+  },
+  {
+    "name": "happy_path.submits_one",
+    "status": "PASS",
+    "detail": "1"
+  },
+  {
+    "name": "happy_path.phase_order",
+    "status": "PASS",
+    "detail": "understand,hypothesize,critique,plan,approve,wait,evaluate,stop"
+  },
+  {
+    "name": "happy_path.task_ref_persisted",
+    "status": "PASS",
+    "detail": "1"
+  },
+  {
+    "name": "no_evidence.terminal_stop_phase",
+    "status": "PASS",
+    "detail": "stop"
+  },
+  {
+    "name": "no_evidence.stop_reason",
+    "status": "PASS",
+    "detail": "expected=no_evidence actual=no_evidence"
+  },
+  {
+    "name": "no_evidence.no_second_submit",
+    "status": "PASS",
+    "detail": "1"
+  },
+  {
+    "name": "no_evidence.no_second_round",
+    "status": "PASS",
+    "detail": "1"
+  },
+  {
+    "name": "duplicate_terminal.terminal_stop_phase",
+    "status": "PASS",
+    "detail": "stop"
+  },
+  {
+    "name": "duplicate_terminal.stop_reason",
+    "status": "PASS",
+    "detail": "expected=duplicate_terminal actual=duplicate_terminal"
+  },
+  {
+    "name": "duplicate_terminal.no_extra_submit",
+    "status": "PASS",
+    "detail": "2"
+  },
+  {
+    "name": "duplicate_terminal.duplicate_counted",
+    "status": "PASS",
+    "detail": "1"
+  },
+  {
+    "name": "round_cap.terminal_stop_phase",
+    "status": "PASS",
+    "detail": "stop"
+  },
+  {
+    "name": "round_cap.stop_reason",
+    "status": "PASS",
+    "detail": "expected=round_cap actual=round_cap"
+  },
+  {
+    "name": "round_cap.cap_submits",
+    "status": "PASS",
+    "detail": "2"
+  },
+  {
+    "name": "round_cap.cap_rounds",
+    "status": "PASS",
+    "detail": "2"
+  },
+  {
+    "name": "preflight_failed.terminal_stop_phase",
+    "status": "PASS",
+    "detail": "stop"
+  },
+  {
+    "name": "preflight_failed.stop_reason",
+    "status": "PASS",
+    "detail": "expected=preflight_failed actual=preflight_failed"
+  },
+  {
+    "name": "preflight_failed.no_submit",
+    "status": "PASS",
+    "detail": "0"
+  },
+  {
+    "name": "preflight_failed.no_admission",
+    "status": "PASS",
+    "detail": "0"
+  },
+  {
+    "name": "advice_cannot_override_refuted.terminal_stop_phase",
+    "status": "PASS",
+    "detail": "stop"
+  },
+  {
+    "name": "advice_cannot_override_refuted.stop_reason",
+    "status": "PASS",
+    "detail": "expected=refuted actual=refuted"
+  },
+  {
+    "name": "advice_cannot_override_refuted.advice_recorded",
+    "status": "PASS",
+    "detail": "continue"
+  },
+  {
+    "name": "advice_cannot_override_refuted.single_submit",
+    "status": "PASS",
+    "detail": "1"
+  },
+  {
+    "name": "wait_never_calls_model.terminal_stop_phase",
+    "status": "PASS",
+    "detail": "stop"
+  },
+  {
+    "name": "wait_never_calls_model.stop_reason",
+    "status": "PASS",
+    "detail": "expected=accepted actual=accepted"
+  },
+  {
+    "name": "wait_never_calls_model.no_skill_during_wait",
+    "status": "PASS",
+    "detail": "0"
+  },
+  {
+    "name": "wait_never_calls_model.model_invocations",
+    "status": "PASS",
+    "detail": "5"
+  },
+  {
+    "name": "wait_never_calls_model.wait_called",
+    "status": "PASS",
+    "detail": "1"
+  }
+]

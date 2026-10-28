@@ -1,210 +1,227 @@
 # Auto-Calc Platform (ACP) — Project Knowledge Base
 
-**Generated:** 2026-09-30（slim v2 redo — 明细去重至嵌套 AGENTS.md；行数仅量级参考，以代码为准）
-**Branch:** main
+**Generated:** 2026-10-26（ACP 2.0 三线合并收口后全量刷新；行数仅量级参考，以代码为准）
+**Branch:** feat/frontend-plan1-closure（收口 HEAD `0d739b2`）
 
 ## OVERVIEW
-Automated computational chemistry platform. Three packages under `src/`: `cccp`（Computational Chemistry Connection Package — QC 底座，≈86 .py：qc 子进程层 + 共享科学适配 + backends 能力层 + calculation 任务层）、`acp`（工作流/规划/持久层，≈247 .py：calculation-plan-driven 工作流 + 统一 CLI + API/scheduler/nmr）与 `acp_services`（平台服务层：workspace/data/runtime/store/contracts/entrypoints + bootstrap roots，约 70 .py；`acp → acp_services` 单向依赖）。Python 3.10+，setuptools，YAML config。
+Automated computational chemistry platform. Python 侧三包：`cccp`（科学底座，**202 .py**：QC 子进程层 + 共享科学适配 + backends 能力层 + calculation 任务层 + **analysis 科学分析层** + **plugin 插件生态**）、`acp`（工作流/规划/发布层，**289 .py**：统一 CLI + API/scheduler + init 向导）与 `acp_services`（平台服务层，**99 .py**：workspace/data/runtime/store/contracts/entrypoints；`acp → acp_services` 单向依赖）。Python 3.10+，setuptools，YAML config。
 
-**四层架构（迁移已收口，见 ANTI #17）**: ① `cccp/qc` 子进程接口与共享科学适配（含 `hessian_policy/method_meta/resolved_spec/shermo_adapter/thermo_normalize/translation/keyword_registry`）→ ② `cccp/backends` 能力 Protocol 适配层（无 subprocess）→ ③ `cccp/calculation` 任务层（**唯一执行驻点**，`tasks/` 15 个任务核心）→ ④ `acp` 工作流/规划/发布层（`acp.calculations.primitives` 为纯兼容转发，`acp.backends` 为纯 re-export shim）。全部 15 个工作流经 `cccp.calculation` 任务核心执行。**Services 平台层**与四层科学栈正交：`acp_services` 持有 store/schema、Runtime 用例、Data prepare/read、事件、访问边界与发行契约的实现根，`acp` 旧路径保留 identity forwarder（见 ANTI #30）。
+**ACP 2.0（2026-10 并行三线 A/B/C，已合并）**: A 线给 cccp 增加科学契约与插件生态（`analysis/research/` 证据/溯源/问题/反应类型 + 打包契约语料、`analysis/nmr/` NMR 全量迁入、`plugin/` 第三方科学插件、`calculation/{capabilities,products,recipes}/`）；B 线给 acp_services 增加研究运行时（持久预算/审批/跨会话事件游标恢复/attempt 冻结-完成链/基础设施适配器注册表/cgroup 恢复）与 MCP 入口（`acp mcp serve`，协议 `2025-06-18`，8 工具）；C 线交付 Workbench 体验（前端 `js/{client,workbench,visualization}`）与 **`rph/`**（Research Package Hub — git 跟踪的 pnpm TypeScript workspace，DSH/agent 驱动客户端）。四发行 0.3.0：`cccp` / `acp-worker` / `acp-web`（`packaging/roles/`）+ 根 `acp` 二选一安装。
 
-**可运行工作流（15，registry 驱动）**: `acp run Confsearch | PESsearch | BatchOptimize | XtbPathSearch | OrcaGradient | XtbConstrainedOpt | irc | scan | tsmode | casscf | nmr | singlepoint | optimize | frequency | xtb_optimize`；simple 系列 + scan/irc 由 `workflows/simple.py` + `registry.py` 组装；XtbPathSearch/OrcaGradient/XtbConstrainedOpt 消费冻结 `pes2ts_*_request_v1` payload（PES2TS → ACP 执行统一，本地专用）。另有 `acp run serve`（Web 服务）与 `acp doctor`（诊断）。
+**四层架构（迁移已收口，见 ANTI #17）**: ① `cccp/qc` 子进程接口与共享科学适配 → ② `cccp/backends` 能力 Protocol 适配层（无 subprocess）→ ③ `cccp/calculation` 任务层（**唯一执行驻点**，`tasks/` 15 个任务核心）→ ④ `acp` 工作流/规划/发布层。**Services 平台层**与四层科学栈正交：`acp_services` 持有 store/schema、Runtime 用例、Data prepare/read、研究运行时、事件、访问边界与发行契约的实现根，`acp` 旧路径保留 identity forwarder（见 ANTI #30）。
 
-**Retired**（catalog `status:"retired"`，仅历史作业展示，**勿重建/勿扩展 CLI**）: ensemble, energy, xtbmd_censo_energy, mechanism, conformer, benchmark, mech-conf, mech-step, mech-confirm, mech-chain, optfreq, optfreqsp, Lowconfirm, Highconfirm。
+**可运行工作流（15 active，registry 驱动）**: `acp run Confsearch | PESsearch | BatchOptimize | XtbPathSearch | OrcaGradient | XtbConstrainedOpt | irc | scan | tsmode | casscf | nmr | singlepoint | optimize | frequency | xtb_optimize`（catalog 30 条 = 15 active + 14 retired + 1 planned `custom_sequence`；内部合成 `fake` 仅测试用）。simple 系列 + scan/irc 由 `workflows/simple.py` + `registry.py` 组装；XtbPathSearch/OrcaGradient/XtbConstrainedOpt 消费冻结 `pes2ts_*_request_v1` payload。CLI 子命令：**`run` / `doctor` / `init` / `task` / `mcp`**（`serve` 在 `acp run serve` 下）。
 
-**Job 生命周期**: QUEUED/RUNNING/PAUSED/WAITING_REVIEW/FAILED/CANCELLED/COMPLETED — PAUSED 见 CONVENTIONS；checkpoint continue / rerun（**原地重跑**：同任务目录、attempt+1、旧 attempt 回执归档至 `WORK/00_RUNTIME/attempts/<N>/`，不再生成 `{name}__rerun` 新任务）/ cascade purge。
+**Retired**（catalog `status:"retired"`，仅历史作业展示，**勿重建/勿扩展 CLI**）: ensemble, energy, xtbmd_censo_energy, mechanism, conformer, benchmark, mech-conf, mech-step, mech-confirm, mech-chain, optfreq, optfreqsp, Lowconfirm, Highconfirm（CLI 拦截 `_CLI_REMOVED_WORKFLOWS` 12 条；`conformer`/`benchmark` 无 parser，argparse 报 invalid choice）。
+
+**Job 生命周期**: QUEUED/RUNNING/PAUSED/WAITING_REVIEW/FAILED/CANCELLED/COMPLETED — PAUSED 见 CONVENTIONS；checkpoint continue / rerun（**原地重跑**：同任务目录、attempt+1、旧 attempt 回执归档至 `WORK/00_RUNTIME/attempts/<N>/`）/ cascade purge；跨会话恢复契约 `acp2.runtime.events-recovery.v1`（事件游标 + outbox，见 acp_services/runtime）。
 
 ## STRUCTURE（地图 — 叶级明细一律看嵌套 AGENTS.md）
 ```
-src/cccp/                 # QC 底座：config/software/version + core + qc/{interfaces,runners,cluster} + qc/{hessian_policy,method_meta,resolved_spec,shermo_adapter,thermo_normalize,translation,keyword_registry}.py + backends/（能力适配） + calculation/（任务层，tasks/ 15 核心） + io + utils
-src/acp/
-├── cli.py                # argparse 统一入口：run/doctor/serve；retired 子命令拦截报错
-├── catalog.py            # WORKFLOW_CATALOG + METHOD_META + METHOD_SCHEMAS（≈4.3k 行；electronic-state/CASSCF 路由块）
-├── confsearch/           # 4 协议构象搜索（xtb-crest/xtb-md/censo-crest/xtbmd-censo）+ sampling 帧/盆/饱和度
-├── calculations/         # 规划/发布层：contracts/checkpoint/executor/plans + primitives/（纯兼容转发 → cccp.calculation 任务核心 + ACP 发布契约）+ pes/ + batch/ + irc/ + tsmode/
-├── compat/legacy/        # 只读：历史 manifest 读取器 + 布局双探针
-├── results/              # result_manifest 读取 + frames（TrajectoryFrame/VIEW_REGISTRY）+ sampling_graph + frame_candidates + structure_viewer + irc_projection + remote_structure_cache + orca_parser + frequencies
-├── storage/              # result_manifest v2 写入（含 electronic-state product kinds）
-├── core/  backends/  chem/  intake/  io/      # 通用机制 / 纯 re-export shim（→ cccp.backends）/ 化学 / 摄入 / 结构 I/O
-├── workflows/            # pes_search/batch_optimize/irc/simple/tsmode/xtb_path/xtb_constrained_opt/orca_gradient + registry（legacy 退役引擎仍作 Confsearch 协议引擎）
-├── nmr/                  # DP4/DP5、平均、缩放/归属、FCHL、谱图/处理、协议/证据门、报告、修订/诊断、DP5q 隔离（25 模块；见 nmr/AGENTS.md）
-├── api/                  # FastAPI：server/routes/v1_routes/v2_routes/v2_structure_sources/schemas + mechanism_readonly（历史只读）
-└── scheduler/            # jobs/manager/runner/store/stage_tasks/tasks/task_views/molecule_groups/structure_source_store/structure_source_indexer/job_edit + remote/（LSF 远程执行）
-src/acp_services/         # 平台服务层（acp → acp_services 单向；禁 acp_services → acp）
-├── bootstrap.py          # ServicesPorts：过渡注入的冻结端口包（每端口登记迁移/移除任务）
-├── worker_bootstrap.py   # 独立 worker 组合根（python -m acp_services.worker_bootstrap；零 acp import / 零 jobs DB）
-├── workspace/            # projects/admin/entry_authz/identity_lifecycle/identity_mapping/keys/boundary
-├── data/                 # contracts/operations(prepare)/transfer/resource_read/read_root/storage_binding/namespaces/archive/import_/budget/helpers
-├── runtime/              # commands/execution_chain/worker/receipts/recovery/plan_contracts/step_result/step_requirements/admission/quota/usage/metering_policy/freshness/projections/events/outbox/provisioning/workflow_enablement/isolation/lab_capabilities/lineage/helpers/method_flags
-├── store/                # store(JobStore CAS)/migrations/record(s)/layout/naming/legacy_method/molecule_groups
-├── contracts/            # access/envelope/events/config_plan/config_validation/action_gating/injection
-└── entrypoints/          # diagnostics/machine_output/mcp（薄入口；未绑默认入口项见 closure L2）
-frontend/                 # ACP_Workbench_v2.html（v1 遗留）；js/ 含 structure_viewer/structure_editor/vibration_viewer/structure_source_picker/task_input_workspace/candidate_details/job_editor
-config/defaults.yaml      # 仅供参考 — Python built-in `_get_default_config()` 权威
-tests/                    # ≈247 文件；conftest/fixtures/baseline（审计痕迹，勿提交 e2e-task-root.txt）
-docs/                     # 权威设计文档（CENSO、Job File Layout、Simple、EVT Viewer、Electronic State CASSCF…）
-requirements-node.txt     # 远端计算节点运行时依赖（numpy/rdkit/pyyaml）— 新增 `acp run` 运行时 import 需同步 HERE + pyproject.toml
-pyproject.toml            # api/remote/nmr/dev extras；console script `acp = acp.cli:main`
+src/cccp/                 # 科学底座（9 子包，202 .py）
+├── analysis/             # NEW(ACP2) 科学分析层 87 .py：nmr/（DP4/DP5/FCHL + model_assets 唯一资产位）、research/（证据/溯源/问题/反应/选择性 + 打包契约语料）、pes/ ensemble/ bounded/ structure/ confsearch/ tsmode/ sampling/ xtbmd/ — 见 analysis/AGENTS.md
+├── plugin/               # NEW(ACP2) 科学插件生态 8 .py：metadata/discovery/host/sdk/errors + 试点；entry-point 组 cccp.science_plugins；discovery 只读 metadata — 见 plugin/AGENTS.md
+├── calculation/          # 任务层 50 .py（唯一执行驻点）：tasks/ 15 核心 + requests/results 契约 + NEW capabilities/ products/ recipes/ + batch — 见 calculation/AGENTS.md
+├── qc/                   # 子进程层 25 .py：interfaces/ 15 模块（ORCA/CREST/xTB/CENSO/ISOSTAT/Molclus + constraints/hess_file/orca_ts/route_render/xtb_path/xtb_scan/xtb_thermo）+ runners/ cluster/ + 共享科学适配（hessian_policy/method_meta/resolved_spec/shermo_adapter/thermo_normalize/translation/keyword_registry）
+├── backends/             # 能力 Protocol 适配 13 .py：base.py 12 个 Protocol；matrix.py 能力声明唯一权威 — 见 backends/AGENTS.md
+├── core/ io/ pipeline/ utils/   # 协议/候选、分子输入、thin 编排、共享工具（5 模块）
+└── config.py software.py version.py __init__.py   # 6 源配置 / 可执行解析唯一驻点 / 0.3.0
+
+src/acp/                  # 工作流/规划/发布层（289 .py）
+├── cli.py                # argparse 统一入口（5.5k 行）：run/doctor/init/task/mcp；retired 拦截；--json/--dry-run 机器输出
+├── init_wizard/          # NEW `acp init` 向导 13 .py：flows/plan（InitPlan/apply_plan）/newnode（TOFU SSH）/options（TIER_SPECS）/capabilities（三态 doctor）/lab_doctor/gating/persist/answers/prompts/sniff_local/sniff_remote
+├── services_{,completion_,data_,events_,mcp_,publication_}bootstrap.py   # NEW 6 个组合根（services_data_bootstrap 2.5k 行：DataResourcePort/read_root/cache-only reader；services_mcp_bootstrap:build_mcp_runtime）
+├── catalog.py            # WORKFLOW_CATALOG + METHOD_META + METHOD_SCHEMAS（5.3k 行）
+├── confsearch/           # 4 协议构象搜索 + sampling 帧/盆/饱和度
+├── calculations/         # 规划/发布层：contracts/checkpoint/executor/plans + primitives/（纯转发）+ pes/ batch/ irc/ tsmode/ + NEW attempt_freeze/attempt_publication/identity（attempt 链 + identity v2）
+├── api/                  # FastAPI 20 .py / 11 routers：v1_routes(104 路由)/v2_routes + v2_structure_sources + NEW v1_science/v2_science/v2_research/v2_approvals/v2_budgets/science_projection/drafts/job_status_view/batch_preview — 见 api/AGENTS.md
+├── scheduler/            # 45 .py（31 顶层 + remote/ 14）：jobs/manager(7k 行)/runner/store(转发)/stage_tasks/tasks/task_views/molecule_groups/structure_source_store/structure_source_indexer/job_edit/events(after_seq 游标)/registration/… — 见 scheduler/AGENTS.md
+├── nmr/                  # 转发面（→ cccp.analysis.nmr；仅 analysis_revision.py + method_config.py 有 acp 侧实现）— 见 nmr/AGENTS.md
+├── results/ storage/     # manifest v2 读写（ProductKind 15 种）+ frames（VIEW_REGISTRY 9 视图）+ NEW frames_adapter（ScienceProduct→帧契约）
+├── core/ backends/ chem/ intake/ io/ compat/legacy/   # 通用机制 / 纯 re-export shim / 化学 / 摄入 / 结构 I/O / 历史只读
+└── workflows/            # pes_search/batch_optimize/irc/simple/tsmode/xtb_path/xtb_constrained_opt/orca_gradient/nmr + registry
+
+src/acp_services/         # 平台服务层（127 .py；acp → acp_services 单向；禁反向）
+├── bootstrap.py          # ServicesPorts：过渡端口包（收窄至 10 字段；JobStore/Migrations/StepRequirement 端口已就地移除）
+├── worker_bootstrap.py   # 独立 worker 组合根（零 acp import / 零 jobs DB；= acp-worker console script）
+├── workspace/            # projects/admin/entry_authz/identity_lifecycle/identity_mapping/keys/boundary + NEW http_identity（多用户 HTTP 凭据→principal）/server_identity/command_identity（M0-04 唯一 CommandIdentity：HTTP/CLI/admission/幂等 scope）
+├── data/                 # contracts/operations/transfer/resource_read/read_root/storage_binding/namespaces/archive/import_/budget(存储配额)/helpers + NEW artifacts（ArtifactRef 生命周期）/research_resources（Proposal/ResearchRecord CAS）
+├── runtime/              # 44 模块 = 原 23 + NEW 21：research_budget/usage_units/approvals/canonical_digest/research_events(游标)/attempt_recovery/cgroup/adapter_registry/adapter_bootstrap/execution_right/receipt_identity/errors/attempt_completion/attempt_freeze/step_dag/science_binding/capability_registry/analysis_capabilities/idempotency/local_admission/metering_decoupling
+├── store/                # store(JobStore CAS)/migrations(24 条)/record(s)/layout/naming/legacy_method/molecule_groups
+├── contracts/            # access/envelope/events/config_plan/config_validation/action_gating/injection + NEW adapters（AdapterDescriptor）
+├── entrypoints/          # diagnostics/machine_output/mcp(TOOL_ALLOWLIST 8 工具) + NEW application_params/controller_client/mcp_stdio/status_projection
+└── events.py             # 纯 re-export shim（EventEnvelope/EventCursor/EventScope）
+
+rph/                      # NEW(ACP2-C) Research Package Hub：git 跟踪 pnpm workspace（Node ≥22.19/pnpm 11.28.5）；4 包冻结方向 cli→dsh-bundle→bridge→research；DSH 本体在外部 $ACP2_TOOLS，不 vendor；rph 上层禁止再加 package.json
+packaging/                # NEW 发行角色 roles/{cccp,worker,web}/pyproject.toml（第四发行 = 根 pyproject `acp`；acp-web 的 src/acp_web_assets 由 build_release.py 构建期生成，源码树无此目录）
+frontend/                 # Workbench：ACP_Workbench_v2.html + js/{client(12),workbench(30),visualization(4),module_tests(33)} + css/workbench + js/vendor(3Dmol)
+scripts/                  # build_release.py / install_systemd.sh / migrate_run_root.py / verify_cccp_{isolation,slice_guard}.py / check_grep_gates.py … + acceptance/（35 个验收脚本）
+docs/                     # reference/current（29）+ reference/next-change（ACP 2.0 计划/评审/契约语料 acp2-contracts/{science,runtime,experience}）+ archive
+reports/                  # 证据库（git 跟踪 ~1.5k 文件，acp2_implementation 为主 + 未跟踪验收残留）
+tests/                    # 486 test_*.py（test_services_* 69 / test_acp2_* 66 / test_acp_* 170 / test_cccp_* 47 / browser 4）— 见 tests/AGENTS.md
+examples/                 # 仅 example_inputs.txt
 ```
 
 ## 嵌套知识库索引（动手前先读对应 AGENTS.md）
 | 知识库 | 覆盖 |
 |---|---|
-| `src/acp/AGENTS.md` | acp 全模块叶级 WHERE TO LOOK（confsearch/pes/batch/irc/results/storage/core/backends/…） |
-| `src/acp/api/AGENTS.md` | FastAPI 端点、SSE、schema |
-| `src/acp/backends/AGENTS.md` | 纯 re-export shim 层（→ cccp.backends）+ 隔离的 legacy batch 面 |
-| `src/acp/chem/AGENTS.md` | RDKit embedding + composition |
-| `src/acp/core/AGENTS.md` | Structure/WorkflowRunner/Registry/State/Config |
-| `src/acp/intake/AGENTS.md` | 文件解析器（6 格式） |
-| `src/acp/nmr/AGENTS.md` | DP4/DP5 + FCHL + 谱图/处理 + 协议/证据门 + 报告 + 修订/诊断 + DP5q 隔离 |
-| `src/acp/scheduler/AGENTS.md` | Job 生命周期、持久化、stage_tasks |
-| `src/acp/scheduler/remote/AGENTS.md` | LSF 远程执行：SSH/SFTP/bsub/bjobs/结果拉取 |
-| `src/acp_services/AGENTS.md` | 平台服务层：workspace/data/runtime/store/contracts/entrypoints、bootstrap roots、identity forwarder 边界 |
-| `src/acp/workflows/AGENTS.md` | 工作流实现 + registry（15 active） |
-| `src/cccp/AGENTS.md` | cccp 包根：config/version + 7 子包（core/io/pipeline/qc/utils/backends/calculation） |
-| `src/cccp/backends/AGENTS.md` | 能力 Protocol 适配层实现体（ORCA/CREST/xTB/CENSO/Isostat/Molclus；无 subprocess） |
-| `src/cccp/core/AGENTS.md` | ConformerEngine（dormant）+ ProtocolSpec + CandidateSet |
-| `src/cccp/io/AGENTS.md` | MolecularInputHandler（格式检测 + RDKit embedding） |
-| `src/cccp/pipeline/AGENTS.md` | PipelineExecutor（thin） |
-| `src/cccp/qc/AGENTS.md` | QC 子进程层总览（interfaces/runners/cluster） |
-| `src/cccp/qc/cluster/AGENTS.md` | Local + LSF 适配器（factory in `__init__`） |
-| `src/cccp/qc/interfaces/AGENTS.md` | ORCA/CREST/xTB/CENSO/ISOSTAT/Molclus 子进程封装 |
-| `src/cccp/utils/AGENTS.md` | File I/O、几何、常数、溶剂映射 |
-| `tests/AGENTS.md` | 测试约定、fixture 分层、慢测门控 |
+| `src/cccp/AGENTS.md` | cccp 包根：config/software/version + 9 子包导航 |
+| `src/cccp/analysis/AGENTS.md` | **NEW** 科学分析层：nmr/research/pes/ensemble/bounded/structure/confsearch/tsmode/sampling/xtbmd + 资产位 + 契约语料 |
+| `src/cccp/plugin/AGENTS.md` | **NEW** 科学插件生态：metadata/discovery/host/sdk/errors |
+| `src/cccp/calculation/AGENTS.md` | **NEW** 任务层：15 核心 + capabilities/products/recipes |
+| `src/cccp/backends/AGENTS.md` | 能力 Protocol 适配层实现体（12 Protocol；matrix.py 声明权威） |
+| `src/cccp/qc/AGENTS.md` + `qc/interfaces/AGENTS.md` + `qc/cluster/AGENTS.md` | 子进程层（interfaces 15 模块） |
+| `src/cccp/{core,io,pipeline,utils}/AGENTS.md` | ConformerEngine(dormant)/ProtocolSpec、输入处理、thin 编排、共享工具 |
+| `src/acp/AGENTS.md` | acp 全模块叶级 WHERE TO LOOK（init_wizard/组合根/api/scheduler/…） |
+| `src/acp/api/AGENTS.md` | FastAPI 11 routers、只读 science/research 面、MCP 关系 |
+| `src/acp/nmr/AGENTS.md` | NMR 转发面（实现根在 cccp/analysis/nmr）+ 修订/评审面 |
+| `src/acp/scheduler/AGENTS.md` + `remote/AGENTS.md` | Job 生命周期、持久化、stage_tasks、LSF 远程执行 |
+| `src/acp/{backends,chem,core,intake}/AGENTS.md` | shim 层 / RDKit / 通用机制 / 摄入解析 |
+| `src/acp_services/AGENTS.md` | 平台服务层：workspace/data/runtime(研究运行时+attempt 链)/store/contracts/entrypoints |
+| `tests/AGENTS.md` | 测试约定、fixture 分层、慢测门控、三态证据规则 |
 | **本文件（root）** | 全局契约、ANTI-PATTERNS、COMMANDS |
 
 ## WHERE TO LOOK（跨包入口 + 全局契约；模块内细节先查嵌套表）
-- **CLI/工作流注册**: `src/acp/cli.py` + `workflows/registry.py`；退役拦截 `_CLI_REMOVED_WORKFLOWS`
-- **新增 QC 协议**: `src/cccp/core/protocols.py::_get_default_protocol_config()`（YAML protocols 节不可达）
-- **配置**: `src/cccp/config.py`（6 源合并）；ACP 侧 `src/acp/core/config.py`；**数据目录唯一权威 `src/acp/core/paths.py::resolve_run_root`**
-- **计算基元（任务核心）**: 实现体在 `src/cccp/calculation/tasks/`（electronic-state 门控在 `cccp/calculation/_common.py`；`casscf.py` CASSCF/NEVPT2；批量执行器 `cccp/calculation/batch.py`）；ACP 侧 `acp.calculations.primitives` 为纯兼容转发 + ACP 发布契约；单步 plan 经 `acp/calculations/executor.py::CalculationPlanExecutor` dispatch 到 `cccp.calculation.run_*`；多步走 `acp/calculations/batch/engine.py`
-- **结果契约**: 写 `storage/manifest.py`（v2）→ 读 `results/manifest.py`；帧契约 `results/frames.py::VIEW_REGISTRY` + `to_node()/to_annotation()`；帧候选权威 `frame_candidates.json`
-- **调度**: `scheduler/manager.py`（pause/unpause/continue/rerun/purge/resume）；`structure_sources.py`（COMPLETED 任务结构来源）；`job_edit.py`（修改参数后重算 + edit-coverage registry）
-- **API**: `api/v1_routes.py`（任务/文件/detail/recovery 矩阵/edit-recalculate）+ `api/v2_routes.py` + `api/v2_structure_sources.py`（结构来源组织端点）。只读 `availability`/`prepared/{resource}` 新面与旧 GET 兼容面并存（closure L2-02/L2-03）
-- **Services 平台层**: 实现根 `src/acp_services/` — Workspace `workspace/{projects,admin,entry_authz,identity_lifecycle,identity_mapping,keys,boundary}.py`；Data `data/{contracts,operations,transfer,resource_read,read_root,storage_binding,namespaces,archive,import_,budget}.py`；Runtime `runtime/{commands,execution_chain,worker,receipts,recovery,plan_contracts,step_result,step_requirements,admission,quota,usage,metering_policy,freshness,projections,events,outbox,provisioning,workflow_enablement,isolation,lab_capabilities,lineage,method_flags}.py`；Store `store/{store,migrations,records,layout,naming,legacy_method,molecule_groups}.py`；Contracts `contracts/{access,envelope,events,config_plan,config_validation,action_gating,injection}.py`；Entrypoints `entrypoints/{diagnostics,machine_output,mcp}.py`
-- **Services 装配/转发**: `acp_services/bootstrap.py::ServicesPorts`（过渡冻结端口包）+ `acp_services/worker_bootstrap.py`（独立组合根）；`acp/services_{,data_,events_,publication_}bootstrap.py` 为过渡装配；旧 `acp.scheduler.{store,migrations}`、`acp.calculations.{contracts,step_result,step_requirements}`、`acp.catalog.method_levels_to_cli_flags` 为 identity forwarder（同对象，非第二实现）
-- **Services 证据/收口**: 层记录 `docs/reference/current/ACP_Services_Closure_20261019.md`（三态 PASS/FAIL/NOT_VERIFIED）+ 四组合 `docs/reference/current/ACP_Services_Four_Combination_Acceptance.md`；台账 `tests/baseline/services-evidence/{migration_ledger,public_shim_inventory,handoff_registry}.md`；守护 `tests/test_services_*.py` + `tests/test_acp_services_isolation.py` + `tests/test_services_doc_sync.py`
-- **公开 shim/历史 reader**: `acp.calculations.primitives`（→ `cccp.calculation.tasks`）、`acp.backends`（→ `cccp.backends`）、`src/acp/compat/legacy/` 只读 reader 均**保留**；调用者审计见 `tests/baseline/services-evidence/public_shim_inventory.md`。禁止以缩代码为由删除兼容面
-- **NMR**: 全套见 `src/acp/nmr/AGENTS.md`；工作流入口 `workflows/nmr.py`
-- **Frontend**: `frontend/ACP_Workbench_v2.html` — 能量/轨迹查看器、任务向导、结构来源面板、job_editor
-- **权威设计文档**: `docs/reference/current/ACP_Job_File_Layout_Spec.md`（文件布局契约）、`docs/reference/current/ACP_Energy_Trajectory_Viewer_DevDoc.md`（帧契约/采样管线）、`docs/reference/current/ACP_PES_Manual_Review_DevDoc.md`（PES 人工选点 → BatchOptimize）、`docs/reference/current/ACP_Simple_Workflows_DevDoc.html`（simple 工作流）
+- **CLI**: `src/acp/cli.py` — `run`（15 工作流 + `serve`）/`doctor`/`init`（init_wizard）/`task`（ingest/plan/execute/query/pause/unpause/continue/cancel/rerun/recover/export，`--controller <url>` 远程）/`mcp serve`（`--transport stdio|--controller`，→ `acp_services.entrypoints.mcp_stdio` + `services_mcp_bootstrap`）
+- **工作流注册**: `workflows/registry.py` + `catalog.py`；新增 QC 协议: `cccp/core/protocols.py::_get_default_protocol_config()`
+- **配置**: `cccp/config.py`（6 源合并）；ACP 侧 `acp/core/config.py`；数据目录唯一权威 `acp/core/paths.py::resolve_run_root`；可执行解析唯一驻点 `cccp/software.py::resolve_executable`
+- **计算基元**: 实现体 `cccp/calculation/tasks/`（门控 `_common.py`；casscf CASSCF/NEVPT2；批量 `batch.py`）；能力/绑定 `calculation/capabilities/`；配方编译 `calculation/recipes/`；`acp.calculations.primitives` 纯转发 + ACP 发布契约；单步经 `acp/calculations/executor.py::CalculationPlanExecutor`，多步 `acp/calculations/batch/engine.py`
+- **科学契约/证据**: `cccp/analysis/research/`（evidence/provenance/validators/question/reaction/selectivity/artifact_manifest）+ 打包语料 `analysis/research/contracts/`（与 `docs/reference/next-change/acp2-contracts/science/` 字节一致，drift guard）
+- **NMR**: 实现根 `cccp/analysis/nmr/`（模型资产唯一访问 `nmr/assets.py`）；工作流入口 `acp/workflows/nmr.py`；修订/评审 `acp/nmr/analysis_revision.py`
+- **插件**: `cccp/plugin/`（entry-point `cccp.science_plugins`，manifest `cccp_science_plugin.json`）；外部参考发行 `tests/fixtures/acp2/science/external_plugin/`
+- **结果契约**: 写 `acp/storage/manifest.py`（v2，ProductKind 15 种）→ 读 `acp/results/manifest.py`；帧契约 `results/frames.py::VIEW_REGISTRY`（9 视图）+ `results/frames_adapter.py`（ScienceProduct→帧）；帧候选权威 `frame_candidates.json`
+- **调度**: `acp/scheduler/manager.py`（pause/unpause/continue/rerun/purge/resume + prepare/发布/attempt 链 seam）；`job_edit.py`（edit-coverage registry）；事件游标 `scheduler/events.py` + `GET /api/v1/jobs/{id}/events?after_seq=`
+- **API**: `api/v1_routes.py`（104 路由）+ `api/v2_routes.py` + v2_structure_sources + **只读 science/research 面** `api/{v1_science,v2_science,v2_research,v2_approvals,v2_budgets}.py`（零副作用，`science_projection.py` 纯投影）
+- **研究运行时**: `acp_services/runtime/` — 预算 `research_budget.py`（身份=project+proposal_ref）/审批 `approvals.py`（plan_digest 绑定 + CAS）/事件 `research_events.py`（时间有界游标）/attempt 链 `{attempt_freeze,attempt_completion,execution_right,receipt_identity}.py`/科学绑定 `{step_dag,science_binding}.py`/适配器 `adapter_registry.py`
+- **Services 装配**: `acp_services/bootstrap.py::ServicesPorts`（10 端口）+ `worker_bootstrap.py`（acp-worker 入口）+ acp 侧 6 个 `services_*_bootstrap.py`
+- **MCP**: 协议 owner `acp_services/entrypoints/mcp.py`（TOOL_ALLOWLIST 8 工具，1:1 绑 Controller HTTP 命令）；stdio 帧实现 `mcp_stdio.py`；`acp mcp serve --controller <url>`
+- **rph/**: `rph/README.md` + `rph/packages/{research,bridge,dsh-bundle,cli}`；契约文档 `docs/reference/next-change/acp2-contracts/experience/`
+- **发行**: `packaging/roles/{cccp,worker,web}/pyproject.toml` + `scripts/build_release.py`（--out 须为空目录；release-manifest.json SHA-256）；验收 `scripts/acceptance/`（35 脚本：acp2_package_install / acp2_runtime --scenario package-install / release_role_probe / check_release_artifacts / four_combinations / acp2_experience_*）
+- **Frontend**: `frontend/ACP_Workbench_v2.html` + `js/client|workbench|visualization`（C 线 Workbench）；能源/轨迹查看器、任务向导、结构来源面板
+- **权威设计文档**: `docs/reference/current/`（Job File Layout / Energy Trajectory Viewer / PES Manual Review / Simple Workflows / Services Closure）+ `docs/reference/next-change/`（ACP 2.0 并行计划 A/B/C + 评审 R1-R6 + MCP/DSH 验收 runbook）
 
 ## CONVENTIONS
-- **Docstrings**: cccp Google 风格（`Args:/Returns:`）；acp 紧凑单行/短块 — 随所在包
-- **注解**: 旧 cccp 用 `typing.Optional[X]`；acp 与新增 cccp 用 PEP 604 `X | None` + `from __future__ import annotations` — **新代码一律 PEP 604**
-- **Imports**: stdlib → 第三方（numpy/rdkit）→ local；每模块 `logger = logging.getLogger(__name__)`；`pathlib.Path` + `os.replace` 原子写（禁 `os.path.*`）
+- **Docstrings**: cccp Google 风格；acp 紧凑单行/短块 — 随所在包
+- **注解**: 新代码一律 PEP 604 `X | None` + `from __future__ import annotations`
+- **Imports**: stdlib → 第三方 → local；每模块 `logger = logging.getLogger(__name__)`；`pathlib.Path` + `os.replace` 原子写（禁 `os.path.*`）
 - **Dataclasses**: `@dataclass(frozen=True)` 用于 spec/contracts；可变仅数据容器
-- **抽象**: cccp `ABC` base vs acp 结构 `Protocol`（PEP 544）；例外 `QCBackend(ABC)`、`ErrorModel(ABC)`、`CRESTInterface` 无基类（勿"修正"）；`XTBInterface` 独立于 `qc/interfaces/xtb.py`（勿回并 `crest.py`）
-- **风格**: `__all__` 全量 re-export；旧 cccp 模块 docstring 带 `====` 下划线 + `Author: QCcalc Team`
-- **工具链**: ruff（E/F/I/N/W/UP）+ ruff-format + mypy(strict) + pre-commit；CI 见 ANTI §10
-- **Job PAUSED 语义**: active 非终态（计入队列、禁删），poller 跳过；本地 killpg SIGSTOP/SIGCONT（进程留守 `_processes`，不释放内存/磁盘），远端 LSF `bstop/bresume`；restart：本地冻结 → FAILED `[RESTART_FAILED]`，远端重收养保持 PAUSED；cancel 顺序 SIGCONT → SIGTERM → SIGKILL
-- **Task custom names**: `tasks.py` custom_name/name_revision/name_updated_at（NOT in `_SYNC_COLUMNS` — sync never overwrites）；`update_custom_name()` 事务性 revision check + organization_events 审计；PATCH `/api/v2/tasks/{id}` + expected_name_revision（409 carries current projection）
-- **Structure-source org store**: `structure_source_store.py` — 4 tables；`source_uid_for()` = `ss_`+sha256(job_id+relpath)[:24]；upsert 只碰 discovery fields；`RevisionConflictError` + expected_revision 乐观锁
-- **Job-edit coverage registry**: `job_edit.py::EDIT_ACTIVE_WORKFLOWS` — 新 active 工作流必须登记，`audit_workflow_edit_coverage()` + `tests/test_acp_job_edit.py` 守护
-- **Services 依赖方向**: `src/acp` 可导入 `acp_services`；`src/acp_services/**` **禁止**导入 `acp`（含懒加载、`TYPE_CHECKING`、`importlib`/`__import__`/字符串 `getattr` 反射）。旧路径必须保持 identity forwarder（`is` 同一对象），不得在 `acp` 侧重加实现
-- **Services 台账/证据**: 新平台能力先登记 `tests/baseline/services-evidence/migration_ledger.md`（恒定 6 列，状态 token 写在退出条件列首）；公开兼容面登记 `public_shim_inventory.md`；不删除模型/资产/notice 与 `tests/baseline/recovery_fixtures/`
+- **抽象**: cccp `ABC` vs acp `Protocol`（PEP 544）；例外 `QCBackend(ABC)`、`ErrorModel(ABC)`、`CRESTInterface` 无基类（勿"修正"）
+- **风格**: `__all__` 全量 re-export（例外：`cccp/__init__.py` 与 `cccp/analysis/__init__.py` 仅 docstring）；ruff（E/F/I/N/W/UP）+ ruff-format + mypy(strict) + pre-commit
+- **Job PAUSED 语义**: active 非终态（计入队列、禁删），poller 跳过；本地 killpg SIGSTOP/SIGCONT，远端 bstop/bresume；restart：本地 → FAILED `[RESTART_FAILED]`，远端重收养保持 PAUSED；cancel 顺序 SIGCONT → SIGTERM → SIGKILL
+- **Task custom names / Structure-source store / Job-edit coverage**: 见 ANTI #12/#23 与 `scheduler/AGENTS.md`
+- **Services 依赖方向**: `acp_services → acp` 禁止（单向依赖硬门，`acp → acp_services` 允许）；`src/acp_services/**` 禁止导入 `acp`（含懒加载/TYPE_CHECKING/importlib/字符串反射）；旧路径 identity forwarder（`is` 同一对象）
+- **Services 台账/证据**: 平台能力登记 `tests/baseline/services-evidence/migration_ledger.md`（6 列）；公开兼容面登记 `public_shim_inventory.md`；三态 PASS/FAIL/NOT_VERIFIED，`NOT_VERIFIED` 不得改写 PASS
+- **研究运行时**: 预算身份服务端固定（project+proposal_ref）；审批不写执行事实；`canonical_digest.py` 是唯一 digest 实现；适配器 discovery 永不执行代码
+- **ACP 2.0 证据**: `reports/acp2_implementation/`（当前基线 bb45a46）；C33/C34 与 experience/static-assets.manifest.json 仍 `NOT_VERIFIED`
 
-## EXECUTION PROTOCOL（执行完整性四不变量，2026-10-06）
-> 迁移期由本计划（`.omo/plans/acp-execution-integrity-remediation.md`）引入，todo 32 文档收口口径下**保留**（不随迁移期结束删除）。实现驻点：`scheduler/store.py`（CAS）、`scheduler/manager.py`、`scheduler/remote/{paths,release,submission,runner}.py`、`calculations/{executor,step_requirements}.py`、`calculations/batch/engine.py`。
+## EXECUTION PROTOCOL（执行完整性四不变量，2026-10-06；ACP 2.0 attempt 链扩展）
+> 实现驻点：`acp_services/store/store.py`（CAS）、`acp/scheduler/manager.py`、`scheduler/remote/{paths,release,submission,runner}.py`、`acp/calculations/{executor,identity}.py`、`calculations/batch/engine.py`、**NEW** `acp_services/runtime/{attempt_freeze,attempt_completion,execution_right,receipt_identity}.py` + `acp/calculations/{attempt_freeze,attempt_publication}.py`。
 
-1. **一次 attempt ↔ 一个已确认的存储位置 / 执行版本 / 提交记录**：每个任务 attempt 恰好对应一个已确认存储位置（本地分配映射 = 远端目录 `<remote_work_dir>/<项目叶子>/<任务叶子[__NN]>`）、一个已验证执行版本（`release_id`；生产 `auto_sync` 模式，dev 逃生门 `ACP_REMOTE_ALLOW_UNVERSIONED=1` 显式标注 `unversioned-shared`）与一条先于 bsub 持久化的提交记录（含 `submission_id`）。同项目同名 / 跨项目同名 / rerun / continue 复用同一存储目录且互不冲突，attempt 回执隔离。
-2. **控制意图不被旧观测覆盖**：用户 pause/cancel 意图永不被过期 poll 观测改写；合法转换（`PENDING/PAUSED→RUNNING`）不丢失；CANCELLING 只有**确认远端已停止**后才置 CANCELLED；终态不可被旧写入复活；进度写不覆盖 status/spec/result；终态副作用在终态持久化之后且幂等可重试。状态写入一律走 `store.py` 的 CAS API（revision/status/attempt 守卫）。
-3. **恢复只复用身份与工件有效的结果**：仅复用身份（有效参数/内容/角色/依赖工件摘要，两层 `plan_identity`/`step_identity` + 任务专属参数入身份）有效且完成事实完整的科学结果；`step_result.json` 自证属于当前计算；旧 v1 checkpoint 默认保守重算；发布失败只重试发布；batch 与 executor 同源 `resume_source.json`；不兼容 → 全量重算。
-4. **下游只消费满足前置条件的结果**：失败/缺失上游的步骤记 `blocked`/`upstream_failed` 并阻断其依赖者；**必需步骤 blocked 时整体不判 completed**；诊断性继续必须显式声明（`diagnostic_only=True`）且恢复时重判、不得当正常结果收养。
+1. **一次 attempt ↔ 一个已确认的存储位置 / 执行版本 / 提交记录**：…（同前）… attempt 冻结产物组提交于 `WORK/00_RUNTIME/frozen/`（`frozen_group.json` sha256 manifest）；提交幂等经 `JobStore.claim_idempotency`（migration 022）。
+2. **控制意图不被旧观测覆盖**：… 状态写入一律走 CAS API；worker 侧持 `execution_right`（独占 (job, attempt) 回执写权，fencing）。
+3. **恢复只复用身份与工件有效的结果**：… identity v2（`plan_identity` + per-step `step_identities`）；跨会话事件恢复走时间有界游标（过期=显式快照重置，绝不静默跳变）。
+4. **下游只消费满足前置条件的结果**：… 配方 DAG 由 `cccp/calculation/recipes/validation.py` 守护（cycle/diagnostic-dep 报错）。
 
 ## MIGRATION PERIOD RULES — 已收口（CLOSED at todo 32, 2026-10-05）
-> acp→cccp 架构整改迁移期**已结束**（基线 `main@2a23b93` → 收口 HEAD `66222f7`）。以下为生效的**最终规则**；历史台账（`tests/baseline/refactor-evidence/migration_ledger.md`）保留为审计记录，不再作为流程要求维护。
-> - **唯一实现根**: 计算任务核心唯一驻点 = `src/cccp/calculation/tasks/`（todo 23 硬切换）；`src/acp/calculations/primitives/` 永久定位为纯兼容转发/重导出 + ACP 发布契约 — 两根每基元**恰好一个实现体**，由 `tests/test_architecture_invariants.py::test_unique_primitive_definitions` 守护（非 shim 实现体出现在 acp 侧即 FAIL）。
-> - **依赖方向**: `src/cccp/**` 禁止导入 `acp`（含懒加载/TYPE_CHECKING）；backends 层禁导任务模块（`backend_imports_task_module` 门）。
-> - **护栏仍生效**: `tests/test_f4_scope_audit.py`（QC 接口层改动登记 amendment）；`scripts/check_grep_gates.py` 四个 pin（`unique_run_scan`/`unique_run_irc`/`wave2_shermo_external`/`final_shermo`）已重定向到新驻点 — 禁禁用/静默放宽；跨版本恢复 fixtures 固定于 `tests/baseline/recovery_fixtures/`。
-> - **新计算能力**: 一律先落 `src/cccp/calculation/tasks/`（options/payload 契约经 `cccp/calculation/{requests,results}.py`），ACP 侧只加转发与发布契约。
+> acp→cccp 架构整改迁移期已结束。最终规则：计算任务核心唯一驻点 = `src/cccp/calculation/tasks/`（`acp/calculations/primitives/` 永久纯转发 + ACP 发布契约；`tests/test_architecture_invariants.py::test_unique_primitive_definitions` 守护）；`src/cccp/**` 禁止导入 `acp`（`tests/test_cccp_isolation.py` + `scripts/verify_cccp_isolation.py`）；backends 层禁导任务模块；`scripts/check_grep_gates.py` 四 pin 禁禁用；跨版本恢复 fixtures 固定于 `tests/baseline/recovery_fixtures/`；新计算能力一律先落 cccp 任务层。
 
 ## ANTI-PATTERNS（硬性铁律）
-1. **NEVER `pymatgen`** — 已从 pyproject 移除（零引用）
-2. **NEVER 只更新一处 `__version__`** — 4 处同步：`cccp/__init__.py`、`cccp/version.py`、`acp/__init__.py`、`pyproject.toml`
-3. **YAML defaults 与 Python built-in 须同步** — `config/defaults.yaml` 与 `_get_default_config()`；built-in 权威
+1. **NEVER `pymatgen`** — 已移除（零引用）
+2. **NEVER 只更新一处 `__version__`** — 4 处同步：`cccp/__init__.py`、`cccp/version.py`、`acp/__init__.py`（importlib.metadata + fallback `0.3.0`）、`pyproject.toml`
+3. **YAML defaults 与 Python built-in 须同步** — built-in `_get_default_config()` 权威
 4. **协议只进 `_get_default_protocol_config()`** — YAML `protocols` 节不可达
-5. **NEVER 在 `__init__.py` 放实现** — 例外仅 `qc/cluster/__init__`（factory）与 `qc/runners/__init__`（整模块）
-6. **`__main__` 仅 acp** — `python -m acp`/`python -m acp.cli` 可用，`python -m cccp` 不可用；旧 `conformer-search` console_script 已删，一律 `acp`
-7. **ORCA `%geom` 关键字是 `Trust` 非 `TrustRadius`** — TrustRadius 被输入解析拒（ORCA 5/6.x）；`MaxIter` 出自 `max_cycles`/`geom_maxiter`
-8. **新代码禁裸 `except Exception:`** — 历史 80+ 处蔓延，pyright suppressions 重（nmr/ 最密，pyright 不在工具链）
-9. **常量单点定义** — `HARTREE_TO_KCAL` ×2（值同）、气体常数 R ×3（精度不一）；新常量禁复制
-10. **CI（2026-08-21 起）**: push main/feat/** + PR → py3.10/3.11/3.12 compileall + `pytest -m "not slow"`。install 行必须含全部 extras — `pip install -e '.[dev,api,remote]'`（漏 `api` 是 2026-09-05 全红原因）。lint/format 门仍注释中
-11. **`_SCHEDULER_MARKERS` 必须列出调度器预建文件全集** — 漏列使 `_resolve_output_dir` 把产物重定向到不可见 `<work_dir>_1/`。审计已收口（2026-10-07）：全集含 `.structure_history`（rerun/edit 保留）与 `electronic_state.json`/`input.com`/`input.inp`（均先于子进程启动写入，首跑/重跑/续跑 resolve 时都在场）；另有第二道保险 = `_resolve_output_dir` 正向调度身份判定（`job.json`+`task.json` 同时存在 → 无条件复用，即使目录含集合未登记文件）。豁免两类：resolve 之后才写入的根文件（`state.json`）与不经 `_resolve_output_dir` 的工作流专属根写（`batch_items.json`/`scan_config.json`）。守护：`tests/test_scheduler_markers_audit.py`（行为断言 + 全集 snapshot pin）；完整审计表见 `.omo/evidence/acp-legacy-bug-remediation/task-1-acp-legacy-bug-remediation.log`
-12. **新增 job status 必须全表面同步** — `jobs.py::JobStatus` is_active/is_terminal + `store.counts()` 消费者 + 前端 `getStatusClass`/i18n（zh+en）
-13. **NEVER 裸 `DELETE FROM jobs`** — schema 无 FK 级联；走 `store.purge_cascade`（先删 tasks 行）
-14. **`resume()` 仅 WAITING_REVIEW review-only** — pause/unpause/continue 是独立方法；非 requeue resume 有 RUNNING-bounce footgun
-15. **NEVER 把 `job_id`/时间戳放进磁盘路径** — 任务目录 `<molecule>_<task>_<remark>`（`JobSpec.task_dir_name()`），job_id 仅 DB PK/job.json/task.json/WORK/00_RUNTIME/events.jsonl；调度上下文扁平写（`is_scheduler_task_dir`），非调度 CLI 保留 `{output}/{safe_name}/`
-16. **mechanism 布局归一化（v1.2）** — 新任务产物落 `WORK/{02_SEARCH,03_OPT/TS,07_PATH,08_ANALYSIS}` + `RESULT/mechanism`；**禁直接拼 `mechanism_study/<id>/` 路径**
-17. **四层架构与唯一执行驻点（2026-10-05 收口）** — ① `cccp/qc`（子进程接口 + 共享科学适配）→ ② `cccp/backends`（能力 Protocol 适配，无 subprocess）→ ③ `cccp/calculation`（**任务层唯一执行驻点**）→ ④ `acp`（工作流/规划/发布）。新计算能力一律先落 `src/cccp/calculation/tasks/`（契约经 `cccp/calculation/{requests,results}.py`）；`src/acp/calculations/primitives/` 仅纯兼容转发 + ACP 发布契约（非 shim 实现体出现即 FAIL `test_unique_primitive_definitions`）；`src/acp/backends/` 仅纯 re-export shim（实现体在 `cccp/backends/`）；backends 层禁导任务模块；`src/cccp/**` 禁导入 `acp`。ACP 单步 plan 经 `CalculationPlanExecutor` dispatch 到 `cccp.calculation.run_*`，多步走 BatchOptimizeEngine（底层 `cccp.calculation.batch`）
-18. **compat/ 只读禁止写入** — 新代码消费数据走 `results/manifest`（v2），仅历史任务经 compat 转接
-19. **两层目录: 安装目录 ≠ 数据目录** — run_root 须原生文件系统（9p/nfs/cifs 慢 ~1000×）；禁 `./ACP_runs` 相对默认、禁默认 `/tmp` work_root；迁移 `python scripts/migrate_run_root.py <old> <new>`
-20. **前端禁硬编码退役 id 作默认值** — 向导默认经 `resolveDefaultWorkflow()`/`pickDefaultProfile()` 目录驱动，消费点先 `ensureWizardWorkflowValid()`；退役字面量仅许历史兼容分支
-21. **NEVER 绕过 `acp.results.frames` 契约发视图投影** — 一律经 `TrajectoryFrame.to_node()`/`TrajectoryAnnotation.to_annotation()`；新视图类型先注册 `VIEW_REGISTRY::ViewSpec`
-22. **energy viewer 禁提交任务** — 帧操作仅"保存为候选"；`energyGraphConfirmAndBatch` 为前端禁止标识符；3Dmol viewer 必须经 `scheduleViewerFraming`/`frame3DViewer`
-23. **NEVER 添加 active 工作流而不登记 edit coverage** — `job_edit.py::EDIT_ACTIVE_WORKFLOWS` 必须同步；`audit_workflow_edit_coverage()` 守护
-24. **远程提交必须带 scheduler markers** — `job.json` + `task.json` 缺失致远程嵌套错误；`_upload_scheduler_markers` 在 bsub 前调用
-25. **keyword choices 大小写折叠只走三个 choke points** — CLI parser `_normalize_string_choices`、catalog `normalize_and_validate_method_config`、BatchOptimize `_canonicalize_batch_keywords`；禁逐参数 `type=` 包装器
-26. **远程 `pending_fetch` 禁仅依赖浏览器 `?fetch=1`** — 后台 terminal transition 时 `_queue_catalog_prefetch`；前端 `?fetch=1` 为快速路径非唯一路径
-27. **远程作业结果读取必须经 `_job_read_root`** — 禁直接读 `record.work_dir`；远端走 `RemoteStructureCache.fetch_catalog`；写回走 `push_paths`
-28. **前端 `api()` 超时禁泄露 raw AbortError** — SFTP 端点用 `apiRemote()`（60s）；默认 8s 只用于本地端点
-29. **`acp_services` 禁止导入 `acp`** — 单向依赖硬门：含懒加载、`if TYPE_CHECKING:`、`importlib.import_module("acp…")`、`__import__`、字符串 `getattr`。禁止把 `acp.*` 类型放进 `acp_services` 公开签名。守护 `tests/test_acp_services_isolation.py` + `tests/test_services_worker_contract.py`
-30. **旧路径只做 identity forwarder，不做第二实现** — `acp.scheduler.{store,migrations}`、`acp.calculations.{contracts,step_result,step_requirements}`、`acp.catalog.method_levels_to_cli_flags` 必须与 `acp_services` 对应对象 `is` 同一对象；禁止在 `acp` 侧重加业务逻辑。公共服务能力唯一实现根在 `src/acp_services/`
-31. **兼容面与资产不可为“减行数”删除** — `acp.calculations.primitives`、`acp.backends`、`src/acp/compat/legacy/`（只读）、退役工作流内部引擎 shim、`tests/baseline/recovery_fixtures/`、`src/cccp/analysis/nmr/model_assets/`（含 `NOTICE.md`/`LICENSE-DP5`）与 `frontend/js/vendor/` 均保留；调用者见 `tests/baseline/services-evidence/public_shim_inventory.md`
-32. **Services 护栏/台账不得放宽或跳过** — `tests/test_services_*.py`、`test_acp_services_isolation.py`、`tests/test_services_doc_sync.py`、`tests/test_services_closure_record.py` 与 6 列 `migration_ledger.md` 是收口门；`NOT_VERIFIED` 不得改写成 PASS，`已交付字段` 不得写成 `前端已接入`
+5. **NEVER 在 `__init__.py` 放实现** — 例外仅 `qc/cluster/__init__`、`qc/runners/__init__` 与纯 re-export 壳
+6. **`__main__` 仅 acp** — `python -m cccp` 不可用；console script 一律 `acp`（+ 发行角色 `acp-worker`）
+7. **ORCA `%geom` 关键字是 `Trust` 非 `TrustRadius`** — `MaxIter` 出自 `max_cycles`/`geom_maxiter`
+8. **新代码禁裸 `except Exception:`**
+9. **常量单点定义** — 新常量禁复制
+10. **CI（更新 2026-10-27/M0-02b）**: push main/feat/** + PR → py3.10/3.11/3.12 compileall + `pytest -m "not slow and not contract"`（`--strict-markers` 默认开启，markers 见 `pyproject.toml`）；install 行必须含全部 extras + nmrglue（`pip install -e '.[dev,api,remote]'`）；browser 套件仅 3.11（`.[browser]` + playwright chromium）；**frontend-module-tests**（Node 22.19，`run_all.js` 非空强制门）；**rph-detect/rph job**（Node 22.19.0 + pnpm 11.28.5，存在 `rph/pnpm-lock.yaml` 才跑：install --frozen-lockfile → build → test → check → **package** → upload）；**mcp-conformance**（Python3.11+Node22.19+pnpm11.28.5）已接线真实门：先跑非空结构子集（mcp_process+mcp_backends 非 contract），再跑 `tests/test_acp2_mcp_sdk_contract.py -m contract`（JUnit 计数防静默空过：空选择/部分 skip/DSH 可得却全 skip 均 fail）；外部 DSH 树（~2.8GB，rev `687f282e`）经 repo variable `ACP2_DSH_SOURCE` 声明，lane 不自行拉取，声明却不可解析即 fail `DSH_DECLARED_BUT_UNRESOLVED`；各 job 记录 wall-clock，超时必须分片不得 skip。lint/format 门仍注释中
+11. **`_SCHEDULER_MARKERS` 必须列出调度器预建文件全集** — 守护：`tests/test_scheduler_markers_audit.py`
+12. **新增 job status 必须全表面同步** — `jobs.py::JobStatus` is_active/is_terminal + `store.counts()` + 前端 `getStatusClass`/i18n（zh+en）
+13. **NEVER 裸 `DELETE FROM jobs`** — 走 `store.purge_cascade`
+14. **`resume()` 仅 WAITING_REVIEW review-only** — pause/unpause/continue 是独立方法
+15. **NEVER 把 `job_id`/时间戳放进磁盘路径** — job_id 仅 DB PK/job.json/task.json/WORK/00_RUNTIME
+16. **mechanism 布局归一化（v1.2）** — 禁直接拼 `mechanism_study/<id>/` 路径
+17. **四层架构与唯一执行驻点** — 新计算能力一律先落 `src/cccp/calculation/tasks/`；`acp/calculations/primitives/` 仅纯兼容转发 + ACP 发布契约；`acp/backends/` 仅纯 re-export shim；backends 层禁导任务模块；`src/cccp/**` 禁导入 `acp`
+18. **compat/ 只读禁止写入** — 新代码消费数据走 `results/manifest`（v2）
+19. **两层目录: 安装目录 ≠ 数据目录** — run_root 须原生文件系统；禁 `./ACP_runs` 相对默认、禁默认 `/tmp`
+20. **前端禁硬编码退役 id 作默认值** — 目录驱动 `resolveDefaultWorkflow()`
+21. **NEVER 绕过 `acp.results.frames` 契约发视图投影** — 一律经 `to_node()/to_annotation()`；ScienceProduct 经 `results/frames_adapter.py`
+22. **energy viewer 禁提交任务** — 帧操作仅"保存为候选"；`energyGraphConfirmAndBatch` 为前端禁止标识符
+23. **NEVER 添加 active 工作流而不登记 edit coverage** — `job_edit.py::EDIT_ACTIVE_WORKFLOWS` 必须同步
+24. **远程提交必须带 scheduler markers** — `_upload_scheduler_markers` 在 bsub 前调用
+25. **keyword choices 大小写折叠只走三个 choke points** — 禁逐参数 `type=` 包装器
+26. **远程 `pending_fetch` 禁仅依赖浏览器 `?fetch=1`** — 后台 terminal transition 时 `_queue_catalog_prefetch`
+27. **远程作业结果读取必须经 `_job_read_root`** — 远端走 `RemoteStructureCache.fetch_catalog`；写回走 `push_paths`
+28. **前端 `api()` 超时禁泄露 raw AbortError** — SFTP 端点用 `apiRemote()`（60s）
+29. **`acp_services` 禁止导入 `acp`** — 单向依赖硬门；禁把 `acp.*` 类型放进公开签名。**wire-id 例外（M1-01c，唯一范围）**：仅允许 `src/acp_services/entrypoints/wire_identifiers.py` 中经审查的常量值（当前 `NEGOTIATION_EXTENSION_ID = "acp.negotiation.v1"`，即 `REVIEWED_WIRE_IDENTIFIERS` 元组）；其他模块只能用常量引用，禁再出现字面量、禁 `chr(97)` 之类拼接；import / 懒加载 / `TYPE_CHECKING` / `importlib` / `__import__` / `getattr(...,"acp.*")` / `sys.modules["acp.*"]` 在该模块内亦**永不豁免**；ANTI #32 不新增例外。守护 `tests/test_acp_services_isolation.py`（按常量值+模块 allowlist，不按行号/函数位置豁免）+ `tests/test_services_injection_contracts.py` + `tests/test_services_worker_contract.py`
+30. **旧路径只做 identity forwarder，不做第二实现** — 公共服务能力唯一实现根在 `src/acp_services/`
+31. **兼容面与资产不可为"减行数"删除** — `acp.calculations.primitives`、`acp.backends`、`compat/legacy/`、退役引擎 shim、`tests/baseline/recovery_fixtures/`、`cccp/analysis/nmr/model_assets/`（NOTICE.md/LICENSE-DP5）与 `frontend/js/vendor/` 均保留
+32. **Services 护栏/台账不得放宽或跳过** — `NOT_VERIFIED` 不得改写成 PASS，`已交付字段` 不得写成 `前端已接入`
+33. **插件 discovery 永不 import 插件模块**（metadata-only）；enablement 一律 disabled-by-default；冲突/许可/版本/fixture 错误在启动前 fail-closed（`cccp/plugin/errors.py`）；插件不直接起子进程（执行经 calculation 层）。守护 `tests/test_cccp_plugin_{pilot,sdk}.py` + `tests/test_acp2_science_plugin_*.py`
+34. **NMR 科学唯一实现根 = `cccp/analysis/nmr/`** — `acp/nmr/` 只做转发 + 修订/评审面；模型资产唯一访问路径 `analysis/nmr/assets.py`（禁硬编码 model_assets 路径；`acp/nmr/models/` 空目录为遗留，勿放回资产）
+35. **科学契约语料字节一致** — `cccp/analysis/research/contracts/` 与 `docs/reference/next-change/acp2-contracts/science/` 必须同步修改（drift guard `tests/test_acp2_science_installed_package.py`）；模型/LLM 叙述永不作为证据（`reject_model_conclusion_as_evidence`）
+36. **rph 冻结依赖方向 `cli → dsh-bundle → bridge → research`** — `@rph/research` 顶层自由（禁 import）；bridge 禁 fetch/HTTP/spawn；rph 上层不得新增根 package.json；DSH 本体在外部 `$ACP2_TOOLS/deepseek-harness`，不 vendor
+37. **`src/acp_web_assets` 是构建期生成物**（build_release.py 从 frontend/ 拷贝）— 源码树无此目录，勿手工创建；发行制品一律经 `scripts/build_release.py` + `scripts/acceptance/` 验收，证据落 `reports/`
 
 ## COMMANDS
 ```bash
 # Install
-pip install -e .                 # 运行全部 pytest 需 -e '.[dev,api,remote]'（CI 同）
-pip install -e '.[api]' / '.[remote]' / '.[dev]'
+pip install -e .                 # 运行全部 pytest 需 -e '.[dev,api,remote]'（CI 同，另装 nmrglue）
+pip install -e '.[api]' / '.[remote]' / '.[browser]' / '.[dev]'
 
-# Run — 15 个可运行工作流（retired 子命令会被 CLI 拦截并提示替代）
+# Run — CLI 子命令 run/doctor/init/task/mcp
 acp run Confsearch --input "CCO" --protocol xtb-crest --refinement-policy screen --output ./out
-acp run Confsearch --input "CCO" --protocol censo-crest --profile light
 acp run PESsearch --from-job 20260823_001_Confsearch --output ./pes_out
 acp run BatchOptimize --from-job 20260823_002_PESsearch --output ./batch_out
-acp run BatchOptimize --items-file structures.xyz --profile opt_freq_sp_thermo
-acp run XtbPathSearch --path-config request.json --output ./path_out
-acp run OrcaGradient --gradient-config request.json --output ./grad_out
-acp run XtbConstrainedOpt --opt-config request.json --output ./opt_out
+acp run XtbPathSearch --path-config request.json --output ./path_out      # 另 OrcaGradient / XtbConstrainedOpt
 acp run irc --input ts_structure.xyz --input-role transition_state --ts-provenance prov.json --output ./irc_out
 acp run scan --input "CCO" --coordinate 3,4,1.0,3.0 --output ./scan_out   # 默认无 ScanTS；--scants 显式 opt-in
 acp run nmr --input "CCO" --spectrum exp_spectrum.txt --output ./nmr_out
 acp run singlepoint --input molecule.xyz --method "wB97X-D4" --basis "def2-TZVPPD"
-acp run optimize --input molecule.xyz --method "r2SCAN-3c" --charge 0 --multiplicity 1
+acp run optimize --input molecule.xyz --method "r2SCAN-3c"
 acp run frequency --input molecule.xyz
 acp run xtb_optimize --input molecule.xyz
-acp run tsmode --source-bundle bundle.json --source-mode-index 7   # 原生打印序号（非位置序）；真实运行另需 --allow-unverified-mapping
 acp run casscf --input molecule.xyz
 acp run serve --port 8765
+acp init [--answers answers.yaml | --plan]        # 初始化向导（资源菜单/新节点 TOFU/三态 doctor）
+acp task --help                                   # Services 本地任务管理（--controller <url> 远程）
+acp mcp serve --controller http://127.0.0.1:8765  # MCP stdio（协议 2025-06-18，8 工具）
 acp doctor
-acp task --help                      # Services 本地任务管理（ingest/plan/execute/query/pause/unpause/continue/cancel/rerun/recover/export）
 
 # Retired → 现役替代
 # ensemble→Confsearch censo-crest screen · energy→Confsearch rank1/cumulative-99 · xtbmd_censo_energy→Confsearch xtbmd-censo
 # mechanism→PESsearch → BatchOptimize → irc · optfreq/optfreqsp/Lowconfirm/Highconfirm→BatchOptimize 各 profile
 
+# Release (ACP 2.0 四发行)
+python scripts/build_release.py --out dist/release        # cccp/acp-worker/acp-web 角色 wheel
+python scripts/acceptance/acp2_package_install.py         # 干净 venv 安装验收
+python scripts/acceptance/acp2_runtime.py --scenario package-install
+
+# rph (Research Package Hub)
+pnpm --dir rph install && pnpm --dir rph build            # tsc -b
+pnpm --dir rph check                                      # check-boundaries.mjs + tsc -b
+pnpm --dir rph test && pnpm --dir rph package             # dist-packages/*.tgz
+
 # Test
-pytest tests/ -v && pytest tests/ --run-slow -v && pytest -m "not slow" -v
-pytest tests/test_frontend_sync.py tests/test_acp_energy_graph.py -v
-pytest tests/test_acp_workflows_nmr.py tests/test_acp_backends.py -v
-pytest tests/test_remote_phase1.py -v
-pytest tests/test_services_first_slice_contracts.py tests/test_services_closure_record.py tests/test_services_plan_consistency.py tests/test_services_doc_sync.py -q
-pytest tests/test_acp_services_isolation.py tests/test_architecture_invariants.py -q
+pytest tests/ -v && pytest tests/ -m "not slow" -q
+pytest tests/test_architecture_invariants.py tests/test_acp_services_isolation.py -q   # 架构守护
+pytest tests/test_services_doc_sync.py tests/test_services_closure_record.py -q       # Services 收口门
+pytest tests/test_cccp_plugin_sdk.py tests/test_acp2_science_recipe.py -q             # ACP2 科学
+pytest tests/test_acp2_runtime_event_recovery.py tests/test_acp2_runtime_approvals.py -q
 
 # Lint/format（pre-commit hooks = ruff --fix + ruff-format）
 ruff check src tests && ruff format --check src tests
 ```
 
 ## ACP 2.0 RELEASE ROLES（B25b，2026-10-23）
-- **四发行**: `cccp` / `acp-worker` / `acp-web` 0.3.0 互不重叠；根 `acp` 单发行保留，二者二选一安装。构建 `scripts/build_release.py`，安装验收 `scripts/acceptance/acp2_package_install.py` + `scripts/acceptance/acp2_runtime.py --scenario package-install`。
-- **安装证据**: `reports/acp2_implementation/bb45a46/B/B25/`（`summary.json` 经 `--check-only` 通过；四个干净 venv、CCCP 无 Controller 样例、Lab/MCP/CLI、资产/版本）。B25a 首版 `acp_web` 的 `OriginPolicy` 启动缺陷在 B25b 重建中修正；原始制品在 `release-b25a-original/`。
-- **版本**: 四处 `0.3.0`（`src/cccp/__init__.py`、`src/cccp/version.py`、`src/acp/__init__.py`、`pyproject.toml`）；`requirements-node.txt` 未新增 import。
-- **MCP**: 可执行入口 `acp mcp serve --controller <url>`；协议 `2025-06-18`，八工具。`runtime/mcp-launch.template.json` 的 `entrypoint` 只是协议 owner 元数据。
-- **未发布**: C33/C34 与 C `experience/static-assets.manifest.json` 为 `NOT_VERIFIED`（预期路径见 B25b `a-c-evidence.json` / `static-assets-status.json`）；C35 非 B25b 前置。生产 service/run_root 未触碰。
+- **四发行**: `cccp` / `acp-worker` / `acp-web` 0.3.0 互不重叠；根 `acp` 单发行保留，二者二选一安装。构建 `scripts/build_release.py`，安装验收 `scripts/acceptance/acp2_package_install.py` + `acp2_runtime.py --scenario package-install`。
+- **角色内容**: `cccp` = `cccp/**` + model_assets + research 契约语料 + py.typed（无 CLI）；`acp-worker` = `acp_services/**`（deps cccp；script `acp-worker = acp_services.worker_bootstrap:main`）；`acp-web` = `acp/**` + 构建期生成 `src/acp_web_assets`（deps cccp + acp-worker + fastapi/uvicorn/paramiko；script `acp`）。
+- **安装证据**: `reports/acp2_implementation/bb45a46/B/B25/`（summary.json 经 --check-only 通过；四个干净 venv；MCP 协议 2025-06-18 八工具）。
+- **未发布**: C33/C34 与 C `experience/static-assets.manifest.json` 为 `NOT_VERIFIED`；生产 service/run_root 未触碰。
+- **文档现状提示**: 根 `README.md` 的"开发状态"表止于 Phase 4 + 2026-10-05 收口，未吸收 ACP 2.0/Services/四发行 — 现状以本 KB 与 `docs/reference/next-change/` 为准。
 
 ## SYSTEMD SERVICE
 - **Service**: `acp.service` · config `/etc/systemd/system/acp.service`（**generated — 编辑 `scripts/install_systemd.sh`，勿手改 unit**）· URL http://127.0.0.1:8765 · 日志 `sudo journalctl -u acp -f`
 - **Reload**: 任何代码修改后 `sudo systemctl restart acp`（服务无 `--reload`）
-- **Services 收口**: `scripts/install_systemd.sh` 生成 `ExecStart=<repo>/scripts/start_acp.sh`（`uvicorn acp.api.server:app`，`ACP_RUN_ROOT=/var/lib/acp/runs`）；Services 改造未改 unit/启动脚本，文档收口（todo 70）**不重启服务**。实际发布/重启/冒烟归 todo 76（F1—F4 批准后）
+- **发布/重启/冒烟**: 归发布流程（先跑 `scripts/acceptance/` + 更新 `reports/` 证据）

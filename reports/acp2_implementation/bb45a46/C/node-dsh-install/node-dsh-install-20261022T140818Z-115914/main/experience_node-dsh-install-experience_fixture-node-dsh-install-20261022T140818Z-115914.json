@@ -1,0 +1,86 @@
+{
+  "artifacts": [
+    {
+      "path": "node-dsh-install.json",
+      "sha256": "c2746bb2c3eaaa8b9ce126ebc96171ad6255e46b5a4beb726992d53c6809b889",
+      "size_bytes": 257
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "v22.19.0 expected=v22.19.0",
+      "name": "node_dsh.node_version",
+      "status": "PASS"
+    },
+    {
+      "detail": "11.28.5 expected=11.28.5",
+      "name": "node_dsh.pnpm_version",
+      "status": "PASS"
+    },
+    {
+      "detail": "687f282e8625c6b8d11ff58211a90524be2e4317 expected=687f282e8625c6b8d11ff58211a90524be2e4317",
+      "name": "node_dsh.dsh_revision",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 0.2.1-rc.2",
+      "name": "node_dsh.dsh_version_probe",
+      "status": "PASS"
+    },
+    {
+      "detail": "c0649af18e6a24f6fe5535a3e86b341dd49a8e71117c8b68bde973ef834f16f2 expected=c0649af18e6a24f6fe5535a3e86b341dd49a8e71117c8b68bde973ef834f16f2",
+      "name": "node_dsh.archive_sha256",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+    "harness_revision": "906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+  "command": [
+    "/ACPServer/acp2-development/venvs/c/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "node-dsh-install",
+    "--timeout",
+    "1200",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/node-dsh-install/node-dsh-install-20261022T140818Z-115914/main"
+  ],
+  "contract_version": "1.0.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "fixture",
+  "exit_code": 0,
+  "extensions": {
+    "experience.harness_contract_revision": "906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+    "experience.mode": "fixture",
+    "experience.product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+    "experience.run_id": "node-dsh-install-20261022T140818Z-115914",
+    "experience.scenario_key": "node-dsh-install",
+    "experience.subcase": null,
+    "experience.test_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec"
+  },
+  "finished_at": "2026-10-22T14:08:20Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:fixture",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "node-dsh-install-20261022T140818Z-115914",
+  "scenario": "experience:node-dsh-install",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T14:08:18Z",
+  "submission_id": null,
+  "usage": null
+}

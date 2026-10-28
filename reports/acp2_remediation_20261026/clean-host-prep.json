@@ -1,0 +1,43 @@
+{
+  "access": "ephemeral local SSH key; password not stored in repository",
+  "generated_on": "2026-10-26T14:54:27.618525+00:00",
+  "host_alias": "ACPtest@clean-arm64-01",
+  "limitations": [
+    "No sudo was used.",
+    "This is implementation-side preparation, not independent-operator acceptance.",
+    "Independent reviewer remains NOT_VERIFIED.",
+    "No ACP package, model, QC, or LSF work has been installed/run on this host yet."
+  ],
+  "provisions": [
+    {
+      "kind": "micromamba prefix",
+      "name": "python",
+      "path": "~/acp2-envs/py311",
+      "version": "3.11.18"
+    },
+    {
+      "kind": "user-level tarball",
+      "name": "node",
+      "path": "~/acp2-tools/node-v22.19.0-linux-arm64",
+      "version": "22.19.0"
+    },
+    {
+      "kind": "corepack wrapper",
+      "name": "pnpm",
+      "path": "~/acp2-tools/bin/pnpm",
+      "version": "11.28.5"
+    },
+    {
+      "name": "run_root",
+      "path": "~/acp2-runs/remediation"
+    },
+    {
+      "name": "artifact_store",
+      "path": "~/acp2-artifacts/remediation"
+    }
+  ],
+  "remote_output": "host=ACPServer\narch=aarch64\npython=Python 3.11.18\nnode=v22.19.0\npnpm=11.28.5\ngit=git version 2.47.3\nprofile=/home/ACPtest/acp2-env.sh\n/dev/mmcblk0p2   59G  9.1G   47G  17% /",
+  "role": "implementation-side clean-host preparation",
+  "schema": "acp2.remediation.clean_host_prep.v1",
+  "secret_free": true
+}

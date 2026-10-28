@@ -67,7 +67,8 @@ const LAYOUT_DEFAULTS = {
             queue: {collapsed: false}, info: {collapsed: false},
             science_question: {collapsed: false},
             scientific_evidence: {collapsed: false},
-            research_approval: {collapsed: false} },
+            research_approval: {collapsed: false},
+            capability_form: {collapsed: false} },
   heights: { left_log: 180, right_info: 220 }
 };
 let layoutState = loadLayoutState();

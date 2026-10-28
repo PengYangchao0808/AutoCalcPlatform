@@ -264,7 +264,7 @@ def _assert_selftest(context: Any, selftest: dict[str, Any]) -> bool:
     _assert_detail(
         context,
         "model_live.t13a_no_real_spend",
-        separated and not data_root.startswith("<acp2-dev>/data/b/"),
+        separated and not data_root.startswith("/ACPServer/acp2-development/data/b/"),
         f"selftest_data_root={data_root} live_ledger={live}",
     )
     live_usage = _live_usage()
@@ -916,6 +916,26 @@ def _scenario_model_live(context: Any) -> int:
     if not selftest_pass:
         _assert_detail(context, "model_live.t13a_overall", False, "selftest was not fully PASS")
         return EXIT_FAIL
+    publish_observations(
+        context,
+        {
+            "transport": "present",
+            "controller": "absent",
+            "model": "present",
+            "qc": "absent",
+            "lsf": "absent",
+            "browser": "absent",
+            "artifact": "absent",
+            "denial": "absent",
+        },
+        model_calls=int(usage.get("model_calls") or 0),
+        model_evidence=(
+            "live model gateway ledger: "
+            f"model_calls={usage.get('model_calls')} "
+            f"total_tokens={usage.get('total_tokens')} "
+            f"ledger={usage.get('ledger_path')}"
+        ),
+    )
     return EXIT_PASS
 
 

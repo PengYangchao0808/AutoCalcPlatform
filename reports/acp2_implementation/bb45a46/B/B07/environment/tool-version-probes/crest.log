@@ -1,5 +1,5 @@
-argv: /home/<user>/crest/crest --version
-cwd: <repo>
+argv: /home/xieningke/crest/crest --version
+cwd: /ACPServer/AutoCalcPlatform
  
        ╔════════════════════════════════════════════╗
        ║            ___ ___ ___ ___ _____           ║

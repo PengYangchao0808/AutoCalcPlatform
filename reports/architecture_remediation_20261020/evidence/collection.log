@@ -1,6 +1,6 @@
 === TASK 1 raw collection log ===
 collected_on: 2026-10-20T17:13:55+08:00
-host: Linux redacted-host 5.14.0-687.56.1.el9_8.x86_64 #1 SMP PREEMPT_DYNAMIC Thu Oct 8 14:47:43 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+host: Linux workstation 5.14.0-687.56.1.el9_8.x86_64 #1 SMP PREEMPT_DYNAMIC Thu Oct 8 14:47:43 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
 
 === git rev-parse HEAD ===
 878e3557b3b593a0c42adf842e80fe1408db395e

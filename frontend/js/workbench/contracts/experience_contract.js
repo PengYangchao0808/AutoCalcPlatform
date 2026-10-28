@@ -27,6 +27,7 @@ ACPWorkbench.contracts.experience = (function () {
 
   var AVAILABILITY_STATES = ["unprepared", "preparing", "readable", "failed"];
   var CLAIM_STATES = ["supported", "refuted", "inconclusive", "not_evaluated"];
+  var EVIDENCE_STATUSES = ["complete", "partial", "incomplete", "failed"];
   var PROPOSAL_DECISIONS = ["proposed", "approved", "rejected", "superseded", "deferred"];
   var RECORD_DECISIONS = ["accept", "revise", "reject", "defer", "escalate"];
   var ACP_TOOLS = [
@@ -315,6 +316,92 @@ ACPWorkbench.contracts.experience = (function () {
     return result(problems);
   }
 
+  /** `acp2.runtime.evidence-projection.v1` structural check (M1-06).
+   *
+   * The platform projection is the only evidence document a consumer may read:
+   * execution status and claim status are separate fields, a decision is never
+   * merged into a task status, and every cited evidence ref must be digest
+   * bound. This validator mirrors the frozen payload; it never re-derives a
+   * claim status and never recomputes a digest (the server owns both).
+   */
+  function validateEvidenceView(body) {
+    var problems = [];
+    if (!isObject(body)) return result(["body is not an object"]);
+    if (body.schema !== "acp2.runtime.evidence-projection.v1") {
+      problems.push("schema: expected acp2.runtime.evidence-projection.v1");
+    }
+    var research = requireObject(problems, body, "research", "");
+    if (research !== null) {
+      requireText(problems, research, "principal_id", "research.");
+      requireText(problems, research, "project_id", "research.");
+      if (hasOwn(research, "research_id") &&
+          !RESEARCH_ID_RE.test(String(research.research_id || ""))) {
+        problems.push("research.research_id: expected res-<id>");
+      }
+      requireText(problems, research, "session_id", "research.");
+      requireInteger(problems, research, "round", 0, "research.");
+    }
+    var taskRef = requireObject(problems, body, "task_ref", "");
+    if (taskRef !== null) {
+      requireText(problems, taskRef, "project_id", "task_ref.");
+      requireText(problems, taskRef, "task_id", "task_ref.");
+      requireInteger(problems, taskRef, "attempt", 1, "task_ref.");
+      var release = requireObject(problems, taskRef, "release", "task_ref.");
+      if (release !== null) {
+        requireText(problems, release, "release_id", "task_ref.release.");
+        if (!DIGEST_RE.test(String(release.release_digest || ""))) {
+          problems.push("task_ref.release.release_digest: expected sha256:<64 hex>");
+        }
+      }
+    }
+    var report = requireObject(problems, body, "report", "");
+    if (report !== null) {
+      requireText(problems, report, "report_id", "report.");
+      if (!DIGEST_RE.test(String(report.digest || ""))) {
+        problems.push("report.digest: expected sha256:<64 hex>");
+      }
+      requireInteger(problems, report, "schema_version", 1, "report.");
+      requireText(problems, report, "subject_id", "report.");
+    }
+    requireText(problems, body, "execution_terminal_state", "");
+    requireText(problems, body, "qualification", "");
+    if (hasOwn(body, "evidence_status") && EVIDENCE_STATUSES.indexOf(body.evidence_status) === -1) {
+      problems.push("evidence_status: not one of " + EVIDENCE_STATUSES.join("|"));
+    }
+    if (hasOwn(body, "overall_claim_status") &&
+        CLAIM_STATES.indexOf(body.overall_claim_status) === -1) {
+      problems.push("overall_claim_status: not one of " + CLAIM_STATES.join("|"));
+    }
+    var claims = requireArray(problems, body, "claims", "");
+    claims.forEach(function (item, index) {
+      var prefix = "claims[" + index + "].";
+      if (!isObject(item)) { problems.push(prefix + ": not an object"); return; }
+      requireText(problems, item, "claim_id", prefix);
+      if (CLAIM_STATES.indexOf(item.status) === -1) {
+        problems.push(prefix + "status: not one of " + CLAIM_STATES.join("|"));
+      }
+    });
+    var refs = requireArray(problems, body, "evidence_refs", "");
+    refs.forEach(function (item, index) {
+      var prefix = "evidence_refs[" + index + "].";
+      if (!isObject(item)) { problems.push(prefix + ": not an object"); return; }
+      requireText(problems, item, "evidence_id", prefix);
+      requireText(problems, item, "kind", prefix);
+      if (!DIGEST_RE.test(String(item.sha256 || ""))) {
+        problems.push(prefix + "sha256: expected sha256:<64 hex>");
+      }
+    });
+    requireArray(problems, body, "blocking_missing_checks", "");
+    requireArray(problems, body, "limitations", "");
+    if (!DIGEST_RE.test(String(body.projection_digest || ""))) {
+      problems.push("projection_digest: expected sha256:<64 hex>");
+    }
+    if (hasOwn(body, "normal_reuse") && typeof body.normal_reuse !== "boolean") {
+      problems.push("normal_reuse: expected boolean");
+    }
+    return result(problems);
+  }
+
   /** Display mapping only; the schema above rejects any value outside the four
    * states. Unknown values are surfaced as `failed`, never as a fifth state. */
   function normalizeAvailability(value) {
@@ -337,6 +424,8 @@ ACPWorkbench.contracts.experience = (function () {
     validateTaskStatus: validateTaskStatus,
     validateProposal: validateProposal,
     validateResearchRecord: validateResearchRecord,
+    validateEvidenceView: validateEvidenceView,
+    EVIDENCE_STATUSES: EVIDENCE_STATUSES,
     normalizeAvailability: normalizeAvailability,
     isClaimStatus: isClaimStatus,
   };

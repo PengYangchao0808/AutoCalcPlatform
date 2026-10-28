@@ -83,3 +83,5 @@ export * from "./proposal.js";
 export * from "./cas.js";
 export * from "./store.js";
 export * from "./memory.js";
+export * from "./submit-intent.js";
+export * from "./evidence.js";

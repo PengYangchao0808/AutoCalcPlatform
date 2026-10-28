@@ -1,0 +1,95 @@
+{
+  "budget": {
+    "measured_step_timings": "recorded in chain/<step>.json",
+    "queue_deadline": "NOT_VERIFIED",
+    "timing_basis": "unmeasured",
+    "walltime_process_termination": "NOT_VERIFIED"
+  },
+  "claim_status": "inconclusive",
+  "counts": {
+    "attempt": 4,
+    "qc_invocation": 4,
+    "task_ref": 9
+  },
+  "criteria": {
+    "DA-C01-ts-single-imaginary-mode": "inconclusive",
+    "DA-C02-ts-mode-mapping": "supported",
+    "DA-C03-frequency-evidence": "inconclusive",
+    "DA-C04-irc-bidirectional": "not_evaluated",
+    "DA-C05-endpoint-association": "inconclusive",
+    "DA-C06-energy-comparability": "not_evaluated",
+    "DA-C07-reactant-stoichiometry": "inconclusive"
+  },
+  "environment": "Local",
+  "missing": {
+    "incomplete_steps": [
+      "ts_optimize",
+      "ts_frequency",
+      "irc",
+      "endpoint_reactants",
+      "endpoint_product",
+      "energy_thermochemistry"
+    ],
+    "missing_receipts": [
+      "walltime_process_termination",
+      "terminal_usage_receipt"
+    ]
+  },
+  "reason": "the row is open: incomplete steps ['ts_optimize', 'ts_frequency', 'irc', 'endpoint_reactants', 'endpoint_product', 'energy_thermochemistry']",
+  "receipts": {
+    "attempt_attribution": "per step in chain/<step>.json",
+    "process_group_termination_receipt": "NOT_VERIFIED (M1-04 walltime_process_termination)",
+    "usage_receipt": "not produced (no Controller-side usage collection in this run)"
+  },
+  "required": true,
+  "row_id": "DA-ENV-LOCAL",
+  "scenario_result": "FAIL",
+  "state": "open",
+  "steps": {
+    "candidate_frequency": {
+      "duration_seconds": 383.55,
+      "entry": "bounded_recipe_envelope",
+      "status": "completed"
+    },
+    "candidate_path": {
+      "duration_seconds": 859.07,
+      "entry": "platform_workflow_route",
+      "status": "completed"
+    },
+    "endpoint_prep": {
+      "duration_seconds": 2525.79,
+      "entry": "legacy_task_core",
+      "status": "completed"
+    },
+    "endpoint_product": {
+      "duration_seconds": null,
+      "entry": null,
+      "status": "skipped"
+    },
+    "endpoint_reactants": {
+      "duration_seconds": null,
+      "entry": null,
+      "status": "skipped"
+    },
+    "energy_thermochemistry": {
+      "duration_seconds": 0.0,
+      "entry": "deterministic_analysis",
+      "status": "partial"
+    },
+    "irc": {
+      "duration_seconds": null,
+      "entry": null,
+      "status": "skipped"
+    },
+    "ts_frequency": {
+      "duration_seconds": null,
+      "entry": null,
+      "status": "skipped"
+    },
+    "ts_optimize": {
+      "duration_seconds": 3197.16,
+      "entry": "legacy_task_core",
+      "status": "failed"
+    }
+  }
+}

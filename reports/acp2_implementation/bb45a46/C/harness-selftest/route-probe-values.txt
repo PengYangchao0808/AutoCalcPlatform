@@ -1,0 +1,7 @@
+# route_probe value-taking flags: missing value -> 3, immediate
+--mode -> rc=3 stdout=route_select: option --mode requires a value exit=3 
+--phase -> rc=3 stdout=route_select: option --phase requires a value exit=3 
+--subcase -> rc=3 stdout=route_select: option --subcase requires a value exit=3 
+# dry-run precedence: --mode live --dry-run selects C
+interpreter=/ACPServer/acp2-development/venvs/c/bin/python source=/ACPServer/acp2-development/C mode=fixture
+rc=0

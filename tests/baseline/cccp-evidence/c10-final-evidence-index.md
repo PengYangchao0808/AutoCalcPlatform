@@ -247,7 +247,7 @@
 原始输出（2026-10-19，`/usr/bin/python3.11`，exit=0；副本 `E/c10-final-index-crosscheck.out`）：
 
 ```
-ROOT=<repo>
+ROOT=/ACPServer/AutoCalcPlatform
 rows=60 (todos 1-56 + F1-F4)
 todo   1: OK (1 paths)
 todo   2: OK (1 paths)

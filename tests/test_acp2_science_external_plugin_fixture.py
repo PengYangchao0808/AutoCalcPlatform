@@ -141,7 +141,8 @@ def test_manifest_digests_match_the_fixture_sources() -> None:
     payload = json.loads(MANIFEST.read_text(encoding="utf-8"))
 
     assert payload["distribution_digest"] == integrity.distribution_digest(
-        FIXTURE_ROOT / "src" / MODULE_NAME
+        FIXTURE_ROOT / "src" / MODULE_NAME,
+        data_dir=FIXTURE_ROOT / "fixtures",
     )
     assert payload["fixture_evidence"][0]["digest"] == integrity.fixture_evidence_digest(
         FIXTURE_ROOT / "fixtures"

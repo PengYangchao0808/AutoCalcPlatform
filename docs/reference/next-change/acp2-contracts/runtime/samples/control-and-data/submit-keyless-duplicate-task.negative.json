@@ -1,0 +1,22 @@
+{
+  "sample_id": "submit-keyless-duplicate-task.negative",
+  "contract": "control-and-data.v1.json",
+  "kind": "negative",
+  "operation": "submit",
+  "payload": {
+    "workflow": "singlepoint",
+    "input": {
+      "xyz_text": "1\nH\nH 0 0 0"
+    },
+    "plan_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "entry": "http-manual-legacy"
+  },
+  "expected": {
+    "valid": false,
+    "class": "conflict",
+    "code": "revision_conflict",
+    "violation": "keyless_submit_non_idempotent_duplicate",
+    "field": "idempotency_key",
+    "note": "HTTP manual/legacy submit may omit the key, but the call is explicitly non-idempotent: a retry creates a SECOND task and the response never reports idempotent_replay=true."
+  }
+}

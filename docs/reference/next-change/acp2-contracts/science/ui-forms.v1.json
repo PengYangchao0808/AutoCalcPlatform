@@ -1,0 +1,356 @@
+{
+  "contract_version": 1,
+  "forms": [
+    {
+      "capability_id": "electronic.energy",
+      "descriptor_digest_pin": null,
+      "form": {
+        "capability_id": "electronic.energy",
+        "description": "One frozen single-point request; every field maps onto a TaskRequest path.",
+        "form_digest": "sha256:5d3b3fc9b0702f2689919194ecca3353475ca6e0482abdc72c4a0d6314b14696",
+        "form_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "basis": {
+              "maxLength": 64,
+              "minLength": 2,
+              "title": "Basis set",
+              "type": "string",
+              "x-acp": {
+                "binding": "task.level.basis",
+                "widget": "text"
+              }
+            },
+            "charge": {
+              "default": 0,
+              "maximum": 10,
+              "minimum": -10,
+              "title": "Charge",
+              "type": "integer",
+              "x-acp": {
+                "binding": "task.charge",
+                "widget": "number"
+              }
+            },
+            "method": {
+              "maxLength": 64,
+              "minLength": 2,
+              "title": "Method",
+              "type": "string",
+              "x-acp": {
+                "binding": "task.level.method",
+                "widget": "text"
+              }
+            },
+            "multiplicity": {
+              "default": 1,
+              "maximum": 10,
+              "minimum": 1,
+              "title": "Multiplicity",
+              "type": "integer",
+              "x-acp": {
+                "binding": "task.multiplicity",
+                "widget": "number"
+              }
+            },
+            "nproc": {
+              "default": 1,
+              "maximum": 128,
+              "minimum": 1,
+              "title": "Processes",
+              "type": "integer",
+              "x-acp": {
+                "binding": "task.resources.nproc",
+                "widget": "number"
+              }
+            },
+            "source": {
+              "description": "Inline structure text handed to the calculation.",
+              "minLength": 4,
+              "title": "Structure",
+              "type": "string",
+              "x-acp": {
+                "binding": "task.structure.source",
+                "widget": "textarea"
+              }
+            }
+          },
+          "required": [
+            "source"
+          ],
+          "type": "object"
+        },
+        "request": {
+          "surface": "job_submit",
+          "template": {
+            "input": {
+              "source": "",
+              "source_type": "xyz_text"
+            },
+            "method": {
+              "levels": {
+                "single_point": {
+                  "engine": "orca"
+                }
+              },
+              "schema_id": "dft_singlepoint"
+            },
+            "resources": {}
+          },
+          "workflow": "singlepoint"
+        },
+        "schema": "acp2.ui.form.v1",
+        "schema_version": 1,
+        "subset_version": "acp2.ui-subset.v1",
+        "title": "Single-point energy"
+      },
+      "form_digest": "sha256:5d3b3fc9b0702f2689919194ecca3353475ca6e0482abdc72c4a0d6314b14696",
+      "origin": "platform"
+    },
+    {
+      "capability_id": "geometry.optimize",
+      "descriptor_digest_pin": null,
+      "form": {
+        "capability_id": "geometry.optimize",
+        "description": "Optimization request bound to the optimize workflow.",
+        "form_digest": "sha256:43e94751d7c18c6815ef05f510509373d87f189101932d44ef565598d30aae46",
+        "form_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "basis": {
+              "maxLength": 64,
+              "minLength": 2,
+              "title": "Basis set",
+              "type": "string",
+              "x-acp": {
+                "binding": "task.level.basis",
+                "widget": "text"
+              }
+            },
+            "charge": {
+              "default": 0,
+              "maximum": 10,
+              "minimum": -10,
+              "title": "Charge",
+              "type": "integer",
+              "x-acp": {
+                "binding": "task.charge",
+                "widget": "number"
+              }
+            },
+            "method": {
+              "maxLength": 64,
+              "minLength": 2,
+              "title": "Method",
+              "type": "string",
+              "x-acp": {
+                "binding": "task.level.method",
+                "widget": "text"
+              }
+            },
+            "source": {
+              "minLength": 4,
+              "title": "Structure",
+              "type": "string",
+              "x-acp": {
+                "binding": "task.structure.source",
+                "widget": "textarea"
+              }
+            }
+          },
+          "required": [
+            "source"
+          ],
+          "type": "object"
+        },
+        "request": {
+          "surface": "job_submit",
+          "template": {
+            "input": {
+              "source": "",
+              "source_type": "xyz_text"
+            },
+            "method": {
+              "levels": {
+                "opt": {
+                  "engine": "orca"
+                }
+              }
+            },
+            "resources": {}
+          },
+          "workflow": "optimize"
+        },
+        "schema": "acp2.ui.form.v1",
+        "schema_version": 1,
+        "subset_version": "acp2.ui-subset.v1",
+        "title": "Geometry optimization"
+      },
+      "form_digest": "sha256:43e94751d7c18c6815ef05f510509373d87f189101932d44ef565598d30aae46",
+      "origin": "platform"
+    },
+    {
+      "capability_id": "vibration.analyze",
+      "descriptor_digest_pin": null,
+      "form": {
+        "capability_id": "vibration.analyze",
+        "description": "Frequency request whose result carries the vibrational analysis product.",
+        "form_digest": "sha256:ccfc081f6637c64f67d0a796fbf410543c830da09399b2d31887a575563b57ba",
+        "form_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "mem": {
+              "pattern": "^[0-9]+(?:MB|GB)$",
+              "title": "Memory budget",
+              "type": "string",
+              "x-acp": {
+                "binding": "task.resources.mem",
+                "widget": "text"
+              }
+            },
+            "method": {
+              "maxLength": 64,
+              "minLength": 2,
+              "title": "Method",
+              "type": "string",
+              "x-acp": {
+                "binding": "task.level.method",
+                "widget": "text"
+              }
+            },
+            "source": {
+              "minLength": 4,
+              "title": "Structure",
+              "type": "string",
+              "x-acp": {
+                "binding": "task.structure.source",
+                "widget": "textarea"
+              }
+            }
+          },
+          "required": [
+            "source"
+          ],
+          "type": "object"
+        },
+        "request": {
+          "surface": "job_submit",
+          "template": {
+            "input": {
+              "source": "",
+              "source_type": "xyz_text"
+            },
+            "method": {
+              "levels": {
+                "freq": {
+                  "engine": "orca"
+                }
+              }
+            },
+            "resources": {}
+          },
+          "workflow": "frequency"
+        },
+        "schema": "acp2.ui.form.v1",
+        "schema_version": 1,
+        "subset_version": "acp2.ui-subset.v1",
+        "title": "Vibration analysis"
+      },
+      "form_digest": "sha256:ccfc081f6637c64f67d0a796fbf410543c830da09399b2d31887a575563b57ba",
+      "origin": "platform"
+    }
+  ],
+  "forms_digest": "sha256:90fa99de9601438370a7962750cb370e8386bfeb1bea21f25fdac8847d977ca5",
+  "note": "Platform-owned form registry mirror. Built-in forms are data in src/acp/api/capability_forms.py (the runtime authority; an installed wheel cannot read docs/). A third-party capability ships its own form inside the installed distribution's dist-info (cccp_ui_form.json); plugin_example_forms mirrors the M2-05 fixture so a reviewer can read it without building the wheel.",
+  "plugin_example_forms": [
+    {
+      "capability_id": "acp2_external_native_singlepoint",
+      "distribution": "acp2-external-science-validator",
+      "form": {
+        "capability_id": "acp2_external_native_singlepoint",
+        "description": "Third-party (fixture) form shipped inside the installed distribution as cccp_ui_form.json. The platform validates it against acp2.ui-subset.v1 and serves it through discovery; the Workbench renders it with no frontend source change.",
+        "form_digest": "sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0",
+        "form_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "charge": {
+              "default": 0,
+              "maximum": 10,
+              "minimum": -10,
+              "title": "Charge",
+              "type": "integer",
+              "x-acp": {
+                "binding": "task.charge",
+                "widget": "number"
+              }
+            },
+            "multiplicity": {
+              "default": 1,
+              "maximum": 10,
+              "minimum": 1,
+              "title": "Multiplicity",
+              "type": "integer",
+              "x-acp": {
+                "binding": "task.multiplicity",
+                "widget": "number"
+              }
+            },
+            "nproc": {
+              "default": 1,
+              "maximum": 32,
+              "minimum": 1,
+              "title": "Processes",
+              "type": "integer",
+              "x-acp": {
+                "binding": "task.resources.nproc",
+                "widget": "number"
+              }
+            },
+            "source": {
+              "description": "Inline structure text the validator consumes.",
+              "minLength": 4,
+              "title": "Native record text",
+              "type": "string",
+              "x-acp": {
+                "binding": "task.structure.source",
+                "widget": "textarea"
+              }
+            }
+          },
+          "required": [
+            "source"
+          ],
+          "type": "object"
+        },
+        "request": {
+          "surface": "job_submit",
+          "template": {
+            "input": {
+              "source": "",
+              "source_type": "xyz_text"
+            },
+            "method": {
+              "levels": {
+                "single_point": {
+                  "engine": "orca"
+                }
+              }
+            },
+            "resources": {}
+          },
+          "workflow": "singlepoint"
+        },
+        "schema": "acp2.ui.form.v1",
+        "schema_version": 1,
+        "subset_version": "acp2.ui-subset.v1",
+        "title": "Native single-point record validator"
+      },
+      "form_digest": "sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0"
+    }
+  ],
+  "read_only_rule": "Discovery lists only active capabilities. A capability whose plugin was disabled, uninstalled or upgraded is projected read_only with the frozen descriptor digest from the M2-05 enablement ledger; the Workbench consumes that view and never re-enables a form locally.",
+  "registration": "Not registered in docs/reference/next-change/acp2-contracts/manifest.json: M3-06 adds the capability-form contract as a platform-owned UI document; the runtime authority is src/acp/api/capability_forms.py (an installed wheel cannot read docs/) and tests/test_acp2_ui_subset.py pins the digests and the byte-for-byte table parity.",
+  "schema": "acp2.ui.capability-forms.v1",
+  "subset_digest": "sha256:870d59473be275fa52785896cdb7e09d03aa15855a8a29dc69b90839fbf08b06",
+  "subset_version": "acp2.ui-subset.v1"
+}

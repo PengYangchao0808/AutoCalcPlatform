@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="4" skipped="0" tests="4" time="3.586" timestamp="2026-10-21T10:42:13.802008+08:00" hostname="redacted-host"><testcase classname="tests.test_acp_frontend_browser" name="test_nmr_canvas_survives_success" time="2.044"><failure message="playwright._impl._errors.Error: Page.evaluate: TypeError: Cannot read properties of undefined (reading 'instance')&#10;    at eval (eval at evaluate (:311:30), &lt;anonymous&gt;:68:63)&#10;    at async &lt;anonymous&gt;:337:30">frontend_page = &lt;tests.test_acp_frontend_browser._Harness object at 0x7f1a2a24c6d0&gt;
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="4" skipped="0" tests="4" time="3.586" timestamp="2026-10-21T10:42:13.802008+08:00" hostname="workstation"><testcase classname="tests.test_acp_frontend_browser" name="test_nmr_canvas_survives_success" time="2.044"><failure message="playwright._impl._errors.Error: Page.evaluate: TypeError: Cannot read properties of undefined (reading 'instance')&#10;    at eval (eval at evaluate (:311:30), &lt;anonymous&gt;:68:63)&#10;    at async &lt;anonymous&gt;:337:30">frontend_page = &lt;tests.test_acp_frontend_browser._Harness object at 0x7f1a2a24c6d0&gt;
 
     def test_nmr_canvas_survives_success(frontend_page: _Harness) -&gt; None:
         """D08/GAP-8: the live canvas survives a successful load in real Chromium."""
@@ -106,14 +106,14 @@
 
 tests/test_acp_frontend_browser.py:359: 
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
-/home/redacted-user/.local/lib/python3.11/site-packages/playwright/sync_api/_generated.py:9413: in evaluate
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/sync_api/_generated.py:9413: in evaluate
     self._sync(
-/home/redacted-user/.local/lib/python3.11/site-packages/playwright/_impl/_page.py:474: in evaluate
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_page.py:474: in evaluate
     return await self._main_frame.evaluate(expression, arg)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-/home/redacted-user/.local/lib/python3.11/site-packages/playwright/_impl/_frame.py:346: in evaluate
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_frame.py:346: in evaluate
     await self._channel.send(
-/home/redacted-user/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:76: in send
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:76: in send
     return await self._connection.wrap_api_call(
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
 
@@ -141,7 +141,7 @@ E           playwright._impl._errors.Error: Page.evaluate: TypeError: Cannot rea
 E               at eval (eval at evaluate (:311:30), &lt;anonymous&gt;:68:63)
 E               at async &lt;anonymous&gt;:337:30
 
-/home/redacted-user/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:632: Error</failure></testcase><testcase classname="tests.test_acp_frontend_browser" name="test_vibration_cold_start_arrows_in_real_browser" time="0.317"><failure message="AssertionError: scene instance not created (browser=153.0.8010.12 vendor=js/vendor/3Dmol-2.5.5.min.js:f7cc78921ae72e76): {'vendor_loaded': True, 'instance_created': False, 'native_captured': False, 'enabled_before': False, 'last_count_before': 0}&#10;assert False">frontend_page = &lt;tests.test_acp_frontend_browser._Harness object at 0x7f1a2ae28890&gt;
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:632: Error</failure></testcase><testcase classname="tests.test_acp_frontend_browser" name="test_vibration_cold_start_arrows_in_real_browser" time="0.317"><failure message="AssertionError: scene instance not created (browser=153.0.8010.12 vendor=js/vendor/3Dmol-2.5.5.min.js:f7cc78921ae72e76): {'vendor_loaded': True, 'instance_created': False, 'native_captured': False, 'enabled_before': False, 'last_count_before': 0}&#10;assert False">frontend_page = &lt;tests.test_acp_frontend_browser._Harness object at 0x7f1a2ae28890&gt;
 
     def test_vibration_cold_start_arrows_in_real_browser(frontend_page: _Harness) -&gt; None:
         """D09/GAP-9: cold start (enabled=false) draws real3Dmol arrows from display intent."""

@@ -1,0 +1,131 @@
+{
+  "artifacts": [
+    {
+      "path": "manual-node-suite.log",
+      "sha256": "03a4a0809e6e778067373ce387a9db1f3dce7e4b47e57def2746b13d07992476",
+      "size_bytes": 774
+    },
+    {
+      "path": "manual-browser.log",
+      "sha256": "5919547e9f8b3078dee8e6d72e12bc1380508e004613cc24d65b049616d36429",
+      "size_bytes": 750
+    },
+    {
+      "path": "manual-browser-fixtures.png",
+      "sha256": "36d4cfc457cd6045d191ca967b63e2ed1b7fc6480b13f0c4cdc99067ccef59ce",
+      "size_bytes": 325815
+    },
+    {
+      "path": "manual-browser-fixtures.json",
+      "sha256": "03870439cd46f5c5919fb68b0a9be04a4b36a3d6dfd67284823ad0669d4e344c",
+      "size_bytes": 1159
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "rc=0 passed=10 failed=0 min=8",
+      "name": "manual.node_suite",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=1 error=NameError: name 'PAGE_HTML_NAME' is not defined port=44065",
+      "name": "manual.browser.probe_completed",
+      "status": "FAIL"
+    },
+    {
+      "detail": "entry_visible=True",
+      "name": "manual.browser.entry_visible",
+      "status": "PASS"
+    },
+    {
+      "detail": "demo_badge=True text='\u6f14\u793a\u6570\u636e'",
+      "name": "manual.browser.demo_badge",
+      "status": "PASS"
+    },
+    {
+      "detail": "disabled=True status='\u9884\u68c0\u5931\u8d25\uff0c\u63d0\u4ea4\u5df2\u7981\u7528'",
+      "name": "manual.browser.submit_disabled_after_preflight_failure",
+      "status": "PASS"
+    },
+    {
+      "detail": "submit_calls=0",
+      "name": "manual.browser.zero_submit_calls",
+      "status": "PASS"
+    },
+    {
+      "detail": "screenshot_bytes=325815 probe_bytes=325815",
+      "name": "manual.browser.screenshot_nonempty",
+      "status": "PASS"
+    },
+    {
+      "detail": "console_errors=1 page_errors=0 Failed to load resource: the server responded with a status of 422 (Unprocessable Entity)",
+      "name": "manual.browser.zero_console_errors",
+      "status": "FAIL"
+    },
+    {
+      "detail": "entries=0",
+      "name": "manual.browser.network_log",
+      "status": "FAIL"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "ef86091ef338551ebb42c07ebd14fbc81c90901a",
+    "harness_revision": "642c2643c9db7bebcbe90d69ff24d6560a3f4ac1ee278e585e407ecd99c8c36f",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "ef86091ef338551ebb42c07ebd14fbc81c90901a",
+  "command": [
+    "/ACPServer/acp2-development/venvs/c/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "manual-browser-fixtures",
+    "--timeout",
+    "300",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/manual-browser-fixtures/manual-browser-fixtures-20261022T163435Z-471983/main"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/acp2-development/C",
+  "evidence_kind": "fixture",
+  "exit_code": 1,
+  "extensions": {
+    "experience.harness_contract_revision": "642c2643c9db7bebcbe90d69ff24d6560a3f4ac1ee278e585e407ecd99c8c36f",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+    "experience.manual_chromium": "153.0.8010.12",
+    "experience.manual_console_errors": 1,
+    "experience.manual_demo_badge": true,
+    "experience.manual_entry_visible": true,
+    "experience.manual_min_tests": 8,
+    "experience.manual_screenshot_bytes": 325815,
+    "experience.manual_submit_calls": 0,
+    "experience.manual_submit_disabled_after_preflight": true,
+    "experience.manual_suite_failed": 0,
+    "experience.manual_suite_passed": 10,
+    "experience.mode": "fixture",
+    "experience.product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+    "experience.run_id": "manual-browser-fixtures-20261022T163435Z-471983",
+    "experience.scenario_key": "manual-browser-fixtures",
+    "experience.subcase": null,
+    "experience.test_revision": "ef86091ef338551ebb42c07ebd14fbc81c90901a"
+  },
+  "finished_at": "2026-10-22T16:34:38Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:fixture",
+  "reason": "manual_browser_fixtures_assertion_failed",
+  "release_id": null,
+  "result": "FAIL",
+  "run_id": "manual-browser-fixtures-20261022T163435Z-471983",
+  "scenario": "experience:manual-browser-fixtures",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T16:34:35Z",
+  "submission_id": null,
+  "usage": null
+}

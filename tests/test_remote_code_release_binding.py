@@ -1034,9 +1034,10 @@ _NODE_GAP_MODULES = {
     "acp.results.irc_remote_live",
     "acp.results.structure_migration",
     "acp.services_bootstrap",
-    "acp.services_data_bootstrap",
     "acp.services_events_bootstrap",
-    "acp.services_publication_bootstrap",
+    # M2-02's lazy structure-store import made services_data_bootstrap and
+    # services_publication_bootstrap importable node-side (verified 2026-10-28
+    # after the M4 wave); they left the gap set and must not return.
 }
 _NODE_GAP_FILES = {
     "src/acp/calculations/irc/source.py",
@@ -1184,7 +1185,6 @@ def test_node_side_cli_reachable_modules_importable_enumeration():
         f"node-side import gaps changed (Todo 19 risk set): {sorted(gaps)}; "
         f"expected exactly {sorted(_NODE_GAP_MODULES)}"
     )
-
     # The gap FILES stay in the sync/release file set — the exclusion set
     # must NOT be expanded to paper over them.
     project_root = Path(__file__).resolve().parents[1]

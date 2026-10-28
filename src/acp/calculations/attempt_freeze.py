@@ -48,7 +48,7 @@ import shutil
 import socket
 import tempfile
 import uuid
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Final
@@ -113,8 +113,12 @@ __all__ = [
     "ReleaseIdentity",
     "ReleaseIdentityError",
     "StaleReleaseError",
+    "BOUNDED_RECIPE_WORKFLOW",
     "FREEZE_BUILDERS",
+    "RECIPE_INPUT_KEY",
+    "build_bounded_recipe_freeze_spec",
     "build_freeze_spec",
+    "dag_recipe_id",
     "build_local_release",
     "build_singlepoint_freeze_spec",
     "freeze_singlepoint_attempt",
@@ -732,6 +736,7 @@ def _build_envelope(
     release: LocalRelease,
     *,
     task_kind: str = TaskKind.SINGLEPOINT.value,
+    required_capabilities: Sequence[str] | None = None,
 ) -> ExecutionEnvelope:
     identity = plan.identity
     if identity is None:  # pragma: no cover - built immediately above
@@ -752,7 +757,9 @@ def _build_envelope(
         step_identities=identity.step_identities,
         protocol="local",
         entrypoint="worker.bootstrap",
-        required_capabilities=(task_kind,),
+        required_capabilities=(
+            tuple(required_capabilities) if required_capabilities else (task_kind,)
+        ),
         data_bindings=(binding,) if binding is not None else (),
         scientific_closure=ScientificClosure(task_kind=task_kind),
     )
@@ -1214,6 +1221,165 @@ def freeze_singlepoint_attempt(
     return write_frozen_attempt(work_dir, spec)
 
 
+#: Workflow id of the envelope-only bounded recipe entry (M2-04d).
+BOUNDED_RECIPE_WORKFLOW: Final = "BoundedRecipe"
+
+#: Job input key carrying the canonical recipe payload + its frozen inputs.
+RECIPE_INPUT_KEY: Final = "bounded_recipe"
+
+# ── M2-04d: bounded recipe freeze spec (produced here, written by Services) ──
+
+
+def _bounded_recipe_payload(record: Any) -> Mapping[str, Any]:
+    """Return ``record.spec.input["bounded_recipe"]`` (typed refusal otherwise)."""
+    raw_input = getattr(record.spec, "input", None)
+    if not isinstance(raw_input, Mapping):
+        raise FreezeSpecError(
+            "a bounded recipe freeze requires the job input to carry the recipe payload"
+        )
+    payload = raw_input.get(RECIPE_INPUT_KEY)
+    if not isinstance(payload, Mapping):
+        raise FreezeSpecError(
+            f"job input must carry {RECIPE_INPUT_KEY!r}: {{recipe, inputs, structure_role, "
+            "step_requirements}}"
+        )
+    return payload
+
+
+def build_bounded_recipe_freeze_spec(
+    record: Any,
+    work_dir: Path | str,
+    input_path: Path | str | None,
+    release: LocalRelease,
+) -> AttemptFreezeSpec:
+    """Build the freeze spec of the envelope-only bounded recipe DAG (M2-04d).
+
+    The definition conversion happens **here**, at freeze time: the canonical
+    recipe is compiled once (CCCP ``compile_recipe`` reached through the Services
+    ``compile_step_dag_definition``), the runtime ``StepSpec`` view and the frozen
+    definition ride the frozen plan body, and the worst-case allowance is
+    reserved for this attempt.  The worker only deserializes.
+
+    The Services writer (:func:`acp_services.runtime.attempt_freeze.
+    write_frozen_attempt`) publishes the group; this function never writes a
+    frozen member itself.
+    """
+    from acp_services.runtime.execution_quota import reserve_worst_case
+    from acp_services.runtime.step_dag_worker import BOUNDED_RECIPE_PAYLOAD_KEY
+    from acp_services.runtime.step_definition import (
+        FROZEN_STEP_DAG_KEY,
+        compile_step_dag_definition,
+    )
+
+    workflow = str(record.spec.workflow)
+    if workflow != BOUNDED_RECIPE_WORKFLOW:
+        raise FreezeSpecError(f"{BOUNDED_RECIPE_WORKFLOW} freeze builder cannot build {workflow!r}")
+    work = Path(work_dir).resolve()
+    work.mkdir(parents=True, exist_ok=True)
+    existing = _existing_spec(work, int(record.attempt), workflow=workflow)
+    if existing is not None:
+        return existing
+    if release is None:
+        raise FreezeSpecError("an immutable LocalRelease is required for a new freeze")
+    release.assert_current()
+
+    payload = _bounded_recipe_payload(record)
+    recipe = payload.get("recipe")
+    if not isinstance(recipe, Mapping):
+        raise FreezeSpecError("bounded_recipe.recipe must be the canonical recipe payload")
+    recipe_inputs = payload.get("inputs") or {}
+    if not isinstance(recipe_inputs, Mapping):
+        raise FreezeSpecError("bounded_recipe.inputs must be a mapping")
+    structure_role = str(payload.get("structure_role") or "")
+    if not structure_role:
+        raise FreezeSpecError("bounded_recipe.structure_role is required (never guessed)")
+    input_file = _materialize_input(work, input_path)
+    structure_digest = "sha256:" + _sha256_bytes(input_file.read_bytes())
+
+    dag, definition = compile_step_dag_definition(
+        recipe,
+        recipe_inputs,
+        approval_plan_digest=(
+            str(payload.get("approval_plan_digest") or "")
+            if str(payload.get("approval_plan_digest") or "").startswith("sha256:")
+            else ""
+        ),
+        step_definition_identities=tuple(
+            str(item) for item in payload.get("step_definition_identities") or ()
+        ),
+        provider_versions=payload.get("provider_versions") or {},
+        task_ref=str(record.id),
+    )
+    reservation = reserve_worst_case(
+        work,
+        reservation_id=f"{record.id}-a{int(record.attempt)}",
+        task_ref=str(record.id),
+        attempt=int(record.attempt),
+        plan_definition_digest=definition.plan_definition_digest,
+        worst_case=dict(definition.worst_case_executions),
+        issued_by="controller-freeze",
+    )
+    plan_payload: dict[str, Any] = {
+        FROZEN_STEP_DAG_KEY: dag.to_frozen_payload(),
+        BOUNDED_RECIPE_PAYLOAD_KEY: {
+            "structure_path": input_file.name,
+            "structure_role": structure_role,
+            "structure_digest": structure_digest,
+            "input_roles": dict(payload.get("input_roles") or {}),
+            "step_requirements": list(payload.get("step_requirements") or ()),
+            "approval_plan_digest": str(payload.get("approval_plan_digest") or ""),
+            "reservation": reservation.to_dict(),
+            "settings": {
+                "charge": int(payload.get("charge") or 0),
+                "multiplicity": int(payload.get("multiplicity") or 1),
+                "method": dict(payload.get("method") or {}),
+                "backend": payload.get("backend"),
+                "resources": dict(payload.get("resources") or {}),
+            },
+        },
+    }
+    config_snapshot = payload.get("config")
+    if isinstance(config_snapshot, Mapping) and config_snapshot:
+        plan_payload[TASK_ENVIRONMENT_CONFIG_KEY] = dict(config_snapshot)
+
+    frozen_body = FrozenPlan(
+        payload=plan_payload,
+        steps=tuple(
+            FrozenStep(kind=step.kind.value, payload={"step_id": step.step_id})
+            for step in dag.steps
+        ),
+        item_symbols=(),
+    )
+    plan = replace(
+        frozen_body,
+        identity=FrozenPlanIdentity(
+            plan_digest=frozen_plan_body_digest(frozen_body),
+            plan_identity=str(payload.get("plan_identity") or definition.plan_definition_digest),
+            step_identities=tuple(
+                str(item) for item in payload.get("step_definition_identities") or ()
+            ),
+        ),
+    )
+    binding = _local_binding(work, release, input_file)
+    envelope = _build_envelope(
+        record,
+        plan,
+        binding,
+        release,
+        task_kind="bounded_recipe",
+        required_capabilities=tuple(sorted({str(step.kind.value) for step in dag.steps})),
+    )
+    return AttemptFreezeSpec(workflow=workflow, envelope=envelope, plan=plan, binding=binding)
+
+
+def dag_recipe_id(recipe: Mapping[str, Any]) -> str:
+    """Return the declared recipe id (typed refusal when absent)."""
+    recipe_id = str(recipe.get("recipe_id") or "")
+    if not recipe_id:
+        raise FreezeSpecError("the bounded recipe payload declares no recipe_id")
+    return recipe_id
+
+
 #: The single builder registry used by the activation hook (no scattered branches).
 FREEZE_BUILDERS: Final[dict[str, Any]] = {
     "singlepoint": build_singlepoint_freeze_spec,
@@ -1232,4 +1398,5 @@ FREEZE_BUILDERS: Final[dict[str, Any]] = {
     "scan": build_scan_freeze_spec,
     "irc": build_irc_freeze_spec,
     "OrcaGradient": build_orca_gradient_freeze_spec,
+    BOUNDED_RECIPE_WORKFLOW: build_bounded_recipe_freeze_spec,
 }

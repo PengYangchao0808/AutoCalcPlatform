@@ -1,0 +1,498 @@
+{
+  "scope": "Real ASGI routes, credentials, JobManager and persistent ledger in temporary root; local capability probe forced true and _start_submission_thread suppressed; no sockets/QC/LSF",
+  "two_principals_same_project": {
+    "principals": [
+      "principal_b15_alice",
+      "principal_b15_bob"
+    ],
+    "first": {
+      "job_id": "20261026_115629_001_singlepoint",
+      "status": "queued",
+      "workflow": "singlepoint",
+      "project_id": "project_alpha",
+      "schema_version": 1,
+      "attempt": 1,
+      "release_id": null,
+      "release_digest": null,
+      "task_ref": {
+        "task_id": "20261026_115629_001_singlepoint",
+        "job_id": "20261026_115629_001_singlepoint",
+        "attempt": 1
+      },
+      "operation_ref": null,
+      "plan_digest": null,
+      "proposal_digest": null,
+      "approval_ref": null,
+      "result": "accepted",
+      "idempotency_key": "r3-two-users",
+      "idempotent_replay": false,
+      "admission": {
+        "reservation_id": "res_idem_24f930d58e8b4c1c82a78d336b62a6c3",
+        "enforcement": "local-single-enforced",
+        "mode": "quota-only",
+        "enforced": true,
+        "policy_version": "local-single-v1",
+        "principal_id": "principal_local",
+        "verified_project": null,
+        "multi_tenant_security": false
+      },
+      "identity": {
+        "principal_id": "principal_b15_alice",
+        "issuer": "local",
+        "subject": "principal_b15_alice",
+        "tenant_id": "acp-test-multiuser",
+        "deployment_tier": "local-single",
+        "verified_project": "project_alpha",
+        "project_hint_policy": "narrow-only",
+        "multi_tenant_security": false
+      }
+    },
+    "second": {
+      "job_id": "20261026_115629_001_singlepoint",
+      "status": "queued",
+      "workflow": "singlepoint",
+      "project_id": "project_alpha",
+      "schema_version": 1,
+      "attempt": 1,
+      "release_id": null,
+      "release_digest": null,
+      "task_ref": {
+        "task_id": "20261026_115629_001_singlepoint",
+        "job_id": "20261026_115629_001_singlepoint",
+        "attempt": 1
+      },
+      "operation_ref": null,
+      "plan_digest": null,
+      "proposal_digest": null,
+      "approval_ref": null,
+      "result": "accepted",
+      "idempotency_key": "r3-two-users",
+      "idempotent_replay": true,
+      "admission": {
+        "reservation_id": "res_idem_24f930d58e8b4c1c82a78d336b62a6c3",
+        "enforcement": "local-single-enforced",
+        "mode": "quota-only",
+        "enforced": true,
+        "policy_version": "local-single-v1",
+        "principal_id": "principal_local",
+        "verified_project": null,
+        "multi_tenant_security": false
+      },
+      "identity": {
+        "principal_id": "principal_b15_bob",
+        "issuer": "local",
+        "subject": "principal_b15_bob",
+        "tenant_id": "acp-test-multiuser",
+        "deployment_tier": "local-single",
+        "verified_project": "project_alpha",
+        "project_hint_policy": "narrow-only",
+        "multi_tenant_security": false
+      }
+    }
+  },
+  "remote_target_http_vs_mcp": {
+    "direct_http_status": 400,
+    "direct_http_error": {
+      "detail": {
+        "code": "unknown_target_node",
+        "message": "target_node 'r3-nonexistent-node' is not a configured node",
+        "missing_software": [],
+        "missing_tags": [],
+        "local_missing_software": [],
+        "remote_nodes_configured": null
+      }
+    },
+    "mcp_adapter_result": {
+      "reference": {
+        "kind": "job",
+        "id": "20261026_115629_002_singlepoint"
+      },
+      "task_ref": {
+        "task_id": "20261026_115629_002_singlepoint",
+        "job_id": "20261026_115629_002_singlepoint",
+        "attempt": 1
+      },
+      "status": "queued",
+      "idempotency_key": "r3-remote-choice",
+      "idempotent_replay": false,
+      "admission": {
+        "reservation_id": "res_idem_45fb60486f9b4fd78c4346f01c78cd6b",
+        "enforcement": "local-single-enforced",
+        "mode": "quota-only",
+        "enforced": true,
+        "policy_version": "local-single-v1",
+        "principal_id": "principal_local",
+        "verified_project": null,
+        "multi_tenant_security": false
+      },
+      "identity": {
+        "principal_id": "principal_b15_alice",
+        "issuer": "local",
+        "subject": "principal_b15_alice",
+        "tenant_id": "acp-test-multiuser",
+        "deployment_tier": "local-single",
+        "verified_project": "project_alpha",
+        "project_hint_policy": "narrow-only",
+        "multi_tenant_security": false
+      },
+      "result": "accepted"
+    },
+    "stored_spec": {
+      "target_node": null,
+      "execution_mode": null
+    }
+  },
+  "client_asserted_trusted_receipt": {
+    "setup": "Seeded approved budget and dispatched reservation via real ledger; ordinary member write credential on HTTP settlement",
+    "before_new_reservation": {
+      "admitted": false,
+      "reason_code": "budget_exhausted",
+      "budget_id": "rb_r3_receipt",
+      "detail": "task_ref budget 1 - consumed 1 < requested 1; new dispatch refused",
+      "reservation_id": null,
+      "exhausted_unit": "task_ref",
+      "requested": {
+        "task_ref": 1
+      },
+      "remaining": {
+        "task_ref": 0
+      }
+    },
+    "settlement_http_status": 200,
+    "settlement_body": {
+      "schema": "acp2.research-budget-settlement.v1",
+      "settlement": {
+        "applied": true,
+        "duplicate": false,
+        "reason_code": "budget_settled",
+        "budget_id": "rb_r3_receipt",
+        "reservation_id": "bres_r3_receipt",
+        "receipt_id": "arbitrary-client-receipt",
+        "counters": {
+          "task_ref": 0,
+          "recipe_step": 0,
+          "qc_invocation": 999,
+          "attempt": 0,
+          "bsub": 0,
+          "model_request": 0
+        },
+        "consumed": {
+          "task_ref": 1,
+          "attempt": 0,
+          "recipe_step": 0,
+          "qc_invocation": 999,
+          "bsub": 0,
+          "model_request": 0
+        },
+        "remaining": {
+          "task_ref": 0
+        }
+      },
+      "budget": {
+        "budget_id": "rb_r3_receipt",
+        "limits": {
+          "task_ref": 1
+        },
+        "approved_limits": {},
+        "timeouts": {
+          "queue_wait_s": 0.0,
+          "science_runtime_s": 1800.0,
+          "client_request_s": 60.0,
+          "overall_acceptance_s": 3600.0
+        },
+        "approval_ref": "ap_r3_seeded",
+        "project_id": "project_alpha",
+        "unit_capabilities": {
+          "task_ref": "enforced"
+        },
+        "consumed": {
+          "task_ref": 1,
+          "attempt": 0,
+          "recipe_step": 0,
+          "qc_invocation": 999,
+          "bsub": 0,
+          "model_request": 0
+        },
+        "remaining": {
+          "task_ref": 0
+        },
+        "reservations": [
+          {
+            "reservation_id": "bres_r3_receipt",
+            "budget_id": "rb_r3_receipt",
+            "units": {
+              "task_ref": 1
+            },
+            "state": "settled",
+            "task_ref": "r3-running-task",
+            "run_id": "",
+            "claim_id": "",
+            "admission_reservation_id": "res_r3_seeded",
+            "detail": "",
+            "created_at": "2026-10-26T03:56:29.738966+00:00",
+            "updated_at": "2026-10-26T03:56:29.760361+00:00"
+          }
+        ],
+        "receipts": 1,
+        "receipt_counters": {
+          "task_ref": 0,
+          "attempt": 0,
+          "recipe_step": 0,
+          "qc_invocation": 999,
+          "bsub": 0,
+          "model_request": 0
+        },
+        "release_statement": {
+          "enforced": [
+            "task_ref",
+            "attempt"
+          ],
+          "recorded_only": [
+            "recipe_step",
+            "qc_invocation",
+            "bsub",
+            "model_request"
+          ],
+          "not_verified": [
+            {
+              "capability": "model_token_enforcement",
+              "reason": "model-call proxy is C-owned (acp2_experience_budget_proxy.py, C T-13)"
+            },
+            {
+              "capability": "bsub_enforcement",
+              "reason": "LSF is absent in this environment; bsub count is 0 and recorded only"
+            }
+          ],
+          "unit_consumption": {
+            "task_ref": {
+              "consumed_at": "accepted submit, before any work directory",
+              "failure": "consumes",
+              "replay": "does not consume a second TaskRef",
+              "recovery": "does not consume a new TaskRef"
+            },
+            "recipe_step": {
+              "consumed_at": "trusted receipt for a dispatched step",
+              "failure": "consumes when the step was invoked",
+              "replay": "does not re-consume the same receipt",
+              "recovery": "does not re-consume a completed step"
+            },
+            "qc_invocation": {
+              "consumed_at": "trusted receipt per QC process invocation",
+              "failure": "consumes when the process was invoked",
+              "replay": "does not re-consume the same receipt",
+              "recovery": "does not re-invoke a completed step"
+            },
+            "attempt": {
+              "consumed_at": "accepted submit/dispatch of an attempt",
+              "failure": "consumes the failed attempt",
+              "replay": "does not consume a second attempt",
+              "recovery": "same attempt recovery does not consume; continue/rerun is a new attempt"
+            },
+            "bsub": {
+              "consumed_at": "trusted receipt per real bsub",
+              "failure": "consumes when bsub was invoked",
+              "replay": "does not re-consume the same receipt",
+              "recovery": "does not re-issue bsub"
+            },
+            "model_request": {
+              "consumed_at": "trusted receipt from the C-owned model proxy",
+              "failure": "recorded when the trusted source reports it",
+              "replay": "does not re-consume the same receipt",
+              "recovery": "does not re-request tokens"
+            }
+          },
+          "release_rules": {
+            "submit_failed": {
+              "release_reserved_units": true,
+              "recharges_computation": false,
+              "detail": "the claim never dispatched; its queued reservation is released"
+            },
+            "cancel_before_dispatch": {
+              "release_reserved_units": true,
+              "recharges_computation": false,
+              "detail": "a queued reservation released before any QC invocation is refunded"
+            },
+            "cancel_after_dispatch": {
+              "release_reserved_units": false,
+              "recharges_computation": false,
+              "detail": "science already started; the consumed units stay charged"
+            },
+            "science_failure": {
+              "release_reserved_units": false,
+              "recharges_computation": false,
+              "detail": "a failed attempt that invoked QC consumes its units; a retry is a new attempt"
+            },
+            "publication_pending": {
+              "release_reserved_units": false,
+              "recharges_computation": false,
+              "detail": "publication is a separate fact; pending publication keeps computation charged"
+            },
+            "publication_failure": {
+              "release_reserved_units": false,
+              "recharges_computation": false,
+              "detail": "publication retries only republish; they never re-charge computation"
+            },
+            "replay": {
+              "release_reserved_units": false,
+              "recharges_computation": false,
+              "detail": "a duplicate receipt/claim replay is idempotent and charges nothing new"
+            },
+            "recovery": {
+              "release_reserved_units": false,
+              "recharges_computation": false,
+              "detail": "restart recovery replays reservations and receipts; it never resets a budget"
+            }
+          },
+          "notes": {
+            "identity": "budget identity is project + proposal_ref (research round/batch); it is independent of run_id, so retries and restarts inherit the remaining batch",
+            "settlement": "settlement comes from receipts/trusted usage; a duplicate receipt/event cannot charge twice because its deterministic receipt id is unique",
+            "publication": "A publication failure or retry never re-charges computation: usage is ingested once from the trusted receipt and publication is an independent step.",
+            "model_tokens": "model-token enforcement is NOT_VERIFIED; the model-call proxy is C-owned and B neither proxies tokens nor invents unified billing",
+            "science": "budget/balance state never changes scientific behavior, TaskRequest or an algorithm result"
+          }
+        }
+      }
+    },
+    "after_new_reservation": {
+      "admitted": false,
+      "reason_code": "budget_exhausted",
+      "budget_id": "rb_r3_receipt",
+      "detail": "task_ref budget 1 - consumed 1 < requested 1; new dispatch refused",
+      "reservation_id": null,
+      "exhausted_unit": "task_ref",
+      "requested": {
+        "task_ref": 1
+      },
+      "remaining": {
+        "task_ref": 0
+      }
+    }
+  },
+  "revoked_key_cached_submit": {
+    "http_identity_status": 401,
+    "cached_reply": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"schema_version\": 1, \"operation\": \"acp_submit\", \"status\": \"ok\", \"exit_code\": 0, \"dry_run\": false, \"operation_identity\": \"project_alpha\", \"diagnostic_ref\": null, \"data\": {\"reference\": {\"kind\": \"job\", \"id\": \"20261026_115629_003_singlepoint\"}, \"idempotent_replay\": true}, \"error\": null}"
+          }
+        ],
+        "structuredContent": {
+          "schema_version": 1,
+          "operation": "acp_submit",
+          "status": "ok",
+          "exit_code": 0,
+          "dry_run": false,
+          "operation_identity": "project_alpha",
+          "diagnostic_ref": null,
+          "data": {
+            "reference": {
+              "kind": "job",
+              "id": "20261026_115629_003_singlepoint"
+            },
+            "idempotent_replay": true
+          },
+          "error": null
+        },
+        "isError": false
+      }
+    },
+    "uncached_reply": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"schema_version\": 1, \"operation\": \"acp_submit\", \"status\": \"error\", \"exit_code\": 5, \"dry_run\": false, \"operation_identity\": null, \"diagnostic_ref\": null, \"data\": null, \"error\": {\"code\": \"access_denied\", \"category\": \"denied\", \"message\": \"credential denied by isolated Controller\", \"retryable\": false, \"params\": {\"command\": \"submit\"}, \"diagnostic_ref\": null}}"
+          }
+        ],
+        "structuredContent": {
+          "schema_version": 1,
+          "operation": "acp_submit",
+          "status": "error",
+          "exit_code": 5,
+          "dry_run": false,
+          "operation_identity": null,
+          "diagnostic_ref": null,
+          "data": null,
+          "error": {
+            "code": "access_denied",
+            "category": "denied",
+            "message": "credential denied by isolated Controller",
+            "retryable": false,
+            "params": {
+              "command": "submit"
+            },
+            "diagnostic_ref": null
+          }
+        },
+        "isError": true
+      }
+    },
+    "cached_controller_calls": 0,
+    "before_revoke": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"schema_version\": 1, \"operation\": \"acp_submit\", \"status\": \"ok\", \"exit_code\": 0, \"dry_run\": false, \"operation_identity\": \"project_alpha\", \"diagnostic_ref\": null, \"data\": {\"reference\": {\"kind\": \"job\", \"id\": \"20261026_115629_003_singlepoint\"}, \"idempotency_key\": \"op_e66335f70857e3a65335ea20d2e794ab\", \"query_tool\": \"acp_status\", \"cancel_tool\": \"acp_cancel\", \"task_ref\": {\"task_id\": \"20261026_115629_003_singlepoint\", \"job_id\": \"20261026_115629_003_singlepoint\", \"attempt\": 1}, \"result\": \"accepted\", \"idempotent_replay\": false, \"admission\": {\"reservation_id\": \"<redacted>\", \"enforcement\": \"local-single-enforced\", \"mode\": \"quota-only\", \"enforced\": true, \"policy_version\": \"local-single-v1\", \"principal_id\": \"principal_local\", \"verified_project\": null, \"multi_tenant_security\": false}, \"identity\": {\"principal_id\": \"principal_b15_alice\", \"issuer\": \"local\", \"subject\": \"principal_b15_alice\", \"tenant_id\": \"acp-test-multiuser\", \"deployment_tier\": \"local-single\", \"verified_project\": \"project_alpha\", \"project_hint_policy\": \"narrow-only\", \"multi_tenant_security\": false}}, \"error\": null}"
+          }
+        ],
+        "structuredContent": {
+          "schema_version": 1,
+          "operation": "acp_submit",
+          "status": "ok",
+          "exit_code": 0,
+          "dry_run": false,
+          "operation_identity": "project_alpha",
+          "diagnostic_ref": null,
+          "data": {
+            "reference": {
+              "kind": "job",
+              "id": "20261026_115629_003_singlepoint"
+            },
+            "idempotency_key": "op_e66335f70857e3a65335ea20d2e794ab",
+            "query_tool": "acp_status",
+            "cancel_tool": "acp_cancel",
+            "task_ref": {
+              "task_id": "20261026_115629_003_singlepoint",
+              "job_id": "20261026_115629_003_singlepoint",
+              "attempt": 1
+            },
+            "result": "accepted",
+            "idempotent_replay": false,
+            "admission": {
+              "reservation_id": "<redacted>",
+              "enforcement": "local-single-enforced",
+              "mode": "quota-only",
+              "enforced": true,
+              "policy_version": "local-single-v1",
+              "principal_id": "principal_local",
+              "verified_project": null,
+              "multi_tenant_security": false
+            },
+            "identity": {
+              "principal_id": "principal_b15_alice",
+              "issuer": "local",
+              "subject": "principal_b15_alice",
+              "tenant_id": "acp-test-multiuser",
+              "deployment_tier": "local-single",
+              "verified_project": "project_alpha",
+              "project_hint_policy": "narrow-only",
+              "multi_tenant_security": false
+            }
+          },
+          "error": null
+        },
+        "isError": false
+      }
+    }
+  },
+  "suppressed_dispatches": 7
+}

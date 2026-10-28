@@ -1,0 +1,49 @@
+{
+  "budget": {
+    "attempts": 1,
+    "bsub": 0,
+    "qc_invocations": 1,
+    "steps": 1,
+    "task_refs": 1
+  },
+  "cancelled": false,
+  "dispatch_count": 1,
+  "paused": false,
+  "publication_attempts": 1,
+  "schema": "acp2.runtime.step-dag-state.v1",
+  "states": [
+    {
+      "attempts": 1,
+      "output_digests": {
+        "geometry": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "publication_reason": "",
+      "publish_payload": {},
+      "publish_status": "published",
+      "reason": "",
+      "receipt_digest": "",
+      "result_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "status": "completed",
+      "step_id": "relax",
+      "step_identity": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "upstream_digests": []
+    },
+    {
+      "attempts": 1,
+      "output_digests": {},
+      "publication_reason": "",
+      "publish_payload": {},
+      "publish_status": "not_published",
+      "reason": "",
+      "receipt_digest": "",
+      "result_digest": "",
+      "status": "running",
+      "step_id": "freq",
+      "step_identity": "",
+      "upstream_digests": [
+        "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+      ]
+    }
+  ],
+  "task_ref": "20260101_010_BoundedRecipe"
+}

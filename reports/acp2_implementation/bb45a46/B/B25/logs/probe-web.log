@@ -1,4 +1,4 @@
-$ <repo>/reports/acp2_implementation/bb45a46/B/B25/venvs/web/bin/python -c 
+$ /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/bin/python -c 
 import hashlib, importlib.util, json, os, sys
 from importlib import metadata
 role = sys.argv[1]
@@ -43,7 +43,7 @@ print(json.dumps(facts))
  web 0.3.0
 exit=0
 --- stdout ---
-{"role": "web", "python": "<repo>/reports/acp2_implementation/bb45a46/B/B25/venvs/web/bin/python", "cwd": "<repo>/reports/acp2_implementation/bb45a46/B/B25", "modules": {"acp": "<repo>/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/acp/__init__.py", "acp_services": "<repo>/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/acp_services/__init__.py", "acp_web_assets": "<repo>/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/acp_web_assets/__init__.py"}, "version": "0.3.0", "forbidden": {}, "site_packages": true, "version_ok": true, "forbidden_absent": true}
+{"role": "web", "python": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/bin/python", "cwd": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25", "modules": {"acp": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/acp/__init__.py", "acp_services": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/acp_services/__init__.py", "acp_web_assets": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/lib64/python3.11/site-packages/acp_web_assets/__init__.py"}, "version": "0.3.0", "forbidden": {}, "site_packages": true, "version_ok": true, "forbidden_absent": true}
 
 --- stderr ---
 

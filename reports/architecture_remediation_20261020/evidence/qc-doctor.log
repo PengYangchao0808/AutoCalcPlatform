@@ -1,19 +1,19 @@
 === acp doctor (captured verbatim; absent software recorded as fact, never PASS) ===
-INFO:cccp.config:Loaded defaults from: <repo>/config/defaults.yaml
+INFO:cccp.config:Loaded defaults from: /ACPServer/AutoCalcPlatform/config/defaults.yaml
 INFO:paramiko.transport:Connected (version 2.0, client OpenSSH_9.9)
 INFO:paramiko.transport:Authentication (password) successful!
-INFO:acp.scheduler.remote.node_manager:Resolved node python for node-157: /home/<user>/anaconda3/bin/python (version 3.13.9)
+INFO:acp.scheduler.remote.node_manager:Resolved node python for node-157: /home/xieningke/anaconda3/bin/python (version 3.13.9)
 
-== node node-157 (192.168.1.100) ==
-  Python: /home/<user>/anaconda3/bin/python (version 3.13.9)
-  censo    -> /home/<user>/anaconda3/bin/censo [version: 3.0.8]
-  crest    -> /home/<user>/crest/crest [version: 3.0.2]
-  isostat  -> /home/<user>/molclus_1.14_Linux/isostat
-  molclus  -> /home/<user>/molclus_1.14_Linux/molclus
-  mpi      -> /home/<user>/openmpi418/bin/orterun [version: orterun (OpenRTE) 4.1.8]
-  orca     -> /home/<user>/orca611/orca
-  shermo   -> /home/<user>/Shermo_2.6.1/Shermo
-  xtb      -> /home/<user>/xtb-dist/bin/xtb [version: 6.7.1]
+== node node-157 (10.16.5.157) ==
+  Python: /home/xieningke/anaconda3/bin/python (version 3.13.9)
+  censo    -> /home/xieningke/anaconda3/bin/censo [version: 3.0.8]
+  crest    -> /home/xieningke/crest/crest [version: 3.0.2]
+  isostat  -> /home/xieningke/molclus_1.14_Linux/isostat
+  molclus  -> /home/xieningke/molclus_1.14_Linux/molclus
+  mpi      -> /home/xieningke/openmpi418/bin/orterun [version: orterun (OpenRTE) 4.1.8]
+  orca     -> /home/xieningke/orca611/orca
+  shermo   -> /home/xieningke/Shermo_2.6.1/Shermo
+  xtb      -> /home/xieningke/xtb-dist/bin/xtb [version: 6.7.1]
 
 Doctor finished: all checks passed
 exit=0

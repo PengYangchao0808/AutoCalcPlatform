@@ -1,0 +1,163 @@
+{
+  "adr_step_index": 4,
+  "adr_task_kind": "optimize",
+  "attempt": 1,
+  "attempts": [
+    {
+      "attempt": 1,
+      "converged": false,
+      "duration_seconds": 5790.09,
+      "max_cycles": 40,
+      "native_log_sha256": "789c01565d5f1f870169b27b23e7ac9e7511e241c2de7e0ea112d1888b516f2b",
+      "native_success_marker": "did_not_converge",
+      "optimization_status": "converged",
+      "reason": "native log reports 'did not converge'",
+      "start_sha256": null,
+      "start_structure": "previous run (interrupted)",
+      "task_ref": "20261028_940_ts_optimize",
+      "trust_radius": null
+    },
+    {
+      "attempt": 2,
+      "converged": false,
+      "duration_seconds": 3197.16,
+      "max_cycles": 100,
+      "native_success_marker": null,
+      "optimization_status": null,
+      "reason": "task payload status '' without native success marker",
+      "start_sha256": "af91f6d118efa1de059d217ab786fe7b43853a6426b293bebb1230a7ffeaba29",
+      "start_structure": "/ACPServer/acp2-runs/remediation/m4-04-route-a/da/inputs/ts_restart.xyz",
+      "task_ref": "20261028_940_ts_optimize",
+      "trust_radius": 0.3
+    }
+  ],
+  "bounded_alternative": null,
+  "complete": false,
+  "converged": false,
+  "duration_seconds": 3197.16,
+  "entry": "legacy_task_core",
+  "error": "TS optimization did not converge at the frozen level (40 cycles, 100 cycles); no non-converged geometry is used as evidence",
+  "executed_task_kind": "optimize",
+  "level": {
+    "basis": "def2-TZVP",
+    "charge": 0,
+    "method": "wB97X-D4",
+    "multiplicity": 1
+  },
+  "native_files": [
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a/da/ts_optimize/ts_opt.out",
+      "path": "ts_opt.out",
+      "sha256": "2d14795519872f6b27349e5d9cde2807194478f6c12c855f672c1ef305fe28d7",
+      "size_bytes": 1169388
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a/da/ts_optimize/ts_opt.xyz",
+      "path": "ts_opt.xyz",
+      "sha256": "480e823ed320621715c1bfc240caf3e1ab93654b0d3d26d93ecdf99aab118a4f",
+      "size_bytes": 1298
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a/da/ts_optimize/ts_opt_trj.xyz",
+      "path": "ts_opt_trj.xyz",
+      "sha256": "a1341128627c6ff253bb30c4028b799d3beb0edfff31a7d6c4c8225fa77f623a",
+      "size_bytes": 17400
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a/da/ts_optimize/ts_opt.inp",
+      "path": "ts_opt.inp",
+      "sha256": "28e86b4cdeba0bdec1f51a2bd504a8e4ba23d39a44cb67a1711f1f2bc8f6800d",
+      "size_bytes": 985
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a/da/ts_optimize/ts_opt.property.txt",
+      "path": "ts_opt.property.txt",
+      "sha256": "127242b5cd9cd64c7656f63b238f7ee4467e4a8a4d6cf577f0b3fccf2f635c57",
+      "size_bytes": 851300
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a/da/ts_optimize/ts_opt.001.hess",
+      "path": "ts_opt.001.hess",
+      "sha256": "8434c537416bde276639c438a58ed87a2c26964f865add6bcdc9dc30ba9f942e",
+      "size_bytes": 108018
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a/da/ts_optimize/ts_opt.002.hess",
+      "path": "ts_opt.002.hess",
+      "sha256": "6c85f86471d153f172d856ada438a993847ecd4d47bed07de88c4a2e251a53d5",
+      "size_bytes": 108018
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a/da/ts_optimize/ts_opt.003.hess",
+      "path": "ts_opt.003.hess",
+      "sha256": "ce3c289a0f54499ff8eea0a8ad4123b9c75ad1a2f4343de7232adead2bd43529",
+      "size_bytes": 108018
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a/da/ts_optimize/ts_opt.004.hess",
+      "path": "ts_opt.004.hess",
+      "sha256": "f8f3e0d6ac5fd6831945c6149b37fdfec6d657809f0bf65b5fcc9636a3e53497",
+      "size_bytes": 108018
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a/da/ts_optimize/ts_opt.hess",
+      "path": "ts_opt.hess",
+      "sha256": "f8f3e0d6ac5fd6831945c6149b37fdfec6d657809f0bf65b5fcc9636a3e53497",
+      "size_bytes": 108018
+    }
+  ],
+  "products": [],
+  "receipt": null,
+  "release_digest": "813583bdcaae20ef900a99180f433b34a7dfa730fb47c1efea5c9435919a061b",
+  "release_id": "2d1ab37a0f988933",
+  "schema": "acp2.m4-04.step.v1",
+  "status": "failed",
+  "step_id": "ts_optimize",
+  "task_ref": "20261028_940_ts_optimize",
+  "task_result": {
+    "artifacts": [
+      {
+        "checksum": "sha256:28e86b4cdeba0bdec1f51a2bd504a8e4ba23d39a44cb67a1711f1f2bc8f6800d",
+        "path": "/ACPServer/acp2-runs/remediation/m4-04-route-a/da/ts_optimize/ts_opt.inp",
+        "source": "orca",
+        "type": "output"
+      },
+      {
+        "checksum": "sha256:2d14795519872f6b27349e5d9cde2807194478f6c12c855f672c1ef305fe28d7",
+        "path": "/ACPServer/acp2-runs/remediation/m4-04-route-a/da/ts_optimize/ts_opt.out",
+        "source": "orca",
+        "type": "log"
+      }
+    ],
+    "complete": false,
+    "error_kind": "backend_failure",
+    "errors": [
+      "transition_state_opt: ORCA transition-state optimization failed [unknown]"
+    ],
+    "frequencies": [],
+    "metadata": {},
+    "payload": {
+      "rescue_actions": [],
+      "rescue_attempts": 0,
+      "rescue_failure_type": "geometry_not_converged",
+      "rescue_structure_kind": "ts",
+      "rescue_terminal": true,
+      "trajectory_ref": {
+        "path": "/ACPServer/acp2-runs/remediation/m4-04-route-a/da/ts_optimize/optimization_trajectory.json",
+        "source": "optimization_trajectory",
+        "type": "trajectory"
+      },
+      "tsmode_explicit_target": 6,
+      "tsmode_target_preserved": true
+    },
+    "provenance": {
+      "backend": "orca",
+      "input_signature": "/ACPServer/acp2-runs/remediation/m4-04-route-a/da/inputs/ts_restart.xyz",
+      "method": "wB97X-D4",
+      "version": "unknown"
+    },
+    "schema_version": 1,
+    "status": "failed",
+    "task": "optimize"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "authoritative": false,
+  "diagnostic": true,
+  "exit_code": 0,
+  "harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+  "interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+  "interpreter_is_c": true,
+  "note": "Dry-run precedence: --mode live --dry-run still executes on the C interpreter; it never selects the integration lane.",
+  "product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+  "product_import_is_c": true,
+  "result": "NOT_VERIFIED",
+  "test_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec"
+}

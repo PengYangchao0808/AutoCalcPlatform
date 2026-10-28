@@ -1,9 +1,9 @@
 # B02a browser extra (playwright==1.63.0) install/verify — 2026-10-22T19:47:23+08:00
-Requirement already satisfied: playwright==1.63.0 in <acp2-dev>/venvs/browser/lib64/python3.11/site-packages (1.63.0)
-Requirement already satisfied: pyee<14,>=13 in <acp2-dev>/venvs/browser/lib64/python3.11/site-packages (from playwright==1.63.0) (13.0.1)
-Requirement already satisfied: greenlet<4.0.0,>=3.1.1 in <acp2-dev>/venvs/browser/lib64/python3.11/site-packages (from playwright==1.63.0) (3.5.6)
-Requirement already satisfied: typing-extensions in <acp2-dev>/venvs/browser/lib64/python3.11/site-packages (from pyee<14,>=13->playwright==1.63.0) (4.16.0)
+Requirement already satisfied: playwright==1.63.0 in /ACPServer/acp2-development/venvs/browser/lib64/python3.11/site-packages (1.63.0)
+Requirement already satisfied: pyee<14,>=13 in /ACPServer/acp2-development/venvs/browser/lib64/python3.11/site-packages (from playwright==1.63.0) (13.0.1)
+Requirement already satisfied: greenlet<4.0.0,>=3.1.1 in /ACPServer/acp2-development/venvs/browser/lib64/python3.11/site-packages (from playwright==1.63.0) (3.5.6)
+Requirement already satisfied: typing-extensions in /ACPServer/acp2-development/venvs/browser/lib64/python3.11/site-packages (from pyee<14,>=13->playwright==1.63.0) (4.16.0)
 install_exit=0
-playwright_file <acp2-dev>/venvs/browser/lib64/python3.11/site-packages/playwright/__init__.py
+playwright_file /ACPServer/acp2-development/venvs/browser/lib64/python3.11/site-packages/playwright/__init__.py
 playwright_version 1.63.0
 chromium_launched=false (C T-08 H2 owns launch)

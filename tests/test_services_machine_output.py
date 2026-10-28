@@ -239,6 +239,103 @@ def test_redaction_keeps_lowercase_hex_identity() -> None:
     assert mo.redact(identity) == identity
 
 
+# M3-01b (F5): the published platform identifiers must survive so RPH can
+# attribute a submit.  The net keeps its named namespaces; a random opaque run
+# is still redacted.
+_PROJECT_ID = "6f1c2a9e-4b3d-4f80-9a11-2c7d5e8b0f42"
+_APPROVAL_REF = "ap_" + "d" * 32
+_RESERVATION_ID = "rsv_" + "e" * 32
+_SESSION_ID = "session_" + "f" * 32
+
+
+def test_redaction_keeps_published_platform_identifiers() -> None:
+    for identifier in (_PROJECT_ID, _APPROVAL_REF, _RESERVATION_ID, _SESSION_ID):
+        assert mo.redact(identifier) == identifier, identifier
+        assert mo.redact(f"project {identifier} approved") == f"project {identifier} approved"
+
+
+def test_redaction_keeps_identifiers_inside_a_result_payload() -> None:
+    payload = {
+        "project_id": _PROJECT_ID,
+        "approval_ref": _APPROVAL_REF,
+        "reservation_id": _RESERVATION_ID,
+        "task_ref": {"task_id": "20261027_001_fake", "attempt": 1},
+    }
+    cleaned = mo.redact_value(payload)
+    assert cleaned == payload
+    serialized = json.dumps(cleaned)
+    assert "<redacted" not in serialized
+
+
+def test_redaction_still_hides_random_opaque_runs() -> None:
+    secret = "Zx9Qv2LmN8pR4sT6uW0yB3cD5eF7gH1j"
+    cleaned = mo.redact(f"value {secret}")
+    assert secret not in cleaned
+    assert mo.REDACTED_SECRET in cleaned
+
+
+# M4-01/F8: the bounded-wait cursor is a **server-issued opaque handle**, not a
+# credential.  The envelope must carry it back verbatim (a client that cannot
+# replay it cannot continue the wait).  The exemption is explicit (a declared
+# field name) *and* shape-checked (the published cursor encoding) — never a
+# general "long string" exemption.
+def _wait_cursor() -> str:
+    from acp_services.runtime.research_service import encode_wait_cursor
+
+    return encode_wait_cursor(
+        snapshot_revision="sha256:" + "a" * 64,
+        project_id=_PROJECT_ID,
+        issued_at=1_790_000_000.0,
+    )
+
+
+def test_redaction_keeps_a_server_issued_wait_cursor() -> None:
+    cursor = _wait_cursor()
+    assert mo.is_opaque_wait_cursor(cursor) is True
+    payload = {"events": [], "cursor": cursor, "snapshot_revision": 3, "timed_out": True}
+    cleaned = mo.redact_value(payload)
+    assert cleaned == payload
+    envelope = mo.MachineResult(operation="acp_research_wait_v1", status="ok", data=payload)
+    serialized = json.dumps(envelope.to_dict())
+    assert cursor in serialized
+    assert "<redacted" not in serialized
+    # Both frames agree: the text frame is the same envelope, not a second one.
+    assert cursor in envelope.to_json()
+
+
+def test_redaction_still_hides_a_credential_under_the_cursor_field() -> None:
+    import base64
+
+    for credential in (
+        "Bearer " + "a" * 24,
+        "Zx9Qv2LmN8pR4sT6uW0yB3cD5eF7gH1j",
+        "sk-" + "b" * 40,
+        base64.urlsafe_b64encode(b'{"api_key":"live-secret-value"}').decode("ascii"),
+    ):
+        cleaned = mo.redact_value({"cursor": credential})["cursor"]
+        assert cleaned != credential, credential
+        assert "<redacted" in cleaned, credential
+    # A declared field whose value is not the published encoding is not exempt.
+    assert mo.is_opaque_wait_cursor("cursor-1") is False
+    assert mo.redact_value({"cursor": "cursor-1"})["cursor"] == "cursor-1"
+
+
+def test_redaction_does_not_exempt_an_undeclared_field() -> None:
+    cursor = _wait_cursor()
+    cleaned = mo.redact_value({"continuation": cursor, "cursor": cursor})
+    assert cleaned["cursor"] == cursor
+    assert cleaned["continuation"] != cursor
+    assert mo.REDACTED_SECRET in cleaned["continuation"]
+
+
+def test_redaction_keeps_the_credential_path_intact() -> None:
+    # A real credential is still caught by the assignment/bearer nets even when
+    # it sits next to a preserved identifier.
+    cleaned = mo.redact(f"project {_PROJECT_ID} token=abcDEF123456")
+    assert _PROJECT_ID in cleaned
+    assert "abcDEF123456" not in cleaned
+
+
 def test_error_object_redacts_message_and_params() -> None:
     obj = mo.error_object(
         mo.ErrorCode.INPUT_INVALID,

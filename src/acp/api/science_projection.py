@@ -428,12 +428,16 @@ def science_capabilities(
     *,
     descriptors: Mapping[str, Any] | None = None,
     domain: Mapping[str, Any] | None = None,
+    analysis: tuple[Mapping[str, Any], ...] | list[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Return the read-only ``GET /api/v2/science/capabilities`` document.
 
     ``descriptors``/``domain`` may be injected by the route (cached once per
-    app) or by tests (to avoid executable probing).  The top level contains
-    exactly ``protocol_version``, ``tools`` and ``capabilities``.
+    app) or by tests (to avoid executable probing).  ``analysis`` is the frozen
+    ``registered/executable/unavailable`` projection of the injected
+    application analysis registry (M2-02); a caller that does not pass it gets
+    an empty table, never a fabricated state.  The top level contains exactly
+    ``protocol_version``, ``tools`` and ``capabilities``.
     """
 
     descriptor_doc = descriptors if descriptors is not None else builtin_catalog().to_dict()
@@ -446,6 +450,7 @@ def science_capabilities(
             "questions": question_specs(descriptors=descriptor_doc),
             "descriptors": descriptor_doc,
             "domain": domain_doc,
+            "analysis": [dict(entry) for entry in (analysis or ())],
         },
     }
 

@@ -24,12 +24,12 @@ Mem:            62Gi       8.0Gi       7.9Gi        51Mi        47Gi        54Gi
 Swap:           31Gi          0B        31Gi
 ## disk/inode data root candidate
 文件系统                         容量  已用  可用 已用% 挂载点
-/dev/mapper/rl_redacted-host-root   70G   43G   28G   62% /
+/dev/mapper/rl_workstation-root   70G   43G   28G   62% /
 文件系统                          Inodes 已用(I)  可用(I) 已用(I)% 挂载点
-/dev/mapper/rl_redacted-host-root 36700160  743966 35956194       3% /
+/dev/mapper/rl_workstation-root 36700160  743966 35956194       3% /
 ## findmnt
 TARGET SOURCE                          FSTYPE OPTIONS
-/      /dev/mapper/rl_redacted-host-root xfs    rw,relatime,seclabel,attr2,inode64,logbufs=8,logbsize=32k,noquota
+/      /dev/mapper/rl_workstation-root xfs    rw,relatime,seclabel,attr2,inode64,logbufs=8,logbsize=32k,noquota
 ## production service (must remain untouched)
 GET http://127.0.0.1:8765/ -> 200
 ## listening ports (all)

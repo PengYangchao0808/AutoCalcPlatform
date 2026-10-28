@@ -1,0 +1,106 @@
+{
+  "artifacts": [
+    {
+      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/research-loop-live/offline/f3-honesty-rloop-20261022T234209Z/summary.json",
+      "sha256": "4375c8edbd615efaa391427d001d6925996c20bb9a04657abdc6e46e3324d82e",
+      "size_bytes": 544
+    },
+    {
+      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/research-loop-live/offline/f3-honesty-rloop-20261022T234209Z/assertion-table.json",
+      "sha256": "585e1ed7a31d04c0aa0ba917aeb9827dacefbce47288d42a07f50b54196bca73",
+      "size_bytes": 3266
+    },
+    {
+      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/research-loop-live/offline/f3-honesty-rloop-20261022T234209Z/run-log.json",
+      "sha256": "4c990fedf000b00f1fe5829c51f5e630678eaca551a9ce85bb37dca1431b26af",
+      "size_bytes": 19765
+    },
+    {
+      "path": "control-report.json",
+      "sha256": "980de85a5ffc0ba3e9f873a04e975922e0146684329f5ae256315e4ff3c881e9",
+      "size_bytes": 910
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "rc=0 $ tsc -b",
+      "name": "research_loop.build",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 offline proof PASS: 7 cases, 30 assertions -> /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/research-loop-live/offline/f3-honesty-rloop-20261022T234209Z",
+      "name": "research_loop.offline_proof_process",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"all_passed\": true, \"assertions\": 30, \"cases\": [\"happy_path\", \"no_evidence\", \"duplicate_terminal\", \"round_cap\", \"preflight_failed\", \"advice_cannot_override_refuted\", \"wait_never_calls_model\"], \"live_model_calls\": 0}",
+      "name": "research_loop.offline_proof_all_passed",
+      "status": "PASS"
+    },
+    {
+      "detail": "cases=7",
+      "name": "research_loop.offline_cases_ge_7",
+      "status": "PASS"
+    },
+    {
+      "detail": "all required assertions PASS",
+      "name": "research_loop.required_offline_assertions",
+      "status": "PASS"
+    },
+    {
+      "detail": "upstream_not_delivered:live_model_and_controller_absent",
+      "name": "prerequisite:upstream_not_delivered",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "e03a9dd9f6897ca0a8d43e69a10b22a20097f05d",
+    "harness_revision": "9c2523d35a884272807c6857794886eeedd43e728da0d695fd2a26244ddaa433",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "e03a9dd9f6897ca0a8d43e69a10b22a20097f05d",
+  "command": [
+    "/ACPServer/acp2-development/venvs/integration/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "research-loop-live",
+    "--timeout",
+    "120",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/research-loop-live/f3-honesty-rloop-20261022T234209Z/main/control"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "live",
+  "exit_code": 2,
+  "extensions": {
+    "experience.harness_contract_revision": "9c2523d35a884272807c6857794886eeedd43e728da0d695fd2a26244ddaa433",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/integration/bin/python",
+    "experience.mode": "live",
+    "experience.product_import": "/ACPServer/acp2-development/integration/src/acp/__init__.py",
+    "experience.run_id": "f3-honesty-rloop-20261022T234209Z",
+    "experience.scenario_key": "research-loop-live",
+    "experience.subcase": "control",
+    "experience.test_revision": "e03a9dd9f6897ca0a8d43e69a10b22a20097f05d"
+  },
+  "finished_at": "2026-10-22T23:42:10Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:control",
+  "reason": "upstream_not_delivered:live_model_and_controller_absent",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "f3-honesty-rloop-20261022T234209Z",
+  "scenario": "experience:research-loop-live",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T23:42:09Z",
+  "submission_id": null,
+  "usage": null
+}

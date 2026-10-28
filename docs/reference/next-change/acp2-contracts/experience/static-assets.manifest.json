@@ -1,0 +1,478 @@
+{
+  "counts": {
+    "bytes": 3554243,
+    "css": 10,
+    "files": 76,
+    "html": 3,
+    "js": 61
+  },
+  "digest": "1e99be8991342cacf43b8c13af67be36c39cf3e0491afc1587ad2b7264f78ac0",
+  "digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\"",
+  "entry_points": {
+    "index": "ACP_Workbench_v2.html",
+    "js_root": "js",
+    "legacy": "ACP_Workbench.html"
+  },
+  "files": [
+    {
+      "media_type": "text/html",
+      "path": "ACP_Workbench.html",
+      "sha256": "f4c0e4925131a3e6ec24e1562001762802b73d8d97ac70da5923eebdd0900fc3",
+      "size_bytes": 26548
+    },
+    {
+      "media_type": "text/html",
+      "path": "ACP_Workbench_minimal.html",
+      "sha256": "1dae353cb509651e6b7ebba34bbe3a930db1673bdba7d24bab20759ebefd768a",
+      "size_bytes": 32057
+    },
+    {
+      "media_type": "text/html",
+      "path": "ACP_Workbench_v2.html",
+      "sha256": "ebe5264ba692c28994d40497429f4efdb1a00a8e3048028cb5ccd9c7b980c7c0",
+      "size_bytes": 85840
+    },
+    {
+      "media_type": "text/css",
+      "path": "css/structure_source_picker.css",
+      "sha256": "f6289697638963ad5095585bc6b93e0c5ddf865c2ffb464c651c6049eca00477",
+      "size_bytes": 17168
+    },
+    {
+      "media_type": "text/css",
+      "path": "css/structure_viewer.css",
+      "sha256": "126fecdd53a828c08a98cd9b26eca8aaf8c5dc483a318aaadd21357e56bd873c",
+      "size_bytes": 30486
+    },
+    {
+      "media_type": "text/css",
+      "path": "css/task_input_workspace.css",
+      "sha256": "fc1b348e95f2cdee93755dcc0e2ede4ad71f2a8e5244eb0ad1435218112bb7b2",
+      "size_bytes": 57010
+    },
+    {
+      "media_type": "text/css",
+      "path": "css/tsmode_editor.css",
+      "sha256": "f25dab539ff7874026585856e351ca91565e4239d6b821d68ec19238a070c674",
+      "size_bytes": 8235
+    },
+    {
+      "media_type": "text/css",
+      "path": "css/workbench/base.css",
+      "sha256": "b8b785db58c9510eb34ac6edd0483286da2314bd1fcc301087c8f9bcb90d66fc",
+      "size_bytes": 2092
+    },
+    {
+      "media_type": "text/css",
+      "path": "css/workbench/energy.css",
+      "sha256": "6be02076291589b1b426cf4d66d9487ed2a9f25f68a52317dbf39a1f83982ae5",
+      "size_bytes": 42894
+    },
+    {
+      "media_type": "text/css",
+      "path": "css/workbench/features.css",
+      "sha256": "9f4eaab85242d556ffd94f647086170c5dae339a5b6f484811c71e0c355b786b",
+      "size_bytes": 47036
+    },
+    {
+      "media_type": "text/css",
+      "path": "css/workbench/layout.css",
+      "sha256": "ca6eabc2bfa41d81b229804fe1a9cc18940a80f7ad5690f2ac5d78a2523e717f",
+      "size_bytes": 17113
+    },
+    {
+      "media_type": "text/css",
+      "path": "css/workbench/queue-detail.css",
+      "sha256": "88307780f1190736233a0ab2d8cdd000a1dd1711008d88c052a802e99bf711dd",
+      "size_bytes": 44715
+    },
+    {
+      "media_type": "text/css",
+      "path": "css/workbench/wizard.css",
+      "sha256": "ad4597bb01c1ac3ba506b9b935aa4dd77c287ba265d6b39d8d0c0ade54cbb888",
+      "size_bytes": 64052
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/candidate_details.js",
+      "sha256": "1b1039bec285b2c6ef63476350f3ecbf454a27ffbe8f2caacab88409e40cb7b6",
+      "size_bytes": 29344
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/client/event-invalidation.js",
+      "sha256": "72d64999b5bbe03bad2ac6990041279c7972b5b6f13721032f8d62d7e4580a0f",
+      "size_bytes": 14999
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/client/event-stream.js",
+      "sha256": "a297d292991be62ee4560450bbb2bd7c7110d35a3992534697f12510b61b2a1a",
+      "size_bytes": 7537
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/client/job-commands.js",
+      "sha256": "18877e0be0a7824a6f4839060b33392849a15d7bba0167b56f63951f5341b165",
+      "size_bytes": 6565
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/client/job-detail-query.js",
+      "sha256": "955441773ce49acfd31c44513976dc4ff79ae44a5a97b7c001edd22212a09dbb",
+      "size_bytes": 8265
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/client/polling-strategy.js",
+      "sha256": "881fe553b0acae45a1ad1dd793a63d78301154855a03fcb7b5c8979ffcd56e88",
+      "size_bytes": 7870
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/client/research-commands.js",
+      "sha256": "5a1b57f944f72f669f6b1ec3a2506d98ab62583fd7a7b85c93e8d6824900b065",
+      "size_bytes": 21457
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/client/research-query.js",
+      "sha256": "5fe01aaffd3d4e7ecc761eac703e3460ae8023f7313ddaf4a300ea6f2d27bd84",
+      "size_bytes": 14527
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/client/resource-store.js",
+      "sha256": "68c03385cb63294345960f5f49e26dea83e06d0b473c0ed85b04890095cee8a3",
+      "size_bytes": 5344
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/client/science-query.js",
+      "sha256": "28cda1f4e7eeb4602ef1ecc16e08fc3e85cf6f1e884e87d138db168e05db4666",
+      "size_bytes": 19013
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/client/system-endpoints.js",
+      "sha256": "308bf17cf9039850bbcd398ebf8a5f104dacc0f35c2873f37624552d7e4f5f91",
+      "size_bytes": 3256
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/client/task-view-query.js",
+      "sha256": "daed4689851427e978272855edbc730671ac380b0687b3f748529e6192269ad8",
+      "size_bytes": 7735
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/client/transport.js",
+      "sha256": "7b68608dbe8b2b5fea681c0c8945865f1854ad4bd4271f4ac2e1962cb136ffa8",
+      "size_bytes": 6518
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/client/wizard-endpoints.js",
+      "sha256": "6377fdedd1e5e29e005035f2335bff7792da4b4e592d82269c09d85ebafa5a85",
+      "size_bytes": 11505
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/geometry_store.js",
+      "sha256": "35725a143c84fa6cf4fc1c2617d0a9d2feeb9bd6edfdd7acaafd820dd87428ab",
+      "size_bytes": 19089
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/job_editor.js",
+      "sha256": "6b4d39818bd6bdc64938a3431d3e561b7b5c202557b948cfc60b6ea146e26d73",
+      "size_bytes": 128488
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/memory_input.js",
+      "sha256": "b422cfc6e21385f70be95764e926b6bb4dcbb9d7124890fc025d223c8610ebe3",
+      "size_bytes": 2292
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/structure_editor.js",
+      "sha256": "846aa9e9e1d04717245045b7d13e0331d3da9384134c9a6f9ecd2347425b4a59",
+      "size_bytes": 76597
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/structure_source_picker.js",
+      "sha256": "c78f7e4779a4f197ea191410b282fca72d8bc21b2fd94e2df5626b50de894995",
+      "size_bytes": 81985
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/structure_viewer.js",
+      "sha256": "1eaed3ff9aaaeec9bea9a8b87978283f827ef0512c2829bd86867a47e487c147",
+      "size_bytes": 165403
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/task_input_workspace.js",
+      "sha256": "7d8c418a56ab0699e106b149104079a9ae752ebd562053537f4f9624958b07c1",
+      "size_bytes": 8072
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/tsmode_editor.js",
+      "sha256": "861ed668633038f298b10328a7088a929cb8fb20685564e24494193850d910d9",
+      "size_bytes": 32355
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/vendor/3Dmol-2.5.5.min.js",
+      "sha256": "f7cc78921ae72e7623e89cdd111434f58c2efddd2ffda1cd212644b406fb8016",
+      "size_bytes": 537792
+    },
+    {
+      "media_type": "application/octet-stream",
+      "path": "js/vendor/3Dmol-LICENSE",
+      "sha256": "4c6eaaed856f3f28a3b1a98e74f4a8a71618de7d51ea4155c29f6f793bcef861",
+      "size_bytes": 4283
+    },
+    {
+      "media_type": "text/markdown",
+      "path": "js/vendor/README.md",
+      "sha256": "f7e70ff76ee724fbfce9fe279754cfd14f18f749d5583ee76f9c41a757affae6",
+      "size_bytes": 382
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/vibration_viewer.js",
+      "sha256": "8c876b243cf9ef4c49ed8622d28f4bab076b3aed015267789841bcddc24f3712",
+      "size_bytes": 76254
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/visualization/energy_chart_renderer.js",
+      "sha256": "d7d5626128014b54b997eed03d349c9c104c1e6461947593928ef3fa604b8b8c",
+      "size_bytes": 56240
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/visualization/framing.js",
+      "sha256": "471d50c7b523871da875930cb5ab072f094c60774e3611905122e08049b72d60",
+      "size_bytes": 4463
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/visualization/mol3d_adapter.js",
+      "sha256": "c150b7f4ac03a524826ee97c888d78b76e35f0202a9d73c2c95e1a1c872c06d9",
+      "size_bytes": 2416
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/visualization/scene_instance.js",
+      "sha256": "dee4862b23418200bb10e961e2643bdcf6d28d08f7028b3c3b64975eb280fece",
+      "size_bytes": 27291
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/bootstrap.js",
+      "sha256": "79c323d650cb8134a39eca2eeffec2df638adf06a56544173114ed885fdc5081",
+      "size_bytes": 34779
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/compat/api.js",
+      "sha256": "498720de88916f2f215bf760662d0219a8d28ff33b881fa28b19291490a620ab",
+      "size_bytes": 10810
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/compat/shared-state.js",
+      "sha256": "d3783e18da657221fe710bec17c94385ed6829c794484c2a70327974dda48438",
+      "size_bytes": 17373
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/contracts/batch_role_defaults.js",
+      "sha256": "c49646fd2db36a8cbeda7a1f59ce2c0d1a3be51c52ec884ff5b7d0f597f5350e",
+      "size_bytes": 2661
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/contracts/experience_contract.js",
+      "sha256": "ccd589fd89e2668d1227ef2a57bf5e97228973c4dbb5179bc8c2a21ba9f0b5e2",
+      "size_bytes": 19872
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/contracts/fixtures/evidence-bundle.js",
+      "sha256": "7ea5e8ca4d2bf7384d42b3fc0ffb7217d0ae7dbf96eb003b18a04d0b3651d76c",
+      "size_bytes": 15279
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/contracts/fixtures/task_view_samples.js",
+      "sha256": "d66aa930a5fd34e6f6a79d64ef72e19e452a8a5d26b27fdc4ffafb559b5871b1",
+      "size_bytes": 4516
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/contracts/task_view_contract.js",
+      "sha256": "931e546c00135195214e74322e5279faed5c8354f3d876aec9407250248bc4c5",
+      "size_bytes": 6746
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/contracts/ui_subset.js",
+      "sha256": "68bd7897915f6e0a046ce4b6e3cf1eb5978cc569d4dc3154b4a3bc93655b765b",
+      "size_bytes": 31852
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/controllers/candidate_review_controller.js",
+      "sha256": "363d77204234f332b9b1c3c376d7bbee95b72ede370732734f5bd4cd6f1caebf",
+      "size_bytes": 14203
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/controllers/job_detail_controller.js",
+      "sha256": "aa3ef62934db117e07dcb524eaaf0289f583d106a0353886708f64e16f4f698c",
+      "size_bytes": 4783
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/controllers/system_resources_controller.js",
+      "sha256": "6d8dcdbe8cca845bb38ff560646f9ad7fe663fb516bcc92e0c12aaa6adbcdd23",
+      "size_bytes": 13189
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/controllers/task_list_controller.js",
+      "sha256": "4de1ebc86f382fc32022f3f898df41fa655b53497f7114c28821bde2fea00ab9",
+      "size_bytes": 5291
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/controllers/task_session_controller.js",
+      "sha256": "8b5133ed8aa6d79c607ee8123ade7d222a5b912e1a4bc2803ca24997ac6c7d03",
+      "size_bytes": 7025
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/features/capability-form.js",
+      "sha256": "60d97f2a50f3a17eb975d623548bcfc185ff800d9531c8b20cc992d3fba873ee",
+      "size_bytes": 30688
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/features/energy.js",
+      "sha256": "873b78329df4a668251f0d5aa52eab7845efa432bfdabdd3cb9577708278a01d",
+      "size_bytes": 253767
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/features/files-logs.js",
+      "sha256": "992ef52eeb07295ec406aecb7d1512e7644a379a865405a3d1e40af4cc6fda90",
+      "size_bytes": 26470
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/features/job-detail.js",
+      "sha256": "f3ba469926e5392eaa1f6d21b6b6be84245ce91036ec93e341a41f4b7a6db494",
+      "size_bytes": 51783
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/features/molecule-view.js",
+      "sha256": "05d16859bf60b81096c8bacaa40bdf6d9691735a75063948b0f14bc82cba4275",
+      "size_bytes": 57474
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/features/nmr.js",
+      "sha256": "90f71c991cf8ab9b20477cb2d9a5e971d7a749cc8e4d2a3516c49ce4dc037837",
+      "size_bytes": 36563
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/features/queue.js",
+      "sha256": "6dae6cc337d0acca55526fad99eeb72be09814f39cf761813944ad14545bbe3b",
+      "size_bytes": 82689
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/features/reaction-builder.js",
+      "sha256": "eea051c540592dfab331a641fa596f5d62681e4099bbab7770d24b1c8a6f8a54",
+      "size_bytes": 153179
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/features/research-approval.js",
+      "sha256": "1006b8b39fdc938902d03f385857797d6e000b5b47159d839c829256776d0411",
+      "size_bytes": 66593
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/features/research-evidence-view.js",
+      "sha256": "6a003e0e89f7c5672db012b37cc98b3500ee0e7c3e0bef0fc0f829dd737029ef",
+      "size_bytes": 4616
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/features/scan-s2.js",
+      "sha256": "f95495a9e43a90c498e9794fc837fb04b113b4fa27fd10ee28e3b44b5709afce",
+      "size_bytes": 4383
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/features/science-question.js",
+      "sha256": "520b8137200e615f0835649be1867ea3828893c763f61bdaff51b4c3fe047f77",
+      "size_bytes": 61741
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/features/scientific-evidence.js",
+      "sha256": "ce95bdff1b10134942f3a7016fc292801e99433a0340acc9c84c93b712b243a6",
+      "size_bytes": 39033
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/features/wizard.js",
+      "sha256": "111e51c263c2ddfbd2e9c906c9e7e922f55c69bfd199e8a6ef7adc401fba2e03",
+      "size_bytes": 166301
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/features/wizard/draft-form.js",
+      "sha256": "9e0e545f4937259e9885793b78aa87f3d4a8586594ab75ef6c2f56fc4277326e",
+      "size_bytes": 178858
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/features/wizard/preview-validate.js",
+      "sha256": "6df6c290584768c1a8ec7afd0d2b014e2a7fe81b98ee886469f3cdea122f7e8f",
+      "size_bytes": 39498
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/features/wizard/submit-edit.js",
+      "sha256": "4dc8fcf4ca29776b3761ce5309cc90043e541213ebb276ef3c701d903350ae68",
+      "size_bytes": 46565
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/features/wizard/upload-parse.js",
+      "sha256": "97f46034b113d035e560746e188aa6dc561b1cc7576852c7f25421cd21018536",
+      "size_bytes": 10549
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/workbench/i18n.js",
+      "sha256": "cc943bdfbf9291e00562a7c3ba2d0e3fb6f8c00c7a4fcd79a3b0426ce908a7ca",
+      "size_bytes": 192531
+    }
+  ],
+  "package_version": "0.3.0",
+  "release_id": "acp2-experience-0.3.0",
+  "schema": "acp2.experience.static-assets.v1",
+  "schema_version": "1.0.0"
+}

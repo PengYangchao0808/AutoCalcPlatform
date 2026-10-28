@@ -1,0 +1,21 @@
+{
+  "data": {
+    "complete_marker": true,
+    "duration_s": 11.4,
+    "files": 606,
+    "publish_retries": 6,
+    "release_dir": "/ACPServer/acp2-runs/remediation/m4-03/remote_code/releases/2d1ab37a0f988933",
+    "release_id": "2d1ab37a0f988933",
+    "sample_path": "config/defaults.yaml",
+    "sample_present": true,
+    "source": "remote"
+  },
+  "detail": "release 2d1ab37a0f988933 publish-verified (606 files, 11.4s)",
+  "evidence": [
+    "native/code_release.json"
+  ],
+  "name": "code_release",
+  "recorded_at": "2026-10-27T17:14:33.041229Z",
+  "schema": "acp2.m403.acceptance.v1",
+  "status": "PASS"
+}

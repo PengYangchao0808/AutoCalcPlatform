@@ -1,0 +1,47 @@
+{
+  "bind_tuple": [
+    "plan_definition_digest",
+    "project_id",
+    "budget",
+    "allowed_change_scope"
+  ],
+  "evidence_kind": "fixture",
+  "feature_module": "frontend/js/workbench/features/research-approval.js",
+  "gating": {
+    "display_name_and_timestamps_do_not_invalidate": true,
+    "expiry_displayed": true,
+    "model_claim_is_never_approval": true,
+    "other_user_approve_rejected": true,
+    "submit_requires_bound_digest": true
+  },
+  "invalidate_matrix": {
+    "appended task_refs/evidence_refs": "keeps_valid",
+    "approval_ref/approval_status": "keeps_valid",
+    "budget.*": "invalidates",
+    "display_name/created_at/updated_at": "keeps_valid",
+    "science.initial_inputs": "invalidates",
+    "science.mapping": "invalidates",
+    "science.method": "invalidates"
+  },
+  "live_b16_rows": {
+    "budget.deny": "NOT_VERIFIED(b16_handoff)",
+    "budget.expire": "NOT_VERIFIED(b16_handoff)",
+    "budget.reservation": "NOT_VERIFIED(b16_handoff)",
+    "budget.revoke": "NOT_VERIFIED(b16_handoff)"
+  },
+  "node_tests": {
+    "failed": 0,
+    "minimum": 8,
+    "passed": 21
+  },
+  "phase": "approval",
+  "plan_identity": "docs/reference/next-change/acp2-contracts/experience/plan-identity.md",
+  "public_evidence_kind": "fixture",
+  "public_phase": "experience:fixture",
+  "requested_phase": "approval",
+  "separation": {
+    "dsh_tool_approval": "separate mapping; never changes platform state",
+    "platform_research_approval": "approval_card only; approve binds the real principal"
+  },
+  "test_module": "frontend/js/module_tests/acp2_approval.test.js"
+}

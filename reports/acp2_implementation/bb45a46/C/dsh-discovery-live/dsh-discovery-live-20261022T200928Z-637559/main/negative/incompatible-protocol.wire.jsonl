@@ -1,0 +1,4 @@
+{"kind": "recv", "payload": {"jsonrpc": "2.0", "id": "server-discover-probe-1", "method": "server/discover", "params": {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": {"name": "dsh-mcp-client", "version": "0.0.1"}, "io.modelcontextprotocol/clientCapabilities": {}}}}}
+{"kind": "send", "payload": {"jsonrpc": "2.0", "id": "server-discover-probe-1", "error": {"code": -32601, "message": "method not found"}}}
+{"kind": "recv", "payload": {"method": "initialize", "params": {"protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "dsh-mcp-client", "version": "0.0.1"}}, "jsonrpc": "2.0", "id": 0}}
+{"kind": "send", "payload": {"jsonrpc": "2.0", "id": 0, "error": {"code": -32602, "message": "unsupported protocol version", "data": {"code": "unsupported_protocol_version", "supported": ["2025-06-18"]}}}}

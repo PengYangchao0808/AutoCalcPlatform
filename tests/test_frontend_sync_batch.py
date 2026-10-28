@@ -5,6 +5,7 @@ its original name and body; the old -> new mapping is
 tests/test_frontend_sync.py::<name> -> tests/test_frontend_sync_batch.py
 ::<name>. Shared helpers live in tests/_frontend_sync_shared.py.
 """
+
 from __future__ import annotations
 
 from tests._frontend_sync_shared import (
@@ -84,7 +85,7 @@ def test_node_selector_structure_and_disabled_logic_lock() -> None:
     cards_body = html.split("function updateConfigCards()", 1)[1].split("\nfunction ", 1)[0]
     assert "scheduleNodeMatchingRefresh();" in cards_body
     assert (
-        'document.getElementById("modal-node-select").addEventListener("change", onNodeSelectChange);'
+        'document.getElementById("modal-node-select").addEventListener("change", onNodeSelectChange);'  # noqa: E501
         in html
     )
     open_body = html.split("function openModal()", 1)[1].split("\nfunction ", 1)[0]
@@ -92,9 +93,13 @@ def test_node_selector_structure_and_disabled_logic_lock() -> None:
     assert "scheduleNodeMatchingRefresh();" in open_body
 
     # D12: submission-time target error codes map to localized text.
+    # M0-06: 422 envelopes put the fine-grained reason in params.rule with the
+    # legacy top-level code as fallback; translateNodeError reads params first.
     assert "function translateNodeError(err)" in html
     assert "function formatSubmitError(err)" in html
-    assert 'key = "nodes.error." + parsed.code;' in html
+    assert 'var rule = (typeof params.rule === "string" && params.rule) || parsed.code;' in html
+    assert 'var key = "nodes.error." + rule;' in html
+    assert 'translated = t("nodes.error.execution_target_error");' in html
     # m9: EVERY submit-branch alert routes coded 400 bodies through
     # formatSubmitError — definition + stage chain + PESsearch inline scan
     # + NMR + mechanism.  (The general per-structure loop alerts with a
@@ -444,7 +449,9 @@ def test_batch_preview_failure_explicit() -> None:
     assert "mc-preview-unverified" in html, "Unverified CSS class missing"
     # T18: the catch path now lives in the S2 slice module (wizard.js keeps the
     # same-name delegate). catch path routes to the failure renderer.
-    s2_module = (FRONTEND_WORKBENCH_JS_DIR / "features" / "wizard" / "preview-validate.js").read_text(encoding="utf-8")
+    s2_module = (
+        FRONTEND_WORKBENCH_JS_DIR / "features" / "wizard" / "preview-validate.js"
+    ).read_text(encoding="utf-8")
     catch_body = s2_module.split("function fetch()", 1)[1]
     catch_body = catch_body.split("function renderServer", 1)[0]
     assert "renderFailure(" in catch_body
@@ -627,11 +634,13 @@ def test_batch_preview_local_summary_for_active_role() -> None:
     html = read_workbench_content()
     # T18: the renderer body moved to the S2 slice module; wizard.js supplies the
     # active-role / roles accessors to the factory, so pin the wiring there.
-    assert "getActiveRole: function() { return _batchRoleActive; }" in html, \
+    assert "getActiveRole: function() { return _batchRoleActive; }" in html, (
         "Must use active role for local summary"
-    assert "getRoles: function() { return _batchRoles; }" in html, \
-        "Must read from _batchRoles"
-    s2_module = (FRONTEND_WORKBENCH_JS_DIR / "features" / "wizard" / "preview-validate.js").read_text(encoding="utf-8")
+    )
+    assert "getRoles: function() { return _batchRoles; }" in html, "Must read from _batchRoles"
+    s2_module = (
+        FRONTEND_WORKBENCH_JS_DIR / "features" / "wizard" / "preview-validate.js"
+    ).read_text(encoding="utf-8")
     body = s2_module.split("function renderLocal()", 1)[1].split("\n    }", 1)[0]
     assert "getActiveRole()" in body, "Local summary must resolve the active role"
     assert "getRoles()" in body, "Local summary must resolve the role drafts"

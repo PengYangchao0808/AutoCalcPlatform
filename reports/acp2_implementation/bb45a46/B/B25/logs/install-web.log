@@ -1,7 +1,7 @@
-$ <repo>/reports/acp2_implementation/bb45a46/B/B25/venvs/web/bin/python -m pip install --disable-pip-version-check --no-input --find-links <repo>/reports/acp2_implementation/bb45a46/B/B25/release <repo>/reports/acp2_implementation/bb45a46/B/B25/release/acp_web-0.3.0-py3-none-any.whl
+$ /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/bin/python -m pip install --disable-pip-version-check --no-input --find-links /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release/acp_web-0.3.0-py3-none-any.whl
 exit=0
 --- stdout ---
-Looking in links: <repo>/reports/acp2_implementation/bb45a46/B/B25/release
+Looking in links: /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/release
 Processing ./release/acp_web-0.3.0-py3-none-any.whl
 Processing ./release/cccp-0.3.0-py3-none-any.whl
 Processing ./release/acp_worker-0.3.0-py3-none-any.whl

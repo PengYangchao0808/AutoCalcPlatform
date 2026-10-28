@@ -1,0 +1,142 @@
+{
+  "descriptor_sha256": "ca807cc4b8014af265fac64c9b84ca3c4050df9bfbab3b5dc408ce068b548046",
+  "descriptor_tool_names": [
+    "acp_analyze",
+    "acp_cancel",
+    "acp_capabilities",
+    "acp_preflight",
+    "acp_prepare_artifact",
+    "acp_read_artifact",
+    "acp_status",
+    "acp_submit"
+  ],
+  "live_snapshot_kind": "b_recorded_not_c_owned",
+  "live_tool_names": [
+    "acp_analyze",
+    "acp_cancel",
+    "acp_capabilities",
+    "acp_preflight",
+    "acp_prepare_artifact",
+    "acp_read_artifact",
+    "acp_status",
+    "acp_submit"
+  ],
+  "matches": false,
+  "mismatched_tools": [
+    "acp_analyze",
+    "acp_cancel",
+    "acp_capabilities",
+    "acp_preflight",
+    "acp_prepare_artifact",
+    "acp_read_artifact",
+    "acp_status",
+    "acp_submit"
+  ],
+  "output_schema_tools": [],
+  "schema": "acp2.c.mcp-live.schema-drift.v1",
+  "source": "B/B05/probe/wire.jsonl",
+  "source_sha256": "f4d898901f9b7ce243c85553dfd1acc81e3e835f70c9d3b63d357d5389dbe1f5",
+  "tool_differences": {
+    "acp_analyze": {
+      "descriptor_additional_properties": false,
+      "descriptor_required": [
+        "analysis_id",
+        "input_refs",
+        "explicit"
+      ],
+      "fields": [
+        "inputSchema"
+      ],
+      "live_additional_properties": true,
+      "live_required": [
+        "workflow"
+      ]
+    },
+    "acp_cancel": {
+      "descriptor_additional_properties": false,
+      "descriptor_required": [
+        "reference"
+      ],
+      "fields": [
+        "inputSchema"
+      ],
+      "live_additional_properties": true,
+      "live_required": [
+        "reference"
+      ]
+    },
+    "acp_capabilities": {
+      "descriptor_additional_properties": false,
+      "descriptor_required": null,
+      "fields": [
+        "inputSchema"
+      ],
+      "live_additional_properties": false,
+      "live_required": null
+    },
+    "acp_preflight": {
+      "descriptor_additional_properties": false,
+      "descriptor_required": [
+        "workflow",
+        "input"
+      ],
+      "fields": [
+        "inputSchema"
+      ],
+      "live_additional_properties": true,
+      "live_required": [
+        "workflow"
+      ]
+    },
+    "acp_prepare_artifact": {
+      "descriptor_additional_properties": false,
+      "descriptor_required": [
+        "purpose"
+      ],
+      "fields": [
+        "inputSchema"
+      ],
+      "live_additional_properties": true,
+      "live_required": null
+    },
+    "acp_read_artifact": {
+      "descriptor_additional_properties": false,
+      "descriptor_required": [
+        "artifact_ref"
+      ],
+      "fields": [
+        "inputSchema"
+      ],
+      "live_additional_properties": true,
+      "live_required": null
+    },
+    "acp_status": {
+      "descriptor_additional_properties": false,
+      "descriptor_required": [
+        "reference"
+      ],
+      "fields": [
+        "inputSchema"
+      ],
+      "live_additional_properties": true,
+      "live_required": [
+        "reference"
+      ]
+    },
+    "acp_submit": {
+      "descriptor_additional_properties": false,
+      "descriptor_required": [
+        "workflow",
+        "input",
+        "plan_digest"
+      ],
+      "fields": [
+        "inputSchema"
+      ],
+      "live_additional_properties": true,
+      "live_required": [
+        "workflow"
+      ]
+    }
+  }
+}

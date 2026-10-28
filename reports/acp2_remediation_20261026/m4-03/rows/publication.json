@@ -1,0 +1,31 @@
+{
+  "data": {
+    "attempt": 1,
+    "attempt_after_retries": 1,
+    "baseline_publications": 0,
+    "duration_s": 35.39,
+    "job_id": "20261028_012702_001_m403-publication",
+    "manifest_present": false,
+    "manifest_restored": true,
+    "no_recompute_same_attempt": true,
+    "publication_count": 1,
+    "publication_events": [
+      "{\"type\": \"attempt.frozen\", \"timestamp\": \"2026-10-27T17:27:04.134439+00:00\", \"job_id\": \"20261028_012702_001_m403-publication\", \"workflow\": \"singlepoint\", \"attempt\": 1, \"release_id\": \"2d1ab37a0f988933\", \"release_digest\": \"813583bdcaae20ef900a99180f433b34a7dfa730fb47c1efea5c9435919a061b\"}",
+      "{\"type\": \"process.starting\", \"timestamp\": \"2026-10-27T17:27:04.137035+00:00\", \"job_id\": \"20261028_012702_001_m403-publication\", \"cmd\": \"/usr/bin/python3.11 -m acp_services.worker_bootstrap --envelope /ACPServer/acp2-runs/remediation/m4-03/run/20261028T011416/main/M4-03_LSF_matrix_20261028T011416/CCO_singlepoint/WORK/00_RUNTIME/frozen/envelope.json --plan /ACPServer/acp2-runs/remediation/m4-03/run/20261028T011416/main/M4-03_LSF_matrix_20261028T011416/CCO_singlepoint/WORK/00_RUNTIME/frozen/plan.json --work-dir /ACPServer/acp2-runs/remediation/m4-03/run/20261028T011416/main/M4-03_LSF_matrix_20261028T011416/CCO_singlepoint --binding /ACPServer/acp2-runs/remediation/m4-03/run/20261028T011416/main/M4-03_LSF_matrix_20261028T011416/CCO_singlepoint/WORK/00_RUNTIME/frozen/binding.json\"}",
+      "{\"type\": \"job.completed\", \"timestamp\": \"2026-10-27T17:27:12.227431+00:00\", \"job_id\": \"20261028_012702_001_m403-publication\", \"exit_code\": 0, \"idempotency_key\": \"terminal:20261028_012702_001_m403-publication:1:job.completed\"}",
+      "{\"type\": \"job.publication_completed\", \"timestamp\": \"2026-10-27T17:27:24.273590+00:00\", \"job_id\": \"20261028_012702_001_m403-publication\", \"attempt\": 1, \"result_id\": \"20261028_012702_001_m403-publication:attempt1:sub_67ee3fa8cf11c493\", \"idempotency_key\": \"publication-completed:20261028_012702_001_m403-publication:1\"}",
+      "{\"type\": \"job.publication_pending\", \"timestamp\": \"2026-10-27T17:27:36.965605+00:00\", \"job_id\": \"20261028_012702_001_m403-publication\", \"code\": \"publication_failed\", \"attempt\": 1, \"detail\": \"publication failed: PublicationIntegrityError: receipt is missing\", \"idempotency_key\": \"publication-pending:20261028_012702_001_m403-publication:1:publication_failed\"}"
+    ],
+    "receipt_lost_refused": true,
+    "receipt_present": false,
+    "status_after_retries": "completed"
+  },
+  "detail": "publication retried from the existing receipt (same attempt) and a lost receipt is refused instead of recomputed",
+  "evidence": [
+    "native/publication.json"
+  ],
+  "name": "publication",
+  "recorded_at": "2026-10-27T17:27:37.436385Z",
+  "schema": "acp2.m403.acceptance.v1",
+  "status": "PASS"
+}

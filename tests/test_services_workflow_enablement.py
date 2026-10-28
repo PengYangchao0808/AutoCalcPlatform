@@ -360,10 +360,14 @@ def _matrix_problems(text: str) -> list[str]:
                     f"{workflow}: TaskKind {task_kinds[:1]!r} missing from "
                     "T5 completion authorities"
                 )
-    if defaults != set(chain.DEFAULT_ENVELOPE_WORKFLOWS):
+    # M2-04d adds an envelope-only *recipe* workflow that is deliberately not a
+    # catalog workflow, so the T31 catalog matrix cannot carry a row for it.
+    # The guard therefore compares against the catalog default scope only.
+    catalog_defaults = set(chain.DEFAULT_ENVELOPE_WORKFLOWS) & set(CURRENT_ACTIVE_IDS)
+    if defaults != catalog_defaults:
         problems.append(
-            f"matrix default set {sorted(defaults)} != DEFAULT_ENVELOPE_WORKFLOWS "
-            f"{sorted(chain.DEFAULT_ENVELOPE_WORKFLOWS)}"
+            f"matrix default set {sorted(defaults)} != catalog DEFAULT_ENVELOPE_WORKFLOWS "
+            f"{sorted(catalog_defaults)}"
         )
     return problems
 
@@ -373,7 +377,9 @@ def test_t31_support_matrix_is_consistent_and_default_scope_is_explicit() -> Non
     problems = _matrix_problems(text)
     assert problems == [], problems
     assert "singlepoint" in chain.DEFAULT_ENVELOPE_WORKFLOWS
-    assert len(chain.DEFAULT_ENVELOPE_WORKFLOWS) == 1
+    # Only one *catalog* workflow freezes an envelope by default; the M2-04
+    # envelope-only recipe workflow is not a catalog workflow.
+    assert len(chain.DEFAULT_ENVELOPE_WORKFLOWS & set(CURRENT_ACTIVE_IDS)) == 1
     # Scientific closure is tracked separately; the matrix must not use the
     # closure count as a generic default-enabled count.
     assert "8/15" not in text
