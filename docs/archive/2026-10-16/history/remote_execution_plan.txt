@@ -89,7 +89,7 @@ ACP Server (本地)
         src/acp/ (排除 api/, scheduler/)
         src/cccp/ (完整)
         scripts/run_g16_worker.sh
-      /scratch/<user>/acp_jobs/<job_id>/
+      /scratch/redacted-user/acp_jobs/<job_id>/
         inputs/ submit.lsf stdout.log stderr.log .exit_code <QC outputs>
 
 2. 阶段 1：基础设施层（SSH/SFTP）
@@ -319,7 +319,7 @@ tail_stdout(remote_dir, offset) -> (new_text, new_offset) — SFTP 增量读 std
 
 tail_stderr(remote_dir, offset) -> (new_text, new_offset) — SFTP 增量读 stderr.log
 
-get_running_job_count() -> int — SSH bjobs -u <user> | grep RUN | wc -l
+get_running_job_count() -> int — SSH bjobs -u redacted-user | grep RUN | wc -l
 
 check_disk_usage(remote_work_dir) -> int — SSH df，返回百分比
 
@@ -555,7 +555,7 @@ shutdown() 关闭 SSHConnectionPool 所有空闲连接
 
 ✅ 集成测试验证结果（CCO 远程 conformer 搜索）
 
-代码同步：CodeSyncer 增量同步 101 文件到 /home/<user>/acp_code/，二次同步 0 上传
+代码同步：CodeSyncer 增量同步 101 文件到 /home/redacted-user/acp_code/，二次同步 0 上传
 
 输入物化：SMILES→XYZ（本地 rdkit）→ SFTP 上传 inputs/input.xyz
 
@@ -614,7 +614,7 @@ wall_time：43.88 秒（含 CREST 两阶段 + ISOSTAT 聚类，CCO 2 个构象�
 
 ✅ 方案 A 逆向同步已实施并远程验证通过（2026-07-13）：ACP Server 的 src/cccp/ 已用计算节点权威版（30 .py、engine.py=1733 行）替换，删除全部 ACP 独有分叉文件（specs/spec_adapter/method_resolution/xtb/isostat/shermo + benchmark/ensemble/recipes 子包）。acp/cli.py、acp/workflows/conformer.py（重写为委托 ConformerEngine.run()）、acp/backends/ 全部适配完成。远程 CCO lite/zero 回归测试通过：DFT 阶段完整执行（opt+freq+sp+shermo），全局最小 Energy ≠ 0（lite: -154.9428981 Ha / 2 构象；zero: -154.9430129 Ha / 1 构象），无协议不匹配警告。
 
-✅ 权威版本完整性已确认（2026-07-12）：计算节点原始安装路径 /home/<user>/cccp/（30 .py、engine.py=1733 行、含 lite/zero/benchmark 协议、含 state_manager.py）完全完好，最后修改时间 2026-06-15，本次所有远程测试操作均未触碰该目录。CodeSyncer 仅写入 {remote_code_dir}（/home/<user>/acp_code/），两目录完全独立。"覆盖"仅发生在 PYTHONPATH 层面——LSF 作业的 PYTHONPATH={remote_code_dir}/src 使同步的分叉版优先于 pip install -e 安装的权威版被 import。
+✅ 权威版本完整性已确认（2026-07-12）：计算节点原始安装路径 /home/redacted-user/cccp/（30 .py、engine.py=1733 行、含 lite/zero/benchmark 协议、含 state_manager.py）完全完好，最后修改时间 2026-06-15，本次所有远程测试操作均未触碰该目录。CodeSyncer 仅写入 {remote_code_dir}（/home/redacted-user/acp_code/），两目录完全独立。"覆盖"仅发生在 PYTHONPATH 层面——LSF 作业的 PYTHONPATH={remote_code_dir}/src 使同步的分叉版优先于 pip install -e 安装的权威版被 import。
 
 ℹ️ 架构约束：ACP Server 是纯调度器——仅负责 Web 仪表板、作业队列、SSH/SFTP 分发、LSF 监控。cccp 和 acp.cli 从不在 ACP Server 本地执行，它们只通过 CodeSyncer 同步到远程节点后由 LSF 调用。因此：
 
@@ -628,7 +628,7 @@ ACP Server 自身仅依赖 acp.api + acp.scheduler（纯 Python + FastAPI + para
 
 根因
 
-ACP Server 的 src/cccp/ 是一个分叉版本，与计算节点 /home/<user>/cccp/ 的权威版本存在结构性差异。CodeSyncer 将 ACP Server 的分叉版本同步到远程节点的 {remote_code_dir}/src/cccp/，LSF 脚本的 PYTHONPATH={remote_code_dir}/src 使同步版本在 import 优先级上覆盖了远程节点本地安装的权威版本（原始文件未受影响），导致：
+ACP Server 的 src/cccp/ 是一个分叉版本，与计算节点 /home/redacted-user/cccp/ 的权威版本存在结构性差异。CodeSyncer 将 ACP Server 的分叉版本同步到远程节点的 {remote_code_dir}/src/cccp/，LSF 脚本的 PYTHONPATH={remote_code_dir}/src 使同步版本在 import 优先级上覆盖了远程节点本地安装的权威版本（原始文件未受影响），导致：
 
 协议不匹配：ACP 版本无 lite/zero/benchmark 协议 → _validate_config 回退为 ext，输出 warning
 
@@ -719,7 +719,7 @@ git commit -am "backup: cccp before reverse-sync from authoritative"
 
 步骤 CS-2：反向同步权威版本 ✓ 完成
 
-从计算节点 /home/<user>/cccp/src/cccp/ 复制全部 30 个 .py 文件到 ACP Server src/cccp/（替换而非合并）
+从计算节点 /home/redacted-user/cccp/src/cccp/ 复制全部 30 个 .py 文件到 ACP Server src/cccp/（替换而非合并）
 
 同步 cccp/config/defaults.yaml（权威版本的协议定义）
 
@@ -809,7 +809,7 @@ if protocol not in ('ext', 'full', 'lite', 'zero', 'benchmark'):
 
 步骤 CS-7：远程回归测试 ✓ 完成（2026-07-13）
 
-ACP Server 是纯调度器，不在本地运行 cccp。所有 QC 验证通过远程节点（192.168.1.100）直接执行 python -m acp.cli run conformer（PYTHONPATH=/home/<user>/acp_code/src）进行：
+ACP Server 是纯调度器，不在本地运行 cccp。所有 QC 验证通过远程节点（192.168.1.100）直接执行 python -m acp.cli run conformer（PYTHONPATH=/home/redacted-user/acp_code/src）进行：
 
  | 协议 | 结果 | 关键指标
 
@@ -1737,7 +1737,7 @@ tmpfs 容量 = 物理内存的一部分（当前 923M），大量 job 元数据�
 
 systemd 服务需更新：Environment=ACP_RUN_ROOT=/var/lib/acp/runs + LogsDirectory / StateDirectory 声明
 
-权限：/var/lib/acp/runs 属主 <user>:<user>，systemd 服务已以该用户运行
+权限：/var/lib/acp/runs 属主 redacted-user:redacted-user，systemd 服务已以该用户运行
 
 🔍 可行性分析 & 风险评估 (2026-07-13 审计)
 
@@ -1839,7 +1839,7 @@ CRITICAL — 必须在任何代码开发前完成，否则 Phase 5B 清理策略
 
 # 1. 创建持久卷目录
 sudo mkdir -p /var/lib/acp/runs
-sudo chown -R <user>:<user> /var/lib/acp/runs
+sudo chown -R redacted-user:redacted-user /var/lib/acp/runs
 
 # 2. 更新 systemd 服务
 sudo vim /etc/systemd/system/acp.service
@@ -2516,9 +2516,9 @@ cluster:
   nodes:
     - name: compute-01
       host: 192.168.1.100
-      username: <user>
-      remote_work_dir: /scratch/<user>/acp_jobs
-      remote_code_dir: /home/<user>/acp_code
+      username: redacted-user
+      remote_work_dir: /scratch/redacted-user/acp_jobs
+      remote_code_dir: /home/redacted-user/acp_code
       max_concurrent_jobs: 5
       queue: bigmem            # 可选 per-node LSF 队列覆盖；省略/空 → cluster.queue
       capabilities:            # 可选静态能力声明；省略 → 节点按 generic 处理
@@ -2744,19 +2744,19 @@ cluster:
   nodes:
     - name: "compute-01"
       host: "192.168.1.100"
-      username: "<user>"
+      username: "redacted-user"
       # password 通过环境变量设置：export ACP_REMOTE_PASSWORD_COMPUTE_01="..."
       # 或使用密钥认证：
       key_file: "~/.ssh/id_rsa"
-      remote_work_dir: "/scratch/<user>/acp_jobs"
-      remote_code_dir: "/home/<user>/acp_code"
+      remote_work_dir: "/scratch/redacted-user/acp_jobs"
+      remote_code_dir: "/home/redacted-user/acp_code"
       max_concurrent_jobs: 5
     - name: "compute-02"
       host: "10.16.5.200"
-      username: "<user>"
+      username: "redacted-user"
       key_file: "~/.ssh/id_rsa"
       remote_work_dir: "/data/acp_jobs"
-      remote_code_dir: "/home/<user>/acp_code"
+      remote_code_dir: "/home/redacted-user/acp_code"
       max_concurrent_jobs: 10
 
 密码通过环境变量设置（不在 YAML 中存储明文密码）：

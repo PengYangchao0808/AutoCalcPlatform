@@ -1,4 +1,4 @@
-== suite: architecture-remediation (root: <repo>) ==
+== suite: architecture-remediation (root: repo-root) ==
 -- gate: cccp_imports_acp --
 ALLOWED:
 ALLOWLISTED (wave-0 baseline, must only shrink):

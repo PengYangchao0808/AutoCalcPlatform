@@ -952,7 +952,7 @@ rg "run_two_stage_search" src/acp/ src/cccp/   # v6 修正：补 src/cccp/；确
  | SUPPORTED_WORKFLOWS fallback 静态列表漏改，ImportError 时复活已删工作流 | 中 | Part A2 已列 jobs.py:68-71 必改；加单测断言 fallback 不含 conformer/nmr/benchmark
 
   
- | systemd 服务（用户 <user>）读不到配置 —— ~/.conformer_search.yaml 改名后失效 | 中 | Part B3 加旧路径回退读取逻辑；部署时把 ~/.conformer_search.yaml 改名
+ | systemd 服务（用户 redacted-user）读不到配置 —— ~/.conformer_search.yaml 改名后失效 | 中 | Part B3 加旧路径回退读取逻辑；部署时把 ~/.conformer_search.yaml 改名
 
   
  | 远程节点已同步的 src/conformer_search/ 变悬空目录 + 旧 __pycache__ 残留 | 中 | sync.py 改推 src/cccp/；远端手动 rm -rf $REMOTE_WORKDIR/src/conformer_search（v7 补：含 __pycache__）

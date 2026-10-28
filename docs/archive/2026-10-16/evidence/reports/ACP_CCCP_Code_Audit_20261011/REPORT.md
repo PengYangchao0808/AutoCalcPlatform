@@ -94,7 +94,7 @@ Ruff 主要分布：UP045 150、UP006 132、W293 126、E501 125、UP035 40、I00
 
 ### B01 — 远程命令遗漏电子态配置【P1；已复现；现行路径】
 
-位置：[本地 runner](<repo>/src/acp/scheduler/runner.py:66)、同文件 `:1403`；[远程命令构建](<repo>/src/acp/scheduler/remote/script_gen.py:148)；`acp/catalog.py:5226` 的通用 method-level 转换。
+位置：[本地 runner](src/acp/scheduler/runner.py:66)、同文件 `:1403`；[远程命令构建](src/acp/scheduler/remote/script_gen.py:148)；`acp/catalog.py:5226` 的通用 method-level 转换。
 
 本地 simple 工作流从 level 中提取 `electronic_state`，写 `electronic_state.json` 并传 `--spin-config`。远程路径主要走 `method_levels_to_cli_flags`，没有对应的电子态提取和 sidecar 传递。用同一个 singlepoint JobSpec 构建两个命令，本地标志和 sidecar 均存在，远程命令没有该标志。
 
@@ -104,7 +104,7 @@ Ruff 主要分布：UP045 150、UP006 132、W293 126、E501 125、UP035 40、I00
 
 ### B02 — GJF 与 ORCA 输入摄入丢失电荷、多重度【P1；已复现；现行路径】
 
-位置：[GJF 底层读取](<repo>/src/cccp/utils/file_io.py:90)、`cccp/io/input_handler.py:312`；[ACP GJF 摄入](<repo>/src/acp/intake/parsers.py:630)、同文件 `:694` 的 ORCA 摄入。
+位置：[GJF 底层读取](src/cccp/utils/file_io.py:90)、`cccp/io/input_handler.py:312`；[ACP GJF 摄入](src/acp/intake/parsers.py:630)、同文件 `:694` 的 ORCA 摄入。
 
 标准 GJF 的结构是 route、空行、标题、空行、电荷与多重度、坐标。ACP 实现把第一处空行后第一个非空行当成电荷行，实际读到标题，再回退到 `0, 1`。CCCP 实现用带点号的特殊 token 方式提取状态，未正确识别标准的 `1 2`。输入 `He`、电荷 +1、多重度 2 时，三个入口都得到 `0, 1`。
 
@@ -116,7 +116,7 @@ ORCA 摄入遇到 `* xyz 1 2` 时只切换到坐标区，没有读取 header 中
 
 ### B03 — 任务层接受截断和非有限坐标的 XYZ【P1；已复现；现行路径】
 
-位置：[read_xyz](<repo>/src/cccp/utils/file_io.py:20)、[load_geometry](<repo>/src/cccp/calculation/_common.py:95)。
+位置：[read_xyz](src/cccp/utils/file_io.py:20)、[load_geometry](src/cccp/calculation/_common.py:95)。
 
 `read_xyz` 按文件头截取若干行，短行被跳过，但不检查实际解析原子数是否等于声明数。`load_geometry` 随后检查数组形状与符号长度，没有验证原文件的数量完整性。头部声明 3 个原子、实际只有 2 行坐标，任务加载器正常返回 `(2, 3)` 数组。含 `nan` 的坐标也通过，`isfinite` 结果为 false。
 
@@ -138,7 +138,7 @@ ORCA 摄入遇到 `* xyz 1 2` 时只切换到坐标区，没有读取 header 中
 
 ### B05 — 非均匀 λ 被记录，但目标约束仍按均匀步长计算【P1；已复现；现行扫描契约】
 
-位置：[ReactionCoordinatePlan](<repo>/src/cccp/qc/interfaces/constraints.py:187)、同文件 `:238`、`:250`；`cccp/qc/interfaces/orca.py:2506` 的同步扫描消费。
+位置：[ReactionCoordinatePlan](src/cccp/qc/interfaces/constraints.py:187)、同文件 `:238`、`:250`；`cccp/qc/interfaces/orca.py:2506` 的同步扫描消费。
 
 构造器接受严格递增、首尾为 0 和 1 的非均匀 `lambda_values`。但 `frame_constraints` 和 `coordinate_targets` 都用 `index / (points - 1)`。距离从 1.0 到 3.0、λ 为 `(0.0, 0.2, 1.0)` 时，中间目标应为 1.4，实际为 2.0。ORCA 消费端又能将该帧 progress 记录为 0.2，形成进度与约束语义不一致。
 
@@ -148,7 +148,7 @@ ORCA 摄入遇到 `* xyz 1 2` 时只切换到坐标区，没有读取 header 中
 
 ### B06 — 覆盖扫描点数会丢失完整计划字段【P2；已复现；现行兼容入口】
 
-位置：[build_scan_plan](<repo>/src/cccp/calculation/tasks/scan.py:245)，特别是 `:267` 的重建分支。
+位置：[build_scan_plan](src/cccp/calculation/tasks/scan.py:245)，特别是 `:267` 的重建分支。
 
 raw plan 的 points 与 `options.points` 不同时，仅用 coordinates、points、coupling、start_from 重建对象。原计划中的 `lambda_values`、`reference_geometries`、`fixed_endpoints` 和 `xtb_scc_max_iterations` 没有转入新对象。探针将 3 点非均匀计划覆盖为 4 点，结果 λ 直接变为空，而不是明确报告网格长度冲突。
 
@@ -178,7 +178,7 @@ CASSCF 是 active 工作流，本地 builder 支持，远程 builder 的允许�
 
 ### B09 — Boltzmann helper 未校验物理温度【P2；已复现；现行共享 helper】
 
-位置：[boltzmann_weights](<repo>/src/acp/confsearch/shared/boltzmann.py:13)、同文件 `:58`。
+位置：[boltzmann_weights](src/acp/confsearch/shared/boltzmann.py:13)、同文件 `:58`。
 
 传 `-298.15 K`、两个构象相差 1 kcal/mol，两个 missing 策略都接受输入，得到高能构象约 0.844 的权重。零温还会在倒数处失败。部分上游模型可能已有温度限制，但 helper 的公开契约本身没有这项保障。
 
@@ -188,7 +188,7 @@ CASSCF 是 active 工作流，本地 builder 支持，远程 builder 的允许�
 
 ### B10 — 配置校验拒绝 typo，服务启动却回退本地执行【P1；已复现；现行服务配置】
 
-位置：[server._load_remote_config](<repo>/src/acp/api/server.py:50)；`acp/scheduler/remote/config.py:347`。
+位置：[server._load_remote_config](src/acp/api/server.py:50)；`acp/scheduler/remote/config.py:347`。
 
 RemoteExecutionConfig 对非法 execution_mode 抛 ValueError，意图是避免拼写错误改变执行位置。server 捕获所有 Exception，返回 `execution_mode="local"`。配置为 `remot` 的隔离探针确实得到 local。该代码会记录 warning，问题是依然继续采用另一种执行模式，而不是完全没有可观察性。
 
@@ -198,7 +198,7 @@ RemoteExecutionConfig 对非法 execution_mode 抛 ValueError，意图是避免�
 
 ### B11 — 旧 CandidateSet 的能量单位混用【P2；已复现；遗留公开 API】
 
-位置：[CandidateSet](<repo>/src/cccp/core/candidates.py:132)、`:191`；与当前 `acp/confsearch/shared/boltzmann.py` 对照。
+位置：[CandidateSet](src/cccp/core/candidates.py:132)、`:191`；与当前 `acp/confsearch/shared/boltzmann.py` 对照。
 
 candidate.energy 的契约是 Hartree，旧权重函数却直接除以 kcal/(mol·K) 的 kB；能量窗口也直接拿 Hartree 差与 window_kcal 比较。两个构象相差 1 kcal/mol 时，旧权重约为 `(0.50067, 0.49933)`，正确的 Hartree-aware 权重约为 `(0.84394, 0.15606)`。0.5 kcal/mol 窗口错误地保留两个构象。
 
@@ -208,7 +208,7 @@ candidate.energy 的契约是 Hartree，旧权重函数却直接除以 kcal/(mol
 
 ### B12 — 遗留 JobStore API 可复活终态、留下孤儿索引【P2；已复现；未发现现行 manager 调用】
 
-位置：[JobStore.update](<repo>/src/acp/scheduler/store.py:139)、[JobStore.delete](<repo>/src/acp/scheduler/store.py:724)。
+位置：[JobStore.update](src/acp/scheduler/store.py:139)、[JobStore.delete](src/acp/scheduler/store.py:724)。
 
 `update` 无 CAS 守卫整行写 status / spec / result，且不变更 revision。临时 DB 中先用正确 CAS 将任务置 COMPLETED，再写回旧 QUEUED 记录，任务变回 QUEUED，revision 仍为 1。`delete` 直接删 jobs；同步过 TaskIndex 后调用该方法，job 已不存在而 tasks 行仍存在。
 

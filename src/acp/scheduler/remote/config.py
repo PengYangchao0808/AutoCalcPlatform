@@ -91,7 +91,7 @@ class RemoteNode:
             and to drive ``pip`` during :meth:`NodeManager.bootstrap_node`.
             Defaults to ``"python"``.  Set to ``"python3"``, an absolute
             path, or a venv interpreter (e.g.
-            ``/opt/acp/venv/bin/python``) to pin a specific runtime per
+            ``<venv>/bin/python``) to pin a specific runtime per
             node — keeps node configuration portable across hosts whose
             default ``python`` differs.
         bin_symlinks: Mapping ``{name: target}`` of symlinks created under
