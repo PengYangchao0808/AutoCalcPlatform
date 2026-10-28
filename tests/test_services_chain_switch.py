@@ -123,6 +123,7 @@ from acp_services.worker_bootstrap import (
     frozen_plan_body_digest,
 )
 from cccp.calculation.requests import TaskRequest
+from tests.conftest import requires_orca
 from tests.test_acp_services_isolation import (
     _code_only_text,
     scan_for_acp_imports,
@@ -1959,6 +1960,7 @@ def _t27_events(work: Path) -> str:
     return (work / "WORK" / "00_RUNTIME" / "events.jsonl").read_text(encoding="utf-8")
 
 
+@requires_orca
 def test_t27_opt_in_singlepoint_runs_worker_advances_once_and_restarts_noop(
     tmp_path: Path,
 ) -> None:
@@ -2019,6 +2021,7 @@ def test_t27_opt_in_singlepoint_runs_worker_advances_once_and_restarts_noop(
             manager.shutdown()
 
 
+@requires_orca
 def test_t27_failed_receipt_yields_failed_via_cas(tmp_path: Path) -> None:
     manager, store, _runner, _run_root = _t27_manager(tmp_path, probe="fail")
     try:
@@ -2616,6 +2619,7 @@ def test_t29_default_envelope_scope_is_singlepoint_only() -> None:
     }
 
 
+@requires_orca
 def test_t29_ordinary_singlepoint_submit_uses_the_frozen_chain(tmp_path: Path) -> None:
     run_root = tmp_path / "run_root"
     store = JobStore(run_root / "acp_jobs.db")
