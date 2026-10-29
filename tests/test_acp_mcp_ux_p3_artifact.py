@@ -164,3 +164,42 @@ def test_identity_body_that_looks_like_base64_is_still_redacted() -> None:
             }
         )
     assert excinfo.value.params["rule"] == "artifact_body_redacted"
+
+
+def test_base64_cannot_smuggle_a_redacted_path() -> None:
+    import base64
+
+    encoded = base64.b64encode(b"/home/xieningke/secret.txt").decode("ascii")
+    with pytest.raises(mcp.McpToolError) as excinfo:
+        McpServer._verify_artifact_body(
+            {
+                "body": encoded,
+                "encoding": "base64",
+                "digest": "sha256:" + "a" * 64,
+            }
+        )
+    assert excinfo.value.params["rule"] == "artifact_body_redacted"
+
+
+def test_invalid_base64_is_refused() -> None:
+    with pytest.raises(mcp.McpToolError) as excinfo:
+        McpServer._verify_artifact_body(
+            {"body": "!!!!", "encoding": "base64", "digest": "sha256:" + "a" * 64}
+        )
+    assert excinfo.value.params["rule"] == "artifact_encoding_invalid"
+
+
+def test_truncated_base64_is_still_content_checked() -> None:
+    import base64
+
+    encoded = base64.b64encode(b"prefix /home/secret").decode("ascii")
+    with pytest.raises(mcp.McpToolError) as excinfo:
+        McpServer._verify_artifact_body(
+            {
+                "body": encoded,
+                "encoding": "base64",
+                "digest": "sha256:" + "a" * 64,
+                "truncated": True,
+            }
+        )
+    assert excinfo.value.params["rule"] == "artifact_body_redacted"

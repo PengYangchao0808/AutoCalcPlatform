@@ -1961,10 +1961,13 @@ def _amendment_x_censo_ranges(worktree: str) -> list[tuple[int, int]]:
         if line.strip().startswith("execution: Dict[str, Any] = field("):
             ranges.append((index + 1, index + 3))
             break
-    for function in ("_resolve_final_part", "_memory_templates"):
+    for function in ("_resolve_final_part",):
         resolved = _func_range(worktree, function, "CensoInterface")
         if resolved:
             ranges.append(resolved)
+    for index, line in enumerate(lines):
+        if "hashlib.sha256(ensemble_xyz" in line or "hashlib.sha256(Path(rcfile)" in line:
+            ranges.append((index - 1, index + 4))
     start = next(
         (i for i, line in enumerate(lines) if line.strip() == "enabled_parts = {"),
         None,
@@ -1985,6 +1988,16 @@ def _amendment_x_censo_ranges(worktree: str) -> list[tuple[int, int]]:
 def _is_amendment_x_censo_addition(ln: int, txt: str, worktree: str) -> bool:
     if txt.strip() == "import hashlib":
         return True
+    if any(
+        marker in txt
+        for marker in (
+            "input_sha256",
+            "rcfile_sha256",
+            "hashlib.sha256(ensemble_xyz.read_bytes())",
+            "hashlib.sha256(Path(rcfile).read_bytes())",
+        )
+    ):
+        return True
     return any(start <= ln <= end for start, end in _amendment_x_censo_ranges(worktree))
 
 
@@ -1998,6 +2011,8 @@ def _amendment_x_censo_teeth(worktree: str) -> list[str]:
         ('"artifacts"', "artifact digests"),
         ('"enabled_parts"', "enabled parts"),
         ('"conformers"', "conformer membership"),
+        ('"input_sha256"', "input digest"),
+        ('"rcfile_sha256"', "rcfile digest"),
     )
     for needle, label in checks:
         if needle not in worktree:

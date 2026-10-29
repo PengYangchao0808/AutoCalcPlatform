@@ -755,7 +755,15 @@ class CensoInterface:
             templated_parts=set(effective_templates),
             solvent_model=solvent_model,
         )
+        try:
+            rcfile_sha256 = hashlib.sha256(Path(rcfile).read_bytes()).hexdigest()
+        except (OSError, TypeError):
+            rcfile_sha256 = ""
 
+        try:
+            input_sha256 = hashlib.sha256(ensemble_xyz.read_bytes()).hexdigest()
+        except OSError:
+            input_sha256 = ""
         env: Optional[Dict[str, str]] = None
 
         orca_cfg = self.config.get("executables", {}).get("orca", {})
@@ -935,6 +943,8 @@ class CensoInterface:
             "artifacts": artifact_facts,
             "enabled_parts": sorted(enabled_parts),
             "conformers": [str(rec.conf_id) for rec in records],
+            "input_sha256": input_sha256,
+            "rcfile_sha256": rcfile_sha256,
         }
         self._compare_boltzmann_weights(result, out_path)
 

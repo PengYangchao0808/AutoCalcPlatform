@@ -8,6 +8,7 @@ Covers plan todo 6 (confsearch-weight-provenance-final-report):
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from pathlib import Path
@@ -445,6 +446,33 @@ def test_register_final_report_missing_artifact_raises(tmp_path: Path) -> None:
     assert not (mol_dir / "RESULT" / MANIFEST_FILENAME).exists()
 
 
+
+
+def _execution_facts(tmp_path: Path, conformers: tuple[str, ...] = ("CONF2",)) -> dict:
+    """Real CENSO part files + real digests: verified means bytes match."""
+    cwd = tmp_path / "censo"
+    cwd.mkdir(exist_ok=True)
+    (cwd / "1_SCREENING.json").write_text("{}", encoding="utf-8")
+    (cwd / "1_SCREENING.xyz").write_text("1\nH 0 0 0\n", encoding="utf-8")
+
+    def _sha(name: str) -> str:
+        return hashlib.sha256((cwd / name).read_bytes()).hexdigest()
+
+    return {
+        "argv": ["censo", "-i", "crest_conformers.xyz"],
+        "returncode": 0,
+        "cwd": str(cwd),
+        "final_part": "screening",
+        "enabled_parts": ["screening"],
+        "conformers": list(conformers),
+        "input_sha256": "a" * 64,
+        "rcfile_sha256": "b" * 64,
+        "artifacts": {
+            "json": {"path": "1_SCREENING.json", "sha256": _sha("1_SCREENING.json")},
+            "xyz": {"path": "1_SCREENING.xyz", "sha256": _sha("1_SCREENING.xyz")},
+        },
+    }
+
 def test_method_identity_records_declared_vs_executed(tmp_path: Path) -> None:
     confsearch_dir = tmp_path / "RESULT" / "confsearch"
     confsearch_dir.mkdir(parents=True)
@@ -452,15 +480,7 @@ def test_method_identity_records_declared_vs_executed(tmp_path: Path) -> None:
     outcome = _make_outcome(
         workflow_metadata={
             **_make_outcome().workflow_metadata,
-            "censo_execution": {
-                "argv": ["censo", "-i", "crest_conformers.xyz"],
-                "returncode": 0,
-                "final_part": "screening",
-                "artifacts": {
-                    "json": {"path": "2_SCREENING.json", "sha256": "a" * 64},
-                    "xyz": {"path": "2_SCREENING.xyz", "sha256": "b" * 64},
-                },
-            },
+            "censo_execution": _execution_facts(tmp_path),
         }
     )
     report_path, _ = write_final_report(
@@ -539,16 +559,7 @@ def test_screening_evidence_must_name_the_conformer(tmp_path: Path) -> None:
     outcome = _make_outcome(
         workflow_metadata={
             **_make_outcome().workflow_metadata,
-            "censo_execution": {
-                "argv": ["censo"],
-                "returncode": 0,
-                "final_part": "screening",
-                "conformers": ["CONF2"],
-                "artifacts": {
-                    "json": {"sha256": "a" * 64},
-                    "xyz": {"sha256": "b" * 64},
-                },
-            },
+            "censo_execution": _execution_facts(tmp_path),
         }
     )
     report_path, _ = write_final_report(
@@ -560,3 +571,55 @@ def test_screening_evidence_must_name_the_conformer(tmp_path: Path) -> None:
     assert by_id["conf_0002"]["energy_kind_verified"] is True
     assert by_id["conf_0001"]["method_evidence"] == "unverified"
     assert by_id["conf_0001"]["energy_kind_verified"] is False
+
+
+def test_execution_file_tampering_is_not_verified(tmp_path: Path) -> None:
+    confsearch_dir = tmp_path / "RESULT" / "confsearch"
+    confsearch_dir.mkdir(parents=True)
+    entries = _standard_entries(confsearch_dir)
+    facts = _execution_facts(tmp_path)
+    (tmp_path / "censo" / "1_SCREENING.json").write_text("tampered", encoding="utf-8")
+    outcome = _make_outcome(
+        workflow_metadata={**_make_outcome().workflow_metadata, "censo_execution": facts}
+    )
+    report_path, _ = write_final_report(
+        confsearch_dir, request=_make_request(tmp_path), entries=entries, outcome=outcome
+    )
+    payload = _read_json(report_path)
+    assert payload["method_identity"]["executed_status"] == "unverified"
+
+
+def test_execution_without_members_is_not_verified(tmp_path: Path) -> None:
+    confsearch_dir = tmp_path / "RESULT" / "confsearch"
+    confsearch_dir.mkdir(parents=True)
+    entries = _standard_entries(confsearch_dir)
+    facts = _execution_facts(tmp_path, conformers=())
+    outcome = _make_outcome(
+        workflow_metadata={**_make_outcome().workflow_metadata, "censo_execution": facts}
+    )
+    report_path, _ = write_final_report(
+        confsearch_dir, request=_make_request(tmp_path), entries=entries, outcome=outcome
+    )
+    payload = _read_json(report_path)
+    assert payload["method_identity"]["executed_status"] == "unverified"
+    assert all(c["method_evidence"] == "unverified" for c in payload["conformers"])
+
+
+def test_report_does_not_publish_absolute_workspace_paths(tmp_path: Path) -> None:
+    confsearch_dir = tmp_path / "RESULT" / "confsearch"
+    confsearch_dir.mkdir(parents=True)
+    entries = _standard_entries(confsearch_dir)
+    outcome = _make_outcome(
+        workflow_metadata={
+            **_make_outcome().workflow_metadata,
+            "censo_execution": _execution_facts(tmp_path),
+        }
+    )
+    report_path, _ = write_final_report(
+        confsearch_dir, request=_make_request(tmp_path), entries=entries, outcome=outcome
+    )
+    payload = _read_json(report_path)
+    executed = payload["method_identity"]["executed"]
+    assert "cwd" not in executed
+    assert executed["workspace"] == "<run>"
+    assert all(str(tmp_path) not in item for item in executed["argv"])

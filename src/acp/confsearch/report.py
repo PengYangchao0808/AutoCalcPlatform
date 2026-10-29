@@ -14,6 +14,7 @@ registration failures RAISE — the report is a required deliverable.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from collections.abc import Mapping
 from pathlib import Path
@@ -99,7 +100,7 @@ def write_final_report(
     if requested_levels or executed:
         payload["method_identity"] = {
             "requested": requested_levels,
-            "executed": executed,
+            "executed": _publish_execution(executed),
             "executed_status": "verified" if verified else "unverified",
             "final_part": executed.get("final_part"),
             "energy_kind": outcome.energy_kind,
@@ -181,6 +182,23 @@ def _execution_verified(executed: Mapping[str, Any]) -> bool:
         digest = str(entry.get("sha256") or "")
         if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
             return False
+    tracked = executed.get("conformers")
+    if not isinstance(tracked, list) or not tracked:
+        return False
+    for key in ("input_sha256", "rcfile_sha256"):
+        digest = str(executed.get(key) or "")
+        if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+            return False
+    cwd = Path(str(executed.get("cwd") or ""))
+    if not str(cwd) or not cwd.is_dir():
+        return False
+    for name in ("json", "xyz"):
+        entry = artifacts[name]
+        artifact = cwd / str(entry.get("path") or "")
+        if not artifact.is_file():
+            return False
+        if hashlib.sha256(artifact.read_bytes()).hexdigest() != entry["sha256"]:
+            return False
     return True
 
 
@@ -244,6 +262,26 @@ def _conformer_block(
     }
 
 
+def _publish_execution(executed: Mapping[str, Any]) -> dict[str, Any]:
+    """Public projection: no absolute workspace/argv paths in a report artifact.
+
+    The verifier checked the raw facts first; the report keeps the evidence
+    (rc/digests/members/part) but replaces the run directory with ``<run>`` so
+    the report itself survives the artifact content policy.
+    """
+    if not executed:
+        return {}
+    cwd = str(executed.get("cwd") or "")
+    published = {key: value for key, value in executed.items() if key != "cwd"}
+    argv = executed.get("argv")
+    if isinstance(argv, list):
+        published["argv"] = [
+            str(item).replace(cwd, "<run>") if cwd else str(item) for item in argv
+        ]
+    published["workspace"] = "<run>" if cwd else ""
+    return published
+
+
 def _role_evidence(
     entry: ConformerEntry,
     role: str,
@@ -259,10 +297,11 @@ def _role_evidence(
     if role == "refinement_sp" and final_part != "refinement":
         return "unverified"
     tracked = executed.get("conformers")
-    if isinstance(tracked, list) and tracked:
-        conf_id = str(entry.source_conf_id or entry.conf_id)
-        if conf_id not in {str(item) for item in tracked}:
-            return "unverified"
+    if not isinstance(tracked, list) or not tracked:
+        return "unverified"
+    conf_id = str(entry.source_conf_id or entry.conf_id)
+    if conf_id not in {str(item) for item in tracked}:
+        return "unverified"
     return "executed"
 
 

@@ -2896,12 +2896,36 @@ class McpServer:
         if not isinstance(body, str):
             return
         encoding = data.get("encoding") or "identity"
-        if data.get("truncated"):
-            data.setdefault("digest_scope", "artifact")
+        import base64
+        import binascii
+        import hashlib
+
         from acp_services.entrypoints.machine_output import redact
 
-        # base64 is opaque bytes; identity text must survive redaction verbatim.
-        if encoding != "base64" and redact(body) != body:
+        if encoding == "base64":
+            try:
+                raw = base64.b64decode(body, validate=True)
+            except (binascii.Error, ValueError):
+                raise McpToolError(
+                    mo.ErrorCode.INPUT_INVALID,
+                    "artifact body is not valid base64",
+                    params={"field": "body", "rule": "artifact_encoding_invalid"},
+                    retryable=False,
+                ) from None
+        elif encoding == "identity":
+            raw = body.encode("utf-8")
+        else:
+            raise McpToolError(
+                mo.ErrorCode.INPUT_INVALID,
+                f"unknown artifact body encoding {encoding!r}",
+                params={"field": "encoding", "rule": "artifact_encoding_invalid"},
+                retryable=False,
+            )
+        # One content policy for both encodings: a decoded path/secret is
+        # refused, never smuggled through base64.  Undecodable bytes decode with
+        # surrogate escapes so ASCII path fragments are still visible.
+        decoded = raw.decode("utf-8", errors="surrogateescape")
+        if redact(decoded) != decoded:
             raise McpToolError(
                 mo.ErrorCode.UNSUPPORTED_CAPABILITY,
                 "artifact body contains a redacted pattern; the bytes cannot be "
@@ -2909,15 +2933,12 @@ class McpServer:
                 params={"field": "body", "rule": "artifact_body_redacted"},
             )
         if data.get("truncated"):
+            data.setdefault("digest_scope", "artifact")
             return
         digest = str(data.get("digest") or "")
         expected = digest.split(":", 1)[1] if digest.startswith("sha256:") else digest
         if not expected:
             return
-        import base64
-        import hashlib
-
-        raw = base64.b64decode(body) if encoding == "base64" else body.encode("utf-8")
         if hashlib.sha256(raw).hexdigest() != expected:
             raise McpToolError(
                 mo.ErrorCode.UNSUPPORTED_CAPABILITY,
