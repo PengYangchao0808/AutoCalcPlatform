@@ -93,7 +93,7 @@
 |---|---|
 | 契约测试 `tests/test_acp_mcp_ux_p1_contract.py` | 37 passed，exit 0 |
 | 资源链 `tests/test_memory_resource_chain.py` | 60 passed，exit 0 |
-| 批次 A（preflight/digest/discovery/progress/services-mcp/mcp-process） | 101 passed，exit 0 |
+| 批次 A（preflight/digest/discovery/progress/services-mcp/mcp-process） | 101 passed，exit 0（首跑遇 `test_signal_shutdown_is_clean[2]` 负载下抖动，单跑与复跑均通过，见证据 note） |
 | 批次 B（retirement/v1-science/frame/structure-viewer/api） | 177 passed，exit 0 |
 
 ## 边界（不冒充 PASS）
