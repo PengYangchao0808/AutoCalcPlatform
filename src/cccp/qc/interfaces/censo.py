@@ -470,8 +470,12 @@ class CensoInterface:
 
     # ----- Output parsing --------------------------------------------------
 
-    def _resolve_final_part(self, output_dir: Path) -> Optional[str]:
+    def _resolve_final_part(
+        self, output_dir: Path, *, allowed: Optional[set] = None
+    ) -> Optional[str]:
         for part_name in CENSO_PARSE_PRIORITY:
+            if allowed is not None and part_name not in allowed:
+                continue
             json_path = output_dir / f"{_part_index(part_name)}_{part_name.upper()}.json"
             if json_path.exists():
                 return part_name
@@ -862,7 +866,21 @@ class CensoInterface:
 
             raise CensoExecutionError(error_msg)
 
-        final_part = self._resolve_final_part(output_dir)
+        enabled_parts = {
+            name
+            for flag, name in (
+                ("-P", "prescreening"),
+                ("-S", "screening"),
+                ("-R", "refinement"),
+                ("-O", "optimization"),
+            )
+            if flag in cmd
+        }
+        # Bind the final part to a part this run actually enabled: a stale
+        # artifact from an earlier run in the same dir cannot be adopted.
+        final_part = self._resolve_final_part(
+            output_dir, allowed=enabled_parts or None
+        )
         if final_part is None:
             raise CensoParseError(
                 f"No CENSO output JSON found in {output_dir}. Checked: {_PARSE_PRIORITY}"
@@ -915,6 +933,8 @@ class CensoInterface:
             "final_part": final_part,
             "temperature_k": float(temp),
             "artifacts": artifact_facts,
+            "enabled_parts": sorted(enabled_parts),
+            "conformers": [str(rec.conf_id) for rec in records],
         }
         self._compare_boltzmann_weights(result, out_path)
 

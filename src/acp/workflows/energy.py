@@ -472,6 +472,7 @@ def run_conformer_energy(
                     {"status": "completed", "n_records": len(censo_result.records)},
                 )
                 stages_completed.append("censo")
+                censo_execution = dict(getattr(censo_result, "execution", {}) or {})
                 if not censo_result.records:
                     raise RuntimeError("CENSO screening produced no conformer records")
 
@@ -585,6 +586,7 @@ def run_conformer_energy(
                     {"status": "completed", "n_records": len(censo_result.records)},
                 )
                 stages_completed.append("censo")
+                censo_execution = dict(getattr(censo_result, "execution", {}) or {})
                 if not censo_result.records:
                     raise RuntimeError("CENSO refinement produced no conformer records")
 
@@ -647,6 +649,7 @@ def run_conformer_energy(
                     {"status": "completed", "n_records": len(censo_result.records)},
                 )
                 stages_completed.append("censo")
+                censo_execution = dict(getattr(censo_result, "execution", {}) or {})
                 if not censo_result.records:
                     raise RuntimeError("CENSO refinement produced no conformer records")
 

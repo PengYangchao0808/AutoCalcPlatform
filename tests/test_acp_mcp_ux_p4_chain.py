@@ -60,3 +60,19 @@ def test_adapter_forwards_execution_facts(tmp_path: Path) -> None:
         )
     assert result.execution == _EXECUTION
     assert result.final_part == "screening"
+
+
+def test_stale_part_artifact_is_not_adopted(tmp_path: Path) -> None:
+    """A refinement file left by an earlier run cannot bind to a screening run."""
+    from cccp.qc.interfaces.censo import CensoInterface
+
+    interface = CensoInterface({})
+    # Higher-priority stale file exists...
+    (tmp_path / "3_REFINEMENT.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "1_SCREENING.json").write_text("{}", encoding="utf-8")
+    assert interface._resolve_final_part(tmp_path) == "refinement"
+    # ...but a screening-only run may only adopt the screening part.
+    assert (
+        interface._resolve_final_part(tmp_path, allowed={"screening"})
+        == "screening"
+    )

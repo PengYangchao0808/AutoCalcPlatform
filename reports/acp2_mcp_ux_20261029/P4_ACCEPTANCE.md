@@ -40,10 +40,20 @@
 | 非 CENSO 报告无条件加 method_identity | 仅当存在 requested levels 或执行事实时才添加该块 |
 | 测试手填 `"a"*64` 固化漏拒 | 改为完整执行事实夹具，并补 rc=1 / 空 argv / 短 digest 三类负例 |
 
+## 第二轮复验整改
+
+| 问题 | 整改 |
+|---|---|
+| `energy.py` 三处执行分支未接 `censo_result.execution`，转发分支永空 | 三处（screening / refinement / 另一 refinement 分支）均赋值 `censo_execution`，metadata 转发恢复 |
+| `final_part` 只按现存文件选，旧 refinement 产物可绑新 rc=0 | 从本次 argv 的 `-P/-S/-R/-O` 推导 enabled parts，`_resolve_final_part(allowed=...)` 只接受本次启用的 part；新增 stale artifact 测试 |
+| 角色证据未逐构象对齐 | execution 携带本次 `conformers` 列表；screening 条目必须其 `source_conf_id` 在列表内才 `executed`，否则 `unverified`；新增逐构象负例 |
+
+仍为已知限制：refined 条目的 DFT 执行证据（ORCA 侧）未采集，screening 运行中保持 `unverified`，不冒充。
+
 ## 证据
 
 - `evidence/p4/p4_batch.txt`：命令、模块清单、源文件哈希、exit code。
-- CENSO/confsearch/report/chain 批次：**190 passed，exit 0**。
+- CENSO/confsearch/report/chain 批次：**192 passed，exit 0**。
 
 ## 边界（不冒充 PASS）
 

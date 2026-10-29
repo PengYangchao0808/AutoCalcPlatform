@@ -235,7 +235,7 @@ def _conformer_block(
         "free_energy_hartree": entry.free_energy_hartree,
         "energy_kind": energy_kind,
         "method_role": role,
-        "method_evidence": _role_evidence(role, executed, verified),
+        "method_evidence": _role_evidence(entry, role, executed, verified),
         "energy_kind_verified": bool(
             verified and not entry.refined and executed.get("final_part") == "screening"
         ),
@@ -245,16 +245,26 @@ def _conformer_block(
     }
 
 
-def _role_evidence(role: str, executed: Mapping[str, Any], verified: bool) -> str:
-    """Only the part that actually ran can count as executed evidence."""
+def _role_evidence(
+    entry: ConformerEntry,
+    role: str,
+    executed: Mapping[str, Any],
+    verified: bool,
+) -> str:
+    """Only the part that ran AND contains this conformer counts as executed."""
     if not verified:
         return "unverified"
     final_part = str(executed.get("final_part") or "")
-    if role == "screening" and final_part == "screening":
-        return "executed"
-    if role == "refinement_sp" and final_part == "refinement":
-        return "executed"
-    return "unverified"
+    if role == "screening" and final_part != "screening":
+        return "unverified"
+    if role == "refinement_sp" and final_part != "refinement":
+        return "unverified"
+    tracked = executed.get("conformers")
+    if isinstance(tracked, list) and tracked:
+        conf_id = str(entry.source_conf_id or entry.conf_id)
+        if conf_id not in {str(item) for item in tracked}:
+            return "unverified"
+    return "executed"
 
 
 def _frame_title(entry: ConformerEntry, outcome: ProtocolOutcome) -> str:

@@ -530,3 +530,31 @@ def test_weak_execution_facts_are_not_verified(tmp_path: Path) -> None:
         assert all(
             c["method_evidence"] == "unverified" for c in payload["conformers"]
         )
+
+
+def test_screening_evidence_must_name_the_conformer(tmp_path: Path) -> None:
+    confsearch_dir = tmp_path / "RESULT" / "confsearch"
+    confsearch_dir.mkdir(parents=True)
+    entries = _standard_entries(confsearch_dir)
+    outcome = _make_outcome(
+        workflow_metadata={
+            **_make_outcome().workflow_metadata,
+            "censo_execution": {
+                "argv": ["censo"],
+                "returncode": 0,
+                "final_part": "screening",
+                "conformers": ["CONF2"],
+                "artifacts": {
+                    "json": {"sha256": "a" * 64},
+                    "xyz": {"sha256": "b" * 64},
+                },
+            },
+        }
+    )
+    report_path, _ = write_final_report(
+        confsearch_dir, request=_make_request(tmp_path), entries=entries, outcome=outcome
+    )
+    payload = _read_json(report_path)
+    by_id = {c["conf_id"]: c for c in payload["conformers"]}
+    assert by_id["conf_0002"]["method_evidence"] == "executed"
+    assert by_id["conf_0001"]["method_evidence"] == "unverified"
