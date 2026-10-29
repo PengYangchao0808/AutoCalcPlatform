@@ -33,6 +33,7 @@ def test_descriptors_publish_result_relative_paths(monkeypatch: Any, tmp_path: A
         _product("final_report", "confsearch/final_report.json", "Final report"),
         _product("traversal", "../secret.txt"),
         _product("absolute", "/etc/passwd"),
+        _product("windows", "..\\secret.txt"),
     )
     monkeypatch.setattr(descriptors, "load_result_manifest", lambda task: manifest)
     items, truncated = descriptors.describe_job_artifacts(_touch_manifest(tmp_path))

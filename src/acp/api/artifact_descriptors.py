@@ -12,7 +12,11 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from acp.results.manifest import MANIFEST_FILENAME, load_result_manifest
-from acp_services.data.artifacts import is_safe_artifact_token
+from acp_services.data.artifacts import (
+    ArtifactPathRefusedError,
+    is_safe_artifact_token,
+    validate_artifact_relative_path,
+)
 
 __all__ = ["describe_job_artifacts"]
 
@@ -24,14 +28,16 @@ MAX_MANIFEST_BYTES = 2 * 1024 * 1024
 
 
 def _safe_relative(path: str) -> str | None:
-    """Return a task-relative path or None (absolute/traversal/invalid)."""
-    text = str(path or "").strip()
-    if not text or "\x00" in text:
+    """Return the prepare-valid task-relative path, or None.
+
+    Uses the same authority as ``prepare`` (``validate_artifact_relative_path``)
+    so a discovered descriptor is always directly usable; Windows separators,
+    absolute paths and traversal are refused there, not re-implemented here.
+    """
+    try:
+        return validate_artifact_relative_path(str(path or ""))
+    except (ArtifactPathRefusedError, ValueError):
         return None
-    candidate = PurePosixPath(text)
-    if candidate.is_absolute() or any(part in {"..", ""} for part in candidate.parts):
-        return None
-    return candidate.as_posix()
 
 
 def _safe_token(value: object) -> str | None:
