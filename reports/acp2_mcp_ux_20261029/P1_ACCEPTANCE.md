@@ -54,6 +54,15 @@
 | Workbench 默认 `temperature=298.15` 被白名单无条件放过（400 也被吞） | 默认值表改为精确值：只有等于 Workbench 默认的镜像才放行，非默认且无角色/levels 依据 → `shadowed_field` |
 | P1-02 未覆盖 prepare／持久记录 | 拒绝前后比较 run_root 文件树、`store.counts()`、`admission.snapshot()`，并断言 `_submission_jobs` 为空 |
 
+### 第六轮验收后
+
+| 问题 | 整改 |
+|---|---|
+| 无前缀 flat 在多角色值不同时仍误拒（要求全部相等） | 无前缀键改为"匹配任一角色即可"；`levels.batch` 值仍严格比对 |
+| P1-02 未证明 SQLite prepare/预算记录不增加 | 拒绝前后比较 `acp_jobs.db` 全部表行数、`store.counts()`、`admission.snapshot()`、run_root 文件树 |
+
+> 备注：第七轮复验因 codex 账号用量上限（18:01 重置）未能执行；P1 代码与证据已就绪，待额度恢复后补一次复验。
+
 ## 本轮变更
 
 | 文件 | 变更 |
