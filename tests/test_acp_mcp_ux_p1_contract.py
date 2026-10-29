@@ -395,7 +395,7 @@ def test_batch_flat_scalars_must_mirror_a_role() -> None:
             },
             resources={},
         )
-    assert excinfo.value.params()["rule"] == "shadowed_field"
+    assert excinfo.value.params()["rule"] == "conflicting_fields"
 
 
 @pytest.mark.parametrize(
@@ -538,9 +538,9 @@ def test_batch_non_mirrored_flat_fields_are_refused() -> None:
             input=base_input,
             method={
                 "profile": "opt_freq",
-                "batch_roles": {"int": {"method": "B3LYP"}},
-                "scf_orbital_inherit": True,
+                "batch_roles": {"int": {"scf_orbital_inherit": "0"}},
+                "scf_orbital_inherit": False,
             },
             resources={},
         )
-    assert excinfo.value.params()["rule"] == "shadowed_field"
+    assert excinfo.value.params()["rule"] == "conflicting_fields"
