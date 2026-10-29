@@ -1,7 +1,7 @@
 # P4 验收记录（科学可解释性：执行证据 / 方法身份）
 
 > 执行：2026-10-29T19:05–19:20 +08:00
-> 状态：**PASS**（sol 第 4 轮复验；P4-01/P4-02/phase PASS）
+> 状态：**PASS（限定范围）**（sol 第 4 轮复验；后续 astra 复审触发加固，见下）
 
 ## P4-01 CENSO 成功执行证据
 
@@ -60,3 +60,10 @@
 - 只有 CENSO 路径产生 `executed` 事实；纯 xTB / CREST-only 路径为 `unverified`（没有可核验的 DFT 执行证据）。
 - 非 CENSO 协议的报告不新增方法身份（本轮范围外）。
 - 真实 QC 未提交（本轮全部为 mocked subprocess / fixture）。
+
+
+## astra 复审后的加固（同一 PR）
+
+- `_execution_verified` 现在重算 JSON/XYZ 文件摘要，并绑定本次 `input_path`/`rcfile_path` 的摘要；成员列表必须非空且含该构象。
+- 报告公开投影去掉 `cwd/input_path/rcfile_path` 与绝对 argv 前缀（`<run>`），避免正文内容策略拒绝合法报告。
+- 仍 **DEFERRED**：同 part 旧产物与模板/成员在文件层面的完整绑定、真实 QC 执行、历史回执改写；这些写入 residual，不冒充已关闭。

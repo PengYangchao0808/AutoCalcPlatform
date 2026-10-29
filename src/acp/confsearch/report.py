@@ -185,9 +185,17 @@ def _execution_verified(executed: Mapping[str, Any]) -> bool:
     tracked = executed.get("conformers")
     if not isinstance(tracked, list) or not tracked:
         return False
-    for key in ("input_sha256", "rcfile_sha256"):
+    for key, path_key in (
+        ("input_sha256", "input_path"),
+        ("rcfile_sha256", "rcfile_path"),
+    ):
         digest = str(executed.get(key) or "")
         if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+            return False
+        bound = Path(str(executed.get(path_key) or ""))
+        if not bound.is_file():
+            return False
+        if hashlib.sha256(bound.read_bytes()).hexdigest() != digest:
             return False
     cwd = Path(str(executed.get("cwd") or ""))
     if not str(cwd) or not cwd.is_dir():
@@ -272,7 +280,11 @@ def _publish_execution(executed: Mapping[str, Any]) -> dict[str, Any]:
     if not executed:
         return {}
     cwd = str(executed.get("cwd") or "")
-    published = {key: value for key, value in executed.items() if key != "cwd"}
+    published = {
+        key: value
+        for key, value in executed.items()
+        if key not in {"cwd", "input_path", "rcfile_path"}
+    }
     argv = executed.get("argv")
     if isinstance(argv, list):
         published["argv"] = [

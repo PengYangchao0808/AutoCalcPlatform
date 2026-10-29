@@ -454,6 +454,8 @@ def _execution_facts(tmp_path: Path, conformers: tuple[str, ...] = ("CONF2",)) -
     cwd.mkdir(exist_ok=True)
     (cwd / "1_SCREENING.json").write_text("{}", encoding="utf-8")
     (cwd / "1_SCREENING.xyz").write_text("1\nH 0 0 0\n", encoding="utf-8")
+    (cwd / "input.xyz").write_text("1\nH 0 0 0\n", encoding="utf-8")
+    (cwd / "censo2rc").write_text("[prescreening]\n", encoding="utf-8")
 
     def _sha(name: str) -> str:
         return hashlib.sha256((cwd / name).read_bytes()).hexdigest()
@@ -465,8 +467,10 @@ def _execution_facts(tmp_path: Path, conformers: tuple[str, ...] = ("CONF2",)) -
         "final_part": "screening",
         "enabled_parts": ["screening"],
         "conformers": list(conformers),
-        "input_sha256": "a" * 64,
-        "rcfile_sha256": "b" * 64,
+        "input_sha256": _sha("input.xyz"),
+        "input_path": str(cwd / "input.xyz"),
+        "rcfile_sha256": _sha("censo2rc"),
+        "rcfile_path": str(cwd / "censo2rc"),
         "artifacts": {
             "json": {"path": "1_SCREENING.json", "sha256": _sha("1_SCREENING.json")},
             "xyz": {"path": "1_SCREENING.xyz", "sha256": _sha("1_SCREENING.xyz")},

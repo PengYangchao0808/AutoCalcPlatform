@@ -281,7 +281,8 @@ class _ControllerHandler(http.server.BaseHTTPRequestHandler):
             if body.get("workflow"):
                 payload["workflow_contract"] = {
                     "workflow": body["workflow"],
-                    "coverage": "complete",
+                    "coverage": "partial",
+                    "gaps": ["live harness fixture does not publish value-level gaps"],
                     "status_vocabulary": {"envelope": {"ok": "ok", "error": "error"}},
                 }
                 payload["research_tools"] = {"visible": True}

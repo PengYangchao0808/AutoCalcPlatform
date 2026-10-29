@@ -944,7 +944,9 @@ class CensoInterface:
             "enabled_parts": sorted(enabled_parts),
             "conformers": [str(rec.conf_id) for rec in records],
             "input_sha256": input_sha256,
+            "input_path": str(ensemble_xyz),
             "rcfile_sha256": rcfile_sha256,
+            "rcfile_path": str(rcfile),
         }
         self._compare_boltzmann_weights(result, out_path)
 

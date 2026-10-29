@@ -1988,16 +1988,6 @@ def _amendment_x_censo_ranges(worktree: str) -> list[tuple[int, int]]:
 def _is_amendment_x_censo_addition(ln: int, txt: str, worktree: str) -> bool:
     if txt.strip() == "import hashlib":
         return True
-    if any(
-        marker in txt
-        for marker in (
-            "input_sha256",
-            "rcfile_sha256",
-            "hashlib.sha256(ensemble_xyz.read_bytes())",
-            "hashlib.sha256(Path(rcfile).read_bytes())",
-        )
-    ):
-        return True
     return any(start <= ln <= end for start, end in _amendment_x_censo_ranges(worktree))
 
 

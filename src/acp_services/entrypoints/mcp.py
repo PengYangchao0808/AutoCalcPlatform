@@ -2924,7 +2924,19 @@ class McpServer:
         # One content policy for both encodings: a decoded path/secret is
         # refused, never smuggled through base64.  Undecodable bytes decode with
         # surrogate escapes so ASCII path fragments are still visible.
-        decoded = raw.decode("utf-8", errors="surrogateescape")
+        try:
+            decoded = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            if data.get("truncated"):
+                # A slice cannot prove the whole bytes are safe; binary
+                # truncation is refused this round (residual: full-body scan).
+                raise McpToolError(
+                    mo.ErrorCode.UNSUPPORTED_CAPABILITY,
+                    "truncated non-UTF-8 artifact body cannot be verified",
+                    params={"field": "body", "rule": "artifact_body_unverifiable"},
+                    retryable=False,
+                ) from None
+            decoded = raw.decode("utf-8", errors="surrogateescape")
         if redact(decoded) != decoded:
             raise McpToolError(
                 mo.ErrorCode.UNSUPPORTED_CAPABILITY,

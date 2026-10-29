@@ -191,6 +191,24 @@ _ROLE_FLAT_ALIASES: dict[str, str] = {
     "sp_basis": "single_point_basis",
 }
 
+_WORKBENCH_MIRROR_DEFAULTS: dict[str, tuple[float, ...]] = {
+    "temperature": (298.15,),
+    "pressure": (1.0,),
+    "scale_factor": (0.9905,),
+}
+
+
+def _is_workbench_default(key: str, value: object) -> bool:
+    """The Workbench keeps these flat defaults next to a user-set role value."""
+    defaults = _WORKBENCH_MIRROR_DEFAULTS.get(key)
+    if not defaults:
+        return False
+    try:
+        return any(float(value) == item for item in defaults)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return False
+
+
 def _same_mirror_value(flat: object, role: object) -> bool:
     """Compare a mirror with its role value the way the consumer would."""
     if flat == role:
@@ -374,6 +392,8 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
             if not isinstance(role_value, Mapping) or role_field not in role_value:
                 continue
             if role_value[role_field] is None:
+                continue
+            if _is_workbench_default(flat_key, method[flat_key]):
                 continue
             if not _same_mirror_value(method[flat_key], role_value[role_field]):
                 raise SubmissionContractError(

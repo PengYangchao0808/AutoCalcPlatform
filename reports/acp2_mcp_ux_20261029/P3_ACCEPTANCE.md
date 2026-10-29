@@ -1,7 +1,7 @@
 # P3 验收记录（闭环：计数 / status / artifact）
 
 > 执行：2026-10-29T17:58–18:05 +08:00
-> 状态：**PASS**（sol 第 5 轮复验：路径权威统一后签收；真实 SDK 整链仍 NOT_VERIFIED）
+> 状态：**PASS（限定范围）**（sol 第 5 轮复验；真实 SDK 生产整链未交付，标 NOT_VERIFIED；后续 astra 复审见 ASTRA_FIX_VERIFICATION.md）
 
 ## 已完成
 
@@ -63,3 +63,10 @@
 
 - `evidence/p3/p3_batch.txt`：命令、cwd、模块路径、文件哈希、exit code。
 - 批次：P3 status/artifact/descriptors + confsearch progress + v1 science status + services mcp + mcp process + P1/P2 契约 + api → **163 passed，exit 0**（命令与模块清单在证据文件内）。
+
+
+## astra 复审后的加固（同一 PR）
+
+- base64 不再豁免内容策略：严格解码、坏编码 `artifact_encoding_invalid`、解码后的路径/密钥仍拒绝；截断的非 UTF-8 正文 `artifact_body_unverifiable`（完整正文预扫描 DEFERRED）。
+- 真实 SDK selector 的 coverage 断言改为 `partial`（与新的契约声明一致）。
+- 真实生产 manifest→prepare→store 整链仍 **DEFERRED / NOT_VERIFIED**，不以 scripted Controller 冒充。

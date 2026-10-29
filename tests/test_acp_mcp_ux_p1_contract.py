@@ -773,3 +773,17 @@ def test_conflicting_mirror_value_is_refused() -> None:
         },
         resources={},
     )
+
+
+def test_workbench_default_mirror_does_not_block_the_role_value() -> None:
+    """The wizard keeps 298.15 top-level while the user sets a role temperature."""
+    validate_workflow_submission(
+        "BatchOptimize",
+        input={"source_type": "batch_structures", "items": [{"xyz": "H 0 0 0"}]},
+        method={
+            "profile": "opt_freq",
+            "batch_roles": {"int": {"temperature": 400}},
+            "temperature": 298.15,
+        },
+        resources={},
+    )
