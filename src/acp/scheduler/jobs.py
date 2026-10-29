@@ -757,7 +757,6 @@ _CONFSEARCH_SCALAR_FLAGS: dict[str, str] = {
     "max_frames": "--max-frames",
     "temperature": "--temperature",
     "energy_window": "--ewin",
-    "max_conformers": "--max-conformers",
 }
 
 

@@ -53,6 +53,10 @@ except ImportError:  # pragma: no cover
     ZipStream = None
 
 from acp.api.job_status_view import build_live_status, resolve_display_method
+from acp.api.submission_contract import (
+    SubmissionContractError,
+    validate_workflow_submission,
+)
 from acp.api.routes import (
     get_backends as legacy_get_backends,
 )
@@ -2568,6 +2572,14 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         raise _command_error(
             _field_policy_status(exc), exc.code, exc.message, params=dict(exc.params)
         ) from exc
+    # Semantic contract (P1): unknown method keys / illegal enums / missing
+    # input are refused here, before classification, approval or dispatch.
+    try:
+        validate_workflow_submission(
+            req.workflow, input=req.input, method=req.method, resources=req.resources
+        )
+    except SubmissionContractError as exc:
+        raise _command_error(422, "input_invalid", str(exc), params=exc.params()) from exc
     fingerprint = normalized_submit.get("preflight_fingerprint")
     if fingerprint:
         from acp_services.runtime.canonical_digest import CanonicalDigestError
@@ -8750,6 +8762,13 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
             str(detail.get("message") or exc.detail),
             params=dict(detail.get("params") or {}),
         ) from exc
+    # Same semantic contract as create_job, before any snapshot/estimate work.
+    try:
+        validate_workflow_submission(
+            req.workflow, input=req.input, method=req.method, resources=req.resources
+        )
+    except SubmissionContractError as exc:
+        raise _command_error(422, "input_invalid", str(exc), params=exc.params()) from exc
     manager = _manager(request)
     project_id = _research_project(manager, req.project_id)
     spec = JobSpec(

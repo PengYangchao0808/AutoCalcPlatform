@@ -19,7 +19,26 @@ def resolve_job_resources(spec: JobSpec) -> dict[str, Any]:
     The cccp TaskResources API retains its separate unitless MB contract.
     """
     resources = dict(spec.resources)
-    nproc = resources.get("nproc", resources.get("ncores"))
+    # ``cores`` is the MCP-facing alias; precedence stays nproc > ncores >
+    # cores and an explicit value is validated even when it is zero.  Zero on a
+    # lower-priority alias means "unset" (historical payloads send both), but a
+    # non-zero disagreement is a real conflict: admission and argv must agree.
+    core_fields = [
+        (name, resources[name])
+        for name in ("nproc", "ncores", "cores")
+        if resources.get(name) is not None
+    ]
+    nproc = core_fields[0][1] if core_fields else None
+    effective = [(name, value) for name, value in core_fields if value != 0]
+    if len(effective) > 1:
+        distinct: set[float | str] = set()
+        for _name, value in effective:
+            try:
+                distinct.add(float(value))
+            except (TypeError, ValueError):
+                distinct.add(str(value))
+        if len(distinct) > 1:
+            raise ValueError("resources.nproc/ncores/cores disagree")
     memory = resources.get("mem", resources.get("memory_gb"))
     if nproc is None or memory is None:
         config = load_config(config_path=Path(spec.config_path) if spec.config_path else None)

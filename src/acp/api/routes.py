@@ -271,6 +271,30 @@ def _backend_capability_summary() -> list[dict[str, Any]]:
     return summaries
 
 
+def _capability_limits(request: Request) -> dict[str, Any]:
+    """Publish the ceilings the running admission instance actually enforces.
+
+    C6: the previous dict was a second hardcoded set of numbers, so discovery
+    and admission could disagree.  The admission instance is the authority;
+    when it is not assembled, say so instead of inventing a limit.
+    """
+    published = dict(_CONTROLLER_LIMITS)
+    admission = getattr(request.app.state, "admission", None)
+    limits = getattr(admission, "limits", None)
+    if limits is None:
+        published["enforcement"] = "not-verified"
+        return published
+    published.update(
+        {
+            "max_cores": int(limits.max_cores),
+            "max_walltime_s": int(limits.max_walltime_s),
+            "default_walltime_s": int(limits.default_walltime_s),
+            "enforcement": "admission",
+        }
+    )
+    return published
+
+
 def _capabilities_payload(
     request: Request,
     *,
@@ -342,7 +366,7 @@ def _capabilities_payload(
         # never reported as executable.
         "capability_descriptors": list(science_catalog.capability_descriptors(request.app.state)),
         "analysis_capabilities": list(science_catalog.analysis_capabilities(request.app.state)),
-        "limits": dict(_CONTROLLER_LIMITS),
+        "limits": _capability_limits(request),
         # M2-01c: the HTTP surface mirrors tools/list — the eight P1 tools, plus
         # the ten research tools only for a request that negotiated the extension.
         "tools": list(_MCP_TOOLS) + ([*RESEARCH_TOOL_NAMES] if handshake.negotiated else []),
