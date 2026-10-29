@@ -301,6 +301,7 @@ def _capabilities_payload(
     research_extension: Mapping[str, Any] | str | None = None,
     project_id: str | None = None,
     client: Mapping[str, Any] | None = None,
+    workflow: str | None = None,
 ) -> dict[str, Any]:
     """Build the discovery payload and answer the extension handshake.
 
@@ -375,6 +376,19 @@ def _capabilities_payload(
             "visible": bool(handshake.negotiated),
             "negotiated": bool(handshake.negotiated),
         },
+        "status_vocabulary": {
+            "envelope": {"ok": "the call succeeded", "error": "the call failed"},
+            "task_state": [
+                "queued",
+                "running",
+                "paused",
+                "waiting_review",
+                "failed",
+                "cancelled",
+                "completed",
+            ],
+            "legacy_alias": "status mirrors state for older clients",
+        },
         "protocol_version": _MCP_PROTOCOL_VERSION,
         "extensions": [dict(entry) for entry in handshake.entries],
         "capability_request": {
@@ -409,6 +423,31 @@ def _capabilities_payload(
             "project_hint_policy": "narrow-only",
             "multi_tenant_security": "api-key-scoped",
         }
+    if workflow is not None:
+        from acp.api.workflow_contracts import (
+            ACTIVE_WORKFLOWS,
+            canonical_workflow,
+            describe_workflow,
+            workflow_suggestion,
+        )
+
+        canonical = canonical_workflow(workflow)
+        if canonical is None:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "input_invalid",
+                    "message": f"unknown workflow {workflow!r}",
+                    "params": {
+                        "field": "workflow",
+                        "rule": "unknown_workflow",
+                        "allowed": list(ACTIVE_WORKFLOWS),
+                        "suggestion": workflow_suggestion(workflow),
+                    },
+                },
+            )
+        payload["workflow_contract"] = describe_workflow(canonical)
+
     if handshake.refusal is not None:
         # Typed, in-band refusal: the client still receives extensions[] so it
         # can read the supported version instead of guessing.
@@ -445,6 +484,7 @@ def get_capabilities(
     research_extension: str | None = Query(default=None),
     project_id: str | None = Query(default=None),
     client: str | None = Query(default=None),
+    workflow: str | None = Query(default=None),
 ) -> dict[str, Any]:
     """Read-only discovery (``capabilities`` application command).
 
@@ -461,6 +501,7 @@ def get_capabilities(
         research_extension=research_extension,
         project_id=project_id,
         client=client_facts,
+        workflow=workflow,
     )
 
 
@@ -482,7 +523,14 @@ async def post_capabilities(request: Request) -> dict[str, Any]:
             status_code=422,
             detail={"code": "input_invalid", "message": "capabilities body must be an object"},
         )
-    allowed_fields = {"schema_version", "extensions", "research_extension", "project_id", "client"}
+    allowed_fields = {
+        "schema_version",
+        "extensions",
+        "research_extension",
+        "project_id",
+        "client",
+        "workflow",
+    }
     unknown = set(body) - allowed_fields
     if unknown:
         raise HTTPException(
@@ -511,11 +559,18 @@ async def post_capabilities(request: Request) -> dict[str, Any]:
             status_code=422,
             detail={"code": "input_invalid", "message": "project_id must be a string"},
         )
+    workflow = body.get("workflow")
+    if workflow is not None and not isinstance(workflow, str):
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "input_invalid", "message": "workflow must be a string"},
+        )
     return _capabilities_payload(
         request,
         research_extension=research,
         project_id=project_id,
         client=client,
+        workflow=workflow,
     )
 
 

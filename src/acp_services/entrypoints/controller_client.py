@@ -474,6 +474,7 @@ class ControllerClient:
         research_extension: Mapping[str, Any] | str | None = None,
         project_id: str | None = None,
         client: Mapping[str, Any] | None = None,
+        workflow: str | None = None,
     ) -> Capabilities:
         """Return what the Controller currently offers (no side effects).
 
@@ -504,6 +505,8 @@ class ControllerClient:
             body["project_id"] = str(project_id)
         if client is not None:
             body["client"] = dict(client)
+        if workflow is not None:
+            body["workflow"] = str(workflow)
         if body:
             body.setdefault("schema_version", 1)
             data = self._request_json("POST", "/api/capabilities", body)

@@ -48,6 +48,7 @@ class _ControllerState:
         self.capabilities_reads = 0
         self.submit_posts = 0
         self.status_paths: list[str] = []
+        self.capabilities_posts: list[dict[str, Any]] = []
         self.long_description = "capability descriptor " * 500
 
 
@@ -116,8 +117,32 @@ class _ControllerHandler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         length = int(self.headers.get("Content-Length", "0") or "0")
-        if length:
-            self.rfile.read(length)
+        raw = self.rfile.read(length) if length else b""
+        if self.path == "/api/capabilities":
+            body = json.loads(raw or b"{}")
+            self.state.capabilities_posts.append(body)
+            if body.get("workflow") == "Refused":
+                self._send_json(
+                    422,
+                    {"detail": {"code": "input_invalid", "message": "unknown workflow"}},
+                )
+                return
+            payload = {
+                "schema_version": 1,
+                "task_kinds": ["singlepoint"],
+                "workflows": ["singlepoint", "optimize"],
+                "backends": [{"name": "orca", "available": True}],
+                "limits": {"max_cores": 64},
+                "tools": sorted(EXPECTED_TOOLS),
+                "protocol_version": PROTOCOL_VERSION,
+            }
+            if body.get("workflow"):
+                payload["workflow_contract"] = {
+                    "workflow": body["workflow"],
+                    "coverage": "complete",
+                }
+            self._send_json(200, payload)
+            return
         if self.path == "/api/v1/jobs":
             self.state.submit_posts += 1
             self._send_json(201, {"job_id": "must-not-be-created"})
@@ -795,3 +820,68 @@ def test_protocol_negotiation_matrix(controller: Any, tmp_path: Path) -> None:
     assert cases[4][1]["exit_code"] == 0
     # Zero task side effects across the whole matrix (no process called a tool).
     assert state.submit_posts == 0
+
+
+def test_capabilities_workflow_selector_is_forwarded(controller: Any, tmp_path: Path) -> None:
+    state, url = controller
+    with _McpProcess(url, tmp_path / "run-root") as process:
+        assert "error" not in process.handshake()
+        process.notify_initialized()
+        result = process.request(
+            2,
+            "tools/call",
+            {"name": "acp_capabilities", "arguments": {"workflow": "Confsearch"}},
+        )
+        assert result["result"]["isError"] is False
+        data = result["result"]["structuredContent"]["data"]
+        assert data["workflow_contract"]["workflow"] == "Confsearch"
+        plain = process.request(
+            3,
+            "tools/call",
+            {"name": "acp_capabilities", "arguments": {}},
+        )
+        assert plain["result"]["isError"] is False
+        assert "workflow_contract" not in plain["result"]["structuredContent"]["data"]
+        process.close_stdin()
+        assert process.wait() == 0
+    assert state.capabilities_posts[-1]["workflow"] == "Confsearch"
+
+
+def test_research_tools_visible_after_negotiation(controller: Any, tmp_path: Path) -> None:
+    _, url = controller
+    with _McpProcess(url, tmp_path / "run-root") as process:
+        assert "error" not in process.handshake()
+        process.notify_initialized()
+        before = process.request(2, "tools/list")
+        names = {tool["name"] for tool in before["result"]["tools"]}
+        assert "acp_research_proposal_create_v1" not in names
+        negotiated = process.request(
+            3,
+            "tools/call",
+            {
+                "name": "acp_capabilities",
+                "arguments": {"research_extension": {"id": "acp.research.v1"}},
+            },
+        )
+        assert negotiated["result"]["isError"] is False
+        after = process.request(4, "tools/list")
+        names = {tool["name"] for tool in after["result"]["tools"]}
+        assert "acp_research_proposal_create_v1" in names
+        process.close_stdin()
+        assert process.wait() == 0
+
+
+def test_selector_refusal_is_not_downgraded(controller: Any, tmp_path: Path) -> None:
+    _, url = controller
+    with _McpProcess(url, tmp_path / "run-root") as process:
+        assert "error" not in process.handshake()
+        process.notify_initialized()
+        result = process.request(
+            2,
+            "tools/call",
+            {"name": "acp_capabilities", "arguments": {"workflow": "Refused"}},
+        )
+        assert result["result"]["isError"] is True
+        assert result["result"]["structuredContent"]["error"]["code"] == "input_invalid"
+        process.close_stdin()
+        assert process.wait() == 0

@@ -683,6 +683,16 @@ _CAPABILITIES_SCHEMA: dict[str, Any] = {
                 "Client identifier recorded for audit only; never used for authorization."
             ),
         },
+        "workflow": {
+            "type": "string",
+            "description": (
+                "Optional workflow id (case-insensitive). Returns workflow_contract "
+                "with the input/method/resources schema, examples and known "
+                "constraints. Unknown ids return input_invalid with allowed ids "
+                "and a suggestion; other active workflows are marked coverage="
+                "not_provided."
+            ),
+        },
     },
     "additionalProperties": False,
 }
@@ -712,7 +722,10 @@ _SUBMIT_PROPERTIES: dict[str, Any] = {
     },
     "project_id": {
         "type": "string",
-        "description": "Requested Workspace hint (never the tenant).",
+        "description": (
+            "Requested Workspace hint (never the tenant). Legacy local submissions "
+            "that omit it land in the server default project (uncategorized)."
+        ),
     },
     "execution_mode": {
         "type": "string",
@@ -783,7 +796,7 @@ _SUBMIT_SCHEMA: dict[str, Any] = {
     "description": (
         "Submit descriptor. Legacies and research launches share this schema; the field "
         "relations below are documented for callers, never enforced here — the Controller "
-        "remains the gate. idempotency_key is required (M1-01b): an undeclared field is a "
+        "remains the gate. idempotency_key is required: an undeclared field is a "
         "typed input_invalid (rule=unknown_field) and a missing key is "
         "input_invalid (rule=idempotency_key_required) before any budget or Controller "
         "call. plan_digest is the research-launch switch: supplying it (or any of "
@@ -808,7 +821,16 @@ _PREFLIGHT_SCHEMA: dict[str, Any] = {
         "side effects (no task, no reservation, no metering). idempotency_key is optional "
         "here because nothing is created."
     ),
-    "properties": dict(_SUBMIT_PROPERTIES),
+    "properties": {
+        **_SUBMIT_PROPERTIES,
+        "idempotency_key": {
+            "type": "string",
+            "description": (
+                "Optional for preflight: nothing is created, so no ledger entry is "
+                "claimed. acp_submit requires the key."
+            ),
+        },
+    },
     "required": ["workflow", "input"],
     "additionalProperties": False,
 }
@@ -837,7 +859,7 @@ _READ_SCHEMA: dict[str, Any] = {
     "description": (
         "Bounded read of an already-prepared artifact. artifact_ref is required; a miss is "
         "resource_not_ready and a read never fetches, prepares or starts computation "
-        "(M1-01b). max_bytes above the frozen max_read_bytes bound is refused "
+        "max_bytes above the frozen max_read_bytes bound is refused "
         "(input_invalid, rule=max_read_bytes_exceeded) instead of served."
     ),
     "properties": {
@@ -970,14 +992,15 @@ _PREPARE_SCHEMA: dict[str, Any] = {
         "task_ref": {
             "type": "object",
             "description": (
-                "Alternate task reference; task_ref.task_id must equal the job id in the "
-                "route path and supplies the default attempt."
+                "Alternate task reference; task_ref.task_id selects the task and "
+                "supplies the default attempt."
             ),
         },
         "job_id": {
             "type": "string",
             "description": (
-                "Must equal the job id in the route path; a mismatch is revision_conflict."
+                "Task id to prepare; a mismatch with task_ref.task_id is "
+                "revision_conflict."
             ),
         },
         "artifact_id": {
@@ -1414,8 +1437,12 @@ def _research_tool_specs() -> tuple[dict[str, Any], ...]:
 class CapabilityPort(Protocol):
     """Capability discovery (read-only)."""
 
-    def capabilities(self) -> Mapping[str, Any]:
-        """Return the current capability descriptor."""
+    def capabilities(self, *, workflow: str | None = None) -> Mapping[str, Any]:
+        """Return the current capability descriptor.
+
+        ``workflow`` selects the optional per-workflow contract projection
+        (P2).  Omitting it keeps the frozen payload shape unchanged.
+        """
         ...
 
 
@@ -2456,7 +2483,17 @@ class McpServer:
         ``project_id`` argument is only an advisory hint that must agree with the
         binding, and ``client`` is audit metadata that never authorizes.
         """
-        data = dict(self._backends.capabilities.capabilities())
+        workflow = arguments.get("workflow")
+        if workflow is not None and not isinstance(workflow, str):
+            raise McpToolError(
+                mo.ErrorCode.INPUT_INVALID,
+                "workflow must be a string",
+                params={"field": "workflow"},
+            )
+        if workflow is None:
+            data = dict(self._backends.capabilities.capabilities())
+        else:
+            data = dict(self._backends.capabilities.capabilities(workflow=workflow))
         data.setdefault("protocol_version", MCP_PROTOCOL_VERSION)
         # M1-01b/M2-02: the frozen three-state analysis-capability projection.  A
         # descriptor is never "available": registered/executable/unavailable are
