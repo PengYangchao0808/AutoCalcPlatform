@@ -180,6 +180,18 @@ _WORKBENCH_FLAT_DEFAULTS: dict[str, Any] = {
 }
 
 
+def _mirror_equal(left: Any, right: Any) -> bool:
+    """Compare a flat mirror to its role value the way the consumer will.
+
+    ``options.py`` normalises numeric strings (e.g. ``"5"`` -> ``5``), so raw
+    ``==`` would report a conflict the executable path does not have.
+    """
+    try:
+        return float(left) == float(right)
+    except (TypeError, ValueError):
+        return left == right
+
+
 def _flat_mirror_source(key: str) -> tuple[str, str]:
     """Return the (role, role field) a flat method key mirrors.
 
@@ -315,7 +327,7 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
                     rule="unknown_field",
                     allowed=tuple(sorted(allowed)),
                 )
-    if "batch_roles" in method and method["batch_roles"] is not None:
+    if "batch_roles" in method:
         roles = _as_mapping(method["batch_roles"], "method.batch_roles")
         for role_id, role_value in roles.items():
             _as_mapping(role_value, f"method.batch_roles.{role_id}")
@@ -340,7 +352,7 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
                 else []
             )
             if role_values:
-                if not any(value == method[key] for value in role_values):
+                if not any(_mirror_equal(value, method[key]) for value in role_values):
                     raise SubmissionContractError(
                         f"method.{key} disagrees with the mirrored batch setting",
                         field_name=f"method.{key}",
