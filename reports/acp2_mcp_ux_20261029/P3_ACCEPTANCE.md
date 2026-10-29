@@ -25,6 +25,15 @@
 | 计数缺 screen 用例、编码缺截断多字节用例 | 已补（screen kept=2/selected=0；`é` 截断字节往返） |
 | 记录把 4 个校验用例写成 5 个 | 已更正，并补到 6 个 |
 
+## 第二轮复验整改
+
+| 问题 | 整改 |
+|---|---|
+| base64 正文在 `MachineResult` 序列化时仍被当路径改写 | `PASSTHROUGH_FIELD_VALUES["body"]` 增加 base64 形状判定；identity 正文仍走脱敏（校验器先行拒绝被改写的 identity） |
+| 描述符整份解析后才截断、无 attempt/读根 | `get_job` 传 `_job_read_root(request, record)` 与 `record.attempt`；迭代到 `limit+1` 即停 |
+| 产品 `id="../x"` 可被发布 | `_safe_token` 拒绝空/NUL/路径分隔符/`..` |
+| 闭环链漏 relative_path 与 operation status | prepare 带发现到的 `relative_path`；随后 `acp_status({"kind":"operation","id":"op_chain"})` 断言 digest |
+
 ## P3-04/05 产物发现
 
 - 新增 `src/acp/api/artifact_descriptors.py`：从 `RESULT/result_manifest.json` 投影

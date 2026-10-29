@@ -72,6 +72,7 @@ __all__ = [
     "error_spec",
     "default_error_for_exit",
     "dry_run_result",
+    "is_base64_artifact_body",
     "is_opaque_wait_cursor",
     "redact",
     "redact_value",
@@ -441,8 +442,25 @@ def is_opaque_wait_cursor(value: str) -> bool:
 #: is explicit (a declared field name) *and* value-shaped (the published cursor
 #: encoding), never a general entropy exception: an undeclared field, or a
 #: credential under the declared name, is still redacted.
+_BASE64_BODY_RE = re.compile(r"^[A-Za-z0-9+/]+={0,2}$")
+
+
+def is_base64_artifact_body(text: str) -> bool:
+    """True for a base64 artifact body: opaque bytes, not a path to redact.
+
+    Identity bodies never reach this branch: the read verifier rejects a body
+    whose redaction would change it, so only base64-encoded bytes are carried
+    verbatim.  The predicate is shape-only and never authorizes anything.
+    """
+    value = str(text or "")
+    if not value or len(value) % 4 != 0:
+        return False
+    return bool(_BASE64_BODY_RE.fullmatch(value))
+
+
 PASSTHROUGH_FIELD_VALUES: Mapping[str, Callable[[str], bool]] = {
     "cursor": is_opaque_wait_cursor,
+    "body": is_base64_artifact_body,
 }
 
 

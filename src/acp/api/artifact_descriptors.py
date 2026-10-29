@@ -30,15 +30,28 @@ def _safe_relative(path: str) -> str | None:
     return candidate.as_posix()
 
 
+def _safe_token(value: object) -> str | None:
+    """A resource id that :func:`prepare` will accept (no path syntax)."""
+    text = str(value or "").strip()
+    if not text or "\x00" in text or "/" in text or "\\" in text or ".." in text:
+        return None
+    return text
+
+
 def describe_job_artifacts(
     task_dir: str | Path | None,
     *,
     limit: int = MAX_ARTIFACT_DESCRIPTORS,
+    attempt: int | None = None,
 ) -> tuple[list[dict[str, Any]], bool]:
     """Return ``(descriptors, truncated)`` for one task's manifest products.
 
-    Only ``RESULT/``-relative product paths are published; unknown sizes stay
-    ``None`` and ``prepared`` stays ``False`` (the caller has not prepared it).
+    * ``task_dir`` is the caller's controlled read root for the **current**
+      attempt (never a walk from the run root).
+    * Only ``RESULT/``-relative paths and prepare-safe resource ids are
+      published; unknown sizes stay ``None`` and ``prepared`` stays ``False``.
+    * Iteration stops at ``limit + 1`` products: the manifest's size is not
+      allowed to cost more than the bound.
     """
     if not task_dir:
         return [], False
@@ -47,21 +60,27 @@ def describe_job_artifacts(
         return [], False
     bounded = max(1, int(limit))
     descriptors: list[dict[str, Any]] = []
-    for product in manifest.products:
+    truncated = False
+    for index, product in enumerate(manifest.products):
+        if index >= bounded:
+            truncated = True
+            break
         relative = _safe_relative(getattr(product, "path", ""))
-        if relative is None:
+        resource_id = _safe_token(getattr(product, "id", ""))
+        if relative is None or resource_id is None:
             continue
-        descriptors.append(
-            {
-                "resource_id": str(product.id),
-                "relative_path": f"RESULT/{relative}",
-                "kind": getattr(product.kind, "value", str(product.kind)),
-                "label": str(getattr(product, "label", "")),
-                "size_bytes": None,
-                "prepared": False,
-            }
-        )
-    return descriptors[:bounded], len(descriptors) > bounded
+        descriptor: dict[str, Any] = {
+            "resource_id": resource_id,
+            "relative_path": f"RESULT/{relative}",
+            "kind": getattr(product.kind, "value", str(product.kind)),
+            "label": str(getattr(product, "label", "")),
+            "size_bytes": None,
+            "prepared": False,
+        }
+        if attempt is not None:
+            descriptor["attempt"] = int(attempt)
+        descriptors.append(descriptor)
+    return descriptors, truncated
 
 
 _ = MANIFEST_FILENAME  # re-exported contract name, kept importable for callers

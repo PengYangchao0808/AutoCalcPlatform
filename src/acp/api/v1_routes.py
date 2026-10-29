@@ -5035,12 +5035,12 @@ def get_sampling_frame(
 
 
 def _with_artifact_descriptors(
-    model: V1JobRecordModel, work_dir: str | None
+    model: V1JobRecordModel, read_root: Path | None, attempt: int
 ) -> V1JobRecordModel:
-    """Attach the bounded manifest projection without a directory walk."""
+    """Attach the bounded manifest projection from the controlled read root."""
     from acp.api.artifact_descriptors import describe_job_artifacts
 
-    descriptors, truncated = describe_job_artifacts(work_dir)
+    descriptors, truncated = describe_job_artifacts(read_root, attempt=attempt)
     if not descriptors and not truncated:
         return model
     return model.model_copy(
@@ -5059,7 +5059,9 @@ def get_job(job_id: str, request: Request) -> V1JobRecordModel:
     task_row = manager.tasks.get(job_id)
     if task_row is not None:
         model = _enrich_v1_with_names(model, resolve_task_names(task_row))
-    return _with_artifact_descriptors(model, record.work_dir)
+    return _with_artifact_descriptors(
+        model, _job_read_root(request, record), record.attempt
+    )
 
 
 @router.get("/jobs/{job_id}/summary", response_model=V1JobRecordModel)
@@ -5073,7 +5075,9 @@ def get_job_summary(job_id: str, request: Request) -> V1JobRecordModel:
     task_row = manager.tasks.get(job_id)
     if task_row is not None:
         model = _enrich_v1_with_names(model, resolve_task_names(task_row))
-    return _with_artifact_descriptors(model, record.work_dir)
+    return _with_artifact_descriptors(
+        model, _job_read_root(request, record), record.attempt
+    )
 
 
 # ---------------------------------------------------------------------- #

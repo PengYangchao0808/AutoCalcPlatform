@@ -129,3 +129,25 @@ def test_truncated_body_with_a_redacted_pattern_is_refused() -> None:
             }
         )
     assert excinfo.value.params["rule"] == "artifact_body_redacted"
+
+
+def test_base64_body_survives_machine_serialization() -> None:
+    from acp_services.entrypoints.machine_output import MachineResult
+
+    result = MachineResult(
+        operation="read_artifact",
+        status="ok",
+        data={"body": "/w==", "encoding": "base64", "truncated": False},
+    )
+    assert result.to_dict()["data"]["body"] == "/w=="
+
+
+def test_identity_body_is_still_redacted() -> None:
+    from acp_services.entrypoints.machine_output import MachineResult
+
+    result = MachineResult(
+        operation="read_artifact",
+        status="ok",
+        data={"body": "path=/home/xieningke/secret.txt", "encoding": "identity"},
+    )
+    assert result.to_dict()["data"]["body"] != "path=/home/xieningke/secret.txt"

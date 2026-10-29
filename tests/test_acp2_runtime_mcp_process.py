@@ -109,6 +109,16 @@ class _ControllerHandler(http.server.BaseHTTPRequestHandler):
                 },
             )
             return
+        if self.path == "/api/v1/operations/op_chain":
+            self._send_json(
+                200,
+                {
+                    "operation_id": "op_chain",
+                    "state": "ready",
+                    "artifact_ref": self.state.chain_ref,
+                },
+            )
+            return
         if self.path == "/api/v1/jobs/job_chain":
             self.state.status_paths.append(self.path)
             self._send_json(
@@ -1024,6 +1034,7 @@ def test_closed_loop_submit_status_prepare_read(controller: Any, tmp_path: Path)
                 "arguments": {
                     "task_ref": {"task_id": "job_chain", "attempt": 1},
                     "artifact_id": "final_report",
+                    "relative_path": descriptor["relative_path"],
                     "purpose": "artifact",
                 },
             },
@@ -1031,6 +1042,14 @@ def test_closed_loop_submit_status_prepare_read(controller: Any, tmp_path: Path)
         assert prepared["result"]["isError"] is False
         ref = prepared["result"]["structuredContent"]["data"]["artifact_ref"]
         assert ref["digest"] == state.chain_digest
+
+        operation = process.request(
+            9,
+            "tools/call",
+            {"name": "acp_status", "arguments": {"reference": "op_chain"}},
+        )
+        op_data = operation["result"]["structuredContent"]["data"]
+        assert op_data["artifact_ref"]["digest"] == state.chain_digest
 
         read = process.request(
             5,
