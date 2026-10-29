@@ -57,6 +57,7 @@ from acp.api.submission_contract import (
     SubmissionContractError,
     validate_workflow_submission,
 )
+from acp.scheduler.resources import validate_resource_request
 from acp.api.routes import (
     get_backends as legacy_get_backends,
 )
@@ -2580,6 +2581,12 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         )
     except SubmissionContractError as exc:
         raise _command_error(422, "input_invalid", str(exc), params=exc.params()) from exc
+    try:
+        validate_resource_request(req.resources or {})
+    except ValueError as exc:
+        raise _command_error(
+            422, "input_invalid", str(exc), params={"field": "resources", "rule": "invalid_resource"}
+        ) from exc
     fingerprint = normalized_submit.get("preflight_fingerprint")
     if fingerprint:
         from acp_services.runtime.canonical_digest import CanonicalDigestError
@@ -8769,6 +8776,12 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
         )
     except SubmissionContractError as exc:
         raise _command_error(422, "input_invalid", str(exc), params=exc.params()) from exc
+    try:
+        validate_resource_request(req.resources or {})
+    except ValueError as exc:
+        raise _command_error(
+            422, "input_invalid", str(exc), params={"field": "resources", "rule": "invalid_resource"}
+        ) from exc
     manager = _manager(request)
     project_id = _research_project(manager, req.project_id)
     spec = JobSpec(

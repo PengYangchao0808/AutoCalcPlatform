@@ -11,6 +11,40 @@ from cccp.config import load_config
 from cccp.utils.resource_utils import normalize_memory
 
 
+_CORE_KEYS: tuple[str, ...] = ("nproc", "ncores", "cores")
+
+
+def validate_resource_request(resources: Mapping[str, Any]) -> None:
+    """Pure resource validation shared by preflight and submit.
+
+    Aliases follow the historical precedence ``nproc > ncores > cores``; a
+    lower-priority ``0`` means "unset" but any boolean or non-integer value is
+    rejected wherever it appears.  Two non-zero aliases that disagree are a
+    conflict: admission and argv must describe the same request.
+
+    Raises:
+        ValueError: A boolean/non-numeric/non-integer core value, or a
+            non-zero alias conflict.
+    """
+    numeric: dict[str, float] = {}
+    for name in _CORE_KEYS:
+        if name not in resources or resources[name] is None:
+            continue
+        value = resources[name]
+        if isinstance(value, bool):
+            raise ValueError(f"resources.{name} must be a positive integer")
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            raise ValueError(f"resources.{name} must be a positive integer") from None
+        if number != int(number):
+            raise ValueError(f"resources.{name} must be a positive integer")
+        numeric[name] = number
+    non_zero = {value for value in numeric.values() if value != 0}
+    if len(non_zero) > 1:
+        raise ValueError("resources.nproc/ncores/cores disagree")
+
+
 def resolve_job_resources(spec: JobSpec) -> dict[str, Any]:
     """Resolve total memory and cores, keeping scheduler metadata intact.
 
@@ -19,26 +53,11 @@ def resolve_job_resources(spec: JobSpec) -> dict[str, Any]:
     The cccp TaskResources API retains its separate unitless MB contract.
     """
     resources = dict(spec.resources)
-    # ``cores`` is the MCP-facing alias; precedence stays nproc > ncores >
-    # cores and an explicit value is validated even when it is zero.  Zero on a
-    # lower-priority alias means "unset" (historical payloads send both), but a
-    # non-zero disagreement is a real conflict: admission and argv must agree.
-    core_fields = [
-        (name, resources[name])
-        for name in ("nproc", "ncores", "cores")
-        if resources.get(name) is not None
-    ]
-    nproc = core_fields[0][1] if core_fields else None
-    effective = [(name, value) for name, value in core_fields if value != 0]
-    if len(effective) > 1:
-        distinct: set[float | str] = set()
-        for _name, value in effective:
-            try:
-                distinct.add(float(value))
-            except (TypeError, ValueError):
-                distinct.add(str(value))
-        if len(distinct) > 1:
-            raise ValueError("resources.nproc/ncores/cores disagree")
+    validate_resource_request(resources)
+    nproc = next(
+        (resources[name] for name in _CORE_KEYS if resources.get(name) is not None),
+        None,
+    )
     memory = resources.get("mem", resources.get("memory_gb"))
     if nproc is None or memory is None:
         config = load_config(config_path=Path(spec.config_path) if spec.config_path else None)
@@ -65,4 +84,4 @@ def with_job_resources(spec: JobSpec) -> JobSpec:
     return replace(spec, resources=resolve_job_resources(spec))
 
 
-__all__ = ["resolve_job_resources", "with_job_resources"]
+__all__ = ["resolve_job_resources", "validate_resource_request", "with_job_resources"]

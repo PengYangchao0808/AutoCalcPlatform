@@ -35,6 +35,7 @@ from typing import Any
 # Consumer tables — imported rather than copied so a new CLI flag cannot drift
 # into a second allowlist.  They are a *lower bound*: non-flag fields are
 # registered explicitly below (see the module docstring).
+from acp.catalog import METHOD_SCHEMAS
 from acp.confsearch.contracts import (
     BACKENDS,
     PROTOCOLS,
@@ -87,7 +88,9 @@ class WorkflowContract:
     input_keys: frozenset[str] | None = None
     required_input_any: tuple[str, ...] = ()
     batch_structures_only: bool = False
-    reject_batch_roles_with_scalars: bool = False
+    # level_id -> allowed field names, derived from the catalog schema the
+    # wizard and the engine both read (``METHOD_SCHEMAS``).
+    levels: Mapping[str, frozenset[str]] = field(default_factory=dict)
 
 
 _CONFSEARCH_METHOD_KEYS: frozenset[str] = frozenset(
@@ -104,6 +107,8 @@ _CONFSEARCH_METHOD_KEYS: frozenset[str] = frozenset(
         "ewin",  # censo_ewin_from_method
         "levels",  # --levels JSON, read by the engine
         "schema_id",  # runner._expand_method_levels
+        # Workbench UI selection; no scheduler consumer yet (P2 cleanup).
+        "confsearch_profile",
     }
 )
 
@@ -113,7 +118,6 @@ _BATCHOPTIMIZE_METHOD_KEYS: frozenset[str] = frozenset(
         "profile",
         "profile_id",
         "select",
-        "selected_ids",
         "batch_roles",
         "levels",
         "schema_id",
@@ -123,6 +127,23 @@ _BATCHOPTIMIZE_METHOD_KEYS: frozenset[str] = frozenset(
         "scf_orbital_inherit",
     }
 )
+
+def _level_fields(schema_id: str) -> dict[str, frozenset[str]]:
+    schema = METHOD_SCHEMAS[schema_id]
+    return {
+        str(level["level_id"]): frozenset(str(name) for name in level.get("fields", ()))
+        for level in schema["method_levels"]
+    }
+
+
+_CONFSEARCH_LEVELS: dict[str, frozenset[str]] = {
+    **_level_fields("confsearch_unified"),
+    # Legacy payloads still carry the CENSO level; the resolver reads
+    # ``levels.censo.ewin`` and per-level solvent fields.
+    "censo": frozenset({"ewin", "solvent", "solvent_model"}),
+}
+_BATCH_LEVELS: dict[str, frozenset[str]] = _level_fields("batch_optimize")
+
 
 WORKFLOW_CONTRACTS: dict[str, WorkflowContract] = {
     "Confsearch": WorkflowContract(
@@ -134,8 +155,22 @@ WORKFLOW_CONTRACTS: dict[str, WorkflowContract] = {
             "preset": frozenset(_CENSO_PRESETS),
             "profile": frozenset(PROFILES),
         },
-        input_keys=frozenset({"input_artifact", "source", "input", "smiles"}),
+        input_keys=frozenset(
+            {
+                "input_artifact",
+                "source",
+                "input",
+                "smiles",
+                # Workbench chemistry envelope (consumed by input_chemistry_flags)
+                "source_type",
+                "charge",
+                "multiplicity",
+                "source_ref",
+                "asset_id",
+            }
+        ),
         required_input_any=("input_artifact", "source", "input", "smiles"),
+        levels=_CONFSEARCH_LEVELS,
     ),
     "BatchOptimize": WorkflowContract(
         method_keys=_BATCHOPTIMIZE_METHOD_KEYS,
@@ -144,11 +179,21 @@ WORKFLOW_CONTRACTS: dict[str, WorkflowContract] = {
             "profile_id": frozenset(_BATCHOPTIMIZE_PROFILES),
         },
         input_keys=frozenset(
-            {"source_type", "items", "from_artifact", "items_file", "input", "source"}
+            {
+                "source_type",
+                "items",
+                "from_artifact",
+                "items_file",
+                "input",
+                "source",
+                "selected_ids",
+                "charge",
+                "multiplicity",
+            }
         ),
-        # A batch_roles request returns before scalar flags are emitted, so a
-        # request carrying both would silently drop the flat settings.
-        reject_batch_roles_with_scalars=True,
+        required_input_any=("items", "from_artifact", "items_file", "input", "source"),
+        batch_structures_only=True,
+        levels=_BATCH_LEVELS,
     ),
 }
 
@@ -186,6 +231,27 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
     for container in ("levels", "batch_roles"):
         if container in method and method[container] is not None:
             _as_mapping(method[container], f"method.{container}")
+    if "levels" in method and method["levels"] is not None:
+        levels = _as_mapping(method["levels"], "method.levels")
+        for level_id, level_value in levels.items():
+            allowed_levels = contract.levels
+            if level_id not in allowed_levels:
+                raise SubmissionContractError(
+                    f"{workflow} method.levels has an undeclared level {level_id!r}",
+                    field_name=f"method.levels.{level_id}",
+                    rule="unknown_field",
+                    allowed=tuple(sorted(allowed_levels)),
+                )
+            level_mapping = _as_mapping(level_value, f"method.levels.{level_id}")
+            allowed = allowed_levels[level_id] | {"engine", "_disabled", "steps"}
+            unknown = sorted(str(key) for key in level_mapping if str(key) not in allowed)
+            if unknown:
+                raise SubmissionContractError(
+                    f"{workflow} method.levels.{level_id} has an undeclared field {unknown[0]!r}",
+                    field_name=f"method.levels.{level_id}.{unknown[0]}",
+                    rule="unknown_field",
+                    allowed=tuple(sorted(allowed)),
+                )
     if "select" in method and method["select"] is not None:
         select = method["select"]
         if not isinstance(select, str) and not isinstance(select, (list, tuple)):
@@ -194,22 +260,6 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
                 field_name="method.select",
                 rule="invalid_type",
             )
-    if contract.reject_batch_roles_with_scalars and "batch_roles" in method:
-        swallowed = sorted(
-            key
-            for key in _BATCHOPTIMIZE_SCALAR_FLAGS
-            if key in method and method[key] not in (None, "")
-        )
-        if swallowed:
-            raise SubmissionContractError(
-                "method.batch_roles overrides the flat method settings; "
-                "remove one of the two forms",
-                field_name="method.batch_roles",
-                rule="conflicting_fields",
-                allowed=tuple(swallowed),
-            )
-
-
 def _validate_input(workflow: str, payload: Mapping[str, Any], contract: WorkflowContract) -> None:
     if contract.input_keys is not None:
         unknown = sorted(str(key) for key in payload if str(key) not in contract.input_keys)

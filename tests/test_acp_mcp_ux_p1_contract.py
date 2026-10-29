@@ -13,6 +13,7 @@ Covers the four P1 acceptance clauses:
 
 from __future__ import annotations
 
+import copy
 import os
 from collections.abc import Generator
 from pathlib import Path
@@ -174,3 +175,141 @@ def test_capabilities_match_admission_under_environment_override(
     assert payload["limits"]["max_walltime_s"] == snapshot["limits"]["max_walltime_s"] == 7200
     assert payload["limits"]["default_walltime_s"] == 1800
     assert payload["limits"]["enforcement"] == "admission"
+
+
+def test_workbench_shaped_confsearch_payload_is_accepted() -> None:
+    """The real Workbench sends source_type/charge/multiplicity and a levels map."""
+    payload = {
+        "workflow": "Confsearch",
+        "input": {
+            "source_type": "smiles",
+            "source": "CCO",
+            "charge": 0,
+            "multiplicity": 1,
+        },
+        "method": {
+            "protocol": "xtb-crest",
+            "profile": "default",
+            "refinement_policy": "rank1",
+            "confsearch_profile": "default",
+            "levels": {"censo": {"ewin": 6.0}},
+        },
+        "resources": {"cores": 4},
+    }
+    validate_workflow_submission(**payload)
+
+
+def test_batch_roles_with_flat_scalars_is_accepted() -> None:
+    """Workbench sends the flat mirror next to batch_roles; it must not be refused."""
+    validate_workflow_submission(
+        "BatchOptimize",
+        input={
+            "source_type": "batch_structures",
+            "items": [{"xyz": "H 0 0 0"}],
+            "charge": 0,
+            "multiplicity": 1,
+        },
+        method={
+            "profile": "opt_freq",
+            "batch_roles": {"reactant": {"role": "reactant"}},
+            "optimization_method": "B3LYP",
+            "temperature": 298.15,
+        },
+        resources={},
+    )
+
+
+def test_contract_does_not_mutate_inputs() -> None:
+    payload = {
+        "workflow": "Confsearch",
+        "input": {"smiles": "CCO"},
+        "method": {"protocol": "xtb-crest", "refinement_policy": "rank1"},
+        "resources": {"cores": 4},
+    }
+    before = copy.deepcopy(payload)
+    validate_workflow_submission(**payload)
+    assert payload == before
+
+
+@pytest.mark.parametrize("path", ["/api/v1/preflight", "/api/v1/jobs"])
+def test_resource_conflict_is_refused(client: TestClient, path: str) -> None:
+    detail = _error(
+        client.post(path, json=_confsearch(resources={"nproc": 4, "cores": 8}))
+    )
+    assert detail["params"] == {"field": "resources", "rule": "invalid_resource"}
+
+
+@pytest.mark.parametrize("path", ["/api/v1/preflight", "/api/v1/jobs"])
+def test_resource_bool_and_zero_alias(client: TestClient, path: str) -> None:
+    bool_detail = _error(
+        client.post(path, json=_confsearch(resources={"nproc": 4, "cores": True}))
+    )
+    assert bool_detail["params"]["rule"] == "invalid_resource"
+    # "0" on a lower-priority alias is unset, not a conflict.
+    response = client.post(path, json=_confsearch(resources={"nproc": 4, "cores": "0"}))
+    assert response.status_code != 422 or response.json()["detail"]["params"]["field"] != "resources"
+
+
+def test_workbench_confsearch_levels_are_accepted() -> None:
+    validate_workflow_submission(
+        "Confsearch",
+        input={"source_type": "smiles", "source": "CCO", "charge": 0, "multiplicity": 1},
+        method={
+            "protocol": "censo-crest",
+            "profile": "default",
+            "refinement_policy": "rank1",
+            "confsearch_profile": "default",
+            "levels": {
+                "confsearch": {
+                    "engine": "censo",
+                    "protocol": "censo-crest",
+                    "confsearch_profile": "default",
+                    "refinement_policy": "rank1",
+                    "ewin": 6.0,
+                    "refinement_threshold": 0.99,
+                },
+                "dft_opt": {"engine": "orca", "functional": "wB97X-D4", "basis": "def2-TZVP"},
+                "refinement_sp": {"engine": "orca", "functional": "wB97X-D4"},
+                "thermo": {"engine": "shermo", "temperature": 298.15, "pressure": 1.0},
+            },
+        },
+        resources={"cores": 4},
+    )
+
+
+def test_nested_level_typo_is_refused() -> None:
+    with pytest.raises(SubmissionContractError) as excinfo:
+        validate_workflow_submission(
+            "Confsearch",
+            input={"smiles": "CCO"},
+            method={"protocol": "xtb-crest", "levels": {"dft_opt": {"functonal": "B3LYP"}}},
+            resources={},
+        )
+    assert excinfo.value.params()["field"] == "method.levels.dft_opt.functonal"
+
+
+def test_unknown_level_id_is_refused() -> None:
+    with pytest.raises(SubmissionContractError) as excinfo:
+        validate_workflow_submission(
+            "Confsearch",
+            input={"smiles": "CCO"},
+            method={"protocol": "xtb-crest", "levels": {"dftopt": {"functional": "B3LYP"}}},
+            resources={},
+        )
+    assert excinfo.value.params()["rule"] == "unknown_field"
+
+
+def test_batch_levels_accept_steps_and_reject_typos() -> None:
+    validate_workflow_submission(
+        "BatchOptimize",
+        input={"source_type": "batch_structures", "items": [{"xyz": "H 0 0 0"}]},
+        method={"profile": "opt_freq", "levels": {"batch": {"steps": ["optimize", "frequency"]}}},
+        resources={},
+    )
+    with pytest.raises(SubmissionContractError):
+        validate_workflow_submission(
+            "BatchOptimize",
+            input={"source_type": "batch_structures", "items": [{"xyz": "H 0 0 0"}]},
+            method={"profile": "opt_freq", "levels": {"batch": {"optimze": True}}},
+            resources={},
+        )
