@@ -338,6 +338,10 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
                 role = roles.get(role_id)
                 if isinstance(role, Mapping) and role.get(role_key) is not None:
                     expected.append(role[role_key])
+            else:
+                for role in roles.values():
+                    if isinstance(role, Mapping) and role.get(role_key) is not None:
+                        expected.append(role[role_key])
             if not expected:
                 if key in _WORKBENCH_FLAT_DEFAULTS and method[key] == _WORKBENCH_FLAT_DEFAULTS[key]:
                     continue
