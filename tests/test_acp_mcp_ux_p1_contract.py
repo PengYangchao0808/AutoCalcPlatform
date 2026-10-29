@@ -28,7 +28,7 @@ from acp.api.submission_contract import (
     validate_workflow_submission,
 )
 from acp.scheduler.jobs import JobSpec
-from acp.scheduler.resources import resolve_job_resources
+from acp.scheduler.resources import resolve_job_resources, validate_resource_request
 
 
 @pytest.fixture()
@@ -313,3 +313,159 @@ def test_batch_levels_accept_steps_and_reject_typos() -> None:
             method={"profile": "opt_freq", "levels": {"batch": {"optimze": True}}},
             resources={},
         )
+
+
+def test_consumer_only_level_fields_are_accepted() -> None:
+    """screening_sp / recalc_hess / aux_c_basis are real consumers, not UI fields."""
+    validate_workflow_submission(
+        "Confsearch",
+        input={"smiles": "CCO"},
+        method={
+            "protocol": "censo-crest",
+            "levels": {
+                "refinement_threshold": 0.99,
+                "dft_opt": {"recalc_hess": "auto"},
+                "refinement_sp": {"aux_c_basis": "def2-TZVPPD"},
+                "screening_sp": {"functional": "B3LYP"},
+            },
+        },
+        resources={},
+    )
+
+
+def test_batch_mirror_must_match_batch_level() -> None:
+    validate_workflow_submission(
+        "BatchOptimize",
+        input={"source_type": "batch_structures", "items": [{"xyz": "H 0 0 0"}]},
+        method={
+            "profile": "opt_freq",
+            "batch_roles": {"int": {"role": "int"}},
+            "temperature": 298.15,
+            "levels": {"batch": {"temperature": 298.15}},
+        },
+        resources={},
+    )
+    with pytest.raises(SubmissionContractError) as excinfo:
+        validate_workflow_submission(
+            "BatchOptimize",
+            input={"source_type": "batch_structures", "items": [{"xyz": "H 0 0 0"}]},
+            method={
+                "profile": "opt_freq",
+                "batch_roles": {"int": {"role": "int"}},
+                "temperature": 298.15,
+                "levels": {"batch": {"temperature": 310.15}},
+            },
+            resources={},
+        )
+    assert excinfo.value.params()["rule"] == "conflicting_fields"
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [{"nproc": 0}, {"nproc": -1}, {"nproc": "4.0"}, {"nproc": "1e999"}, {"nproc": True}],
+)
+def test_resource_invalid_values_refused_by_both_entries(client: TestClient, bad: dict[str, Any]) -> None:
+    for path in ("/api/v1/preflight", "/api/v1/jobs"):
+        detail = _error(client.post(path, json=_confsearch(resources=bad)))
+        assert detail["params"]["field"] == "resources"
+
+
+def test_local_and_remote_argv_parse_for_three_workflows() -> None:
+    """P1-03: every emitted flag must be parseable by the real CLI parser."""
+    from acp.cli import build_parser
+    from acp.scheduler.jobs import (
+        batchoptimize_method_flags,
+        confsearch_method_flags,
+        nmr_method_flags,
+    )
+    from acp.scheduler.remote.script_gen import build_remote_cli_command
+
+    parser = build_parser()
+    conf = JobSpec(
+        workflow="Confsearch",
+        name="conf",
+        input={"smiles": "CCO"},
+        method={
+            "protocol": "censo-crest",
+            "refinement_policy": "rank1",
+            "levels": {"refinement_threshold": 0.99, "dft_opt": {"functional": "wB97X-D4"}},
+        },
+        resources={"nproc": 4, "mem": "8GB"},
+    )
+    batch = JobSpec(
+        workflow="BatchOptimize",
+        name="batch",
+        input={"items_file": "/tmp/items.json"},
+        method={"profile": "opt_freq", "optimization_method": "B3LYP"},
+        resources={"nproc": 4, "mem": "8GB"},
+    )
+    nmr = JobSpec(
+        workflow="nmr",
+        name="nmr",
+        input={"smiles": "CCO", "experiment": {"mode": "assigned", "content": "1 1.0 2.0"}},
+        method={"max_conformers": 5},
+        resources={"nproc": 4, "mem": "8GB"},
+    )
+    local = [
+        (["run", "Confsearch", "--input", "CCO", "--output", "."], confsearch_method_flags(conf.method)),
+        (
+            ["run", "BatchOptimize", "--items-file", "/tmp/items.json", "--output", "."],
+            batchoptimize_method_flags(batch.method, batch.input),
+        ),
+        (
+            ["run", "nmr", "--input", "CCO", "--spectrum", "/tmp/exp.txt", "--output", "."],
+            nmr_method_flags(nmr.method),
+        ),
+    ]
+    for base, flags in local:
+        parser.parse_args(base + flags)
+    for spec in (conf, batch, nmr):
+        remote = build_remote_cli_command(spec, python_executable="python")
+        assert remote[:4] == ["python", "-m", "acp.cli", "run"]
+        parser.parse_args(remote[3:])
+
+
+def test_workbench_payloads_pass_the_http_entry(client: TestClient) -> None:
+    """Real production shapes must not be refused by preflight."""
+    conf = _confsearch(
+        input={"source_type": "smiles", "source": "CCO", "charge": 0, "multiplicity": 1},
+        method={
+            "protocol": "censo-crest",
+            "profile": "default",
+            "refinement_policy": "rank1",
+            "confsearch_profile": "default",
+            "levels": {
+                "confsearch": {"engine": "censo", "protocol": "censo-crest"},
+                "dft_opt": {"engine": "orca", "functional": "wB97X-D4", "recalc_hess": "auto"},
+                "refinement_sp": {"engine": "orca", "aux_c_basis": "def2-TZVPPD"},
+                "thermo": {"engine": "shermo", "temperature": "298.15"},
+            },
+        },
+    )
+    response = client.post("/api/v1/preflight", json=conf)
+    assert response.status_code == 200, response.text
+
+    batch = {
+        "workflow": "BatchOptimize",
+        "name": "batch-contract",
+        "input": {
+            "source_type": "batch_structures",
+            "items": [{"xyz": "O 0 0 0\nH 1 0 0\nH 0 1 0"}],
+            "charge": 0,
+            "multiplicity": 1,
+        },
+        "method": {
+            "profile": "opt_freq",
+            "batch_roles": {"int": {"role": "int"}},
+            "levels": {"batch": {"steps": ["optimize", "frequency"]}},
+        },
+    }
+    response = client.post("/api/v1/preflight", json=batch)
+    assert response.status_code == 200, response.text
+
+
+def test_resource_validation_does_not_mutate() -> None:
+    resources = {"nproc": 4, "cores": "0", "mem": "8GB"}
+    before = copy.deepcopy(resources)
+    validate_resource_request(resources)
+    assert resources == before

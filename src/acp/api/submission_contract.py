@@ -136,12 +136,33 @@ def _level_fields(schema_id: str) -> dict[str, frozenset[str]]:
     }
 
 
+_SP_LEVEL_FIELDS: frozenset[str] = frozenset(
+    {
+        "functional",
+        "basis",
+        "aux_j_basis",
+        "aux_c_basis",
+        "dispersion",
+        "ri_approximation",
+        "solvent_model",
+        "solvent",
+        "grid",
+        "scf_convergence",
+    }
+)
 _CONFSEARCH_LEVELS: dict[str, frozenset[str]] = {
     **_level_fields("confsearch_unified"),
+    # Consumers in cccp/analysis/ensemble/levels.py accept more than the UI
+    # schema lists (recalc_hess, aux_c_basis) and a screening part.
+    "dft_opt": _level_fields("confsearch_unified")["dft_opt"] | {"recalc_hess"},
+    "refinement_sp": _SP_LEVEL_FIELDS,
+    "screening_sp": _SP_LEVEL_FIELDS,
     # Legacy payloads still carry the CENSO level; the resolver reads
     # ``levels.censo.ewin`` and per-level solvent fields.
     "censo": frozenset({"ewin", "solvent", "solvent_model"}),
 }
+# ``levels`` also carries scalar knobs at its top level (engine reads them).
+_LEVEL_SCALARS: frozenset[str] = frozenset({"refinement_threshold"})
 _BATCH_LEVELS: dict[str, frozenset[str]] = _level_fields("batch_optimize")
 
 
@@ -234,6 +255,14 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
     if "levels" in method and method["levels"] is not None:
         levels = _as_mapping(method["levels"], "method.levels")
         for level_id, level_value in levels.items():
+            if level_id in _LEVEL_SCALARS:
+                if isinstance(level_value, bool) or not isinstance(level_value, (int, float)):
+                    raise SubmissionContractError(
+                        f"{workflow} method.levels.{level_id} must be a number",
+                        field_name=f"method.levels.{level_id}",
+                        rule="invalid_type",
+                    )
+                continue
             allowed_levels = contract.levels
             if level_id not in allowed_levels:
                 raise SubmissionContractError(
@@ -252,6 +281,25 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
                     rule="unknown_field",
                     allowed=tuple(sorted(allowed)),
                 )
+    if "batch_roles" in method and method["batch_roles"] is not None:
+        roles = _as_mapping(method["batch_roles"], "method.batch_roles")
+        for role_id, role_value in roles.items():
+            _as_mapping(role_value, f"method.batch_roles.{role_id}")
+        batch_level = (method.get("levels") or {}).get("batch")
+        if isinstance(batch_level, Mapping):
+            for key in (
+                *_BATCHOPTIMIZE_SCALAR_FLAGS,
+                "opt_recalc_hess",
+                "minimum_opt_recalc_hess",
+                "transition_state_opt_recalc_hess",
+                "scf_orbital_inherit",
+            ):
+                if key in method and key in batch_level and method[key] != batch_level[key]:
+                    raise SubmissionContractError(
+                        f"method.{key} disagrees with method.levels.batch.{key}",
+                        field_name=f"method.{key}",
+                        rule="conflicting_fields",
+                    )
     if "select" in method and method["select"] is not None:
         select = method["select"]
         if not isinstance(select, str) and not isinstance(select, (list, tuple)):
@@ -270,8 +318,15 @@ def _validate_input(workflow: str, payload: Mapping[str, Any], contract: Workflo
                 rule="unknown_field",
                 allowed=tuple(sorted(contract.input_keys)),
             )
+    def _present(value: Any) -> bool:
+        if value is None or value == "":
+            return False
+        if isinstance(value, (list, tuple, dict)):
+            return bool(value)
+        return True
+
     if contract.required_input_any and not any(
-        payload.get(key) not in (None, "") for key in contract.required_input_any
+        _present(payload.get(key)) for key in contract.required_input_any
     ):
         raise SubmissionContractError(
             f"{workflow} input needs one of {list(contract.required_input_any)}",
