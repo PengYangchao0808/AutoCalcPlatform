@@ -25,7 +25,7 @@ def test_workflow_selector_returns_complete_contract(client: TestClient) -> None
     payload = client.get("/api/capabilities", params={"workflow": "Confsearch"}).json()
     block = payload["workflow_contract"]
     assert block["workflow"] == "Confsearch"
-    assert block["coverage"] == "complete"
+    assert block["coverage"] == "partial"
     assert block["method"]["enums"]["refinement_policy"] == [
         "all",
         "cumulative-99",
@@ -41,6 +41,7 @@ def test_workflow_selector_returns_complete_contract(client: TestClient) -> None
             resources=example["resources"],
         )
     assert block["status_vocabulary"]["envelope"]["ok"]
+    assert block["gaps"], "partial coverage must name its gaps"
 
 
 def test_workflow_selector_is_case_insensitive(client: TestClient) -> None:

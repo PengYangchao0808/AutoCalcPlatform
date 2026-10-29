@@ -66,16 +66,19 @@ class SubmissionContractError(ValueError):
         field_name: str,
         rule: str = "unknown_field",
         allowed: tuple[str, ...] | None = None,
+        details: Mapping[str, Any] | None = None,
     ) -> None:
         super().__init__(message)
         self.field_name = field_name
         self.rule = rule
         self.allowed = allowed
+        self.details = dict(details or {})
 
     def params(self) -> dict[str, Any]:
         params: dict[str, Any] = {"field": self.field_name, "rule": self.rule}
         if self.allowed is not None:
             params["allowed"] = list(self.allowed)
+        params.update(self.details)
         return params
 
 
@@ -187,6 +190,16 @@ _ROLE_FLAT_ALIASES: dict[str, str] = {
     "sp_method": "single_point_method",
     "sp_basis": "single_point_basis",
 }
+
+def _same_mirror_value(flat: object, role: object) -> bool:
+    """Compare a mirror with its role value the way the consumer would."""
+    if flat == role:
+        return True
+    try:
+        return float(flat) == float(role)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return str(flat).strip().lower() == str(role).strip().lower()
+
 
 def _flat_mirror_source(key: str) -> tuple[str, str]:
     """Return the (role, role field) a flat method key mirrors.
@@ -353,6 +366,27 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
                 field_name=f"method.{unsupported[0]}",
                 rule="shadowed_field",
             )
+        # A Workbench mirror that carries a *different* value than the role the
+        # engine executes is a silent swallow; the role value wins downstream.
+        for flat_key in sorted(_WORKBENCH_FLAT_MIRRORS & set(method)):
+            role_id, role_field = _flat_mirror_source(flat_key)
+            role_value = roles.get(role_id)
+            if not isinstance(role_value, Mapping) or role_field not in role_value:
+                continue
+            if role_value[role_field] is None:
+                continue
+            if not _same_mirror_value(method[flat_key], role_value[role_field]):
+                raise SubmissionContractError(
+                    f"method.{flat_key} conflicts with batch_roles.{role_id}.{role_field}; "
+                    "the role value is the one executed",
+                    field_name=f"method.{flat_key}",
+                    rule="shadowed_field",
+                    details={
+                        "role": f"batch_roles.{role_id}.{role_field}",
+                        "role_value": role_value[role_field],
+                        "flat_value": method[flat_key],
+                    },
+                )
     if "select" in method and method["select"] is not None:
         select = method["select"]
         if not isinstance(select, str) and not isinstance(select, (list, tuple)):

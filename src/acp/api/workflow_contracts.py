@@ -170,7 +170,11 @@ def _confsearch_block() -> dict[str, Any]:
     properties, enums = _method_properties("Confsearch")
     return {
         "workflow": "Confsearch",
-        "coverage": "complete",
+        "coverage": "partial",
+        "gaps": [
+            "value-level mirror equivalence is not enforced: the engine's "
+            "role fallbacks (TS→INT, recalc auto→numeric) are not reproduced here",
+        ],
         "input": {
             "required_any": list(contract.required_input_any),
             "properties": _CONFSEARCH_INPUT_PROPERTIES,
@@ -218,7 +222,11 @@ def _batch_block() -> dict[str, Any]:
     properties, enums = _method_properties("BatchOptimize")
     return {
         "workflow": "BatchOptimize",
-        "coverage": "complete",
+        "coverage": "partial",
+        "gaps": [
+            "value-level batch_roles mirror equivalence is enforced only when the "
+            "role field is explicitly present; engine fallbacks stay unverified",
+        ],
         "input": {
             "required_any": list(contract.required_input_any),
             "properties": _BATCH_INPUT_PROPERTIES,

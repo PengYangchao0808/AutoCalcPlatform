@@ -5044,17 +5044,34 @@ def get_sampling_frame(
     )
 
 
+def _descriptor_read_root(
+    request: Request, record: JobRecord
+) -> tuple[Path, str | None]:
+    """Cache-only descriptor root: a status poll never fetches remote bytes."""
+    if not _is_remote_job(record):
+        return Path(record.work_dir), None
+    cache = _remote_structure_cache(request)
+    return cache.job_root(record.id), "remote_cache_only"
+
+
 def _with_artifact_descriptors(
-    model: V1JobRecordModel, read_root: Path | None, attempt: int
+    model: V1JobRecordModel,
+    read_root: Path | None,
+    attempt: int,
+    unknown_reason: str | None = None,
 ) -> V1JobRecordModel:
     """Attach the bounded manifest projection from the controlled read root."""
     from acp.api.artifact_descriptors import describe_job_artifacts
 
     descriptors, truncated = describe_job_artifacts(read_root, attempt=attempt)
-    if not descriptors and not truncated:
+    if not descriptors and not truncated and unknown_reason is None:
         return model
     return model.model_copy(
-        update={"artifacts": descriptors, "artifacts_truncated": truncated}
+        update={
+            "artifacts": descriptors,
+            "artifacts_truncated": truncated,
+            "artifacts_unknown_reason": unknown_reason,
+        }
     )
 
 
@@ -5069,9 +5086,8 @@ def get_job(job_id: str, request: Request) -> V1JobRecordModel:
     task_row = manager.tasks.get(job_id)
     if task_row is not None:
         model = _enrich_v1_with_names(model, resolve_task_names(task_row))
-    return _with_artifact_descriptors(
-        model, _job_read_root(request, record), record.attempt
-    )
+    read_root, unknown_reason = _descriptor_read_root(request, record)
+    return _with_artifact_descriptors(model, read_root, record.attempt, unknown_reason)
 
 
 @router.get("/jobs/{job_id}/summary", response_model=V1JobRecordModel)
@@ -5085,9 +5101,8 @@ def get_job_summary(job_id: str, request: Request) -> V1JobRecordModel:
     task_row = manager.tasks.get(job_id)
     if task_row is not None:
         model = _enrich_v1_with_names(model, resolve_task_names(task_row))
-    return _with_artifact_descriptors(
-        model, _job_read_root(request, record), record.attempt
-    )
+    read_root, unknown_reason = _descriptor_read_root(request, record)
+    return _with_artifact_descriptors(model, read_root, record.attempt, unknown_reason)
 
 
 # ---------------------------------------------------------------------- #

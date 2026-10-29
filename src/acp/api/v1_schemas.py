@@ -300,6 +300,7 @@ class V1JobRecordModel(BaseModel):
     attempt: int = 1
     artifacts: list[dict[str, Any]] | None = None
     artifacts_truncated: bool = False
+    artifacts_unknown_reason: str | None = None
     revision: int = 0
     # Execution identity facts carried by the attempt's frozen group/receipt.
     # Additive and optional: legacy rows and remote-unmirrored attempts stay

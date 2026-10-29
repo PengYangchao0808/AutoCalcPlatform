@@ -152,7 +152,7 @@
       "NOT_APPLICABLE"
     ]
   },
-  "contract_digest": "d12504f1ada8ad19d88acc804077dafdd74c286cd92df32379179580fd6fc914",
+  "contract_digest": "6e4b68e1de545795c063787abeb0260b8315dbeab8b70ed44ceb2ce90983c3ff",
   "contract_digest_rule": "sha256 over sorted lines '<path> <sha256>\\n' for delivered contracts excluding manifest.json, runtime/baseline-lock.json and release/bom.current.json (self-referential files; the BOM embeds this aggregate digest).",
   "contract_version": "1.7.0",
   "contract_version_history": [
@@ -224,7 +224,7 @@
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/manifest.json",
-      "sha256": "67ddc664f9f814e1c43f9ed413e8677b33f0f6adb0f306349d920782d7ec47c4",
+      "sha256": "c782ecb7e07f1a30519333775ed4a16d657c49177b25af17221bb7e240bb8811",
       "status": "delivered"
     },
     {
@@ -290,7 +290,7 @@
       "id": "application-api",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
-      "sha256": "f72cd58dc1177cc7be212c31f2b62eded027fe9cde39b67ef5ad55ccdafd8350",
+      "sha256": "8c25a3174e545d7c838e7e21aeafac2f2329b77e3fd52afa8bff0bb54f0ea755",
       "status": "delivered",
       "updated_by": "B16"
     },
@@ -474,7 +474,7 @@
       "note": "M5-02 clean-candidate BOM: 27 artifacts with URI+sha256+size, toolchain/DSH locks, contract digest and coverage canonical digest. Self-referential: excluded from contract_digest because it embeds that aggregate digest.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/release/bom.current.json",
-      "sha256": "2f6c8fb42691c31b33f35af6ed6a2d4db609ceeb175f17bd9b4b1dcd38dbfb37",
+      "sha256": "8ed4166ba81371aa98aba27caeecddd1b12604eafcdff3f17b4f9243129f5de8",
       "status": "delivered"
     },
     {
