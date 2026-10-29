@@ -324,7 +324,12 @@ def test_consumer_only_level_fields_are_accepted() -> None:
             "protocol": "censo-crest",
             "levels": {
                 "refinement_threshold": 0.99,
-                "dft_opt": {"recalc_hess": "auto"},
+                "dft_opt": {
+                    "recalc_hess": "auto",
+                    "aux_j_basis": "def2/J",
+                    "aux_c_basis": "def2-TZVPPD",
+                    "ri_approximation": "RIJCOSX",
+                },
                 "refinement_sp": {"aux_c_basis": "def2-TZVPPD"},
                 "screening_sp": {"functional": "B3LYP"},
             },
@@ -370,15 +375,13 @@ def test_resource_invalid_values_refused_by_both_entries(client: TestClient, bad
         assert detail["params"]["field"] == "resources"
 
 
-def test_local_and_remote_argv_parse_for_three_workflows() -> None:
-    """P1-03: every emitted flag must be parseable by the real CLI parser."""
+def test_local_and_remote_argv_parse_for_three_workflows(tmp_path: Path) -> None:
+    """P1-03: the production local and remote builders must emit parseable argv."""
+    from types import SimpleNamespace
+
     from acp.cli import build_parser
-    from acp.scheduler.jobs import (
-        batchoptimize_method_flags,
-        confsearch_method_flags,
-        nmr_method_flags,
-    )
     from acp.scheduler.remote.script_gen import build_remote_cli_command
+    from acp.scheduler.runner import JobRunner
 
     parser = build_parser()
     conf = JobSpec(
@@ -402,24 +405,22 @@ def test_local_and_remote_argv_parse_for_three_workflows() -> None:
     nmr = JobSpec(
         workflow="nmr",
         name="nmr",
-        input={"smiles": "CCO", "experiment": {"mode": "assigned", "content": "1 1.0 2.0"}},
+        input={
+            "smiles": "CCO",
+            "experiment": {"mode": "assigned", "content": "1 1.0 2.0"},
+        },
         method={"max_conformers": 5},
         resources={"nproc": 4, "mem": "8GB"},
     )
-    local = [
-        (["run", "Confsearch", "--input", "CCO", "--output", "."], confsearch_method_flags(conf.method)),
-        (
-            ["run", "BatchOptimize", "--items-file", "/tmp/items.json", "--output", "."],
-            batchoptimize_method_flags(batch.method, batch.input),
-        ),
-        (
-            ["run", "nmr", "--input", "CCO", "--spectrum", "/tmp/exp.txt", "--output", "."],
-            nmr_method_flags(nmr.method),
-        ),
-    ]
-    for base, flags in local:
-        parser.parse_args(base + flags)
+    runner = SimpleNamespace(python="python")
+    runner._build_nmr_cmd = lambda spec, work_dir: JobRunner._build_nmr_cmd(
+        runner, spec, work_dir
+    )
+    runner._materialize_experiment = JobRunner._materialize_experiment
     for spec in (conf, batch, nmr):
+        local = JobRunner._build_cmd(runner, spec, tmp_path, "input.xyz")
+        assert local[:4] == ["python", "-m", "acp.cli", "run"]
+        parser.parse_args(local[3:])
         remote = build_remote_cli_command(spec, python_executable="python")
         assert remote[:4] == ["python", "-m", "acp.cli", "run"]
         parser.parse_args(remote[3:])

@@ -29,6 +29,14 @@
 | 缺完整 argv 验收 | 新增 3 工作流本地 + 远端 argv 经 `build_parser` 解析（Confsearch / BatchOptimize / NMR） |
 | 合法用例只调纯函数 | 新增 HTTP 入口回归：Workbench 形态 Confsearch（含 levels）与 BatchOptimize（batch_structures）preflight 200 |
 
+### 第三轮验收后
+
+| 问题 | 整改 |
+|---|---|
+| `dft_opt` 漏 `aux_j_basis`/`aux_c_basis`/`ri_approximation`（`_base_route_extras` 消费者） | 补进 `dft_opt` 允许表 |
+| Batch 只在有 `levels.batch` 时检查镜像，`batch_roles.int.opt_recalc_hess=5` + 顶层 `10` 可绕过 | 镜像值同时从 `batch_roles` 各角色提取，不一致即 `conflicting_fields` |
+| 本地 argv 仍是手拼 base+flags | 新增测试改用生产本地 builder `JobRunner._build_cmd`（NMR 绑定真实 `_build_nmr_cmd`/`_materialize_experiment`），与远端 `build_remote_cli_command` 一样经 `build_parser` 解析 |
+
 ## 本轮变更
 
 | 文件 | 变更 |
@@ -82,7 +90,7 @@
 
 ## 边界（不冒充 PASS）
 
-- levels 字段表 = catalog ∪ `levels.py` 消费者；若仍有引擎-only 字段未登记会被拒绝，需集成回归继续发现。
+- levels 字段表 = catalog `METHOD_SCHEMAS` ∪ `cccp/analysis/ensemble/levels.py` 消费者（含 `screening_sp`、`dft_opt` 的 `recalc_hess`/`aux_j_basis`/`aux_c_basis`/`ri_approximation`、顶层 `refinement_threshold`）。若仍有未登记消费者，集成回归继续发现。
 - BatchOptimize 非 `batch_structures` 形态只要求存在来源之一，不做键级校验。
 - C1 真实客户端转换链仍未验证（P0 结论，不阻塞 P1）。
 - 未跑全量 `pytest tests/`（慢测/浏览器套件不在本阶段范围）。

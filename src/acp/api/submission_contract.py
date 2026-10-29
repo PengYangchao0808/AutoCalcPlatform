@@ -154,7 +154,8 @@ _CONFSEARCH_LEVELS: dict[str, frozenset[str]] = {
     **_level_fields("confsearch_unified"),
     # Consumers in cccp/analysis/ensemble/levels.py accept more than the UI
     # schema lists (recalc_hess, aux_c_basis) and a screening part.
-    "dft_opt": _level_fields("confsearch_unified")["dft_opt"] | {"recalc_hess"},
+    "dft_opt": _level_fields("confsearch_unified")["dft_opt"]
+    | {"recalc_hess", "aux_j_basis", "aux_c_basis", "ri_approximation"},
     "refinement_sp": _SP_LEVEL_FIELDS,
     "screening_sp": _SP_LEVEL_FIELDS,
     # Legacy payloads still carry the CENSO level; the resolver reads
@@ -286,20 +287,26 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
         for role_id, role_value in roles.items():
             _as_mapping(role_value, f"method.batch_roles.{role_id}")
         batch_level = (method.get("levels") or {}).get("batch")
-        if isinstance(batch_level, Mapping):
-            for key in (
-                *_BATCHOPTIMIZE_SCALAR_FLAGS,
-                "opt_recalc_hess",
-                "minimum_opt_recalc_hess",
-                "transition_state_opt_recalc_hess",
-                "scf_orbital_inherit",
-            ):
-                if key in method and key in batch_level and method[key] != batch_level[key]:
-                    raise SubmissionContractError(
-                        f"method.{key} disagrees with method.levels.batch.{key}",
-                        field_name=f"method.{key}",
-                        rule="conflicting_fields",
-                    )
+        mirrored: dict[str, Any] = dict(batch_level) if isinstance(batch_level, Mapping) else {}
+        # Workbench also mirrors the INT role at the top level; a differing
+        # mirror is a real conflict (the early return would swallow it).
+        for role_value in roles.values():
+            for key in (*_BATCHOPTIMIZE_SCALAR_FLAGS, "opt_recalc_hess", "scf_orbital_inherit"):
+                if isinstance(role_value, Mapping) and role_value.get(key) is not None:
+                    mirrored.setdefault(key, role_value[key])
+        for key in (
+            *_BATCHOPTIMIZE_SCALAR_FLAGS,
+            "opt_recalc_hess",
+            "minimum_opt_recalc_hess",
+            "transition_state_opt_recalc_hess",
+            "scf_orbital_inherit",
+        ):
+            if key in method and key in mirrored and method[key] != mirrored[key]:
+                raise SubmissionContractError(
+                    f"method.{key} disagrees with the mirrored batch setting",
+                    field_name=f"method.{key}",
+                    rule="conflicting_fields",
+                )
     if "select" in method and method["select"] is not None:
         select = method["select"]
         if not isinstance(select, str) and not isinstance(select, (list, tuple)):
