@@ -180,19 +180,23 @@ _WORKBENCH_FLAT_DEFAULTS: dict[str, Any] = {
 }
 
 
-def _flat_mirror_source(key: str) -> tuple[str | None, str]:
-    """Return the (role, role field) a flat method key mirrors."""
+def _flat_mirror_source(key: str) -> tuple[str, str]:
+    """Return the (role, role field) a flat method key mirrors.
+
+    BatchMethodOptions builds the shared settings from the INT role and only
+    the ``transition_state_*`` family from TS (see
+    ``acp/calculations/batch/options.py``); a flat value matching *another*
+    role is not a mirror of the executed value.
+    """
     if key.startswith("transition_state_"):
         return "ts", key[len("transition_state_") :]
     if key.startswith("minimum_"):
         return "int", key[len("minimum_") :]
     if key.startswith("optimization_"):
-        suffix = key[len("optimization_") :]
-        return "int", suffix
+        return "int", key[len("optimization_") :]
     if key.startswith("single_point_"):
-        suffix = key[len("single_point_") :]
-        return "int", f"sp_{suffix}"
-    return None, key
+        return "int", f"sp_{key[len('single_point_') :]}"
+    return "int", key
 _BATCH_LEVELS: dict[str, frozenset[str]] = _level_fields("batch_optimize")
 
 
@@ -329,21 +333,12 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
             if key not in method or method[key] in (None, ""):
                 continue
             role_id, role_key = _flat_mirror_source(key)
-            if role_id is not None:
-                # Prefix-routed field: only its own role is the mirror source.
-                role = roles.get(role_id)
-                role_values = (
-                    [role[role_key]]
-                    if isinstance(role, Mapping) and role.get(role_key) is not None
-                    else []
-                )
-            else:
-                # Unprefixed fields may mirror any role; matching one is enough.
-                role_values = [
-                    role[role_key]
-                    for role in roles.values()
-                    if isinstance(role, Mapping) and role.get(role_key) is not None
-                ]
+            role = roles.get(role_id)
+            role_values = (
+                [role[role_key]]
+                if isinstance(role, Mapping) and role.get(role_key) is not None
+                else []
+            )
             if role_values:
                 if not any(value == method[key] for value in role_values):
                     raise SubmissionContractError(
