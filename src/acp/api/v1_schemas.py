@@ -320,7 +320,7 @@ class V1JobCreateRequest(BaseModel):
 
     workflow: str
     name: str = ""
-    input: dict[str, Any] = Field(default_factory=dict)
+    input: dict[str, Any] | None = None
     method: dict[str, Any] = Field(default_factory=dict)
     resources: dict[str, Any] = Field(default_factory=dict)
     output_dir: str | None = None

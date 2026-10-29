@@ -1,0 +1,30 @@
+{
+  "head": "fd2087c71df9695edbc798b74e595ee487b198f8",
+  "branch": "main",
+  "tree": "5cfe587f002e2cc2413c251e6dd2dc4dda8e1a8e",
+  "python": "3.11.13 (main, Jun  1 2026, 00:00:00) [GCC 11.5.0 20240719 (Red Hat 11.5.0-14)]",
+  "platform": "Linux-5.14.0-687.56.1.el9_8.x86_64-x86_64-with-glibc2.34",
+  "initial_worktree_status": [
+    " M README.md",
+    " M docs/ACP_2.0_Four_Component_Collaboration_Plan_20261020.md",
+    " M docs/README.md",
+    " M docs/reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md",
+    " M docs/reference/next-change/ACP_2.0_Parallel_Plan_C_RPH_Workbench_20261020.md",
+    " M reports/acp2_remediation_20261026/m4-02/README.md",
+    " M reports/acp2_remediation_20261026/m4-02/model/README.md",
+    " M reports/acp2_remediation_20261026/m4-03/README.md",
+    " M reports/acp2_remediation_20261026/m5-02/README.md",
+    " M rph/README.md",
+    "?? docs/RPH_Agent_Three_Phase_Roadmap_20261027(1).md",
+    "?? docs/reference/current/ACP_RPH_Status_20261028.md"
+  ],
+  "source_diff_from_prior_baseline": [],
+  "py_counts": {
+    "src/cccp": 203,
+    "src/acp": 298,
+    "src/acp_services": 128,
+    "src/acp_services/runtime": 71,
+    "tests": 583
+  },
+  "scope": "read-only functional audit plus AGENTS/documentation updates; no production restart or real model/QC/LSF submission"
+}

@@ -1,0 +1,7 @@
+{
+  "action": "submit",
+  "attempt": 1,
+  "claim_id": "idem_dd957a2d0c7c442a8c9829452a167bab",
+  "request_digest": "sha256:2900213801a0c8e1f4f6631ab562c483658954abe8c46e7fdba4379a5b1cdc7b",
+  "scope_id": "principal_local\u001f43dd4ee1-444a-4b2f-b16d-0ad785cc2a0a"
+}

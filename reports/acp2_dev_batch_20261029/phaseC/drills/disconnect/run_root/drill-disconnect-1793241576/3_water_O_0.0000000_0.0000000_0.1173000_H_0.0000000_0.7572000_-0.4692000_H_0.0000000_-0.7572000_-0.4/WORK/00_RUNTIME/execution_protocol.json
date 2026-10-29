@@ -1,0 +1,9 @@
+{
+  "attempt": 1,
+  "closure": "integrated",
+  "entry": "envelope",
+  "protocol": "local",
+  "release_id": "",
+  "schema": 1,
+  "workflow": "singlepoint"
+}

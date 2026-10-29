@@ -1,0 +1,21 @@
+{
+  "created_at": "2026-10-29T02:37:01.981805+00:00",
+  "current_stage": null,
+  "custom_name": null,
+  "display_name": "3_water_O_0.0000000_0.0000000_0.1173000_H_0.0000000_0.7572000_-0.4692000_H_0.0000000_-0.7572000_-0.4",
+  "input_hash": "sha256:4362e9c4618c1b89fb14d1cd253ba192cd110ef95cf7f00e4bc25a9b10c6d74e",
+  "layout_version": 2,
+  "molecule_name": "3\nwater\nO   0.0000000    0.0000000    0.1173000\nH   0.0000000    0.7572000   -0.4692000\nH   0.0000000   -0.7572000   -0.4692000",
+  "name_revision": 0,
+  "node_id": "local",
+  "node_path": "/tmp/phaseC/drills/cancel/run_root/drill-cancel-1793241416/3_water_O_0.0000000_0.0000000_0.1173000_H_0.0000000_0.7572000_-0.4692000_H_0.0000000_-0.7572000_-0.4",
+  "project_id": "f6e82091-3af7-4d56-bdef-5c0486a43e81",
+  "remark": "",
+  "result_manifest_path": null,
+  "status": "starting",
+  "task_dir_name": "3_water_O_0.0000000_0.0000000_0.1173000_H_0.0000000_0.7572000_-0.4692000_H_0.0000000_-0.7572000_-0.4",
+  "task_id": "20261029_103701_001_singlepoint",
+  "task_name": "singlepoint",
+  "updated_at": "2026-10-29T02:37:01.998244+00:00",
+  "workflow": "singlepoint"
+}

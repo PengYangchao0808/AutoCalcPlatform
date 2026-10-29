@@ -1,0 +1,1603 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="18" skipped="0" tests="44" time="476.927" timestamp="2026-10-28T23:53:54.842279+08:00" hostname="workstation"><testcase classname="tests.test_frontend_startup_browser" name="test_stalled_catalogs_and_missing_viewer_do_not_block_shell[False]" time="37.573"><failure message="playwright._impl._errors.TimeoutError: Locator.click: Timeout 30000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#btn-new-project&quot;)&#10;    - locator resolved to &lt;button title=&quot;新建项目&quot; aria-label=&quot;新建项目&quot; id=&quot;btn-new-project&quot; class=&quot;project-new-btn&quot; data-i18n-title=&quot;project.new_title&quot;&gt;…&lt;/button&gt;&#10;  - attempting click action&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;  - retrying click action&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;  - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 100ms&#10;    14 × waiting for element to be visible, enabled and stable&#10;       - element is visible, enabled and stable&#10;       - scrolling into view if needed&#10;       - done scrolling&#10;       - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;     - retrying click action&#10;       - waiting 500ms&#10;       - waiting for element to be visible, enabled and stable&#10;       - element is visible, enabled and stable&#10;       - scrolling into view if needed&#10;       - done scrolling&#10;       - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;     - retrying click action&#10;       - waiting 500ms&#10;       - waiting for element to be visible, enabled and stable&#10;       - element is visible, enabled and stable&#10;       - scrolling into view if needed&#10;       - done scrolling&#10;       - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;     - retrying click action&#10;       - waiting 500ms&#10;       - waiting for element to be visible, enabled and stable&#10;       - element is visible, enabled and stable&#10;       - scrolling into view if needed&#10;       - done scrolling&#10;       - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;     - retrying click action&#10;       - waiting 500ms&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;  - retrying click action&#10;    - waiting 500ms&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;  - retrying click action&#10;    - waiting 500ms">page = &lt;Page url='http://127.0.0.1:50161/'&gt;
+server_url = 'http://127.0.0.1:50161', viewer_stalled = False
+
+    @pytest.mark.parametrize("viewer_stalled", [False, True])
+    @pytest.mark.skipif(os.environ.get("CI") == "true", reason="headless CI click stability; covered on dev hosts")
+    def test_stalled_catalogs_and_missing_viewer_do_not_block_shell(
+        page: Page, server_url: str, viewer_stalled: bool
+    ) -&gt; None:
+        pending = []
+        page.route("**/api/v1/*-catalog", lambda route: pending.append(route))
+        pending_viewers = []
+        page.route(
+            "**/js/vendor/3Dmol-*",
+            lambda route: pending_viewers.append(route) if viewer_stalled else route.abort(),
+        )
+        page.route("**/api/v2/task-view?**", lambda route: route.fulfill(json=_view()))
+        errors = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.goto(server_url, wait_until="domcontentloaded")
+        expect(page.locator("#queue-counts")).to_contain_text("完成 0", timeout=2000)
+&gt;       page.locator("#btn-new-project").click()
+
+tests/test_frontend_startup_browser.py:127: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/sync_api/_generated.py:18032: in click
+    self._sync(
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_locator.py:165: in click
+    return await self._frame._click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_frame.py:594: in _click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:76: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x7f7536ec5850&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x7f75343cb6a0&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        parsed_st = _attach_api_call_information(
+            getattr(task, "__pw_stack__", None) or _capture_stack_trace(),
+            is_internal,
+            title,
+        )
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Locator.click: Timeout 30000ms exceeded.
+E           Call log:
+E             - waiting for locator("#btn-new-project")
+E               - locator resolved to &lt;button title="新建项目" aria-label="新建项目" id="btn-new-project" class="project-new-btn" data-i18n-title="project.new_title"&gt;…&lt;/button&gt;
+E             - attempting click action
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E             - retrying click action
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E             - retrying click action
+E               - waiting 20ms
+E               2 × waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 100ms
+E               14 × waiting for element to be visible, enabled and stable
+E                  - element is visible, enabled and stable
+E                  - scrolling into view if needed
+E                  - done scrolling
+E                  - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E                - retrying click action
+E                  - waiting 500ms
+E                  - waiting for element to be visible, enabled and stable
+E                  - element is visible, enabled and stable
+E                  - scrolling into view if needed
+E                  - done scrolling
+E                  - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E                - retrying click action
+E                  - waiting 500ms
+E                  - waiting for element to be visible, enabled and stable
+E                  - element is visible, enabled and stable
+E                  - scrolling into view if needed
+E                  - done scrolling
+E                  - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E                - retrying click action
+E                  - waiting 500ms
+E                  - waiting for element to be visible, enabled and stable
+E                  - element is visible, enabled and stable
+E                  - scrolling into view if needed
+E                  - done scrolling
+E                  - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E                - retrying click action
+E                  - waiting 500ms
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E             - retrying click action
+E               - waiting 500ms
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E             - retrying click action
+E               - waiting 500ms
+
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:632: TimeoutError</failure></testcase><testcase classname="tests.test_frontend_startup_browser" name="test_stalled_catalogs_and_missing_viewer_do_not_block_shell[True]" time="32.259"><failure message="playwright._impl._errors.TimeoutError: Locator.click: Timeout 30000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#btn-new-project&quot;)&#10;    - locator resolved to &lt;button title=&quot;新建项目&quot; aria-label=&quot;新建项目&quot; id=&quot;btn-new-project&quot; class=&quot;project-new-btn&quot; data-i18n-title=&quot;project.new_title&quot;&gt;…&lt;/button&gt;&#10;  - attempting click action&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;  - retrying click action&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;  - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 100ms&#10;    14 × waiting for element to be visible, enabled and stable&#10;       - element is visible, enabled and stable&#10;       - scrolling into view if needed&#10;       - done scrolling&#10;       - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;     - retrying click action&#10;       - waiting 500ms&#10;       - waiting for element to be visible, enabled and stable&#10;       - element is visible, enabled and stable&#10;       - scrolling into view if needed&#10;       - done scrolling&#10;       - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;     - retrying click action&#10;       - waiting 500ms&#10;       - waiting for element to be visible, enabled and stable&#10;       - element is visible, enabled and stable&#10;       - scrolling into view if needed&#10;       - done scrolling&#10;       - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;     - retrying click action&#10;       - waiting 500ms&#10;       - waiting for element to be visible, enabled and stable&#10;       - element is visible, enabled and stable&#10;       - scrolling into view if needed&#10;       - done scrolling&#10;       - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;     - retrying click action&#10;       - waiting 500ms&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;  - retrying click action&#10;    - waiting 500ms&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;  - retrying click action&#10;    - waiting 500ms">page = &lt;Page url='http://127.0.0.1:50161/'&gt;
+server_url = 'http://127.0.0.1:50161', viewer_stalled = True
+
+    @pytest.mark.parametrize("viewer_stalled", [False, True])
+    @pytest.mark.skipif(os.environ.get("CI") == "true", reason="headless CI click stability; covered on dev hosts")
+    def test_stalled_catalogs_and_missing_viewer_do_not_block_shell(
+        page: Page, server_url: str, viewer_stalled: bool
+    ) -&gt; None:
+        pending = []
+        page.route("**/api/v1/*-catalog", lambda route: pending.append(route))
+        pending_viewers = []
+        page.route(
+            "**/js/vendor/3Dmol-*",
+            lambda route: pending_viewers.append(route) if viewer_stalled else route.abort(),
+        )
+        page.route("**/api/v2/task-view?**", lambda route: route.fulfill(json=_view()))
+        errors = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.goto(server_url, wait_until="domcontentloaded")
+        expect(page.locator("#queue-counts")).to_contain_text("完成 0", timeout=2000)
+&gt;       page.locator("#btn-new-project").click()
+
+tests/test_frontend_startup_browser.py:127: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/sync_api/_generated.py:18032: in click
+    self._sync(
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_locator.py:165: in click
+    return await self._frame._click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_frame.py:594: in _click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:76: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x7f7536ffe490&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x7f751e62cf40&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        parsed_st = _attach_api_call_information(
+            getattr(task, "__pw_stack__", None) or _capture_stack_trace(),
+            is_internal,
+            title,
+        )
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Locator.click: Timeout 30000ms exceeded.
+E           Call log:
+E             - waiting for locator("#btn-new-project")
+E               - locator resolved to &lt;button title="新建项目" aria-label="新建项目" id="btn-new-project" class="project-new-btn" data-i18n-title="project.new_title"&gt;…&lt;/button&gt;
+E             - attempting click action
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E             - retrying click action
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E             - retrying click action
+E               - waiting 20ms
+E               2 × waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 100ms
+E               14 × waiting for element to be visible, enabled and stable
+E                  - element is visible, enabled and stable
+E                  - scrolling into view if needed
+E                  - done scrolling
+E                  - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E                - retrying click action
+E                  - waiting 500ms
+E                  - waiting for element to be visible, enabled and stable
+E                  - element is visible, enabled and stable
+E                  - scrolling into view if needed
+E                  - done scrolling
+E                  - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E                - retrying click action
+E                  - waiting 500ms
+E                  - waiting for element to be visible, enabled and stable
+E                  - element is visible, enabled and stable
+E                  - scrolling into view if needed
+E                  - done scrolling
+E                  - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E                - retrying click action
+E                  - waiting 500ms
+E                  - waiting for element to be visible, enabled and stable
+E                  - element is visible, enabled and stable
+E                  - scrolling into view if needed
+E                  - done scrolling
+E                  - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E                - retrying click action
+E                  - waiting 500ms
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E             - retrying click action
+E               - waiting 500ms
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E             - retrying click action
+E               - waiting 500ms
+
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:632: TimeoutError</failure></testcase><testcase classname="tests.test_frontend_startup_browser" name="test_failed_task_list_has_retry_and_recovers" time="32.283"><failure message="playwright._impl._errors.TimeoutError: Locator.click: Timeout 30000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#workbench-load-errors&quot;).get_by_role(&quot;button&quot;, name=&quot;重试&quot;)&#10;    - locator resolved to &lt;button class=&quot;mini-btn&quot;&gt;重试&lt;/button&gt;&#10;  - attempting click action&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;  - retrying click action&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;  - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 100ms&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;  - retrying click action&#10;    - waiting 500ms&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;  - retrying click action&#10;    - waiting 500ms&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;  - retrying click action&#10;    - waiting 500ms&#10;    - waiting for element to be visible, enabled and stable&#10;  - element was detached from the DOM, retrying&#10;    - locator resolved to &lt;button class=&quot;mini-btn&quot;&gt;重试&lt;/button&gt;&#10;  - attempting click action&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;  - retrying click action&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;  - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 100ms&#10;    6 × waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;  - retrying click action&#10;    - waiting 500ms&#10;    - waiting for element to be visible, enabled and stable&#10;  - element was detached from the DOM, retrying">page = &lt;Page url='http://127.0.0.1:50161/'&gt;
+server_url = 'http://127.0.0.1:50161'
+
+    @pytest.mark.skipif(os.environ.get("CI") == "true", reason="headless CI click stability; covered on dev hosts")
+    def test_failed_task_list_has_retry_and_recovers(page: Page, server_url: str) -&gt; None:
+        requests = []
+    
+        def serve(route):
+            requests.append(route.request.url)
+            if len(requests) == 1:
+                route.fulfill(
+                    status=503, content_type="application/json", body=json.dumps({"detail": "busy"})
+                )
+            else:
+                route.fulfill(json=_view())
+    
+        page.route("**/api/v2/task-view?**", serve)
+        page.goto(server_url, wait_until="domcontentloaded")
+        expect(page.locator("#queue-counts")).to_have_text("任务列表加载失败")
+&gt;       page.locator("#workbench-load-errors").get_by_role("button", name="重试").click()
+
+tests/test_frontend_startup_browser.py:149: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/sync_api/_generated.py:18032: in click
+    self._sync(
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_locator.py:165: in click
+    return await self._frame._click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_frame.py:594: in _click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:76: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x7f7536e0f250&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x7f751efe89a0&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        parsed_st = _attach_api_call_information(
+            getattr(task, "__pw_stack__", None) or _capture_stack_trace(),
+            is_internal,
+            title,
+        )
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Locator.click: Timeout 30000ms exceeded.
+E           Call log:
+E             - waiting for locator("#workbench-load-errors").get_by_role("button", name="重试")
+E               - locator resolved to &lt;button class="mini-btn"&gt;重试&lt;/button&gt;
+E             - attempting click action
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E             - retrying click action
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E             - retrying click action
+E               - waiting 20ms
+E               2 × waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 100ms
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E             - retrying click action
+E               - waiting 500ms
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E             - retrying click action
+E               - waiting 500ms
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E             - retrying click action
+E               - waiting 500ms
+E               - waiting for element to be visible, enabled and stable
+E             - element was detached from the DOM, retrying
+E               - locator resolved to &lt;button class="mini-btn"&gt;重试&lt;/button&gt;
+E             - attempting click action
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E             - retrying click action
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E             - retrying click action
+E               - waiting 20ms
+E               2 × waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 100ms
+E               6 × waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E             - retrying click action
+E               - waiting 500ms
+E               - waiting for element to be visible, enabled and stable
+E             - element was detached from the DOM, retrying
+
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:632: TimeoutError</failure></testcase><testcase classname="tests.test_frontend_startup_browser" name="test_status_failure_does_not_block_task_list" time="2.381" /><testcase classname="tests.test_frontend_startup_browser" name="test_paging_keeps_counts_and_reuses_unchanged_rows" time="32.630"><failure message="playwright._impl._errors.TimeoutError: Locator.click: Timeout 30000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#queue-pagination&quot;).get_by_role(&quot;button&quot;, name=&quot;下一页&quot;)&#10;    2 × locator resolved to &lt;button class=&quot;mini-btn&quot;&gt;下一页&lt;/button&gt;&#10;    - attempting click action&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;    - retrying click action&#10;      - waiting 20ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 100ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 100ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 500ms&#10;      - waiting for element to be visible, enabled and stable&#10;    - element was detached from the DOM, retrying&#10;    - locator resolved to &lt;button class=&quot;mini-btn&quot;&gt;下一页&lt;/button&gt;&#10;  - attempting click action&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;  - retrying click action&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;  - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 100ms">page = &lt;Page url='http://127.0.0.1:50161/'&gt;
+server_url = 'http://127.0.0.1:50161'
+
+    @pytest.mark.skipif(os.environ.get("CI") == "true", reason="headless CI click stability; covered on dev hosts")
+    def test_paging_keeps_counts_and_reuses_unchanged_rows(page: Page, server_url: str) -&gt; None:
+        from urllib.parse import parse_qs, urlparse
+    
+        requests = []
+    
+        def serve(route):
+            query = parse_qs(urlparse(route.request.url).query)
+            requests.append(query)
+            route.fulfill(json=_view(int(query["offset"][0]), total=201))
+    
+        page.route("**/api/v2/task-view?**", serve)
+        page.goto(server_url, wait_until="domcontentloaded")
+        expect(page.locator("#queue-pagination")).to_contain_text("共 201 个任务")
+        expect(page.locator("#queue-list .queue-row")).to_have_count(200)
+        page.evaluate("window._testRow = document.querySelector('#queue-list .queue-row')")
+        page.evaluate("refreshJobs()")
+        assert page.evaluate("window._testRow === document.querySelector('#queue-list .queue-row')")
+        assert requests[-1]["include_facets"] == ["false"]
+&gt;       page.locator("#queue-pagination").get_by_role("button", name="下一页").click()
+
+tests/test_frontend_startup_browser.py:183: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/sync_api/_generated.py:18032: in click
+    self._sync(
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_locator.py:165: in click
+    return await self._frame._click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_frame.py:594: in _click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:76: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x7f751c53a810&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x7f751e62c040&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        parsed_st = _attach_api_call_information(
+            getattr(task, "__pw_stack__", None) or _capture_stack_trace(),
+            is_internal,
+            title,
+        )
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Locator.click: Timeout 30000ms exceeded.
+E           Call log:
+E             - waiting for locator("#queue-pagination").get_by_role("button", name="下一页")
+E               2 × locator resolved to &lt;button class="mini-btn"&gt;下一页&lt;/button&gt;
+E               - attempting click action
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E               - retrying click action
+E                 - waiting 20ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 100ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 100ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 500ms
+E                 - waiting for element to be visible, enabled and stable
+E               - element was detached from the DOM, retrying
+E               - locator resolved to &lt;button class="mini-btn"&gt;下一页&lt;/button&gt;
+E             - attempting click action
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E             - retrying click action
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E             - retrying click action
+E               - waiting 20ms
+E               2 × waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 100ms
+
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:632: TimeoutError</failure></testcase><testcase classname="tests.test_frontend_multiframe_playback_browser" name="test_multiframe_playback_bar_stays_visible_during_play" time="6.112" /><testcase classname="tests.test_frontend_measure_edit_browser" name="test_pick_advances_status_and_creates_measurement" time="3.876" /><testcase classname="tests.test_frontend_measure_edit_browser" name="test_measurement_editable_for_bond_and_not_for_nonbond" time="2.588" /><testcase classname="tests.test_frontend_measure_edit_browser" name="test_ring_bond_blocks_edit" time="2.649" /><testcase classname="tests.test_frontend_measure_edit_browser" name="test_pick_uses_native_index_without_custom_property" time="2.249" /><testcase classname="tests.test_frontend_measure_edit_browser" name="test_edit_preserves_measurements_and_recomputes" time="2.715" /><testcase classname="tests.test_frontend_measure_edit_browser" name="test_undo_redo_reset_preserve_measurements" time="2.787" /><testcase classname="tests.test_frontend_measure_edit_browser" name="test_consecutive_measurements_are_not_lost" time="2.659" /><testcase classname="tests.test_frontend_viewer_framing_browser.TestMainViewerFraming" name="test_main_viewer_first_load_centers_model" time="3.600"><failure message="AssertionError: Canvas or container element not found&#10;assert None is not None">self = &lt;tests.test_frontend_viewer_framing_browser.TestMainViewerFraming object at 0x7f753e588c10&gt;
+browser_page = &lt;Page url='http://127.0.0.1:41047/'&gt;
+
+    def test_main_viewer_first_load_centers_model(self, browser_page: Page) -&gt; None:
+        """After loading a molecule, ``frame3DViewer`` should center the
+        camera on the bounding-box center (not at the origin).
+    
+        Contract tested:
+        - ``mainViewerFraming.settled`` becomes ``true``
+        - ``viewer.getView()`` look-at (first 3 entries) ≈ bbox center
+        - Canvas pixel size matches container layout size
+        """
+        page = browser_page
+    
+        # Inject the offset molecule into molDoc.frames and trigger render.
+        page.evaluate(
+            """(xyz) =&gt; {
+                const frames = parseMultiFrameXYZ(xyz);
+                if (!frames.length) throw new Error('XYZ parse returned 0 frames');
+                molDoc.frames = frames;
+                molDoc.currentFrame = 0;
+                renderMolDoc({ zoomTo: true });
+            }""",
+            _OFFSET_XYZ,
+        )
+    
+        # Wait for the framing to settle (mainViewerFraming.settled === true).
+        # If the parallel frontend agent hasn't landed frame3DViewer/
+        # scheduleViewerFraming yet, this will time out — that's expected and
+        # the test will fail with a clear message.
+        try:
+            page.wait_for_function(
+                "typeof mainViewerFraming !== 'undefined' &amp;&amp; mainViewerFraming.settled === true",
+                timeout=120_000,
+            )
+        except Exception:
+            pytest.fail(
+                "mainViewerFraming.settled never became true within 120 s. "
+                "Either the framing helpers are not present (parallel agent "
+                "hasn't landed) or the container never stabilised."
+            )
+    
+        # --- Assertion (a): view center ≈ molecule bbox center ---
+        view = page.evaluate("viewer.getView()")
+        assert isinstance(view, list) and len(view) &gt;= 3, (
+            f"viewer.getView() returned unexpected shape: {view}"
+        )
+    
+        # Compute bbox center from the rendered model (ground truth).
+        bbox = page.evaluate(
+            """() =&gt; {
+                const atoms = currentModel.selectedAtoms({});
+                if (!atoms.length) return null;
+                let minX = Infinity, maxX = -Infinity;
+                let minY = Infinity, maxY = -Infinity;
+                let minZ = Infinity, maxZ = -Infinity;
+                atoms.forEach(a =&gt; {
+                    if (a.x &lt; minX) minX = a.x; if (a.x &gt; maxX) maxX = a.x;
+                    if (a.y &lt; minY) minY = a.y; if (a.y &gt; maxY) maxY = a.y;
+                    if (a.z &lt; minZ) minZ = a.z; if (a.z &gt; maxZ) maxZ = a.z;
+                });
+                return {
+                    cx: (minX + maxX) / 2,
+                    cy: (minY + maxY) / 2,
+                    cz: (minZ + maxZ) / 2
+                };
+            }"""
+        )
+        assert bbox is not None, "currentModel.selectedAtoms({}) returned 0 atoms"
+    
+        # The view translation (first 3 entries of getView()) should be
+        # approximately the negative of the bbox center, because center()
+        # translates the model group so the bbox centroid sits at the origin.
+        # Tolerance: ≤ 1.0 Å per axis.
+        tol = 1.0
+        view_x, view_y, view_z = view[0], view[1], view[2]
+        assert math.fabs(view_x - (-bbox["cx"])) &lt;= tol, (
+            f"view X {view_x:.3f} != -bbox.cx {-bbox['cx']:.3f} (tol {tol})"
+        )
+        assert math.fabs(view_y - (-bbox["cy"])) &lt;= tol, (
+            f"view Y {view_y:.3f} != -bbox.cy {-bbox['cy']:.3f} (tol {tol})"
+        )
+        assert math.fabs(view_z - (-bbox["cz"])) &lt;= tol, (
+            f"view Z {view_z:.3f} != -bbox.cz {-bbox['cz']:.3f} (tol {tol})"
+        )
+    
+        # --- Assertion (b): canvas CSS size ≈ container size ---
+        # 3Dmol renders a 2x internal drawing buffer (canvas.width == 2 * CSS
+        # width even at devicePixelRatio=1); resize() only guarantees the CSS
+        # size, so compare style.width/style.height against the container.
+        sizes = page.evaluate(
+            """() =&gt; {
+                const canvas = document.querySelector('#viewer-3d canvas');
+                const container = document.getElementById('viewer-3d');
+                if (!canvas || !container) return null;
+                return {
+                    canvasW: parseFloat(canvas.style.width),
+                    canvasH: parseFloat(canvas.style.height),
+                    containerW: container.clientWidth,
+                    containerH: container.clientHeight
+                };
+            }"""
+        )
+&gt;       assert sizes is not None, "Canvas or container element not found"
+E       AssertionError: Canvas or container element not found
+E       assert None is not None
+
+tests/test_frontend_viewer_framing_browser.py:356: AssertionError</failure></testcase><testcase classname="tests.test_frontend_viewer_framing_browser.TestMainViewerFraming" name="test_main_viewer_resize_after_settle_preserves_user_camera" time="3.008" /><testcase classname="tests.test_frontend_viewer_framing_browser.TestPreviewViewerFraming" name="test_preview_viewer_modal_centers_model" time="2.492" /><testcase classname="tests.test_frontend_interaction.TestMethodFamilyGatingBrowser" name="test_scan_optimizer_method_gating_hides_and_restores_fields" time="22.552"><failure message="playwright._impl._errors.TimeoutError: Page.wait_for_function: Timeout 20000ms exceeded.">self = &lt;tests.test_frontend_interaction.TestMethodFamilyGatingBrowser object at 0x7f753e5b9e10&gt;
+page = &lt;Page url='http://127.0.0.1:44391/'&gt;
+
+    def test_scan_optimizer_method_gating_hides_and_restores_fields(self, page: Page) -&gt; None:
+&gt;       _open_method_modal(page)
+
+tests/test_frontend_interaction.py:356: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_frontend_interaction.py:292: in _open_method_modal
+    _load_structure_and_next(page)
+tests/test_frontend_interaction.py:278: in _load_structure_and_next
+    page.wait_for_function("wizardStructures.length &gt; 0", timeout=20_000)
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/sync_api/_generated.py:12809: in wait_for_function
+    self._sync(
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_page.py:1153: in wait_for_function
+    return await self._main_frame.wait_for_function(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_frame.py:941: in wait_for_function
+    await self._channel.send("waitForFunction", self._timeout, params)
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:76: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x7f751d6a5b90&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x7f751edaa0c0&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        parsed_st = _attach_api_call_information(
+            getattr(task, "__pw_stack__", None) or _capture_stack_trace(),
+            is_internal,
+            title,
+        )
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Page.wait_for_function: Timeout 20000ms exceeded.
+
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:632: TimeoutError</failure></testcase><testcase classname="tests.test_frontend_interaction.TestMethodFamilyGatingBrowser" name="test_copy_scan_level_final_serialized_payload" time="21.828"><failure message="playwright._impl._errors.TimeoutError: Page.wait_for_function: Timeout 20000ms exceeded.">self = &lt;tests.test_frontend_interaction.TestMethodFamilyGatingBrowser object at 0x7f753e5ba450&gt;
+page = &lt;Page url='http://127.0.0.1:44391/'&gt;
+
+    def test_copy_scan_level_final_serialized_payload(self, page: Page) -&gt; None:
+&gt;       _open_method_modal(page)
+
+tests/test_frontend_interaction.py:389: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_frontend_interaction.py:292: in _open_method_modal
+    _load_structure_and_next(page)
+tests/test_frontend_interaction.py:278: in _load_structure_and_next
+    page.wait_for_function("wizardStructures.length &gt; 0", timeout=20_000)
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/sync_api/_generated.py:12809: in wait_for_function
+    self._sync(
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_page.py:1153: in wait_for_function
+    return await self._main_frame.wait_for_function(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_frame.py:941: in wait_for_function
+    await self._channel.send("waitForFunction", self._timeout, params)
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:76: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x7f751ee097d0&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x7f751c5967a0&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        parsed_st = _attach_api_call_information(
+            getattr(task, "__pw_stack__", None) or _capture_stack_trace(),
+            is_internal,
+            title,
+        )
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Page.wait_for_function: Timeout 20000ms exceeded.
+
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:632: TimeoutError</failure></testcase><testcase classname="tests.test_frontend_interaction.TestMethodFamilyGatingBrowser" name="test_legacy_draft_grid_migration_hint" time="1.466"><failure message="AssertionError: {'detail': {'code': 'cross_origin', 'message': 'Origin does not match the server Host (cross-site write rejected)'}}&#10;assert None&#10; +  where None = &lt;built-in method get of dict object at 0x7f751d519300&gt;('draft_id')&#10; +    where &lt;built-in method get of dict object at 0x7f751d519300&gt; = {'detail': {'code': 'cross_origin', 'message': 'Origin does not match the server Host (cross-site write rejected)'}}.get">self = &lt;tests.test_frontend_interaction.TestMethodFamilyGatingBrowser object at 0x7f753e5baa90&gt;
+page = &lt;Page url='http://127.0.0.1:44391/'&gt;
+
+    def test_legacy_draft_grid_migration_hint(self, page: Page) -&gt; None:
+        # Open the wizard so the drafts box becomes reachable (its listeners
+        # bind with the same init chain as #btn-new-calc).
+        _wait_wizard_open(page)
+    
+        # A legacy (pre-T12) draft: grid carries a Gaussian-era alias.
+        draft_name = "T25-legacy-grid"
+        snapshot = {
+            "structures": [],
+            "selectedIndex": 0,
+            "activeTab": "task",
+            "step": 1,
+            "fields": {},
+            "workflowState": {
+                "workflow": {"id": "PESsearch", "label": "PES Search", "schema_id": "pes_scan"},
+                "method": {
+                    "profile_id": "default",
+                    "profile_label": "default",
+                    "stages": {
+                        "scan_optimizer": {
+                            "engine": "orca",
+                            "scan_optimizer_method": "B3LYP",
+                            "scan_optimizer_basis": "def2-SVP",
+                            "scan_optimizer_grid": "UltraFine",
+                        }
+                    },
+                },
+            },
+        }
+        created = page.evaluate(
+            """async (args) =&gt; {
+                const resp = await fetch("/api/v1/drafts", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        name: args.name, project_id: "",
+                        workflow: "PESsearch", snapshot: args.snapshot,
+                    }),
+                });
+                return await resp.json();
+            }""",
+            {"name": draft_name, "snapshot": snapshot},
+        )
+&gt;       assert created.get("draft_id"), created
+E       AssertionError: {'detail': {'code': 'cross_origin', 'message': 'Origin does not match the server Host (cross-site write rejected)'}}
+E       assert None
+E        +  where None = &lt;built-in method get of dict object at 0x7f751d519300&gt;('draft_id')
+E        +    where &lt;built-in method get of dict object at 0x7f751d519300&gt; = {'detail': {'code': 'cross_origin', 'message': 'Origin does not match the server Host (cross-site write rejected)'}}.get
+
+tests/test_frontend_interaction.py:505: AssertionError</failure></testcase><testcase classname="tests.test_frontend_interaction.TestMethodFamilyGatingBrowser" name="test_invalid_gfn_combination_rejected_on_submit" time="21.810"><failure message="playwright._impl._errors.TimeoutError: Page.wait_for_function: Timeout 20000ms exceeded.">self = &lt;tests.test_frontend_interaction.TestMethodFamilyGatingBrowser object at 0x7f753e5bb110&gt;
+page = &lt;Page url='http://127.0.0.1:44391/'&gt;
+
+    def test_invalid_gfn_combination_rejected_on_submit(self, page: Page) -&gt; None:
+&gt;       _open_method_modal(page)
+
+tests/test_frontend_interaction.py:530: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_frontend_interaction.py:292: in _open_method_modal
+    _load_structure_and_next(page)
+tests/test_frontend_interaction.py:278: in _load_structure_and_next
+    page.wait_for_function("wizardStructures.length &gt; 0", timeout=20_000)
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/sync_api/_generated.py:12809: in wait_for_function
+    self._sync(
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_page.py:1153: in wait_for_function
+    return await self._main_frame.wait_for_function(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_frame.py:941: in wait_for_function
+    await self._channel.send("waitForFunction", self._timeout, params)
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:76: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x7f751d69ccd0&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x7f751c5af920&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        parsed_st = _attach_api_call_information(
+            getattr(task, "__pw_stack__", None) or _capture_stack_trace(),
+            is_internal,
+            title,
+        )
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Page.wait_for_function: Timeout 20000ms exceeded.
+
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:632: TimeoutError</failure></testcase><testcase classname="tests.test_frontend_interaction.TestMethodFamilyGatingBrowser" name="test_validation_warnings_visible_in_modal_and_summary" time="1.425"><failure message="AssertionError: {'detail': {'code': 'cross_origin', 'message': 'Origin does not match the server Host (cross-site write rejected)'}}&#10;assert None&#10; +  where None = &lt;built-in method get of dict object at 0x7f751d6b06c0&gt;('draft_id')&#10; +    where &lt;built-in method get of dict object at 0x7f751d6b06c0&gt; = {'detail': {'code': 'cross_origin', 'message': 'Origin does not match the server Host (cross-site write rejected)'}}.get">self = &lt;tests.test_frontend_interaction.TestMethodFamilyGatingBrowser object at 0x7f753e5bb750&gt;
+page = &lt;Page url='http://127.0.0.1:44391/'&gt;
+
+    def test_validation_warnings_visible_in_modal_and_summary(self, page: Page) -&gt; None:
+        # Legacy draft whose values are NOT client-migrated: the method alias
+        # "b973c" and the title-cased "Tight" reach /validate-method, which
+        # surfaces canonicalization warnings (T24) — rendered by the UI.
+        _wait_wizard_open(page)
+    
+        draft_name = "T25-legacy-alias"
+        snapshot = {
+            "structures": [],
+            "selectedIndex": 0,
+            "activeTab": "task",
+            "step": 1,
+            "fields": {},
+            "workflowState": {
+                "workflow": {"id": "PESsearch", "label": "PES Search", "schema_id": "pes_scan"},
+                "method": {
+                    "profile_id": "default",
+                    "profile_label": "default",
+                    "stages": {
+                        "scan_optimizer": {
+                            "engine": "orca",
+                            "scan_optimizer_method": "b973c",
+                            "scan_optimizer_convergence": "Tight",
+                        }
+                    },
+                },
+            },
+        }
+        created = page.evaluate(
+            """async (args) =&gt; {
+                const resp = await fetch("/api/v1/drafts", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        name: args.name, project_id: "",
+                        workflow: "PESsearch", snapshot: args.snapshot,
+                    }),
+                });
+                return await resp.json();
+            }""",
+            {"name": draft_name, "snapshot": snapshot},
+        )
+&gt;       assert created.get("draft_id"), created
+E       AssertionError: {'detail': {'code': 'cross_origin', 'message': 'Origin does not match the server Host (cross-site write rejected)'}}
+E       assert None
+E        +  where None = &lt;built-in method get of dict object at 0x7f751d6b06c0&gt;('draft_id')
+E        +    where &lt;built-in method get of dict object at 0x7f751d6b06c0&gt; = {'detail': {'code': 'cross_origin', 'message': 'Origin does not match the server Host (cross-site write rejected)'}}.get
+
+tests/test_frontend_interaction.py:630: AssertionError</failure></testcase><testcase classname="tests.test_frontend_interaction.TestScanWizardBrowser" name="test_scan_wizard_submit_posts_real_body_with_0_based_coordinate" time="22.247"><failure message="AssertionError: timed out after 20 s waiting for structure parse">self = &lt;tests.test_frontend_interaction.TestScanWizardBrowser object at 0x7f753e5ba210&gt;
+page = &lt;Page url='http://127.0.0.1:44391/'&gt;
+
+    def test_scan_wizard_submit_posts_real_body_with_0_based_coordinate(self, page: Page) -&gt; None:
+        captured: list[dict] = []
+    
+        def _handler(route) -&gt; None:  # noqa: ANN001 - playwright route
+            request = route.request
+            if request.method == "POST":
+                captured.append(json.loads(request.post_data or "{}"))
+            route.fulfill(
+                status=201,
+                content_type="application/json",
+                body=json.dumps(
+                    {"job_id": "scan_browser_001", "status": "queued", "workflow": "scan"}
+                ),
+            )
+    
+        page.context.route(re.compile(r".*/api/v1/jobs$"), _handler)
+&gt;       self._open_scan_step_two(page)
+
+tests/test_frontend_interaction.py:864: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_frontend_interaction.py:820: in _open_scan_step_two
+    _scan_wait(page, "wizardStructures.length &gt; 0", timeout=20, what="structure parse")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+page = &lt;Page url='http://127.0.0.1:44391/'&gt;
+expression = 'wizardStructures.length &gt; 0', timeout = 20
+what = 'structure parse'
+
+    def _scan_wait(page: Page, expression: str, *, timeout: float, what: str) -&gt; None:
+        """Poll a boolean page expression via evaluate.
+    
+        wait_for_function polls via requestAnimationFrame, which intermittently
+        stalls in this container — conditions known to be true are never re-checked
+        (observed on the draft-restore wait). Evaluate-based polling is reliable.
+        """
+        deadline = time.monotonic() + timeout
+        while True:
+            if page.evaluate("() =&gt; Boolean(" + expression + ")"):
+                return
+            if time.monotonic() &gt; deadline:
+&gt;               raise AssertionError(f"timed out after {timeout:.0f} s waiting for {what}")
+E               AssertionError: timed out after 20 s waiting for structure parse
+
+tests/test_frontend_interaction.py:701: AssertionError</failure></testcase><testcase classname="tests.test_frontend_interaction.TestScanWizardBrowser" name="test_scan_wizard_rejects_out_of_range_atom_without_submitting" time="22.144"><failure message="AssertionError: timed out after 20 s waiting for structure parse">self = &lt;tests.test_frontend_interaction.TestScanWizardBrowser object at 0x7f753e5bbed0&gt;
+page = &lt;Page url='http://127.0.0.1:44391/'&gt;
+
+    def test_scan_wizard_rejects_out_of_range_atom_without_submitting(self, page: Page) -&gt; None:
+        captured: list[dict] = []
+    
+        def _handler(route) -&gt; None:  # noqa: ANN001 - playwright route
+            request = route.request
+            if request.method == "POST":
+                captured.append(json.loads(request.post_data or "{}"))
+            route.fulfill(
+                status=201,
+                content_type="application/json",
+                body=json.dumps(
+                    {"job_id": "scan_browser_002", "status": "queued", "workflow": "scan"}
+                ),
+            )
+    
+        page.context.route(re.compile(r".*/api/v1/jobs$"), _handler)
+&gt;       self._open_scan_step_two(page)
+
+tests/test_frontend_interaction.py:919: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_frontend_interaction.py:820: in _open_scan_step_two
+    _scan_wait(page, "wizardStructures.length &gt; 0", timeout=20, what="structure parse")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+page = &lt;Page url='http://127.0.0.1:44391/'&gt;
+expression = 'wizardStructures.length &gt; 0', timeout = 20
+what = 'structure parse'
+
+    def _scan_wait(page: Page, expression: str, *, timeout: float, what: str) -&gt; None:
+        """Poll a boolean page expression via evaluate.
+    
+        wait_for_function polls via requestAnimationFrame, which intermittently
+        stalls in this container — conditions known to be true are never re-checked
+        (observed on the draft-restore wait). Evaluate-based polling is reliable.
+        """
+        deadline = time.monotonic() + timeout
+        while True:
+            if page.evaluate("() =&gt; Boolean(" + expression + ")"):
+                return
+            if time.monotonic() &gt; deadline:
+&gt;               raise AssertionError(f"timed out after {timeout:.0f} s waiting for {what}")
+E               AssertionError: timed out after 20 s waiting for structure parse
+
+tests/test_frontend_interaction.py:701: AssertionError</failure></testcase><testcase classname="tests.test_frontend_interaction.TestScanWizardBrowser" name="test_scan_wizard_switch_away_clears_scan_selection" time="22.109"><failure message="AssertionError: timed out after 20 s waiting for structure parse">self = &lt;tests.test_frontend_interaction.TestScanWizardBrowser object at 0x7f753e3c82d0&gt;
+page = &lt;Page url='http://127.0.0.1:44391/'&gt;
+
+    def test_scan_wizard_switch_away_clears_scan_selection(self, page: Page) -&gt; None:
+&gt;       self._open_scan_step_two(page)
+
+tests/test_frontend_interaction.py:946: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_frontend_interaction.py:820: in _open_scan_step_two
+    _scan_wait(page, "wizardStructures.length &gt; 0", timeout=20, what="structure parse")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+page = &lt;Page url='http://127.0.0.1:44391/'&gt;
+expression = 'wizardStructures.length &gt; 0', timeout = 20
+what = 'structure parse'
+
+    def _scan_wait(page: Page, expression: str, *, timeout: float, what: str) -&gt; None:
+        """Poll a boolean page expression via evaluate.
+    
+        wait_for_function polls via requestAnimationFrame, which intermittently
+        stalls in this container — conditions known to be true are never re-checked
+        (observed on the draft-restore wait). Evaluate-based polling is reliable.
+        """
+        deadline = time.monotonic() + timeout
+        while True:
+            if page.evaluate("() =&gt; Boolean(" + expression + ")"):
+                return
+            if time.monotonic() &gt; deadline:
+&gt;               raise AssertionError(f"timed out after {timeout:.0f} s waiting for {what}")
+E               AssertionError: timed out after 20 s waiting for structure parse
+
+tests/test_frontend_interaction.py:701: AssertionError</failure></testcase><testcase classname="tests.test_frontend_interaction.TestScanWizardBrowser" name="test_scan_draft_restore_round_trips_selection" time="2.075"><failure message="AssertionError: {'detail': {'code': 'cross_origin', 'message': 'Origin does not match the server Host (cross-site write rejected)'}}&#10;assert None&#10; +  where None = &lt;built-in method get of dict object at 0x7f74fc4d7300&gt;('draft_id')&#10; +    where &lt;built-in method get of dict object at 0x7f74fc4d7300&gt; = {'detail': {'code': 'cross_origin', 'message': 'Origin does not match the server Host (cross-site write rejected)'}}.get">self = &lt;tests.test_frontend_interaction.TestScanWizardBrowser object at 0x7f753e3c8850&gt;
+page = &lt;Page url='http://127.0.0.1:44391/'&gt;
+
+    def test_scan_draft_restore_round_trips_selection(self, page: Page) -&gt; None:
+        _scan_wait_wizard_open(page)
+        snapshot = {
+            "structures": [{"name": "mol", "xyz": _SCAN_XYZ, "has_3d": True}],
+            "selectedIndex": 0,
+            "activeTab": "task",
+            "step": 1,
+            "fields": {},
+            "workflowState": {
+                "workflow": {"id": "scan", "label": "Relaxed Scan", "schema_id": "dft_scan"},
+                "method": {
+                    "profile_id": "default",
+                    "profile_label": "default",
+                    "stages": {
+                        "scan": {
+                            "engine": "orca",
+                            "scan_coordinate_kind": "distance",
+                            "scan_coordinate_start": 1.5,
+                            "scan_coordinate_end": 2.5,
+                            "scan_coordinate_points": 7,
+                        }
+                    },
+                },
+            },
+            # The stage mirror deliberately carries NO atoms here: the restored
+            # pick survives only through this block plus its structureKey —
+            # syncScanSelectionFromWizard keeps it while the key still matches
+            # the staged structure.
+            "scanSelection": {
+                "selectionKind": "distance",
+                "selectedAtoms": [1, 2],
+                "structureKey": _SCAN_XYZ.strip(),
+            },
+        }
+        created = page.evaluate(
+            """async (args) =&gt; {
+                const resp = await fetch("/api/v1/drafts", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        name: args.name, project_id: "",
+                        workflow: "scan", snapshot: args.snapshot,
+                    }),
+                });
+                return await resp.json();
+            }""",
+            {"name": "scan-wizard-draft", "snapshot": snapshot},
+        )
+&gt;       assert created.get("draft_id"), created
+E       AssertionError: {'detail': {'code': 'cross_origin', 'message': 'Origin does not match the server Host (cross-site write rejected)'}}
+E       assert None
+E        +  where None = &lt;built-in method get of dict object at 0x7f74fc4d7300&gt;('draft_id')
+E        +    where &lt;built-in method get of dict object at 0x7f74fc4d7300&gt; = {'detail': {'code': 'cross_origin', 'message': 'Origin does not match the server Host (cross-site write rejected)'}}.get
+
+tests/test_frontend_interaction.py:1025: AssertionError</failure></testcase><testcase classname="tests.test_frontend_interaction.TestScanWizardBrowser" name="test_scan_edit_hydration_hydrates_state_from_stage_mirror" time="22.260"><failure message="AssertionError: timed out after 20 s waiting for structure parse">self = &lt;tests.test_frontend_interaction.TestScanWizardBrowser object at 0x7f753e3c8e50&gt;
+page = &lt;Page url='http://127.0.0.1:44391/'&gt;
+
+    def test_scan_edit_hydration_hydrates_state_from_stage_mirror(self, page: Page) -&gt; None:
+&gt;       self._open_scan_step_two(page)
+
+tests/test_frontend_interaction.py:1093: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_frontend_interaction.py:820: in _open_scan_step_two
+    _scan_wait(page, "wizardStructures.length &gt; 0", timeout=20, what="structure parse")
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+page = &lt;Page url='http://127.0.0.1:44391/'&gt;
+expression = 'wizardStructures.length &gt; 0', timeout = 20
+what = 'structure parse'
+
+    def _scan_wait(page: Page, expression: str, *, timeout: float, what: str) -&gt; None:
+        """Poll a boolean page expression via evaluate.
+    
+        wait_for_function polls via requestAnimationFrame, which intermittently
+        stalls in this container — conditions known to be true are never re-checked
+        (observed on the draft-restore wait). Evaluate-based polling is reliable.
+        """
+        deadline = time.monotonic() + timeout
+        while True:
+            if page.evaluate("() =&gt; Boolean(" + expression + ")"):
+                return
+            if time.monotonic() &gt; deadline:
+&gt;               raise AssertionError(f"timed out after {timeout:.0f} s waiting for {what}")
+E               AssertionError: timed out after 20 s waiting for structure parse
+
+tests/test_frontend_interaction.py:701: AssertionError</failure></testcase><testcase classname="tests.test_frontend_interaction.TestQueueRowFreshnessBrowser" name="test_completed_row_drops_stale_active_actions_and_offers_rerun_menu" time="31.404"><failure message="playwright._impl._errors.TimeoutError: Page.click: Timeout 30000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#queue-list .queue-row[data-job-id=\&quot;J1\&quot;] .queue-row-actions button:has-text(\&quot;↻\&quot;)&quot;)&#10;    - locator resolved to &lt;button title=&quot;Rerun&quot; class=&quot;mini-btn icon-btn&quot;&gt;↻&lt;/button&gt;&#10;  - attempting click action&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;  - retrying click action&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;  - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 100ms&#10;    14 × waiting for element to be visible, enabled and stable&#10;       - element is visible, enabled and stable&#10;       - scrolling into view if needed&#10;       - done scrolling&#10;       - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;     - retrying click action&#10;       - waiting 500ms&#10;       - waiting for element to be visible, enabled and stable&#10;       - element is visible, enabled and stable&#10;       - scrolling into view if needed&#10;       - done scrolling&#10;       - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;     - retrying click action&#10;       - waiting 500ms&#10;       - waiting for element to be visible, enabled and stable&#10;       - element is visible, enabled and stable&#10;       - scrolling into view if needed&#10;       - done scrolling&#10;       - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;     - retrying click action&#10;       - waiting 500ms&#10;       - waiting for element to be visible, enabled and stable&#10;       - element is visible, enabled and stable&#10;       - scrolling into view if needed&#10;       - done scrolling&#10;       - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;     - retrying click action&#10;       - waiting 500ms&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;  - retrying click action&#10;    - waiting 500ms&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;  - retrying click action&#10;    - waiting 500ms">self = &lt;tests.test_frontend_interaction.TestQueueRowFreshnessBrowser object at 0x7f753e3c9590&gt;
+page = &lt;Page url='http://127.0.0.1:44391/'&gt;
+
+    @pytest.mark.skipif(os.environ.get("CI") == "true", reason="headless CI click stability; covered on dev hosts")
+    def test_completed_row_drops_stale_active_actions_and_offers_rerun_menu(
+        self, page: Page
+    ) -&gt; None:
+        sim = self._boot(page)
+        sim.add_job("J1", "running", attempt=1, revision=1)
+        self._render(page)
+        # Natural cache population: the real detail fetch while J1 is RUNNING.
+        page.evaluate("() =&gt; fetchJobDetail('J1')")
+        assert page.evaluate("() =&gt; !!getJobDetail('J1')")
+        # Server-side completion (revision bumps like the real CAS).
+        sim.set_state("J1", "completed", revision=2)
+        page.evaluate("() =&gt; refreshJobs()")  # the poll observing the change
+        ops = page.evaluate(_ROW_BUTTONS_JS, "J1")
+        assert ops is not None
+        assert _RERUN_GLYPH in ops, f"terminal row must offer rerun: {ops}"
+        for active in (_PAUSE_GLYPH, _RESUME_GLYPH, _CANCEL_GLYPH):
+            assert active not in ops, f"terminal row shows active-only action {active!r}: {ops}"
+        # Stale RUNNING detail must be dropped (status disagrees with the list).
+        assert page.evaluate("() =&gt; getJobDetail('J1')") is None
+        # Terminal rerun menu: 3 real actions, rerun_direct enabled.
+&gt;       page.click(_row_sel("J1", f'button:has-text("{_RERUN_GLYPH}")'))
+
+tests/test_frontend_interaction.py:1539: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/sync_api/_generated.py:11102: in click
+    self._sync(
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_page.py:889: in click
+    return await self._main_frame._click(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_frame.py:594: in _click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:76: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x7f751d414090&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x7f751eda9e40&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        parsed_st = _attach_api_call_information(
+            getattr(task, "__pw_stack__", None) or _capture_stack_trace(),
+            is_internal,
+            title,
+        )
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Page.click: Timeout 30000ms exceeded.
+E           Call log:
+E             - waiting for locator("#queue-list .queue-row[data-job-id=\"J1\"] .queue-row-actions button:has-text(\"↻\")")
+E               - locator resolved to &lt;button title="Rerun" class="mini-btn icon-btn"&gt;↻&lt;/button&gt;
+E             - attempting click action
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E             - retrying click action
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E             - retrying click action
+E               - waiting 20ms
+E               2 × waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 100ms
+E               14 × waiting for element to be visible, enabled and stable
+E                  - element is visible, enabled and stable
+E                  - scrolling into view if needed
+E                  - done scrolling
+E                  - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E                - retrying click action
+E                  - waiting 500ms
+E                  - waiting for element to be visible, enabled and stable
+E                  - element is visible, enabled and stable
+E                  - scrolling into view if needed
+E                  - done scrolling
+E                  - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E                - retrying click action
+E                  - waiting 500ms
+E                  - waiting for element to be visible, enabled and stable
+E                  - element is visible, enabled and stable
+E                  - scrolling into view if needed
+E                  - done scrolling
+E                  - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E                - retrying click action
+E                  - waiting 500ms
+E                  - waiting for element to be visible, enabled and stable
+E                  - element is visible, enabled and stable
+E                  - scrolling into view if needed
+E                  - done scrolling
+E                  - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E                - retrying click action
+E                  - waiting 500ms
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E             - retrying click action
+E               - waiting 500ms
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E             - retrying click action
+E               - waiting 500ms
+
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:632: TimeoutError</failure></testcase><testcase classname="tests.test_frontend_interaction.TestQueueRowFreshnessBrowser" name="test_unselected_row_pause_then_resume_reflects_fresh_state" time="31.417"><failure message="playwright._impl._errors.TimeoutError: Page.click: Timeout 30000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#queue-list .queue-row[data-job-id=\&quot;J1\&quot;] .queue-row-actions button.mini-btn.warn&quot;)&#10;    - locator resolved to &lt;button title=&quot;Pause&quot; class=&quot;mini-btn icon-btn warn&quot;&gt;‖&lt;/button&gt;&#10;  - attempting click action&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;  - retrying click action&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;  - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 100ms&#10;    14 × waiting for element to be visible, enabled and stable&#10;       - element is visible, enabled and stable&#10;       - scrolling into view if needed&#10;       - done scrolling&#10;       - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;     - retrying click action&#10;       - waiting 500ms&#10;       - waiting for element to be visible, enabled and stable&#10;       - element is visible, enabled and stable&#10;       - scrolling into view if needed&#10;       - done scrolling&#10;       - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;     - retrying click action&#10;       - waiting 500ms&#10;       - waiting for element to be visible, enabled and stable&#10;       - element is visible, enabled and stable&#10;       - scrolling into view if needed&#10;       - done scrolling&#10;       - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;     - retrying click action&#10;       - waiting 500ms&#10;       - waiting for element to be visible, enabled and stable&#10;       - element is visible, enabled and stable&#10;       - scrolling into view if needed&#10;       - done scrolling&#10;       - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;     - retrying click action&#10;       - waiting 500ms">self = &lt;tests.test_frontend_interaction.TestQueueRowFreshnessBrowser object at 0x7f753e3c9bd0&gt;
+page = &lt;Page url='http://127.0.0.1:44391/'&gt;
+
+    @pytest.mark.skipif(os.environ.get("CI") == "true", reason="headless CI click stability; covered on dev hosts")
+    def test_unselected_row_pause_then_resume_reflects_fresh_state(self, page: Page) -&gt; None:
+        sim = self._boot(page)
+        sim.add_job("J1", "running", attempt=1, revision=1)
+        sim.add_job("J2", "running", attempt=1, revision=1)
+        self._render(page)
+        page.evaluate("() =&gt; fetchJobDetail('J1')")  # cache primed for an unselected row
+        assert page.evaluate("() =&gt; String(selectedJobId)") == ""
+        # Real row button click (stopPropagation keeps the row unselected).
+&gt;       page.click(_row_sel("J1", "button.mini-btn.warn"))
+
+tests/test_frontend_interaction.py:1558: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/sync_api/_generated.py:11102: in click
+    self._sync(
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_page.py:889: in click
+    return await self._main_frame._click(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_frame.py:594: in _click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:76: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x7f751d5153d0&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x7f751d62e3e0&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        parsed_st = _attach_api_call_information(
+            getattr(task, "__pw_stack__", None) or _capture_stack_trace(),
+            is_internal,
+            title,
+        )
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Page.click: Timeout 30000ms exceeded.
+E           Call log:
+E             - waiting for locator("#queue-list .queue-row[data-job-id=\"J1\"] .queue-row-actions button.mini-btn.warn")
+E               - locator resolved to &lt;button title="Pause" class="mini-btn icon-btn warn"&gt;‖&lt;/button&gt;
+E             - attempting click action
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E             - retrying click action
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E             - retrying click action
+E               - waiting 20ms
+E               2 × waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 100ms
+E               14 × waiting for element to be visible, enabled and stable
+E                  - element is visible, enabled and stable
+E                  - scrolling into view if needed
+E                  - done scrolling
+E                  - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E                - retrying click action
+E                  - waiting 500ms
+E                  - waiting for element to be visible, enabled and stable
+E                  - element is visible, enabled and stable
+E                  - scrolling into view if needed
+E                  - done scrolling
+E                  - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E                - retrying click action
+E                  - waiting 500ms
+E                  - waiting for element to be visible, enabled and stable
+E                  - element is visible, enabled and stable
+E                  - scrolling into view if needed
+E                  - done scrolling
+E                  - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E                - retrying click action
+E                  - waiting 500ms
+E                  - waiting for element to be visible, enabled and stable
+E                  - element is visible, enabled and stable
+E                  - scrolling into view if needed
+E                  - done scrolling
+E                  - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E                - retrying click action
+E                  - waiting 500ms
+
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:632: TimeoutError</failure></testcase><testcase classname="tests.test_frontend_interaction.TestQueueRowFreshnessBrowser" name="test_delayed_detail_response_cannot_override_newer_state" time="1.771" /><testcase classname="tests.test_frontend_interaction.TestQueueRowFreshnessBrowser" name="test_rerun_between_polls_drops_old_attempt_detail_and_re_renders" time="1.469" /><testcase classname="tests.test_frontend_interaction.TestQueueRowFreshnessBrowser" name="test_fresh_server_recovery_re_render_decides_capability" time="1.379" /><testcase classname="tests.test_frontend_interaction.TestQueueRowFreshnessBrowser" name="test_detail_requests_bounded_per_poll" time="2.035" /><testcase classname="tests.test_frontend_interaction.TestQueueRowFreshnessBrowser" name="test_batch_ops_invalidate_all_selected_row_caches" time="31.472"><failure message="playwright._impl._errors.TimeoutError: Page.check: Timeout 30000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#queue-list .queue-row[data-job-id=\&quot;J1\&quot;] .queue-check&quot;)&#10;    - locator resolved to &lt;input type=&quot;checkbox&quot; title=&quot;Purge jobs&quot; class=&quot;queue-check&quot;/&gt;&#10;  - attempting click action&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;  - retrying click action&#10;    - waiting for element to be visible, enabled and stable&#10;    - element is visible, enabled and stable&#10;    - scrolling into view if needed&#10;    - done scrolling&#10;    - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;  - retrying click action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and stable&#10;      - element is visible, enabled and stable&#10;      - scrolling into view if needed&#10;      - done scrolling&#10;      - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;    - retrying click action&#10;      - waiting 100ms&#10;    14 × waiting for element to be visible, enabled and stable&#10;       - element is visible, enabled and stable&#10;       - scrolling into view if needed&#10;       - done scrolling&#10;       - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;     - retrying click action&#10;       - waiting 500ms&#10;       - waiting for element to be visible, enabled and stable&#10;       - element is visible, enabled and stable&#10;       - scrolling into view if needed&#10;       - done scrolling&#10;       - &lt;header class=&quot;topbar&quot;&gt;…&lt;/header&gt; intercepts pointer events&#10;     - retrying click action&#10;       - waiting 500ms&#10;       - waiting for element to be visible, enabled and stable&#10;       - element is visible, enabled and stable&#10;       - scrolling into view if needed&#10;       - done scrolling&#10;       - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;     - retrying click action&#10;       - waiting 500ms&#10;       - waiting for element to be visible, enabled and stable&#10;       - element is visible, enabled and stable&#10;       - scrolling into view if needed&#10;       - done scrolling&#10;       - &lt;div class=&quot;panel-head&quot;&gt;…&lt;/div&gt; from &lt;section id=&quot;science-question-panel&quot; data-panel-key=&quot;science_question&quot; class=&quot;panel-section science-question-panel&quot;&gt;…&lt;/section&gt; subtree intercepts pointer events&#10;     - retrying click action&#10;       - waiting 500ms">self = &lt;tests.test_frontend_interaction.TestQueueRowFreshnessBrowser object at 0x7f753e3d0050&gt;
+page = &lt;Page url='http://127.0.0.1:44391/'&gt;
+
+    @pytest.mark.skipif(os.environ.get("CI") == "true", reason="headless CI click stability; covered on dev hosts")
+    def test_batch_ops_invalidate_all_selected_row_caches(self, page: Page) -&gt; None:
+        sim = self._boot(page)
+        sim.add_job("J1", "running", attempt=1, revision=1)
+        sim.add_job("J2", "running", attempt=1, revision=1)
+        self._render(page)
+        page.evaluate("() =&gt; fetchJobDetail('J1')")
+        page.evaluate("() =&gt; fetchJobDetail('J2')")
+&gt;       page.check('#queue-list .queue-row[data-job-id="J1"] .queue-check')
+
+tests/test_frontend_interaction.py:1758: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/sync_api/_generated.py:12635: in check
+    self._sync(
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_page.py:1128: in check
+    return await self._main_frame.check(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_frame.py:909: in check
+    await self._channel.send("check", self._timeout, locals_to_params(locals()))
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:76: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x7f751c351b50&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x7f751c370720&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        parsed_st = _attach_api_call_information(
+            getattr(task, "__pw_stack__", None) or _capture_stack_trace(),
+            is_internal,
+            title,
+        )
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Page.check: Timeout 30000ms exceeded.
+E           Call log:
+E             - waiting for locator("#queue-list .queue-row[data-job-id=\"J1\"] .queue-check")
+E               - locator resolved to &lt;input type="checkbox" title="Purge jobs" class="queue-check"/&gt;
+E             - attempting click action
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E             - retrying click action
+E               - waiting for element to be visible, enabled and stable
+E               - element is visible, enabled and stable
+E               - scrolling into view if needed
+E               - done scrolling
+E               - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E             - retrying click action
+E               - waiting 20ms
+E               2 × waiting for element to be visible, enabled and stable
+E                 - element is visible, enabled and stable
+E                 - scrolling into view if needed
+E                 - done scrolling
+E                 - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E               - retrying click action
+E                 - waiting 100ms
+E               14 × waiting for element to be visible, enabled and stable
+E                  - element is visible, enabled and stable
+E                  - scrolling into view if needed
+E                  - done scrolling
+E                  - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E                - retrying click action
+E                  - waiting 500ms
+E                  - waiting for element to be visible, enabled and stable
+E                  - element is visible, enabled and stable
+E                  - scrolling into view if needed
+E                  - done scrolling
+E                  - &lt;header class="topbar"&gt;…&lt;/header&gt; intercepts pointer events
+E                - retrying click action
+E                  - waiting 500ms
+E                  - waiting for element to be visible, enabled and stable
+E                  - element is visible, enabled and stable
+E                  - scrolling into view if needed
+E                  - done scrolling
+E                  - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E                - retrying click action
+E                  - waiting 500ms
+E                  - waiting for element to be visible, enabled and stable
+E                  - element is visible, enabled and stable
+E                  - scrolling into view if needed
+E                  - done scrolling
+E                  - &lt;div class="panel-head"&gt;…&lt;/div&gt; from &lt;section id="science-question-panel" data-panel-key="science_question" class="panel-section science-question-panel"&gt;…&lt;/section&gt; subtree intercepts pointer events
+E                - retrying click action
+E                  - waiting 500ms
+
+/home/xieningke/.local/lib/python3.11/site-packages/playwright/_impl/_connection.py:632: TimeoutError</failure></testcase><testcase classname="tests.test_frontend_interaction.TestScanAtomPickBrowser" name="test_scan_pick_append_restart_and_toggle_semantics" time="2.358" /><testcase classname="tests.test_frontend_interaction.TestScanAtomPickBrowser" name="test_scan_pick_angle_kind_fills_three_slots_and_kind_switch_clears" time="2.246" /><testcase classname="tests.test_frontend_interaction.TestScanAtomPickBrowser" name="test_scan_pick_renders_position_colored_markers" time="2.225" /><testcase classname="tests.test_frontend_interaction.TestScanAtomPickBrowser" name="test_scan_pick_gating_step2_enables_and_other_steps_disable" time="2.274" /><testcase classname="tests.test_frontend_interaction.TestScanAtomPickBrowser" name="test_scan_pick_preserves_pes_dispatch" time="2.168" /><testcase classname="tests.test_frontend_interaction.TestScanAtomPickBrowser" name="test_scan_kind_switch_swaps_default_range_only" time="2.319" /><testcase classname="tests.test_frontend_interaction.TestScanAtomPickBrowser" name="test_scan_preview_rerender_keeps_selection_and_redraws_markers" time="2.368" /><testcase classname="tests.test_frontend_interaction.TestScanAtomPickBrowser" name="test_scan_kind_switch_mid_pick_clears_selection_and_shapes" time="2.293" /><testcase classname="tests.test_frontend_interaction.TestEditWorkflowSwitchBrowser" name="test_in_place_disables_scan_selection_and_explains_new_job_mode" time="2.979" /><testcase classname="tests.test_frontend_interaction.TestEditWorkflowSwitchBrowser" name="test_stale_workflow_change_is_blocked_before_collecting_pes_input" time="2.931" /><testcase classname="tests.test_frontend_interaction.TestEditWorkflowSwitchBrowser" name="test_new_scan_collects_scan_payload_and_preserves_validation_reason" time="13.832" /></testsuite></testsuites>

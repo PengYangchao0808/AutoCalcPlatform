@@ -1,0 +1,13 @@
+{
+  "name": "bom_walk",
+  "command": [
+    "python3.11",
+    "scripts/release/walk_bom.py",
+    "--verify",
+    "--json-out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_function_audit_20261028/evidence/bom-walk.json"
+  ],
+  "exit_code": 1,
+  "elapsed_seconds": 0.17,
+  "log": "bom_walk.log"
+}

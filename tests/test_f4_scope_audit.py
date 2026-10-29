@@ -1945,6 +1945,74 @@ def test_diff_only_allowed_py_files() -> None:
     assert not (py - ALLOWED_PY), f"Unexpected .py files changed: {py - ALLOWED_PY}"
 
 
+
+# ── Amendment S — CENSO execution evidence (MCP UX P4, 2026-10-29) ──────────
+# The plan requires verified execution facts (argv/rc/final part/artifact
+# digests) and a part-bound final-part choice.  Those additions are confined to
+# CensoRunResult.execution, the allowed= parameter of _resolve_final_part, and
+# the enabled-parts/execution block inside refine_ensemble; no numeric or
+# control-flow algorithm line is touched (teeth below).
+
+
+def _amendment_s_censo_ranges(worktree: str) -> list[tuple[int, int]]:
+    lines = worktree.splitlines()
+    ranges: list[tuple[int, int]] = []
+    for index, line in enumerate(lines):
+        if line.strip().startswith("execution: Dict[str, Any] = field("):
+            ranges.append((index + 1, index + 3))
+            break
+    for function in ("_resolve_final_part", "_memory_templates"):
+        resolved = _func_range(worktree, function, "CensoInterface")
+        if resolved:
+            ranges.append(resolved)
+    start = next(
+        (i for i, line in enumerate(lines) if line.strip() == "enabled_parts = {"),
+        None,
+    )
+    end = next(
+        (
+            i
+            for i, line in enumerate(lines)
+            if "self._compare_boltzmann_weights(result, out_path)" in line
+        ),
+        None,
+    )
+    if start is not None and end is not None and end > start:
+        ranges.append((start + 1, end + 1))
+    return ranges
+
+
+def _is_amendment_s_censo_addition(ln: int, txt: str, worktree: str) -> bool:
+    stripped = txt.strip()
+    if stripped in {
+        "import hashlib",
+        "from __future__ import annotations",
+        "from cccp.utils.resource_utils import mem_to_mb, resolve_orca_maxcore",
+    }:
+        return True
+    if stripped.startswith("effective_templates = self._memory_templates("):
+        return True
+    return any(start <= ln <= end for start, end in _amendment_s_censo_ranges(worktree))
+
+
+def _amendment_s_censo_teeth(worktree: str) -> list[str]:
+    issues: list[str] = []
+    checks = (
+        ("execution: Dict[str, Any] = field(", "execution field"),
+        ("allowed: Optional[set] = None", "_resolve_final_part allowed"),
+        ('"argv"', "argv fact"),
+        ('"returncode"', "returncode fact"),
+        ('"artifacts"', "artifact digests"),
+        ('"enabled_parts"', "enabled parts"),
+        ('"conformers"', "conformer membership"),
+        ("def _memory_templates(", "memory-template injection"),
+    )
+    for needle, label in checks:
+        if needle not in worktree:
+            issues.append(f"  censo.py: Amendment S scope missing {label}")
+    return issues
+
+
 def test_algorithm_body_untouched() -> None:
     """① Every added line must be pure comment/blank — no algorithm-body changes.
 
@@ -1966,6 +2034,19 @@ def test_algorithm_body_untouched() -> None:
 
     for fp in ALLOWED_PY:
         added, deleted = _diff_hunks(fp)
+
+        # ── censo.py: Amendment S (execution evidence) ────────────────────
+        if fp == "src/cccp/qc/interfaces/censo.py":
+            worktree = _worktree_content(fp)
+            for ln, txt in added:
+                stripped = txt.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                if _is_amendment_s_censo_addition(ln, txt, worktree):
+                    continue
+                violations.append(f"  {fp}:{ln}: {txt!r}")
+            violations.extend(_amendment_s_censo_teeth(worktree))
+            continue
 
         # ── orca_ts.py: Amendment F + G ───────────────────────────────────
         if fp == "src/cccp/qc/interfaces/orca_ts.py":
@@ -2532,6 +2613,9 @@ MIGRATION_STATION_PREFIXES = (
     # todo 25: CENSO template-line construction points (translation-layer consumers).
     "src/acp/workflows/energy_shared.py",
     "src/acp/confsearch/shared/helpers.py",
+    # MCP UX P3 (2026-10-29): the conformer counter pair (kept vs selected)
+    # lives in the engine's pipeline telemetry; exact file only.
+    "src/acp/confsearch/engine.py",
     # todo 28: PES/路径工作流任务化改线（XtbPathSearch/OrcaGradient + PES 扫描接线）。
     "src/acp/workflows/xtb_path.py",
     "src/acp/workflows/orca_gradient.py",

@@ -1,0 +1,549 @@
+{
+  "$comment": "ACP2 science evidence report, schema_version 1. Execution facts live only under the top-level 'execution' object; no claim field carries an execution result and no terminal execution state can be read as claim support.",
+  "$defs": {
+    "ArtifactSourceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_path": {
+          "description": "Artifact path relative to the run/evidence root. Absolute paths and parent traversal are rejected.",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+",
+          "type": "string"
+        },
+        "digest": {
+          "$ref": "#/$defs/Digest"
+        },
+        "quantity": {
+          "description": "Optional name of the quantity extracted from the artifact.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "role": {
+          "description": "Scientific role of the artifact, e.g. native_output, standardized_product, input_snapshot, irc_forward, irc_reverse.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "units": {
+          "description": "Explicit unit for the quantity this reference supports (e.g. hartree, kJ.mol-1, cm-1, angstrom, kelvin). Null only when the artifact is not a numeric quantity; it is never omitted.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "artifact_path",
+        "digest",
+        "role",
+        "units"
+      ],
+      "type": "object"
+    },
+    "Claim": {
+      "$comment": "supported/refuted require a validator id+version and at least one digested source ref; not_evaluated requires an explicit missing check. No execution field may appear on a claim.",
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "supported"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "source_refs": {
+                "minItems": 1
+              }
+            },
+            "required": [
+              "validator",
+              "source_refs"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "refuted"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "source_refs": {
+                "minItems": 1
+              }
+            },
+            "required": [
+              "validator",
+              "source_refs"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "not_evaluated"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "missing_checks": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "claim_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "limitations": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "missing_checks": {
+          "items": {
+            "$ref": "#/$defs/MissingCheck"
+          },
+          "type": "array"
+        },
+        "scope": {
+          "$ref": "#/$defs/ClaimScope"
+        },
+        "source_refs": {
+          "items": {
+            "$ref": "#/$defs/ArtifactSourceRef"
+          },
+          "type": "array"
+        },
+        "statement": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/ClaimStatus"
+        },
+        "validator": {
+          "$ref": "#/$defs/Validator"
+        }
+      },
+      "required": [
+        "claim_id",
+        "statement",
+        "status",
+        "scope",
+        "source_refs",
+        "missing_checks"
+      ],
+      "type": "object"
+    },
+    "ClaimScope": {
+      "additionalProperties": false,
+      "properties": {
+        "applicability": {
+          "enum": [
+            "universal",
+            "system_specific",
+            "ensemble_specific",
+            "conformer_specific",
+            "condition_specific"
+          ],
+          "type": "string"
+        },
+        "conditions": {
+          "description": "Explicit scope conditions (temperature, solvent, conformer set). Null means no additional condition restriction is claimed.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "not_in_scope": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "subject": {
+          "description": "Scientific quantity or proposition this claim is about.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject",
+        "applicability"
+      ],
+      "type": "object"
+    },
+    "ClaimStatus": {
+      "description": "Frozen claim status vocabulary. Any other value, including 'confirmed' or 'passed', is rejected.",
+      "enum": [
+        "supported",
+        "refuted",
+        "inconclusive",
+        "not_evaluated"
+      ],
+      "type": "string"
+    },
+    "Digest": {
+      "additionalProperties": false,
+      "description": "Content digest. Mirrors cccp.analysis.identity: algorithm fixed to sha256, value is the bare lowercase hex digest (no algorithm prefix).",
+      "properties": {
+        "algorithm": {
+          "enum": [
+            "sha256"
+          ],
+          "type": "string"
+        },
+        "value": {
+          "description": "Bare lowercase sha256 content digest, as returned by cccp.analysis.identity.content_sha256().",
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "algorithm",
+        "value"
+      ],
+      "type": "object"
+    },
+    "ExecutionFacts": {
+      "$comment": "Execution separation is structural: these keys exist only here, and Claim has additionalProperties:false so an execution result cannot be attached to a claim.",
+      "additionalProperties": false,
+      "properties": {
+        "argv": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "exit_code": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "finished_at": {
+          "format": "date-time",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "started_at": {
+          "format": "date-time",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stderr_path": {
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stdout_path": {
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminal_state": {
+          "description": "Execution terminal state. It describes the process, never the scientific claim status.",
+          "enum": [
+            "completed",
+            "failed",
+            "cancelled",
+            "not_started"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "terminal_state",
+        "argv",
+        "exit_code"
+      ],
+      "type": "object"
+    },
+    "Limitation": {
+      "additionalProperties": false,
+      "properties": {
+        "affected_claim_ids": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "description": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "limitation_id": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "limitation_id",
+        "description"
+      ],
+      "type": "object"
+    },
+    "MissingCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "blocking": {
+          "type": "boolean"
+        },
+        "check_id": {
+          "$ref": "#/$defs/MissingCheckId"
+        },
+        "reason": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "check_id",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "MissingCheckId": {
+      "description": "Frozen missing-check vocabulary. New check ids require a schema_version bump; prose is not a check id.",
+      "enum": [
+        "artifact_missing",
+        "artifact_digest_mismatch",
+        "partial_output",
+        "missing_irc",
+        "irc_not_bidirectional",
+        "imaginary_mode_missing",
+        "imaginary_mode_count",
+        "geometry_not_stationary",
+        "frequency_not_computed",
+        "convergence_not_met",
+        "electronic_state_unresolved",
+        "basis_incomplete",
+        "temperature_unspecified",
+        "standard_state_unspecified",
+        "reference_state_unspecified",
+        "method_identity_missing",
+        "software_version_missing",
+        "validator_unavailable",
+        "external_artifact_unavailable",
+        "run_key_unavailable",
+        "not_executed"
+      ],
+      "type": "string"
+    },
+    "Subject": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "input_digests": {
+          "items": {
+            "$ref": "#/$defs/Digest"
+          },
+          "type": "array"
+        },
+        "science_identity": {
+          "pattern": "^v2:[0-9a-f]{32}$",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "subject_id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "subject_kind": {
+          "enum": [
+            "research_record",
+            "calculation_result",
+            "recipe_run",
+            "artifact_set"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject_id",
+        "subject_kind"
+      ],
+      "type": "object"
+    },
+    "Validator": {
+      "$comment": "Model/LLM text can never be a validator: the kind enum has no model member and the id must be a registered check./software./human. namespace.",
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "deterministic"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "validator_id": {
+                "pattern": "^check\\."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "software"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "validator_id": {
+                "pattern": "^software\\."
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "human_review"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "validator_id": {
+                "pattern": "^human\\."
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "description": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "deterministic",
+            "software",
+            "human_review"
+          ],
+          "type": "string"
+        },
+        "validator_id": {
+          "description": "Registered namespaced validator identifier. Bare prose, model output and 'llm:*' strings are not validator ids.",
+          "minLength": 1,
+          "pattern": "^(?:check|software|human)\\.[a-z0-9][a-z0-9_.-]*$",
+          "type": "string"
+        },
+        "validator_version": {
+          "minLength": 1,
+          "pattern": "^[0-9][0-9A-Za-z.+-]*$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "validator_id",
+        "validator_version",
+        "kind"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://acp.local/acp2/science/evidence.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Per-claim scientific evidence. Each claim carries exactly one of the four frozen statuses, its scientific scope, source artifact references with sha256 digests and explicit units, an optional deterministic/software/human validator, missing checks from the frozen vocabulary and limitation references.",
+  "properties": {
+    "claims": {
+      "items": {
+        "$ref": "#/$defs/Claim"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "execution": {
+      "$ref": "#/$defs/ExecutionFacts"
+    },
+    "limitations": {
+      "items": {
+        "$ref": "#/$defs/Limitation"
+      },
+      "type": "array"
+    },
+    "provenance_digest": {
+      "$ref": "#/$defs/Digest"
+    },
+    "report_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "subject": {
+      "$ref": "#/$defs/Subject"
+    }
+  },
+  "required": [
+    "schema_version",
+    "report_id",
+    "subject",
+    "execution",
+    "claims",
+    "limitations"
+  ],
+  "schema_version": 1,
+  "title": "ACP2 EvidenceReport",
+  "type": "object"
+}

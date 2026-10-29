@@ -1,0 +1,79 @@
+{
+  "authority": "cccp.calculation.tasks.optimize:467-599 (_successful_geometry/_result)",
+  "complete": true,
+  "content_digest": "sha256:d7ec8e6e293ac73fe4742bf1e30f5f3b47853dc9e408008931d3f41493cde3ff",
+  "exit_code": 0,
+  "job_status": "completed",
+  "missing_required_facts": [],
+  "normal_reuse": true,
+  "partial_result": false,
+  "publish": true,
+  "publish_policy": "normal",
+  "qualification": "complete",
+  "receipt_state": "completed",
+  "required_facts": [
+    "coordinates",
+    "symbols_aligned"
+  ],
+  "result": {
+    "artifacts": [
+      {
+        "checksum": "sha256:0df5496548f214b638ee894587e2fe1081c7b948b127e2ec76cd67157b51a86c",
+        "path": "/tmp/phaseC2/c2-chain/run_root/ACP2_dev_batch_phase_C1_1793244103/3_water_O_0.0000000_0.0000000_0.1173000_H_0.0000000_0.7572000_-0.4692000_H_0.0000000_-0.7572000_-0.4/xtbopt.xyz",
+        "source": "xtb",
+        "type": "output"
+      },
+      {
+        "checksum": "sha256:9d3eba02f939281b9a1558ec69ef4d38290b3fe86b2418a4735e6844ca54f423",
+        "path": "/tmp/phaseC2/c2-chain/run_root/ACP2_dev_batch_phase_C1_1793244103/3_water_O_0.0000000_0.0000000_0.1173000_H_0.0000000_0.7572000_-0.4692000_H_0.0000000_-0.7572000_-0.4/xtb.log",
+        "source": "xtb",
+        "type": "log"
+      }
+    ],
+    "complete": true,
+    "coordinates": [
+      [
+        -0.0,
+        4.612e-11,
+        0.10542063891309
+      ],
+      [
+        -0.0,
+        0.77249613148439,
+        -0.46326031943868
+      ],
+      [
+        0.0,
+        -0.77249613153052,
+        -0.46326031947441
+      ]
+    ],
+    "energy_hartree": -5.070544374391,
+    "errors": [],
+    "frequencies": [],
+    "metadata": {},
+    "payload": {
+      "optimization_status": "converged"
+    },
+    "provenance": {
+      "backend": "xtb",
+      "input_signature": "input.xyz",
+      "method": "GFN2-xTB",
+      "version": "unknown"
+    },
+    "schema_version": 1,
+    "status": "completed",
+    "symbols": [
+      "O",
+      "H",
+      "H"
+    ],
+    "task": "optimize"
+  },
+  "result_digest": "sha256:08a8c7c145b6e65b048d0bff6eaeedbb8bcd5c8f10f1ea1775fbde8b47620db1",
+  "schema": "acp_task_result_v1",
+  "status": "completed",
+  "task": "optimize",
+  "truth_table_row": "b",
+  "written_at": "2026-10-29T03:21:52.150291+00:00"
+}

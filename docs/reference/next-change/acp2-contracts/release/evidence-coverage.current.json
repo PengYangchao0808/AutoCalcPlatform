@@ -229,7 +229,7 @@
       "owner": "B",
       "parent": "M1-01",
       "receipt": "tests/test_acp2_runtime_contracts.py",
-      "receipt_sha256": "62d66c80ab33610799e477d0cdcc6f14b3b7356001ea59a3723b65c8fe79bf4e",
+      "receipt_sha256": "e02e82be369c40bd93edd23df85b99abbb932a8992b37cfe9ff88803a6f3efe8",
       "required_observations": {
         "negotiation": "present",
         "version_axis": "present"
@@ -254,7 +254,7 @@
       "owner": "B",
       "parent": "M1-01",
       "receipt": "tests/test_acp2_runtime_contracts.py",
-      "receipt_sha256": "62d66c80ab33610799e477d0cdcc6f14b3b7356001ea59a3723b65c8fe79bf4e",
+      "receipt_sha256": "e02e82be369c40bd93edd23df85b99abbb932a8992b37cfe9ff88803a6f3efe8",
       "required_observations": {
         "artifact_schema": "present",
         "operation_schema": "present"
@@ -676,7 +676,7 @@
       "owner": "C-RPH",
       "parent": "M3-02",
       "receipt": "rph/test/m3-02-cli.test.ts",
-      "receipt_sha256": "4bb23770554b3c4cc0a21c8128a84ee63f9f71529cb80d398703e12e0f891df2",
+      "receipt_sha256": "e9c30c9b7e7c8fcd6cdaf1bbedfcc3b3202a72ab8f166d13247146fa95929a7a",
       "required_observations": {
         "cli_bin": "present",
         "composition": "present"
@@ -813,7 +813,7 @@
       "status": "CLOSED"
     }
   ],
-  "coverage_sha256": "df8400319a0521d0172b79541109a868142d8b1dad92104af04d3d85cb455bc6",
+  "coverage_sha256": "323232dfee34e762b5d30c728fc03a84f7da9ba7a35bc8238f269859fb282044",
   "deferred_rows": [
     {
       "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
@@ -2410,7 +2410,7 @@
       "notes": "MCP idempotency now routes through CommandIdentity; prepare key v2 and lookup-only auto_ keys are covered by the process/backends tests. Revocation is re-tested on the remote path by M4-03.",
       "owner": "B + C-RPH",
       "receipt": "tests/test_acp2_runtime_mcp_process.py",
-      "receipt_sha256": "7557dcc74566476ddcd219ea416f1e6eb36797f93a95eec74c30aac914e2103a",
+      "receipt_sha256": "6e3c5bd6241888fe57f62b84632942ab472ddfceadddc345a9e5e7eb52d16e17",
       "required_observations": {
         "auto_lookup_only": "present",
         "mcp_idempotency": "present",
@@ -2443,7 +2443,7 @@
       "notes": "Exhaustive v1 field policy and cross-entry JobSpec equivalence with digest v2; the HTTP prepare route is the single prepare-field authority (M0-06 followup 927d92f).",
       "owner": "B",
       "receipt": "tests/test_acp2_runtime_contracts.py",
-      "receipt_sha256": "62d66c80ab33610799e477d0cdcc6f14b3b7356001ea59a3723b65c8fe79bf4e",
+      "receipt_sha256": "e02e82be369c40bd93edd23df85b99abbb932a8992b37cfe9ff88803a6f3efe8",
       "required_observations": {
         "digest_v2": "present",
         "jobspec_equivalence": "present",
@@ -2709,7 +2709,7 @@
       "notes": "Application/MCP/artifact/analysis contract unification and the reviewed wire-id allowlist (M1-01a/b/c). Later additive contract versions are registered in the manifest.",
       "owner": "B，A/C 消费确认",
       "receipt": "tests/test_acp2_runtime_contracts.py",
-      "receipt_sha256": "62d66c80ab33610799e477d0cdcc6f14b3b7356001ea59a3723b65c8fe79bf4e",
+      "receipt_sha256": "e02e82be369c40bd93edd23df85b99abbb932a8992b37cfe9ff88803a6f3efe8",
       "required_observations": {
         "application_api": "present",
         "operation_schema": "present",
@@ -3063,7 +3063,7 @@
       "notes": "Production assembly for pure-analysis third-party plugins only. worker-hosted third-party COMPUTE stays a separate DEFERRED/NOT_VERIFIED row (see deferred_rows) and is never closed by this pure-analysis evidence.",
       "owner": "B + A",
       "receipt": "tests/test_acp2_science_plugin_production.py",
-      "receipt_sha256": "aa78b848d525a7cca0e5cc59e04c96b739cc2168cdb4b11d28089d0b1a1fa86c",
+      "receipt_sha256": "57a51d2c1b38ee025db0f3202f4a5ae5ca385f717c6517c2aec736fd830623e9",
       "required_observations": {
         "computed_distribution_digest": "present",
         "pure_analysis_plugin": "present",

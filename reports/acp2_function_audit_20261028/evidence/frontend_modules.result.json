@@ -1,0 +1,10 @@
+{
+  "name": "frontend_modules",
+  "command": [
+    "node",
+    "frontend/js/module_tests/run_all.js"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 8.65,
+  "log": "frontend_modules.log"
+}

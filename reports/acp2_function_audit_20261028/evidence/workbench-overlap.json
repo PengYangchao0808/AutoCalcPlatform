@@ -1,0 +1,77 @@
+{
+  "viewport": {
+    "w": 1280,
+    "h": 800
+  },
+  "elements": [
+    {
+      "id": "btn-new-project",
+      "rect": {
+        "x": 1196,
+        "y": 114,
+        "w": 24,
+        "h": 24
+      },
+      "text": "",
+      "top": {
+        "id": "sq-no-project-note",
+        "cls": "science-question-note",
+        "tag": "DIV"
+      }
+    },
+    {
+      "id": "queue-counts",
+      "rect": {
+        "x": 1055,
+        "y": 150,
+        "w": 196,
+        "h": 26.5
+      },
+      "text": "运行 0 | 排队 0 | 完成 0 | 失败 0",
+      "top": {
+        "id": "sq-no-model-note",
+        "cls": "science-question-note",
+        "tag": "DIV"
+      }
+    },
+    {
+      "id": "science-question-panel",
+      "rect": {
+        "x": 1041,
+        "y": 64,
+        "w": 224,
+        "h": 1629.9375
+      },
+      "text": "手工研究\n−\n请先在左侧选择项目，再发现能力\n本入口不依赖模型配置\n科学问题\n输入结构 (XYZ)\n粘贴 XYZ 文本，或使用演示结构\n载入演示结构\n预览结构\n可解释默认值\n方法 *\n来源：-\n电荷 ",
+      "top": null
+    },
+    {
+      "id": "capability-form-panel",
+      "rect": {
+        "x": 1041,
+        "y": 3269.3125,
+        "w": 224,
+        "h": 1
+      },
+      "text": "能力表单\n−\n选择项目后加载能力表单",
+      "top": null
+    },
+    {
+      "id": "queue-list",
+      "rect": {
+        "x": 1055,
+        "y": 275.5,
+        "w": 196,
+        "h": 120
+      },
+      "text": "暂无任务",
+      "top": {
+        "id": "sq-structure",
+        "cls": "modal-input",
+        "tag": "TEXTAREA"
+      }
+    }
+  ],
+  "new_project_click": "blocked",
+  "click_error": "Locator.click: Timeout 1800ms exceeded.\nCall log:\n  - waiting for locator(\"#btn-new-project\")\n    - locator resolved to <button title=\"新建项目\" aria-label=\"新建项目\" id=\"btn-new-project\" class=\"project-new-btn\" data-i18n-title=\"project.new_title\">…</button>\n  - attempting click action (trial run)\n    - waiting for element to be visible, enabled and stable\n    - element is visible, enabled and stable\n    - scrolling into view if needed\n    - done scrolling\n    - <div class=\"panel-head\">…</div> from <section id=\"science-question-panel\" data-panel-key=\"science_question\" class=\"panel-section science-question-panel\">…</section> subtree intercepts pointer events\n  - retrying click action (trial run)\n    - waiting for element to be visible, enabled and stable\n    - element is visible, enabled and stable\n    - scrolling into view if needed\n    - done scrolling\n    - <header class=\"topbar\">…</header> intercepts pointer events\n  - retrying click action (trial run)\n    - waiting 20ms\n    2 × waiting for element to be visible, enabled and stable\n      - element is visible, enabled and stable\n      - scrolling into view if needed\n      - done scrolling\n      - <div class=\"panel-head\">…</div> from <section id=\"science-question-panel\" data-panel-key=\"science_question\" class=\"panel-section science-question-panel\">…</section> subtree intercepts pointer events\n    - retrying click action (trial run)\n      - waiting 100ms\n    - waiting for element to be visible, enabled and stable\n    - element is visible, enabled and stable\n    - scrolling into view if needed\n    - done scrolling\n    - <div class=\"panel-head\">…</div> from <section id=\"science-question-panel\" data-panel-key=\"science_question\" class=\"panel-section science-question-panel\">…</section> subtree intercepts pointer events\n  - retrying click action (trial run)\n    - waiting 500ms\n    - waiting for element to be visible, enabled and stable\n    - element is visible, enabled and stable\n    - scrolling into view if needed\n    - done scrolling\n    - <header class=\"topbar\">…</header> intercepts pointer events\n  - retrying click action (trial run)\n    - waiting 500ms\n    - waiting for element to be visible, enabled and stable\n    - element is visible, enabled and stable\n    - scrolling into view if needed\n    - done scrolling\n    - <div class=\"panel-head\">…</div> from <section id=\"science-question-panel\" data-panel-key=\"science_question\" class=\"panel-section science-question-panel\">…</section> subtree intercepts pointer events\n  - retrying click action (trial run)\n    - waiting 500ms\n"
+}

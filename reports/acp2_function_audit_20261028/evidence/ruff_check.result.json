@@ -1,0 +1,15 @@
+{
+  "name": "ruff_check",
+  "command": [
+    "python3.11",
+    "-m",
+    "ruff",
+    "check",
+    "src",
+    "tests",
+    "--output-format=json"
+  ],
+  "exit_code": 1,
+  "elapsed_seconds": 1.33,
+  "log": "ruff_check.log"
+}

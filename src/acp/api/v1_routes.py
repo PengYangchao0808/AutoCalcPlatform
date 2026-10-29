@@ -2567,7 +2567,12 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
     # before any resolution/snapshot/dispatch side effect, and the canonical form
     # is the same object MCP and the CLI build (so the request digest and the
     # effective JobSpec cannot drift per entry).
+    raw_input = req.input
     request_payload = req.model_dump(exclude_none=True)
+    if raw_input is None:
+        # An omitted input block keeps the legacy create-now-fail-later shape;
+        # the field policy still sees an (empty) object, not a missing field.
+        request_payload["input"] = {}
     try:
         canonical_submit_request(request_payload, entry="http")
         normalized_submit = normalize_submit(request_payload)
@@ -2579,9 +2584,10 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         ) from exc
     # Semantic contract (P1): unknown method keys / illegal enums / missing
     # input are refused here, before classification, approval or dispatch.
+    req.input = req.input or {}
     try:
         validate_workflow_submission(
-            req.workflow, input=req.input, method=req.method, resources=req.resources
+            req.workflow, input=raw_input, method=req.method, resources=req.resources
         )
     except SubmissionContractError as exc:
         raise _command_error(422, "input_invalid", str(exc), params=exc.params()) from exc
@@ -8773,7 +8779,10 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
             f"Unsupported workflow '{req.workflow}'",
             params={"field": "workflow", "allowed": list(PUBLIC_WORKFLOWS)},
         )
+    raw_input = req.input
     payload = req.model_dump(exclude_none=True)
+    if raw_input is None:
+        payload["input"] = {}
     try:
         validate_request_fields(payload, request_kind="preflight", entry="http")
         normalize_preflight(payload)
@@ -8793,9 +8802,10 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
             params=dict(detail.get("params") or {}),
         ) from exc
     # Same semantic contract as create_job, before any snapshot/estimate work.
+    req.input = req.input or {}
     try:
         validate_workflow_submission(
-            req.workflow, input=req.input, method=req.method, resources=req.resources
+            req.workflow, input=raw_input, method=req.method, resources=req.resources
         )
     except SubmissionContractError as exc:
         raise _command_error(422, "input_invalid", str(exc), params=exc.params()) from exc

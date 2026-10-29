@@ -1,0 +1,12 @@
+{
+  "drill": "disconnect",
+  "step1_stop": "approval_rejected",
+  "jobs_total": 1,
+  "job_statuses": {
+    "20261029_103943_001_singlepoint": "RUNNING"
+  },
+  "restart_stop": "wait_pending",
+  "restart_submits": 0,
+  "killed_pid": 2310012,
+  "restart_exit": 0
+}

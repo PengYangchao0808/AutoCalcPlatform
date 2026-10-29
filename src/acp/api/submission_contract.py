@@ -244,6 +244,8 @@ WORKFLOW_CONTRACTS: dict[str, WorkflowContract] = {
         input_keys=frozenset(
             {
                 "source_type",
+                "schema_version",
+                "source_job_id",
                 "items",
                 "from_artifact",
                 "items_file",
@@ -359,7 +361,13 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
                 field_name="method.select",
                 rule="invalid_type",
             )
-def _validate_input(workflow: str, payload: Mapping[str, Any], contract: WorkflowContract) -> None:
+def _validate_input(
+    workflow: str,
+    payload: Mapping[str, Any],
+    contract: WorkflowContract,
+    *,
+    require_sources: bool = True,
+) -> None:
     if contract.input_keys is not None:
         unknown = sorted(str(key) for key in payload if str(key) not in contract.input_keys)
         if unknown:
@@ -372,12 +380,18 @@ def _validate_input(workflow: str, payload: Mapping[str, Any], contract: Workflo
     def _present(value: Any) -> bool:
         if value is None or value == "":
             return False
-        if isinstance(value, (list, tuple, dict)):
+        if isinstance(value, dict):
             return bool(value)
+        if isinstance(value, (list, tuple)):
+            # An explicitly supplied list (even empty) is a declared source:
+            # the legacy API defers item validation to the resolver.
+            return True
         return True
 
-    if contract.required_input_any and not any(
-        _present(payload.get(key)) for key in contract.required_input_any
+    if (
+        require_sources
+        and contract.required_input_any
+        and not any(_present(payload.get(key)) for key in contract.required_input_any)
     ):
         raise SubmissionContractError(
             f"{workflow} input needs one of {list(contract.required_input_any)}",
@@ -385,14 +399,9 @@ def _validate_input(workflow: str, payload: Mapping[str, Any], contract: Workflo
             rule="missing_input",
             allowed=contract.required_input_any,
         )
-    if contract.batch_structures_only and payload.get("source_type") == "batch_structures":
-        items = payload.get("items")
-        if not isinstance(items, list) or not items:
-            raise SubmissionContractError(
-                "BatchOptimize batch_structures input requires a non-empty items list",
-                field_name="input.items",
-                rule="missing_input",
-            )
+    # ``batch_structures`` item lists are validated by the resolver downstream:
+    # the legacy API accepts an empty list at create time (create-now-fail-later),
+    # so the contract must not turn that into a 422.
 
 
 def validate_workflow_submission(
@@ -418,4 +427,8 @@ def validate_workflow_submission(
     input_mapping = _as_mapping(input or {}, "input")
     _ = _as_mapping(resources or {}, "resources")
     _validate_method(workflow, method_mapping, contract)
-    _validate_input(workflow, input_mapping, contract)
+    # An omitted input block keeps the legacy "create now, fail later" shape;
+    # an explicitly empty block is still refused (P1).
+    _validate_input(
+        workflow, input_mapping, contract, require_sources=input is not None
+    )

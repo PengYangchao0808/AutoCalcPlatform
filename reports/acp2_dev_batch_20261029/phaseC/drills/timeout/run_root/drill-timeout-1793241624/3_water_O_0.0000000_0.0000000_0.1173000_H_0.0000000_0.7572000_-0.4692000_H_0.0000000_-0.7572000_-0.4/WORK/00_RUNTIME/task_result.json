@@ -1,0 +1,76 @@
+{
+  "authority": "cccp.calculation.tasks.singlepoint:184-239",
+  "complete": true,
+  "content_digest": "sha256:6032be89d6c12560b3b4c51c727ac7e90c0d858fd08cec286af731fefba414c5",
+  "exit_code": 0,
+  "job_status": "completed",
+  "missing_required_facts": [],
+  "normal_reuse": true,
+  "partial_result": false,
+  "publish": true,
+  "publish_policy": "normal",
+  "qualification": "complete",
+  "receipt_state": "completed",
+  "required_facts": [
+    "energy_hartree"
+  ],
+  "result": {
+    "artifacts": [
+      {
+        "checksum": "sha256:f2c51beda0a96dec659536485a30055f4b1405cdbf67e0d643dcdf57317553a7",
+        "path": "/tmp/phaseC/drills/timeout/run_root/drill-timeout-1793241624/3_water_O_0.0000000_0.0000000_0.1173000_H_0.0000000_0.7572000_-0.4692000_H_0.0000000_-0.7572000_-0.4/sp.inp",
+        "source": "orca",
+        "type": "output"
+      },
+      {
+        "checksum": "sha256:8c0a9cc62e068fc443c539172115e4f78d8f826197921952ce2b5264c789511c",
+        "path": "/tmp/phaseC/drills/timeout/run_root/drill-timeout-1793241624/3_water_O_0.0000000_0.0000000_0.1173000_H_0.0000000_0.7572000_-0.4692000_H_0.0000000_-0.7572000_-0.4/sp.out",
+        "source": "orca",
+        "type": "log"
+      }
+    ],
+    "complete": true,
+    "coordinates": [
+      [
+        0.0,
+        0.0,
+        0.1173
+      ],
+      [
+        0.0,
+        0.7572,
+        -0.4692
+      ],
+      [
+        0.0,
+        -0.7572,
+        -0.4692
+      ]
+    ],
+    "energy_hartree": -76.418906909978,
+    "errors": [],
+    "frequencies": [],
+    "metadata": {},
+    "payload": {},
+    "provenance": {
+      "backend": "orca",
+      "input_signature": "input.xyz",
+      "method": "r2SCAN-3c",
+      "version": "unknown"
+    },
+    "schema_version": 1,
+    "status": "completed",
+    "symbols": [
+      "O",
+      "H",
+      "H"
+    ],
+    "task": "singlepoint"
+  },
+  "result_digest": "sha256:1d25a4bf5f01613755cef09b9178780eee813bbb9dd11187c8db4bb5b514c803",
+  "schema": "acp_task_result_v1",
+  "status": "completed",
+  "task": "singlepoint",
+  "truth_table_row": "b",
+  "written_at": "2026-10-29T02:40:34.011066+00:00"
+}

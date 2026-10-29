@@ -1,0 +1,2135 @@
+{
+  "tracked_file_counts": {
+    "src/cccp": 203,
+    "src/cccp/analysis": 88,
+    "src/cccp/calculation": 50,
+    "src/acp": 298,
+    "src/acp/api": 24,
+    "src/acp/scheduler": 45,
+    "src/acp/scheduler/remote": 14,
+    "src/acp_services": 128,
+    "src/acp_services/runtime": 71,
+    "src/acp_services/entrypoints": 10,
+    "tests": 583,
+    "scripts/acceptance": 54,
+    "frontend/js/client": 13,
+    "frontend/js/workbench": 33,
+    "frontend/js/visualization": 4,
+    "frontend/js/module_tests": 46
+  },
+  "test_files_total": 534,
+  "test_files_flat": 529,
+  "catalog": [
+    {
+      "id": "singlepoint",
+      "label": "Single Point Energy",
+      "label_zh": "单点能计算",
+      "category": "simple",
+      "description": "Compute energy at current geometry",
+      "method_schema_id": "dft_singlepoint",
+      "default_backend": "orca",
+      "requires_binaries": [
+        "orca"
+      ],
+      "status": "active",
+      "visible": true
+    },
+    {
+      "id": "optimize",
+      "label": "Geometry Optimization",
+      "label_zh": "几何优化",
+      "category": "simple",
+      "description": "Optimize molecular geometry",
+      "method_schema_id": "dft_optimize",
+      "default_backend": "orca",
+      "requires_binaries": [
+        "orca"
+      ],
+      "status": "active",
+      "visible": true
+    },
+    {
+      "id": "frequency",
+      "label": "Frequency Calculation",
+      "label_zh": "频率计算",
+      "category": "simple",
+      "description": "Compute vibrational frequencies",
+      "method_schema_id": "dft_frequency",
+      "default_backend": "orca",
+      "requires_binaries": [
+        "orca"
+      ],
+      "status": "active",
+      "visible": true
+    },
+    {
+      "id": "scan",
+      "label": "Relaxed Scan",
+      "label_zh": "松弛扫描",
+      "category": "simple",
+      "description": "Scan an internal coordinate while relaxing the remaining geometry",
+      "method_schema_id": "dft_scan",
+      "default_backend": "orca",
+      "requires_binaries": [
+        "orca"
+      ],
+      "status": "active",
+      "visible": true
+    },
+    {
+      "id": "irc",
+      "label": "Intrinsic Reaction Coordinate",
+      "label_zh": "内禀反应坐标",
+      "category": "simple",
+      "description": "Follow both directions of a transition-state IRC",
+      "method_schema_id": "irc",
+      "default_backend": "orca",
+      "requires_binaries": [
+        "orca"
+      ],
+      "status": "active",
+      "visible": true
+    },
+    {
+      "id": "tsmode",
+      "label": "TS Mode Optimization",
+      "label_zh": "TS 模式定向优化",
+      "category": "simple",
+      "description": "Directed OptTS along a chosen imaginary mode of an existing frequency result (reads its Hessian), with final frequency verification",
+      "method_schema_id": "tsmode",
+      "default_backend": "orca",
+      "requires_binaries": [
+        "orca"
+      ],
+      "requires_source": true,
+      "status": "active",
+      "visible": true
+    },
+    {
+      "id": "casscf",
+      "label": "CASSCF / NEVPT2",
+      "label_zh": "CASSCF / NEVPT2",
+      "category": "simple",
+      "description": "Multi-reference CASSCF single point with optional SC-/FIC-NEVPT2",
+      "description_zh": "多参考 CASSCF 单点，可选 SC-/FIC-NEVPT2 动态相关",
+      "method_schema_id": "casscf",
+      "default_backend": "orca",
+      "requires_binaries": [
+        "orca"
+      ],
+      "status": "active",
+      "visible": true
+    },
+    {
+      "id": "optfreq",
+      "label": "Optimization + Frequency",
+      "label_zh": "优化+频率",
+      "category": "simple",
+      "description": "Retired in the 2026-08 refactor; use optimize + frequency or BatchOptimize; historical jobs are read-only",
+      "description_zh": "已由 BatchOptimize 取代，历史任务只读",
+      "method_schema_id": "dft_optfreq",
+      "default_backend": "orca",
+      "requires_binaries": [
+        "orca"
+      ],
+      "reason": "2026-08 refactor",
+      "replacements": [
+        "optimize + frequency",
+        "BatchOptimize"
+      ],
+      "status": "retired",
+      "visible": false
+    },
+    {
+      "id": "optfreqsp",
+      "label": "Opt+Freq+SP+Thermo",
+      "label_zh": "优化+频率+单点+热化学",
+      "category": "simple",
+      "description": "Retired in the 2026-08 refactor; use BatchOptimize for optimization, frequency, single-point, and thermochemistry; historical jobs are read-only",
+      "description_zh": "已由 BatchOptimize 取代，历史任务只读",
+      "method_schema_id": "dft_optfreqsp",
+      "default_backend": "orca",
+      "requires_binaries": [
+        "orca",
+        "shermo"
+      ],
+      "reason": "2026-08 refactor",
+      "replacements": [
+        "BatchOptimize"
+      ],
+      "status": "retired",
+      "visible": false
+    },
+    {
+      "id": "xtb_optimize",
+      "label": "xTB Optimization",
+      "label_zh": "xTB 优化",
+      "category": "simple",
+      "description": "Fast semi-empirical optimization with xTB",
+      "method_schema_id": "xtb_optimize",
+      "default_backend": "xtb",
+      "requires_binaries": [
+        "xtb"
+      ],
+      "status": "active",
+      "visible": true
+    },
+    {
+      "id": "conformer",
+      "label": "Conformer Search",
+      "label_zh": "构象搜索",
+      "category": "preset",
+      "description": "CREST conformer search + DFT refinement + thermo",
+      "method_schema_id": "confsearch",
+      "default_backend": "crest",
+      "requires_binaries": [
+        "crest",
+        "orca"
+      ],
+      "status": "retired",
+      "visible": false
+    },
+    {
+      "id": "nmr",
+      "label": "NMR + DP4/DP5",
+      "label_zh": "NMR + DP4/DP5 立体归属",
+      "category": "preset",
+      "description": "GIAO NMR shieldings + Boltzmann averaging + DP4/DP5 stereochemistry assignment",
+      "method_schema_id": "nmr",
+      "default_backend": "orca",
+      "requires_binaries": [
+        "crest",
+        "censo",
+        "orca"
+      ],
+      "status": "active",
+      "visible": true
+    },
+    {
+      "id": "benchmark",
+      "label": "Benchmark",
+      "label_zh": "基准测试",
+      "category": "preset",
+      "description": "Compare protocols/methods across test set",
+      "method_schema_id": "benchmark",
+      "default_backend": "orca",
+      "requires_binaries": [
+        "orca"
+      ],
+      "status": "retired",
+      "visible": false
+    },
+    {
+      "id": "ensemble",
+      "label": "Ensemble Generation",
+      "label_zh": "构象生成",
+      "category": "preset",
+      "description": "CREST + CENSO → Boltzmann conformer ensemble",
+      "method_schema_id": "censo_ensemble",
+      "default_backend": "censo",
+      "requires_binaries": [
+        "crest",
+        "censo",
+        "orca"
+      ],
+      "status": "retired",
+      "visible": false
+    },
+    {
+      "id": "energy",
+      "label": "Conformer Energy",
+      "label_zh": "构象能量",
+      "category": "preset",
+      "description": "CREST + CENSO → 99% ensemble → refined free energies",
+      "method_schema_id": "censo_energy",
+      "default_backend": "censo",
+      "requires_binaries": [
+        "crest",
+        "censo",
+        "orca"
+      ],
+      "status": "retired",
+      "visible": false
+    },
+    {
+      "id": "xtbmd_censo_energy",
+      "label": "xTB-MD CENSO Energy",
+      "label_zh": "xTB 动力学构象自由能",
+      "category": "preset",
+      "description": "GFN-FF MD sampling → GFN1 batch opt → isostat dedup → CENSO → fine DFT",
+      "method_schema_id": "xtbmd_censo_energy",
+      "default_backend": "censo",
+      "requires_binaries": [
+        "xtb",
+        "isostat",
+        "censo",
+        "orca"
+      ],
+      "status": "retired",
+      "visible": false
+    },
+    {
+      "id": "mechanism",
+      "label": "Mechanism / TS",
+      "label_zh": "机理研究 / 过渡态",
+      "category": "preset",
+      "description": "TS guess + optimization + IRC verification",
+      "method_schema_id": "mechanism",
+      "default_backend": "orca",
+      "requires_binaries": [
+        "orca"
+      ],
+      "status": "retired",
+      "visible": false
+    },
+    {
+      "id": "custom_sequence",
+      "label": "Custom Task Sequence",
+      "label_zh": "自定义任务序列",
+      "category": "custom",
+      "description": "Build a linear pipeline of calculation blocks",
+      "method_schema_id": "custom",
+      "default_backend": "",
+      "requires_binaries": [],
+      "status": "planned",
+      "visible": false
+    },
+    {
+      "id": "mech-conf",
+      "label": "Mechanism Conformer / Stable State",
+      "label_zh": "机理构象 / 稳定态",
+      "category": "mechanism",
+      "description": "Standalone conformer search for one mechanism stable state",
+      "method_schema_id": "mech_conf",
+      "default_backend": "orca",
+      "requires_binaries": [
+        "crest",
+        "orca"
+      ],
+      "status": "retired",
+      "visible": false
+    },
+    {
+      "id": "mech-step",
+      "label": "Mechanism Elementary Step",
+      "label_zh": "机理基元步骤",
+      "category": "mechanism",
+      "description": "Elementary step: PEB path -> coarse refine -> IRC -> endpoints",
+      "method_schema_id": "mech_step",
+      "default_backend": "orca",
+      "requires_binaries": [
+        "orca",
+        "xtb"
+      ],
+      "status": "retired",
+      "visible": false
+    },
+    {
+      "id": "mech-confirm",
+      "label": "Mechanism High-Fidelity Confirmation",
+      "label_zh": "机理高精度确认",
+      "category": "mechanism",
+      "description": "High-fidelity confirmation of one elementary-step artifact",
+      "method_schema_id": "mech_confirm",
+      "default_backend": "orca",
+      "requires_binaries": [
+        "orca"
+      ],
+      "status": "retired",
+      "visible": false
+    },
+    {
+      "id": "mech-chain",
+      "label": "Mechanism Chain",
+      "label_zh": "机理模块链",
+      "category": "mechanism",
+      "description": "Declarative composition of standalone mechanism modules",
+      "method_schema_id": "mech_chain",
+      "default_backend": "",
+      "requires_binaries": [],
+      "status": "retired",
+      "visible": false
+    },
+    {
+      "id": "Confsearch",
+      "label": "Conformer Search",
+      "label_zh": "构象搜索",
+      "category": "preset",
+      "description": "Unified conformer search + energies: protocols xtb-crest / xtb-md / censo-crest / xtbmd-censo",
+      "method_schema_id": "confsearch_unified",
+      "default_backend": "censo",
+      "requires_binaries": [
+        "crest",
+        "xtb",
+        "isostat",
+        "censo",
+        "orca"
+      ],
+      "status": "active",
+      "visible": true
+    },
+    {
+      "id": "PESsearch",
+      "label": "PES Search",
+      "label_zh": "势能面搜索",
+      "category": "preset",
+      "description": "PES scan and candidate extraction from a structure or upstream result",
+      "description_zh": "从结构或上游结果执行势能面扫描并提取候选结构",
+      "method_schema_id": "pes_scan",
+      "default_backend": "orca",
+      "requires_binaries": [
+        "orca",
+        "xtb"
+      ],
+      "status": "active",
+      "visible": true
+    },
+    {
+      "id": "BatchOptimize",
+      "label": "Batch Optimization",
+      "label_zh": "批量优化",
+      "category": "preset",
+      "description": "Batch optimization and optional frequency, single-point, and thermochemistry steps",
+      "description_zh": "批量执行结构优化，并可选执行频率、单点能和热化学步骤",
+      "method_schema_id": "batch_optimize",
+      "default_backend": "orca",
+      "requires_binaries": [
+        "orca",
+        "shermo"
+      ],
+      "status": "active",
+      "visible": true
+    },
+    {
+      "id": "XtbPathSearch",
+      "label": "xTB PATH Search",
+      "label_zh": "xTB PATH 势能路径搜索",
+      "category": "preset",
+      "description": "GFN2-xTB PATH metadynamics from a frozen pes2ts_xtb_path_request_v1 payload delivered via --path-config (PES2TS → ACP execution unification)",
+      "description_zh": "基于冻结 pes2ts_xtb_path_request_v1 请求（--path-config）的 GFN2-xTB PATH 势能路径搜索",
+      "method_schema_id": "xtb_path_search",
+      "default_backend": "xtb",
+      "requires_binaries": [
+        "xtb"
+      ],
+      "status": "active",
+      "visible": true
+    },
+    {
+      "id": "OrcaGradient",
+      "label": "ORCA Single-Point Gradient",
+      "label_zh": "ORCA 单点梯度（EnGrad）",
+      "category": "preset",
+      "description": "ORCA single-point analytic gradient (EnGrad) from a frozen pes2ts_orca_gradient_request_v1 payload delivered via --gradient-config (PES2TS → ACP execution unification)",
+      "description_zh": "基于冻结 pes2ts_orca_gradient_request_v1 请求（--gradient-config）的 ORCA 单点解析梯度（EnGrad）",
+      "method_schema_id": "orca_gradient",
+      "default_backend": "orca",
+      "requires_binaries": [
+        "orca"
+      ],
+      "status": "active",
+      "visible": true
+    },
+    {
+      "id": "XtbConstrainedOpt",
+      "label": "xTB Constrained Optimization",
+      "label_zh": "xTB 约束优化",
+      "category": "preset",
+      "description": "Single-geometry xTB native constrained optimization (+ optional unrestrained physical single point) from a frozen pes2ts_xtb_constrained_opt_request_v1 payload delivered via --opt-config (PES2TS → ACP execution unification)",
+      "description_zh": "基于冻结 pes2ts_xtb_constrained_opt_request_v1 请求（--opt-config）的 xTB 单几何约束优化（可选无约束物理单点）",
+      "method_schema_id": "xtb_constrained_opt",
+      "default_backend": "xtb",
+      "requires_binaries": [
+        "xtb"
+      ],
+      "status": "active",
+      "visible": true
+    },
+    {
+      "id": "Lowconfirm",
+      "label": "Low Confirmation",
+      "label_zh": "粗优化",
+      "category": "stages",
+      "description": "Retired in the 2026-08 refactor; use BatchOptimize and the standalone IRC workflow when needed; historical jobs are read-only",
+      "description_zh": "已由 BatchOptimize 取代，历史任务只读",
+      "method_schema_id": "low_confirm",
+      "default_backend": "orca",
+      "requires_binaries": [
+        "orca"
+      ],
+      "reason": "2026-08 refactor",
+      "replacements": [
+        "BatchOptimize",
+        "irc"
+      ],
+      "status": "retired",
+      "visible": false
+    },
+    {
+      "id": "Highconfirm",
+      "label": "High Confirmation",
+      "label_zh": "精细优化",
+      "category": "stages",
+      "description": "Retired in the 2026-08 refactor; use BatchOptimize and the standalone IRC workflow when needed; historical jobs are read-only",
+      "description_zh": "已由 BatchOptimize 取代，历史任务只读",
+      "method_schema_id": "high_confirm",
+      "default_backend": "orca",
+      "requires_binaries": [
+        "orca"
+      ],
+      "reason": "2026-08 refactor",
+      "replacements": [
+        "BatchOptimize",
+        "irc"
+      ],
+      "status": "retired",
+      "visible": false
+    }
+  ],
+  "catalog_status_counts": {
+    "active": 15,
+    "retired": 14,
+    "planned": 1
+  },
+  "task_kinds": [
+    "singlepoint",
+    "optimize",
+    "frequency",
+    "scan",
+    "irc",
+    "casscf",
+    "thermochemistry",
+    "conformer_search",
+    "md_sampling",
+    "clustering",
+    "censo_refine",
+    "nmr_shielding",
+    "xtb_path_search",
+    "orca_gradient",
+    "xtb_constrained_opt"
+  ],
+  "execution_capabilities": {
+    "singlepoint": {
+      "workflow": "singlepoint",
+      "capabilities": [
+        "singlepoint"
+      ],
+      "closure": "integrated",
+      "remote_supported": true,
+      "release_required": true,
+      "requires_envelope": false
+    },
+    "optimize": {
+      "workflow": "optimize",
+      "capabilities": [
+        "optimize"
+      ],
+      "closure": "integrated",
+      "remote_supported": true,
+      "release_required": true,
+      "requires_envelope": false
+    },
+    "frequency": {
+      "workflow": "frequency",
+      "capabilities": [
+        "frequency"
+      ],
+      "closure": "integrated",
+      "remote_supported": true,
+      "release_required": true,
+      "requires_envelope": false
+    },
+    "scan": {
+      "workflow": "scan",
+      "capabilities": [
+        "scan"
+      ],
+      "closure": "integrated",
+      "remote_supported": true,
+      "release_required": true,
+      "requires_envelope": false
+    },
+    "irc": {
+      "workflow": "irc",
+      "capabilities": [
+        "irc"
+      ],
+      "closure": "integrated",
+      "remote_supported": true,
+      "release_required": true,
+      "requires_envelope": false
+    },
+    "casscf": {
+      "workflow": "casscf",
+      "capabilities": [
+        "casscf"
+      ],
+      "closure": "integrated",
+      "remote_supported": false,
+      "release_required": true,
+      "requires_envelope": false
+    },
+    "xtb_optimize": {
+      "workflow": "xtb_optimize",
+      "capabilities": [
+        "optimize"
+      ],
+      "closure": "integrated",
+      "remote_supported": true,
+      "release_required": true,
+      "requires_envelope": false
+    },
+    "OrcaGradient": {
+      "workflow": "OrcaGradient",
+      "capabilities": [
+        "orca_gradient"
+      ],
+      "closure": "integrated",
+      "remote_supported": false,
+      "release_required": true,
+      "requires_envelope": false
+    },
+    "BoundedRecipe": {
+      "workflow": "BoundedRecipe",
+      "capabilities": [
+        "singlepoint",
+        "optimize",
+        "frequency",
+        "irc"
+      ],
+      "closure": "integrated",
+      "remote_supported": true,
+      "release_required": true,
+      "requires_envelope": true
+    },
+    "Confsearch": {
+      "workflow": "Confsearch",
+      "capabilities": [
+        "conformer_search",
+        "md_sampling",
+        "clustering",
+        "censo_refine"
+      ],
+      "closure": "legacy",
+      "remote_supported": true,
+      "release_required": true,
+      "requires_envelope": false
+    },
+    "PESsearch": {
+      "workflow": "PESsearch",
+      "capabilities": [
+        "scan",
+        "singlepoint"
+      ],
+      "closure": "legacy",
+      "remote_supported": true,
+      "release_required": true,
+      "requires_envelope": false
+    },
+    "BatchOptimize": {
+      "workflow": "BatchOptimize",
+      "capabilities": [
+        "optimize",
+        "frequency",
+        "singlepoint",
+        "thermochemistry"
+      ],
+      "closure": "legacy",
+      "remote_supported": true,
+      "release_required": true,
+      "requires_envelope": false
+    },
+    "XtbPathSearch": {
+      "workflow": "XtbPathSearch",
+      "capabilities": [
+        "xtb_path_search"
+      ],
+      "closure": "legacy",
+      "remote_supported": false,
+      "release_required": true,
+      "requires_envelope": false
+    },
+    "XtbConstrainedOpt": {
+      "workflow": "XtbConstrainedOpt",
+      "capabilities": [
+        "xtb_constrained_opt"
+      ],
+      "closure": "legacy",
+      "remote_supported": false,
+      "release_required": true,
+      "requires_envelope": false
+    },
+    "tsmode": {
+      "workflow": "tsmode",
+      "capabilities": [
+        "frequency",
+        "optimize"
+      ],
+      "closure": "legacy",
+      "remote_supported": true,
+      "release_required": true,
+      "requires_envelope": false
+    },
+    "nmr": {
+      "workflow": "nmr",
+      "capabilities": [
+        "nmr_shielding",
+        "conformer_search",
+        "censo_refine"
+      ],
+      "closure": "legacy",
+      "remote_supported": true,
+      "release_required": true,
+      "requires_envelope": false
+    }
+  },
+  "default_envelope_workflows": [
+    "BoundedRecipe",
+    "singlepoint"
+  ],
+  "enabled_workflows": [
+    "BoundedRecipe",
+    "OrcaGradient",
+    "casscf",
+    "frequency",
+    "irc",
+    "optimize",
+    "scan",
+    "singlepoint",
+    "xtb_optimize"
+  ],
+  "mcp_basic_tools": [
+    "acp_analyze",
+    "acp_cancel",
+    "acp_capabilities",
+    "acp_preflight",
+    "acp_prepare_artifact",
+    "acp_read_artifact",
+    "acp_status",
+    "acp_submit"
+  ],
+  "mcp_research_tools": [
+    "acp_research_proposal_create_v1",
+    "acp_research_proposal_read_v1",
+    "acp_research_proposal_update_cas_v1",
+    "acp_research_approval_request_v1",
+    "acp_research_approval_query_v1",
+    "acp_research_approval_decide_v1",
+    "acp_research_approval_revoke_v1",
+    "acp_research_wait_v1",
+    "acp_research_snapshot_v1",
+    "acp_research_resume_v1"
+  ],
+  "api_routes": {
+    "__init__.py": [],
+    "batch_preview.py": [
+      {
+        "method": "POST",
+        "path": "/batch-optimize/config-preview",
+        "handler": "batch_optimize_config_preview",
+        "line": 140
+      }
+    ],
+    "capability_forms.py": [],
+    "drafts.py": [
+      {
+        "method": "GET",
+        "path": "/drafts",
+        "handler": "list_drafts",
+        "line": 64
+      },
+      {
+        "method": "POST",
+        "path": "/drafts",
+        "handler": "create_draft",
+        "line": 75
+      },
+      {
+        "method": "GET",
+        "path": "/drafts/{draft_id}",
+        "handler": "get_draft",
+        "line": 81
+      },
+      {
+        "method": "PUT",
+        "path": "/drafts/{draft_id}",
+        "handler": "update_draft",
+        "line": 94
+      },
+      {
+        "method": "DELETE",
+        "path": "/drafts/{draft_id}",
+        "handler": "delete_draft",
+        "line": 103
+      }
+    ],
+    "job_status_view.py": [],
+    "mechanism_readonly.py": [
+      {
+        "method": "POST",
+        "path": "/mechanism-projects",
+        "handler": "create_mechanism_project",
+        "line": 63
+      },
+      {
+        "method": "GET",
+        "path": "/mechanism-projects",
+        "handler": "list_mechanism_projects",
+        "line": 71
+      },
+      {
+        "method": "GET",
+        "path": "/mechanism-projects/{project_id}",
+        "handler": "get_mechanism_project",
+        "line": 97
+      }
+    ],
+    "mechanism_readonly_schemas.py": [],
+    "routes.py": [
+      {
+        "method": "GET",
+        "path": "/status",
+        "handler": "get_status",
+        "line": 118
+      },
+      {
+        "method": "GET",
+        "path": "/health",
+        "handler": "get_health",
+        "line": 223
+      },
+      {
+        "method": "GET",
+        "path": "/capabilities",
+        "handler": "get_capabilities",
+        "line": 419
+      },
+      {
+        "method": "POST",
+        "path": "/capabilities",
+        "handler": "post_capabilities",
+        "line": 444
+      },
+      {
+        "method": "GET",
+        "path": "/identity",
+        "handler": "get_identity",
+        "line": 499
+      },
+      {
+        "method": "GET",
+        "path": "/backends",
+        "handler": "get_backends",
+        "line": 580
+      },
+      {
+        "method": "GET",
+        "path": "/workflows",
+        "handler": "get_workflows",
+        "line": 612
+      },
+      {
+        "method": "GET",
+        "path": "/protocols",
+        "handler": "get_protocols",
+        "line": 617
+      },
+      {
+        "method": "POST",
+        "path": "/jobs",
+        "handler": "create_job",
+        "line": 627
+      },
+      {
+        "method": "GET",
+        "path": "/jobs",
+        "handler": "list_jobs",
+        "line": 660
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}",
+        "handler": "get_job",
+        "line": 681
+      },
+      {
+        "method": "POST",
+        "path": "/jobs/{job_id}/cancel",
+        "handler": "cancel_job",
+        "line": 690
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/logs",
+        "handler": "get_job_logs",
+        "line": 699
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/files",
+        "handler": "get_job_files",
+        "line": 715
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/files/{file_path:path}",
+        "handler": "download_job_file",
+        "line": 738
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/events",
+        "handler": "stream_job_events",
+        "line": 776
+      },
+      {
+        "method": "GET",
+        "path": "/events/stream",
+        "handler": "stream_scope_events",
+        "line": 1115
+      }
+    ],
+    "schemas.py": [],
+    "science_catalog.py": [],
+    "science_projection.py": [],
+    "server.py": [
+      {
+        "method": "GET",
+        "path": "/",
+        "handler": "index",
+        "line": 578
+      },
+      {
+        "method": "GET",
+        "path": "/legacy/",
+        "handler": "legacy_index",
+        "line": 587
+      }
+    ],
+    "static_assets.py": [],
+    "v1_routes.py": [
+      {
+        "method": "GET",
+        "path": "/status",
+        "handler": "get_status",
+        "line": 1306
+      },
+      {
+        "method": "GET",
+        "path": "/backends",
+        "handler": "get_backends",
+        "line": 1311
+      },
+      {
+        "method": "GET",
+        "path": "/software/discovery",
+        "handler": "get_software_discovery",
+        "line": 1316
+      },
+      {
+        "method": "GET",
+        "path": "/workflows",
+        "handler": "get_workflows",
+        "line": 1358
+      },
+      {
+        "method": "GET",
+        "path": "/protocols",
+        "handler": "get_protocols",
+        "line": 1363
+      },
+      {
+        "method": "GET",
+        "path": "/projects",
+        "handler": "list_projects",
+        "line": 1368
+      },
+      {
+        "method": "POST",
+        "path": "/projects",
+        "handler": "create_project",
+        "line": 1379
+      },
+      {
+        "method": "GET",
+        "path": "/projects/{project_id}",
+        "handler": "get_project",
+        "line": 1394
+      },
+      {
+        "method": "PATCH",
+        "path": "/projects/{project_id}",
+        "handler": "update_project",
+        "line": 1404
+      },
+      {
+        "method": "DELETE",
+        "path": "/projects/{project_id}",
+        "handler": "delete_project",
+        "line": 1421
+      },
+      {
+        "method": "GET",
+        "path": "/projects/{project_id}/jobs",
+        "handler": "list_project_jobs",
+        "line": 1438
+      },
+      {
+        "method": "GET",
+        "path": "/irc/ts-source",
+        "handler": "preview_irc_ts_source",
+        "line": 2475
+      },
+      {
+        "method": "POST",
+        "path": "/jobs",
+        "handler": "create_job",
+        "line": 2540
+      },
+      {
+        "method": "GET",
+        "path": "/jobs",
+        "handler": "list_jobs",
+        "line": 2816
+      },
+      {
+        "method": "GET",
+        "path": "/mechanism-studies",
+        "handler": "list_mechanism_studies",
+        "line": 2854
+      },
+      {
+        "method": "POST",
+        "path": "/mechanism-studies",
+        "handler": "create_mechanism_study",
+        "line": 2868
+      },
+      {
+        "method": "GET",
+        "path": "/mechanism-studies/{study_id}",
+        "handler": "get_mechanism_study",
+        "line": 2876
+      },
+      {
+        "method": "POST",
+        "path": "/mechanism-studies/{study_id}/reaction/preview",
+        "handler": "preview_mechanism_reaction",
+        "line": 2887
+      },
+      {
+        "method": "POST",
+        "path": "/mechanism-studies/{study_id}/reaction/confirm",
+        "handler": "confirm_mechanism_reaction",
+        "line": 2899
+      },
+      {
+        "method": "GET",
+        "path": "/mechanism-studies/{study_id}/reaction",
+        "handler": "get_mechanism_reaction",
+        "line": 2911
+      },
+      {
+        "method": "POST",
+        "path": "/mechanism-studies/{study_id}/mechanism/plan",
+        "handler": "confirm_mechanism_plan",
+        "line": 2926
+      },
+      {
+        "method": "GET",
+        "path": "/mechanism-studies/{study_id}/report",
+        "handler": "get_mechanism_study_report",
+        "line": 2938
+      },
+      {
+        "method": "POST",
+        "path": "/mechanism-studies/{study_id}/decisions/{decision_id}",
+        "handler": "resolve_mechanism_decision",
+        "line": 2955
+      },
+      {
+        "method": "GET",
+        "path": "/mechanism-studies/{study_id}/reviews",
+        "handler": "list_mechanism_reviews",
+        "line": 2978
+      },
+      {
+        "method": "POST",
+        "path": "/mechanism-studies/{study_id}/reviews/{review_id}/decision",
+        "handler": "submit_mechanism_review_decision",
+        "line": 3014
+      },
+      {
+        "method": "POST",
+        "path": "/mechanism-studies/{study_id}/resume",
+        "handler": "resume_mechanism_study_job",
+        "line": 3024
+      },
+      {
+        "method": "POST",
+        "path": "/mechanism-studies/{study_id}/promote",
+        "handler": "promote_mechanism_study",
+        "line": 3032
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/energy-graph",
+        "handler": "get_energy_graph",
+        "line": 3088
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/irc/frames/{direction}/{frame_index}/geometry",
+        "handler": "get_irc_frame_geometry",
+        "line": 3239
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/irc/log-tail",
+        "handler": "get_irc_log_tail",
+        "line": 3285
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/optimization/frame/{frame_index}",
+        "handler": "get_optimization_frame",
+        "line": 3329
+      },
+      {
+        "method": "POST",
+        "path": "/structure-assets",
+        "handler": "create_structure_asset",
+        "line": 3388
+      },
+      {
+        "method": "POST",
+        "path": "/s2/structure-preview",
+        "handler": "preview_s2_structure",
+        "line": 3458
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/s2/profile",
+        "handler": "get_s2_profile",
+        "line": 3466
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/s2/candidates",
+        "handler": "get_s2_candidates",
+        "line": 3490
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/s2/frame/{frame_index}",
+        "handler": "get_s2_frame",
+        "line": 3507
+      },
+      {
+        "method": "POST",
+        "path": "/mechanism-projects/{project_id}/s2/review",
+        "handler": "save_s2_review",
+        "line": 3559
+      },
+      {
+        "method": "POST",
+        "path": "/jobs/{job_id}/s2/review",
+        "handler": "save_job_s2_review",
+        "line": 3571
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/pes/review",
+        "handler": "get_pes_review",
+        "line": 3784
+      },
+      {
+        "method": "POST",
+        "path": "/jobs/{job_id}/pes/review/restore",
+        "handler": "restore_pes_review_endpoint",
+        "line": 3834
+      },
+      {
+        "method": "POST",
+        "path": "/jobs/{job_id}/pes/review",
+        "handler": "save_pes_review_endpoint",
+        "line": 3895
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/frequency-sources",
+        "handler": "get_frequency_sources",
+        "line": 4100
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/structure-viewer",
+        "handler": "get_structure_viewer_catalog",
+        "line": 4137
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/structure-viewer/entries/{entry_id}/geometry",
+        "handler": "get_structure_viewer_geometry",
+        "line": 4244
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/structure-viewer/entries/{entry_id}/vibrations",
+        "handler": "get_structure_viewer_vibrations",
+        "line": 4455
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/structure-viewer/overlay",
+        "handler": "get_structure_viewer_overlay",
+        "line": 4639
+      },
+      {
+        "method": "POST",
+        "path": "/jobs/{job_id}/frame-candidate",
+        "handler": "save_frame_candidate_endpoint",
+        "line": 4766
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/frame-candidates",
+        "handler": "list_frame_candidates_endpoint",
+        "line": 4847
+      },
+      {
+        "method": "DELETE",
+        "path": "/jobs/{job_id}/frame-candidate/{candidate_id}",
+        "handler": "delete_frame_candidate_endpoint",
+        "line": 4885
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/sampling/frame/{frame_index}",
+        "handler": "get_sampling_frame",
+        "line": 4944
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}",
+        "handler": "get_job",
+        "line": 5019
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/summary",
+        "handler": "get_job_summary",
+        "line": 5032
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/detail",
+        "handler": "get_job_detail",
+        "line": 5417
+      },
+      {
+        "method": "POST",
+        "path": "/jobs/{job_id}/cancel",
+        "handler": "cancel_job",
+        "line": 5524
+      },
+      {
+        "method": "POST",
+        "path": "/jobs/{job_id}/move",
+        "handler": "move_job",
+        "line": 5533
+      },
+      {
+        "method": "POST",
+        "path": "/jobs/{job_id}/clone",
+        "handler": "clone_job",
+        "line": 5545
+      },
+      {
+        "method": "DELETE",
+        "path": "/jobs/{job_id}",
+        "handler": "delete_job",
+        "line": 5562
+      },
+      {
+        "method": "POST",
+        "path": "/jobs/{job_id}/pause",
+        "handler": "pause_job",
+        "line": 5591
+      },
+      {
+        "method": "POST",
+        "path": "/jobs/{job_id}/unpause",
+        "handler": "unpause_job",
+        "line": 5598
+      },
+      {
+        "method": "POST",
+        "path": "/jobs/{job_id}/continue",
+        "handler": "continue_job",
+        "line": 5605
+      },
+      {
+        "method": "POST",
+        "path": "/jobs/{job_id}/rerun",
+        "handler": "rerun_job",
+        "line": 5630
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/edit-draft",
+        "handler": "get_job_edit_draft",
+        "line": 5939
+      },
+      {
+        "method": "POST",
+        "path": "/jobs/{job_id}/edit-recalculate/preview",
+        "handler": "preview_job_edit_recalculate",
+        "line": 6042
+      },
+      {
+        "method": "POST",
+        "path": "/jobs/{job_id}/edit-recalculate",
+        "handler": "submit_job_edit_recalculate",
+        "line": 6104
+      },
+      {
+        "method": "POST",
+        "path": "/jobs/purge",
+        "handler": "purge_jobs",
+        "line": 6251
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/events",
+        "handler": "stream_job_events",
+        "line": 6276
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/logs",
+        "handler": "get_job_logs",
+        "line": 6286
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/files",
+        "handler": "get_job_files",
+        "line": 6340
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/files/{file_path:path}",
+        "handler": "download_job_file",
+        "line": 6394
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/remote-files",
+        "handler": "list_remote_files",
+        "line": 6551
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/remote-files/archive",
+        "handler": "download_remote_archive",
+        "line": 6586
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/remote-files/{file_path:path}/preview",
+        "handler": "preview_remote_file",
+        "line": 6642
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/remote-files/{file_path:path}/checksum",
+        "handler": "remote_file_checksum",
+        "line": 6783
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/remote-files/{file_path:path}",
+        "handler": "download_remote_file",
+        "line": 6803
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/remote-logs/{name}",
+        "handler": "get_remote_log_tail",
+        "line": 6839
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/tasks",
+        "handler": "list_stage_tasks",
+        "line": 6868
+      },
+      {
+        "method": "GET",
+        "path": "/tasks/{task_id}",
+        "handler": "get_stage_task",
+        "line": 6896
+      },
+      {
+        "method": "POST",
+        "path": "/jobs/{job_id}/artifacts/{artifact_id}/run-irc",
+        "handler": "run_irc_from_artifact",
+        "line": 6909
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/artifacts",
+        "handler": "list_artifacts",
+        "line": 6998
+      },
+      {
+        "method": "GET",
+        "path": "/artifacts/{artifact_id}",
+        "handler": "get_artifact",
+        "line": 7007
+      },
+      {
+        "method": "GET",
+        "path": "/artifacts/{artifact_id}/download",
+        "handler": "download_artifact",
+        "line": 7015
+      },
+      {
+        "method": "POST",
+        "path": "/molecule/resolve",
+        "handler": "resolve_molecule",
+        "line": 7030
+      },
+      {
+        "method": "POST",
+        "path": "/molecule/embed",
+        "handler": "embed_molecule",
+        "line": 7050
+      },
+      {
+        "method": "POST",
+        "path": "/structures/parse",
+        "handler": "parse_structures",
+        "line": 7102
+      },
+      {
+        "method": "GET",
+        "path": "/structure-sources/recent",
+        "handler": "list_structure_sources",
+        "line": 7136
+      },
+      {
+        "method": "GET",
+        "path": "/structure-sources/{source_id:path}",
+        "handler": "get_structure_source",
+        "line": 7188
+      },
+      {
+        "method": "GET",
+        "path": "/workflow-catalog",
+        "handler": "get_workflow_catalog",
+        "line": 7221
+      },
+      {
+        "method": "GET",
+        "path": "/method-catalog",
+        "handler": "get_method_catalog",
+        "line": 7228
+      },
+      {
+        "method": "POST",
+        "path": "/validate-method",
+        "handler": "validate_method",
+        "line": 7249
+      },
+      {
+        "method": "POST",
+        "path": "/hessian-preview",
+        "handler": "hessian_preview",
+        "line": 7383
+      },
+      {
+        "method": "POST",
+        "path": "/uploads",
+        "handler": "upload_structure_file",
+        "line": 7458
+      },
+      {
+        "method": "GET",
+        "path": "/maintenance/disk-usage",
+        "handler": "get_disk_usage",
+        "line": 7548
+      },
+      {
+        "method": "POST",
+        "path": "/maintenance/cleanup",
+        "handler": "trigger_cleanup",
+        "line": 7596
+      },
+      {
+        "method": "GET",
+        "path": "/nodes",
+        "handler": "list_nodes",
+        "line": 7704
+      },
+      {
+        "method": "POST",
+        "path": "/nodes/matching",
+        "handler": "node_matching",
+        "line": 7834
+      },
+      {
+        "method": "GET",
+        "path": "/nodes/{name}/status",
+        "handler": "get_node_status",
+        "line": 7874
+      },
+      {
+        "method": "POST",
+        "path": "/nodes/{name}/ping",
+        "handler": "ping_node",
+        "line": 7885
+      },
+      {
+        "method": "POST",
+        "path": "/nodes/{name}/bootstrap",
+        "handler": "bootstrap_node",
+        "line": 7902
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/availability",
+        "handler": "get_job_availability",
+        "line": 8000
+      },
+      {
+        "method": "GET",
+        "path": "/jobs/{job_id}/prepared/{resource}",
+        "handler": "get_prepared_resource",
+        "line": 8235
+      },
+      {
+        "method": "POST",
+        "path": "/preflight",
+        "handler": "preflight_request",
+        "line": 8821
+      },
+      {
+        "method": "POST",
+        "path": "/jobs/{job_id}/prepare",
+        "handler": "prepare_artifact",
+        "line": 8921
+      },
+      {
+        "method": "GET",
+        "path": "/operations/{operation_id}",
+        "handler": "get_operation",
+        "line": 9149
+      },
+      {
+        "method": "POST",
+        "path": "/jobs/{job_id}/analyze",
+        "handler": "analyze_job",
+        "line": 9192
+      }
+    ],
+    "v1_schemas.py": [],
+    "v1_science.py": [
+      {
+        "method": "GET",
+        "path": "/science/tasks/{job_id}/attempts/{attempt}/status",
+        "handler": "science_attempt_status",
+        "line": 95
+      }
+    ],
+    "v2_approvals.py": [
+      {
+        "method": "POST",
+        "path": "/research/approvals",
+        "handler": "request_approval",
+        "line": 306
+      },
+      {
+        "method": "GET",
+        "path": "/research/approvals",
+        "handler": "query_approvals",
+        "line": 356
+      },
+      {
+        "method": "GET",
+        "path": "/research/approvals/{approval_ref}",
+        "handler": "get_approval",
+        "line": 405
+      },
+      {
+        "method": "POST",
+        "path": "/research/approvals/{approval_ref}/approve",
+        "handler": "approve_approval",
+        "line": 506
+      },
+      {
+        "method": "POST",
+        "path": "/research/approvals/{approval_ref}/reject",
+        "handler": "reject_approval",
+        "line": 513
+      },
+      {
+        "method": "POST",
+        "path": "/research/approvals/{approval_ref}/revoke",
+        "handler": "revoke_approval",
+        "line": 520
+      }
+    ],
+    "v2_budgets.py": [
+      {
+        "method": "GET",
+        "path": "/research/budgets/{budget_id}",
+        "handler": "get_research_budget",
+        "line": 169
+      },
+      {
+        "method": "GET",
+        "path": "/research/budgets/{budget_id}/evidence",
+        "handler": "get_research_budget_evidence",
+        "line": 183
+      },
+      {
+        "method": "POST",
+        "path": "/research/budgets/{budget_id}/settle",
+        "handler": "settle_research_budget",
+        "line": 200
+      }
+    ],
+    "v2_model_gateway.py": [
+      {
+        "method": "POST",
+        "path": "/model/plan",
+        "handler": "plan_model_call",
+        "line": 242
+      },
+      {
+        "method": "GET",
+        "path": "/model/usage",
+        "handler": "model_usage",
+        "line": 306
+      },
+      {
+        "method": "GET",
+        "path": "/model/statement",
+        "handler": "model_statement",
+        "line": 333
+      }
+    ],
+    "v2_research.py": [
+      {
+        "method": "POST",
+        "path": "/research/proposals",
+        "handler": "create_research_proposal",
+        "line": 272
+      },
+      {
+        "method": "POST",
+        "path": "/research/proposals/{proposal_id}/cas",
+        "handler": "cas_research_proposal",
+        "line": 292
+      },
+      {
+        "method": "POST",
+        "path": "/research/records",
+        "handler": "create_research_record",
+        "line": 317
+      },
+      {
+        "method": "GET",
+        "path": "/research/proposals/{proposal_id}",
+        "handler": "get_research_proposal",
+        "line": 471
+      },
+      {
+        "method": "GET",
+        "path": "/research/records/{research_id}",
+        "handler": "get_research_record",
+        "line": 486
+      },
+      {
+        "method": "POST",
+        "path": "/research/records/{research_id}/rounds",
+        "handler": "append_research_round",
+        "line": 574
+      },
+      {
+        "method": "POST",
+        "path": "/research/wait",
+        "handler": "wait_research",
+        "line": 607
+      },
+      {
+        "method": "GET",
+        "path": "/research/snapshot",
+        "handler": "snapshot_research",
+        "line": 631
+      },
+      {
+        "method": "POST",
+        "path": "/research/resume",
+        "handler": "resume_research",
+        "line": 666
+      },
+      {
+        "method": "GET",
+        "path": "/research/sagas/{saga_id}",
+        "handler": "get_research_saga",
+        "line": 690
+      },
+      {
+        "method": "POST",
+        "path": "/research/sagas/{saga_id}/reconcile",
+        "handler": "reconcile_research_saga",
+        "line": 713
+      },
+      {
+        "method": "GET",
+        "path": "/research/records/{research_id}/evidence",
+        "handler": "get_research_record_evidence",
+        "line": 779
+      }
+    ],
+    "v2_routes.py": [
+      {
+        "method": "GET",
+        "path": "/projects",
+        "handler": "list_projects",
+        "line": 541
+      },
+      {
+        "method": "GET",
+        "path": "/projects/{project_id}/tasks",
+        "handler": "list_project_tasks",
+        "line": 566
+      },
+      {
+        "method": "GET",
+        "path": "/task-view",
+        "handler": "get_task_view",
+        "line": 581
+      },
+      {
+        "method": "GET",
+        "path": "/tasks/orphans",
+        "handler": "list_orphan_tasks",
+        "line": 727
+      },
+      {
+        "method": "GET",
+        "path": "/tasks/{task_id}",
+        "handler": "get_task",
+        "line": 748
+      },
+      {
+        "method": "PATCH",
+        "path": "/tasks/{task_id}",
+        "handler": "patch_task",
+        "line": 761
+      },
+      {
+        "method": "GET",
+        "path": "/tasks/{task_id}/tree",
+        "handler": "get_task_tree",
+        "line": 854
+      },
+      {
+        "method": "GET",
+        "path": "/tasks/{task_id}/files/{file_path:path}",
+        "handler": "download_task_file",
+        "line": 892
+      },
+      {
+        "method": "GET",
+        "path": "/tasks/{task_id}/results",
+        "handler": "get_task_results",
+        "line": 907
+      },
+      {
+        "method": "GET",
+        "path": "/tasks/{task_id}/structures/{structure_id}",
+        "handler": "download_task_structure",
+        "line": 942
+      },
+      {
+        "method": "GET",
+        "path": "/tasks/{task_id}/frequencies/{frequency_id}",
+        "handler": "download_task_frequencies",
+        "line": 954
+      },
+      {
+        "method": "POST",
+        "path": "/tasks/batch",
+        "handler": "create_task_batch",
+        "line": 969
+      },
+      {
+        "method": "GET",
+        "path": "/projects/{project_id}/tags",
+        "handler": "list_project_tags",
+        "line": 1137
+      },
+      {
+        "method": "POST",
+        "path": "/projects/{project_id}/tags/rename",
+        "handler": "rename_tag",
+        "line": 1148
+      },
+      {
+        "method": "POST",
+        "path": "/projects/{project_id}/tags/merge",
+        "handler": "merge_tags",
+        "line": 1167
+      },
+      {
+        "method": "POST",
+        "path": "/projects/{project_id}/tags/delete",
+        "handler": "delete_tag",
+        "line": 1200
+      },
+      {
+        "method": "POST",
+        "path": "/tasks/batch-ops",
+        "handler": "batch_ops",
+        "line": 1222
+      },
+      {
+        "method": "POST",
+        "path": "/projects/{project_id}/auto-tag-rules/apply",
+        "handler": "apply_auto_tag_rules_backfill",
+        "line": 1426
+      },
+      {
+        "method": "GET",
+        "path": "/projects/{project_id}/molecule-groups",
+        "handler": "list_molecule_groups",
+        "line": 1467
+      },
+      {
+        "method": "POST",
+        "path": "/projects/{project_id}/molecule-groups/merge",
+        "handler": "merge_molecule_groups",
+        "line": 1506
+      },
+      {
+        "method": "GET",
+        "path": "/projects/{project_id}/molecule-groups/suggestions",
+        "handler": "get_molecule_group_suggestions",
+        "line": 1550
+      },
+      {
+        "method": "DELETE",
+        "path": "/projects/{project_id}/molecule-groups/alias/{alias_key}",
+        "handler": "delete_molecule_alias",
+        "line": 1578
+      },
+      {
+        "method": "GET",
+        "path": "/tasks/{task_id}/lineage",
+        "handler": "get_task_lineage",
+        "line": 1756
+      },
+      {
+        "method": "GET",
+        "path": "/tasks/{task_id}/lineage/projection",
+        "handler": "get_task_lineage_projection",
+        "line": 1804
+      },
+      {
+        "method": "POST",
+        "path": "/tasks/orphans/purge",
+        "handler": "purge_orphan_tasks",
+        "line": 1847
+      }
+    ],
+    "v2_schemas.py": [],
+    "v2_science.py": [
+      {
+        "method": "GET",
+        "path": "/science/capabilities",
+        "handler": "get_science_capabilities",
+        "line": 242
+      },
+      {
+        "method": "GET",
+        "path": "/science/capability-forms",
+        "handler": "get_science_capability_forms",
+        "line": 268
+      },
+      {
+        "method": "POST",
+        "path": "/science/preflight",
+        "handler": "post_science_preflight",
+        "line": 304
+      },
+      {
+        "method": "GET",
+        "path": "/science/tasks/{job_id}/attempts/{attempt}/view",
+        "handler": "get_science_attempt_view",
+        "line": 343
+      },
+      {
+        "method": "GET",
+        "path": "/science/tasks/{job_id}/attempts/{attempt}/artifacts/{artifact_id:path}/read",
+        "handler": "get_science_artifact_read",
+        "line": 434
+      }
+    ],
+    "v2_structure_sources.py": [
+      {
+        "method": "GET",
+        "path": "/structure-sources/facets",
+        "handler": "get_facets",
+        "line": 286
+      },
+      {
+        "method": "POST",
+        "path": "/structure-sources/batch-metadata",
+        "handler": "batch_metadata",
+        "line": 339
+      },
+      {
+        "method": "POST",
+        "path": "/structure-sources/trash/purge",
+        "handler": "purge_structure_source_trash",
+        "line": 367
+      },
+      {
+        "method": "GET",
+        "path": "/structure-sources",
+        "handler": "list_structure_sources",
+        "line": 390
+      },
+      {
+        "method": "GET",
+        "path": "/structure-sources/{source_uid}",
+        "handler": "get_structure_source",
+        "line": 453
+      },
+      {
+        "method": "GET",
+        "path": "/structure-sources/{source_uid}/candidate",
+        "handler": "get_candidate",
+        "line": 463
+      },
+      {
+        "method": "PATCH",
+        "path": "/structure-sources/{source_uid}/candidate/status",
+        "handler": "patch_candidate_status",
+        "line": 473
+      },
+      {
+        "method": "POST",
+        "path": "/structure-sources/{source_uid}/candidate/assessments",
+        "handler": "add_candidate_assessment",
+        "line": 496
+      },
+      {
+        "method": "PATCH",
+        "path": "/structure-sources/{source_uid}/metadata",
+        "handler": "patch_metadata",
+        "line": 519
+      },
+      {
+        "method": "GET",
+        "path": "/projects/{project_id}/structure-tags",
+        "handler": "list_project_tags",
+        "line": 571
+      },
+      {
+        "method": "POST",
+        "path": "/projects/{project_id}/structure-tags/rename",
+        "handler": "rename_project_tag",
+        "line": 579
+      },
+      {
+        "method": "POST",
+        "path": "/projects/{project_id}/structure-tags/remove",
+        "handler": "remove_project_tag",
+        "line": 587
+      }
+    ]
+  },
+  "mounted_routers": [
+    "app.include_router(v1_router, prefix='/api/v1')",
+    "app.include_router(drafts_router, prefix='/api/v1')",
+    "app.include_router(mechanism_readonly_router, prefix='/api/v1')",
+    "app.include_router(batch_preview_router, prefix='/api/v1')",
+    "app.include_router(v2_router, prefix='/api/v2')",
+    "app.include_router(v2_approvals_router, prefix='/api/v2')",
+    "app.include_router(v2_budgets_router, prefix='/api/v2')",
+    "app.include_router(v2_model_gateway_router, prefix='/api/v2')",
+    "app.include_router(v2_struct_router, prefix='/api/v2')",
+    "app.include_router(v2_science.router, prefix='/api/v2')",
+    "app.include_router(v1_science.router, prefix='/api/v1')",
+    "app.include_router(v2_research.router, prefix='/api/v2')",
+    "app.include_router(api_router, prefix='/api')"
+  ],
+  "execution_limits": {
+    "schema": "acp2.runtime.execution-limits.v1",
+    "limits": [
+      {
+        "limit": "walltime_admission_bound",
+        "kind": "admission-bound",
+        "carrier": "LocalAdmission.effective_bounds / AdmissionRequest.duration_s",
+        "capability": "enforced",
+        "source_field": "wall_seconds",
+        "budget_unit": null,
+        "evidence": "tests/test_acp2_runtime_admission.py (refused before dispatch); local_admission ceilings are finite by construction",
+        "notes": "only the *request* is bounded here; it does not terminate a running attempt and must not be presented as process termination"
+      },
+      {
+        "limit": "walltime_process_termination",
+        "kind": "process-termination",
+        "carrier": "local process group / CCCP resources.timeout_s / LSF -W",
+        "capability": "enforced",
+        "source_field": "wall_seconds",
+        "budget_unit": null,
+        "evidence": "M4-03 real receipts: local worker+ORCA process group killed to zero survivors; approval 60s -> #BSUB -W 00:01 -> native RUNLIMIT exit 140 with a verified deadline receipt; PAUSED time counts against the absolute deadline and a restart restores the same bound (reports/acp2_remediation_20261026/m4-03/)",
+        "notes": "CCCP resources.timeout_s stays subprocess-level only; platform termination is the claim-deadline-then-terminate ordering in the manager's dedicated deadline thread"
+      },
+      {
+        "limit": "queue_deadline",
+        "kind": "queue-deadline",
+        "carrier": "persistent absolute deadline recorded at admission",
+        "capability": "enforced",
+        "source_field": "queue_seconds",
+        "budget_unit": null,
+        "evidence": "M4-03 real receipt: a PEND job under a closed queue expired by a 40s queue deadline, terminated with bkill and recorded a verified deadline receipt (reports/acp2_remediation_20261026/m4-03/)",
+        "notes": "a queued attempt is governed by this clock only; it never starts late"
+      },
+      {
+        "limit": "science_runtime_recorded",
+        "kind": "recorded-only",
+        "carrier": "usage receipt seconds (controller-terminal-receipt)",
+        "capability": "recorded-only",
+        "source_field": "",
+        "budget_unit": null,
+        "evidence": "recorded from the terminal usage receipt",
+        "notes": "records actual execution time; an RPH client wait timeout is not this clock and must never be substituted for it"
+      },
+      {
+        "limit": "cumulative_core_hours",
+        "kind": "recorded-only",
+        "carrier": "usage/metering receipt (cores x seconds)",
+        "capability": "recorded-only",
+        "source_field": "core_hours",
+        "budget_unit": null,
+        "evidence": "recorded from trusted receipts; no pre-call hard cap in this release",
+        "notes": "a hard cumulative cap needs an explicit IN_SCOPE work item"
+      },
+      {
+        "limit": "model_tokens",
+        "kind": "recorded-only",
+        "carrier": "C-owned model proxy (RPH client throttle) + recorded usage",
+        "capability": "recorded-only",
+        "source_field": "input_tokens/output_tokens",
+        "budget_unit": null,
+        "evidence": "client-side throttle only (experience/model-budget.md §4)",
+        "notes": "platform token enforcement stays NOT_VERIFIED; a client throttle never becomes a platform enforced claim"
+      }
+    ],
+    "clocks": [
+      {
+        "clock": "queue",
+        "starts_at": "submit admitted / queued",
+        "representation": "persistent absolute timestamp (admission + queue_seconds)",
+        "persisted": true,
+        "paused": "not applicable (not running)",
+        "restart": "the absolute deadline is restored unchanged; a restart never resets it",
+        "authority": "platform (admission)",
+        "capability": "NOT_VERIFIED",
+        "evidence": "expiry -> terminal transition receipt pending (M1-05)"
+      },
+      {
+        "clock": "wall",
+        "starts_at": "attempt dispatch (started_at)",
+        "representation": "persistent absolute timestamp (started_at + wall_seconds)",
+        "persisted": true,
+        "paused": "PAUSED time counts by default (DEFAULT_INCLUDE_PAUSED=True)",
+        "restart": "only the remaining time is restored; the deadline is never extended",
+        "authority": "platform (Controller) + worker receipt",
+        "capability": "NOT_VERIFIED",
+        "evidence": "process termination / LSF -W receipt pending (M1-05, M4-03)"
+      },
+      {
+        "clock": "science-runtime",
+        "starts_at": "worker start of the science payload",
+        "representation": "measured duration on the usage receipt",
+        "persisted": true,
+        "paused": "records wall time including pause unless the runtime reports otherwise",
+        "restart": "re-measured per attempt; never derived from a client wait timeout",
+        "authority": "worker/controller receipt (recorded-only)",
+        "capability": "recorded-only",
+        "evidence": "terminal usage receipt seconds"
+      }
+    ],
+    "precedence": [
+      {
+        "rank": "1",
+        "clock": "queue",
+        "applies_to": "queued attempt, before start",
+        "rule": "only the queue deadline may stop a queued attempt"
+      },
+      {
+        "rank": "2",
+        "clock": "wall",
+        "applies_to": "started attempt",
+        "rule": "once started, the wall deadline terminates the attempt"
+      },
+      {
+        "rank": "3",
+        "clock": "science-runtime",
+        "applies_to": "every attempt",
+        "rule": "records actual runtime only; never terminates and never bypasses rank 1-2"
+      },
+      {
+        "rank": "*",
+        "clock": "client/rph",
+        "applies_to": "any",
+        "rule": "a client wait timeout is not a platform clock; the platform resolves conflicts by rank 1 -> 2 -> 3 and a client may not choose one to bypass another"
+      }
+    ],
+    "budget_shape": {
+      "wall_seconds": "ResourceBounds/timeout (local + CCCP subprocess + LSF -W)",
+      "queue_seconds": "queue deadline (absolute, from admission)",
+      "input_tokens": "recorded-only + RPH client throttle",
+      "output_tokens": "recorded-only + RPH client throttle",
+      "core_hours": "recorded-only",
+      "unknown_non_empty": "typed error (never parsed into empty limits)"
+    },
+    "enforced": [
+      "walltime_admission_bound",
+      "walltime_process_termination",
+      "queue_deadline"
+    ],
+    "recorded_only": [
+      "science_runtime_recorded",
+      "cumulative_core_hours",
+      "model_tokens"
+    ],
+    "not_verified": []
+  },
+  "builtin_capabilities": [
+    "electronic.energy",
+    "geometry.optimize",
+    "vibration.analyze",
+    "vibration.compute"
+  ],
+  "unsupported_families": [
+    "casscf",
+    "clustering",
+    "censo_refine",
+    "conformer_search",
+    "constrained_optimization",
+    "gradient",
+    "md_sampling",
+    "nmr",
+    "reaction_path",
+    "thermochemistry"
+  ]
+}
