@@ -2,6 +2,18 @@
 
 > **2026-10-29 audit:** current commands/results and exclusions are archived in [reports/acp2_function_audit_20261028](../reports/acp2_function_audit_20261028/REPORT.md). Ordinary non-slow regression, real-SDK contract tests and browser tests are separate evidence layers. A browser failure must stay FAIL even if CI skips the case; do not set CI or change markers to conceal it. Test fixtures with a temporary origin must isolate deployment configuration such as ACP_PUBLIC_ORIGIN. Real model/QC/LSF slow scenarios require their own evidence and are not implied by fast tests.
 
+## MCP / Guide / 自动 Batch 测试约定（2026-10-30）
+
+[统一计划](../docs/reference/next-change/ACP_MCP_Agent_Guidance_PES_Batch_Plan_20261030.md) §3.3/10/15 定义待实现验收。下面是后续修改要求，不表示这些新测试/CI 门已交付。
+
+- 分别验收 U01—U09 基础工具体验、指南行为、全自动科研链；skill 不应替代缺失的 schema/产物读取/恢复接口。
+- 从 catalog/registry 枚举 active 范围，验证指南/专题引用与契约版本、有效示例和负例；不只检查 prompt 字符串存在。工作流增加时计数应随注册表变化，不永久钉死 15。
+- 兼容矩阵包括：旧人工记录/旧客户端；新 Agent 自动发布；权限/预算/过期/撤销/越项目；view-only/旧 attempt/旧 generation/错误 digest；合法 UI 与 MCP 参数等价。
+- 覆盖初猜发布后真实提交 Batch（fixture 层与真实层分报）、逐 item/stage 部分失败和科学缺项；负例必须阻止“选点成功即 TS 成功”和“completed 即收敛/验证通过”。
+- 崩溃点：发布中断、发布完成未提交、submit 回包丢失、Batch 运行中、来源 rerun/选点 revision 改变；断言不重复任务、不静默换来源，远端写回失败可对账。
+- 继承 MCP UX 回归：共用校验与资源、错误自纠、冷缓存零 fetch、正文跨截断边界、不可验证编码拒绝、fragment/full digest 作用域；禁止放宽护栏取得绿灯。
+- fixture、真实 SDK、真模型＋QC、安装、Local/LSF 分别记证据 revision；不把不同分支 PASS 拼成同链 PASS。模型行为评估与纯契约测试分别记录，按实际授权安排真实运行。
+
 ## OVERVIEW
 pytest suite covering config loading, cccp QC/task/backends layers, ACP core/IO/backend/workflow modules, FastAPI, scheduler, remote LSF execution, NMR/DP4/DP5, the ACP 2.0 runtime/science plugin stack, and the `acp_services` platform layer. **534 `test_*.py`** (529 flat in `tests/` + 5 under `tests/benchmark/nmr/`; 541 top-level `.py` including helpers). Prefix families: `test_acp_*` **170** (incl. 37 `test_acp_nmr_*`), `test_services_*` **69**, `test_acp2_*` **113**, `test_cccp_*` **47**. File counts are pinned; collected-test totals drift with parametrization and are not pinned here. Real-QC integration scenarios are gated behind `--run-slow`/`--run-integration`; non-slow tests also launch real CLI, isolated services, plugin builds and other local subprocesses. Inspect markers and fixtures instead of assuming every non-slow process is mocked. Real-QC binary skips carry the literal `NOT_VERIFIED` (three-state rule: PASS / FAIL / NOT_VERIFIED) — a skipped real-QC test is never a green pass.
 

@@ -2,6 +2,16 @@
 
 > **Current audit:** [full functional review](../../../reports/acp2_function_audit_20261028/REPORT.md). Read the separate results for fast/API tests, real-SDK transport, browser behavior and historical model/QC/LSF receipts. A working HTTP evidence route does not itself wire the RPH MCP reader. Preserve the source gates and record failed UI tests; do not widen origins or bypass CAS to make a test green.
 
+## MCP 易用性与指南接口（2026-10-30 开发约定）
+
+依据[统一计划](../../../docs/reference/next-change/ACP_MCP_Agent_Guidance_PES_Batch_Plan_20261030.md) §3/5/9；新接口名称与自动授权尚待实现，不能仅靠文档宣称开放。
+
+- `submission_contract.py`/`workflow_contracts.py`/实际消费者保持同源语义；扩展四个首批工作流及必要操作，未知字段/冲突拒绝与合法 UI payload 兼容一起验收。UI schema 或 CLI flags 不能代替 submit 契约。
+- U01—U09：发现、可修正错误、资源、生效配置、低噪音状态、prepare/read、可信摘要、跨会话找回、兼容与轻量。错误返回 field/rule 和有限建议；不能自动改变科学目标或授权。
+- status/产物描述符保持有界、cache-only；显式 prepare 负责获取，读取绑定 attempt/generation/digest，缺失未知不补造；完整正文检查在截断前，不能为模型可读性绕过内容策略。
+- 指南读取返回当前版本/覆盖/来源，参数从契约投影；响应大小与省略明确，关键限制不静默截断。新增字段穿过 DTO、MCP 投影和真实 SDK 验证，不只测试内部 handler。
+- 新 selection/自动发布命令经 Controller 和现有写入服务；服务端验证身份/授权/预算/CAS，写入与 Batch 提交分开。旧客户端和 manual 记录保持兼容；不把 HTTP 路由存在当 MCP 已消费。
+
 ## OVERVIEW
 FastAPI application providing REST endpoints for job submission, backend/workflow discovery, SSE event streaming, and static frontend hosting. Wires into `acp.scheduler` for job lifecycle; data reads and commands go through `acp_services` (Data prepare/read, Runtime commands, research runtime). 24 `.py`, 13 mounted routers including legacy `/api` (2026-10-29, `fd2087c7`). Services read surfaces (`GET /api/v1/jobs/{id}/availability`, `GET /api/v1/jobs/{id}/prepared/{resource}`) coexist with the legacy GET paths; control endpoints go through `acp_services.runtime.commands.RuntimeCommands`. Legacy GET behavior is retained for F0 compatibility (closure L2-02/L2-03). ACP 2.0 includes science discovery/forms, research writes/Saga/recovery/evidence, approvals, budgets and a Controller model gateway. Science GETs stay side-effect-free; research POSTs and approval/budget commands are state-changing and must keep their identity/CAS/budget gates.
 
@@ -54,7 +64,7 @@ api/
 | `science_catalog.py` / `capability_forms.py` / `static_assets.py` | Capability + domain + enabled pure-analysis plugin discovery; whitelisted ui-subset bindings and read-only history; packaged-asset digest guard. Discovery never imports/executes plugin code |
 | `science_projection.py` | Pure read-only projections: `attempt_status`, `attempt_view`, `artifact_read`, `science_capabilities`, `science_preflight`, `map_availability`, artifact-id safety (`SAFE_ARTIFACT_ID_RE`/`is_safe_artifact_id`), prepare-state vocabulary. Imports only metadata/read contracts (`acp.catalog`, `acp.storage.manifest`, `cccp.calculation.{capabilities,requests}`, `acp_services.data.operations`, `acp_services.entrypoints.{mcp,status_projection}`) — adding a DB or server import is a bug |
 | `schemas.py` / `v1_schemas.py` / `v2_schemas.py` | Pydantic contracts: shared status/backends/jobs (`schemas.py`), V1 job/detail/preflight/live-status models (`v1_schemas.py`), V2 task-view/group/lineage models (`v2_schemas.py`) |
-| MCP relationship | `acp mcp serve` is a thin stdio adapter over `acp_services.entrypoints.mcp_stdio.run_stdio` + `acp/services_mcp_bootstrap.build_mcp_runtime`; protocol/allowlist owner is `acp_services/entrypoints/mcp.py` (`TOOL_ALLOWLIST`, 8 tools: `acp_capabilities`, `acp_preflight`, `acp_submit`, `acp_status`, `acp_cancel`, `acp_prepare_artifact`, `acp_read_artifact`, `acp_analyze`), each 1:1 with a Controller HTTP command. Ten `RESEARCH_TOOL_NAMES` are additionally visible after `acp_capabilities` negotiates `acp.research.v1`, followed by tools/list. `science_projection.py` imports the same allowlist — there is no second list |
+| MCP relationship | `acp mcp serve` is a thin stdio adapter over `acp_services.entrypoints.mcp_stdio.run_stdio` + `acp/services_mcp_bootstrap.build_mcp_runtime`; protocol/allowlist owner is `acp_services/entrypoints/mcp.py` (`TOOL_ALLOWLIST`, 8 tools: `acp_capabilities`, `acp_preflight`, `acp_submit`, `acp_status`, `acp_cancel`, `acp_prepare_artifact`, `acp_read_artifact`, `acp_analyze`), each 1:1 with a Controller HTTP command. Ten `RESEARCH_TOOL_NAMES` are additionally visible after `acp_capabilities` negotiates `acp.research.v1`, followed by tools/list; composed consumption operations from `research_consumption.py` are additionally visible. `science_projection.py` imports the same allowlist — there is no second list |
 | Tests | `tests/test_acp2_v1_science_status.py` and `tests/test_acp2_v2_science_routes.py` pin zero side effects via `manager.store.counts()`; `tests/test_acp2_research_read_routes.py`, `tests/test_acp2_api_science_routes.py`, `tests/test_acp2_science_projection.py` cover the read surfaces |
 
 ## CONVENTIONS

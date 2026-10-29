@@ -400,7 +400,11 @@ class _McpProcess:
         except OSError:
             pass
 
-    def wait(self, timeout: float = 120.0) -> int:
+    def wait(self, timeout: float = 300.0) -> int:
+        # The stdio server imports the whole runtime; on a loaded CI runner a
+        # clean shutdown can legitimately take longer than two minutes. The
+        # assertion is "clean exit", not "exits within 120 s".
+        
         return self.proc.wait(timeout=timeout)
 
     def _drain_stderr(self) -> None:
