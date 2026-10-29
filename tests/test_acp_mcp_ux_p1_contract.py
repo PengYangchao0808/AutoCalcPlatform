@@ -369,33 +369,33 @@ def test_consumer_only_level_fields_are_accepted() -> None:
     )
 
 
-def test_batch_mirror_must_match_batch_level() -> None:
+def test_batch_flat_scalars_must_mirror_a_role() -> None:
+    """With batch_roles the engine reads role options; levels.batch is not the source."""
+    base_input = {"source_type": "batch_structures", "items": [{"xyz": "H 0 0 0"}]}
     validate_workflow_submission(
         "BatchOptimize",
-        input={"source_type": "batch_structures", "items": [{"xyz": "H 0 0 0"}]},
+        input=base_input,
         method={
             "profile": "opt_freq",
             "batch_roles": {"int": {"role": "int", "method": "B3LYP"}},
             "optimization_method": "B3LYP",
             "temperature": 298.15,
-            "levels": {"batch": {"temperature": 298.15}},
         },
         resources={},
     )
     with pytest.raises(SubmissionContractError) as excinfo:
         validate_workflow_submission(
             "BatchOptimize",
-            input={"source_type": "batch_structures", "items": [{"xyz": "H 0 0 0"}]},
+            input=base_input,
             method={
-                "profile": "opt_freq",
-                "batch_roles": {"int": {"role": "int", "method": "B3LYP"}},
-                "optimization_method": "B3LYP",
-                "temperature": 298.15,
-                "levels": {"batch": {"temperature": 310.15}},
+                "profile": "opt_freq_sp_thermo",
+                "batch_roles": {"int": {"method": "B3LYP"}},
+                "temperature": 400,
+                "levels": {"batch": {"temperature": 400}},
             },
             resources={},
         )
-    assert excinfo.value.params()["rule"] == "conflicting_fields"
+    assert excinfo.value.params()["rule"] == "shadowed_field"
 
 
 @pytest.mark.parametrize(

@@ -319,8 +319,6 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
         # top-level flat setting must be a mirror of a role/level value or it
         # would be silently ignored.  Prefixes select the role they mirror:
         # optimization_*/minimum_* <- int, transition_state_* <- ts.
-        batch_level = (method.get("levels") or {}).get("batch")
-        batch_values: Mapping[str, Any] = batch_level if isinstance(batch_level, Mapping) else {}
         for key in (
             *_BATCHOPTIMIZE_SCALAR_FLAGS,
             "opt_recalc_hess",
@@ -330,13 +328,6 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
         ):
             if key not in method or method[key] in (None, ""):
                 continue
-            batch_value = batch_values.get(key)
-            if batch_value is not None and batch_value != method[key]:
-                raise SubmissionContractError(
-                    f"method.{key} disagrees with method.levels.batch.{key}",
-                    field_name=f"method.{key}",
-                    rule="conflicting_fields",
-                )
             role_id, role_key = _flat_mirror_source(key)
             if role_id is not None:
                 # Prefix-routed field: only its own role is the mirror source.
@@ -353,20 +344,22 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
                     for role in roles.values()
                     if isinstance(role, Mapping) and role.get(role_key) is not None
                 ]
-            if role_values and not any(value == method[key] for value in role_values):
-                raise SubmissionContractError(
-                    f"method.{key} disagrees with the mirrored batch setting",
-                    field_name=f"method.{key}",
-                    rule="conflicting_fields",
-                )
-            if not role_values and batch_value is None:
-                if key in _WORKBENCH_FLAT_DEFAULTS and method[key] == _WORKBENCH_FLAT_DEFAULTS[key]:
-                    continue
-                raise SubmissionContractError(
-                    f"method.{key} would be ignored while method.batch_roles is set",
-                    field_name=f"method.{key}",
-                    rule="shadowed_field",
-                )
+            if role_values:
+                if not any(value == method[key] for value in role_values):
+                    raise SubmissionContractError(
+                        f"method.{key} disagrees with the mirrored batch setting",
+                        field_name=f"method.{key}",
+                        rule="conflicting_fields",
+                    )
+                continue
+            # No role carries it: only the inert Workbench default is allowed.
+            if key in _WORKBENCH_FLAT_DEFAULTS and method[key] == _WORKBENCH_FLAT_DEFAULTS[key]:
+                continue
+            raise SubmissionContractError(
+                f"method.{key} would be ignored while method.batch_roles is set",
+                field_name=f"method.{key}",
+                rule="shadowed_field",
+            )
     if "select" in method and method["select"] is not None:
         select = method["select"]
         if not isinstance(select, str) and not isinstance(select, (list, tuple)):
