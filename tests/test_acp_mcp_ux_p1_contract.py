@@ -369,8 +369,8 @@ def test_consumer_only_level_fields_are_accepted() -> None:
     )
 
 
-def test_batch_flat_scalars_must_mirror_a_role() -> None:
-    """With batch_roles the engine reads role options; levels.batch is not the source."""
+def test_batch_flat_keys_are_limited_to_compat_mirrors() -> None:
+    """batch_roles makes roles authoritative; only documented mirrors stay flat."""
     base_input = {"source_type": "batch_structures", "items": [{"xyz": "H 0 0 0"}]}
     validate_workflow_submission(
         "BatchOptimize",
@@ -388,14 +388,13 @@ def test_batch_flat_scalars_must_mirror_a_role() -> None:
             "BatchOptimize",
             input=base_input,
             method={
-                "profile": "opt_freq_sp_thermo",
+                "profile": "opt_freq",
                 "batch_roles": {"int": {"method": "B3LYP"}},
-                "temperature": 400,
-                "levels": {"batch": {"temperature": 400}},
+                "opt_recalc_hess": 5,
             },
             resources={},
         )
-    assert excinfo.value.params()["rule"] == "conflicting_fields"
+    assert excinfo.value.params()["rule"] == "shadowed_field"
 
 
 @pytest.mark.parametrize(
@@ -506,8 +505,121 @@ def test_resource_validation_does_not_mutate() -> None:
 
 
 def test_batch_non_mirrored_flat_fields_are_refused() -> None:
-    """Sol round 4: shadowed flat settings must not be swallowed."""
+    """A flat setting outside the Workbench mirror set is refused, not swallowed."""
     base_input = {"source_type": "batch_structures", "items": [{"xyz": "H 0 0 0"}]}
+    for key, value in (("scf_orbital_inherit", True), ("minimum_method", "B3LYP")):
+        with pytest.raises(SubmissionContractError) as excinfo:
+            validate_workflow_submission(
+                "BatchOptimize",
+                input=base_input,
+                method={"profile": "opt_freq", "batch_roles": {"int": {"method": "B3LYP"}}, key: value},
+                resources={},
+            )
+        assert excinfo.value.params()["rule"] == "shadowed_field"
+
+
+def test_workbench_confsearch_levels_are_accepted() -> None:
+    validate_workflow_submission(
+        "Confsearch",
+        input={"source_type": "smiles", "source": "CCO", "charge": 0, "multiplicity": 1},
+        method={
+            "protocol": "censo-crest",
+            "profile": "default",
+            "refinement_policy": "rank1",
+            "confsearch_profile": "default",
+            "levels": {
+                "confsearch": {
+                    "engine": "censo",
+                    "protocol": "censo-crest",
+                    "confsearch_profile": "default",
+                    "refinement_policy": "rank1",
+                    "ewin": 6.0,
+                    "refinement_threshold": 0.99,
+                },
+                "dft_opt": {"engine": "orca", "functional": "wB97X-D4", "basis": "def2-TZVP"},
+                "refinement_sp": {"engine": "orca", "functional": "wB97X-D4"},
+                "thermo": {"engine": "shermo", "temperature": 298.15, "pressure": 1.0},
+            },
+        },
+        resources={"cores": 4},
+    )
+
+
+def test_nested_level_typo_is_refused() -> None:
+    with pytest.raises(SubmissionContractError) as excinfo:
+        validate_workflow_submission(
+            "Confsearch",
+            input={"smiles": "CCO"},
+            method={"protocol": "xtb-crest", "levels": {"dft_opt": {"functonal": "B3LYP"}}},
+            resources={},
+        )
+    assert excinfo.value.params()["field"] == "method.levels.dft_opt.functonal"
+
+
+def test_unknown_level_id_is_refused() -> None:
+    with pytest.raises(SubmissionContractError) as excinfo:
+        validate_workflow_submission(
+            "Confsearch",
+            input={"smiles": "CCO"},
+            method={"protocol": "xtb-crest", "levels": {"dftopt": {"functional": "B3LYP"}}},
+            resources={},
+        )
+    assert excinfo.value.params()["rule"] == "unknown_field"
+
+
+def test_batch_levels_accept_steps_and_reject_typos() -> None:
+    validate_workflow_submission(
+        "BatchOptimize",
+        input={"source_type": "batch_structures", "items": [{"xyz": "H 0 0 0"}]},
+        method={"profile": "opt_freq", "levels": {"batch": {"steps": ["optimize", "frequency"]}}},
+        resources={},
+    )
+    with pytest.raises(SubmissionContractError):
+        validate_workflow_submission(
+            "BatchOptimize",
+            input={"source_type": "batch_structures", "items": [{"xyz": "H 0 0 0"}]},
+            method={"profile": "opt_freq", "levels": {"batch": {"optimze": True}}},
+            resources={},
+        )
+
+
+def test_consumer_only_level_fields_are_accepted() -> None:
+    """screening_sp / recalc_hess / aux_c_basis are real consumers, not UI fields."""
+    validate_workflow_submission(
+        "Confsearch",
+        input={"smiles": "CCO"},
+        method={
+            "protocol": "censo-crest",
+            "levels": {
+                "refinement_threshold": 0.99,
+                "dft_opt": {
+                    "recalc_hess": "auto",
+                    "aux_j_basis": "def2/J",
+                    "aux_c_basis": "def2-TZVPPD",
+                    "ri_approximation": "RIJCOSX",
+                },
+                "refinement_sp": {"aux_c_basis": "def2-TZVPPD"},
+                "screening_sp": {"functional": "B3LYP"},
+            },
+        },
+        resources={},
+    )
+
+
+def test_batch_flat_keys_are_limited_to_compat_mirrors() -> None:
+    """batch_roles makes roles authoritative; only documented mirrors stay flat."""
+    base_input = {"source_type": "batch_structures", "items": [{"xyz": "H 0 0 0"}]}
+    validate_workflow_submission(
+        "BatchOptimize",
+        input=base_input,
+        method={
+            "profile": "opt_freq",
+            "batch_roles": {"int": {"role": "int", "method": "B3LYP"}},
+            "optimization_method": "B3LYP",
+            "temperature": 298.15,
+        },
+        resources={},
+    )
     with pytest.raises(SubmissionContractError) as excinfo:
         validate_workflow_submission(
             "BatchOptimize",
@@ -515,32 +627,117 @@ def test_batch_non_mirrored_flat_fields_are_refused() -> None:
             method={
                 "profile": "opt_freq",
                 "batch_roles": {"int": {"method": "B3LYP"}},
-                "optimization_method": "PBE0",
+                "opt_recalc_hess": 5,
             },
             resources={},
         )
-    assert excinfo.value.params()["rule"] == "conflicting_fields"
-    with pytest.raises(SubmissionContractError) as excinfo:
-        validate_workflow_submission(
-            "BatchOptimize",
-            input=base_input,
-            method={
-                "profile": "opt_freq",
-                "batch_roles": {"int": {"opt_recalc_hess": 5}},
-                "minimum_opt_recalc_hess": 10,
+    assert excinfo.value.params()["rule"] == "shadowed_field"
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [{"nproc": 0}, {"nproc": -1}, {"nproc": "4.0"}, {"nproc": "1e999"}, {"nproc": True}],
+)
+def test_resource_invalid_values_refused_by_both_entries(client: TestClient, bad: dict[str, Any]) -> None:
+    for path in ("/api/v1/preflight", "/api/v1/jobs"):
+        detail = _error(client.post(path, json=_confsearch(resources=bad)))
+        assert detail["params"]["field"] == "resources"
+
+
+def test_local_and_remote_argv_parse_for_three_workflows(tmp_path: Path) -> None:
+    """P1-03: the production local and remote builders must emit parseable argv."""
+    from types import SimpleNamespace
+
+    from acp.cli import build_parser
+    from acp.scheduler.remote.script_gen import build_remote_cli_command
+    from acp.scheduler.runner import JobRunner
+
+    parser = build_parser()
+    conf = JobSpec(
+        workflow="Confsearch",
+        name="conf",
+        input={"smiles": "CCO"},
+        method={
+            "protocol": "censo-crest",
+            "refinement_policy": "rank1",
+            "levels": {"refinement_threshold": 0.99, "dft_opt": {"functional": "wB97X-D4"}},
+        },
+        resources={"nproc": 4, "mem": "8GB"},
+    )
+    batch = JobSpec(
+        workflow="BatchOptimize",
+        name="batch",
+        input={"items_file": "/tmp/items.json"},
+        method={"profile": "opt_freq", "optimization_method": "B3LYP"},
+        resources={"nproc": 4, "mem": "8GB"},
+    )
+    nmr = JobSpec(
+        workflow="nmr",
+        name="nmr",
+        input={
+            "smiles": "CCO",
+            "experiment": {"mode": "assigned", "content": "1 1.0 2.0"},
+        },
+        method={"max_conformers": 5},
+        resources={"nproc": 4, "mem": "8GB"},
+    )
+    runner = SimpleNamespace(python="python")
+    runner._build_nmr_cmd = lambda spec, work_dir: JobRunner._build_nmr_cmd(
+        runner, spec, work_dir
+    )
+    runner._materialize_experiment = JobRunner._materialize_experiment
+    for spec in (conf, batch, nmr):
+        local = JobRunner._build_cmd(runner, spec, tmp_path, "input.xyz")
+        assert local[:4] == ["python", "-m", "acp.cli", "run"]
+        parser.parse_args(local[3:])
+        remote = build_remote_cli_command(spec, python_executable="python")
+        assert remote[:4] == ["python", "-m", "acp.cli", "run"]
+        parser.parse_args(remote[3:])
+
+
+def test_workbench_payloads_pass_the_http_entry(client: TestClient) -> None:
+    """Real production shapes must not be refused by preflight."""
+    conf = _confsearch(
+        input={"source_type": "smiles", "source": "CCO", "charge": 0, "multiplicity": 1},
+        method={
+            "protocol": "censo-crest",
+            "profile": "default",
+            "refinement_policy": "rank1",
+            "confsearch_profile": "default",
+            "levels": {
+                "confsearch": {"engine": "censo", "protocol": "censo-crest"},
+                "dft_opt": {"engine": "orca", "functional": "wB97X-D4", "recalc_hess": "auto"},
+                "refinement_sp": {"engine": "orca", "aux_c_basis": "def2-TZVPPD"},
+                "thermo": {"engine": "shermo", "temperature": "298.15"},
             },
-            resources={},
-        )
-    assert excinfo.value.params()["rule"] == "conflicting_fields"
-    with pytest.raises(SubmissionContractError) as excinfo:
-        validate_workflow_submission(
-            "BatchOptimize",
-            input=base_input,
-            method={
-                "profile": "opt_freq",
-                "batch_roles": {"int": {"scf_orbital_inherit": "0"}},
-                "scf_orbital_inherit": False,
-            },
-            resources={},
-        )
-    assert excinfo.value.params()["rule"] == "conflicting_fields"
+        },
+    )
+    response = client.post("/api/v1/preflight", json=conf)
+    assert response.status_code == 200, response.text
+
+    batch = {
+        "workflow": "BatchOptimize",
+        "name": "batch-contract",
+        "input": {
+            "source_type": "batch_structures",
+            "items": [{"xyz": "O 0 0 0\nH 1 0 0\nH 0 1 0"}],
+            "charge": 0,
+            "multiplicity": 1,
+        },
+        "method": {
+            "profile": "opt_freq",
+            "batch_roles": {"int": {"role": "int"}},
+            "levels": {"batch": {"steps": ["optimize", "frequency"]}},
+        },
+    }
+    response = client.post("/api/v1/preflight", json=batch)
+    assert response.status_code == 200, response.text
+
+
+def test_resource_validation_does_not_mutate() -> None:
+    resources = {"nproc": 4, "cores": "0", "mem": "8GB"}
+    before = copy.deepcopy(resources)
+    validate_resource_request(resources)
+    assert resources == before
+
+

@@ -63,6 +63,14 @@
 
 > 备注：第七轮复验因 codex 账号用量上限（18:01 重置）未能执行；P1 代码与证据已就绪，待额度恢复后补一次复验。
 
+### 范围收窄（第七轮后）
+
+`batch_roles` 存在时，flat 字段的**值级等价**不再由 API 层判定：引擎会做 `TS method → INT method`、`recalc auto → 数值` 等回退，API 无法在不复制第二套实现的前提下复现。现在只做**位置校验**：
+
+- 只有 Workbench 文档化的 7 个兼容镜像（`optimization_*`、`single_point_*`、`temperature/pressure/scale_factor`）允许留在顶层；
+- 其余 flat 标量在 `batch_roles` 存在时 → `shadowed_field`（明确拒绝，不静默）；
+- 值级一致性（例如顶层 `temperature=400` 与角色默认 298.15 的差异）作为**已知残余**登记，归属下阶段（引擎/Workbench 统一镜像写入），不在 P1 的 API 层继续加猜测性比较。
+
 ## 本轮变更
 
 | 文件 | 变更 |

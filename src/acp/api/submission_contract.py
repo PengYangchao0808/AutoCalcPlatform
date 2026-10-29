@@ -165,6 +165,21 @@ _CONFSEARCH_LEVELS: dict[str, frozenset[str]] = {
 # ``levels`` also carries scalar knobs at its top level (engine reads them).
 _LEVEL_SCALARS: frozenset[str] = frozenset({"refinement_threshold"})
 
+#: Flat keys the Workbench sends as compatibility mirrors next to batch_roles.
+#: They are inert when batch_roles is present (roles are authoritative); any
+#: other flat setting is refused instead of being silently dropped.
+_WORKBENCH_FLAT_MIRRORS: frozenset[str] = frozenset(
+    {
+        "optimization_method",
+        "optimization_basis",
+        "single_point_method",
+        "single_point_basis",
+        "temperature",
+        "pressure",
+        "scale_factor",
+    }
+)
+
 # Role field -> flat method field (Workbench `applyBatchOptimizeMethodFields`).
 _ROLE_FLAT_ALIASES: dict[str, str] = {
     "method": "optimization_method",
@@ -312,59 +327,30 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
         roles = _as_mapping(method["batch_roles"], "method.batch_roles")
         for role_id, role_value in roles.items():
             _as_mapping(role_value, f"method.batch_roles.{role_id}")
-        # The flag builder returns early when batch_roles is present, so every
-        # top-level flat setting must be a mirror of a role/level value or it
-        # would be silently ignored.  Prefixes select the role they mirror:
-        # optimization_*/minimum_* <- int, transition_state_* <- ts.
-        # The executed values are exactly what the batch engine will build.
-        # Reusing the consumer's constructor keeps the mirror check honest
-        # instead of re-implementing its normalisation (recalc_hess, bool,
-        # numeric strings) in the API layer.
-        from acp.calculations.batch.options import _build_opts_from_batch_roles
-        from acp.chem.composition import normalize_recalc_hess
-
-        executed = _build_opts_from_batch_roles(
-            {str(role_id): dict(role) for role_id, role in roles.items() if isinstance(role, Mapping)}
+        # The flag builder returns early when batch_roles is present, so only
+        # the documented Workbench compatibility mirrors may stay at the top
+        # level; every other flat setting would be silently ignored.  Value
+        # equivalence is NOT re-judged here: the engine applies fallbacks
+        # (TS method -> INT method, recalc auto -> numeric) that the API layer
+        # cannot reproduce without becoming a second implementation.
+        unsupported = sorted(
+            key
+            for key in (
+                *_BATCHOPTIMIZE_SCALAR_FLAGS,
+                "opt_recalc_hess",
+                "minimum_opt_recalc_hess",
+                "transition_state_opt_recalc_hess",
+                "scf_orbital_inherit",
+            )
+            if key in method and key not in _WORKBENCH_FLAT_MIRRORS
         )
-        for key in (
-            *_BATCHOPTIMIZE_SCALAR_FLAGS,
-            "opt_recalc_hess",
-            "minimum_opt_recalc_hess",
-            "transition_state_opt_recalc_hess",
-            "scf_orbital_inherit",
-        ):
-            if key not in method or method[key] is None or method[key] == "":
-                continue
-            expected = getattr(executed, key, None)
-            flat = method[key]
-            if key.endswith("recalc_hess"):
-                try:
-                    flat = normalize_recalc_hess(flat)
-                except ValueError as exc:
-                    raise SubmissionContractError(
-                        f"method.{key}: {exc}",
-                        field_name=f"method.{key}",
-                        rule="invalid_enum",
-                    ) from None
-            elif isinstance(expected, bool):
-                flat = bool(flat)
-            elif isinstance(expected, (int, float)):
-                try:
-                    flat = float(flat)
-                    expected = float(expected)
-                except (TypeError, ValueError):
-                    raise SubmissionContractError(
-                        f"method.{key} must be numeric",
-                        field_name=f"method.{key}",
-                        rule="invalid_type",
-                    ) from None
-            if flat != expected:
-                raise SubmissionContractError(
-                    f"method.{key} disagrees with the executed batch setting "
-                    f"({expected!r})",
-                    field_name=f"method.{key}",
-                    rule="conflicting_fields",
-                )
+        if unsupported:
+            raise SubmissionContractError(
+                f"method.{unsupported[0]} would be ignored while method.batch_roles is set; "
+                "put it in batch_roles instead",
+                field_name=f"method.{unsupported[0]}",
+                rule="shadowed_field",
+            )
     if "select" in method and method["select"] is not None:
         select = method["select"]
         if not isinstance(select, str) and not isinstance(select, (list, tuple)):
