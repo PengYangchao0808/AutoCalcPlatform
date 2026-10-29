@@ -8,8 +8,8 @@
   "client_path": {
     "chosen": "versioned MCP extension",
     "reason": "C's MCP Bridge only calls tools registered on the DSH MCP server; a server-side data interface is not reachable from RPH. The extension keeps one controlled path instead of adding a second client protocol.",
-    "p1_contract_preserved": "the eight frozen P1 tools (acp_capabilities, acp_preflight, acp_submit, acp_status, acp_cancel, acp_prepare_artifact, acp_read_artifact, acp_analyze) remain the P1 allowlist and never change names or schemas",
-    "extension_rule": "P2 tools are promised by the versioned extension acp.research.v1 and are registered by M2-01c, but tools/list only exposes them after that session negotiated the extension (tools/call acp_capabilities with research_extension). Before negotiation a research tool call is refused in-band as unsupported_capability with params.rule=extension_not_negotiated; the eight P1 names are unchanged and always advertised.",
+    "p1_contract_preserved": "the frozen P1 tools (acp_capabilities, acp_preflight, acp_submit, acp_status, acp_cancel, acp_prepare_artifact, acp_read_artifact, acp_analyze) never change names or schemas; the 2026-10-30 guidance batch (plan ACP_MCP_Agent_Guidance_PES_Batch_Plan_20261030 §5) additively registered the read-only acp_get_guidance in the same P1 allowlist without touching any frozen name or schema",
+    "extension_rule": "P2 tools are promised by the versioned extension acp.research.v1 and are registered by M2-01c, but tools/list only exposes them after that session negotiated the extension (tools/call acp_capabilities with research_extension). Before negotiation a research tool call is refused in-band as unsupported_capability with params.rule=extension_not_negotiated; the P1 names are unchanged and always advertised.",
     "tool_sets": {
       "p1_advertised": [
         "acp_capabilities",
@@ -19,7 +19,8 @@
         "acp_cancel",
         "acp_prepare_artifact",
         "acp_read_artifact",
-        "acp_analyze"
+        "acp_analyze",
+        "acp_get_guidance"
       ],
       "p2_promised": [
         "acp_research_proposal_create_v1",
@@ -33,11 +34,11 @@
         "acp_research_snapshot_v1",
         "acp_research_resume_v1"
       ],
-      "advertised": "the eight P1 tools in tools/list plus the extension entry acp_capabilities always reports; advertising never implies delivery",
+      "advertised": "the P1 tools in tools/list (the eight frozen names plus the additive read-only acp_get_guidance) plus the extension entry acp_capabilities always reports; advertising never implies delivery",
       "implemented": "derived, never asserted: the registered tool allowlist must cover the whole p2_promised set (ten names). M2-01c registers all ten, so implemented=true; a partial registration would still be implemented=false.",
       "negotiated": "derived: implemented=true AND the requested version equals extension_version. Since M2-01c a matching-version negotiation succeeds; an advertised-but-partial set stays negotiated=false with the typed refusal extension_not_implemented.",
       "partial_implementation": "refused with unsupported_capability/params.rule=extension_not_implemented, never a negotiated=true over a subset",
-      "p1_is_unchanged": "the eight P1 names and input schemas are frozen (M1-01b changes only acp_submit/acp_prepare_artifact/acp_read_artifact/acp_analyze request schemas, never names)"
+      "p1_is_unchanged": "the eight original P1 names and input schemas are frozen (M1-01b changes only acp_submit/acp_prepare_artifact/acp_read_artifact/acp_analyze request schemas, never names); acp_get_guidance is an additive registration, not a change to any frozen name"
     },
     "negotiation": {
       "request_carrier": "tools/call",
@@ -567,9 +568,10 @@
       "acp_cancel",
       "acp_prepare_artifact",
       "acp_read_artifact",
-      "acp_analyze"
+      "acp_analyze",
+      "acp_get_guidance"
     ],
-    "rule": "these eight names and their input schemas are the frozen P1 contract; the P2 extension adds names instead of widening them"
+    "rule": "the eight original names and their input schemas are the frozen P1 contract; the 2026-10-30 guidance batch additively registered the read-only acp_get_guidance in the same allowlist (plan ACP_MCP_Agent_Guidance_PES_Batch_Plan_20261030 §5) without touching any frozen name or schema; the P2 extension adds names instead of widening them"
   },
   "samples": [
     {

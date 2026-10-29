@@ -60,6 +60,7 @@ EXPECTED_TOOLS = frozenset(
         "acp_cancel",
         "acp_prepare_artifact",
         "acp_read_artifact",
+        "acp_get_guidance",
         "acp_analyze",
     }
 )

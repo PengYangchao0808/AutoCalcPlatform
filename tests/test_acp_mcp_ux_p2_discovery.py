@@ -83,7 +83,9 @@ def test_no_selector_keeps_the_frozen_shape(client: TestClient) -> None:
 
 
 def test_uncovered_workflow_is_marked_not_provided(client: TestClient) -> None:
-    payload = client.get("/api/capabilities", params={"workflow": "PESsearch"}).json()
+    # PESsearch/scan gained staged partial coverage (2026-10-30 first-batch
+    # contracts); irc is still outside the published set.
+    payload = client.get("/api/capabilities", params={"workflow": "irc"}).json()
     block = payload["workflow_contract"]
     assert block["coverage"] == "not_provided"
     assert "not published" in block["reason"]

@@ -4,7 +4,7 @@ B06 (plan ``.omo/plans/acp2-parallel-plan-b-runtime.md`` todo 7).  This module i
 the only place that wires the stdlib-only Controller client into the
 protocol/allowlist/policy owner :mod:`acp_services.entrypoints.mcp`.
 
-Every one of the eight tools is bound to **one Controller application command**:
+Every one of the nine tools is bound to **one Controller application command**:
 
 ======================================  =========================================
 MCP tool                                Controller command
@@ -18,6 +18,7 @@ MCP tool                                Controller command
 ``acp_prepare_artifact``                ``POST /api/v1/jobs/{id}/prepare``
 ``acp_read_artifact``                   ``GET /api/v1/jobs/{id}/prepared/{r}``
 ``acp_analyze``                         ``POST /api/v1/jobs/{id}/analyze``
+``acp_get_guidance``                    ``GET /api/v1/guidance/{guide_id}``
 ======================================  =========================================
 
 Parameters pass through the shared :mod:`acp_services.entrypoints.
@@ -359,6 +360,50 @@ class _ControllerAnalysis:
             raise _tool_error("analyze", exc) from None
 
 
+class _ControllerGuidance:
+    """Read-only guidance forward (plan 2026-10-30 §5: 指南读取).
+
+    The port is a thin forward to the Controller route; version/digest and the
+    explicit-omission budget policy live in the content pack behind the route,
+    so this adapter adds no second guidance authority.
+    """
+
+    def __init__(self, client: ControllerClient) -> None:
+        self._client = client
+
+    def guidance(self, request: Mapping[str, Any], *, workspace_id: str) -> Any:
+        del workspace_id
+        guide_id = str(request.get("guide_id") or "").strip()
+        if not guide_id:
+            raise mcp.McpToolError(
+                mo.ErrorCode.INPUT_INVALID,
+                "guidance read requires a non-empty guide_id",
+                params={"field": "guide_id", "rule": "missing_required_field"},
+                retryable=False,
+            )
+        section = request.get("section")
+        version = request.get("version")
+        max_bytes = request.get("max_bytes")
+        try:
+            return dict(
+                self._client.guidance(
+                    guide_id,
+                    section=str(section) if section is not None else None,
+                    version=str(version) if version is not None else None,
+                    max_bytes=int(max_bytes) if max_bytes is not None else None,
+                )
+            )
+        except ControllerClientError as exc:
+            raise _tool_error("guidance", exc) from None
+        except (TypeError, ValueError) as exc:
+            raise mcp.McpToolError(
+                mo.ErrorCode.INPUT_INVALID,
+                f"invalid guidance request: {exc}",
+                params={"field": "max_bytes", "rule": "invalid_type"},
+                retryable=False,
+            ) from None
+
+
 @dataclass(frozen=True)
 class McpRuntime:
     """A built MCP server plus the Controller facts used to build it."""
@@ -412,6 +457,7 @@ def build_mcp_runtime(
         cancel=_ControllerCancel(client),
         artifacts=_ControllerArtifacts(client),
         analysis=_ControllerAnalysis(client),
+        guidance=_ControllerGuidance(client),
         # M2-01c: the ten research tools reach the Controller application service
         # through the one transport; the adapter holds no research store.
         research=ControllerResearchPort(client),

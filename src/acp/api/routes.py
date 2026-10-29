@@ -49,6 +49,7 @@ from acp.scheduler.logs import read_log_tail
 from acp.storage.layout import runtime_file
 from acp.workflows.registry import list_workflow_entries, workflow_to_dict
 from acp_services.entrypoints.application_params import MAX_READ_BYTES
+from acp_services.entrypoints.mcp import TOOL_ALLOWLIST as _MCP_TOOL_ALLOWLIST
 
 router = APIRouter()
 
@@ -155,16 +156,10 @@ def get_status(request: Request) -> StatusResponse:
 
 _CONTRACT_MANIFEST_RELATIVE = "docs/reference/next-change/acp2-contracts/manifest.json"
 _MCP_PROTOCOL_VERSION = "2025-06-18"
-_MCP_TOOLS: tuple[str, ...] = (
-    "acp_capabilities",
-    "acp_preflight",
-    "acp_submit",
-    "acp_status",
-    "acp_cancel",
-    "acp_prepare_artifact",
-    "acp_read_artifact",
-    "acp_analyze",
-)
+#: Derived from the protocol owner's allowlist (never a second hand-written
+#: list): the 2026-10-30 guidance batch added ``acp_get_guidance`` there and
+#: this projection inherits registration changes automatically.
+_MCP_TOOLS: tuple[str, ...] = tuple(sorted(_MCP_TOOL_ALLOWLIST))
 #: Bounded discovery limits (application-api.v1 ``capabilities.limits``).
 _CONTROLLER_LIMITS: dict[str, int] = {
     "max_artifact_bytes": 8 * 1024 * 1024,

@@ -418,8 +418,25 @@ def validate_p2_implementation_status(root: Path) -> None:
         fail(f"P2 {P2_TOOL_SETS_KEY} is missing")
     advertised = list(tool_sets.get("p1_advertised") or [])
     promised = list(tool_sets.get("p2_promised") or [])
-    if len(advertised) != 8:
-        fail(f"P2 p1_advertised must list the eight P1 tools; got {len(advertised)}")
+    # The frozen eight P1 names plus the additive read-only acp_get_guidance
+    # (2026-10-30 guidance batch, plan §5). Registry-derived, not a bare count:
+    # a new registration updates this expectation, a removal breaks it.
+    _FROZEN_P1 = {
+        "acp_capabilities",
+        "acp_preflight",
+        "acp_submit",
+        "acp_status",
+        "acp_cancel",
+        "acp_prepare_artifact",
+        "acp_read_artifact",
+        "acp_analyze",
+    }
+    expected_p1 = _FROZEN_P1 | {"acp_get_guidance"}
+    if set(advertised) != expected_p1:
+        fail(
+            "P2 p1_advertised must list the frozen P1 tools plus the additive "
+            f"acp_get_guidance; got {sorted(set(advertised) ^ expected_p1)}"
+        )
     if len(promised) != 10:
         fail(f"P2 p2_promised must list the ten research tools; got {len(promised)}")
     if set(advertised) & set(promised):

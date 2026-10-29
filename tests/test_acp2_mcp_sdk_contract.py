@@ -10,7 +10,7 @@ What is proven here (and what is not):
 
 * the **unmodified** frozen client, with the plugin's production constructor
   options (``versionNegotiation: {mode: 'auto'}``), completes ``initialize``
-  against a real ``acp mcp serve`` stdio process and lists the eight P1 tools;
+  against a real ``acp mcp serve`` stdio process and lists the P1 tool allowlist
 * the client offers ``2025-11-25``, the server answers ``2025-06-18`` (standard
   MCP negotiation, ADR-006), and the client accepts it because it supports it;
 * the ``auto`` era probe runs on a **second, disposable adapter process**
@@ -104,7 +104,7 @@ def test_server_answers_its_own_version_and_client_accepts_it(
     assert document["server"]["server_info"]["name"] == "acp-services-mcp"
 
 
-def test_tools_list_is_the_eight_tool_allowlist(live_default: dict[str, Any]) -> None:
+def test_tools_list_is_the_p1_tool_allowlist(live_default: dict[str, Any]) -> None:
     tools = live_default["document"].get("tools") or []
     assert {tool["name"] for tool in tools} == set(harness.EXPECTED_TOOLS)
     assert all(tool["inputSchema"]["type"] == "object" for tool in tools)

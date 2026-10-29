@@ -496,7 +496,8 @@
             "acp_cancel",
             "acp_prepare_artifact",
             "acp_read_artifact",
-            "acp_analyze"
+            "acp_analyze",
+            "acp_get_guidance"
           ]
         },
         "version": {
@@ -1058,6 +1059,36 @@
           }
         },
         "description": "vibration.analyze reads existing evidence (no QC); vibration.compute starts exactly one frequency task and requires plan_digest. explicit=true is mandatory and the capability must be executable."
+      },
+      "acp_get_guidance": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "guide_id"
+        ],
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "enum": [
+              1
+            ],
+            "default": 1
+          },
+          "guide_id": {
+            "type": "string"
+          },
+          "section": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "max_bytes": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "description": "Read one versioned guidance document (read-only, bounded, digest-bound for caching); discover ids via acp_capabilities(workflow=...)."
       }
     },
     "constraints": {

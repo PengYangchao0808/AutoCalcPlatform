@@ -131,6 +131,42 @@ _BATCHOPTIMIZE_METHOD_KEYS: frozenset[str] = frozenset(
     }
 )
 
+#: PESsearch — the direct ``mode=bond_length_scan`` branch is the first-batch
+#: documented surface (plan 2026-10-30 §3).  Method carries the branch selector
+#: and the manifest-path knobs the runner reads; the scan protocol itself rides
+#: in ``input.scan_request``/``input.protocol`` (validated by the pydantic bond
+#: scan model downstream), so ``levels`` is deliberately absent: the PESsearch
+#: argv builder consumes no ``method.levels`` and a rejected key is safer than a
+#: silently dropped one.
+_PESSEARCH_METHOD_KEYS: frozenset[str] = frozenset(
+    {
+        "mode",  # "bond_length_scan" selects the direct branch
+        "strategy",  # manifest-path strategy (guided_scan/reverse_peb/direct_ts)
+        "select",
+        "coordinate_plan",  # manifest path --plan JSON
+        "scan_request",  # runner fallback carrier (input.scan_request preferred)
+    }
+)
+
+_PESSEARCH_STRATEGIES: frozenset[str] = frozenset(
+    {"guided_scan", "reverse_peb", "direct_ts"}
+)
+
+#: scan — the simple-workflow relaxed scan.  Coordinates may sit in method or
+#: input (``scan_method_flags`` reads both); ``levels`` follows the dft_scan
+#: schema (level id ``scan``).
+_SCAN_METHOD_KEYS: frozenset[str] = frozenset(
+    {
+        "scan_coordinates",
+        "coordinate",
+        "scan_points",
+        "scan_use_scants",
+        "use_scants",
+        "levels",
+        "schema_id",
+    }
+)
+
 def _level_fields(schema_id: str) -> dict[str, frozenset[str]]:
     schema = METHOD_SCHEMAS[schema_id]
     return {
@@ -290,6 +326,71 @@ WORKFLOW_CONTRACTS: dict[str, WorkflowContract] = {
         required_input_any=("items", "from_artifact", "items_file", "input", "source"),
         batch_structures_only=True,
         levels=_BATCH_LEVELS,
+    ),
+    "PESsearch": WorkflowContract(
+        method_keys=_PESSEARCH_METHOD_KEYS,
+        method_enums={
+            "mode": frozenset({"bond_length_scan"}),
+            "strategy": _PESSEARCH_STRATEGIES,
+        },
+        input_keys=frozenset(
+            {
+                # chemistry envelope (input_chemistry_flags)
+                "input_artifact",
+                "source",
+                "input",
+                "smiles",
+                "source_type",
+                "charge",
+                "multiplicity",
+                "source_ref",
+                "asset_id",
+                # mode=bond_length_scan branch (BondLengthScanJobInput)
+                "coordinate",
+                "coordinates",
+                "selection",
+                "protocol",
+                "source_job_id",
+                "from_artifact",
+                # manifest-path extras the runner reads from input
+                "from",
+                "coordinate_plan",
+                "product",
+                "ts_guess",
+            }
+        ),
+        required_input_any=(
+            "source",
+            "coordinate",
+            "from",
+            "input",
+            "smiles",
+            "input_artifact",
+            "source_job_id",
+            "from_artifact",
+        ),
+    ),
+    "scan": WorkflowContract(
+        method_keys=_SCAN_METHOD_KEYS,
+        input_keys=frozenset(
+            {
+                # chemistry envelope
+                "input_artifact",
+                "source",
+                "input",
+                "smiles",
+                "source_type",
+                "charge",
+                "multiplicity",
+                "source_ref",
+                "asset_id",
+                # coordinates may also ride in input (scan_method_flags)
+                "scan_coordinates",
+                "coordinate",
+            }
+        ),
+        required_input_any=("input", "smiles", "source", "input_artifact"),
+        levels=_level_fields("dft_scan"),
     ),
 }
 

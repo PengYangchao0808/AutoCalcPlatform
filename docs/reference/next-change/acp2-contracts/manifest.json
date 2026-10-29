@@ -152,7 +152,7 @@
       "NOT_APPLICABLE"
     ]
   },
-  "contract_digest": "72a2765fe235db8afc4ad9bfc4190ea5753d76a58c430a891487e02478aaa89a",
+  "contract_digest": "a0f7e201b8b646d499ebe649b5a72125145be7c8d4c887c252a44f9600c7a640",
   "contract_digest_rule": "sha256 over sorted lines '<path> <sha256>\\n' for delivered contracts excluding manifest.json, runtime/baseline-lock.json and release/bom.current.json (self-referential files; the BOM embeds this aggregate digest).",
   "contract_version": "1.7.0",
   "contract_version_history": [
@@ -224,7 +224,7 @@
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/manifest.json",
-      "sha256": "2c953fde4787bf7fc8904aa78a7223d3694d676e2d51cf264118c73934bbbadb",
+      "sha256": "8b5888364161f39b96fcda9aa6207bd243835bd2a06d723a248fe79ddc218404",
       "status": "delivered"
     },
     {
@@ -308,7 +308,7 @@
       "id": "p2-research-operations",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
-      "sha256": "3e9ae8da58899f9657ece57526d7d2315b85557790e2da7802f3a5438cec9a1c",
+      "sha256": "a80f2db16af01b4229c8dfc0ba9d775a65eb9ef4cf72c3f4c96bcee76947500b",
       "status": "delivered",
       "updated_by": "B16"
     },
@@ -317,7 +317,7 @@
       "id": "mcp-launch-schema",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.schema.json",
-      "sha256": "76a3c538a51c66e0cdc231c1f08c99e1e6d9452bb985df39382c507026a0ac13",
+      "sha256": "25b51d12bc8de2a8ae597296ee7d5c1c1da269fa0cb9f099c094ada16fe4437a",
       "status": "delivered",
       "updated_by": "B06"
     },
@@ -474,7 +474,7 @@
       "note": "M5-02 clean-candidate BOM: 27 artifacts with URI+sha256+size, toolchain/DSH locks, contract digest and coverage canonical digest. Self-referential: excluded from contract_digest because it embeds that aggregate digest.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/release/bom.current.json",
-      "sha256": "7a455912d3945811a81872fa1f4c5d1bdea5e00fbcb6a3dcc03c745d824f2b77",
+      "sha256": "259f38de9ad94f4c734c40417d9917727bcd2fb75581d9b0c9c427ba264aa965",
       "status": "delivered"
     },
     {
@@ -483,7 +483,7 @@
       "note": "M5-02 final coverage ledger: 39 tasks / 32 checkpoints / 26 gaps / 8 H rows + 3 DEFERRED rows, each with a receipt+sha256, candidate, reuse and required_observations. Delivery status lives only here, never in the BOM.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/release/evidence-coverage.current.json",
-      "sha256": "62a3e0fa5ae77fe47581c5ddc30c1a516dccdd883e4c0b6eddefbc8593e798db",
+      "sha256": "09cc15b03f59e868174fa5b260b369101d836a7c21ae2ea62651daf5a375ae00",
       "status": "delivered"
     }
   ],

@@ -28,6 +28,7 @@ from acp.api.batch_preview import router as batch_preview_router
 from acp.api.drafts import router as drafts_router
 from acp.api.mechanism_readonly import router as mechanism_readonly_router
 from acp.api.routes import router as api_router
+from acp.api.v1_guidance import router as v1_guidance_router
 from acp.api.v1_routes import router as v1_router
 from acp.api.v2_approvals import router as v2_approvals_router
 from acp.api.v2_budgets import router as v2_budgets_router
@@ -562,6 +563,7 @@ def create_app(
     app.include_router(v2_science.router, prefix="/api/v2")
     app.include_router(v1_science.router, prefix="/api/v1")
     app.include_router(v2_research.router, prefix="/api/v2")
+    app.include_router(v1_guidance_router)
     app.include_router(api_router, prefix="/api")
 
     # Without these mounts /js|/css 404 and the viewer tabs render blank (46a5626 regression).
