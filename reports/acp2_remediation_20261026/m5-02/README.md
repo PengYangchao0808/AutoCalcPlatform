@@ -1,5 +1,7 @@
 # M5-02 — single BOM, retrievable artifacts and evidence coverage matrix
 
+> **Snapshot boundary and update, 2026-10-28.** The build counts, hashes, open-row counts and judgements below describe the original M5-02 run, not the current ledger. The later [M5-03 round-2 operator receipt](../m5-03/m503-operator-receipt-round2/RESULTS.md) is PASS; the current ledger closes M5-03 and G01/G06/G16/G17/G19, leaving five gaps G05/G10/G13/G15/G18 open. H3/H4/H7 remain formally OPEN/NOT_VERIFIED, but notes claiming the operator has not run or the generic deadline limits are not enforced are stale. The current code declares those limits enforced. G15 also contains a real recipe implementation gap, so the remaining work is not exclusively environment/credential work. See the [current status](../../../docs/reference/current/ACP_RPH_Status_20261028.md) for reconciliation. Frozen JSON, raw receipts, BOM and their digest bindings are retained; this text does not grant Candidate-Full release approval.
+
 Generated from the clean candidate `f6b6153` and the receipts in
 `reports/acp2_remediation_20261026/`. Every number below is read back from
 `summary.json` / `walk-bom.json`, not hand-written.
@@ -38,7 +40,7 @@ commit; the only worktree differences are the 17 M5-02 release-ledger overlay
 paths recorded in `source.release_overlay` (coverage/schema/manifest/BOM,
 release scripts, the sign-off tests and this report). No business source changed.
 
-## Coverage: 39 tasks / 32 checkpoints / 26 gaps / 8 H rows / 3 DEFERRED rows
+## Coverage at the original M5-02 run: 39 tasks / 32 checkpoints / 26 gaps / 8 H rows / 3 DEFERRED rows
 
 | segment | total | PASS/CLOSED | OPEN/NOT_VERIFIED |
 | --- | --- | --- | --- |
@@ -64,7 +66,7 @@ receipt digests are verified by the walker.
   and the 3 DEFERRED rows): no current-candidate run; they remain
   `NOT_VERIFIED`.
 
-## Key judgements
+## Historical M5-02 judgements
 
 | row | verdict | reason |
 | --- | --- | --- |
@@ -114,7 +116,7 @@ files (manifest, baseline-lock).
 
 Result: **PASS**, 27/27 artifacts byte-verified, 108/108 receipts verified.
 
-## Open rows handed to M5-03
+## Rows handed to M5-03 at the time
 
 `G01,G05,G06,G10,G13,G15,G16,G17,G18,G19`, `H3,H4,H7`, `M3-03`, `M5-03`.
 `M0-02c` and the three DEFERRED rows stay open but are outside the required

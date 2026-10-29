@@ -350,6 +350,8 @@ export function assertProductReady(input: ReadinessInput): void {
 
 export interface ComposeRuntimeInput extends ReadinessInput {
   readonly adapters?: PlatformPortAdapters;
+  /** Optional project scope forwarded to the P2 queries (approval et al.). */
+  readonly projectId?: string | null;
   /** The proposal whose saga a resume advances (P2-R5 identity). */
   readonly proposalRef?: string | null;
   /** Enables the real bridge-backed submit port (plan → platform payload). */
@@ -422,6 +424,9 @@ export function composeResearchRuntime(input: ComposeRuntimeInput): ComposedRese
       session,
       writer,
       adapters,
+      ...(input.projectId === null || input.projectId === undefined
+        ? {}
+        : { projectId: input.projectId }),
       ...(evidenceReader === null || evidenceReader === undefined ? {} : { evidenceReader }),
       ...(budgetUsage === null || budgetUsage === undefined ? {} : { budgetUsage }),
       ...(input.proposalRef === null || input.proposalRef === undefined
@@ -500,6 +505,8 @@ export async function connectPlatform(input: ConnectPlatformInput): Promise<Conn
     if (runRoot !== null) env["ACP_RUN_ROOT"] = runRoot;
     if (configPath !== null) env["ACP_CONFIG"] = configPath;
     env["ACP_CONTROLLER_URL"] = controllerUrl;
+    const apiKey = input.profile.get("controller_api_key");
+    if (apiKey !== null) env["ACP_API_KEY"] = apiKey;
     launched = launchMcpStdio({
       command: interpreter,
       args: acpMcpServeArgs(controllerUrl),

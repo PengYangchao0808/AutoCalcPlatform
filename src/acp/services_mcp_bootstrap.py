@@ -57,6 +57,7 @@ from acp_services.entrypoints.controller_client import (
     Health,
     NotPreparedError,
 )
+from acp_services.entrypoints.research_consumption import ControllerConsumptionPort
 from acp_services.entrypoints.research_port import ControllerResearchPort
 from acp_services.entrypoints.status_projection import (
     project_operation_status,
@@ -153,9 +154,13 @@ class _ControllerCapabilities:
     def __init__(self, client: ControllerClient) -> None:
         self._client = client
 
-    def capabilities(self) -> dict[str, Any]:
+    def capabilities(self, *, workflow: str | None = None) -> dict[str, Any]:
         try:
-            snapshot = self._client.capabilities()
+            snapshot = (
+                self._client.capabilities()
+                if workflow is None
+                else self._client.capabilities(workflow=workflow)
+            )
         except ControllerClientError as exc:
             raise _tool_error("capabilities", exc) from None
         data = dict(snapshot.raw)
@@ -410,6 +415,7 @@ def build_mcp_runtime(
         # M2-01c: the ten research tools reach the Controller application service
         # through the one transport; the adapter holds no research store.
         research=ControllerResearchPort(client),
+        consumption=ControllerConsumptionPort(client),
     )
     identity = _stdio_identity_mapper(client, api_key)
     server = mcp.McpServer(

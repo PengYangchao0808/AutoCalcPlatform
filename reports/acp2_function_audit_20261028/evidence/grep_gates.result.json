@@ -1,0 +1,10 @@
+{
+  "name": "grep_gates",
+  "command": [
+    "python3.11",
+    "scripts/check_grep_gates.py"
+  ],
+  "exit_code": 2,
+  "elapsed_seconds": 0.17,
+  "log": "grep_gates.log"
+}

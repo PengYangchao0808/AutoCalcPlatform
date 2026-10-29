@@ -1,0 +1,13 @@
+{
+  "artifact_digests": {
+    "input.xyz": "sha256:0f687021eb0d6e5782950e34b7b3f8ecec4c22f55a72ececf6e9c95177ab01b1"
+  },
+  "binding_id": "local:6f4f2397a7347293:3_water_O_0.0000000_0.0000000_0.1173000_H_0.0000000_0.7572000_-0.4692000_H_0.0000000_-0.7572000_-0.4",
+  "endpoint": "local",
+  "kind": "local",
+  "mapping_version": 1,
+  "project_id": "",
+  "relative_path": "3_water_O_0.0000000_0.0000000_0.1173000_H_0.0000000_0.7572000_-0.4692000_H_0.0000000_-0.7572000_-0.4",
+  "root": "/tmp/phaseC/drills/disconnect/run_root/drill-disconnect-1793241401",
+  "tenant_id": ""
+}

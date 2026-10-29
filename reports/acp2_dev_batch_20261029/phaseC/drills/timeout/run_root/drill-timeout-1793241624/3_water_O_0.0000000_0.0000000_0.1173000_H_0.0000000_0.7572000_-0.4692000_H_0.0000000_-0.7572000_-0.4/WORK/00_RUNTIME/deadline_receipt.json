@@ -1,0 +1,26 @@
+{
+  "admitted_at": "2026-10-29T02:40:30.719190Z",
+  "attempt": 1,
+  "clock": "wall",
+  "deadline_at": "2026-10-29T02:40:36.730681Z",
+  "decision": "wall-deadline-expired",
+  "job_id": "20261029_104030_001_singlepoint",
+  "native": {
+    "confirmed_stopped": true,
+    "killed_pids": [],
+    "lsf_job_id": "",
+    "node": "",
+    "phase": "terminated",
+    "signals": "SIGCONT,SIGTERM,SIGKILL (process group via acp.scheduler.processctl)",
+    "still_alive_pids": [],
+    "surface": "local-process-group"
+  },
+  "observed_at": "2026-10-29T02:40:39.333848Z",
+  "queue_seconds": null,
+  "schema": "acp2.runtime.deadline-receipt.v1",
+  "started_at": "2026-10-29T02:40:30.730681Z",
+  "surface": "local-process-group",
+  "terminal_status": "failed",
+  "verified": true,
+  "wall_seconds": 6
+}

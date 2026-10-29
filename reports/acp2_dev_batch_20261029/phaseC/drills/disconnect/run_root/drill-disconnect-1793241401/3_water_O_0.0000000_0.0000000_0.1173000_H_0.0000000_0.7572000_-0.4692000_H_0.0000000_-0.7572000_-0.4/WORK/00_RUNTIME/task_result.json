@@ -1,0 +1,76 @@
+{
+  "authority": "cccp.calculation.tasks.singlepoint:184-239",
+  "complete": true,
+  "content_digest": "sha256:f115f69d5e93c5e3eaf176bcbe9635f0f6f1da30becc0258c9ddd950e2939b87",
+  "exit_code": 0,
+  "job_status": "completed",
+  "missing_required_facts": [],
+  "normal_reuse": true,
+  "partial_result": false,
+  "publish": true,
+  "publish_policy": "normal",
+  "qualification": "complete",
+  "receipt_state": "completed",
+  "required_facts": [
+    "energy_hartree"
+  ],
+  "result": {
+    "artifacts": [
+      {
+        "checksum": "sha256:f2c51beda0a96dec659536485a30055f4b1405cdbf67e0d643dcdf57317553a7",
+        "path": "/tmp/phaseC/drills/disconnect/run_root/drill-disconnect-1793241401/3_water_O_0.0000000_0.0000000_0.1173000_H_0.0000000_0.7572000_-0.4692000_H_0.0000000_-0.7572000_-0.4/sp.inp",
+        "source": "orca",
+        "type": "output"
+      },
+      {
+        "checksum": "sha256:f71c7010614fea95bd6b573488065b2de73d1ae16ff8eae0c11e372ae3fcc9dd",
+        "path": "/tmp/phaseC/drills/disconnect/run_root/drill-disconnect-1793241401/3_water_O_0.0000000_0.0000000_0.1173000_H_0.0000000_0.7572000_-0.4692000_H_0.0000000_-0.7572000_-0.4/sp.out",
+        "source": "orca",
+        "type": "log"
+      }
+    ],
+    "complete": true,
+    "coordinates": [
+      [
+        0.0,
+        0.0,
+        0.1173
+      ],
+      [
+        0.0,
+        0.7572,
+        -0.4692
+      ],
+      [
+        0.0,
+        -0.7572,
+        -0.4692
+      ]
+    ],
+    "energy_hartree": -76.418906909978,
+    "errors": [],
+    "frequencies": [],
+    "metadata": {},
+    "payload": {},
+    "provenance": {
+      "backend": "orca",
+      "input_signature": "input.xyz",
+      "method": "r2SCAN-3c",
+      "version": "unknown"
+    },
+    "schema_version": 1,
+    "status": "completed",
+    "symbols": [
+      "O",
+      "H",
+      "H"
+    ],
+    "task": "singlepoint"
+  },
+  "result_digest": "sha256:2dd8175aa5828a86de38d3f4f5cd04652650ae42a5c37cbe75a8f41445e3377b",
+  "schema": "acp_task_result_v1",
+  "status": "completed",
+  "task": "singlepoint",
+  "truth_table_row": "b",
+  "written_at": "2026-10-29T02:36:50.945537+00:00"
+}

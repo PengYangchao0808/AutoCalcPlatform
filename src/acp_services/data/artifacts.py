@@ -870,13 +870,17 @@ class ArtifactRead:
         import base64
 
         body_text: str | None
+        encoding = self.encoding
         if self.encoding == "base64":
             body_text = base64.b64encode(self.body).decode("ascii")
         else:
             try:
                 body_text = self.body.decode("utf-8")
             except UnicodeDecodeError:
+                # The bytes are not UTF-8 (or a truncation split a character):
+                # report what the body actually is instead of mislabelling it.
                 body_text = base64.b64encode(self.body).decode("ascii")
+                encoding = "base64"
         return {
             "schema": self.ref.schema,
             "version": self.ref.version,
@@ -886,7 +890,7 @@ class ArtifactRead:
             "digest": self.ref.digest,
             "generation": self.ref.generation,
             "availability": self.ref.availability.value,
-            "encoding": self.encoding,
+            "encoding": encoding,
             "body": body_text,
             "body_ref": None,
             "truncated": bool(self.truncated),

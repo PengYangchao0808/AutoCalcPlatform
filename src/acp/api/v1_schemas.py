@@ -298,6 +298,8 @@ class V1JobRecordModel(BaseModel):
     name_revision: int = 0
     name_updated_at: str | None = None
     attempt: int = 1
+    artifacts: list[dict[str, Any]] | None = None
+    artifacts_truncated: bool = False
     revision: int = 0
     # Execution identity facts carried by the attempt's frozen group/receipt.
     # Additive and optional: legacy rows and remote-unmirrored attempts stay
@@ -318,7 +320,7 @@ class V1JobCreateRequest(BaseModel):
 
     workflow: str
     name: str = ""
-    input: dict[str, Any] = Field(default_factory=dict)
+    input: dict[str, Any] | None = None
     method: dict[str, Any] = Field(default_factory=dict)
     resources: dict[str, Any] = Field(default_factory=dict)
     output_dir: str | None = None

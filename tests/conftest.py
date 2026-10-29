@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -36,6 +36,16 @@ _ALL_CONFSEARCH_ENV_VARS = [
     "CONFSEARCH_CENSO_PATH",
     "CONFSEARCH_PROTOCOL",
 ]
+
+
+@pytest.fixture(scope="session")
+def isolated_browser_deployment() -> Generator[None, None, None]:
+    """Reset deployment Origin only for fixtures that boot a temporary server."""
+    with pytest.MonkeyPatch.context() as environment:
+        # Explicit empty overrides both the process environment and init YAML.
+        environment.setenv("ACP_PUBLIC_ORIGIN", "")
+        yield
+
 
 # --- three-state real-QC evidence rule (plan todo 49) ------------------------
 # Real-QC tests have exactly three outcomes: PASS, FAIL, NOT_VERIFIED.  A

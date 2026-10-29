@@ -28,6 +28,7 @@ export const ALL_P2_TOOL_NAMES: readonly string[] = [
 
 export interface FakeServerOptions {
   readonly negotiated: boolean;
+  readonly toolReply?: (name: string, args: Readonly<Record<string, unknown>>) => Record<string, unknown> | undefined;
   readonly tools?: readonly string[];
   readonly protocolVersion?: string;
   /** Answer `tools/call` for P2 operations with this payload. */
@@ -136,6 +137,9 @@ export function fakeServer(options: FakeServerOptions): {
           });
           return;
         }
+        const args = isFrame(params) && isFrame(params["arguments"]) ? params["arguments"] : {};
+        const custom = typeof name === "string" ? options.toolReply?.(name, args) : undefined;
+        if (custom !== undefined) { reply(frame, custom); return; }
         const submitParams = isFrame(params) ? params["arguments"] : undefined;
         const projectId =
           isFrame(submitParams) && typeof submitParams["project_id"] === "string"

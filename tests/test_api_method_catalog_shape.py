@@ -60,3 +60,30 @@ def test_method_catalog_v2_contains_all_basis_sets(client) -> None:
         assert basis in v2, f"{basis} missing from basis_catalog_v2"
         assert "aux_j" in v2[basis]
         assert "aux_c" in v2[basis]
+
+
+def test_method_catalog_backend_available_from_config_pin(client, tmp_path, monkeypatch) -> None:
+    """A backend pinned in ``executables.<id>.path`` is available, not missing.
+
+    Regression: ``METHOD_CATALOG["backends"]`` is built at import time and was
+    only re-probed for versions, so ``available``/``path`` stayed PATH-only.
+    Under the systemd service's minimal PATH that reported config-pinned
+    ``xtb``/``crest``/``censo``/``shermo``/``isostat`` as unavailable.
+    """
+    binary = tmp_path / "pinned" / "xtb"
+    binary.parent.mkdir(parents=True, exist_ok=True)
+    binary.write_text("#!/bin/sh\n", encoding="utf-8")
+    binary.chmod(0o755)
+
+    monkeypatch.setenv("PATH", "/usr/local/bin:/usr/bin:/bin")
+    monkeypatch.setattr(
+        "acp.catalog._effective_backend_config",
+        lambda: {"executables": {"xtb": {"path": str(binary)}}},
+    )
+    monkeypatch.setattr("cccp.software.version_cached", lambda name, path: "")
+
+    resp = client.get("/api/v1/method-catalog")
+    assert resp.status_code == 200
+    by_id = {backend["id"]: backend for backend in resp.json()["backends"]}
+    assert by_id["xtb"]["path"] == str(binary)
+    assert by_id["xtb"]["available"] is True

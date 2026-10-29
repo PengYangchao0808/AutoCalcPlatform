@@ -1,0 +1,6 @@
+{
+  "drill": "timeout",
+  "job_id": "20261029_104030_001_singlepoint",
+  "final_status": "FAILED",
+  "error": "[WALLTIME_EXCEEDED] the attempt was terminated at its wall deadline"
+}

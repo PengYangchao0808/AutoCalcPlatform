@@ -1,0 +1,407 @@
+{
+  "schema": "acp2.runtime.research-consumption.v1",
+  "version": "1.0.0",
+  "extension": "acp.research.v1",
+  "extension_version": "1.0.0",
+  "negotiation": {
+    "carrier": "tools/call:acp_capabilities",
+    "request_field": "research_extension",
+    "visibility": "Hidden before research negotiation; visible only with a bound consumer port. Legacy ten-tool P2 promise unchanged. Product additionally requires every consumer tool in observed tools/list. No HTTP fallback.",
+    "capability_projection": "data.research_consumer_tools{version,available,tools}"
+  },
+  "operations": {
+    "acp_research_model_plan_v1": {
+      "http": [
+        "POST",
+        "/api/v2/model/plan"
+      ],
+      "action": "write",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "phase": {
+            "type": "string"
+          },
+          "round": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "max_output_tokens": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "model": {
+            "type": "string"
+          },
+          "session_seed": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "research_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "messages",
+          "model",
+          "session_seed"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "acp_research_model_usage_v1": {
+      "http": [
+        "GET",
+        "/api/v2/model/usage"
+      ],
+      "action": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "session_seed": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_seed"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "acp_research_model_statement_v1": {
+      "http": [
+        "GET",
+        "/api/v2/model/statement"
+      ],
+      "action": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    "acp_research_record_create_v1": {
+      "http": [
+        "POST",
+        "/api/v2/research/records"
+      ],
+      "action": "write",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "session_seed": {
+            "type": "string"
+          },
+          "research_id": {
+            "type": "string"
+          },
+          "proposal_ref": {
+            "type": "string"
+          },
+          "approval_ref": {
+            "type": "string"
+          },
+          "plan_definition_digest": {
+            "type": "string"
+          },
+          "round": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "decision": {
+            "type": "string"
+          },
+          "task_refs": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "evidence_view": {
+            "type": "object"
+          },
+          "step_identity_refs": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "missing_validation": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "human_edits": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "created_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_seed",
+          "proposal_ref",
+          "approval_ref",
+          "plan_definition_digest",
+          "round",
+          "decision",
+          "task_refs",
+          "evidence_refs"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "acp_research_record_read_v1": {
+      "http": [
+        "GET",
+        "/api/v2/research/records/{research_id}"
+      ],
+      "action": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "research_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "research_id",
+          "project_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "acp_research_record_append_v1": {
+      "http": [
+        "POST",
+        "/api/v2/research/records/{research_id}/rounds"
+      ],
+      "action": "write",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "research_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "session_seed": {
+            "type": "string"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "record": {
+            "type": "object"
+          },
+          "evidence_view": {
+            "type": "object"
+          },
+          "idempotency_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "research_id",
+          "expected_revision",
+          "record",
+          "session_seed"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "acp_research_evidence_read_v1": {
+      "http": [
+        "POST",
+        "/api/v2/research/evidence/read"
+      ],
+      "action": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "session_seed": {
+            "type": "string"
+          },
+          "research_id": {
+            "type": "string"
+          },
+          "round": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "task_ref": {
+            "type": "object"
+          },
+          "report_ref": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "session_seed",
+          "research_id",
+          "round",
+          "task_ref",
+          "report_ref"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "acp_research_budget_read_v1": {
+      "http": [
+        "GET",
+        "/api/v2/research/usage"
+      ],
+      "action": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "proposal_ref": {
+            "type": "string"
+          },
+          "session_seed": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "proposal_ref",
+          "session_seed"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "acp_research_checkpoint_v1": {
+      "http": [
+        "POST",
+        "/api/v2/research/proposals/{proposal_ref}/checkpoint"
+      ],
+      "action": "write",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "proposal_ref": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "session_seed": {
+            "type": "string"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "plan": {
+            "type": "object"
+          },
+          "entry": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "proposal_ref",
+          "session_seed",
+          "expected_revision",
+          "plan",
+          "entry"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "acp_research_readiness_v1": {
+      "http": [
+        "GET",
+        "/api/v2/research/readiness"
+      ],
+      "action": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    "acp_research_evidence_prepare_v1": {
+      "http": [
+        "POST",
+        "/api/v2/research/evidence/prepare"
+      ],
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string"
+          },
+          "session_seed": {
+            "type": "string"
+          },
+          "research_id": {
+            "type": "string"
+          },
+          "round": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "task_ref": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "session_seed",
+          "research_id",
+          "round",
+          "task_ref"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "authorities": {
+    "model": "Controller ModelGateway reserves and receipts calls; credentials never cross MCP.",
+    "writer": "ResearchWriter/ResearchOperations/ResearchResourceStore CAS.",
+    "evidence": "Same project_evidence/verify_attribution for record and pre-record reads. Current project/attempt, exact report bytes/digest, receipt/task result checked. Model narrative is never evidence.",
+    "checkpoint": "Proposal rph_state client metadata via current attempt observation and proposal CAS. Never a worker checkpoint or execution right.",
+    "budget": "Existing admission/model ledgers. Unmeasured wall/queue fields are explicit lower bounds; token/core-hour hard enforcement remains deferred."
+  },
+  "validation_boundary": "Injected fake model/gateway only in Phase B; real same-trajectory model/QC/recovery is Phase C."
+}

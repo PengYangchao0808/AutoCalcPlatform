@@ -1,0 +1,8 @@
+{
+  "drill": "cancel",
+  "job_id": "20261029_103957_001_singlepoint",
+  "cancel_http": 200,
+  "final_status": "CANCELLED",
+  "client_stop": "wait_pending",
+  "client_submits": 1
+}

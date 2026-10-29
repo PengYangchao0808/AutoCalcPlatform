@@ -1,7 +1,9 @@
-# M4-01 — no-QC full product chain and fault matrix (G20)
+# M4-02 model leg — real model gateway with declared no-QC scientific dispatch
+
+> **Documentation correction, 2026-10-28.** This README inherited M4-01 template labels. Model reality is established by the [parent model receipts](../summary.json), and this leg's [summary](summary.json) records `evidence_kind=live` with `model_adapter=model-gateway`. That label establishes the real model branch; the declared scientific dispatch remains a fixture. This correction does not relabel frozen JSON, assert real QC, or close M3-03 production credential readiness. Current boundaries: [status](../../../../docs/reference/current/ACP_RPH_Status_20261028.md).
 
 - status: **PASS**
-- evidence_kind: `fixture` (fixture; not real science/model/browser)
+- evidence boundary: real model gateway calls; fixture scientific dispatch; no real QC or browser inside this leg
 - model adapter: `model-gateway`
 - fault cases: 19/19
 - git HEAD: `980122608540b27ff734745a5542bf3872bf1f66`
@@ -21,15 +23,15 @@
 1. `cccp.dispatch` — the synthetic `fake` workflow; the attempt receipt,
    `task_result.json` and the evidence report are written by a controlled stub
    that follows the worker contract. No QC, no LSF.
-2. `model.adapter` — the explicit test adapter (deterministic skills plus
-   adversarial model text). The real model branch is implemented in
-   `acp2_full_chain_mcp.mjs` (`runProductionSupervisor` + gateway transport) and
-   is selected by M4-02 with `--model model-gateway`.
+2. `model.adapter` — this run selected the real `model-gateway` branch
+   (`runProductionSupervisor` + gateway transport). The parent M4-02 summary
+   records three `deepseek-chat` calls with provider-reported usage and an
+   evidence-feedback round. The other skill helpers default to deterministic
+   implementations; the science seam in item 1 remains a fixture.
 
 ## Not claimed
 
 - real science / QC / LSF execution (M4-02, M4-03);
-- a real model or DSH provider run (M4-02);
 - real browser/Chromium (M4-02; the Workbench row here is Node + real HTTP);
 - remote/LSF publication retry against a real cluster (M4-03).
 

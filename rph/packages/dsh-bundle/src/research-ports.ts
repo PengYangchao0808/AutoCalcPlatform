@@ -168,6 +168,7 @@ export interface PlatformPortAdapters {
   readonly submit?: (request: SubmitRequest) => Promise<SubmitResult>;
   readonly wait?: (request: WaitRequest) => Promise<WaitResult>;
   readonly modelGateway?: () => Promise<ModelGatewayUsage>;
+  readonly resume?: SupervisorPorts["resume"];
 }
 
 /** One raw projection read (`GET /research/records/{id}/evidence` shape). */
@@ -202,12 +203,15 @@ export interface PlatformSubmitPayload {
   readonly budget: unknown;
   readonly proposal_ref: string;
   readonly proposal_digest: string;
+  readonly plan_digest?: string;
 }
 
 export type SubmitPayloadMapper = (request: SubmitRequest) => PlatformSubmitPayload;
 
 export interface PlatformPortInput {
   readonly session: PlatformSession;
+  /** Optional project scope for the P2 queries (approvals are project-scoped). */
+  readonly projectId?: string | null;
   readonly writer: ResearchWriterPort;
   readonly adapters?: PlatformPortAdapters;
   /** The single evidence projection (absent = no binding port). */
@@ -283,7 +287,7 @@ export function bridgeSubmitRequest(
     method: payload.method,
     resources: payload.resources,
     budget: payload.budget,
-    planDigest: request.plan_definition_digest,
+    planDigest: payload.plan_digest ?? request.plan_definition_digest,
     proposalRef: payload.proposal_ref,
     proposalDigest: payload.proposal_digest,
     idempotencyKey: key,
@@ -578,10 +582,11 @@ export function createPlatformPorts(input: PlatformPortInput): SupervisorPorts {
         });
       }
       try {
+        const scope = input.projectId === null || input.projectId === undefined ? {} : { project_id: input.projectId };
         const result = await callP2Operation(
           client,
           "approval.query",
-          request.approval_ref === null ? {} : { approval_ref: request.approval_ref },
+          request.approval_ref === null ? scope : { approval_ref: request.approval_ref, ...scope },
           negotiated,
         );
         if (result.isError) {
@@ -648,7 +653,9 @@ export function createPlatformPorts(input: PlatformPortInput): SupervisorPorts {
   if (persistCheckpoint !== undefined) {
     ports.persistCheckpoint = createCheckpointPort(input.writer, persistCheckpoint);
   }
-  if (input.proposalRef !== undefined && input.proposalRef.length > 0) {
+  if (adapters.resume !== undefined) {
+    ports.resume = adapters.resume;
+  } else if (input.proposalRef !== undefined && input.proposalRef.length > 0) {
     ports.resume = createResumePort({
       session: input.session,
       proposalRef: input.proposalRef,
@@ -686,7 +693,7 @@ function parseApprovals(payload: Readonly<Record<string, unknown>>): readonly Ap
     }
     const ref = entry["approval_ref"] ?? entry["ref"] ?? entry["id"];
     const status = entry["status"];
-    const planDigest = entry["plan_digest"];
+    const planDigest = entry["science_digest"] ?? entry["plan_digest"];
     return Object.freeze({
       ref: typeof ref === "string" ? ref : null,
       status: typeof status === "string" ? status : null,

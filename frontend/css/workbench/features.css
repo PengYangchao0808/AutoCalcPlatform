@@ -690,7 +690,7 @@ option, optgroup {
 
 @media (max-width: 1023px) {
   body { overflow: auto; }
-  .app-shell { min-height: 100vh; display: flex; flex-direction: column; }
+  .app-shell { height: auto; min-height: 100vh; display: flex; flex-direction: column; }
   .topbar { height: auto; display: flex; flex-direction: column; align-items: stretch; gap: 10px; padding: 14px; flex: 0 0 auto; }
   .topbar-actions { justify-content: space-between; flex-wrap: wrap; }
   .server-summary { text-align: left; }
@@ -746,13 +746,12 @@ option, optgroup {
   #job-modal .source-section-nav .input-mode-tabs { width: 100%; }
 }
 
-/* Manual Research entry (T-17): science-question panel.
-   overflow: visible overrides .panel-section{overflow:hidden} so the sticky
-   approval header works against the right-column scroller. */
+/* Research panels scroll within the viewport bound set by queue-detail.css.
+   Clip bodies to their panel so they cannot cover project/queue controls. */
 .panel-section.science-question-panel,
 .panel-section.scientific-evidence-panel,
-.panel-section.research-approval-panel { overflow: visible; }
-.science-question-panel { flex: 0 0 auto; max-height: none; }
+.panel-section.research-approval-panel { overflow: auto; }
+.science-question-panel { flex: 0 0 auto; }
 .science-question-panel .panel-body { flex: 1 1 auto; min-height: 0; overflow: visible; padding: 10px 12px 14px; }
 .science-question-demo-badge {
   display: inline-block;

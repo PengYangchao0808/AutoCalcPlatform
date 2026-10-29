@@ -1,0 +1,1255 @@
+{
+  "identity": {
+    "plan_digest": "v2:f2a73dff8f0e3890d9a408752ae7728b",
+    "plan_identity": "v2:309b0b516f97eb124c065e53c16d235e",
+    "step_identities": [
+      "v2:e85279e097f8ef4acd2de08210ec3685"
+    ]
+  },
+  "item_symbols": [
+    "O",
+    "H",
+    "H"
+  ],
+  "payload": {
+    "backend": "orca",
+    "charge": 0,
+    "environment": {
+      "censo": {
+        "ewin": 6.0,
+        "keep_all": false,
+        "levels": {},
+        "optimization": {
+          "enabled": true,
+          "functional": "r2SCAN-3c",
+          "macrocycles": true,
+          "maxcyc": 200,
+          "optcycles": 8,
+          "optlevel": "normal",
+          "threshold": 3.0,
+          "xtb_opt": true
+        },
+        "preset": "censo-light",
+        "presets": {},
+        "refinement_basis": "def2-tzvpp",
+        "refinement_func": "wb97m-v",
+        "refinement_threshold": 0.99,
+        "scale": 1.0,
+        "solvent": null,
+        "solvent_model": "none",
+        "temperature": 298.15
+      },
+      "cluster": {
+        "auto_sync": true,
+        "enabled": true,
+        "execution_mode": "remote",
+        "extra_flags": "",
+        "local": {
+          "max_jobs": 4
+        },
+        "local_retention": {
+          "cancelled_days": 30,
+          "cleanup_interval_hours": 6,
+          "completed_days": 30,
+          "db_record_days": 365,
+          "disk_cleanup_threshold": 90,
+          "disk_skip_threshold": 95,
+          "enabled": true,
+          "failed_days": 90,
+          "max_dirs_per_sweep": 200,
+          "vacuum_after_db_cleanup": false
+        },
+        "nodes": [
+          {
+            "enabled": true,
+            "host": "10.16.5.157",
+            "host_key_policy": "auto_add",
+            "max_concurrent_jobs": 5,
+            "name": "node-157",
+            "port": 22,
+            "python_executable": "/home/xieningke/anaconda3/bin/python",
+            "remote_code_dir": "/home/xieningke/acp_code",
+            "remote_work_dir": "/home/xieningke/acp_jobs",
+            "username": "xieningke"
+          }
+        ],
+        "poll_interval": 15,
+        "queue": "normal",
+        "require_all_binaries": true,
+        "retention_days": 180,
+        "type": "lsf",
+        "walltime": "24:00"
+      },
+      "deployment": {
+        "components": [
+          "authentication",
+          "isolation",
+          "local-identity",
+          "local-storage",
+          "mcp-server",
+          "science-core",
+          "usage-metering",
+          "web-ui"
+        ],
+        "params": {
+          "public_origin": "https://acp.12513013.xyz/",
+          "run_root": "/home/xieningke/ACP_runs"
+        },
+        "resources": {
+          "database": {
+            "ref": "provider:lab-db"
+          }
+        },
+        "secrets": {
+          "db_password": {
+            "ref": "ACP_DB_PASSWORD",
+            "source": "env"
+          }
+        },
+        "tier": "lab",
+        "usage": "local"
+      },
+      "executables": {
+        "censo": {
+          "path": "/home/xieningke/anaconda3/bin/censo"
+        },
+        "crest": {
+          "gfn_level": 2,
+          "path": "/home/xieningke/crest/crest"
+        },
+        "gaussian": {
+          "path": "/home/xieningke/g16/g16",
+          "use_wrapper": true,
+          "wrapper_path": "./scripts/run_g16_worker.sh"
+        },
+        "isostat": {
+          "path": "/home/xieningke/molclus_1.14_Linux/isostat"
+        },
+        "molclus": {
+          "path": "/home/xieningke/molclus_1.14_Linux/molclus"
+        },
+        "orca": {
+          "ld_library_path": "/home/xieningke/openmpi418/lib:/home/xieningke/orca611",
+          "maxcore": null,
+          "nproc": 1,
+          "path": "/home/xieningke/orca611/orca"
+        },
+        "shermo": {
+          "path": "/home/xieningke/Shermo_2.6.1/Shermo"
+        },
+        "xtb": {
+          "fallback_paths": [
+            "/opt/xtb/bin/xtb",
+            "/usr/local/bin/xtb"
+          ],
+          "path": "/home/xieningke/xtb-dist/bin/xtb"
+        }
+      },
+      "mechanism": {
+        "manual_bond_editing": true
+      },
+      "mrrho_settings": {
+        "gfn_level": 2,
+        "imagthr": -100.0,
+        "max_parallel": 4,
+        "sthr": 50.0,
+        "temperature_k": 333.15
+      },
+      "nmr": {
+        "energy_window_kcal": 3.0,
+        "max_conformers": 10,
+        "references": {
+          "13C": null,
+          "15N": null,
+          "19F": null,
+          "1H": null,
+          "31P": null
+        },
+        "temperature_k": 298.15
+      },
+      "optimization_control": {
+        "default_seconds": 864000,
+        "recalc_hess": 10,
+        "timeout": null
+      },
+      "protocols": {
+        "allopt": {
+          "final_opt_sp": {
+            "final_sp_basis": "def2-TZVPP",
+            "final_sp_method": "wB97M-V"
+          },
+          "freq_engine": null,
+          "funnel": {
+            "clustering_mode": "isostat",
+            "prescreen_mode": "none",
+            "rerank_mode": "none",
+            "search_mode": "crest_two_stage_gfn0_to_gfn2"
+          },
+          "handoff": {
+            "mode": "optimize_all_candidates",
+            "ranking_after_handoff": "final_sp_plus_boltzmann"
+          },
+          "ngeom_default": 48,
+          "ngeom_max": 48,
+          "opt_engine": null,
+          "stages": {
+            "clustering": true,
+            "crest": true,
+            "frequency": true,
+            "optimization": true,
+            "shermo": true,
+            "single_point": true
+          },
+          "two_stage_enabled": true
+        },
+        "benchmark": {
+          "final_opt_sp": {
+            "final_sp_basis": "def2-TZVPP",
+            "final_sp_method": "DLPNO-CCSD(T)"
+          },
+          "freq_engine": "orca",
+          "funnel": {
+            "clustering_mode": "isostat",
+            "prescreen_mode": "none",
+            "rerank_mode": "none",
+            "search_mode": "crest_two_stage_gfn0_to_gfn2"
+          },
+          "handoff": {
+            "mode": "optimize_all_candidates",
+            "ranking_after_handoff": "final_sp_minimum"
+          },
+          "ngeom_default": 3,
+          "ngeom_max": 6,
+          "opt_engine": null,
+          "sp_engine": null,
+          "stage2_energy_window_kcal": 3.0,
+          "stages": {
+            "clustering": true,
+            "crest": true,
+            "frequency": true,
+            "optimization": true,
+            "shermo": true,
+            "single_point": true
+          },
+          "two_stage_enabled": true
+        },
+        "censo-full": {
+          "final_opt_sp": {
+            "final_sp_basis": "def2-TZVPP",
+            "final_sp_method": "wB97M-V"
+          },
+          "freq_engine": null,
+          "funnel": {
+            "clustering_mode": "isostat",
+            "prescreen_mode": "low_cost_dft_sp",
+            "prescreen_window_kcal": 4.0,
+            "rerank_mode": "r2scan3c_sp_plus_mrrho",
+            "screening_window_kcal": 3.5,
+            "search_mode": "crest_gfn2",
+            "survivor_window_kcal": 3.0
+          },
+          "handoff": {
+            "mode": "optimize_all_survivors_within_window",
+            "ranking_after_handoff": "final_sp_plus_boltzmann"
+          },
+          "ngeom_default": 12,
+          "ngeom_max": 24,
+          "opt_engine": null,
+          "stages": {
+            "clustering": true,
+            "crest": true,
+            "frequency": true,
+            "optimization": true,
+            "shermo": true,
+            "single_point": true
+          },
+          "two_stage_enabled": false
+        },
+        "censo-full-safe": {
+          "final_opt_sp": {
+            "final_sp_basis": "def2-TZVPP",
+            "final_sp_method": "wB97M-V"
+          },
+          "freq_engine": null,
+          "funnel": {
+            "boltzmann_cutoff": 0.99,
+            "clustering_mode": "isostat",
+            "prescreen_mode": "low_cost_dft_sp",
+            "prescreen_window_kcal": 8.0,
+            "rerank_mode": "r2scan3c_sp_plus_mrrho",
+            "screening_window_kcal": 6.0,
+            "search_mode": "crest_gfn2",
+            "survivor_window_kcal": 4.0
+          },
+          "handoff": {
+            "mode": "optimize_all_survivors_within_window",
+            "ranking_after_handoff": "final_sp_plus_boltzmann"
+          },
+          "ngeom_default": 12,
+          "ngeom_max": 24,
+          "opt_engine": null,
+          "stages": {
+            "clustering": true,
+            "crest": true,
+            "frequency": true,
+            "optimization": true,
+            "shermo": true,
+            "single_point": true
+          },
+          "two_stage_enabled": false
+        },
+        "censo-lite": {
+          "final_opt_sp": {
+            "final_sp_basis": "def2-TZVPP",
+            "final_sp_method": "wB97M-V"
+          },
+          "freq_engine": null,
+          "funnel": {
+            "boltzmann_cutoff": 0.9,
+            "clustering_mode": "isostat",
+            "optimize_limit": 1,
+            "prescreen_mode": "none",
+            "rerank_mode": "r2scan3c_sp",
+            "search_mode": "crest_gfn2",
+            "top2_fallback_enabled": true,
+            "use_mrrho_like_correction": true
+          },
+          "handoff": {
+            "fallback_mode": "optimize_top2_if_gap_small",
+            "mode": "optimize_rank1",
+            "ranking_after_handoff": "final_sp_minimum",
+            "small_gap_kcal": 1.0
+          },
+          "ngeom_default": 4,
+          "ngeom_max": 6,
+          "opt_engine": null,
+          "stages": {
+            "clustering": true,
+            "crest": true,
+            "frequency": false,
+            "optimization": false,
+            "shermo": false,
+            "single_point": true
+          },
+          "two_stage_enabled": false
+        },
+        "censo-zero": {
+          "final_opt_sp": {
+            "final_sp_basis": "def2-TZVPP",
+            "final_sp_method": "wB97M-V"
+          },
+          "freq_engine": null,
+          "funnel": {
+            "clustering_mode": "isostat",
+            "prescreen_mode": "none",
+            "rerank_mode": "none",
+            "search_mode": "crest_gfn2",
+            "survivor_window_kcal": 1.0
+          },
+          "handoff": {
+            "mode": "optimize_rank1",
+            "ranking_after_handoff": "xtb_energy"
+          },
+          "ngeom_default": 1,
+          "ngeom_max": 3,
+          "opt_engine": null,
+          "stages": {
+            "clustering": true,
+            "crest": true,
+            "frequency": false,
+            "optimization": false,
+            "shermo": false,
+            "single_point": true
+          },
+          "two_stage_enabled": false
+        },
+        "default": "lite",
+        "ext": {
+          "final_opt_sp": {
+            "final_sp_basis": null,
+            "final_sp_method": null
+          },
+          "freq_engine": null,
+          "funnel": {
+            "clustering_mode": "isostat",
+            "prescreen_mode": "none",
+            "rerank_mode": "none",
+            "search_mode": "crest_two_stage_gfn0_to_gfn2"
+          },
+          "handoff": {
+            "mode": "optimize_all_candidates",
+            "ranking_after_handoff": "final_sp_minimum"
+          },
+          "ngeom_default": 3,
+          "ngeom_max": 6,
+          "opt_engine": null,
+          "sp_engine": null,
+          "stage2_energy_window_kcal": 3.0,
+          "stages": {
+            "clustering": true,
+            "crest": true,
+            "frequency": true,
+            "optimization": true,
+            "shermo": true,
+            "single_point": true
+          },
+          "two_stage_enabled": true
+        },
+        "full": {
+          "final_opt_sp": {
+            "final_sp_basis": null,
+            "final_sp_method": null
+          },
+          "freq_engine": null,
+          "funnel": {
+            "clustering_mode": "isostat",
+            "prescreen_mode": "low_cost_dft_sp",
+            "prescreen_window_kcal": 4.0,
+            "rerank_mode": "r2scan3c_sp_plus_mrrho",
+            "screening_window_kcal": 3.5,
+            "search_mode": "crest_gfn2",
+            "survivor_window_kcal": 3.0
+          },
+          "handoff": {
+            "mode": "optimize_all_survivors_within_window",
+            "ranking_after_handoff": "final_sp_plus_boltzmann"
+          },
+          "ngeom_default": 12,
+          "ngeom_max": 24,
+          "opt_engine": null,
+          "sp_engine": null,
+          "stages": {
+            "clustering": true,
+            "crest": true,
+            "frequency": true,
+            "optimization": true,
+            "shermo": true,
+            "single_point": true
+          },
+          "two_stage_enabled": false
+        },
+        "lite": {
+          "crest_energy_window_kcal": 3.0,
+          "final_opt_sp": {
+            "final_sp_basis": null,
+            "final_sp_method": null
+          },
+          "freq_engine": null,
+          "funnel": {
+            "boltzmann_cutoff": 0.9,
+            "clustering_mode": "isostat",
+            "optimize_limit": 1,
+            "prescreen_mode": "none",
+            "rerank_mode": "r2scan3c_sp",
+            "search_mode": "crest_gfn2",
+            "top2_fallback_enabled": true,
+            "use_mrrho_like_correction": true
+          },
+          "handoff": {
+            "fallback_mode": "optimize_top2_if_gap_small",
+            "mode": "optimize_rank1",
+            "ranking_after_handoff": "final_sp_minimum",
+            "small_gap_kcal": 1.0
+          },
+          "ngeom_default": 4,
+          "ngeom_max": 6,
+          "opt_engine": null,
+          "sp_engine": null,
+          "stages": {
+            "clustering": true,
+            "crest": true,
+            "frequency": true,
+            "optimization": true,
+            "shermo": true,
+            "single_point": true
+          },
+          "two_stage_enabled": false
+        },
+        "reference-sp": {
+          "final_opt_sp": {
+            "final_sp_basis": "def2-TZVPP",
+            "final_sp_method": "DLPNO-CCSD(T)"
+          },
+          "freq_engine": null,
+          "funnel": {
+            "clustering_mode": "none",
+            "prescreen_mode": "none",
+            "rerank_mode": "none",
+            "search_mode": "external_xyz"
+          },
+          "handoff": {
+            "mode": "optimize_all_candidates",
+            "ranking_after_handoff": "final_sp_minimum"
+          },
+          "ngeom_default": 48,
+          "ngeom_max": 48,
+          "opt_engine": null,
+          "stages": {
+            "clustering": false,
+            "crest": false,
+            "frequency": false,
+            "optimization": false,
+            "shermo": false,
+            "single_point": true
+          },
+          "two_stage_enabled": false
+        },
+        "zero": {
+          "final_opt_sp": {
+            "final_sp_basis": null,
+            "final_sp_method": null
+          },
+          "freq_engine": null,
+          "funnel": {
+            "clustering_mode": "minimal",
+            "narrow_window_kcal": 0.5,
+            "optimize_limit": 1,
+            "prescreen_mode": "none",
+            "rerank_mode": "none",
+            "search_mode": "crest_gfn2",
+            "use_mrrho_like_correction": false
+          },
+          "handoff": {
+            "fallback_mode": "optimize_all_within_0p5_kcal",
+            "mode": "optimize_rank1",
+            "ranking_after_handoff": "final_sp_minimum"
+          },
+          "mrrho_settings": {
+            "gfn_level": 2,
+            "imagthr": -100.0,
+            "sthr": 50.0,
+            "temperature_k": 298.15
+          },
+          "ngeom_default": 1,
+          "ngeom_max": 3,
+          "opt_basis": "",
+          "opt_engine": null,
+          "opt_method": "r2SCAN-3c",
+          "stages": {
+            "clustering": true,
+            "crest": true,
+            "frequency": true,
+            "optimization": true,
+            "shermo": true,
+            "single_point": true
+          },
+          "two_stage_enabled": false
+        }
+      },
+      "resources": {
+        "isostat_gdis": 1.0,
+        "mem": "2GB",
+        "nproc": 1,
+        "orca_maxcore_safety": 0.8
+      },
+      "theory": {
+        "frequency": {
+          "engine": "orca"
+        },
+        "nmr": {
+          "basis": "6-311G(d)",
+          "engine": "orca",
+          "method": "mPW1PW91",
+          "solvent": null,
+          "solvent_model": "cpcm"
+        },
+        "optimization": {
+          "basis": "ma-def2-SVP def2/J",
+          "engine": "orca",
+          "method": "B3LYP D3",
+          "solvent": "methanol",
+          "solvent_model": "cpcm"
+        },
+        "preoptimization": {
+          "gfn_level": 2,
+          "solvent": "methanol",
+          "solvent_model": "none"
+        },
+        "single_point": {
+          "basis": "def2-TZVPD def2/J def2-TZVPD/C",
+          "engine": "orca",
+          "method": "PWPB95 D4",
+          "solvent": "methanol",
+          "solvent_model": "smd"
+        }
+      },
+      "thermo": {
+        "pressure_atm": 1.0,
+        "scl_zpe": 0.9905,
+        "shermo_conc": 1.0,
+        "shermo_ilowfreq": 2,
+        "shermo_imagreal": 0,
+        "temperature_k": 333.15
+      }
+    },
+    "level": {
+      "basis": "",
+      "method": "r2SCAN-3c",
+      "solvent_model": "none"
+    },
+    "multiplicity": 1,
+    "options": {},
+    "output_dir": ".",
+    "resources": {
+      "mem": "2GB",
+      "nproc": 1
+    },
+    "schema_version": 1,
+    "structure": {
+      "coordinates": [
+        [
+          0.0,
+          0.0,
+          0.1173
+        ],
+        [
+          0.0,
+          0.7572,
+          -0.4692
+        ],
+        [
+          0.0,
+          -0.7572,
+          -0.4692
+        ]
+      ],
+      "elements": [
+        "O",
+        "H",
+        "H"
+      ],
+      "path": "input.xyz",
+      "role": "minimum",
+      "source": "simple",
+      "symbols": [
+        "O",
+        "H",
+        "H"
+      ]
+    },
+    "task": "singlepoint"
+  },
+  "steps": [
+    {
+      "kind": "singlepoint",
+      "payload": {
+        "backend": "orca",
+        "charge": 0,
+        "environment": {
+          "censo": {
+            "ewin": 6.0,
+            "keep_all": false,
+            "levels": {},
+            "optimization": {
+              "enabled": true,
+              "functional": "r2SCAN-3c",
+              "macrocycles": true,
+              "maxcyc": 200,
+              "optcycles": 8,
+              "optlevel": "normal",
+              "threshold": 3.0,
+              "xtb_opt": true
+            },
+            "preset": "censo-light",
+            "presets": {},
+            "refinement_basis": "def2-tzvpp",
+            "refinement_func": "wb97m-v",
+            "refinement_threshold": 0.99,
+            "scale": 1.0,
+            "solvent": null,
+            "solvent_model": "none",
+            "temperature": 298.15
+          },
+          "cluster": {
+            "auto_sync": true,
+            "enabled": true,
+            "execution_mode": "remote",
+            "extra_flags": "",
+            "local": {
+              "max_jobs": 4
+            },
+            "local_retention": {
+              "cancelled_days": 30,
+              "cleanup_interval_hours": 6,
+              "completed_days": 30,
+              "db_record_days": 365,
+              "disk_cleanup_threshold": 90,
+              "disk_skip_threshold": 95,
+              "enabled": true,
+              "failed_days": 90,
+              "max_dirs_per_sweep": 200,
+              "vacuum_after_db_cleanup": false
+            },
+            "nodes": [
+              {
+                "enabled": true,
+                "host": "10.16.5.157",
+                "host_key_policy": "auto_add",
+                "max_concurrent_jobs": 5,
+                "name": "node-157",
+                "port": 22,
+                "python_executable": "/home/xieningke/anaconda3/bin/python",
+                "remote_code_dir": "/home/xieningke/acp_code",
+                "remote_work_dir": "/home/xieningke/acp_jobs",
+                "username": "xieningke"
+              }
+            ],
+            "poll_interval": 15,
+            "queue": "normal",
+            "require_all_binaries": true,
+            "retention_days": 180,
+            "type": "lsf",
+            "walltime": "24:00"
+          },
+          "deployment": {
+            "components": [
+              "authentication",
+              "isolation",
+              "local-identity",
+              "local-storage",
+              "mcp-server",
+              "science-core",
+              "usage-metering",
+              "web-ui"
+            ],
+            "params": {
+              "public_origin": "https://acp.12513013.xyz/",
+              "run_root": "/home/xieningke/ACP_runs"
+            },
+            "resources": {
+              "database": {
+                "ref": "provider:lab-db"
+              }
+            },
+            "secrets": {
+              "db_password": {
+                "ref": "ACP_DB_PASSWORD",
+                "source": "env"
+              }
+            },
+            "tier": "lab",
+            "usage": "local"
+          },
+          "executables": {
+            "censo": {
+              "path": "/home/xieningke/anaconda3/bin/censo"
+            },
+            "crest": {
+              "gfn_level": 2,
+              "path": "/home/xieningke/crest/crest"
+            },
+            "gaussian": {
+              "path": "/home/xieningke/g16/g16",
+              "use_wrapper": true,
+              "wrapper_path": "./scripts/run_g16_worker.sh"
+            },
+            "isostat": {
+              "path": "/home/xieningke/molclus_1.14_Linux/isostat"
+            },
+            "molclus": {
+              "path": "/home/xieningke/molclus_1.14_Linux/molclus"
+            },
+            "orca": {
+              "ld_library_path": "/home/xieningke/openmpi418/lib:/home/xieningke/orca611",
+              "maxcore": null,
+              "nproc": 1,
+              "path": "/home/xieningke/orca611/orca"
+            },
+            "shermo": {
+              "path": "/home/xieningke/Shermo_2.6.1/Shermo"
+            },
+            "xtb": {
+              "fallback_paths": [
+                "/opt/xtb/bin/xtb",
+                "/usr/local/bin/xtb"
+              ],
+              "path": "/home/xieningke/xtb-dist/bin/xtb"
+            }
+          },
+          "mechanism": {
+            "manual_bond_editing": true
+          },
+          "mrrho_settings": {
+            "gfn_level": 2,
+            "imagthr": -100.0,
+            "max_parallel": 4,
+            "sthr": 50.0,
+            "temperature_k": 333.15
+          },
+          "nmr": {
+            "energy_window_kcal": 3.0,
+            "max_conformers": 10,
+            "references": {
+              "13C": null,
+              "15N": null,
+              "19F": null,
+              "1H": null,
+              "31P": null
+            },
+            "temperature_k": 298.15
+          },
+          "optimization_control": {
+            "default_seconds": 864000,
+            "recalc_hess": 10,
+            "timeout": null
+          },
+          "protocols": {
+            "allopt": {
+              "final_opt_sp": {
+                "final_sp_basis": "def2-TZVPP",
+                "final_sp_method": "wB97M-V"
+              },
+              "freq_engine": null,
+              "funnel": {
+                "clustering_mode": "isostat",
+                "prescreen_mode": "none",
+                "rerank_mode": "none",
+                "search_mode": "crest_two_stage_gfn0_to_gfn2"
+              },
+              "handoff": {
+                "mode": "optimize_all_candidates",
+                "ranking_after_handoff": "final_sp_plus_boltzmann"
+              },
+              "ngeom_default": 48,
+              "ngeom_max": 48,
+              "opt_engine": null,
+              "stages": {
+                "clustering": true,
+                "crest": true,
+                "frequency": true,
+                "optimization": true,
+                "shermo": true,
+                "single_point": true
+              },
+              "two_stage_enabled": true
+            },
+            "benchmark": {
+              "final_opt_sp": {
+                "final_sp_basis": "def2-TZVPP",
+                "final_sp_method": "DLPNO-CCSD(T)"
+              },
+              "freq_engine": "orca",
+              "funnel": {
+                "clustering_mode": "isostat",
+                "prescreen_mode": "none",
+                "rerank_mode": "none",
+                "search_mode": "crest_two_stage_gfn0_to_gfn2"
+              },
+              "handoff": {
+                "mode": "optimize_all_candidates",
+                "ranking_after_handoff": "final_sp_minimum"
+              },
+              "ngeom_default": 3,
+              "ngeom_max": 6,
+              "opt_engine": null,
+              "sp_engine": null,
+              "stage2_energy_window_kcal": 3.0,
+              "stages": {
+                "clustering": true,
+                "crest": true,
+                "frequency": true,
+                "optimization": true,
+                "shermo": true,
+                "single_point": true
+              },
+              "two_stage_enabled": true
+            },
+            "censo-full": {
+              "final_opt_sp": {
+                "final_sp_basis": "def2-TZVPP",
+                "final_sp_method": "wB97M-V"
+              },
+              "freq_engine": null,
+              "funnel": {
+                "clustering_mode": "isostat",
+                "prescreen_mode": "low_cost_dft_sp",
+                "prescreen_window_kcal": 4.0,
+                "rerank_mode": "r2scan3c_sp_plus_mrrho",
+                "screening_window_kcal": 3.5,
+                "search_mode": "crest_gfn2",
+                "survivor_window_kcal": 3.0
+              },
+              "handoff": {
+                "mode": "optimize_all_survivors_within_window",
+                "ranking_after_handoff": "final_sp_plus_boltzmann"
+              },
+              "ngeom_default": 12,
+              "ngeom_max": 24,
+              "opt_engine": null,
+              "stages": {
+                "clustering": true,
+                "crest": true,
+                "frequency": true,
+                "optimization": true,
+                "shermo": true,
+                "single_point": true
+              },
+              "two_stage_enabled": false
+            },
+            "censo-full-safe": {
+              "final_opt_sp": {
+                "final_sp_basis": "def2-TZVPP",
+                "final_sp_method": "wB97M-V"
+              },
+              "freq_engine": null,
+              "funnel": {
+                "boltzmann_cutoff": 0.99,
+                "clustering_mode": "isostat",
+                "prescreen_mode": "low_cost_dft_sp",
+                "prescreen_window_kcal": 8.0,
+                "rerank_mode": "r2scan3c_sp_plus_mrrho",
+                "screening_window_kcal": 6.0,
+                "search_mode": "crest_gfn2",
+                "survivor_window_kcal": 4.0
+              },
+              "handoff": {
+                "mode": "optimize_all_survivors_within_window",
+                "ranking_after_handoff": "final_sp_plus_boltzmann"
+              },
+              "ngeom_default": 12,
+              "ngeom_max": 24,
+              "opt_engine": null,
+              "stages": {
+                "clustering": true,
+                "crest": true,
+                "frequency": true,
+                "optimization": true,
+                "shermo": true,
+                "single_point": true
+              },
+              "two_stage_enabled": false
+            },
+            "censo-lite": {
+              "final_opt_sp": {
+                "final_sp_basis": "def2-TZVPP",
+                "final_sp_method": "wB97M-V"
+              },
+              "freq_engine": null,
+              "funnel": {
+                "boltzmann_cutoff": 0.9,
+                "clustering_mode": "isostat",
+                "optimize_limit": 1,
+                "prescreen_mode": "none",
+                "rerank_mode": "r2scan3c_sp",
+                "search_mode": "crest_gfn2",
+                "top2_fallback_enabled": true,
+                "use_mrrho_like_correction": true
+              },
+              "handoff": {
+                "fallback_mode": "optimize_top2_if_gap_small",
+                "mode": "optimize_rank1",
+                "ranking_after_handoff": "final_sp_minimum",
+                "small_gap_kcal": 1.0
+              },
+              "ngeom_default": 4,
+              "ngeom_max": 6,
+              "opt_engine": null,
+              "stages": {
+                "clustering": true,
+                "crest": true,
+                "frequency": false,
+                "optimization": false,
+                "shermo": false,
+                "single_point": true
+              },
+              "two_stage_enabled": false
+            },
+            "censo-zero": {
+              "final_opt_sp": {
+                "final_sp_basis": "def2-TZVPP",
+                "final_sp_method": "wB97M-V"
+              },
+              "freq_engine": null,
+              "funnel": {
+                "clustering_mode": "isostat",
+                "prescreen_mode": "none",
+                "rerank_mode": "none",
+                "search_mode": "crest_gfn2",
+                "survivor_window_kcal": 1.0
+              },
+              "handoff": {
+                "mode": "optimize_rank1",
+                "ranking_after_handoff": "xtb_energy"
+              },
+              "ngeom_default": 1,
+              "ngeom_max": 3,
+              "opt_engine": null,
+              "stages": {
+                "clustering": true,
+                "crest": true,
+                "frequency": false,
+                "optimization": false,
+                "shermo": false,
+                "single_point": true
+              },
+              "two_stage_enabled": false
+            },
+            "default": "lite",
+            "ext": {
+              "final_opt_sp": {
+                "final_sp_basis": null,
+                "final_sp_method": null
+              },
+              "freq_engine": null,
+              "funnel": {
+                "clustering_mode": "isostat",
+                "prescreen_mode": "none",
+                "rerank_mode": "none",
+                "search_mode": "crest_two_stage_gfn0_to_gfn2"
+              },
+              "handoff": {
+                "mode": "optimize_all_candidates",
+                "ranking_after_handoff": "final_sp_minimum"
+              },
+              "ngeom_default": 3,
+              "ngeom_max": 6,
+              "opt_engine": null,
+              "sp_engine": null,
+              "stage2_energy_window_kcal": 3.0,
+              "stages": {
+                "clustering": true,
+                "crest": true,
+                "frequency": true,
+                "optimization": true,
+                "shermo": true,
+                "single_point": true
+              },
+              "two_stage_enabled": true
+            },
+            "full": {
+              "final_opt_sp": {
+                "final_sp_basis": null,
+                "final_sp_method": null
+              },
+              "freq_engine": null,
+              "funnel": {
+                "clustering_mode": "isostat",
+                "prescreen_mode": "low_cost_dft_sp",
+                "prescreen_window_kcal": 4.0,
+                "rerank_mode": "r2scan3c_sp_plus_mrrho",
+                "screening_window_kcal": 3.5,
+                "search_mode": "crest_gfn2",
+                "survivor_window_kcal": 3.0
+              },
+              "handoff": {
+                "mode": "optimize_all_survivors_within_window",
+                "ranking_after_handoff": "final_sp_plus_boltzmann"
+              },
+              "ngeom_default": 12,
+              "ngeom_max": 24,
+              "opt_engine": null,
+              "sp_engine": null,
+              "stages": {
+                "clustering": true,
+                "crest": true,
+                "frequency": true,
+                "optimization": true,
+                "shermo": true,
+                "single_point": true
+              },
+              "two_stage_enabled": false
+            },
+            "lite": {
+              "crest_energy_window_kcal": 3.0,
+              "final_opt_sp": {
+                "final_sp_basis": null,
+                "final_sp_method": null
+              },
+              "freq_engine": null,
+              "funnel": {
+                "boltzmann_cutoff": 0.9,
+                "clustering_mode": "isostat",
+                "optimize_limit": 1,
+                "prescreen_mode": "none",
+                "rerank_mode": "r2scan3c_sp",
+                "search_mode": "crest_gfn2",
+                "top2_fallback_enabled": true,
+                "use_mrrho_like_correction": true
+              },
+              "handoff": {
+                "fallback_mode": "optimize_top2_if_gap_small",
+                "mode": "optimize_rank1",
+                "ranking_after_handoff": "final_sp_minimum",
+                "small_gap_kcal": 1.0
+              },
+              "ngeom_default": 4,
+              "ngeom_max": 6,
+              "opt_engine": null,
+              "sp_engine": null,
+              "stages": {
+                "clustering": true,
+                "crest": true,
+                "frequency": true,
+                "optimization": true,
+                "shermo": true,
+                "single_point": true
+              },
+              "two_stage_enabled": false
+            },
+            "reference-sp": {
+              "final_opt_sp": {
+                "final_sp_basis": "def2-TZVPP",
+                "final_sp_method": "DLPNO-CCSD(T)"
+              },
+              "freq_engine": null,
+              "funnel": {
+                "clustering_mode": "none",
+                "prescreen_mode": "none",
+                "rerank_mode": "none",
+                "search_mode": "external_xyz"
+              },
+              "handoff": {
+                "mode": "optimize_all_candidates",
+                "ranking_after_handoff": "final_sp_minimum"
+              },
+              "ngeom_default": 48,
+              "ngeom_max": 48,
+              "opt_engine": null,
+              "stages": {
+                "clustering": false,
+                "crest": false,
+                "frequency": false,
+                "optimization": false,
+                "shermo": false,
+                "single_point": true
+              },
+              "two_stage_enabled": false
+            },
+            "zero": {
+              "final_opt_sp": {
+                "final_sp_basis": null,
+                "final_sp_method": null
+              },
+              "freq_engine": null,
+              "funnel": {
+                "clustering_mode": "minimal",
+                "narrow_window_kcal": 0.5,
+                "optimize_limit": 1,
+                "prescreen_mode": "none",
+                "rerank_mode": "none",
+                "search_mode": "crest_gfn2",
+                "use_mrrho_like_correction": false
+              },
+              "handoff": {
+                "fallback_mode": "optimize_all_within_0p5_kcal",
+                "mode": "optimize_rank1",
+                "ranking_after_handoff": "final_sp_minimum"
+              },
+              "mrrho_settings": {
+                "gfn_level": 2,
+                "imagthr": -100.0,
+                "sthr": 50.0,
+                "temperature_k": 298.15
+              },
+              "ngeom_default": 1,
+              "ngeom_max": 3,
+              "opt_basis": "",
+              "opt_engine": null,
+              "opt_method": "r2SCAN-3c",
+              "stages": {
+                "clustering": true,
+                "crest": true,
+                "frequency": true,
+                "optimization": true,
+                "shermo": true,
+                "single_point": true
+              },
+              "two_stage_enabled": false
+            }
+          },
+          "resources": {
+            "isostat_gdis": 1.0,
+            "mem": "2GB",
+            "nproc": 1,
+            "orca_maxcore_safety": 0.8
+          },
+          "theory": {
+            "frequency": {
+              "engine": "orca"
+            },
+            "nmr": {
+              "basis": "6-311G(d)",
+              "engine": "orca",
+              "method": "mPW1PW91",
+              "solvent": null,
+              "solvent_model": "cpcm"
+            },
+            "optimization": {
+              "basis": "ma-def2-SVP def2/J",
+              "engine": "orca",
+              "method": "B3LYP D3",
+              "solvent": "methanol",
+              "solvent_model": "cpcm"
+            },
+            "preoptimization": {
+              "gfn_level": 2,
+              "solvent": "methanol",
+              "solvent_model": "none"
+            },
+            "single_point": {
+              "basis": "def2-TZVPD def2/J def2-TZVPD/C",
+              "engine": "orca",
+              "method": "PWPB95 D4",
+              "solvent": "methanol",
+              "solvent_model": "smd"
+            }
+          },
+          "thermo": {
+            "pressure_atm": 1.0,
+            "scl_zpe": 0.9905,
+            "shermo_conc": 1.0,
+            "shermo_ilowfreq": 2,
+            "shermo_imagreal": 0,
+            "temperature_k": 333.15
+          }
+        },
+        "level": {
+          "basis": "",
+          "method": "r2SCAN-3c",
+          "solvent_model": "none"
+        },
+        "multiplicity": 1,
+        "options": {},
+        "output_dir": ".",
+        "resources": {
+          "mem": "2GB",
+          "nproc": 1
+        },
+        "schema_version": 1,
+        "structure": {
+          "coordinates": [
+            [
+              0.0,
+              0.0,
+              0.1173
+            ],
+            [
+              0.0,
+              0.7572,
+              -0.4692
+            ],
+            [
+              0.0,
+              -0.7572,
+              -0.4692
+            ]
+          ],
+          "elements": [
+            "O",
+            "H",
+            "H"
+          ],
+          "path": "input.xyz",
+          "role": "minimum",
+          "source": "simple",
+          "symbols": [
+            "O",
+            "H",
+            "H"
+          ]
+        },
+        "task": "singlepoint"
+      }
+    }
+  ]
+}

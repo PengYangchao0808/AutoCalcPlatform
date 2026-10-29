@@ -93,7 +93,7 @@ def _chromium_launchable(playwright_instance) -> bool:
 
 
 @pytest.fixture(scope="session")
-def server_url() -> Generator[str, None, None]:
+def server_url(isolated_browser_deployment: None) -> Generator[str, None, None]:
     """Boot the real FastAPI app on an ephemeral port for the test session.
 
     The server runs in a daemon thread; ``create_app`` is called with a
@@ -344,16 +344,27 @@ class TestMainViewerFraming:
             """() => {
                 const canvas = document.querySelector('#viewer-3d canvas');
                 const container = document.getElementById('viewer-3d');
-                if (!canvas || !container) return null;
                 return {
-                    canvasW: parseFloat(canvas.style.width),
-                    canvasH: parseFloat(canvas.style.height),
-                    containerW: container.clientWidth,
-                    containerH: container.clientHeight
+                    canvasPresent: !!canvas,
+                    containerPresent: !!container,
+                    canvasConnected: !!canvas && canvas.isConnected,
+                    canvasCount: container ? container.querySelectorAll('canvas').length : 0,
+                    canvasW: canvas ? parseFloat(canvas.style.width) : null,
+                    canvasH: canvas ? parseFloat(canvas.style.height) : null,
+                    containerW: container ? container.clientWidth : null,
+                    containerH: container ? container.clientHeight : null,
+                    libraryLoaded: typeof $3Dmol !== 'undefined',
+                    librarySource: document.getElementById('viewer-library')?.src,
+                    sceneError: viewer && viewer.lastError ? viewer.lastError() : null,
+                    framing: {pending: mainViewerFraming.pending,
+                              settled: mainViewerFraming.settled}
                 };
             }"""
         )
-        assert sizes is not None, "Canvas or container element not found"
+        assert sizes["canvasPresent"] and sizes["containerPresent"], (
+            f"Canvas or container element not found: {sizes}"
+        )
+        assert sizes["canvasConnected"] and sizes["canvasCount"] == 1, sizes
         size_tol = 4.0  # pixels
         assert math.fabs(sizes["canvasW"] - sizes["containerW"]) <= size_tol, (
             f"Canvas width {sizes['canvasW']:.1f} != container {sizes['containerW']:.1f} "

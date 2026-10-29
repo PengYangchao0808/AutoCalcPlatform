@@ -1,0 +1,80 @@
+{
+  "viewport": {
+    "w": 1280,
+    "h": 800
+  },
+  "elements": [
+    {
+      "id": "btn-new-project",
+      "rect": {
+        "x": 1196,
+        "y": 114,
+        "w": 24,
+        "h": 24
+      },
+      "text": "",
+      "top": {
+        "id": "",
+        "cls": {},
+        "tag": "path"
+      }
+    },
+    {
+      "id": "queue-counts",
+      "rect": {
+        "x": 1055,
+        "y": 150,
+        "w": 196,
+        "h": 26.5
+      },
+      "text": "运行 0 | 排队 0 | 完成 0 | 失败 0",
+      "top": {
+        "id": "queue-counts",
+        "cls": "queue-counts",
+        "tag": "DIV"
+      }
+    },
+    {
+      "id": "science-question-panel",
+      "rect": {
+        "x": 1041,
+        "y": 409.5,
+        "w": 224,
+        "h": 640
+      },
+      "text": "手工研究\n−\n请先在左侧选择项目，再发现能力\n本入口不依赖模型配置\n科学问题\n输入结构 (XYZ)\n粘贴 XYZ 文本，或使用演示结构\n载入演示结构\n预览结构\n可解释默认值\n方法 *\n来源：-\n电荷 ",
+      "top": {
+        "id": "sq-structure",
+        "cls": "modal-input",
+        "tag": "TEXTAREA"
+      }
+    },
+    {
+      "id": "capability-form-panel",
+      "rect": {
+        "x": 1041,
+        "y": 1954.9375,
+        "w": 224,
+        "h": 82
+      },
+      "text": "能力表单\n−\n选择项目后加载能力表单",
+      "top": null
+    },
+    {
+      "id": "queue-list",
+      "rect": {
+        "x": 1055,
+        "y": 275.5,
+        "w": 196,
+        "h": 120
+      },
+      "text": "暂无任务",
+      "top": {
+        "id": "",
+        "cls": "placeholder",
+        "tag": "DIV"
+      }
+    }
+  ],
+  "new_project_click": "actionable"
+}

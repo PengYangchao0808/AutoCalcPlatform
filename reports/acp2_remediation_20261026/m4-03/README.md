@@ -1,5 +1,7 @@
 # M4-03 — real LSF submission, execution limits, control and recovery
 
+> **Subsequent state, 2026-10-28 (`b32f22bb`).** The matrix and `summary.json` below are historical run receipts. The later integration already promoted `walltime_process_termination` and `queue_deadline` to `enforced` in `src/acp_services/runtime/execution_limits.py`; the current consistency check passes (0 findings, 6 units, 6 limits). The section below titled “execution_limits judgement” records the pre-integration decision, not a remaining flip to execute. DA-ENV-LSF and DA-specific receipt requirements remain open. See the [current status and reconciliation](../../../docs/reference/current/ACP_RPH_Status_20261028.md#4-正式台账与过期叙述的对应关系).
+
 Candidate: branch `acp2/integration-remediation` at `36b505a` (the M4-03 work is
 uncommitted on top of it; the working tree also carries the parallel M4-04 DA
 lane, untouched by this task).
@@ -41,24 +43,24 @@ cache, identity DB and remote job/code trees are isolated under
 `/ACPServer/acp2-runs/remediation/m4-03/`; the production run root was not
 touched.
 
-## execution_limits judgement (evidence vs shipped claim)
+## Historical execution_limits judgement (before the integration promotion)
 
 `summary.json#execution_limits` is machine-readable; this is the reasoning.
 
-| limit | real evidence gathered here | shipped claim | decision |
+| limit | real evidence gathered here | claim at the original run | decision at that time |
 |---|---|---|---|
 | `walltime_admission_bound` | unchanged (M1-04) | `enforced` | keep |
 | `walltime_process_termination` | **all present**: (a) three-way LSF check — approval 60 s → `#BSUB -W 00:01` → native `RUNLIMIT`/exit 140, receipt `verified=true`; (b) local process-group kill with 7 real PIDs gone; (c) PAUSED time counted (absolute deadline unchanged); (d) restart restores the same absolute deadline | `NOT_VERIFIED` | **evidence complete → `upgrade-to-enforced` prepared, not flipped** |
 | `queue_deadline` | real `PEND` job (`badmin hclose`) with a 40 s queue bound → expiry → terminal + `bkill` + receipt `verified=true` | `NOT_VERIFIED` | **evidence complete → `upgrade-to-enforced` prepared, not flipped** |
 
-Why not flipped in this commit: the two rows are *also* pinned as
+Historical rationale for not flipping in the original task commit (the later integration has completed the promotion): the two rows are *also* pinned as
 `NOT_VERIFIED` by the parallel Diels–Alder lane's acceptance
 (`scripts/acceptance/acp2_m404_da.py:3142-3143`) and by
 `docs/reference/next-change/adr/ADR-008-limited-diels-alder-criteria.md`, both
 of which are explicitly outside this task's scope ("不碰 ccp/analysis/research 与
 science_criteria / ADR-008 面"). Flipping them here would break a live
-acceptance owned by the other lane. The exact flip (one atomic change, to be
-done by the integration owner once both lanes agree) is:
+acceptance owned by the other lane. The following was the handoff checklist
+for that later promotion; it is retained as history, not a new instruction:
 
 1. `src/acp_services/runtime/execution_limits.py` — `EXECUTION_LIMITS`
    `walltime_process_termination` and `queue_deadline` →

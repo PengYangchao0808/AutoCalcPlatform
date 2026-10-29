@@ -1107,8 +1107,10 @@ def test_application_api_v1_1_research_fields_are_additive() -> None:
     # implemented=true with the tool-visibility rule (additive; no P1 change).
     # 1.6.0 (M2-02): analysis_capabilities and product_digest are declared
     # response fields (single science catalog projection).
+    # 1.7.0 (MCP UX P2): capabilities gains the optional workflow selector and
+    # the workflow_contract response block (additive; request stays closed).
     # 1.1.0's research fields stay untouched.
-    assert api["contract_version"] == "1.6.0"
+    assert api["contract_version"] == "1.7.0"
     submit = api["operations"]["submit"]
     for name in ("proposal_ref", "plan_digest", "budget"):
         assert name in submit["request"]["fields"], name

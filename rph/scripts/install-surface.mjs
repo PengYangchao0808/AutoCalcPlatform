@@ -223,7 +223,7 @@ export const VERIFY_SCRIPT = `#!/usr/bin/env node
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, realpathSync } from "node:fs";
+import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -285,7 +285,27 @@ const binEnv = { ...process.env };
 delete binEnv.ACP2_CONTROLLER_URL;
 delete binEnv.PYTHONPATH;
 
-const version = spawnSync(binPath, ["--version"], { cwd: elsewhere, env: binEnv, encoding: "utf8", timeout: 60000 });
+// Regular-file capture also works where synchronous subprocess pipe creation
+// is restricted. Always inspect spawn errors: status alone can be misleading.
+let invocation = 0;
+function runBin(args) {
+  const outputPath = join(elsewhere, "stdout-" + invocation);
+  const errorPath = join(elsewhere, "stderr-" + invocation++);
+  const out = openSync(outputPath, "w");
+  const err = openSync(errorPath, "w");
+  let result;
+  try {
+    result = spawnSync(binPath, args, { cwd: elsewhere, env: binEnv,
+      stdio: ["ignore", out, err], timeout: 60000 });
+  } finally {
+    closeSync(out);
+    closeSync(err);
+  }
+  assert.equal(result.error, undefined, "rph bin launch failed: " + String(result.error));
+  return { ...result, stdout: readFileSync(outputPath, "utf8"), stderr: readFileSync(errorPath, "utf8") };
+}
+
+const version = runBin(["--version"]);
 assert.equal(version.status, 0, "rph --version failed: " + String(version.stderr));
 assert.equal(
   version.stdout.trim(),
@@ -293,13 +313,13 @@ assert.equal(
   "the bin prints a version that is not its package.json version",
 );
 
-const help = spawnSync(binPath, ["--help"], { cwd: elsewhere, env: binEnv, encoding: "utf8", timeout: 60000 });
+const help = runBin(["--help"]);
 assert.equal(help.status, 0, "rph --help failed: " + String(help.stderr));
 for (const command of ["rph research", "rph resume", "rph doctor"]) {
   assert.ok(help.stdout.includes(command), "rph --help does not list " + command);
 }
 
-const doctor = spawnSync(binPath, ["doctor", "--json"], { cwd: elsewhere, env: binEnv, encoding: "utf8", timeout: 60000 });
+const doctor = runBin(["doctor", "--json"]);
 assert.ok(
   doctor.status === 0 || doctor.status === 1,
   "rph doctor --json exited with " + String(doctor.status),

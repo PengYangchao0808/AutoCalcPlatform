@@ -32,6 +32,11 @@ from typing import Any
 
 import pytest
 
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10 uses the declared dev backport.
+    import tomli as tomllib
+
 from acp_services.runtime.science_plugins import (
     DISTRIBUTION_DIGEST_ALGORITHM,
     PLUGIN_ENABLEMENT_SCHEMA,
@@ -42,10 +47,12 @@ from cccp.plugin import (
     PluginLicenseError,
     PluginVersionMismatchError,
 )
+from tests import _acp2_external_plugin_harness as plugin_harness
 from tests._acp2_external_plugin_harness import (
     CAPABILITY_NAME,
     DISTRIBUTION_NAME,
     FIXED_INPUT,
+    FIXTURE_ROOT,
     PLUGIN_NAME,
     build_fixture_wheel,
     create_isolated_venv,
@@ -659,6 +666,35 @@ def m205_environment(
     shutil.rmtree(root, ignore_errors=True)
 
 
+def _assert_offline_build_argv(build_argv: list[str]) -> None:
+    if build_argv[1:3] == ["-m", "build"]:
+        assert "--wheel" in build_argv
+        assert "--no-isolation" in build_argv
+    else:
+        assert build_argv[1:4] == ["-m", "pip", "wheel"], build_argv
+        assert "--no-build-isolation" in build_argv
+        assert "--no-index" in build_argv
+        assert "--no-deps" in build_argv
+
+
+@pytest.mark.parametrize("builder", ["build", "pip"])
+def test_fixture_wheel_offline_toolchains(
+    builder: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Exercise both real commands without uninstalling build. This fixture's
+    # backend is local stdlib code and declares no build/runtime dependencies.
+    metadata = tomllib.loads((FIXTURE_ROOT / "pyproject.toml").read_text())
+    assert metadata["build-system"]["requires"] == []
+    assert metadata["build-system"]["backend-path"] == ["."]
+    assert metadata["project"]["dependencies"] == []
+    monkeypatch.setattr(plugin_harness, "_has_module", lambda name: builder == "build")
+    monkeypatch.setenv("PIP_NO_INDEX", "1")
+    wheel, argv, log = build_fixture_wheel(tmp_path)
+    _assert_offline_build_argv(argv)
+    assert wheel.is_file(), log
+    assert "Downloading" not in log and "Collecting" not in log, log
+
+
 def test_clean_environment_install_is_offline_and_discovery_is_metadata_only(
     m205_environment: dict[str, Any],
 ) -> None:
@@ -674,13 +710,7 @@ def test_clean_environment_install_is_offline_and_discovery_is_metadata_only(
     assert enabled["module_imported_after_scan"] is False
     assert enabled["module_imported_after_enable"] is False
 
-    # ``python -m build`` spells this ``--no-isolation``; the supported
-    # offline fallback ``pip wheel`` spells the same guarantee
-    # ``--no-build-isolation``.  The helper must disable build isolation
-    # either way and must never reach an index.
-    build_argv = m205_environment["build_argv"]
-    assert "--no-isolation" in build_argv or "--no-build-isolation" in build_argv, build_argv
-    assert "--no-index" in build_argv
+    _assert_offline_build_argv(m205_environment["build_argv"])
     assert "--no-deps" in m205_environment["install_argv"]
     assert "--no-index" in m205_environment["install_argv"]
 

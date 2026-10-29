@@ -188,7 +188,7 @@
     "unsupported_behaviour": "unsupported format is invalid-parameter (input_invalid, params.rule=unsupported_structure_format); an empty structure task is never created"
   },
   "change_note": "M2-01c: the research extension projection flips to implemented=true (all ten p2_promised tools are registered) and records the tool-visibility rule (tools/list exposes them only after a session negotiates). Additive: no P1 name, schema or operation changes.",
-  "contract_version": "1.6.0",
+  "contract_version": "1.7.0",
   "digest_fields": {
     "artifact_digest": {
       "consumer": "read, prepare, EvidenceReport references, C display",
@@ -811,8 +811,25 @@
       ],
       "tool_name_prefix": "acp_research_",
       "tool_sets_authority": "runtime/p2-research-operations.v1.json::client_path.tool_sets",
-      "tool_visibility": "tools/list = the eight P1 tools before negotiation and the ten research tools after it; an unnegotiated research call is unsupported_capability with params.rule=extension_not_negotiated",
-      "version": "1.0.0"
+      "tool_visibility": "Eight P1 tools before negotiation; ten legacy P2 tools plus bound research-consumption.v1 operations after negotiation. Product clients check actual tools/list coverage. Unnegotiated research calls return unsupported_capability with params.rule=extension_not_negotiated.",
+      "version": "1.0.0",
+      "consumer_surface": {
+        "contract": "runtime/research-consumption.v1.json",
+        "version": "1.0.0",
+        "optional_for_legacy_p2": true,
+        "required_for_rph_product": [
+          "acp_research_model_plan_v1",
+          "acp_research_model_usage_v1",
+          "acp_research_model_statement_v1",
+          "acp_research_record_create_v1",
+          "acp_research_record_read_v1",
+          "acp_research_record_append_v1",
+          "acp_research_evidence_read_v1",
+          "acp_research_budget_read_v1",
+          "acp_research_checkpoint_v1",
+          "acp_research_readiness_v1"
+        ]
+      }
     }
   },
   "operations": {
@@ -1110,6 +1127,10 @@
               1
             ],
             "type": "integer"
+          },
+          "workflow": {
+            "description": "Optional workflow id (case-insensitive). Selects the workflow_contract projection; an unknown id is input_invalid(rule=unknown_workflow) with allowed ids and a suggestion. Omitting it keeps the frozen shape.",
+            "type": "string"
           }
         },
         "required": []
@@ -1181,6 +1202,10 @@
               "array",
               "null"
             ]
+          },
+          "workflow_contract": {
+            "description": "Present only when request.workflow is supplied: coverage (complete/not_provided), input required_any/properties, method properties/enums/levels, resources properties, examples, constraints and the status vocabulary. Only Confsearch and BatchOptimize claim complete.",
+            "type": "object"
           },
           "workflows": {
             "description": "Active ACP workflow ids (retired ids absent).",

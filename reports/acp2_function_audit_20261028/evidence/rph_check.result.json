@@ -1,0 +1,12 @@
+{
+  "name": "rph_check",
+  "command": [
+    "pnpm",
+    "--dir",
+    "rph",
+    "check"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 2.26,
+  "log": "rph_check.log"
+}

@@ -1,0 +1,15 @@
+{
+  "name": "ruff_format",
+  "command": [
+    "python3.11",
+    "-m",
+    "ruff",
+    "format",
+    "--check",
+    "src",
+    "tests"
+  ],
+  "exit_code": 1,
+  "elapsed_seconds": 1.64,
+  "log": "ruff_format.log"
+}

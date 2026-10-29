@@ -1,12 +1,12 @@
 {
   "counts": {
-    "bytes": 3554243,
+    "bytes": 3557724,
     "css": 10,
     "files": 76,
     "html": 3,
     "js": 61
   },
-  "digest": "1e99be8991342cacf43b8c13af67be36c39cf3e0491afc1587ad2b7264f78ac0",
+  "digest": "e198256a5dea009a789a51b41ec996f1255b3e32a7484400f13177c68e7b4af6",
   "digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\"",
   "entry_points": {
     "index": "ACP_Workbench_v2.html",
@@ -23,8 +23,8 @@
     {
       "media_type": "text/html",
       "path": "ACP_Workbench_minimal.html",
-      "sha256": "1dae353cb509651e6b7ebba34bbe3a930db1673bdba7d24bab20759ebefd768a",
-      "size_bytes": 32057
+      "sha256": "2844728e9d32f003dfedece9efcd38d0d67512fd4257a2b1f53661876ff46efd",
+      "size_bytes": 31918
     },
     {
       "media_type": "text/html",
@@ -71,20 +71,20 @@
     {
       "media_type": "text/css",
       "path": "css/workbench/features.css",
-      "sha256": "9f4eaab85242d556ffd94f647086170c5dae339a5b6f484811c71e0c355b786b",
-      "size_bytes": 47036
+      "sha256": "ec22b7b1f16298c42edb84d193bf11debfffea8a0c07fe1989a2d27940ce078a",
+      "size_bytes": 46987
     },
     {
       "media_type": "text/css",
       "path": "css/workbench/layout.css",
-      "sha256": "ca6eabc2bfa41d81b229804fe1a9cc18940a80f7ad5690f2ac5d78a2523e717f",
-      "size_bytes": 17113
+      "sha256": "00c262680802b6e1b1dd970589fc643148f1526babced8a6160ac05836730fa8",
+      "size_bytes": 17136
     },
     {
       "media_type": "text/css",
       "path": "css/workbench/queue-detail.css",
-      "sha256": "88307780f1190736233a0ab2d8cdd000a1dd1711008d88c052a802e99bf711dd",
-      "size_bytes": 44715
+      "sha256": "40a2bfbc811833d4ee4df4ea79b8d2c217489a93bde1aefce8fae1b8e8be7c6b",
+      "size_bytes": 44846
     },
     {
       "media_type": "text/css",
@@ -257,8 +257,8 @@
     {
       "media_type": "text/javascript",
       "path": "js/visualization/framing.js",
-      "sha256": "471d50c7b523871da875930cb5ab072f094c60774e3611905122e08049b72d60",
-      "size_bytes": 4463
+      "sha256": "7e42203c98cc84fd68910dea4430e0006e7284346c0a16bdec59f101a00d19a2",
+      "size_bytes": 4989
     },
     {
       "media_type": "text/javascript",
@@ -269,8 +269,8 @@
     {
       "media_type": "text/javascript",
       "path": "js/visualization/scene_instance.js",
-      "sha256": "dee4862b23418200bb10e961e2643bdcf6d28d08f7028b3c3b64975eb280fece",
-      "size_bytes": 27291
+      "sha256": "d2156ddd940d70bd804c6557857d32e7537ef7f02a20b2311b810b2d4c7e60d4",
+      "size_bytes": 28299
     },
     {
       "media_type": "text/javascript",
@@ -323,8 +323,8 @@
     {
       "media_type": "text/javascript",
       "path": "js/workbench/contracts/ui_subset.js",
-      "sha256": "68bd7897915f6e0a046ce4b6e3cf1eb5978cc569d4dc3154b4a3bc93655b765b",
-      "size_bytes": 31852
+      "sha256": "d35bea2c4e7fc09e3daed7053b12eb8ea3a42add7c5bd39c00741e992b373331",
+      "size_bytes": 31891
     },
     {
       "media_type": "text/javascript",
@@ -359,8 +359,8 @@
     {
       "media_type": "text/javascript",
       "path": "js/workbench/features/capability-form.js",
-      "sha256": "60d97f2a50f3a17eb975d623548bcfc185ff800d9531c8b20cc992d3fba873ee",
-      "size_bytes": 30688
+      "sha256": "3f07a9be0dbf6fe11c1b0f0e165b8824fe4d93b4e1b0cde2cadc86acb2d4fb1b",
+      "size_bytes": 31750
     },
     {
       "media_type": "text/javascript",
@@ -383,8 +383,8 @@
     {
       "media_type": "text/javascript",
       "path": "js/workbench/features/molecule-view.js",
-      "sha256": "05d16859bf60b81096c8bacaa40bdf6d9691735a75063948b0f14bc82cba4275",
-      "size_bytes": 57474
+      "sha256": "ef3c89a19439549f0b50f7bd8bc5ba1c5ca995d771b1fff246db572f8735f88d",
+      "size_bytes": 58064
     },
     {
       "media_type": "text/javascript",
@@ -467,8 +467,8 @@
     {
       "media_type": "text/javascript",
       "path": "js/workbench/i18n.js",
-      "sha256": "cc943bdfbf9291e00562a7c3ba2d0e3fb6f8c00c7a4fcd79a3b0426ce908a7ca",
-      "size_bytes": 192531
+      "sha256": "8d88cd511a8a3318fbb5e2d5ae6c070d35301d99d1e5920558c53cd593cb6424",
+      "size_bytes": 192821
     }
   ],
   "package_version": "0.3.0",

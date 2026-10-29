@@ -1,0 +1,48 @@
+{
+  "attempt": 1,
+  "chain_digest": "",
+  "data_bindings": [
+    {
+      "artifact_digests": {
+        "input.xyz": "sha256:0f687021eb0d6e5782950e34b7b3f8ecec4c22f55a72ececf6e9c95177ab01b1"
+      },
+      "binding_id": "local:6f4f2397a7347293:3_water_O_0.0000000_0.0000000_0.1173000_H_0.0000000_0.7572000_-0.4692000_H_0.0000000_-0.7572000_-0.4",
+      "endpoint": "local",
+      "kind": "local",
+      "mapping_version": 1,
+      "project_id": "",
+      "relative_path": "3_water_O_0.0000000_0.0000000_0.1173000_H_0.0000000_0.7572000_-0.4692000_H_0.0000000_-0.7572000_-0.4",
+      "root": "/tmp/phaseC/drills/disconnect/run_root/drill-disconnect-1793241401",
+      "tenant_id": ""
+    }
+  ],
+  "errors": [],
+  "evidence_digests": {
+    "exit_code": "0",
+    "job_status": "completed",
+    "missing_required_facts": "",
+    "normal_reuse": "true",
+    "partial_result": "false",
+    "publish": "true",
+    "publish_policy": "normal",
+    "qualification": "complete",
+    "required_facts": "energy_hartree",
+    "task_result_digest": "sha256:f115f69d5e93c5e3eaf176bcbe9635f0f6f1da30becc0258c9ddd950e2939b87",
+    "truth_table_row": "b"
+  },
+  "fencing_token": "d05b2a4e54b2f6f232e311e8f0a00fae",
+  "job_id": "20261029_103647_001_singlepoint",
+  "owner": "local:workstation:2309094:1",
+  "plan_identity": "v2:309b0b516f97eb124c065e53c16d235e",
+  "receipt_version": 1,
+  "release_digest": "0d69f27f3450166bcbceea3021818db32564d69212927c21638624f47fa7c576",
+  "release_id": "6f4f2397a7347293",
+  "result_digest": "sha256:2dd8175aa5828a86de38d3f4f5cd04652650ae42a5c37cbe75a8f41445e3377b",
+  "state": "completed",
+  "step_execution_chain": [],
+  "step_identities": [
+    "v2:e85279e097f8ef4acd2de08210ec3685"
+  ],
+  "submission_id": "sub_54da1abb136f09d0",
+  "written_at": "2026-10-29T02:36:50.948768+00:00"
+}

@@ -1,0 +1,10 @@
+{
+  "name": "coverage",
+  "command": [
+    "python3.11",
+    "scripts/acceptance/validate_acp2_gap_coverage.py"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 0.27,
+  "log": "coverage.log"
+}

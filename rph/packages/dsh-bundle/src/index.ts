@@ -278,3 +278,5 @@ export * from "./research-ports.js";
 export * from "./demo.js";
 export * from "./compose.js";
 export * from "./doctor.js";
+
+export * from "./product-parts.js";

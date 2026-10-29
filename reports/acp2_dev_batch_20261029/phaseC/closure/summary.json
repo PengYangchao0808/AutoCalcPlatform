@@ -1,0 +1,341 @@
+{
+  "project_id": "2fa118be-da9a-4020-b81a-dd1d2d48603f",
+  "approval_ref": "ap_71256550925f4119b6a05c3a4c1dc1fa",
+  "proposal_ref": "prop-ses-1f7a666066ba494210fe2563",
+  "plan_digest": "sha256:5094354878c2b027ffdeb9d7372b2ec3bfd286774ced1b57dae24638fe9a50c7",
+  "recipe_digest": "sha256:1f7588fcf425226e4942b729d1052c50c49e7d46f2c0a0076863b0b29256b0cb",
+  "step1": {
+    "status": "stopped",
+    "mode": "product",
+    "environment": "acceptance",
+    "evidence_kind": "live",
+    "demo": false,
+    "cli_version": "0.0.0",
+    "research_id": "res-1958e94bc1606c9b12f8ea1d",
+    "session_seed": "c1-water-energy",
+    "proposal_ref": "prop-ses-1f7a666066ba494210fe2563",
+    "resume": {
+      "proposal_ref": "prop-ses-1f7a666066ba494210fe2563",
+      "research_id": "res-1958e94bc1606c9b12f8ea1d",
+      "session_seed": "c1-water-energy",
+      "plan_digest": "sha256:5094354878c2b027ffdeb9d7372b2ec3bfd286774ced1b57dae24638fe9a50c7"
+    },
+    "result": {
+      "status": "stopped",
+      "stop_reason": "approval_rejected",
+      "rounds_completed": 0,
+      "submits": 0,
+      "task_refs": [],
+      "model_requests_used": 1,
+      "reports": 0,
+      "bindings": 0,
+      "decisions": 0,
+      "decision": null,
+      "resume_state": null,
+      "phases": 6
+    }
+  },
+  "step3": {
+    "status": "completed",
+    "resumed_from": "proposal-checkpoint",
+    "proposal_ref": "prop-ses-1f7a666066ba494210fe2563",
+    "result": {
+      "status": "completed",
+      "stop_reason": "accepted",
+      "rounds_completed": 1,
+      "submits": 0,
+      "task_refs": [
+        {
+          "project_id": "2fa118be-da9a-4020-b81a-dd1d2d48603f",
+          "job_id": "20261029_110425_001_singlepoint",
+          "attempt": 1,
+          "release_id": "09c26358e4838dcb"
+        }
+      ],
+      "model_requests_used": 1,
+      "reports": 0,
+      "bindings": 1,
+      "decisions": 1,
+      "decision": "accept",
+      "resume_state": null,
+      "phases": 4
+    },
+    "resume": {
+      "proposal_ref": "prop-ses-1f7a666066ba494210fe2563",
+      "research_id": "res-1958e94bc1606c9b12f8ea1d",
+      "session_seed": "c1-water-energy",
+      "plan_digest": "sha256:5094354878c2b027ffdeb9d7372b2ec3bfd286774ced1b57dae24638fe9a50c7"
+    }
+  },
+  "durations": {
+    "research_s": 4.4,
+    "resume_s": 5.0
+  },
+  "jobs": {
+    "jobs": [
+      {
+        "id": "20261029_110425_001_singlepoint",
+        "spec": {
+          "workflow": "singlepoint",
+          "name": "3_water_O_0.0000000_0.0000000_0.1173000_H_0.0000000_0.7572000_-0.4692000_H_0.0000000_-0.7572000_-0.4",
+          "input": {
+            "source_type": "xyz_text",
+            "source": "3\nwater\nO   0.0000000    0.0000000    0.1173000\nH   0.0000000    0.7572000   -0.4692000\nH   0.0000000   -0.7572000   -0.4692000\n",
+            "xyz_text": "3\nwater\nO   0.0000000    0.0000000    0.1173000\nH   0.0000000    0.7572000   -0.4692000\nH   0.0000000   -0.7572000   -0.4692000\n"
+          },
+          "method": {
+            "charge": 0,
+            "method": "r2SCAN-3c",
+            "multiplicity": 1
+          },
+          "resources": {
+            "memory_gb": 2,
+            "ncores": 1,
+            "nproc": 1,
+            "mem": "2GB"
+          },
+          "output_dir": null,
+          "config_path": null,
+          "tags": [],
+          "node_tags": [],
+          "project_id": "2fa118be-da9a-4020-b81a-dd1d2d48603f",
+          "execution_mode": null,
+          "target_node": null,
+          "molecule_name": "3\nwater\nO   0.0000000    0.0000000    0.1173000\nH   0.0000000    0.7572000   -0.4692000\nH   0.0000000   -0.7572000   -0.4692000",
+          "task_name": "singlepoint",
+          "remark": ""
+        },
+        "status": "completed",
+        "work_dir": "/tmp/phaseC/c1/run_root/ACP2_dev_batch_phase_C1_1793243059/3_water_O_0.0000000_0.0000000_0.1173000_H_0.0000000_0.7572000_-0.4692000_H_0.0000000_-0.7572000_-0.4",
+        "project_id": "2fa118be-da9a-4020-b81a-dd1d2d48603f",
+        "project_name": "ACP2 dev batch phase C1 1793243059",
+        "input_hash": "sha256:4362e9c4618c1b89fb14d1cd253ba192cd110ef95cf7f00e4bc25a9b10c6d74e",
+        "created_at": "2026-10-29T03:04:25.816805+00:00",
+        "updated_at": "2026-10-29T03:04:49.126288+00:00",
+        "started_at": "2026-10-29T03:04:25.828432+00:00",
+        "completed_at": "2026-10-29T03:04:49.003836+00:00",
+        "current_stage": null,
+        "progress": 1.0,
+        "error": null,
+        "pid": 2327040,
+        "exit_code": 0,
+        "remote_job_id": null,
+        "group_id": "20261029_110425_001_singlepoint",
+        "node_id": "local",
+        "host": "workstation",
+        "study_id": null,
+        "study_status": null,
+        "result": {
+          "admission": {
+            "reservation_id": "res_idem_b13db1e4371f462f806732f6db8828cb",
+            "enforcement": "local-single-enforced",
+            "mode": "quota-only",
+            "enforced": true,
+            "policy_version": "local-single-v1",
+            "principal_id": "principal_local",
+            "key_id": null,
+            "verified_project": null,
+            "multi_tenant_security": false,
+            "budget": {
+              "budget_id": "rb_613ce59706f8f1a88f2f357c",
+              "reservation_id": "bres_idem_b13db1e4371f462f806732f6db8828cb",
+              "units": {
+                "attempt": 1,
+                "task_ref": 1
+              },
+              "state": "reserved"
+            },
+            "execution_limits": {
+              "schema": "acp2.runtime.execution-limits.v1",
+              "local_terminate_after_s": 900,
+              "ccp_resources_timeout_s": 900.0,
+              "lsf_walltime_minutes": 15,
+              "lsf_walltime": "00:15",
+              "queue_deadline_s": null,
+              "recorded_only": {},
+              "bounded": true,
+              "lsf_walltime_limited": true,
+              "source": "research-budget-policy",
+              "wired_surfaces": {
+                "local_admission_duration_s": 900,
+                "cccp_resources_timeout_s": 900.0,
+                "lsf_walltime": "00:15"
+              }
+            }
+          },
+          "required_software": [
+            "orca"
+          ],
+          "execution_target": "local",
+          "execution_kind": "local",
+          "publication_pending": true,
+          "terminal_side_effects_done": true,
+          "receipt_state": "completed",
+          "receipt_result_digest": "sha256:2878e193676f46b8bb0a7cca56de4b0f67f31e17b4bc95c5cf3334ff4b67316b",
+          "receipt_written_at": "2026-10-29T03:04:29.189489+00:00",
+          "artifacts": [
+            {
+              "artifact_id": "13435ae6-e876-4ef2-9c92-e0023ba4427f",
+              "task_id": null,
+              "job_id": "20261029_110425_001_singlepoint",
+              "artifact_type": "json",
+              "file_path": "RESULT/energy/singlepoint_energy.json",
+              "checksum": "sha256:09afba86b739f04e5afb1ee8f5de3817b801ce00bb732ec9a85fd179fa8ace66",
+              "size_bytes": 243,
+              "parser_status": "pending",
+              "mime_type": "application/json",
+              "metadata": {
+                "stage_dir": "RESULT"
+              },
+              "created_at": "2026-10-29T03:04:49.101318+00:00"
+            },
+            {
+              "artifact_id": "937fe142-3582-4901-8b3d-8b32bc45aae7",
+              "task_id": null,
+              "job_id": "20261029_110425_001_singlepoint",
+              "artifact_type": "json",
+              "file_path": "RESULT/publication_state.json",
+              "checksum": "sha256:b08a015fba68ac8124bcf2f69c1a28e5ff894047c4b3c6f88dfe18d6c0873622",
+              "size_bytes": 102,
+              "parser_status": "pending",
+              "mime_type": "application/json",
+              "metadata": {
+                "stage_dir": "RESULT"
+              },
+              "created_at": "2026-10-29T03:04:49.104026+00:00"
+            },
+            {
+              "artifact_id": "318a1349-d518-48b3-8c8c-a80b437349c2",
+              "task_id": null,
+              "job_id": "20261029_110425_001_singlepoint",
+              "artifact_type": "json",
+              "file_path": "RESULT/result_manifest.json",
+              "checksum": "sha256:46cf73b78268d6c870dcbf0be693b10efd909ef5fb2294cebaf9907c4beb3e11",
+              "size_bytes": 1248,
+              "parser_status": "pending",
+              "mime_type": "application/json",
+              "metadata": {
+                "stage_dir": "RESULT"
+              },
+              "created_at": "2026-10-29T03:04:49.106745+00:00"
+            },
+            {
+              "artifact_id": "31e0f414-3e2c-4952-aeac-ca1cb0a5fa4f",
+              "task_id": null,
+              "job_id": "20261029_110425_001_singlepoint",
+              "artifact_type": "json",
+              "file_path": "RESULT/scientific_result.json",
+              "checksum": "sha256:e92d203cd922117fa613fb9137247bd2d5e74e89787187ba35b5c531656e38a5",
+              "size_bytes": 918,
+              "parser_status": "pending",
+              "mime_type": "application/json",
+              "metadata": {
+                "stage_dir": "RESULT"
+              },
+              "created_at": "2026-10-29T03:04:49.109465+00:00"
+            },
+            {
+              "artifact_id": "c317070f-4d90-451a-9778-9329e0694142",
+              "task_id": null,
+              "job_id": "20261029_110425_001_singlepoint",
+              "artifact_type": "xyz",
+              "file_path": "RESULT/structures/singlepoint_final.xyz",
+              "checksum": "sha256:533102580781ba199dd7fa3837b298dcab645edf1461f9e641121200391534b6",
+              "size_bytes": 156,
+              "parser_status": "pending",
+              "mime_type": "chemical/x-xyz",
+              "metadata": {
+                "stage_dir": "RESULT"
+              },
+              "created_at": "2026-10-29T03:04:49.112363+00:00"
+            },
+            {
+              "artifact_id": "9a8813b8-76d2-4013-ba99-576c4162a6bc",
+              "task_id": null,
+              "job_id": "20261029_110425_001_singlepoint",
+              "artifact_type": "json",
+              "file_path": "RESULT/task_result.json",
+              "checksum": "sha256:2398245b88af63591576b67ae001a5a5bb07baaa8df5be44118bd261c1c9fbd9",
+              "size_bytes": 2096,
+              "parser_status": "pending",
+              "mime_type": "application/json",
+              "metadata": {
+                "stage_dir": "RESULT"
+              },
+              "created_at": "2026-10-29T03:04:49.115072+00:00"
+            }
+          ],
+          "provenance": {
+            "input_hash": "sha256:4362e9c4618c1b89fb14d1cd253ba192cd110ef95cf7f00e4bc25a9b10c6d74e",
+            "molecule_hash": null,
+            "acp_version": "0.3.0",
+            "backend_name": "singlepoint",
+            "backend_version": "",
+            "method": "r2SCAN-3c",
+            "basis": null,
+            "solvent": null,
+            "command_line": "",
+            "hostname": "workstation",
+            "ncores": 1,
+            "memory_gb": 2.0,
+            "wall_time_seconds": 23.175404,
+            "routine": "singlepoint",
+            "creator": null,
+            "schema_version": "1.0"
+          }
+        },
+        "progress_state": "determinate",
+        "stage_index": null,
+        "stage_total": null,
+        "stage_order": [],
+        "stage_progress": null,
+        "stage_detail": null,
+        "latest_event": null,
+        "snapshot_version": null,
+        "live_status": null,
+        "display_method": null,
+        "custom_name": null,
+        "resolved_name": "3_water_O_0.0000000_0.0000000_0.1173000_H_0.0000000_0.7572000_-0.4692000_H_0.0000000_-0.7572000_-0.4",
+        "default_name": "3_water_O_0.0000000_0.0000000_0.1173000_H_0.0000000_0.7572000_-0.4692000_H_0.0000000_-0.7572000_-0.4",
+        "name_revision": 0,
+        "name_updated_at": null,
+        "attempt": 1,
+        "revision": 6,
+        "release_id": null,
+        "release_digest": null,
+        "plan_digest": null,
+        "submission_id": null
+      }
+    ],
+    "counts": {
+      "completed": 1
+    }
+  },
+  "model_usage": {
+    "schema": "acp2.api.model-usage.v1",
+    "model_requests": 0,
+    "receipts": 0,
+    "remaining": 6,
+    "limit": 6,
+    "reserved": 0,
+    "settled": 0,
+    "released": 0,
+    "budget_id": "rb_2bc1afd4eb00bbcf651a9373",
+    "identity": {
+      "principal_id": "principal_local",
+      "project_id": "2fa118be-da9a-4020-b81a-dd1d2d48603f",
+      "research_id": "res-fc1bfb6be3bb8516a9f08a92",
+      "session_id": "ses-d7e97f1b873ec451951b8bda"
+    },
+    "credential": {
+      "configured": true,
+      "model": "deepseek-chat",
+      "environment": "ACP2_MODEL_API_KEY",
+      "base_url": "https://api.deepseek.com/v1"
+    },
+    "receipt_rows": []
+  },
+  "research_record": {
+    "http": 404
+  }
+}

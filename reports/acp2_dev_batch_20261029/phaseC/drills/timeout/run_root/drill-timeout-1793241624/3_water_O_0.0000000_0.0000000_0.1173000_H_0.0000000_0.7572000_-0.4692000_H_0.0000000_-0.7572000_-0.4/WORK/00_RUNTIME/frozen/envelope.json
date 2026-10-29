@@ -1,0 +1,50 @@
+{
+  "attempt": 1,
+  "data_bindings": [
+    {
+      "artifact_digests": {
+        "input.xyz": "sha256:0f687021eb0d6e5782950e34b7b3f8ecec4c22f55a72ececf6e9c95177ab01b1"
+      },
+      "binding_id": "local:6f4f2397a7347293:3_water_O_0.0000000_0.0000000_0.1173000_H_0.0000000_0.7572000_-0.4692000_H_0.0000000_-0.7572000_-0.4",
+      "endpoint": "local",
+      "kind": "local",
+      "mapping_version": 1,
+      "project_id": "",
+      "relative_path": "3_water_O_0.0000000_0.0000000_0.1173000_H_0.0000000_0.7572000_-0.4692000_H_0.0000000_-0.7572000_-0.4",
+      "root": "/tmp/phaseC/drills/timeout/run_root/drill-timeout-1793241624",
+      "tenant_id": ""
+    }
+  ],
+  "entrypoint": "worker.bootstrap",
+  "envelope_version": 1,
+  "fencing_token": "65d6816700cd60d5b3213af9a27f66cd",
+  "job_id": "20261029_104030_001_singlepoint",
+  "owner": "local:workstation:2310476:1",
+  "plan_digest": "v2:f2a73dff8f0e3890d9a408752ae7728b",
+  "plan_identity": "v2:309b0b516f97eb124c065e53c16d235e",
+  "protocol": "local",
+  "release_digest": "0d69f27f3450166bcbceea3021818db32564d69212927c21638624f47fa7c576",
+  "release_id": "6f4f2397a7347293",
+  "required_capabilities": [
+    "singlepoint"
+  ],
+  "resource_budget": {
+    "mem": null,
+    "mem_mb": null,
+    "nproc": null,
+    "partial": false,
+    "queue": null,
+    "walltime_s": null
+  },
+  "scientific_closure": {
+    "algorithm_version": "",
+    "dependency_digests": {},
+    "payload_schema": 1,
+    "result_schema": 1,
+    "task_kind": "singlepoint"
+  },
+  "step_identities": [
+    "v2:e85279e097f8ef4acd2de08210ec3685"
+  ],
+  "submission_id": "sub_cf2593d7fd47276d"
+}

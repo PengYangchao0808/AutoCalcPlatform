@@ -1,7 +1,7 @@
 # cccp/ — Package Root
 
 ## OVERVIEW
-Top-level package files: config loading, version management, package init. Hub connecting **9 subpackages** (core, io, pipeline, qc, utils, backends, calculation, **analysis**, **plugin**). Library-only — no CLI (deleted in the cccp rename; use the unified `acp` CLI). Version `0.3.0` (synced 4-way: here `__init__.py`/`version.py` + `acp/__init__.py` + `pyproject.toml`, see root AGENTS.md ANTI #2). Since ACP 2.0 (2026-10) cccp is no longer just the "QC 底座": it is also the **science-analysis home** (`analysis/`, 87 .py — NMR/DP4/DP5/FCHL, evidence/provenance contracts) and the **science plugin ecosystem** (`plugin/`). 202 .py total.
+Top-level package files: config loading, version management, package init. Hub connecting **9 subpackages** (core, io, pipeline, qc, utils, backends, calculation, **analysis**, **plugin**). Library-only — no CLI (deleted in the cccp rename; use the unified `acp` CLI). Version `0.3.0` (synced 4-way: here `__init__.py`/`version.py` + `acp/__init__.py` + `pyproject.toml`, see root AGENTS.md ANTI #2). Since ACP 2.0 (2026-10) cccp is no longer just the "QC 底座": it is also the **science-analysis home** (`analysis/`, 88 .py — NMR/DP4/DP5/FCHL, evidence/provenance contracts) and the **science plugin ecosystem** (`plugin/`). 203 .py total.
 
 ## STRUCTURE
 ```
@@ -16,7 +16,7 @@ src/cccp/   # QC 底座 + 科学分析/契约/插件层（four-layer ①qc → �
 ├── qc/              # QC subprocess layer: interfaces/ (15 modules — ORCA/CREST/xTB/CENSO/ISOSTAT/Molclus + constraints/hess_file/orca_ts/route_render/xtb_path/xtb_scan/xtb_thermo), runners/, cluster/ + shared science adapters at qc/ top level (hessian_policy, method_meta, resolved_spec, shermo_adapter, thermo_normalize, translation, keyword_registry) — see qc/AGENTS.md + qc/interfaces/AGENTS.md
 ├── backends/        # Capability-Protocol adapter layer (no subprocess; base.py declares 12 Protocols; matrix.py = single capability-declaration authority) — see backends/AGENTS.md
 ├── calculation/     # Task layer — the SINGLE execution station: tasks/ (15 cores), requests/results contracts, _common, batch, selection, progress + ACP2 NEW capabilities/ products/ recipes/ — see calculation/AGENTS.md
-├── analysis/        # Science-analysis home (87 .py): nmr/ (full DP4/DP5/FCHL + model_assets), research/ (evidence/provenance/question/reaction/selectivity + packaged contract corpus), pes/, ensemble/, bounded/, structure/, confsearch/, tsmode/, sampling/, xtbmd/ — see analysis/AGENTS.md
+├── analysis/        # Science-analysis home (88 .py): nmr/ (full DP4/DP5/FCHL + model_assets), research/ (evidence/provenance/question/reaction/selectivity + packaged contract corpus), pes/, ensemble/, bounded/, structure/, confsearch/, tsmode/, sampling/, xtbmd/ — see analysis/AGENTS.md
 ├── plugin/          # Science plugin ecosystem (8 .py): metadata/discovery/host/sdk/errors + readonly_parser & example_xyz pilots — see plugin/AGENTS.md
 └── utils/           # 5 shared utility modules (constants, file_io, geometry_tools, resource_utils, solvent_map)
 ```

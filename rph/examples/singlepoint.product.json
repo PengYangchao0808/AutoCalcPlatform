@@ -1,0 +1,58 @@
+{
+  "science_seed": {
+    "method": "r2SCAN-3c",
+    "mapping": "identity",
+    "charge": 0,
+    "multiplicity": 1,
+    "structure_provenance": [
+      {
+        "input_id": "h2-confirmed",
+        "sha256": "sha256:3ba442e949c46e020ea42187f2c0cab7decceed85af97317f3074c8a7017a916",
+        "format": "xyz",
+        "role": "minimum"
+      }
+    ],
+    "constraints": []
+  },
+  "initial_input": {
+    "input_id": "h2-confirmed",
+    "sha256": "sha256:3ba442e949c46e020ea42187f2c0cab7decceed85af97317f3074c8a7017a916",
+    "format": "xyz",
+    "role": "minimum"
+  },
+  "submission": {
+    "workflow": "singlepoint",
+    "input": {
+      "input_id": "h2-confirmed",
+      "sha256": "sha256:3ba442e949c46e020ea42187f2c0cab7decceed85af97317f3074c8a7017a916",
+      "format": "xyz",
+      "role": "minimum",
+      "xyz_text": "2\nH2\nH 0 0 0\nH 0 0 0.74\n"
+    },
+    "method": {
+      "method": "r2SCAN-3c",
+      "basis": null,
+      "charge": 0,
+      "multiplicity": 1
+    },
+    "resources": {
+      "ncores": 1,
+      "memory_gb": 1
+    },
+    "budget": {
+      "unit": "task_count",
+      "count": 1,
+      "timeout_s": 600
+    }
+  },
+  "planning_budget": {
+    "model_requests": 4,
+    "input_tokens": 5000,
+    "output_tokens": 5000,
+    "task_refs": 1,
+    "recipe_steps": 1,
+    "qc_invocations": 1,
+    "wall_seconds": 600,
+    "queue_seconds": 60
+  }
+}

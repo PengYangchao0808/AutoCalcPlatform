@@ -1,7 +1,9 @@
 # acp/ — ACP Unified Module
 
+> **2026-10-29 baseline (`fd2087c7`, main):** see the [functional audit](../../reports/acp2_function_audit_20261028/REPORT.md) before new work. Default envelope entry is `singlepoint` plus internal `BoundedRecipe`; catalog closure and default activation are distinct. Research routes now include writes/Saga/evidence/model gateway. MCP has eight base plus ten negotiated research tools; API evidence routes alone do not compose the RPH reader. Existing scientific workflows and compatibility paths remain in scope.
+
 ## OVERVIEW
-The unified `acp` CLI, stage-based workflow pipeline, capability-driven QC backends, and generic core models. ≈289 files (incl. API + scheduler + nmr + init_wizard). ACP is the workflow/planning/persistence layer (fourth layer) on top of the `cccp` QC base: task cores live in `cccp/calculation/tasks/`, capability backends in `cccp/backends/` — `acp.calculations.primitives` and `acp.backends` are pure compat forward/re-export shims plus ACP publish contracts (see root AGENTS.md ANTI #17). Platform services (store/schema, Data prepare/read, Runtime use cases, access boundary) live in `src/acp_services/`; the old `acp` paths for migrated symbols are **identity forwarders** (`is` same object), never second implementations (root ANTI #29–#32).
+The unified `acp` CLI, stage-based workflow pipeline, capability-driven QC backends, and generic core models. 298 `.py` files (incl. API + scheduler + nmr + init_wizard). ACP is the workflow/planning/persistence layer (fourth layer) on top of the `cccp` QC base: task cores live in `cccp/calculation/tasks/`, capability backends in `cccp/backends/` — `acp.calculations.primitives` and `acp.backends` are pure compat forward/re-export shims plus ACP publish contracts (see root AGENTS.md ANTI #17). Platform services (store/schema, Data prepare/read, Runtime use cases, access boundary) live in `src/acp_services/`; the old `acp` paths for migrated symbols are **identity forwarders** (`is` same object), never second implementations (root ANTI #29–#32).
 
 **可运行工作流（15，registry 驱动）**: Confsearch, PESsearch, BatchOptimize, XtbPathSearch, OrcaGradient, XtbConstrainedOpt, irc, scan, tsmode, casscf, nmr, singlepoint, optimize, frequency, xtb_optimize（XtbPathSearch/OrcaGradient/XtbConstrainedOpt 消费冻结 `pes2ts_*_request_v1` payload，本地专用）。Retired（catalog `status:"retired"`，仅历史作业展示）: ensemble, energy, xtbmd_censo_energy, mechanism, conformer, benchmark, mech-conf, mech-step, mech-confirm, mech-chain, optfreq, optfreqsp, Lowconfirm, Highconfirm。
 
@@ -10,7 +12,7 @@ The unified `acp` CLI, stage-based workflow pipeline, capability-driven QC backe
 ## STRUCTURE
 ```
 acp/
-├── cli.py              # argparse 统一入口：run/doctor/init/task/mcp（`serve` 仅 `acp run serve`）；retired 子命令拦截报错；--json/--dry-run 仅 _MACHINE_OUTPUT_WORKFLOWS
+├── cli.py              # argparse 统一入口：run/doctor/init/task/mcp/science-plugin（`serve` 仅 `acp run serve`）；retired 子命令拦截报错；--json/--dry-run 仅 _MACHINE_OUTPUT_WORKFLOWS
 ├── __init__.py          # `__version__` via importlib.metadata.version("acp")（fallback "0.3.0"）；__all__=["__version__"]
 ├── __main__.py          # `python -m acp` works
 ├── init_wizard/         # `acp init` 向导（13 .py / 4418 L）：flows.py 729（资源菜单 + orchestration，run_init）、plan.py 548（InitPlan/build_plan/apply_plan/render_plan/PLAN_VERSION/SecretRef）、newnode.py 804（新节点 TOFU 自建 SSHClient + NodeManager.bootstrap_node）、options.py 385（UsageMode/TIER_SPECS/COMPONENT_SPECS/tier_enablement）、capabilities.py 280（PASS/FAIL/NOT_VERIFIED 三态 doctor）、lab_doctor.py 204（LabEnvironment→acp_services.runtime.lab_capabilities）、gating.py 143（→contracts.action_gating）、persist.py 228（merge-safe atomic YAML+.bak→contracts.config_plan）、answers/prompts/sniff_local/sniff_remote；__init__ 仅 re-export
@@ -33,14 +35,14 @@ acp/
 ├── io/                  # StructureReader / StructureWriter（thin cccp wrapper）
 ├── workflows/           # pes_search/batch_optimize/irc/simple/tsmode/xtb_path/xtb_constrained_opt/orca_gradient/nmr + registry（legacy 退役引擎仍作 Confsearch 协议引擎）
 ├── nmr/                 # 转发面 → cccp.analysis.nmr（见 nmr/AGENTS.md）；仅 analysis_revision.py（463 L）+ method_config.py（catalog coupling）保留 acp 侧代码，其余为 re-export shim
-├── api/                 # FastAPI：server/routes/v1_routes/v2_routes/v2_structure_sources/schemas + mechanism_readonly（历史只读）
+├── api/                 # 24 .py / 13 routers：research 写入/恢复/证据、model gateway、science catalog/forms/static assets；见 api/AGENTS.md
 └── scheduler/           # jobs/manager/runner/store/stage_tasks/tasks/task_views/molecule_groups/structure_source_store/structure_source_indexer/job_edit + remote/（LSF 远程执行）
 ```
 
 ## WHERE TO LOOK
 | Task | Location | Notes |
 |------|----------|-------|
-| CLI entry | `cli.py` | `acp run` dispatch + `_build_config()` → `cccp.config.load_config`；顶层子命令 **run/doctor/init/task/mcp**（`serve` 仅 `acp run serve`）；`acp task` = ingest\|plan\|execute\|query\|pause\|unpause\|continue\|cancel\|rerun\|recover\|export（`--run-root` / `--controller <url>`，controller-targeted client 从不启动 Controller）；`acp mcp serve` = `--transport stdio`（唯一支持值）+ `--controller`，委派 `acp_services.entrypoints.mcp_stdio` + `services_mcp_bootstrap.build_mcp_runtime`；`--json`/`--dry-run` 仅 `_MACHINE_OUTPUT_WORKFLOWS`（singlepoint/optimize/frequency/scan/casscf） |
+| CLI entry | `cli.py` | `acp run` dispatch + `_build_config()` → `cccp.config.load_config`；顶层子命令 **run/doctor/init/task/mcp/science-plugin**（`serve` 仅 `acp run serve`）；`acp task` = ingest\|plan\|execute\|query\|pause\|unpause\|continue\|cancel\|rerun\|recover\|export（`--run-root` / `--controller <url>`，controller-targeted client 从不启动 Controller）；`acp mcp serve` = `--transport stdio`（唯一支持值）+ `--controller`，委派 `acp_services.entrypoints.mcp_stdio` + `services_mcp_bootstrap.build_mcp_runtime`；`--json`/`--dry-run` 仅 `_MACHINE_OUTPUT_WORKFLOWS`（singlepoint/optimize/frequency/scan/casscf） |
 | Init wizard | `init_wizard/flows.py` | `acp init` → `cli._handle_init` → `run_init(config, answers_path, plan_only)`；plan T8 资源菜单 + orchestration |
 | Services composition roots | `services_bootstrap.py` + `services_{data,completion,events,mcp,publication}_bootstrap.py` | acp 侧 6 个过渡装配根：ServicesPorts/RuntimeCommands、DataResourcePort + read_root/cache-only reader、attempt completion、event/outbox、`build_mcp_runtime`、publication data port/manifest publisher |
 | Workflow catalog | `catalog.py` | 5270 行；`WORKFLOW_CATALOG`（30 = 15 active + 14 retired + 1 planned `custom_sequence`）, `SUPPORTED_WORKFLOWS`, `METHOD_META`, `METHOD_SCHEMAS`（29，含 `pes_bond_scan`/`xtb_path_search`/`orca_gradient`/`xtb_constrained_opt`） |

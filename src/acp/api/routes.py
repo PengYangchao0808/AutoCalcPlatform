@@ -261,14 +261,39 @@ def _backend_capability_summary() -> list[dict[str, Any]]:
     except ImportError:
         return []
     summaries: list[dict[str, Any]] = []
+    probe_config = _backend_probe_config(_load_executables())
     for name in list_backends():
         try:
-            status = cast(dict[str, Any], backend_status(name))
+            status = cast(dict[str, Any], backend_status(name, config=probe_config))
         except (KeyError, OSError, ValueError):
             summaries.append({"name": name, "available": False})
             continue
         summaries.append({"name": name, "available": bool(status.get("is_available"))})
     return summaries
+
+
+def _capability_limits(request: Request) -> dict[str, Any]:
+    """Publish the ceilings the running admission instance actually enforces.
+
+    C6: the previous dict was a second hardcoded set of numbers, so discovery
+    and admission could disagree.  The admission instance is the authority;
+    when it is not assembled, say so instead of inventing a limit.
+    """
+    published = dict(_CONTROLLER_LIMITS)
+    admission = getattr(request.app.state, "admission", None)
+    limits = getattr(admission, "limits", None)
+    if limits is None:
+        published["enforcement"] = "not-verified"
+        return published
+    published.update(
+        {
+            "max_cores": int(limits.max_cores),
+            "max_walltime_s": int(limits.max_walltime_s),
+            "default_walltime_s": int(limits.default_walltime_s),
+            "enforcement": "admission",
+        }
+    )
+    return published
 
 
 def _capabilities_payload(
@@ -277,6 +302,7 @@ def _capabilities_payload(
     research_extension: Mapping[str, Any] | str | None = None,
     project_id: str | None = None,
     client: Mapping[str, Any] | None = None,
+    workflow: str | None = None,
 ) -> dict[str, Any]:
     """Build the discovery payload and answer the extension handshake.
 
@@ -342,7 +368,7 @@ def _capabilities_payload(
         # never reported as executable.
         "capability_descriptors": list(science_catalog.capability_descriptors(request.app.state)),
         "analysis_capabilities": list(science_catalog.analysis_capabilities(request.app.state)),
-        "limits": dict(_CONTROLLER_LIMITS),
+        "limits": _capability_limits(request),
         # M2-01c: the HTTP surface mirrors tools/list — the eight P1 tools, plus
         # the ten research tools only for a request that negotiated the extension.
         "tools": list(_MCP_TOOLS) + ([*RESEARCH_TOOL_NAMES] if handshake.negotiated else []),
@@ -385,6 +411,31 @@ def _capabilities_payload(
             "project_hint_policy": "narrow-only",
             "multi_tenant_security": "api-key-scoped",
         }
+    if workflow is not None:
+        from acp.api.workflow_contracts import (
+            ACTIVE_WORKFLOWS,
+            canonical_workflow,
+            describe_workflow,
+            workflow_suggestion,
+        )
+
+        canonical = canonical_workflow(workflow)
+        if canonical is None:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "input_invalid",
+                    "message": f"unknown workflow {workflow!r}",
+                    "params": {
+                        "field": "workflow",
+                        "rule": "unknown_workflow",
+                        "allowed": list(ACTIVE_WORKFLOWS),
+                        "suggestion": workflow_suggestion(workflow),
+                    },
+                },
+            )
+        payload["workflow_contract"] = describe_workflow(canonical)
+
     if handshake.refusal is not None:
         # Typed, in-band refusal: the client still receives extensions[] so it
         # can read the supported version instead of guessing.
@@ -421,6 +472,7 @@ def get_capabilities(
     research_extension: str | None = Query(default=None),
     project_id: str | None = Query(default=None),
     client: str | None = Query(default=None),
+    workflow: str | None = Query(default=None),
 ) -> dict[str, Any]:
     """Read-only discovery (``capabilities`` application command).
 
@@ -437,6 +489,7 @@ def get_capabilities(
         research_extension=research_extension,
         project_id=project_id,
         client=client_facts,
+        workflow=workflow,
     )
 
 
@@ -458,7 +511,14 @@ async def post_capabilities(request: Request) -> dict[str, Any]:
             status_code=422,
             detail={"code": "input_invalid", "message": "capabilities body must be an object"},
         )
-    allowed_fields = {"schema_version", "extensions", "research_extension", "project_id", "client"}
+    allowed_fields = {
+        "schema_version",
+        "extensions",
+        "research_extension",
+        "project_id",
+        "client",
+        "workflow",
+    }
     unknown = set(body) - allowed_fields
     if unknown:
         raise HTTPException(
@@ -487,11 +547,18 @@ async def post_capabilities(request: Request) -> dict[str, Any]:
             status_code=422,
             detail={"code": "input_invalid", "message": "project_id must be a string"},
         )
+    workflow = body.get("workflow")
+    if workflow is not None and not isinstance(workflow, str):
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "input_invalid", "message": "workflow must be a string"},
+        )
     return _capabilities_payload(
         request,
         research_extension=research,
         project_id=project_id,
         client=client,
+        workflow=workflow,
     )
 
 
@@ -520,6 +587,22 @@ def _load_executables() -> dict[str, Any]:
         return load_config().get("executables", {})
     except Exception:
         return {}
+
+
+def _backend_probe_config(executables: dict[str, Any]) -> dict[str, Any]:
+    """Configuration a backend constructor needs to judge binary presence.
+
+    ``/api/backends`` must answer "is this binary present *for this
+    deployment*", and the install pin lives in ``executables.<name>.path``.
+    Constructing a backend with an empty config downgrades every interface to
+    ``PATH``-only resolution, which misreports a config-pinned install as a
+    missing binary whenever the serving process runs with a minimal ``PATH``
+    (systemd's default, where e.g. ``xtb``/``crest``/``censo`` live outside
+    ``/usr/bin``).  Only the ``executables`` section is relevant to these
+    probes, so it is reused from the single :func:`_load_executables`
+    authority instead of loading the config twice.
+    """
+    return {"executables": executables}
 
 
 def _resolve_backend_path(name: str, executables: dict[str, Any]) -> str:
@@ -581,10 +664,11 @@ def get_backends(request: Request) -> BackendsResponse:
     from acp.backends import BackendCapabilityStatus, backend_status, list_backends
 
     executables = _load_executables()
+    probe_config = _backend_probe_config(executables)
     remote = _remote_backend_map(request)
     backends: list[BackendInfo] = []
     for name in list_backends():
-        status = cast(dict[str, Any], backend_status(name))
+        status = cast(dict[str, Any], backend_status(name, config=probe_config))
         capabilities = cast(dict[str, Any], status["capabilities"])
         caps = [
             CapabilityInfo(name=cap, available=(st is BackendCapabilityStatus.AVAILABLE))

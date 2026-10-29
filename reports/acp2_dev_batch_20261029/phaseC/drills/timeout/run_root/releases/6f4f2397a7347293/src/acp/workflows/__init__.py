@@ -1,0 +1,78 @@
+# pyright: reportMissingTypeStubs=false
+"""Workflow implementations.
+
+Public symbols are exposed lazily via :pep:`562` ``__getattr__`` so that
+importing a single workflow (e.g. ``from acp.workflows.nmr import ...``)
+does **not** pull in the others.  This keeps each workflow's third-party
+dependencies decoupled and ``import acp.workflows`` cheap and side-effect
+free.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+__all__ = [
+    "WorkflowRegistryEntry",
+    "get_workflow_entry",
+    "list_workflow_entries",
+    "register_workflow",
+    "run_conformer_energy",
+    "run_ensemble_generation",
+    "run_md_replicas",
+    "run_nmr_analysis",
+    "run_xtbmd_censo_energy",
+    "run_batch_optimize",
+    "run_pes_search",
+    "run_singlepoint",
+    "run_optimize",
+    "run_frequency",
+    "run_scan",
+    "run_irc",
+    "run_tsmode",
+    "run_xtb_path_search",
+    "run_orca_gradient",
+    "run_xtb_constrained_opt",
+]
+
+# Maps each public name to the submodule that defines it.  The submodule is
+# imported on first access only, keeping ``import acp.workflows`` cheap and
+# side-effect free.
+_LAZY_SOURCES: dict[str, str] = {
+    "run_md_replicas": "acp.workflows.xtbmd_md",
+    "run_singlepoint": "acp.workflows.simple",
+    "run_optimize": "acp.workflows.simple",
+    "run_frequency": "acp.workflows.simple",
+    "run_scan": "acp.workflows.simple",
+    "run_irc": "acp.workflows.simple",
+    "run_tsmode": "acp.workflows.tsmode",
+    "run_ensemble_generation": "acp.workflows.ensemble",
+    "run_conformer_energy": "acp.workflows.energy",
+    "run_nmr_analysis": "acp.workflows.nmr",
+    "run_xtbmd_censo_energy": "acp.workflows.xtbmd_censo_energy",
+    "run_batch_optimize": "acp.workflows.batch_optimize",
+    "run_pes_search": "acp.workflows.pes_search",
+    "run_xtb_path_search": "acp.workflows.xtb_path",
+    "run_orca_gradient": "acp.workflows.orca_gradient",
+    "run_xtb_constrained_opt": "acp.workflows.xtb_constrained_opt",
+    "WorkflowRegistryEntry": "acp.workflows.registry",
+    "get_workflow_entry": "acp.workflows.registry",
+    "list_workflow_entries": "acp.workflows.registry",
+    "register_workflow": "acp.workflows.registry",
+}
+
+
+def __getattr__(name: str) -> Any:
+    source = _LAZY_SOURCES.get(name)
+    if source is None:
+        raise AttributeError(f"module 'acp.workflows' has no attribute {name!r}")
+    import importlib
+
+    module = importlib.import_module(source)
+    value = getattr(module, name)
+    globals()[name] = value  # cache for subsequent lookups
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(list(globals()) + __all__)

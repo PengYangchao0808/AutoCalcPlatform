@@ -279,7 +279,7 @@ export function usage(): string {
     "  --mode <product|acceptance|demo>  composition mode (default product)",
     "  --skills <model|test>             test skills are demo-only",
     "  --controller <url>                overrides ACP2_CONTROLLER_URL",
-    "  --science <file>                  typed science seed + initial input (JSON)",
+    "  --science <file>                  seed, input, submission + planning_budget (JSON)",
     "  --project <id> --research <id> --max-rounds <n>",
     "resume options:",
     "  --proposal <ref> --plan-digest <sha256:..> [--task <job>] [--cursor <c>]",

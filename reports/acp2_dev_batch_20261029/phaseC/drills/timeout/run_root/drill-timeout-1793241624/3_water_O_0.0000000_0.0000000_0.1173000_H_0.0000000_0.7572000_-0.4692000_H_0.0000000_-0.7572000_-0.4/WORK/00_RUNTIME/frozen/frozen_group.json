@@ -1,0 +1,18 @@
+{
+  "attempt": 1,
+  "fencing_token": "65d6816700cd60d5b3213af9a27f66cd",
+  "job_id": "20261029_104030_001_singlepoint",
+  "members": {
+    "binding.json": "fb36430f5ed2a9d48c31f67deaa608ed63be89b5dd092c2e2f9b24c17a3a7eb6",
+    "envelope.json": "b75f6c914e7ee58be491158a353a4b21910fc66b02ed1443737952c4cb943ad6",
+    "plan.json": "b48bc94c335a04f696afd969899156909a0016fd3bca38ff2840126c143fa1b0"
+  },
+  "owner": "local:workstation:2310476:1",
+  "plan_digest": "v2:f2a73dff8f0e3890d9a408752ae7728b",
+  "plan_identity": "v2:309b0b516f97eb124c065e53c16d235e",
+  "release_digest": "0d69f27f3450166bcbceea3021818db32564d69212927c21638624f47fa7c576",
+  "release_id": "6f4f2397a7347293",
+  "schema": 1,
+  "submission_id": "sub_cf2593d7fd47276d",
+  "workflow": "singlepoint"
+}

@@ -260,6 +260,12 @@ def _segment(value: Any, label: str, *, code: str) -> str:
     return text
 
 
+
+def _strip_scheme(digest: str) -> str:
+    """Compare digests ignoring the optional ``sha256:`` scheme prefix."""
+    return digest.removeprefix("sha256:")
+
+
 def _digest(value: Any, label: str, *, code: str) -> str:
     text = str(value or "")
     if _DIGEST_RE.match(text) is None:
@@ -405,7 +411,13 @@ class TaskRef:
             payload = binding.to_dict() if hasattr(binding, "to_dict") else dict(binding)
         except (TypeError, ValueError) as exc:
             raise TaskRefError("task_ref_invalid", f"not a task binding: {exc}") from exc
-        return cls.from_dict({**payload, "release_digest": release_digest})
+        # Execution receipts store the release digest as bare hex; the TaskRef
+        # wire form carries the ``sha256:`` scheme. Normalise exactly that one
+        # boundary — an empty or malformed digest is still refused below.
+        digest_text = str(release_digest or "")
+        if re.fullmatch(r"[0-9a-f]{64}", digest_text):
+            digest_text = f"sha256:{digest_text}"
+        return cls.from_dict({**payload, "release_digest": digest_text})
 
     def identity(self) -> tuple[str, str, int, str, str]:
         """Hashable identity of the attempt (no display fields)."""
@@ -845,7 +857,9 @@ def _assert_receipt_binds(
             f"receipt release {receipt.get('release_id')!r} != "
             f"task release {task_ref.release_id!r}",
         )
-    if str(receipt.get("release_digest") or "") != task_ref.release_digest:
+    if _strip_scheme(str(receipt.get("release_digest") or "")) != _strip_scheme(
+        task_ref.release_digest
+    ):
         raise EvidenceProjectionError(
             "foreign_release_digest",
             f"receipt release digest {receipt.get('release_digest')!r} != "

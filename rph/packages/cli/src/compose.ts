@@ -26,8 +26,11 @@ import {
   composeResearchRuntime,
   connectPlatform,
   createMemoryResearchWriter,
+  createProductParts,
+  type ProductScienceConfig,
   resolveRuntimeProfile,
   resumeResearch,
+  restoreProductParts,
   runDoctor,
   runSupervisor,
   validateScienceSeed,
@@ -86,6 +89,10 @@ export const processIo: CliIo = Object.freeze({
 
 /** Wiring the caller may inject (product parts, M3-03/M3-04, tests). */
 export interface CliRuntimeParts {
+  readonly researchId?: string;
+  readonly sessionSeed?: string;
+  readonly resumeContext?: () => { readonly proposal_ref: string; readonly research_id: string; readonly session_seed: string; readonly plan_digest: string | null };
+  readonly limits?: SupervisorInput["limits"];
   readonly skills?: SupervisorSkills | null;
   readonly writer?: ResearchWriterPort | null;
   readonly modelGateway?: (() => Promise<ModelGatewayUsage>) | null;
@@ -114,6 +121,8 @@ export interface CliPartContext {
   readonly mode: CompositionMode;
   readonly profile: ResolvedRuntimeProfile;
   readonly session: PlatformSession | null;
+  readonly science?: ProductScienceConfig | null;
+  readonly research?: string;
 }
 
 export interface CliDependencies {
@@ -207,6 +216,7 @@ function refusalLines(refusals: readonly Refusal[], issues: readonly ReadinessIs
 }
 
 interface ScienceInput {
+  readonly productConfig?: ProductScienceConfig;
   readonly seed: ScienceSeed | null;
   readonly initialInput: CliRuntimeParts["initialInput"];
   readonly issues: readonly Refusal[];
@@ -262,6 +272,8 @@ function readScienceFile(path: string): ScienceInput {
     });
   }
   return {
+    ...(record["submission"] !== undefined && record["planning_budget"] !== undefined
+      ? { productConfig: record as unknown as ProductScienceConfig } : {}),
     seed: seedIssues.length === 0 ? (seed as ScienceSeed) : null,
     initialInput:
       typeof initial === "object" && initial !== null
@@ -279,7 +291,7 @@ function supervisorInputFor(
 ): SupervisorInput {
   const projectId =
     options.project ?? (mode === "demo" ? null : profileProjectId) ?? "demo-project";
-  const researchId = options.research ?? "demo-research";
+  const researchId = parts.researchId ?? options.research ?? "demo-research";
   if (mode === "demo") {
     return {
       project_id: projectId,
@@ -318,7 +330,7 @@ function supervisorInputFor(
     // Product composition (M3-04 exit): the verdict comes only from a
     // digest-bound EvidenceView, a persisted submit intent and a CAS decision.
     require_evidence_binding: mode === "product",
-    limits: clientLimits(options.maxRounds ?? 3),
+    limits: parts.limits ?? clientLimits(options.maxRounds ?? 3),
   };
 }
 
@@ -353,8 +365,11 @@ async function defaultParts(
       initialInput: DEMO_INITIAL_INPUT,
     };
   }
-  const parts = await dependencies.parts?.(context);
-  return parts ?? {};
+  if (dependencies.parts !== undefined) return await dependencies.parts(context);
+  return (await createProductParts({ profile: context.profile, session: context.session,
+    ...(context.science === undefined ? {} : { science: context.science }),
+    ...(context.research === undefined ? {} : { research: context.research }),
+  })) ?? {};
 }
 
 /**
@@ -452,15 +467,28 @@ async function runResearch(
         : readScienceFile(options.science);
     refusals.push(...science.issues);
 
-    const parts = await defaultParts(
+    let parts: CliRuntimeParts = {};
+    try {
+      parts = await defaultParts(
       {
         environment,
         mode,
         profile,
         session: connected === null ? null : connected.session,
+        ...(science.productConfig === undefined ? {} : { science: science.productConfig }),
+        ...(options.research === undefined ? {} : { research: options.research }),
       },
       dependencies,
-    );
+      );
+    } catch (error) {
+      refusals.push({ code: error instanceof PlatformPortError ? error.code : "product_parts_unavailable",
+        detail: error instanceof Error ? error.message : String(error),
+        hint: "check negotiated MCP tools, model configuration and the explicit science file" });
+    }
+    if (mode !== "demo" && dependencies.parts === undefined && science.productConfig === undefined) {
+      refusals.push({ code: "science_mapping_missing", detail: "--science needs explicit submission and planning_budget",
+        hint: "provide singlepoint input/method/resources/budget and all eight planning budget counters" });
+    }
     const effectiveParts: CliRuntimeParts = {
       ...parts,
       ...(science.seed === null ? {} : { scienceSeed: science.seed }),
@@ -513,6 +541,7 @@ async function runResearch(
 
     const runtime = composeResearchRuntime({
       ...readiness,
+      projectId: profile.get("project_id"),
       ...(effectiveParts.adapters === undefined ? {} : { adapters: effectiveParts.adapters }),
     });
     if (mode !== "demo") {
@@ -539,6 +568,10 @@ async function runResearch(
         evidence_kind: runtime.evidence_kind,
         demo: mode === "demo",
         cli_version: CLI_VERSION,
+        research_id: effectiveParts.researchId,
+        session_seed: effectiveParts.sessionSeed,
+        proposal_ref: effectiveParts.proposalRef,
+        resume: effectiveParts.resumeContext?.(),
         result: summary,
       });
     } else {
@@ -549,6 +582,10 @@ async function runResearch(
       io.stdout(
         `  rounds=${result.rounds_completed} submits=${result.submits} reports=${result.reports.length}`,
       );
+      const resume = effectiveParts.resumeContext?.();
+      if (resume?.plan_digest !== null && resume !== undefined) {
+        io.stdout(`  proposal=${resume.proposal_ref} execution_plan_digest=${resume.plan_digest} session_seed=${resume.session_seed}`);
+      }
       if (mode === "demo") {
         io.stdout("  DEMO (fixture) — not a scientific result, not platform evidence");
       }
@@ -631,6 +668,28 @@ async function runResume(
     return reportFailure(io, options, error, EXIT_FAILED);
   }
   try {
+    if (dependencies.parts === undefined) {
+      const restored = await restoreProductParts({ profile, session: connected.session,
+        proposalRef: options.proposal, planDigest: options.planDigest,
+        ...(options.task === undefined ? {} : { task: options.task }),
+        ...(options.cursor === undefined ? {} : { cursor: options.cursor }),
+      });
+      if (restored !== null) {
+        const parts = restored.parts;
+        const runtime = composeResearchRuntime({ mode, environment, profile, session: connected.session,
+          projectId: profile.get("project_id"),
+          skills: parts.skills, writer: parts.writer, modelGateway: parts.modelGateway,
+          artifactEvidencePath: profile.get("artifact_evidence_path"), scienceSeedPresent: true,
+          evidenceReader: parts.evidenceReader, budgetUsage: parts.budgetUsage,
+          submitPayload: parts.submitPayload, adapters: parts.adapters,
+        });
+        const result = await runSupervisor(restored.supervisorInput, runtime.ports, runtime.skills);
+        if (options.json === true) printJson(io, { status: result.status, resumed_from: "proposal-checkpoint",
+          proposal_ref: options.proposal, result: resultSummary(result), resume: parts.resumeContext() });
+        else io.stdout(`rph resume: ${result.status} (${result.stop_reason}); proposal=${options.proposal}`);
+        return EXIT_OK;
+      }
+    }
     const outcome = await resumeResearch(connected.session, {
       proposal_ref: options.proposal,
       plan_digest: options.planDigest,
@@ -702,6 +761,7 @@ async function runDoctorCommand(
     io.stdout(
       `rph doctor (${report.mode}, ${report.environment}): ${report.status} — product ${report.product_version}, node ${report.node_version}`,
     );
+    for (const fact of report.readiness) io.stdout(`  [${fact.status}] ${fact.id}: ${fact.hint}`);
     for (const entry of report.checks) {
       io.stdout(`  [${entry.status}] ${entry.id}: ${entry.detail}`);
     }

@@ -66,6 +66,10 @@ function makeEl(tag) {
     querySelectorAll: () => [],
     closest: () => null,
     click() { (this.listeners.click || []).forEach((fn) => fn({ target: this })); },
+    dispatchEvent(event) {
+      (this.listeners[event.type] || []).forEach((fn) => fn(event));
+      return true;
+    },
   };
   ["innerHTML", "outerHTML"].forEach((name) => {
     Object.defineProperty(el, name, {
@@ -230,6 +234,74 @@ function uiSubsetOf(h) {
 
 module.exports.register = async function (h) {
   const { test, assert, assertEq, loadScript, makeSandbox } = h;
+
+  await test("capability-form: DOM changes convert integers and preserve empty/invalid input", async () => {
+    const uiSubset = uiSubsetOf(h);
+    const doc = makeDoc();
+    const form = builtinForm();
+    form.form_schema.required.push("charge");
+    const science = fakeScience({
+      fetchCapabilityForms: () => Promise.resolve(formsDocument(uiSubset, {
+        forms: [availableEntry("electronic.energy", form)],
+      })),
+    });
+    const { feature } = loadForm(h, science, null, doc);
+    await feature.load({ projectId: "proj-1" });
+    feature.setValue("source", "O 0 0 0");
+    function change(value, badInput) {
+      const input = allNodes(doc.getElementById("capability-form-body"))
+        .find((el) => el.id === "capability-form-field-charge");
+      assertEq(input.getAttribute("step"), "1");
+      input.value = value;
+      input.validity = { badInput: !!badInput };
+      input.dispatchEvent({ type: "change", target: input });
+    }
+    change("-2");
+    assertEq(feature.getState().values.charge, -2);
+    assertEq(feature.buildRequest().body.input.charge, -2);
+    assert(feature.getState().edits.some((edit) => edit.field_path === "task.charge"));
+    for (const value of ["1.5", "Infinity", "bad"]) {
+      change(value);
+      assertEq(feature.getState().error.code, "ui_value_type");
+      let caught;
+      try { feature.buildRequest(); } catch (error) { caught = error; }
+      assert(caught && caught.code === "ui_value_type", "invalid edit cannot reuse old value");
+    }
+    change("", true);
+    assertEq(feature.getState().error.code, "ui_value_type", "sanitized invalid number is not empty");
+    change("");
+    assertEq(feature.getState().values.charge, "", "clear is not numeric zero");
+    let caught;
+    try { feature.buildRequest(); } catch (error) { caught = error; }
+    assert(caught && caught.code === "ui_value_required", "required blank cannot reuse default");
+    change("3");
+    assertEq(feature.getState().error, null);
+    assertEq(feature.buildRequest().body.input.charge, 3);
+  });
+
+  await test("capability-form: numeric schema renders decimal input without truncation", async () => {
+    const uiSubset = uiSubsetOf(h);
+    const doc = makeDoc();
+    const form = builtinForm();
+    // The subset also allows scalar type arrays. Exercise its number renderer
+    // without changing the frozen integer-only TaskRequest binding table.
+    form.form_schema.properties.charge.type = ["number"];
+    const science = fakeScience({
+      fetchCapabilityForms: () => Promise.resolve(formsDocument(uiSubset, {
+        forms: [availableEntry("electronic.energy", form)],
+      })),
+    });
+    const { feature } = loadForm(h, science, null, doc);
+    await feature.load({ projectId: "proj-1" });
+    const input = allNodes(doc.getElementById("capability-form-body"))
+      .find((el) => el.id === "capability-form-field-charge");
+    assertEq(input.getAttribute("step"), "any");
+    input.value = "-1.25";
+    input.dispatchEvent({ type: "change", target: input });
+    assertEq(feature.getState().values.charge, -1.25);
+    assertEq(feature.getState().error, null);
+    // This is a renderer test; it never submits a fractional charge.
+  });
 
   // ------------------------------------------------------------------
   // 1. subset contract parity + validator

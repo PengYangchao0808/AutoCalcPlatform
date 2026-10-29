@@ -1,0 +1,10 @@
+{
+  "name": "contracts",
+  "command": [
+    "python3.11",
+    "scripts/acceptance/validate_acp2_contracts.py"
+  ],
+  "exit_code": 0,
+  "elapsed_seconds": 0.17,
+  "log": "contracts.log"
+}

@@ -1,0 +1,228 @@
+"""Merge-safe YAML persistence engine for the ACP init wizard (D1/D5/D7).
+
+Read-modify-writes ONLY the raw target config file — never the merged
+6-source view (root AGENTS.md anti-pattern #3). Writes are atomic
+(tmp + ``os.replace``), preceded by a timestamped ``.bak`` backup, and
+guarded by a writability pre-flight so a read-only target aborts before
+anything is touched.
+
+The I/O primitives (pre-flight, restrictive backup, atomic replace) are the
+single Services-owner implementation in
+:mod:`acp_services.contracts.config_plan`; this module keeps the wizard-facing
+YAML serialization, the ``InitAbort`` message contract and the
+``_backup_timestamp`` clock seam, and maps the structured write failure back to
+the established user-facing messages.
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+from acp_services.contracts.config_plan import ConfigWriteError, write_config_file
+
+logger = logging.getLogger(__name__)
+
+__all__ = [
+    "InitAbort",
+    "load_target",
+    "save_target",
+    "set_cluster_type",
+    "set_execution_mode_remote",
+    "set_executable_path",
+    "set_software_path",
+    "upsert_node",
+]
+
+
+class InitAbort(Exception):  # noqa: N818 — name pinned by the acp-init plan (D1/T3)
+    """User-facing fatal abort: wizard stops and reports the carried reason."""
+
+
+def load_target(path: Path) -> dict[str, Any]:
+    """Load the raw target YAML file.
+
+    A missing file or an empty file (``yaml.safe_load`` returning None)
+    loads as ``{}`` — the ``cccp.config`` empty-file precedent. A parse
+    error or a non-dict, non-None root aborts: a user config file is never
+    auto-rewritten.
+
+    Args:
+        path: Target YAML file path.
+
+    Returns:
+        The raw mapping stored in the file (``{}`` when absent/empty).
+
+    Raises:
+        InitAbort: On unreadable file, YAML parse error, or non-dict root.
+    """
+    if not path.exists():
+        return {}
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise InitAbort(f"无法读取配置文件：{path}（errno {exc.errno}: {exc.strerror}）") from exc
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise InitAbort(f"配置文件解析失败：{path}（{exc}）") from exc
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        raise InitAbort(f"配置文件根节点必须是映射，{path} 实际为 {type(data).__name__}")
+    return data
+
+
+def _backup_timestamp() -> str:
+    """Timestamp used in backup file names (monkeypatch-friendly seam)."""
+    return datetime.now().strftime("%Y%m%d-%H%M%S")
+
+
+def _dump_yaml(data: dict[str, Any]) -> str:
+    """Serialise the raw target mapping in the wizard's established style."""
+    return str(yaml.dump(data, allow_unicode=True, default_flow_style=False, sort_keys=False))
+
+
+def save_target(path: Path, data: dict[str, Any], mode: int | None = None) -> None:
+    """Atomically write *data* to *path*, backing up any prior content.
+
+    The writability pre-flight runs first: an existing target must pass
+    ``os.access(path, os.W_OK)``; a missing target requires a writable
+    parent directory. Failure aborts before any file is touched —
+    ``os.replace`` itself only needs directory write permission, so the
+    pre-flight is what keeps a read-only target from being silently
+    replaced. The effective file mode is the explicit *mode*, else the
+    existing target's ``st_mode & 0o777``, else ``0o644`` — a restrictive
+    existing file is never widened. The tmp file is chmod'ed to the
+    effective mode before ``os.replace`` so the final path never appears
+    world-readable.
+
+    Args:
+        path: Target YAML file path.
+        data: Raw mapping to persist.
+        mode: Explicit permission bits for the written file.
+
+    Raises:
+        InitAbort: On failed pre-flight, or any OSError during
+            backup/tmp-write/chmod/replace (tmp file is cleaned up).
+    """
+    try:
+        write_config_file(
+            path,
+            data,
+            mode=mode,
+            dumps=_dump_yaml,
+            timestamp=_backup_timestamp(),
+        )
+    except ConfigWriteError as exc:
+        if exc.kind == "file_not_writable":
+            raise InitAbort(f"目标文件不可写：{path}（权限拒绝）") from exc
+        if exc.kind == "dir_not_writable":
+            raise InitAbort(f"目标目录不可写或不存在：{exc.dir_path}") from exc
+        raise InitAbort(
+            f"写入配置文件失败：{path}（errno {exc.errno}: {exc.strerror}）"
+        ) from exc
+
+
+def set_executable_path(data: dict[str, Any], name: str, path: Path) -> None:
+    """Set ``data["executables"][name]["path"]``, preserving sibling keys.
+
+    Args:
+        data: Raw target mapping (mutated in place).
+        name: Executable name (e.g. ``xtb``).
+        path: Executable path to persist.
+    """
+    executables = data.get("executables")
+    if not isinstance(executables, dict):
+        if executables is not None:
+            logger.warning("executables 不是映射，已替换（原值 %r）", executables)
+        executables = {}
+        data["executables"] = executables
+    entry = executables.setdefault(name, {})
+    if not isinstance(entry, dict):
+        logger.warning("executables.%s 不是映射，已替换（原值 %r）", name, entry)
+        entry = {}
+        executables[name] = entry
+    entry["path"] = str(path)
+
+
+def set_software_path(data: dict[str, Any], name: str, path: str | Path) -> None:
+    """Persist a path emitted by the init wizard's resource discovery.
+
+    Ordinary QC programs use ``executables.<name>.path``.  MPI is an ORCA
+    runtime dependency rather than a standalone backend, so its launcher is
+    stored at the path consumed by ORCA execution:
+    ``executables.orca.mpi_path``.
+
+    Args:
+        data: Configuration mapping to mutate.
+        name: Discovery key (``"mpi"`` or a QC software name).
+        path: Executable path to persist.
+    """
+    if name != "mpi":
+        set_executable_path(data, name, Path(path))
+        return
+
+    executables = data.get("executables")
+    if not isinstance(executables, dict):
+        if executables is not None:
+            logger.warning("executables 不是映射，已替换（原值 %r）", executables)
+        executables = {}
+        data["executables"] = executables
+    entry = executables.setdefault("orca", {})
+    if not isinstance(entry, dict):
+        logger.warning("executables.orca 不是映射，已替换（原值 %r）", entry)
+        entry = {}
+        executables["orca"] = entry
+    entry["mpi_path"] = str(path)
+
+
+def set_cluster_type(data: dict[str, Any], node_type: str) -> None:
+    """Set ``data["cluster"]["type"]`` only when absent or ``"local"``.
+
+    A differing existing non-local value is left untouched — the caller
+    owns the overwrite confirmation (D2).
+
+    Args:
+        data: Raw target mapping (mutated in place).
+        node_type: Cluster type to declare (``lsf`` or ``openlava``).
+    """
+    cluster = data.setdefault("cluster", {})
+    current = cluster.get("type")
+    if current is None or current == "local":
+        cluster["type"] = node_type
+    else:
+        logger.info("cluster.type 已为 %r，保持不变（覆盖由调用方确认）", current)
+
+
+def set_execution_mode_remote(data: dict[str, Any]) -> None:
+    """Set ``data["cluster"]["execution_mode"] = "remote"`` (D3).
+
+    Args:
+        data: Raw target mapping (mutated in place).
+    """
+    data.setdefault("cluster", {})["execution_mode"] = "remote"
+
+
+def upsert_node(data: dict[str, Any], node_dict: dict[str, Any]) -> None:
+    """Insert or replace a node entry in ``data["cluster"]["nodes"]`` by name.
+
+    Collision confirmation is the caller's job (D14d) — this function
+    always applies replace-by-name semantics.
+
+    Args:
+        data: Raw target mapping (mutated in place).
+        node_dict: Node mapping; its ``name`` identifies the entry.
+    """
+    cluster = data.setdefault("cluster", {})
+    nodes = cluster.setdefault("nodes", [])
+    name = node_dict.get("name")
+    for index, existing in enumerate(nodes):
+        if isinstance(existing, dict) and existing.get("name") == name:
+            nodes[index] = node_dict
+            return
+    nodes.append(node_dict)

@@ -6,6 +6,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import yaml
+
 from acp.chem.composition import normalize_recalc_hess
 
 # The method-levels -> CLI flag converter moved in-package to Services
@@ -4339,24 +4341,52 @@ _BACKEND_SUPPORTS: dict[str, list[str]] = {
 }
 
 
-def _resolve_backend_path(bid: str) -> str:
-    """Resolve the backend binary path for *bid* via the centralized resolver."""
-    from cccp.software import resolve_executable
+def _effective_backend_config() -> dict[str, Any]:
+    """Effective deployment config for backend binary resolution (best effort).
 
-    path = resolve_executable(bid)
+    ``_discover_backends`` runs at import time and must stay I/O-free, so the
+    config is read lazily here instead.  A broken/unreadable config yields no
+    pins (PATH-only resolution) rather than breaking catalog import.
+    """
+    try:
+        from cccp.config import load_config
+
+        config = load_config()
+    except (ImportError, OSError, TypeError, ValueError, yaml.YAMLError) as exc:
+        logger.warning("backend catalog: effective config unavailable: %s", exc)
+        return {}
+    return config if isinstance(config, dict) else {}
+
+
+def _resolve_backend_path(bid: str, config: dict[str, Any] | None = None) -> str:
+    """Resolve the backend binary path for *bid* via the centralized resolver.
+
+    *config* supplies the ``executables.<id>.path`` pin the execution path
+    uses; without it resolution is ``PATH``-only, which reports a pinned
+    install as missing whenever the serving process has a minimal ``PATH``.
+    """
+    from cccp.software import get_configured_path, resolve_executable
+
+    configured = get_configured_path(config, bid)
+    path = resolve_executable(bid, configured_path=configured)
     return str(path) if path else bid
 
 
 def _detect_backend_version(bid: str, binary_path: str) -> str | None:
-    """Try to detect the version of backend *bid* via the centralized helper."""
+    """Probe the version of backend *bid* through the TTL-cached helper.
+
+    The catalog is re-read on every ``GET /api/v1/method-catalog``; a cached
+    probe keeps one subprocess per binary per TTL instead of one per request.
+    """
     from pathlib import Path
 
-    from cccp.software import detect_version
+    from cccp.software import version_cached
 
-    return detect_version(bid, Path(binary_path) if binary_path else None)
+    version = version_cached(bid, Path(binary_path) if binary_path else None)
+    return version or None
 
 
-def _discover_backends() -> list[dict[str, Any]]:
+def _discover_backends(config: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     """Build the backends list with dynamic availability metadata.
 
     Version probing is deliberately deferred to :func:`refresh_backend_versions`
@@ -4365,7 +4395,7 @@ def _discover_backends() -> list[dict[str, Any]]:
     """
     backends: list[dict[str, Any]] = []
     for bid, binfo in _BACKEND_BINARIES.items():
-        path = _resolve_backend_path(bid)
+        path = _resolve_backend_path(bid, config)
         available = path != bid
         backends.append(
             {
@@ -4381,14 +4411,23 @@ def _discover_backends() -> list[dict[str, Any]]:
 
 
 def refresh_backend_versions() -> None:
-    """Probe versions of all resolvable backends, in place.
+    """Re-resolve backend paths, then probe versions, in place.
 
-    Updates ``METHOD_CATALOG["backends"]`` entries in place. Called lazily by
-    the API layer; never at import time.
+    Re-resolution matters because ``METHOD_CATALOG["backends"]`` is built at
+    import time without config I/O: only this lazy pass (called by the API
+    layer, never at import) can see the ``executables.<id>.path`` pins, which
+    is what makes availability agree with the execution path under a minimal
+    ``PATH`` (systemd service).  Updates ``METHOD_CATALOG["backends"]`` in
+    place.
     """
+    config = _effective_backend_config()
     for entry in METHOD_CATALOG["backends"]:
-        if entry["available"]:
-            entry["version"] = _detect_backend_version(entry["id"], entry["path"])
+        path = _resolve_backend_path(entry["id"], config)
+        entry["path"] = path
+        entry["available"] = path != entry["id"]
+        entry["version"] = (
+            _detect_backend_version(entry["id"], path) if entry["available"] else None
+        )
 
 
 METHOD_CATALOG: dict[str, Any] = {

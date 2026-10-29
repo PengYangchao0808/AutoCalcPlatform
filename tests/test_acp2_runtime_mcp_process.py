@@ -21,6 +21,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +47,20 @@ class _ControllerState:
         self.health_reads = 0
         self.capabilities_reads = 0
         self.submit_posts = 0
+        self.status_paths: list[str] = []
+        self.capabilities_posts: list[dict[str, Any]] = []
+        import hashlib as _hashlib
+
+        self.chain_body = b"hello chain"
+        self.chain_digest = "sha256:" + _hashlib.sha256(self.chain_body).hexdigest()
+        self.chain_ref = {
+            "task_id": "job_chain",
+            "attempt": 1,
+            "artifact_id": "final_report",
+            "generation": 1,
+            "digest": self.chain_digest,
+            "size_bytes": len(self.chain_body),
+        }
         self.long_description = "capability descriptor " * 500
 
 
@@ -94,7 +109,77 @@ class _ControllerHandler(http.server.BaseHTTPRequestHandler):
                 },
             )
             return
+        if self.path == "/api/v1/operations/op_chain":
+            self._send_json(
+                200,
+                {
+                    "operation_id": "op_chain",
+                    "state": "ready",
+                    "artifact_ref": self.state.chain_ref,
+                },
+            )
+            return
+        if self.path == "/api/v1/jobs/job_chain":
+            self.state.status_paths.append(self.path)
+            self._send_json(
+                200,
+                {
+                    "id": "job_chain",
+                    "spec": {"workflow": "Confsearch"},
+                    "state": "completed",
+                    "status": "completed",
+                    "attempt": 1,
+                    "revision": 3,
+                    "current_stage": "finalize",
+                    "progress": 1.0,
+                    "live_status": {"stage_label": "done", "metrics": []},
+                    "artifacts": [
+                        {
+                            "resource_id": "final_report",
+                            "relative_path": "RESULT/confsearch/final_report.json",
+                            "kind": "file",
+                            "label": "Final report",
+                            "size_bytes": None,
+                            "prepared": False,
+                        }
+                    ],
+                    "artifacts_truncated": False,
+                },
+            )
+            return
+        if self.path.startswith("/api/v1/jobs/job_chain/prepared/"):
+            from urllib.parse import parse_qs, urlparse
+
+            parsed = urlparse(self.path)
+            resource = parsed.path.rsplit("/", 1)[-1]
+            query = parse_qs(parsed.query)
+            if resource != "final_report":
+                self._send_json(404, {"detail": "not prepared"})
+                return
+            if query.get("expected_revision", ["1"])[0] != "1":
+                self._send_json(409, {"code": "revision_conflict"})
+                return
+            if query.get("digest", [""])[0] != self.state.chain_digest:
+                self._send_json(409, {"code": "revision_conflict"})
+                return
+            self._send_json(
+                200,
+                {
+                    "schema_version": 1,
+                    "artifact_ref": self.state.chain_ref,
+                    "body": self.state.chain_body.decode("utf-8"),
+                    "encoding": "identity",
+                    "truncated": False,
+                    "digest": self.state.chain_digest,
+                    "generation": 1,
+                    "size_bytes": len(self.state.chain_body),
+                    "availability": "ready",
+                    "media_type": "text/plain",
+                },
+            )
+            return
         if self.path.startswith("/api/v1/jobs/"):
+            self.state.status_paths.append(self.path)
             task_id = self.path.rsplit("/", 1)[-1]
             if task_id == "known-job":
                 self._send_json(
@@ -113,11 +198,58 @@ class _ControllerHandler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         length = int(self.headers.get("Content-Length", "0") or "0")
-        if length:
-            self.rfile.read(length)
+        raw = self.rfile.read(length) if length else b""
+        if self.path == "/api/capabilities":
+            body = json.loads(raw or b"{}")
+            self.state.capabilities_posts.append(body)
+            if body.get("workflow") == "Refused":
+                self._send_json(
+                    422,
+                    {"detail": {"code": "input_invalid", "message": "unknown workflow"}},
+                )
+                return
+            payload = {
+                "schema_version": 1,
+                "task_kinds": ["singlepoint"],
+                "workflows": ["singlepoint", "optimize"],
+                "backends": [{"name": "orca", "available": True}],
+                "limits": {"max_cores": 64},
+                "tools": sorted(EXPECTED_TOOLS),
+                "protocol_version": PROTOCOL_VERSION,
+            }
+            if body.get("workflow"):
+                payload["workflow_contract"] = {
+                    "workflow": body["workflow"],
+                    "coverage": "complete",
+                }
+            self._send_json(200, payload)
+            return
         if self.path == "/api/v1/jobs":
+            body = json.loads(raw or b"{}")
+            if body.get("workflow") == "Confsearch":
+                self.state.submit_posts += 1
+                self._send_json(
+                    201,
+                    {
+                        "job_id": "job_chain",
+                        "status": "queued",
+                        "result": "accepted",
+                        "task_ref": {"task_id": "job_chain", "attempt": 1},
+                    },
+                )
+                return
             self.state.submit_posts += 1
             self._send_json(201, {"job_id": "must-not-be-created"})
+            return
+        if self.path == "/api/v1/jobs/job_chain/prepare":
+            self._send_json(
+                200,
+                {
+                    "operation_id": "op_chain",
+                    "state": "ready",
+                    "artifact_ref": self.state.chain_ref,
+                },
+            )
             return
         self._send_json(404, {"detail": "not found"})
 
@@ -585,6 +717,71 @@ def test_status_is_a_real_read_only_controller_call(controller: Any, tmp_path: P
     assert state.submit_posts == 0
 
 
+def test_status_reference_object_and_stringified_json_are_distinct(
+    controller: Any, tmp_path: Path
+) -> None:
+    """C1 wire regression: ``{kind,id}`` reaches the same URL; JSON text does not.
+
+    ``_require_reference`` unwraps ``reference.id``, so a real object must hit
+    the same Controller path as the bare id.  A *stringified* JSON blob is a
+    string on the wire: it is forwarded as an opaque id and must never be
+    decoded into the real task.  The Controller call log is the evidence.
+    """
+    state, url = controller
+    with _McpProcess(url, tmp_path / "run-root") as process:
+        assert "error" not in process.handshake()
+        process.notify_initialized()
+
+        as_id = process.request(
+            2,
+            "tools/call",
+            {"name": "acp_status", "arguments": {"reference": "known-job"}},
+        )
+        assert as_id["result"]["isError"] is False
+
+        as_object = process.request(
+            3,
+            "tools/call",
+            {
+                "name": "acp_status",
+                "arguments": {"reference": {"kind": "job", "id": "known-job"}},
+            },
+        )
+        assert as_object["result"]["isError"] is False
+        assert as_object["result"]["structuredContent"]["data"]["state"] == "completed"
+        # Same task identity, not merely the same URL.
+        assert (
+            as_id["result"]["structuredContent"]["data"]["task_id"]
+            == as_object["result"]["structuredContent"]["data"]["task_id"]
+            == "known-job"
+        )
+
+        as_json_text = process.request(
+            4,
+            "tools/call",
+            {
+                "name": "acp_status",
+                "arguments": {"reference": '{"kind":"job","id":"known-job"}'},
+            },
+        )
+        assert as_json_text["result"]["isError"] is True
+        assert (
+            as_json_text["result"]["structuredContent"]["error"]["code"]
+            == "resource_not_ready"
+        )
+
+        process.close_stdin()
+        assert process.wait() == 0
+
+    assert len(state.status_paths) == 3
+    assert state.status_paths[0] == state.status_paths[1] == "/api/v1/jobs/known-job"
+    assert (
+        urllib.parse.unquote(state.status_paths[2])
+        == '/api/v1/jobs/{"kind":"job","id":"known-job"}'
+    )
+    assert state.submit_posts == 0
+
+
 def test_eof_cleanup_does_not_submit(controller: Any, tmp_path: Path) -> None:
     state, url = controller
     with _McpProcess(url, tmp_path / "run-root") as process:
@@ -727,3 +924,173 @@ def test_protocol_negotiation_matrix(controller: Any, tmp_path: Path) -> None:
     assert cases[4][1]["exit_code"] == 0
     # Zero task side effects across the whole matrix (no process called a tool).
     assert state.submit_posts == 0
+
+
+def test_capabilities_workflow_selector_is_forwarded(controller: Any, tmp_path: Path) -> None:
+    state, url = controller
+    with _McpProcess(url, tmp_path / "run-root") as process:
+        assert "error" not in process.handshake()
+        process.notify_initialized()
+        result = process.request(
+            2,
+            "tools/call",
+            {"name": "acp_capabilities", "arguments": {"workflow": "Confsearch"}},
+        )
+        assert result["result"]["isError"] is False
+        data = result["result"]["structuredContent"]["data"]
+        assert data["workflow_contract"]["workflow"] == "Confsearch"
+        plain = process.request(
+            3,
+            "tools/call",
+            {"name": "acp_capabilities", "arguments": {}},
+        )
+        assert plain["result"]["isError"] is False
+        assert "workflow_contract" not in plain["result"]["structuredContent"]["data"]
+        process.close_stdin()
+        assert process.wait() == 0
+    assert state.capabilities_posts[-1]["workflow"] == "Confsearch"
+
+
+def test_research_tools_visible_after_negotiation(controller: Any, tmp_path: Path) -> None:
+    _, url = controller
+    with _McpProcess(url, tmp_path / "run-root") as process:
+        assert "error" not in process.handshake()
+        process.notify_initialized()
+        before = process.request(2, "tools/list")
+        names = {tool["name"] for tool in before["result"]["tools"]}
+        assert "acp_research_proposal_create_v1" not in names
+        negotiated = process.request(
+            3,
+            "tools/call",
+            {
+                "name": "acp_capabilities",
+                "arguments": {"research_extension": {"id": "acp.research.v1"}},
+            },
+        )
+        assert negotiated["result"]["isError"] is False
+        after = process.request(4, "tools/list")
+        names = {tool["name"] for tool in after["result"]["tools"]}
+        assert "acp_research_proposal_create_v1" in names
+        process.close_stdin()
+        assert process.wait() == 0
+
+
+def test_selector_refusal_is_not_downgraded(controller: Any, tmp_path: Path) -> None:
+    _, url = controller
+    with _McpProcess(url, tmp_path / "run-root") as process:
+        assert "error" not in process.handshake()
+        process.notify_initialized()
+        result = process.request(
+            2,
+            "tools/call",
+            {"name": "acp_capabilities", "arguments": {"workflow": "Refused"}},
+        )
+        assert result["result"]["isError"] is True
+        assert result["result"]["structuredContent"]["error"]["code"] == "input_invalid"
+        process.close_stdin()
+        assert process.wait() == 0
+
+
+def test_closed_loop_submit_status_prepare_read(controller: Any, tmp_path: Path) -> None:
+    """P3-08: one scripted chain, no hand-written paths or digests."""
+    state, url = controller
+    with _McpProcess(url, tmp_path / "run-root") as process:
+        assert "error" not in process.handshake()
+        process.notify_initialized()
+
+        submitted = process.request(
+            2,
+            "tools/call",
+            {
+                "name": "acp_submit",
+                "arguments": {
+                    "workflow": "Confsearch",
+                    "input": {"smiles": "CCO"},
+                    "method": {"protocol": "xtb-crest"},
+                    "idempotency_key": "p3-chain-1",
+                },
+            },
+        )
+        assert submitted["result"]["isError"] is False
+        assert submitted["result"]["structuredContent"]["data"]["job_id"] == "job_chain"
+
+        status = process.request(
+            3,
+            "tools/call",
+            {"name": "acp_status", "arguments": {"reference": "job_chain"}},
+        )
+        data = status["result"]["structuredContent"]["data"]
+        descriptor = data["artifacts"][0]
+        assert descriptor["resource_id"] == "final_report"
+        assert data["artifacts_truncated"] is False
+        assert data["workflow"] == "Confsearch"
+        assert data["progress"] == 1.0
+
+        prepared = process.request(
+            4,
+            "tools/call",
+            {
+                "name": "acp_prepare_artifact",
+                "arguments": {
+                    "task_ref": {"task_id": "job_chain", "attempt": 1},
+                    "artifact_id": "final_report",
+                    "relative_path": descriptor["relative_path"],
+                    "purpose": "artifact",
+                },
+            },
+        )
+        assert prepared["result"]["isError"] is False
+        ref = prepared["result"]["structuredContent"]["data"]["artifact_ref"]
+        assert ref["digest"] == state.chain_digest
+
+        operation = process.request(
+            9,
+            "tools/call",
+            {"name": "acp_status", "arguments": {"reference": "op_chain"}},
+        )
+        op_data = operation["result"]["structuredContent"]["data"]
+        assert op_data["artifact_ref"]["digest"] == state.chain_digest
+
+        read = process.request(
+            5,
+            "tools/call",
+            {"name": "acp_read_artifact", "arguments": {"artifact_ref": ref}},
+        )
+        assert read["result"]["isError"] is False
+        assert read["result"]["structuredContent"]["data"]["body"] == "hello chain"
+
+        wrong = dict(ref)
+        wrong["digest"] = "sha256:" + "0" * 64
+        rejected = process.request(
+            6,
+            "tools/call",
+            {"name": "acp_read_artifact", "arguments": {"artifact_ref": wrong}},
+        )
+        assert rejected["result"]["isError"] is True
+        assert rejected["result"]["structuredContent"]["error"]["code"] == "revision_conflict"
+
+        stale = dict(ref)
+        stale["generation"] = 2
+        stale_result = process.request(
+            8,
+            "tools/call",
+            {"name": "acp_read_artifact", "arguments": {"artifact_ref": stale}},
+        )
+        assert stale_result["result"]["isError"] is True
+        assert (
+            stale_result["result"]["structuredContent"]["error"]["code"]
+            == "revision_conflict"
+        )
+
+        cold_ref = dict(ref)
+        cold_ref["artifact_id"] = "missing"
+        cold = process.request(
+            7,
+            "tools/call",
+            {"name": "acp_read_artifact", "arguments": {"artifact_ref": cold_ref}},
+        )
+        assert cold["result"]["isError"] is True
+        assert cold["result"]["structuredContent"]["error"]["code"] == "resource_not_ready"
+
+        process.close_stdin()
+        assert process.wait() == 0

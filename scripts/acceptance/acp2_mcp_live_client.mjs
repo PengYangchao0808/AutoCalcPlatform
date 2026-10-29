@@ -332,6 +332,31 @@ async function main() {
         error: { name: String(error?.name ?? "Error"), message: String(error?.message ?? error) },
       };
     }
+    // P2: workflow-scoped contract selector. The negotiated research state is
+    // expected to survive this call, so the tools list is re-read afterwards.
+    result.phase = "workflow_selector";
+    try {
+      const selector = await Promise.race([
+        client.callTool({ name: "acp_capabilities", arguments: { workflow: "Confsearch" } }),
+        watchdog,
+      ]);
+      const contract = selector.structuredContent?.data?.workflow_contract ?? null;
+      result.workflow_selector = {
+        isError: selector.isError ?? false,
+        workflow: contract?.workflow ?? null,
+        coverage: contract?.coverage ?? null,
+        status_vocabulary: Boolean(contract?.status_vocabulary),
+        research_tools_visible: selector.structuredContent?.data?.research_tools?.visible ?? null,
+      };
+      const relisted = await Promise.race([client.listTools(), watchdog]);
+      result.workflow_selector.listed_after_selector = (relisted.tools ?? []).map(
+        (tool) => tool.name,
+      );
+    } catch (error) {
+      result.workflow_selector = {
+        error: { name: String(error?.name ?? "Error"), message: String(error?.message ?? error) },
+      };
+    }
     result.status = "ok";
     result.phase = "done";
     await client.close();

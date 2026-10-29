@@ -53,6 +53,11 @@ except ImportError:  # pragma: no cover
     ZipStream = None
 
 from acp.api.job_status_view import build_live_status, resolve_display_method
+from acp.api.submission_contract import (
+    SubmissionContractError,
+    validate_workflow_submission,
+)
+from acp.scheduler.resources import validate_resource_request
 from acp.api.routes import (
     get_backends as legacy_get_backends,
 )
@@ -471,10 +476,14 @@ def _command_identity(request: Request, *, project_id: str | None = None) -> Any
         return CommandIdentity.from_verified_http(
             resolved, project_id=project_id, entry_class=EntryClass.HTTP
         )
+    # No verified credential: the command runs as the Controller process, so
+    # the entry class is CONTROLLER — the same label the model gateway and the
+    # research saga use. A transport label ("http") here forked the derived
+    # ResearchIdentity from every other local path for the same request.
     return CommandIdentity.from_server(
         _server_identity(request),
         project_id=project_id,
-        entry_class=EntryClass.HTTP,
+        entry_class=EntryClass.CONTROLLER,
     )
 
 
@@ -2558,7 +2567,12 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
     # before any resolution/snapshot/dispatch side effect, and the canonical form
     # is the same object MCP and the CLI build (so the request digest and the
     # effective JobSpec cannot drift per entry).
+    raw_input = req.input
     request_payload = req.model_dump(exclude_none=True)
+    if raw_input is None:
+        # An omitted input block keeps the legacy create-now-fail-later shape;
+        # the field policy still sees an (empty) object, not a missing field.
+        request_payload["input"] = {}
     try:
         canonical_submit_request(request_payload, entry="http")
         normalized_submit = normalize_submit(request_payload)
@@ -2567,6 +2581,21 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         # other shape violation keeps the long-standing 400 (budget/type/required).
         raise _command_error(
             _field_policy_status(exc), exc.code, exc.message, params=dict(exc.params)
+        ) from exc
+    # Semantic contract (P1): unknown method keys / illegal enums / missing
+    # input are refused here, before classification, approval or dispatch.
+    req.input = req.input or {}
+    try:
+        validate_workflow_submission(
+            req.workflow, input=raw_input, method=req.method, resources=req.resources
+        )
+    except SubmissionContractError as exc:
+        raise _command_error(422, "input_invalid", str(exc), params=exc.params()) from exc
+    try:
+        validate_resource_request(req.resources or {})
+    except ValueError as exc:
+        raise _command_error(
+            422, "input_invalid", str(exc), params={"field": "resources", "rule": "invalid_resource"}
         ) from exc
     fingerprint = normalized_submit.get("preflight_fingerprint")
     if fingerprint:
@@ -5015,6 +5044,20 @@ def get_sampling_frame(
     )
 
 
+def _with_artifact_descriptors(
+    model: V1JobRecordModel, read_root: Path | None, attempt: int
+) -> V1JobRecordModel:
+    """Attach the bounded manifest projection from the controlled read root."""
+    from acp.api.artifact_descriptors import describe_job_artifacts
+
+    descriptors, truncated = describe_job_artifacts(read_root, attempt=attempt)
+    if not descriptors and not truncated:
+        return model
+    return model.model_copy(
+        update={"artifacts": descriptors, "artifacts_truncated": truncated}
+    )
+
+
 @router.get("/jobs/{job_id}", response_model=V1JobRecordModel)
 def get_job(job_id: str, request: Request) -> V1JobRecordModel:
     manager = _manager(request)
@@ -5022,10 +5065,13 @@ def get_job(job_id: str, request: Request) -> V1JobRecordModel:
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     model = _record_to_v1_model(record, include_release_facts=True)
+    model = _enrich_job_snapshot(record, model, include_event=False)
     task_row = manager.tasks.get(job_id)
     if task_row is not None:
         model = _enrich_v1_with_names(model, resolve_task_names(task_row))
-    return model
+    return _with_artifact_descriptors(
+        model, _job_read_root(request, record), record.attempt
+    )
 
 
 @router.get("/jobs/{job_id}/summary", response_model=V1JobRecordModel)
@@ -5039,7 +5085,9 @@ def get_job_summary(job_id: str, request: Request) -> V1JobRecordModel:
     task_row = manager.tasks.get(job_id)
     if task_row is not None:
         model = _enrich_v1_with_names(model, resolve_task_names(task_row))
-    return model
+    return _with_artifact_descriptors(
+        model, _job_read_root(request, record), record.attempt
+    )
 
 
 # ---------------------------------------------------------------------- #
@@ -8731,7 +8779,10 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
             f"Unsupported workflow '{req.workflow}'",
             params={"field": "workflow", "allowed": list(PUBLIC_WORKFLOWS)},
         )
+    raw_input = req.input
     payload = req.model_dump(exclude_none=True)
+    if raw_input is None:
+        payload["input"] = {}
     try:
         validate_request_fields(payload, request_kind="preflight", entry="http")
         normalize_preflight(payload)
@@ -8749,6 +8800,20 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
             str(detail.get("code") or "input_invalid"),
             str(detail.get("message") or exc.detail),
             params=dict(detail.get("params") or {}),
+        ) from exc
+    # Same semantic contract as create_job, before any snapshot/estimate work.
+    req.input = req.input or {}
+    try:
+        validate_workflow_submission(
+            req.workflow, input=raw_input, method=req.method, resources=req.resources
+        )
+    except SubmissionContractError as exc:
+        raise _command_error(422, "input_invalid", str(exc), params=exc.params()) from exc
+    try:
+        validate_resource_request(req.resources or {})
+    except ValueError as exc:
+        raise _command_error(
+            422, "input_invalid", str(exc), params={"field": "resources", "rule": "invalid_resource"}
         ) from exc
     manager = _manager(request)
     project_id = _research_project(manager, req.project_id)

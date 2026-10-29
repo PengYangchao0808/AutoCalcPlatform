@@ -1,0 +1,254 @@
+{
+  "receipt_count": 108,
+  "receipt_matches": 108,
+  "receipt_failures": [],
+  "artifacts_total": 31,
+  "artifacts_present": 0,
+  "artifacts_matching": 0,
+  "artifacts": [
+    {
+      "id": "python-roles-acp_web-0.3.0-py3-none-any.whl",
+      "kind": "python-wheel",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/python/roles/acp_web-0.3.0-py3-none-any.whl",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "python-roles-acp_worker-0.3.0-py3-none-any.whl",
+      "kind": "python-wheel",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/python/roles/acp_worker-0.3.0-py3-none-any.whl",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "python-roles-cccp-0.3.0-py3-none-any.whl",
+      "kind": "python-wheel",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/python/roles/cccp-0.3.0-py3-none-any.whl",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "python-roles-acp-web-0.3.0.tar.gz",
+      "kind": "python-sdist",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/python/roles/acp-web-0.3.0.tar.gz",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "python-roles-acp-worker-0.3.0.tar.gz",
+      "kind": "python-sdist",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/python/roles/acp-worker-0.3.0.tar.gz",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "python-roles-cccp-0.3.0.tar.gz",
+      "kind": "python-sdist",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/python/roles/cccp-0.3.0.tar.gz",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "python-root-acp-0.3.0-py3-none-any.whl",
+      "kind": "python-wheel",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/python/root/acp-0.3.0-py3-none-any.whl",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "python-root-acp-0.3.0.tar.gz",
+      "kind": "python-sdist",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/python/root/acp-0.3.0.tar.gz",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "rph-research",
+      "kind": "rph-package",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/rph/install-surface/rph-research-0.0.0.tgz",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "rph-bridge",
+      "kind": "rph-package",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/rph/install-surface/rph-bridge-0.0.0.tgz",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "rph-dsh-bundle",
+      "kind": "rph-package",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/rph/install-surface/rph-dsh-bundle-0.0.0.tgz",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "rph-cli",
+      "kind": "rph-package",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/rph/install-surface/rph-cli-0.0.0.tgz",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "rph-surface-rph-install-package-json",
+      "kind": "rph-package",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/rph/install-surface/rph-install.package.json",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "rph-surface-package-json",
+      "kind": "rph-package",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/rph/install-surface/package.json",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "rph-surface-pnpm-workspace-yaml",
+      "kind": "rph-package",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/rph/install-surface/pnpm-workspace.yaml",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "rph-surface-pnpm-lock-yaml",
+      "kind": "rph-package",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/rph/install-surface/pnpm-lock.yaml",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "rph-surface-rph-packages-json",
+      "kind": "rph-package",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/rph/install-surface/rph-packages.json",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "rph-surface-SHA256SUMS",
+      "kind": "rph-package",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/rph/install-surface/SHA256SUMS",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "rph-surface-README-md",
+      "kind": "rph-package",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/rph/install-surface/README.md",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "rph-surface-verify-install-mjs",
+      "kind": "rph-package",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/rph/install-surface/verify-install.mjs",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "plugin-external",
+      "kind": "plugin-wheel",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/plugins/acp2_external_science_validator-1.0.0-py3-none-any.whl",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "plugin-upgrade-v1",
+      "kind": "plugin-wheel",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/plugins/acp2_upgrade_science_validator-1.0.0-py3-none-any.whl",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "plugin-upgrade-v2",
+      "kind": "plugin-wheel",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/plugins/acp2_upgrade_science_validator-2.0.0-py3-none-any.whl",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "static-assets-workbench",
+      "kind": "static-asset-bundle",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/static-assets/static-assets.manifest.json",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "contracts-acp2",
+      "kind": "contract-bundle",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/contracts/acp2-contracts.tar.gz",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "science-nmr-model-assets",
+      "kind": "science-asset",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/science/cccp-nmr-model-assets.tar.gz",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "docs-release",
+      "kind": "document",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/docs/acp-release-docs.tar.gz",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "python-wheelhouse",
+      "kind": "document",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/python/wheelhouse-manifest.json",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "python-wheelhouse-checksums",
+      "kind": "document",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/python/wheelhouse/SHA256SUMS",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "evidence-receipts",
+      "kind": "document",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/evidence/coverage-receipts.tar.gz",
+      "exists": false,
+      "match": false
+    },
+    {
+      "id": "evidence-receipts-manifest",
+      "kind": "document",
+      "uri": "/ACPServer/acp2-artifacts/remediation/m5-03/evidence/coverage-receipts-manifest.json",
+      "exists": false,
+      "match": false
+    }
+  ],
+  "coverage_summary": {
+    "checkpoints_open": 1,
+    "checkpoints_total": 32,
+    "full_release_status": "NOT_VERIFIED",
+    "gaps_open": 5,
+    "gaps_total": 26,
+    "h_rows_open": 3,
+    "h_rows_total": 8,
+    "notes": "Final ledger after the M5-03 independent operator sign-off (two rounds, 2026-10-28). Closed this round: M5-03 and G01/G06/G16/G17/G19. Remaining open rows are environment/credential-bound, not implementation-bound: M3-03 production model-gateway credential rotation (G05/G10/G13 follow it), and the DA science rows G15/G18 with H3/H4 (DA-ENV-LSF NOT_VERIFIED, single-bounded-attempt recipe gap); H4 also carries the honestly-refuted DA endpoint proposition from the real ORCA run. M0-02c Ruff hygiene stays pending outside the required chain; the three DEFERRED rows stay deferred.",
+    "tasks_open": 1,
+    "tasks_total": 39
+  },
+  "formal_gate": {
+    "allowed": false,
+    "blocking_rows": [
+      "G05",
+      "G10",
+      "G13",
+      "G15",
+      "G18",
+      "H3",
+      "H4",
+      "H7",
+      "M3-03"
+    ],
+    "reason": "Required rows still open: M3-03 (production model-gateway credential rotation), G05/G10/G13 (same credential), G15/G18 with H3/H4 (DA-ENV-LSF and the single-bounded-attempt DA recipe gap); the declaration is final for this candidate and every open row is honestly recorded."
+  }
+}

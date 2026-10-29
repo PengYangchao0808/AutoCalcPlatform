@@ -680,4 +680,22 @@ module.exports.register = async function (h) {
     const sc2 = bareSandbox.window.ACPVisualization.scene.create({ viewer });
     assertEq(sc2.frame(), null, "missing mol3d namespace → null, no throw");
   });
+
+  await test("scene: resize() no-ops on unchanged container size; native call only on change (F09)", () => {
+    const viz = loadScene();
+    const rig = makeRig();
+    const container = { isConnected: true, clientWidth: 300, clientHeight: 200 };
+    const sc = viz.scene.create({ viewer: rig.viewer, container });
+    assertEq(callsNamed(rig.calls, "resize").length, 0, "creation does not resize");
+    assertEq(sc.resize(), true, "first resize applies (no recorded size yet)");
+    assertEq(callsNamed(rig.calls, "resize").length, 1, "native resize ran once");
+    assertEq(sc.resize(), true, "identical size → guarded success");
+    assertEq(callsNamed(rig.calls, "resize").length, 1, "no canvas/WebGL context churn");
+    container.clientWidth = 460;
+    assertEq(sc.resize(), true, "changed size applies");
+    assertEq(callsNamed(rig.calls, "resize").length, 2, "native resize ran for the new size");
+    sc.dispose();
+    assertEq(sc.resize(), false, "disposed resize fails");
+    assertEq(sc.lastError().method, "resize", "failure recorded on the right method");
+  });
 };

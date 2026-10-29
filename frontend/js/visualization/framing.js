@@ -96,9 +96,16 @@ ACPVisualization.framing = (function () {
           if (epoch !== framingState.epoch) return;
           if (framingState.pending) return;
           if (!container.isConnected) return;
+          var w = container.clientWidth;
+          var h = container.clientHeight;
+          // Skip when the container did not actually change size: 3Dmol's
+          // resize() destroys and recreates the canvas (and its WebGL
+          // context), so spurious observer fires — including the canvas swap
+          // itself — must not start that teardown loop (audit F09).
+          if (w <= 0 || h <= 0 || (w === framingState.lastW && h === framingState.lastH)) return;
           var v = getViewer();
           if (!v) return;
-          try { v.resize(); v.render(); } catch (e) {}
+          try { v.resize(); v.render(); framingState.lastW = w; framingState.lastH = h; } catch (e) {}
         }, 100);
       });
       framingState.observer.observe(container);
