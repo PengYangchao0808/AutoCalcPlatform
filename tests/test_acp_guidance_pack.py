@@ -23,8 +23,8 @@ from acp.api.guidance_pack import (
     PACK_VERSION,
     audit_pack,
     get_guide,
-    guide_ids,
     guidance_index,
+    guide_ids,
     read_guide,
     workflow_guide_map,
 )
@@ -141,7 +141,13 @@ def test_pessearch_rejects_method_levels_and_bad_enums() -> None:
 
     base_input = {
         "source": {"source_type": "xyz_text", "xyz_text": "3\n\nO 0 0 0\nH 1 0 0\nH 0 1 0"},
-        "coordinate": {"kind": "distance", "atoms": [0, 1], "start": 1.0, "end": 2.4, "n_points": 9},
+        "coordinate": {
+            "kind": "distance",
+            "atoms": [0, 1],
+            "start": 1.0,
+            "end": 2.4,
+            "n_points": 9,
+        },
     }
     validate_workflow_submission(
         "PESsearch", input=base_input, method={"mode": "bond_length_scan"}, resources=None

@@ -21,6 +21,7 @@ api/
 ├── __init__.py                    # 5 L — __all__ = ["server", "routes", "schemas"] (module names, not symbols)
 ├── server.py                      # 476 L — create_app() factory (SCHEDULER-LESS; JobManager/admission/research store on lifespan), deployment tier + OriginPolicy/identity middleware, mounts 13 routers including legacy /api, serves frontend at / and /legacy/
 ├── routes.py                      # 17 routes — /api status/health/capabilities/identity, backends/workflows/protocols, job create/list/get/cancel/logs/files, SSE (/events/stream)
+├── v1_guidance.py                  # 指南只读路由（GET /api/v1/guidance[/{guide_id}]，plan 2026-10-30 §5；内容包 `guidance_pack.py` 纯数据、版本+digest+字节预算）
 ├── v1_routes.py                   # 8970 L / 104 routes — job submission, uploads, tasks, detail, recovery matrix, edit-recalculate, PES review/energy graph/IRC, availability/prepared/prepare/preflight/operations/analyze/events
 ├── v1_science.py                  # 171 L / 1 route — GET /api/v1/science/tasks/{job_id}/attempts/{attempt}/status (own gate chain; read-root resolver; 4 wire fields)
 ├── v1_schemas.py                  # 2075 L — V1 Pydantic models (incl. V1PreflightRequest, JobLiveStatus/JobLiveMetric)

@@ -21,7 +21,6 @@ from acp.api.guidance_pack import (
     GUIDE_FORMAT,
     MAX_GUIDE_BYTES,
     PACK_VERSION,
-    get_guide,
     guidance_index,
     guide_ids,
     read_guide,

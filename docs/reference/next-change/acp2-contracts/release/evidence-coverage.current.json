@@ -229,7 +229,7 @@
       "owner": "B",
       "parent": "M1-01",
       "receipt": "tests/test_acp2_runtime_contracts.py",
-      "receipt_sha256": "3e8f68ce8ce18becacf91bc0372987f64f0c02c273fd3fae887e8b16fdf22dec",
+      "receipt_sha256": "c05471b6891c7ebff98c5272a2973b234e985453f0f95638a11981d089483f09",
       "required_observations": {
         "negotiation": "present",
         "version_axis": "present"
@@ -254,7 +254,7 @@
       "owner": "B",
       "parent": "M1-01",
       "receipt": "tests/test_acp2_runtime_contracts.py",
-      "receipt_sha256": "3e8f68ce8ce18becacf91bc0372987f64f0c02c273fd3fae887e8b16fdf22dec",
+      "receipt_sha256": "c05471b6891c7ebff98c5272a2973b234e985453f0f95638a11981d089483f09",
       "required_observations": {
         "artifact_schema": "present",
         "operation_schema": "present"
@@ -813,7 +813,7 @@
       "status": "CLOSED"
     }
   ],
-  "coverage_sha256": "ca643765492c0ca33a6081c4858bc8e594ff2c72d4d75c142c4afe6a79d9fc87",
+  "coverage_sha256": "530540421eb7e9efdeebbac7ad49d862ca5bdf3945804a751324a93443794a26",
   "deferred_rows": [
     {
       "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
@@ -2410,7 +2410,7 @@
       "notes": "MCP idempotency now routes through CommandIdentity; prepare key v2 and lookup-only auto_ keys are covered by the process/backends tests. Revocation is re-tested on the remote path by M4-03.",
       "owner": "B + C-RPH",
       "receipt": "tests/test_acp2_runtime_mcp_process.py",
-      "receipt_sha256": "1644ac90b5078c066dbf02105a2206f550e2cd49334aa236271d04661072b521",
+      "receipt_sha256": "09355ba02b9712968feefc9ca8a8be526f5101d1c0f913b78e081f35ab7c5390",
       "required_observations": {
         "auto_lookup_only": "present",
         "mcp_idempotency": "present",
@@ -2443,7 +2443,7 @@
       "notes": "Exhaustive v1 field policy and cross-entry JobSpec equivalence with digest v2; the HTTP prepare route is the single prepare-field authority (M0-06 followup 927d92f).",
       "owner": "B",
       "receipt": "tests/test_acp2_runtime_contracts.py",
-      "receipt_sha256": "3e8f68ce8ce18becacf91bc0372987f64f0c02c273fd3fae887e8b16fdf22dec",
+      "receipt_sha256": "c05471b6891c7ebff98c5272a2973b234e985453f0f95638a11981d089483f09",
       "required_observations": {
         "digest_v2": "present",
         "jobspec_equivalence": "present",
@@ -2709,7 +2709,7 @@
       "notes": "Application/MCP/artifact/analysis contract unification and the reviewed wire-id allowlist (M1-01a/b/c). Later additive contract versions are registered in the manifest.",
       "owner": "B，A/C 消费确认",
       "receipt": "tests/test_acp2_runtime_contracts.py",
-      "receipt_sha256": "3e8f68ce8ce18becacf91bc0372987f64f0c02c273fd3fae887e8b16fdf22dec",
+      "receipt_sha256": "c05471b6891c7ebff98c5272a2973b234e985453f0f95638a11981d089483f09",
       "required_observations": {
         "application_api": "present",
         "operation_schema": "present",

@@ -150,9 +150,7 @@ def test_wired_port_returns_versioned_payload() -> None:
     data = result["structuredContent"]["data"]
     assert data["guide_id"] == "workflow.PESsearch"
     assert data["version"] == "1.0.0"
-    assert port.requests == [
-        {"guide_id": "workflow.PESsearch", "section": "purpose"}
-    ]
+    assert port.requests == [{"guide_id": "workflow.PESsearch", "section": "purpose"}]
 
 
 def test_unwired_port_is_a_typed_refusal() -> None:

@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """Versioned agent guidance content pack (plan 2026-10-30 §4/§13/§14).
 
 The pack is pure data: no I/O, no service state, no science facts of its own.

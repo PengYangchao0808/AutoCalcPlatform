@@ -1589,7 +1589,7 @@ class GuidancePort(Protocol):
     """
 
     def guidance(self, request: Mapping[str, Any], *, workspace_id: str) -> Any:
-        """Read one guide (``guide_id`` required; ``section``/``version``/``max_bytes`` optional)."""
+        """Read one guide (``guide_id`` required; optional section/version/max_bytes)."""
         ...
 
 

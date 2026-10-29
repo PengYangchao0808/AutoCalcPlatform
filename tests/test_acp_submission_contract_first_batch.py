@@ -11,8 +11,8 @@ from __future__ import annotations
 import pytest
 
 from acp.api.submission_contract import (
-    SubmissionContractError,
     WORKFLOW_CONTRACTS,
+    SubmissionContractError,
     validate_workflow_submission,
 )
 
@@ -22,7 +22,13 @@ _XYZ = "3\n\nO 0.0 0.0 0.0\nH 0.957 0.0 0.0\nH -0.24 0.927 0.0"
 def _pes_input() -> dict[str, object]:
     return {
         "source": {"source_type": "xyz_text", "xyz_text": _XYZ, "charge": 0, "multiplicity": 1},
-        "coordinate": {"kind": "distance", "atoms": [0, 1], "start": 0.957, "end": 2.4, "n_points": 12},
+        "coordinate": {
+            "kind": "distance",
+            "atoms": [0, 1],
+            "start": 0.957,
+            "end": 2.4,
+            "n_points": 12,
+        },
         "coordinates": [
             {"kind": "distance", "atoms": [0, 1], "start": 0.957, "end": 2.4, "n_points": 12},
             {"kind": "distance", "atoms": [0, 2], "start": 0.957, "end": 2.4, "n_points": 12},
@@ -52,7 +58,10 @@ def test_pessearch_bond_scan_positive_passes() -> None:
     # the manifest-path method knobs stay legal without mode
     validate_workflow_submission(
         "PESsearch",
-        input={"source_job_id": "20261030_001_Confsearch", "from_artifact": "RESULT/confsearch_manifest.json"},
+        input={
+            "source_job_id": "20261030_001_Confsearch",
+            "from_artifact": "RESULT/confsearch_manifest.json",
+        },
         method={"strategy": "guided_scan", "select": "rank1"},
         resources=None,
     )
@@ -68,7 +77,10 @@ def test_pessearch_unknown_method_and_input_keys_are_refused() -> None:
     assert excinfo.value.params()["rule"] == "unknown_field"
     with pytest.raises(SubmissionContractError) as excinfo:
         validate_workflow_submission(
-            "PESsearch", input={**inp, "bar": 1}, method={"mode": "bond_length_scan"}, resources=None
+            "PESsearch",
+            input={**inp, "bar": 1},
+            method={"mode": "bond_length_scan"},
+            resources=None,
         )
     assert excinfo.value.params()["field"] == "input.bar"
 
@@ -140,12 +152,16 @@ def test_scan_scants_is_opt_in_and_levels_are_schema_bound() -> None:
 def test_scan_unknown_keys_refused() -> None:
     with pytest.raises(SubmissionContractError):
         validate_workflow_submission(
-            "scan", input=_scan_input(), method={"coordinate": "0,1,0.9,2.4", "max_cycles": 99},
+            "scan",
+            input=_scan_input(),
+            method={"coordinate": "0,1,0.9,2.4", "max_cycles": 99},
             resources=None,
         )
     with pytest.raises(SubmissionContractError):
         validate_workflow_submission(
-            "scan", input={**_scan_input(), "peak": 1}, method={"coordinate": "0,1,0.9,2.4"},
+            "scan",
+            input={**_scan_input(), "peak": 1},
+            method={"coordinate": "0,1,0.9,2.4"},
             resources=None,
         )
 

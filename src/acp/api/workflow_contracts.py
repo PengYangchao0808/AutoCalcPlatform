@@ -377,7 +377,9 @@ def _pes_block() -> dict[str, Any]:
     return {
         "workflow": "PESsearch",
         "coverage": "partial",
-        "partial_scope": "mode=bond_length_scan direct branch only; the manifest path is not published",
+        "partial_scope": (
+            "mode=bond_length_scan direct branch only; the manifest path is not published"
+        ),
         "gaps": [
             "input.protocol level values are type-checked only; per-level value "
             "semantics stay with the pes_bond_scan schema and the pydantic bond "

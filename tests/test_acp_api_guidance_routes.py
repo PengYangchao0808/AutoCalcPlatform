@@ -93,17 +93,13 @@ def test_unknown_guide_is_a_typed_404_with_suggestion(client: TestClient) -> Non
 
 
 def test_unknown_section_is_a_typed_422(client: TestClient) -> None:
-    response = client.get(
-        _READ.format(guide_id="workflow.PESsearch"), params={"section": "nope"}
-    )
+    response = client.get(_READ.format(guide_id="workflow.PESsearch"), params={"section": "nope"})
     assert response.status_code == 422
     assert response.json()["detail"]["code"] == "input_invalid"
 
 
 def test_stale_cached_version_is_a_typed_409(client: TestClient) -> None:
-    response = client.get(
-        _READ.format(guide_id="workflow.PESsearch"), params={"version": "0.9.0"}
-    )
+    response = client.get(_READ.format(guide_id="workflow.PESsearch"), params={"version": "0.9.0"})
     assert response.status_code == 409
     detail = response.json()["detail"]
     assert detail["code"] == "revision_conflict"

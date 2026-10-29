@@ -164,6 +164,10 @@ _SCAN_METHOD_KEYS: frozenset[str] = frozenset(
         "use_scants",
         "levels",
         "schema_id",
+        # The Workbench scan wizard sends the capability profile selection
+        # alongside the coordinates (scheduler/capabilities.py ``pes_scan``
+        # exposes a ``default`` profile); metadata-only for the runner.
+        "profile_id",
     }
 )
 
@@ -390,7 +394,14 @@ WORKFLOW_CONTRACTS: dict[str, WorkflowContract] = {
             }
         ),
         required_input_any=("input", "smiles", "source", "input_artifact"),
-        levels=_level_fields("dft_scan"),
+        levels={
+            **_level_fields("dft_scan"),
+            # Consumers beyond the UI schema: the edit-recalculate path reads
+            # 1-based ``scan_coordinate_atoms`` from the scan level
+            # (scheduler/edit_parameters.py); declaring it keeps a legal
+            # Workbench payload submittable instead of silently refused.
+            "scan": _level_fields("dft_scan")["scan"] | {"scan_coordinate_atoms"},
+        },
     ),
 }
 

@@ -54,6 +54,7 @@ PYTEST_COUNT_RE = re.compile(r"(\d+)\s+passed")
 P1_TOOLS = frozenset(
     {
         "acp_capabilities",
+        "acp_get_guidance",
         "acp_preflight",
         "acp_submit",
         "acp_status",

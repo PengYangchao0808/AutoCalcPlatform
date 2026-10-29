@@ -201,9 +201,9 @@
     },
     "tools": {
       "type": "array",
-      "description": "The frozen P1 allowlist. Exactly eight entries, in this order; names and input schemas are part of the contract.",
-      "minItems": 8,
-      "maxItems": 8,
+      "description": "The P1 allowlist: the frozen eight plus the additive read-only acp_get_guidance (2026-10-30 guidance batch). Exactly nine entries; names and input schemas are part of the contract.",
+      "minItems": 9,
+      "maxItems": 9,
       "items": {
         "$ref": "#/$defs/tool"
       },

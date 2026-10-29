@@ -485,6 +485,7 @@ def test_mcp_launch_tool_inputs_match_the_runtime_and_application_tables() -> No
         "acp_prepare_artifact": 2,
         "acp_read_artifact": 2,
         "acp_analyze": 2,
+        "acp_get_guidance": 1,
     }
     declared = schema["$defs"]["tool"]["properties"]["input_schema_version"]
     assert declared["type"] == "integer"
@@ -529,6 +530,7 @@ def test_mcp_launch_template_is_placeholder_only(
         "acp_prepare_artifact",
         "acp_read_artifact",
         "acp_analyze",
+        "acp_get_guidance",
     ]
     for tool in launch_template["instance"]["tools"]:
         assert tool["inputSchema"] == tool_inputs[tool["name"]]
