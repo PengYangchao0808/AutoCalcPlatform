@@ -67,3 +67,11 @@
 - `_execution_verified` 现在重算 JSON/XYZ 文件摘要，并绑定本次 `input_path`/`rcfile_path` 的摘要；成员列表必须非空且含该构象。
 - 报告公开投影去掉 `cwd/input_path/rcfile_path` 与绝对 argv 前缀（`<run>`），避免正文内容策略拒绝合法报告。
 - 仍 **DEFERRED**：同 part 旧产物与模板/成员在文件层面的完整绑定、真实 QC 执行、历史回执改写；这些写入 residual，不冒充已关闭。
+
+
+## 第三轮（astra 复审后，降级声明）
+
+- 本轮**不再声称 verified**：`_execution_verified` 统一返回 False，`executed_status=unverified`；另给 `execution_facts_well_formed` 仅表示事实形状/文件摘要一致。
+- 公开报告改为白名单字段，不发布 `argv`（可能含绝对可执行路径）。
+- 非 UTF-8 正文（完整或截断）统一 `artifact_body_unverifiable`，不再用 surrogateescape 放行。
+- **仍 DEFERRED**：完整正文预扫描（截断前）、本次执行/成员/模板的完整绑定、attempt 归属、历史回执改写、SDK 生产整链、真实 QC、残留门禁扩展与历史清理；历史 blob 仍可达、敏感性 NOT_VERIFIED。局部修复不代表整体验收通过。

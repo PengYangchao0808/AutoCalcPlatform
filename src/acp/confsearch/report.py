@@ -79,6 +79,7 @@ def write_final_report(
     metadata = outcome.workflow_metadata or {}
     executed = dict((metadata.get("censo_execution") or {}))
     verified = _execution_verified(executed)
+    well_formed = _execution_well_formed(executed)
     payload: dict[str, Any] = {
         "schema_version": FINAL_REPORT_SCHEMA_VERSION,
         "workflow": "Confsearch",
@@ -102,6 +103,7 @@ def write_final_report(
             "requested": requested_levels,
             "executed": _publish_execution(executed),
             "executed_status": "verified" if verified else "unverified",
+            "execution_facts_well_formed": well_formed,
             "final_part": executed.get("final_part"),
             "energy_kind": outcome.energy_kind,
         }
@@ -165,6 +167,16 @@ def register_final_report(mol_dir: Path, report_path: Path, xyz_path: Path) -> N
 
 
 def _execution_verified(executed: Mapping[str, Any]) -> bool:
+    """Reserved for the full binding; this round deliberately claims nothing.
+
+    File digests/members are still cross-checked by the caller for shape, but
+    nothing proves the facts came from *this* attempt, so ``verified`` would be
+    an over-claim.  ``_execution_verified`` stays the seam for the later fix.
+    """
+    return False
+
+
+def _execution_well_formed(executed: Mapping[str, Any]) -> bool:
     """Require a successful run and both artifact digests, not just a dict."""
     if not isinstance(executed, Mapping) or not executed:
         return False
@@ -279,18 +291,19 @@ def _publish_execution(executed: Mapping[str, Any]) -> dict[str, Any]:
     """
     if not executed:
         return {}
-    cwd = str(executed.get("cwd") or "")
-    published = {
-        key: value
-        for key, value in executed.items()
-        if key not in {"cwd", "input_path", "rcfile_path"}
-    }
-    argv = executed.get("argv")
-    if isinstance(argv, list):
-        published["argv"] = [
-            str(item).replace(cwd, "<run>") if cwd else str(item) for item in argv
-        ]
-    published["workspace"] = "<run>" if cwd else ""
+    allowed = (
+        "returncode",
+        "final_part",
+        "enabled_parts",
+        "conformers",
+        "preset",
+        "temperature_k",
+        "input_sha256",
+        "rcfile_sha256",
+    )
+    published = {key: executed[key] for key in allowed if key in executed}
+    published["workspace"] = "<run>" if executed.get("cwd") else ""
+    # argv is intentionally not published: it may embed absolute executables.
     return published
 
 

@@ -2927,16 +2927,14 @@ class McpServer:
         try:
             decoded = raw.decode("utf-8")
         except UnicodeDecodeError:
-            if data.get("truncated"):
-                # A slice cannot prove the whole bytes are safe; binary
-                # truncation is refused this round (residual: full-body scan).
-                raise McpToolError(
-                    mo.ErrorCode.UNSUPPORTED_CAPABILITY,
-                    "truncated non-UTF-8 artifact body cannot be verified",
-                    params={"field": "body", "rule": "artifact_body_unverifiable"},
-                    retryable=False,
-                ) from None
-            decoded = raw.decode("utf-8", errors="surrogateescape")
+            # Binary bodies cannot be content-checked this round; neither a
+            # slice nor the whole blob is returned (residual: binary allowlist).
+            raise McpToolError(
+                mo.ErrorCode.UNSUPPORTED_CAPABILITY,
+                "non-UTF-8 artifact body cannot be verified",
+                params={"field": "body", "rule": "artifact_body_unverifiable"},
+                retryable=False,
+            ) from None
         if redact(decoded) != decoded:
             raise McpToolError(
                 mo.ErrorCode.UNSUPPORTED_CAPABILITY,

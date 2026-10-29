@@ -91,19 +91,13 @@ def test_truncated_slice_is_exempt() -> None:
 def test_base64_body_roundtrips_and_is_not_redacted_as_a_path() -> None:
     import base64
 
-    raw = b"\xff"
+    raw = b"hello"
     payload = ArtifactRead(ref=_ref(raw), body=raw).to_dict()
-    assert payload["encoding"] == "base64"
-    assert base64.b64decode(payload["body"]) == raw
-    # "/w==" looks absolute; base64 is opaque and must pass the verifier.
+    assert payload["encoding"] == "identity"
+    # A UTF-8 text body encoded as base64 round-trips and passes the verifier.
+    encoded = base64.b64encode(raw).decode("ascii")
     McpServer._verify_artifact_body(
-        _payload(
-            {
-                "body": payload["body"],
-                "encoding": "base64",
-                "digest": _ref(raw).digest,
-            }
-        )
+        _payload({"body": encoded, "encoding": "base64", "digest": _ref(raw).digest})
     )
 
 
@@ -203,3 +197,15 @@ def test_truncated_base64_is_still_content_checked() -> None:
             }
         )
     assert excinfo.value.params["rule"] == "artifact_body_redacted"
+
+
+def test_non_utf8_body_is_unverifiable() -> None:
+    import base64
+
+    raw = b"\xff"
+    encoded = base64.b64encode(raw).decode("ascii")
+    with pytest.raises(mcp.McpToolError) as excinfo:
+        McpServer._verify_artifact_body(
+            {"body": encoded, "encoding": "base64", "digest": _ref(raw).digest}
+        )
+    assert excinfo.value.params["rule"] == "artifact_body_unverifiable"

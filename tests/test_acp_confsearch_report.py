@@ -492,15 +492,13 @@ def test_method_identity_records_declared_vs_executed(tmp_path: Path) -> None:
     )
     payload = _read_json(report_path)
     identity = payload["method_identity"]
-    assert identity["executed_status"] == "verified"
+    # This round deliberately claims no verified execution (astra re-review).
+    assert identity["executed_status"] == "unverified"
     assert identity["executed"]["returncode"] == 0
+    assert identity["execution_facts_well_formed"] is True
     roles = {c["conf_id"]: c for c in payload["conformers"]}
-    # The run was a screening part: refined DFT entries stay unverified.
-    assert roles["conf_0001"]["method_role"] == "refinement_sp"
-    assert roles["conf_0001"]["method_evidence"] == "unverified"
-    assert roles["conf_0002"]["method_role"] == "screening"
-    assert roles["conf_0002"]["method_evidence"] == "executed"
-    assert roles["conf_0002"]["energy_kind_verified"] is True
+    assert all(c["method_evidence"] == "unverified" for c in payload["conformers"])
+    assert all(c["energy_kind_verified"] is False for c in payload["conformers"])
 
 
 def test_method_identity_is_unverified_without_execution_facts(tmp_path: Path) -> None:
@@ -571,10 +569,8 @@ def test_screening_evidence_must_name_the_conformer(tmp_path: Path) -> None:
     )
     payload = _read_json(report_path)
     by_id = {c["conf_id"]: c for c in payload["conformers"]}
-    assert by_id["conf_0002"]["method_evidence"] == "executed"
-    assert by_id["conf_0002"]["energy_kind_verified"] is True
+    assert by_id["conf_0002"]["method_evidence"] == "unverified"
     assert by_id["conf_0001"]["method_evidence"] == "unverified"
-    assert by_id["conf_0001"]["energy_kind_verified"] is False
 
 
 def test_execution_file_tampering_is_not_verified(tmp_path: Path) -> None:
@@ -625,5 +621,6 @@ def test_report_does_not_publish_absolute_workspace_paths(tmp_path: Path) -> Non
     payload = _read_json(report_path)
     executed = payload["method_identity"]["executed"]
     assert "cwd" not in executed
+    assert "argv" not in executed
     assert executed["workspace"] == "<run>"
-    assert all(str(tmp_path) not in item for item in executed["argv"])
+    assert str(tmp_path) not in json.dumps(executed)
