@@ -49,6 +49,18 @@ class _ControllerState:
         self.submit_posts = 0
         self.status_paths: list[str] = []
         self.capabilities_posts: list[dict[str, Any]] = []
+        import hashlib as _hashlib
+
+        self.chain_body = b"hello chain"
+        self.chain_digest = "sha256:" + _hashlib.sha256(self.chain_body).hexdigest()
+        self.chain_ref = {
+            "task_id": "job_chain",
+            "attempt": 1,
+            "artifact_id": "final_report",
+            "generation": 1,
+            "digest": self.chain_digest,
+            "size_bytes": len(self.chain_body),
+        }
         self.long_description = "capability descriptor " * 500
 
 
@@ -94,6 +106,65 @@ class _ControllerHandler(http.server.BaseHTTPRequestHandler):
                     "tools": sorted(EXPECTED_TOOLS),
                     "protocol_version": PROTOCOL_VERSION,
                     "description": self.state.long_description,
+                },
+            )
+            return
+        if self.path == "/api/v1/jobs/job_chain":
+            self.state.status_paths.append(self.path)
+            self._send_json(
+                200,
+                {
+                    "id": "job_chain",
+                    "spec": {"workflow": "Confsearch"},
+                    "state": "completed",
+                    "status": "completed",
+                    "attempt": 1,
+                    "revision": 3,
+                    "current_stage": "finalize",
+                    "progress": 1.0,
+                    "live_status": {"stage_label": "done", "metrics": []},
+                    "artifacts": [
+                        {
+                            "resource_id": "final_report",
+                            "relative_path": "RESULT/confsearch/final_report.json",
+                            "kind": "file",
+                            "label": "Final report",
+                            "size_bytes": None,
+                            "prepared": False,
+                        }
+                    ],
+                    "artifacts_truncated": False,
+                },
+            )
+            return
+        if self.path.startswith("/api/v1/jobs/job_chain/prepared/"):
+            from urllib.parse import parse_qs, urlparse
+
+            parsed = urlparse(self.path)
+            resource = parsed.path.rsplit("/", 1)[-1]
+            query = parse_qs(parsed.query)
+            if resource != "final_report":
+                self._send_json(404, {"detail": "not prepared"})
+                return
+            if query.get("expected_revision", ["1"])[0] != "1":
+                self._send_json(409, {"code": "revision_conflict"})
+                return
+            if query.get("digest", [""])[0] != self.state.chain_digest:
+                self._send_json(409, {"code": "revision_conflict"})
+                return
+            self._send_json(
+                200,
+                {
+                    "schema_version": 1,
+                    "artifact_ref": self.state.chain_ref,
+                    "body": self.state.chain_body.decode("utf-8"),
+                    "encoding": "identity",
+                    "truncated": False,
+                    "digest": self.state.chain_digest,
+                    "generation": 1,
+                    "size_bytes": len(self.state.chain_body),
+                    "availability": "ready",
+                    "media_type": "text/plain",
                 },
             )
             return
@@ -144,8 +215,31 @@ class _ControllerHandler(http.server.BaseHTTPRequestHandler):
             self._send_json(200, payload)
             return
         if self.path == "/api/v1/jobs":
+            body = json.loads(raw or b"{}")
+            if body.get("workflow") == "Confsearch":
+                self.state.submit_posts += 1
+                self._send_json(
+                    201,
+                    {
+                        "job_id": "job_chain",
+                        "status": "queued",
+                        "result": "accepted",
+                        "task_ref": {"task_id": "job_chain", "attempt": 1},
+                    },
+                )
+                return
             self.state.submit_posts += 1
             self._send_json(201, {"job_id": "must-not-be-created"})
+            return
+        if self.path == "/api/v1/jobs/job_chain/prepare":
+            self._send_json(
+                200,
+                {
+                    "operation_id": "op_chain",
+                    "state": "ready",
+                    "artifact_ref": self.state.chain_ref,
+                },
+            )
             return
         self._send_json(404, {"detail": "not found"})
 
@@ -883,5 +977,101 @@ def test_selector_refusal_is_not_downgraded(controller: Any, tmp_path: Path) -> 
         )
         assert result["result"]["isError"] is True
         assert result["result"]["structuredContent"]["error"]["code"] == "input_invalid"
+        process.close_stdin()
+        assert process.wait() == 0
+
+
+def test_closed_loop_submit_status_prepare_read(controller: Any, tmp_path: Path) -> None:
+    """P3-08: one scripted chain, no hand-written paths or digests."""
+    state, url = controller
+    with _McpProcess(url, tmp_path / "run-root") as process:
+        assert "error" not in process.handshake()
+        process.notify_initialized()
+
+        submitted = process.request(
+            2,
+            "tools/call",
+            {
+                "name": "acp_submit",
+                "arguments": {
+                    "workflow": "Confsearch",
+                    "input": {"smiles": "CCO"},
+                    "method": {"protocol": "xtb-crest"},
+                    "idempotency_key": "p3-chain-1",
+                },
+            },
+        )
+        assert submitted["result"]["isError"] is False
+        assert submitted["result"]["structuredContent"]["data"]["job_id"] == "job_chain"
+
+        status = process.request(
+            3,
+            "tools/call",
+            {"name": "acp_status", "arguments": {"reference": "job_chain"}},
+        )
+        data = status["result"]["structuredContent"]["data"]
+        descriptor = data["artifacts"][0]
+        assert descriptor["resource_id"] == "final_report"
+        assert data["artifacts_truncated"] is False
+        assert data["workflow"] == "Confsearch"
+        assert data["progress"] == 1.0
+
+        prepared = process.request(
+            4,
+            "tools/call",
+            {
+                "name": "acp_prepare_artifact",
+                "arguments": {
+                    "task_ref": {"task_id": "job_chain", "attempt": 1},
+                    "artifact_id": "final_report",
+                    "purpose": "artifact",
+                },
+            },
+        )
+        assert prepared["result"]["isError"] is False
+        ref = prepared["result"]["structuredContent"]["data"]["artifact_ref"]
+        assert ref["digest"] == state.chain_digest
+
+        read = process.request(
+            5,
+            "tools/call",
+            {"name": "acp_read_artifact", "arguments": {"artifact_ref": ref}},
+        )
+        assert read["result"]["isError"] is False
+        assert read["result"]["structuredContent"]["data"]["body"] == "hello chain"
+
+        wrong = dict(ref)
+        wrong["digest"] = "sha256:" + "0" * 64
+        rejected = process.request(
+            6,
+            "tools/call",
+            {"name": "acp_read_artifact", "arguments": {"artifact_ref": wrong}},
+        )
+        assert rejected["result"]["isError"] is True
+        assert rejected["result"]["structuredContent"]["error"]["code"] == "revision_conflict"
+
+        stale = dict(ref)
+        stale["generation"] = 2
+        stale_result = process.request(
+            8,
+            "tools/call",
+            {"name": "acp_read_artifact", "arguments": {"artifact_ref": stale}},
+        )
+        assert stale_result["result"]["isError"] is True
+        assert (
+            stale_result["result"]["structuredContent"]["error"]["code"]
+            == "revision_conflict"
+        )
+
+        cold_ref = dict(ref)
+        cold_ref["artifact_id"] = "missing"
+        cold = process.request(
+            7,
+            "tools/call",
+            {"name": "acp_read_artifact", "arguments": {"artifact_ref": cold_ref}},
+        )
+        assert cold["result"]["isError"] is True
+        assert cold["result"]["structuredContent"]["error"]["code"] == "resource_not_ready"
+
         process.close_stdin()
         assert process.wait() == 0

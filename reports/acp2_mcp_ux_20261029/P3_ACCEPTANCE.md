@@ -36,9 +36,10 @@
 
 ## P3-08 端到端闭环
 
-- 已有单元/HTTP 断言覆盖 status 发现、operation artifact_ref、read 的编码与摘要校验。
-- **未完成**：真实 SDK 的 submit → status → prepare → read 全链 fixture 仍为 `NOT_VERIFIED`
-  （需要可执行任务 + prepare 服务装配）；不得用现有分段测试冒充整链 PASS。下一轮补 scripted Controller 闭环。
+- 已交付 **scripted Controller 整链 fixture**（`test_acp2_runtime_mcp_process.py::test_closed_loop_submit_status_prepare_read`）：
+  `acp_submit → acp_status（发现 artifacts）→ acp_prepare_artifact（拿 artifact_ref）→ acp_read_artifact（正文）`，
+  全程不手填路径/摘要；同时覆盖错 digest、旧 generation、冷资源三类拒绝（`revision_conflict` / `resource_not_ready`）。
+- **仍未交付**：真实 SDK（DSH/Node 客户端）跑同一条链；当前为协议/适配器层全链，标 `NOT_VERIFIED`，不冒充 SDK PASS。
 
 ## 证据
 
