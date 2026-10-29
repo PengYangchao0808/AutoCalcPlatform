@@ -557,4 +557,6 @@ def test_screening_evidence_must_name_the_conformer(tmp_path: Path) -> None:
     payload = _read_json(report_path)
     by_id = {c["conf_id"]: c for c in payload["conformers"]}
     assert by_id["conf_0002"]["method_evidence"] == "executed"
+    assert by_id["conf_0002"]["energy_kind_verified"] is True
     assert by_id["conf_0001"]["method_evidence"] == "unverified"
+    assert by_id["conf_0001"]["energy_kind_verified"] is False

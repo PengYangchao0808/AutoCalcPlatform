@@ -220,6 +220,7 @@ def _conformer_block(
     verified: bool,
 ) -> dict[str, Any]:
     role = "refinement_sp" if entry.refined else "screening"
+    evidence = _role_evidence(entry, role, executed, verified)
     if entry.refined:
         energy_kind = "dft"
     else:
@@ -235,10 +236,8 @@ def _conformer_block(
         "free_energy_hartree": entry.free_energy_hartree,
         "energy_kind": energy_kind,
         "method_role": role,
-        "method_evidence": _role_evidence(entry, role, executed, verified),
-        "energy_kind_verified": bool(
-            verified and not entry.refined and executed.get("final_part") == "screening"
-        ),
+        "method_evidence": evidence,
+        "energy_kind_verified": bool(evidence == "executed" and role == "screening"),
         "relative_energy_kcal": entry.relative_energy_kcal,
         "boltzmann_weight": entry.boltzmann_weight,
         "weight_source": entry.weight_source or outcome.weight_source,
