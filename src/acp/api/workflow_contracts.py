@@ -90,6 +90,8 @@ _BATCH_INPUT_PROPERTIES: dict[str, Any] = {
     },
     "from_artifact": {"type": "string"},
     "items_file": {"type": "string"},
+    "input": {"type": "string", "description": "Inline structure input (single-item batch)."},
+    "source": {"type": "string", "description": "Alias of input for stage payloads."},
     "selected_ids": {"type": "array", "items": {"type": "string"}},
     "charge": {"type": "integer", "description": "Total charge (default 0)."},
     "multiplicity": {"type": "integer", "description": "Spin multiplicity (default 1)."},

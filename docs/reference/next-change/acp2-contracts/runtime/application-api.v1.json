@@ -188,7 +188,7 @@
     "unsupported_behaviour": "unsupported format is invalid-parameter (input_invalid, params.rule=unsupported_structure_format); an empty structure task is never created"
   },
   "change_note": "M2-01c: the research extension projection flips to implemented=true (all ten p2_promised tools are registered) and records the tool-visibility rule (tools/list exposes them only after a session negotiates). Additive: no P1 name, schema or operation changes.",
-  "contract_version": "1.6.0",
+  "contract_version": "1.7.0",
   "digest_fields": {
     "artifact_digest": {
       "consumer": "read, prepare, EvidenceReport references, C display",
@@ -1110,6 +1110,10 @@
               1
             ],
             "type": "integer"
+          },
+          "workflow": {
+            "description": "Optional workflow id (case-insensitive). Selects the workflow_contract projection; an unknown id is input_invalid(rule=unknown_workflow) with allowed ids and a suggestion. Omitting it keeps the frozen shape.",
+            "type": "string"
           }
         },
         "required": []
@@ -1181,6 +1185,10 @@
               "array",
               "null"
             ]
+          },
+          "workflow_contract": {
+            "description": "Present only when request.workflow is supplied: coverage (complete/not_provided), input required_any/properties, method properties/enums/levels, resources properties, examples, constraints and the status vocabulary. Only Confsearch and BatchOptimize claim complete.",
+            "type": "object"
           },
           "workflows": {
             "description": "Active ACP workflow ids (retired ids absent).",

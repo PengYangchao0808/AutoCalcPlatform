@@ -263,8 +263,30 @@ class _ControllerHandler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         length = int(self.headers.get("Content-Length", "0") or "0")
-        if length:
-            self.rfile.read(length)
+        raw = self.rfile.read(length) if length else b""
+        if self.path == "/api/capabilities":
+            self.counters.capabilities_reads += 1
+            body = json.loads(raw or b"{}")
+            payload = {
+                "schema_version": 1,
+                "task_kinds": ["singlepoint"],
+                "workflows": ["singlepoint", "optimize"],
+                "backends": [{"name": "orca", "available": True}],
+                "capability_descriptors": None,
+                "limits": {"max_cores": 64},
+                "tools": sorted(EXPECTED_TOOLS),
+                "protocol_version": SERVER_VERSION,
+                "description": "m0-08 live handshake stub",
+            }
+            if body.get("workflow"):
+                payload["workflow_contract"] = {
+                    "workflow": body["workflow"],
+                    "coverage": "complete",
+                    "status_vocabulary": {"envelope": {"ok": "ok", "error": "error"}},
+                }
+                payload["research_tools"] = {"visible": True}
+            self._send_json(200, payload)
+            return
         if self.path == "/api/v1/jobs":
             # Counted, never served: a handshake must not create a task.
             self.counters.submit_posts += 1

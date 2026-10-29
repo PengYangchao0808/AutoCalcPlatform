@@ -14,7 +14,8 @@
   - `Confsearch` / `BatchOptimize` → `coverage=complete`，各 2 个示例（四个示例全部经 `submission_contract` 校验）；
   - 其余 **13 个** active 工作流 → `coverage=not_provided`（明确不提供 schema，而不是假装完整）；
   - 无 `workflow` 参数时**不出现** `workflow_contract` / `status_vocabulary`，既有形状不变；语汇表随契约块返回。
-- 示例由 `submission_contract` 校验器验证（发布即合法）。
+- 示例由 `submission_contract` 校验器验证（发布即合法）；四个示例（两个工作流各两个）全部有断言。
+- 冻结契约已同步：`application-api.v1.json` 1.7.0 增加可选 `workflow` 请求字段与 `workflow_contract` 响应块；manifest 的 entry sha / `contract_digest` / 自校验摘要 / BOM 嵌入摘要按规则重算，`validate_acp2_contracts.py` → **VALID**。
 - 约束写进投影：`screen` 零精修、纯 xTB 不做 DFT 精修、`max_conformers` 仅 NMR。
 
 ## P2-02 MCP 贯通
@@ -23,6 +24,7 @@
   `_tool_capabilities` 仅在有值时透传（无值路径对旧 fake/旧 Controller 完全不变）。
 - `_ControllerCapabilities` → `ControllerClient.capabilities(workflow=...)` → POST body；`workflow=None` 时**不传 kwargs**，旧 fake/旧 Controller 路径不变。
 - 测试覆盖：
+  - **真实 SDK 客户端**（冻结的 DSH → `@modelcontextprotocol/client` 2.2.0 客户端脚本）：`acp_capabilities{workflow:"Confsearch"}` 返回 `coverage=complete` 与状态词表；随后再次 `tools/list` 仍可见研究工具（协商状态保持）。`tests/test_acp2_mcp_sdk_contract.py` 8 passed（`ACP2_DSH_SOURCE=/ACPServer/acp2-tools/deepseek-harness`）；
   - stdio 进程 → MCP → HTTP，`workflow=Confsearch` 被真实转发并在结果中返回 `workflow_contract`；
   - 无参调用形状不变、八工具集合不变；
   - 研究协商后再次 `tools/list` 可见研究工具；
@@ -45,6 +47,6 @@
 
 - 冻结契约语料 `application-api.v1.json`（manifest 1.7.0）**未 bump**：它属于冻结语料 + manifest 自校验/摘要链，需要单独一轮 manifest 周期；本轮只做运行时附加字段，不改冻结文档。
 - 完整 schema 仍只覆盖 Confsearch / BatchOptimize；其余 13 个 active 工作流明确 `not_provided`。
-- **真实 SDK selector 未验证**：仓库无 Python MCP SDK，DSH/Node 真实客户端套件为 contract-marked；本轮以 stdio 进程 + fake Controller 验证协议贯通，真实客户端记 `NOT_VERIFIED`。
-- 冻结契约语料（application-api 1.7.0 / manifest）未 bump，属于单独 manifest 周期；本轮为运行时附加字段。
+- 真实 SDK 已用 DSH/Node 客户端验证（8 passed）；非 DSH 第三方客户端仍 `NOT_VERIFIED`。
+- 冻结契约已按 manifest 规则同步（见上）；仍属"待冻结实现"的只有真实第三方非 DSH 客户端。
 - 选择器查询不改变协商状态；真实第三方客户端未接入（沿用 P0 的 NOT_VERIFIED）。
