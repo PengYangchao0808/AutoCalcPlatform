@@ -21,6 +21,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +47,7 @@ class _ControllerState:
         self.health_reads = 0
         self.capabilities_reads = 0
         self.submit_posts = 0
+        self.status_paths: list[str] = []
         self.long_description = "capability descriptor " * 500
 
 
@@ -95,6 +97,7 @@ class _ControllerHandler(http.server.BaseHTTPRequestHandler):
             )
             return
         if self.path.startswith("/api/v1/jobs/"):
+            self.state.status_paths.append(self.path)
             task_id = self.path.rsplit("/", 1)[-1]
             if task_id == "known-job":
                 self._send_json(
@@ -582,6 +585,71 @@ def test_status_is_a_real_read_only_controller_call(controller: Any, tmp_path: P
         assert missing["result"]["structuredContent"]["error"]["code"] == "resource_not_ready"
         process.close_stdin()
         assert process.wait() == 0
+    assert state.submit_posts == 0
+
+
+def test_status_reference_object_and_stringified_json_are_distinct(
+    controller: Any, tmp_path: Path
+) -> None:
+    """C1 wire regression: ``{kind,id}`` reaches the same URL; JSON text does not.
+
+    ``_require_reference`` unwraps ``reference.id``, so a real object must hit
+    the same Controller path as the bare id.  A *stringified* JSON blob is a
+    string on the wire: it is forwarded as an opaque id and must never be
+    decoded into the real task.  The Controller call log is the evidence.
+    """
+    state, url = controller
+    with _McpProcess(url, tmp_path / "run-root") as process:
+        assert "error" not in process.handshake()
+        process.notify_initialized()
+
+        as_id = process.request(
+            2,
+            "tools/call",
+            {"name": "acp_status", "arguments": {"reference": "known-job"}},
+        )
+        assert as_id["result"]["isError"] is False
+
+        as_object = process.request(
+            3,
+            "tools/call",
+            {
+                "name": "acp_status",
+                "arguments": {"reference": {"kind": "job", "id": "known-job"}},
+            },
+        )
+        assert as_object["result"]["isError"] is False
+        assert as_object["result"]["structuredContent"]["data"]["state"] == "completed"
+        # Same task identity, not merely the same URL.
+        assert (
+            as_id["result"]["structuredContent"]["data"]["task_id"]
+            == as_object["result"]["structuredContent"]["data"]["task_id"]
+            == "known-job"
+        )
+
+        as_json_text = process.request(
+            4,
+            "tools/call",
+            {
+                "name": "acp_status",
+                "arguments": {"reference": '{"kind":"job","id":"known-job"}'},
+            },
+        )
+        assert as_json_text["result"]["isError"] is True
+        assert (
+            as_json_text["result"]["structuredContent"]["error"]["code"]
+            == "resource_not_ready"
+        )
+
+        process.close_stdin()
+        assert process.wait() == 0
+
+    assert len(state.status_paths) == 3
+    assert state.status_paths[0] == state.status_paths[1] == "/api/v1/jobs/known-job"
+    assert (
+        urllib.parse.unquote(state.status_paths[2])
+        == '/api/v1/jobs/{"kind":"job","id":"known-job"}'
+    )
     assert state.submit_posts == 0
 
 
