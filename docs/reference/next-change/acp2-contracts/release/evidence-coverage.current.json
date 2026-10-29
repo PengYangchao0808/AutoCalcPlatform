@@ -153,7 +153,7 @@
       "owner": "B",
       "parent": "M0-03",
       "receipt": "tests/test_acp2_runtime_acceptance_harness.py",
-      "receipt_sha256": "f3dd57431ac1fa194dff6650309cb92ca2893f3d2808c29d2e266897836a9b1e",
+      "receipt_sha256": "ac083deb310319f8e74b098864d3730217ebddb7ee0dc48ab028be1ea4b8157f",
       "required_observations": {
         "evidence_labels": "present",
         "required_observations": "present"
@@ -813,7 +813,7 @@
       "status": "CLOSED"
     }
   ],
-  "coverage_sha256": "323232dfee34e762b5d30c728fc03a84f7da9ba7a35bc8238f269859fb282044",
+  "coverage_sha256": "bd962260179dce08eee8502bc01780d39a600ed2c24a6885147ccff1f6fd541d",
   "deferred_rows": [
     {
       "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",

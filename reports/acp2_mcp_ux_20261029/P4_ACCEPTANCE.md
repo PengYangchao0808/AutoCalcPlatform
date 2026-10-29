@@ -71,6 +71,7 @@
 
 ## 第三轮（astra 复审后，降级声明）
 
+- 历史回执 `h1-r2.json` 恢复为运行时的原摘要，并加 `historical/historical_note`；h7 门只对历史回执跳过当前树比较（负例：无 note 的历史回执失败）。
 - 本轮**不再声称 verified**：`_execution_verified` 统一返回 False，`executed_status=unverified`；另给 `execution_facts_well_formed` 仅表示事实形状/文件摘要一致。
 - 公开报告改为白名单字段，不发布 `argv`（可能含绝对可执行路径）。
 - 非 UTF-8 正文（完整或截断）统一 `artifact_body_unverifiable`，不再用 surrogateescape 放行。

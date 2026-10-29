@@ -67,6 +67,7 @@
 
 ## astra 复审后的加固（同一 PR）
 
-- base64 不再豁免内容策略：严格解码、坏编码 `artifact_encoding_invalid`、解码后的路径/密钥仍拒绝；截断的非 UTF-8 正文 `artifact_body_unverifiable`（完整正文预扫描 DEFERRED）。
+- 内容策略前移到读取层：`resolve_artifact_read` 在**截断前**对完整正文做 UTF-8 + 脱敏检查（`artifact_body_redacted` / `artifact_body_unverifiable`），截断边界不再可绕过；MCP 再对返回片段复核。
+- base64 不再豁免：严格解码、坏编码 `artifact_encoding_invalid`；非 UTF-8 完整/截断正文一律拒绝（二进制白名单 DEFERRED）。
 - 真实 SDK selector 的 coverage 断言改为 `partial`（与新的契约声明一致）。
 - 真实生产 manifest→prepare→store 整链仍 **DEFERRED / NOT_VERIFIED**，不以 scripted Controller 冒充。

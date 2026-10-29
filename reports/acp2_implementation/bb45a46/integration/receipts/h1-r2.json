@@ -17,7 +17,7 @@
     },
     {
       "path": "docs/reference/next-change/acp2-contracts/manifest.json",
-      "sha256": "ff29868fc576f57ce63eb63dd9a26507ad96df9bb099b4222e48103318bf6a13",
+      "sha256": "d0e4c35fcb9527f61b8ff44c4e6d807fc9a4d6a933c3139df730827d1fed18bb",
       "size_bytes": 41652
     },
     {
@@ -126,5 +126,7 @@
       "result": "NOT_VERIFIED"
     }
   ],
-  "submission_id": null
+  "submission_id": null,
+  "historical": true,
+  "historical_note": "H1 receipt preserved at its run-time artifact digests. The contract manifest was legitimately re-frozen later, so current-tree comparison would be a false failure; this receipt is evidence of the H1 run, not of the current contract bytes."
 }

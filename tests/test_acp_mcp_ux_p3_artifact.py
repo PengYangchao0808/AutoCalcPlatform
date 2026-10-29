@@ -209,3 +209,21 @@ def test_non_utf8_body_is_unverifiable() -> None:
             {"body": encoded, "encoding": "base64", "digest": _ref(raw).digest}
         )
     assert excinfo.value.params["rule"] == "artifact_body_unverifiable"
+
+
+def test_full_body_policy_runs_before_truncation() -> None:
+    """A path straddling the truncation boundary is still refused."""
+    from acp_services.data.artifacts import ArtifactBodyRefusedError, _assert_body_content_safe
+
+    body = b"x" * 31 + b" /home/xieningke/secret"
+    with pytest.raises(ArtifactBodyRefusedError) as excinfo:
+        _assert_body_content_safe(body)
+    assert excinfo.value.params["rule"] == "artifact_body_redacted"
+
+
+def test_full_body_policy_refuses_binary() -> None:
+    from acp_services.data.artifacts import ArtifactBodyRefusedError, _assert_body_content_safe
+
+    with pytest.raises(ArtifactBodyRefusedError) as excinfo:
+        _assert_body_content_safe(b"\xff\xfe\x00")
+    assert excinfo.value.params["rule"] == "artifact_body_unverifiable"
