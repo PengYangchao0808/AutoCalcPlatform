@@ -75,6 +75,7 @@ def write_final_report(
     xyz_path = confsearch_dir / XYZ_NAME
 
     metadata = outcome.workflow_metadata or {}
+    executed = dict((metadata.get("censo_execution") or {}))
     payload: dict[str, Any] = {
         "schema_version": FINAL_REPORT_SCHEMA_VERSION,
         "workflow": "Confsearch",
@@ -91,7 +92,16 @@ def write_final_report(
                 confsearch_dir.parent.parent,
             ),
         },
-        "conformers": [_conformer_block(entry, outcome, request) for entry in entries],
+        "method_identity": {
+            "requested": _requested_levels(request),
+            "executed": executed,
+            "executed_status": "verified" if executed else "unverified",
+            "energy_kind": outcome.energy_kind,
+        },
+        "conformers": [
+            _conformer_block(entry, outcome, request, verified=bool(executed))
+            for entry in entries
+        ],
     }
     for key in ("total_gibbs_hartree", "total_gibbs_kcal_mol"):
         if key in metadata:
@@ -148,10 +158,39 @@ def register_final_report(mol_dir: Path, report_path: Path, xyz_path: Path) -> N
     manifest.write(result_dir)
 
 
+def _requested_levels(request: ConfsearchRequest) -> dict[str, Any]:
+    """Level settings from the request — declared intent, never evidence."""
+    requested: dict[str, Any] = {}
+    levels = request.levels or {}
+    if not isinstance(levels, dict):
+        return requested
+    for level_id, level in levels.items():
+        if not isinstance(level, dict):
+            continue
+        picked = {
+            key: level[key]
+            for key in (
+                "engine",
+                "functional",
+                "basis",
+                "solvent_model",
+                "solvent",
+                "ewin",
+                "refinement_threshold",
+            )
+            if level.get(key) not in (None, "")
+        }
+        if picked:
+            requested[str(level_id)] = picked
+    return requested
+
+
 def _conformer_block(
     entry: ConformerEntry,
     outcome: ProtocolOutcome,
     request: ConfsearchRequest,
+    *,
+    verified: bool,
 ) -> dict[str, Any]:
     if entry.refined:
         energy_kind = "dft"
@@ -167,6 +206,8 @@ def _conformer_block(
         "energy_hartree": entry.energy_hartree,
         "free_energy_hartree": entry.free_energy_hartree,
         "energy_kind": energy_kind,
+        "method_role": "refinement_sp" if entry.refined else "screening",
+        "method_evidence": "executed" if verified else "unverified",
         "relative_energy_kcal": entry.relative_energy_kcal,
         "boltzmann_weight": entry.boltzmann_weight,
         "weight_source": entry.weight_source or outcome.weight_source,

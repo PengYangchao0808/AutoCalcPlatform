@@ -176,6 +176,8 @@ def test_final_report_schema_keys_and_values(tmp_path: Path) -> None:
         "energy_hartree",
         "free_energy_hartree",
         "energy_kind",
+        "method_role",
+        "method_evidence",
         "relative_energy_kcal",
         "boltzmann_weight",
         "weight_source",
@@ -440,3 +442,48 @@ def test_register_final_report_missing_artifact_raises(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match="final_conformers.xyz"):
         register_final_report(mol_dir, report_path, xyz_path)
     assert not (mol_dir / "RESULT" / MANIFEST_FILENAME).exists()
+
+
+def test_method_identity_records_declared_vs_executed(tmp_path: Path) -> None:
+    confsearch_dir = tmp_path / "RESULT" / "confsearch"
+    confsearch_dir.mkdir(parents=True)
+    entries = _standard_entries(confsearch_dir)
+    outcome = _make_outcome(
+        workflow_metadata={
+            **_make_outcome().workflow_metadata,
+            "censo_execution": {
+                "argv": ["censo", "-i", "crest_conformers.xyz"],
+                "returncode": 0,
+                "artifacts": {"json": {"path": "2_SCREENING.json", "sha256": "a" * 64}},
+            },
+        }
+    )
+    report_path, _ = write_final_report(
+        confsearch_dir, request=_make_request(tmp_path), entries=entries, outcome=outcome
+    )
+    payload = _read_json(report_path)
+    identity = payload["method_identity"]
+    assert identity["executed_status"] == "verified"
+    assert identity["executed"]["returncode"] == 0
+    roles = {c["conf_id"]: c for c in payload["conformers"]}
+    assert roles["conf_0001"]["method_role"] == "refinement_sp"
+    assert roles["conf_0001"]["method_evidence"] == "executed"
+    assert roles["conf_0002"]["method_role"] == "screening"
+
+
+def test_method_identity_is_unverified_without_execution_facts(tmp_path: Path) -> None:
+    confsearch_dir = tmp_path / "RESULT" / "confsearch"
+    confsearch_dir.mkdir(parents=True)
+    entries = _standard_entries(confsearch_dir)
+    report_path, _ = write_final_report(
+        confsearch_dir,
+        request=_make_request(tmp_path),
+        entries=entries,
+        outcome=_make_outcome(),
+    )
+    payload = _read_json(report_path)
+    assert payload["method_identity"]["executed_status"] == "unverified"
+    assert payload["method_identity"]["executed"] == {}
+    assert all(
+        c["method_evidence"] == "unverified" for c in payload["conformers"]
+    )

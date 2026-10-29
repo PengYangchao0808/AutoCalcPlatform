@@ -255,6 +255,7 @@ def run_conformer_energy(
         safe_nproc = nproc
 
     stages_completed: list[str] = ["embed"]
+    censo_execution: dict[str, Any] = {}
     crest_skipped = False
     screening_ranking_csv: str | None = None
 
@@ -770,6 +771,10 @@ def run_conformer_energy(
         "crest_skipped": crest_skipped,
         **outputs,
     }
+    if censo_execution:
+        # Verified CENSO execution facts (argv/rc/artifact digests), forwarded
+        # verbatim so the final report can prove the level actually ran.
+        metadata["censo_execution"] = censo_execution
     if screening_ranking_csv:
         metadata["screening_ranking_csv"] = screening_ranking_csv
     # Screening conf_ids of the returned candidates (the set that received
