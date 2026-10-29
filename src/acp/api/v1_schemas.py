@@ -298,6 +298,8 @@ class V1JobRecordModel(BaseModel):
     name_revision: int = 0
     name_updated_at: str | None = None
     attempt: int = 1
+    artifacts: list[dict[str, Any]] | None = None
+    artifacts_truncated: bool = False
     revision: int = 0
     # Execution identity facts carried by the attempt's frozen group/receipt.
     # Additive and optional: legacy rows and remote-unmirrored attempts stay

@@ -184,7 +184,7 @@ def test_real_sdk_capabilities_call_returns_the_research_handshake(
     assert counters["submit_posts"] == 0
     assert counters["other_requests"] == []
     methods = harness.wire_methods(document)
-    assert methods.count("tools/call") == 2
+    assert methods.count("tools/call") == 3
 
 
 def test_research_handshake_identity_matches_the_contract_and_the_bridge() -> None:
@@ -244,3 +244,18 @@ def test_incompatible_client_refuses_on_its_own_without_tasks(tmp_path: Path) ->
     assert document.get("tools") is None
     assert counters["submit_posts"] == 0
     assert sorted(p.name for p in run_root.iterdir()) == []
+
+
+def test_real_sdk_workflow_selector_keeps_the_negotiated_state(
+    live_default: dict[str, Any],
+) -> None:
+    """P2: the real client reads a workflow contract and keeps its negotiate state."""
+    document = live_default["document"]
+    selector = document.get("workflow_selector") or {}
+    assert selector.get("isError") is False, selector
+    assert selector["workflow"] == "Confsearch"
+    assert selector["coverage"] == "complete"
+    assert selector["status_vocabulary"] is True
+    assert selector["research_tools_visible"] is True
+    listed = set(selector["listed_after_selector"])
+    assert "acp_research_proposal_create_v1" in listed

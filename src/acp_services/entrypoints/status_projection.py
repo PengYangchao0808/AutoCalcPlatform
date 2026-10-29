@@ -186,6 +186,9 @@ def project_task_status(
             "release_id": release_id,
             "release_digest": row.get("release_digest") or facts.get("release_digest"),
         }
+    workflow = row.get("workflow")
+    if not workflow and isinstance(row.get("spec"), Mapping):
+        workflow = row["spec"].get("workflow")
     projection: dict[str, Any] = {
         "schema_version": STATUS_SCHEMA_VERSION,
         "task_id": task_id,
@@ -196,7 +199,7 @@ def project_task_status(
         "attempt": attempt,
         "revision": revision,
         "updated_at": row.get("updated_at"),
-        "workflow": row.get("workflow"),
+        "workflow": workflow,
         "project_id": row.get("project_id"),
         "work_dir": row.get("work_dir"),
     }
@@ -204,6 +207,7 @@ def project_task_status(
         "state_reason",
         "waiting",
         "artifacts",
+        "artifacts_truncated",
         "error",
         "plan_digest",
         "submission_id",
@@ -211,6 +215,19 @@ def project_task_status(
         "release_digest",
         "name",
         "task_name",
+        # Progress projection: the Controller row already carries these for
+        # local jobs; dropping them here was the M1/C7 report bug.
+        "current_stage",
+        "progress",
+        "live_status",
+        "progress_state",
+        "stage_index",
+        "stage_total",
+        "stage_progress",
+        "stage_detail",
+        "stage_order",
+        "latest_event",
+        "snapshot_version",
     ):
         if key in row:
             projection[key] = row[key]
@@ -245,4 +262,10 @@ def project_operation_status(payload: Mapping[str, Any] | None) -> dict[str, Any
         "sha256": row.get("sha256"),
         "purpose": (row.get("payload") or {}).get("purpose"),
     }
+    artifact_ref = row.get("artifact_ref")
+    if isinstance(artifact_ref, Mapping):
+        projection["artifact_ref"] = dict(artifact_ref)
+    for key in ("artifact_id", "generation", "digest"):
+        if key in row and row[key] is not None:
+            projection[key] = row[key]
     return projection

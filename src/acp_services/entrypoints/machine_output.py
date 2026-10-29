@@ -645,6 +645,9 @@ class MachineResult:
     operation_identity: str | None = None
     diagnostic_ref: str | None = None
     schema_version: int = MACHINE_SCHEMA_VERSION
+    #: Keep ``data["body"]`` verbatim (base64 artifact bytes only).  The
+    #: identity branch is verified by the read tool before this is ever set.
+    passthrough_body: bool = False
 
     def __post_init__(self) -> None:
         if self.status not in ("ok", "error"):
@@ -655,6 +658,13 @@ class MachineResult:
             raise ValueError("a failed result must carry an error object")
 
     def to_dict(self) -> dict[str, Any]:
+        data: dict[str, Any] | None = None
+        if self.data is not None:
+            cleaned = dict(self.data)
+            body = cleaned.pop("body", None) if self.passthrough_body else None
+            data = redact_value(cleaned)
+            if self.passthrough_body and isinstance(body, str):
+                data["body"] = body
         return {
             "schema_version": self.schema_version,
             "operation": self.operation,
@@ -663,7 +673,7 @@ class MachineResult:
             "dry_run": self.dry_run,
             "operation_identity": self.operation_identity,
             "diagnostic_ref": self.diagnostic_ref,
-            "data": redact_value(dict(self.data)) if self.data is not None else None,
+            "data": data,
             "error": self.error.to_dict() if self.error is not None else None,
         }
 

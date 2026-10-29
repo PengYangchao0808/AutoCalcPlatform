@@ -288,6 +288,9 @@ def _map_result(
         "temperature_k": float(getattr(raw_result, "temperature", 0.0) or 0.0),
         "record_count": len(records),
         "dropped_record_count": len(dropped),
+        # Verified interface facts (argv/rc/artifact digests); forwarded, never
+        # reconstructed from the request.
+        "execution": dict(getattr(raw_result, "execution", {}) or {}),
     }
 
     if not records:

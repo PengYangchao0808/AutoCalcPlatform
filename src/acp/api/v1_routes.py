@@ -53,6 +53,11 @@ except ImportError:  # pragma: no cover
     ZipStream = None
 
 from acp.api.job_status_view import build_live_status, resolve_display_method
+from acp.api.submission_contract import (
+    SubmissionContractError,
+    validate_workflow_submission,
+)
+from acp.scheduler.resources import validate_resource_request
 from acp.api.routes import (
     get_backends as legacy_get_backends,
 )
@@ -2572,6 +2577,20 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         raise _command_error(
             _field_policy_status(exc), exc.code, exc.message, params=dict(exc.params)
         ) from exc
+    # Semantic contract (P1): unknown method keys / illegal enums / missing
+    # input are refused here, before classification, approval or dispatch.
+    try:
+        validate_workflow_submission(
+            req.workflow, input=req.input, method=req.method, resources=req.resources
+        )
+    except SubmissionContractError as exc:
+        raise _command_error(422, "input_invalid", str(exc), params=exc.params()) from exc
+    try:
+        validate_resource_request(req.resources or {})
+    except ValueError as exc:
+        raise _command_error(
+            422, "input_invalid", str(exc), params={"field": "resources", "rule": "invalid_resource"}
+        ) from exc
     fingerprint = normalized_submit.get("preflight_fingerprint")
     if fingerprint:
         from acp_services.runtime.canonical_digest import CanonicalDigestError
@@ -5019,6 +5038,20 @@ def get_sampling_frame(
     )
 
 
+def _with_artifact_descriptors(
+    model: V1JobRecordModel, read_root: Path | None, attempt: int
+) -> V1JobRecordModel:
+    """Attach the bounded manifest projection from the controlled read root."""
+    from acp.api.artifact_descriptors import describe_job_artifacts
+
+    descriptors, truncated = describe_job_artifacts(read_root, attempt=attempt)
+    if not descriptors and not truncated:
+        return model
+    return model.model_copy(
+        update={"artifacts": descriptors, "artifacts_truncated": truncated}
+    )
+
+
 @router.get("/jobs/{job_id}", response_model=V1JobRecordModel)
 def get_job(job_id: str, request: Request) -> V1JobRecordModel:
     manager = _manager(request)
@@ -5026,10 +5059,13 @@ def get_job(job_id: str, request: Request) -> V1JobRecordModel:
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     model = _record_to_v1_model(record, include_release_facts=True)
+    model = _enrich_job_snapshot(record, model, include_event=False)
     task_row = manager.tasks.get(job_id)
     if task_row is not None:
         model = _enrich_v1_with_names(model, resolve_task_names(task_row))
-    return model
+    return _with_artifact_descriptors(
+        model, _job_read_root(request, record), record.attempt
+    )
 
 
 @router.get("/jobs/{job_id}/summary", response_model=V1JobRecordModel)
@@ -5043,7 +5079,9 @@ def get_job_summary(job_id: str, request: Request) -> V1JobRecordModel:
     task_row = manager.tasks.get(job_id)
     if task_row is not None:
         model = _enrich_v1_with_names(model, resolve_task_names(task_row))
-    return model
+    return _with_artifact_descriptors(
+        model, _job_read_root(request, record), record.attempt
+    )
 
 
 # ---------------------------------------------------------------------- #
@@ -8753,6 +8791,19 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
             str(detail.get("code") or "input_invalid"),
             str(detail.get("message") or exc.detail),
             params=dict(detail.get("params") or {}),
+        ) from exc
+    # Same semantic contract as create_job, before any snapshot/estimate work.
+    try:
+        validate_workflow_submission(
+            req.workflow, input=req.input, method=req.method, resources=req.resources
+        )
+    except SubmissionContractError as exc:
+        raise _command_error(422, "input_invalid", str(exc), params=exc.params()) from exc
+    try:
+        validate_resource_request(req.resources or {})
+    except ValueError as exc:
+        raise _command_error(
+            422, "input_invalid", str(exc), params={"field": "resources", "rule": "invalid_resource"}
         ) from exc
     manager = _manager(request)
     project_id = _research_project(manager, req.project_id)

@@ -1,165 +1,220 @@
 {
-  "schema": "acp2.contracts.manifest.v1",
-  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
-  "created_at": "2026-10-22T00:00:00Z",
-  "contract_version": "1.7.0",
-  "contract_digest": "d3df46182ffb7e16dcbf260108b5ef7bfcdfed4e2f80dcd2ed61111912057a89",
-  "contract_digest_rule": "sha256 over sorted lines '<path> <sha256>\\n' for delivered contracts excluding manifest.json, runtime/baseline-lock.json and release/bom.current.json (self-referential files; the BOM embeds this aggregate digest).",
+  "b00_deliverables": [
+    "docs/reference/next-change/acp2-contracts/manifest.json",
+    "docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json",
+    "docs/reference/next-change/acp2-contracts/runtime/lint-baseline.json",
+    "docs/reference/next-change/acp2-contracts/runtime/dependencies.json",
+    "docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/",
+    "scripts/acceptance/validate_acp2_contracts.py"
+  ],
+  "b01_deliverables": [
+    "docs/reference/next-change/acp2-contracts/runtime/acceptance-harness.v1.md",
+    "docs/reference/next-change/acp2-contracts/runtime/acceptance-result.schema.json",
+    "scripts/acceptance/acp2_runtime.py",
+    "tests/test_acp2_runtime_acceptance_harness.py"
+  ],
+  "b03_deliverables": [
+    "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+    "docs/reference/next-change/acp2-contracts/runtime/entry-call-table.v1.md",
+    "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
+    "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.schema.json",
+    "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.template.json",
+    "docs/reference/next-change/acp2-contracts/runtime/canonical-digest-vectors.v1.json",
+    "docs/reference/next-change/acp2-contracts/runtime/science-binding.v1.json",
+    "docs/reference/next-change/acp2-contracts/runtime/control-and-data.v1.json",
+    "docs/reference/next-change/acp2-contracts/runtime/admission-approval.v1.json",
+    "docs/reference/next-change/acp2-contracts/runtime/fallback-deferral.json",
+    "docs/reference/next-change/acp2-contracts/runtime/samples/",
+    "tests/test_acp2_runtime_contracts.py"
+  ],
+  "b06_deliverables": [
+    "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+    "docs/reference/next-change/acp2-contracts/runtime/entry-call-table.v1.md",
+    "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.schema.json",
+    "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.template.json",
+    "docs/reference/next-change/acp2-contracts/runtime/cross-track-requests.v1.json",
+    "src/acp_services/entrypoints/controller_client.py",
+    "src/acp_services/entrypoints/application_params.py",
+    "src/acp_services/entrypoints/status_projection.py",
+    "src/acp/services_mcp_bootstrap.py"
+  ],
+  "b19": {
+    "business_state_ownership": {
+      "B": "task/approval/budget",
+      "C": "ResearchRecord question/proposal/round/task references",
+      "double_write": "forbidden"
+    },
+    "contract": {
+      "digest": "sha256:fe8944ded15556bd7461ab2b10036bcaabf181ae5484297a98e80c61ca83f559",
+      "path": "docs/reference/next-change/acp2-contracts/runtime/events-recovery.v1.json",
+      "schema": "acp2.runtime.events-recovery.v1",
+      "sha256": "9e517dbc6cee04f60d1b1e493ce26ba8737c59bfd1031416ccb626952b4b169b",
+      "version": "1.0.0"
+    },
+    "cursor": {
+      "max_age_s": 3600,
+      "reset_reasons": [
+        "cursor_expired",
+        "cursor_missing",
+        "cursor_invalid",
+        "cursor_ahead",
+        "retention_gap",
+        "permission_changed",
+        "service_restart",
+        "subscription_changed"
+      ],
+      "wire": "opaque"
+    },
+    "dsh": {
+      "reason": "c_dsh_absent",
+      "simulated_row_labeled": true,
+      "status": "NOT_VERIFIED"
+    },
+    "handoff": {
+      "path": "docs/reference/next-change/acp2-contracts/runtime/B19a-to-C.json",
+      "schema": "acp2.runtime.b19a-handoff.v1",
+      "sha256": "8ba8e0bd9a181d7477cc51280db1ddec6e762e497d24510193ad74bef45f34c1",
+      "status": "delivered",
+      "to": "C"
+    },
+    "owner": "B",
+    "reuse": [
+      "runtime/events.py",
+      "runtime/outbox.py",
+      "runtime/projections.py",
+      "runtime/recovery.py"
+    ],
+    "rph_exit": "session exit is not task cancellation; terminal task stops immediately, non-terminal task continues without blocking the LLM",
+    "split": {
+      "B19a": "event/cursor/outbox/projection/recovery contract + fixture-level recovery, handed to C without a live client",
+      "B19b": "simulated C-session termination -> new-session cursor recovery + Controller restart duplicate reconciliation; real DSH row stays NOT_VERIFIED(c_dsh_absent)"
+    },
+    "terminal_projection": "write-once per task/approval/budget target; stale or newer status events cannot revive it"
+  },
   "baseline": {
-    "delivery_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
-    "code_candidate_revision": "bb309134c7b2bb21d8a8bfcb5589516a5b0cf798",
-    "final_debug_candidate": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
-    "final_debug_candidate_kind": "source_overlay_sha256",
-    "final_debug_candidate_commit": null,
-    "pending_fix_bundle": "docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/",
-    "debug_report": "reports/architecture_repair_20261022/REPORT.md",
-    "report_sha256": "1a970c8d12885a0bd9d18d6b15c37060b69d26556157b8efc3e8b52a102a15de",
-    "dirty_tree_is_baseline": false,
-    "dirty_path_snapshot": "reports/acp2_implementation/bb45a46/B/B00/git-status-snapshot.txt",
     "candidate_verification": {
-      "status": "partial",
       "per_file_verification": "1906/1906 matched in a clean reconstruction",
-      "reason": "candidate_id digest rule is not reconstructable from the report; digest inherited and per-file hashes independently verified."
-    }
-  },
-  "historical_revisions": {
-    "delivery_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
+      "reason": "candidate_id digest rule is not reconstructable from the report; digest inherited and per-file hashes independently verified.",
+      "status": "partial"
+    },
     "code_candidate_revision": "bb309134c7b2bb21d8a8bfcb5589516a5b0cf798",
-    "final_debug_candidate": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+    "debug_report": "reports/architecture_repair_20261022/REPORT.md",
+    "delivery_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
+    "dirty_path_snapshot": "reports/acp2_implementation/bb45a46/B/B00/git-status-snapshot.txt",
+    "dirty_tree_is_baseline": false,
+    "final_debug_candidate": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
+    "final_debug_candidate_commit": null,
+    "final_debug_candidate_kind": "source_overlay_sha256",
+    "pending_fix_bundle": "docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/",
+    "report_sha256": "1a970c8d12885a0bd9d18d6b15c37060b69d26556157b8efc3e8b52a102a15de"
   },
-  "owners": {
-    "A": {
-      "role": "science (old lane name: frontend)",
-      "globs": [
-        "src/cccp/**",
-        "docs/reference/next-change/acp2-contracts/science/**",
-        "scripts/acceptance/acp2_science.py",
-        "tests/test_acp2_science_*.py"
-      ]
+  "common_enums": {
+    "delivery_status": [
+      "planned",
+      "blocked"
+    ],
+    "evidence_kind": [
+      "fixture",
+      "live",
+      "aggregate"
+    ],
+    "phase": [
+      "main",
+      "approval",
+      "budget",
+      "da-preflight",
+      "da-submit",
+      "da-evidence",
+      "fixture",
+      "live",
+      "aggregate"
+    ],
+    "phase_aliases": {
+      "preflight": "da-preflight"
     },
-    "B": {
-      "role": "runtime/platform (old lane name: services)",
-      "globs": [
-        "src/acp/**",
-        "src/acp_services/**",
-        "packaging/**",
-        "docs/reference/next-change/acp2-contracts/manifest.json",
-        "docs/reference/next-change/acp2-contracts/runtime/**",
-        "scripts/acceptance/acp2_runtime.py",
-        "scripts/acceptance/validate_acp2_contracts.py",
-        "scripts/acceptance/four_combinations.py",
-        "scripts/acceptance/compatibility_checks.py",
-        "scripts/acceptance/check_release_artifacts.py",
-        "scripts/acceptance/browser_runtime.py",
-        "scripts/acceptance/release_role_probe.py",
-        "scripts/acceptance/ordinary_legacy_cli.py",
-        "scripts/build_release.py",
-        "tests/test_acp2_runtime_*.py",
-        "tests/test_services_*.py",
-        "tests/test_architecture_*.py"
-      ]
+    "readiness": [
+      "contract_ready",
+      "implementation_ready",
+      "integration_ready",
+      "verified"
+    ],
+    "readiness_aliases": {
+      "deployed": "integration_ready"
     },
-    "C": {
-      "role": "experience/RPH (old lane name: cccp)",
-      "globs": [
-        "frontend/**",
-        "rph/**",
-        "docs/reference/next-change/acp2-contracts/experience/**",
-        "scripts/acceptance/acp2_experience.py",
-        "tests/test_acp2_experience_*.py"
-      ]
-    }
+    "result": [
+      "PASS",
+      "FAIL",
+      "NOT_VERIFIED"
+    ],
+    "scope": [
+      "IN_SCOPE",
+      "DEFERRED",
+      "NOT_APPLICABLE"
+    ]
   },
-  "shared_files": [
+  "contract_digest": "c183cf7594803f9660b10a2480a0bdf4d86e7604bf308defd513091ca4353886",
+  "contract_digest_rule": "sha256 over sorted lines '<path> <sha256>\\n' for delivered contracts excluding manifest.json, runtime/baseline-lock.json and release/bom.current.json (self-referential files; the BOM embeds this aggregate digest).",
+  "contract_version": "1.7.0",
+  "contract_version_history": [
     {
-      "path": "pyproject.toml",
-      "owner": "B",
-      "reason": "single distribution metadata and extras"
+      "note": "initial freeze",
+      "stage": "B00",
+      "version": "1.0.0"
     },
     {
-      "path": "requirements-node.txt",
-      "owner": "B",
-      "reason": "remote compute-node runtime dependencies"
+      "note": "additive delivery of planned contracts; no already-delivered wire field changed, so the version is NOT bumped",
+      "stage": "B03",
+      "version": "1.0.0"
     },
     {
-      "path": ".github/workflows/ci.yml",
-      "owner": "B",
-      "reason": "CI matrix and extras"
+      "note": "delivers controller-topology.v1.json and the shared change-request template; no already-delivered wire field changed, so contract_version stays 1.0.0",
+      "stage": "B04a",
+      "version": "1.0.0"
     },
     {
-      "path": "src/cccp/__init__.py",
-      "owner": "B",
-      "reason": "version location 1/4"
+      "note": "additive B-req-01 fields in application-api, entry-call-table and mcp-launch refresh, and the cross-track-requests ledger; no field removed or renamed",
+      "stage": "B06",
+      "version": "1.1.0"
     },
     {
-      "path": "src/cccp/version.py",
-      "owner": "B",
-      "reason": "version location 2/4"
+      "note": "additive approval HTTP operations/events in application-api, p2-research-operations and admission-approval; no delivered field removed or renamed, so contract_version stays 1.1.0",
+      "stage": "B16",
+      "version": "1.1.0"
     },
     {
-      "path": "src/acp/__init__.py",
-      "owner": "B",
-      "reason": "version location 3/4"
+      "note": "B18a delivers A schema id/version/digest references in science-binding and adds the bounded step-DAG, evidence-manifest and research-resource sections; no already-delivered wire field was removed or renamed.",
+      "stage": "B18",
+      "version": "1.2.0"
     },
     {
-      "path": "AGENTS.md",
-      "owner": "B",
-      "reason": "root knowledge base"
+      "note": "B19a delivers the cross-research events/recovery contract (event ID, opaque cursor + max_age reset, task/attempt/revision/project scope, payload version, replay/duplicate/out-of-order/terminal/revocation/RPH-exit rules) and its B19a-to-C handoff; no already-delivered wire field was removed or renamed.",
+      "stage": "B19",
+      "version": "1.3.0"
     },
     {
-      "path": "src/acp/AGENTS.md",
-      "owner": "B",
-      "reason": "nested AGENTS"
+      "note": "additive cross_track_edges and p4_sync in runtime/dependencies.json; no delivered field removed or renamed, so contract_version stays 1.3.0",
+      "stage": "B23",
+      "version": "1.3.0"
     },
     {
-      "path": "src/acp/api/AGENTS.md",
-      "owner": "B",
-      "reason": "nested AGENTS"
+      "note": "M0-01b registers release/scope.json, release/evidence-coverage.schema.json and release/bom.schema.json as planned contracts owned by B (no delivered wire field changed). contract_version is bumped anyway because the release namespace is a new consumer-visible contract family: the coverage validator keys on the planned ids and M5-02 freezes the same files at the B26 release stage.",
+      "stage": "M0-01",
+      "version": "1.4.0"
     },
     {
-      "path": "src/acp/scheduler/AGENTS.md",
-      "owner": "B",
-      "reason": "nested AGENTS"
+      "note": "registers the decision-freeze identity/integration contracts (owner INT) and the application-api 1.3.0 prepare field table; additive, no delivered wire field removed",
+      "stage": "M0-12",
+      "version": "1.5.0"
     },
     {
-      "path": "src/acp_services/AGENTS.md",
-      "owner": "B",
-      "reason": "nested AGENTS"
+      "note": "M1-01 contract unification (application-api 1.4.0, control-and-data 1.2.0, launch tables, implementation_status vocabulary) and the M1-02 research-session contract registration",
+      "stage": "M1-02",
+      "version": "1.6.0"
     },
     {
-      "path": "src/cccp/AGENTS.md",
-      "owner": "B",
-      "reason": "nested AGENTS"
-    },
-    {
-      "path": "tests/AGENTS.md",
-      "owner": "B",
-      "reason": "nested AGENTS"
-    },
-    {
-      "path": "scripts/install_systemd.sh",
-      "owner": "B",
-      "reason": "generated systemd unit source"
-    },
-    {
-      "path": "tests/baseline/services-evidence/migration_ledger.md",
-      "owner": "B",
-      "reason": "Services six-column ledger"
-    },
-    {
-      "path": "tests/baseline/services-evidence/handoff_registry.md",
-      "owner": "B",
-      "reason": "handoff/shim ledger"
-    },
-    {
-      "path": "tests/baseline/services-evidence/public_shim_inventory.md",
-      "owner": "B",
-      "reason": "public shim inventory"
-    },
-    {
-      "path": "docs/reference/next-change/acp2-contracts/manifest.json",
-      "owner": "B",
-      "reason": "contract manifest"
+      "note": "M5-02 final release registration: release/scope.json, the evidence-coverage and BOM schemas flip from planned to delivered, and the generated bom.current.json / evidence-coverage.current.json instances register as delivered B26 contracts. contract_version is bumped because the release namespace is now a delivered consumer-visible contract family. The BOM instance itself is excluded from contract_digest (it embeds the aggregate digest); both release schemas and the coverage instance stay inside it.",
+      "stage": "B26",
+      "version": "1.7.0"
     }
   ],
   "contracts": [
@@ -169,7 +224,7 @@
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/manifest.json",
-      "sha256": "cff316a2956c4851241122d3c8d0f166cbe3e7e5513b843a683999c8974b2cb6",
+      "sha256": "54e3104b6a979a8a6e424181333361e3547d04bda68dd7d5544f6d9926a29ab1",
       "status": "delivered"
     },
     {
@@ -235,7 +290,7 @@
       "id": "application-api",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
-      "sha256": "d55f470aab72c2ee3ceed652fd51f16489bff764cc49a0bc1461f8c1333588f0",
+      "sha256": "f72cd58dc1177cc7be212c31f2b62eded027fe9cde39b67ef5ad55ccdafd8350",
       "status": "delivered",
       "updated_by": "B16"
     },
@@ -253,7 +308,7 @@
       "id": "p2-research-operations",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
-      "sha256": "32525b7bd1866ad0d3f2c73162733dd4e44f49d1eec26dbeba14b4ca55696227",
+      "sha256": "3e9ae8da58899f9657ece57526d7d2315b85557790e2da7802f3a5438cec9a1c",
       "status": "delivered",
       "updated_by": "B16"
     },
@@ -419,7 +474,7 @@
       "note": "M5-02 clean-candidate BOM: 27 artifacts with URI+sha256+size, toolchain/DSH locks, contract digest and coverage canonical digest. Self-referential: excluded from contract_digest because it embeds that aggregate digest.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/release/bom.current.json",
-      "sha256": "15839febdc3f3a333528e6d7401b9bc0b400c9464be68ba4922c2e6705766530",
+      "sha256": "c71f3fbb84f850ef4a3686d280b6c5eebef4fb9a843fcad3b8552f284291c3fe",
       "status": "delivered"
     },
     {
@@ -432,127 +487,62 @@
       "status": "delivered"
     }
   ],
+  "created_at": "2026-10-22T00:00:00Z",
   "deferred_capabilities": [
     {
-      "capability": "account/permission/quota production wiring",
-      "owner": "B — Runtime/Workspace (L2-12, L3-09)",
       "b_scope_status": "IN_SCOPE",
       "blocker": "Components delivered but no src/acp consumer; OIDC unavailable; not wired to HTTP/CLI submit/dispatch preconditions.",
+      "capability": "account/permission/quota production wiring",
       "entry_condition": "local-single runs first, then wire Runtime submit/dispatch preconditions by deployment tier.",
+      "evidence": "docs/reference/current/ACP_Services_Closure_20261019.md; src/acp_services/runtime/admission.py; src/acp_services/workspace/identity_lifecycle.py",
       "next_acceptance_gate": "L2-12/L3-09 real cross-user deny, revoke, replay, quota race and execution isolation.",
-      "evidence": "docs/reference/current/ACP_Services_Closure_20261019.md; src/acp_services/runtime/admission.py; src/acp_services/workspace/identity_lifecycle.py"
+      "owner": "B — Runtime/Workspace (L2-12, L3-09)"
     },
     {
-      "capability": "MCP default entry",
-      "owner": "B — Services entrypoints (L2-14)",
       "b_scope_status": "IN_SCOPE",
       "blocker": "entrypoints.mcp exists but src/acp has no default consumer; no real-client integration.",
+      "capability": "MCP default entry",
       "entry_condition": "Runtime/Data/Workspace use cases stable and a default entry defined.",
+      "evidence": "src/acp_services/entrypoints/mcp.py; tests/test_services_mcp.py",
       "next_acceptance_gate": "L2-14 at least one real client handshake; identity/failure/cancel/idempotency consistent with GUI/CLI.",
-      "evidence": "src/acp_services/entrypoints/mcp.py; tests/test_services_mcp.py"
+      "owner": "B — Services entrypoints (L2-14)"
     },
     {
-      "capability": "project-package CLI/API",
-      "owner": "B — Data archive/import (L2-13)",
       "b_scope_status": "DEFERRED",
       "blocker": "archive/import builder delivered but not bound to CLI/HTTP; command/permission/integrity semantics unwired.",
+      "capability": "project-package CLI/API",
       "entry_condition": "After M1 is stable, deliver under M2 with command/permission/receipt/integrity/idempotent import.",
+      "evidence": "src/acp/services_data_bootstrap.py; src/acp_services/data/archive.py",
       "next_acceptance_gate": "L2-13 local export -> new-environment import -> read + complete evidence; import never auto-executes tasks.",
-      "evidence": "src/acp/services_data_bootstrap.py; src/acp_services/data/archive.py"
+      "owner": "B — Data archive/import (L2-13)"
     },
     {
-      "capability": "metering production wiring",
-      "owner": "B — Runtime metering (L2-15)",
       "b_scope_status": "IN_SCOPE",
       "blocker": "Decoupled module and 26 tests delivered; Runtime completion/recovery/read paths have no consumer.",
+      "capability": "metering production wiring",
       "entry_condition": "Wire the delivered decoupled module into real Runtime completion/recovery/read paths; record usage facts separately.",
+      "evidence": "src/acp_services/runtime/metering_decoupling.py; tests/test_services_metering_decoupling.py",
       "next_acceptance_gate": "L2-15 duplicate/out-of-order receipts do not double-meter; metering failure does not change scientific completion/readability.",
-      "evidence": "src/acp_services/runtime/metering_decoupling.py; tests/test_services_metering_decoupling.py"
+      "owner": "B — Runtime metering (L2-15)"
     },
     {
-      "capability": "persistent event A04",
-      "owner": "A04-lane (A frontend + B Services events)",
       "b_scope_status": "IN_SCOPE",
       "blocker": "A04 refresh protocol deferred; frontend eventCursor:false; no real persistent event protocol/cursor implementation.",
+      "capability": "persistent event A04",
       "entry_condition": "After the real service protocol and persistent facts land, deliver Client cursor/reset/reconnect and refresh switching independently.",
+      "evidence": "docs/reference/next-change/ACP_Services_Events_A04_Contract.md",
       "next_acceptance_gate": "L2-16 cursor/reset/reconnect under the real service protocol; old service/terminal availability refresh preserved.",
-      "evidence": "docs/reference/next-change/ACP_Services_Events_A04_Contract.md"
+      "owner": "A04-lane (A frontend + B Services events)"
     },
     {
-      "capability": "frontend prepare/availability consumption",
-      "owner": "A05 frontend (L2-11)",
       "b_scope_status": "C_OWNED",
       "blocker": "Backend availability/prepared endpoints delivered, but frontend prepareAvailability=false and /availability, /prepared have zero call sites.",
+      "capability": "frontend prepare/availability consumption",
       "entry_condition": "After D04-D06/D11, explicitly wire prepare and read-only queries; keep the S0 adapter.",
+      "evidence": "frontend/js/workbench/contracts/task_view_contract.js; docs/reference/current/ACP_Services_Closure_20261019.md (L2-11)",
       "next_acceptance_gate": "L2-11 default page queued/running/failed/ready, restart retry, terminal background prefetch; no implicit GET prepare.",
-      "evidence": "frontend/js/workbench/contracts/task_view_contract.js; docs/reference/current/ACP_Services_Closure_20261019.md (L2-11)"
+      "owner": "A05 frontend (L2-11)"
     }
-  ],
-  "p2_entry": {
-    "chosen": "versioned MCP extension",
-    "transport": "stdio JSON-RPC 2.0 over loopback HTTP Controller",
-    "mcp_protocol_version": "2025-06-18",
-    "controller_transport": "loopback HTTP",
-    "eight_tool_allowlist_remains_p1_contract": true,
-    "rejected_alternative": "restricted HTTP client path (not chosen in this plan)",
-    "reference": "runtime/application-api.v1.json (B03) and B01 acceptance-harness registry"
-  },
-  "common_enums": {
-    "phase": [
-      "main",
-      "approval",
-      "budget",
-      "da-preflight",
-      "da-submit",
-      "da-evidence",
-      "fixture",
-      "live",
-      "aggregate"
-    ],
-    "phase_aliases": {
-      "preflight": "da-preflight"
-    },
-    "readiness": [
-      "contract_ready",
-      "implementation_ready",
-      "integration_ready",
-      "verified"
-    ],
-    "readiness_aliases": {
-      "deployed": "integration_ready"
-    },
-    "delivery_status": [
-      "planned",
-      "blocked"
-    ],
-    "result": [
-      "PASS",
-      "FAIL",
-      "NOT_VERIFIED"
-    ],
-    "scope": [
-      "IN_SCOPE",
-      "DEFERRED",
-      "NOT_APPLICABLE"
-    ],
-    "evidence_kind": [
-      "fixture",
-      "live",
-      "aggregate"
-    ]
-  },
-  "old_lane_to_new_lane": {
-    "A": "frontend (old registry) -> science",
-    "B": "services (old registry) -> runtime/platform",
-    "C": "cccp (old registry) -> experience/RPH"
-  },
-  "b00_deliverables": [
-    "docs/reference/next-change/acp2-contracts/manifest.json",
-    "docs/reference/next-change/acp2-contracts/runtime/baseline-lock.json",
-    "docs/reference/next-change/acp2-contracts/runtime/lint-baseline.json",
-    "docs/reference/next-change/acp2-contracts/runtime/dependencies.json",
-    "docs/reference/next-change/acp2-contracts/runtime/final-debug-patch/",
-    "scripts/acceptance/validate_acp2_contracts.py"
   ],
   "digest_rules": {
     "delivered_contracts": "sha256 of the file bytes; for a directory contract the digest is over its digest_target (runtime/samples/manifest.json), and that file itself lists every sample sha256.",
@@ -562,199 +552,170 @@
   },
   "drift": [
     {
-      "id": "D-B00-01",
-      "kind": "working_tree_divergence",
-      "source": "candidate-snapshot.json vs current checkout",
-      "description": "16 files in the current dirty checkout differ from the frozen final_debug_candidate snapshot. They are later uncommitted edits and are not part of the candidate; B02 must apply the frozen bundle, not install this tree.",
       "count": 16,
+      "description": "16 files in the current dirty checkout differ from the frozen final_debug_candidate snapshot. They are later uncommitted edits and are not part of the candidate; B02 must apply the frozen bundle, not install this tree.",
       "files": [
         {
-          "path": ".omo/plans/acp2-parallel-plan-b-runtime.md",
-          "expected_sha256": "9c3e680d2505a837be4a60eed77d31d52f5211a2844a12f73833d4f91bf16647",
           "actual_sha256": "30cc367899a2607799a694e6ddef47cd6909cebc09028a36ba54e43d6b7a567f",
-          "kind": "post_freeze_worktree_edit"
+          "expected_sha256": "9c3e680d2505a837be4a60eed77d31d52f5211a2844a12f73833d4f91bf16647",
+          "kind": "post_freeze_worktree_edit",
+          "path": ".omo/plans/acp2-parallel-plan-b-runtime.md"
         },
         {
-          "path": ".omo/plans/acp2-plan-a-cccp-science.md",
-          "expected_sha256": "e2655422a8c547facdebc2350b4c63949b3c5084b4f301456510ebd90f6a8530",
           "actual_sha256": "7473ab3d1756de45b8a3c41e92afe48e201bce891d45d6d247532acd5aefb0cc",
-          "kind": "post_freeze_worktree_edit"
+          "expected_sha256": "e2655422a8c547facdebc2350b4c63949b3c5084b4f301456510ebd90f6a8530",
+          "kind": "post_freeze_worktree_edit",
+          "path": ".omo/plans/acp2-plan-a-cccp-science.md"
         },
         {
-          "path": ".omo/plans/acp2-plan-c-rph-workbench.md",
-          "expected_sha256": "9f8a4c1eda58bee4e09aa47383d2f3a76a11fe5f0935df9e9b949e75aa6244d3",
           "actual_sha256": "a9c2396949d2fbcc70119b127eb599fbc92c469e9cc4214584af409c6bdd9171",
-          "kind": "post_freeze_worktree_edit"
+          "expected_sha256": "9f8a4c1eda58bee4e09aa47383d2f3a76a11fe5f0935df9e9b949e75aa6244d3",
+          "kind": "post_freeze_worktree_edit",
+          "path": ".omo/plans/acp2-plan-c-rph-workbench.md"
         },
         {
-          "path": "README.md",
-          "expected_sha256": "299b21f51018897c26b734151ac5e299fabd2aac6a472e37d190e1667aaff366",
           "actual_sha256": "f190bfdec3eb8a2d95d84d59ded258784b343f48d9ec0ee7c2e901913be12e98",
-          "kind": "post_freeze_worktree_edit"
+          "expected_sha256": "299b21f51018897c26b734151ac5e299fabd2aac6a472e37d190e1667aaff366",
+          "kind": "post_freeze_worktree_edit",
+          "path": "README.md"
         },
         {
-          "path": "scripts/install_systemd.sh",
-          "expected_sha256": "14c4fac333dbc920460a47cb36964cd726876969b36b61743caa1dd762febc43",
           "actual_sha256": "1d67ed99ac28b6110b18ab7b454c4325bd80f763d2aea54f5d047385ed21bd1f",
-          "kind": "post_freeze_worktree_edit"
+          "expected_sha256": "14c4fac333dbc920460a47cb36964cd726876969b36b61743caa1dd762febc43",
+          "kind": "post_freeze_worktree_edit",
+          "path": "scripts/install_systemd.sh"
         },
         {
-          "path": "src/acp/api/server.py",
-          "expected_sha256": "a9ead9a297139fd3778b2e448f17262bfa3bab48e40020614c302ca083e09faf",
           "actual_sha256": "28d60944c612fb36a0323923686ac92d6c69c925a7eeed05ec0a68ed01fd587c",
-          "kind": "post_freeze_worktree_edit"
+          "expected_sha256": "a9ead9a297139fd3778b2e448f17262bfa3bab48e40020614c302ca083e09faf",
+          "kind": "post_freeze_worktree_edit",
+          "path": "src/acp/api/server.py"
         },
         {
-          "path": "src/acp/cli.py",
-          "expected_sha256": "13f50eb066e1342328d9d08cf044d17dd9b1f28add73da7456d0efa575ea1049",
           "actual_sha256": "164956b094c0493242bfb41a088e80df0bac0ad3feaa8a2953a27333cbc60eaa",
-          "kind": "post_freeze_worktree_edit"
+          "expected_sha256": "13f50eb066e1342328d9d08cf044d17dd9b1f28add73da7456d0efa575ea1049",
+          "kind": "post_freeze_worktree_edit",
+          "path": "src/acp/cli.py"
         },
         {
-          "path": "src/acp/init_wizard/answers.py",
-          "expected_sha256": "da199d5e5afd72eb5e8b2d214ec28ad968ef7c984234c91d275e1dfdae5b1f73",
           "actual_sha256": "5df54c272b5df45b2cc934e4491741eeba0952f3df0cf3b94a4a11dc2bed7286",
-          "kind": "post_freeze_worktree_edit"
+          "expected_sha256": "da199d5e5afd72eb5e8b2d214ec28ad968ef7c984234c91d275e1dfdae5b1f73",
+          "kind": "post_freeze_worktree_edit",
+          "path": "src/acp/init_wizard/answers.py"
         },
         {
-          "path": "src/acp/init_wizard/flows.py",
-          "expected_sha256": "f2db185b94566244d15b349a57b9fbabfa87cb971ee362c8ee8193acdd11e8c4",
           "actual_sha256": "e4b6ab0dcb2fb4c23f486609a5a719081a43c219ebc9f9eb8f69387eaabbc8f1",
-          "kind": "post_freeze_worktree_edit"
+          "expected_sha256": "f2db185b94566244d15b349a57b9fbabfa87cb971ee362c8ee8193acdd11e8c4",
+          "kind": "post_freeze_worktree_edit",
+          "path": "src/acp/init_wizard/flows.py"
         },
         {
-          "path": "src/acp/init_wizard/plan.py",
-          "expected_sha256": "b6c1562969bbdc0a7811314c452c4c76b933ae03a577d7092864dcb690653fa6",
           "actual_sha256": "33bdbdf538067d0253e3599256fd02e7bac3336bb48a3bc3afd024b9076115b1",
-          "kind": "post_freeze_worktree_edit"
+          "expected_sha256": "b6c1562969bbdc0a7811314c452c4c76b933ae03a577d7092864dcb690653fa6",
+          "kind": "post_freeze_worktree_edit",
+          "path": "src/acp/init_wizard/plan.py"
         },
         {
-          "path": "src/acp_services/workspace/boundary.py",
-          "expected_sha256": "8cbf5bfde58ab7877fe4248e5a3607c3deb9eccad1af7e49122e8921e26e2bfc",
           "actual_sha256": "db3a4ba3df7723718ec2fcaaa47fdff63cdbb1ddccdd257adcb94334ad646ef6",
-          "kind": "post_freeze_worktree_edit"
+          "expected_sha256": "8cbf5bfde58ab7877fe4248e5a3607c3deb9eccad1af7e49122e8921e26e2bfc",
+          "kind": "post_freeze_worktree_edit",
+          "path": "src/acp_services/workspace/boundary.py"
         },
         {
-          "path": "tests/baseline/services-evidence/migration_ledger.md",
-          "expected_sha256": "bbb8e67328e8cd4229bd295ac261c1a0187053904281623c76ca1235999f7f57",
           "actual_sha256": "3ac34b983be3db79ab9929d15076284b1c0d01a686e284e988ef69307a1a7ea3",
-          "kind": "post_freeze_worktree_edit"
+          "expected_sha256": "bbb8e67328e8cd4229bd295ac261c1a0187053904281623c76ca1235999f7f57",
+          "kind": "post_freeze_worktree_edit",
+          "path": "tests/baseline/services-evidence/migration_ledger.md"
         },
         {
-          "path": "tests/baseline/services-evidence/public_shim_inventory.md",
-          "expected_sha256": "00770b859265f267922af8904d83eb16f4804277af5a5a6107f4647f8d10ab42",
           "actual_sha256": "0ddda3501d28b7ed638acc0db42bb76fdf1aec2f5ada2b524c5468adf070b28f",
-          "kind": "post_freeze_worktree_edit"
+          "expected_sha256": "00770b859265f267922af8904d83eb16f4804277af5a5a6107f4647f8d10ab42",
+          "kind": "post_freeze_worktree_edit",
+          "path": "tests/baseline/services-evidence/public_shim_inventory.md"
         },
         {
-          "path": "tests/test_acp_init_cli.py",
-          "expected_sha256": "2ff71f2d8443e15f80660696866f4ccf78247fb26c7e879a3264825fd1a61ac6",
           "actual_sha256": "9bea475f5a6279b4e94b61063ee501e1807a78d06ff783db5a5aac5f55bca4bc",
-          "kind": "post_freeze_worktree_edit"
+          "expected_sha256": "2ff71f2d8443e15f80660696866f4ccf78247fb26c7e879a3264825fd1a61ac6",
+          "kind": "post_freeze_worktree_edit",
+          "path": "tests/test_acp_init_cli.py"
         },
         {
-          "path": "tests/test_services_init_unified.py",
-          "expected_sha256": "c95f9f623dfa97c896d4ecc560b0b0e6d9dba4e5c4b66dd48b2692041f903198",
           "actual_sha256": "7db1aef2dd26f08bc0de4549f843912a72a8b8474c61b71f46e6fd5c8d76e8f8",
-          "kind": "post_freeze_worktree_edit"
+          "expected_sha256": "c95f9f623dfa97c896d4ecc560b0b0e6d9dba4e5c4b66dd48b2692041f903198",
+          "kind": "post_freeze_worktree_edit",
+          "path": "tests/test_services_init_unified.py"
         },
         {
-          "path": "tests/test_services_local_boundary.py",
-          "expected_sha256": "ac598edc797f0f5d0036c8d691a5164a434fa464805971f26fe423d64fc59e2b",
           "actual_sha256": "a183a72a650f499f7b9d90906bff5278c251eecdbd67188ef0e492bcd4859a3a",
-          "kind": "post_freeze_worktree_edit"
+          "expected_sha256": "ac598edc797f0f5d0036c8d691a5164a434fa464805971f26fe423d64fc59e2b",
+          "kind": "post_freeze_worktree_edit",
+          "path": "tests/test_services_local_boundary.py"
         }
       ],
-      "handling": "Do not commit these files as baseline; B02 applies runtime/final-debug-patch to a clean 3670790 worktree."
+      "handling": "Do not commit these files as baseline; B02 applies runtime/final-debug-patch to a clean 3670790 worktree.",
+      "id": "D-B00-01",
+      "kind": "working_tree_divergence",
+      "source": "candidate-snapshot.json vs current checkout"
     },
     {
-      "id": "D-B00-02",
-      "kind": "lint_baseline_count",
-      "source": "plan planning-time figure vs actual ruff 0.15.22 run",
+      "actual": {
+        "count": 1058,
+        "file_count": 129
+      },
       "description": "Plan/review recorded 1,065 diagnostics across 133 files; the actual frozen-candidate run produced 1,058 diagnostics across 129 files. The full actual array is authoritative.",
       "expected": {
         "count": 1065,
         "file_count": 133
       },
-      "actual": {
-        "count": 1058,
-        "file_count": 129
-      },
-      "handling": "Use runtime/lint-baseline.json diagnostics array; do not pad counts."
+      "handling": "Use runtime/lint-baseline.json diagnostics array; do not pad counts.",
+      "id": "D-B00-02",
+      "kind": "lint_baseline_count",
+      "source": "plan planning-time figure vs actual ruff 0.15.22 run"
     },
     {
+      "description": "candidate_id sha256:bb45... is inherited from the repair report. The report does not define a reconstructable derivation; B00 tested 87 plausible canonicalization variants without a match.",
+      "handling": "Record provenance and do not fabricate a digest; B02 records the resulting commit SHA.",
       "id": "D-B00-03",
       "kind": "candidate_digest_rule",
-      "source": "reports/architecture_repair_20261022/REPORT.md",
-      "description": "candidate_id sha256:bb45... is inherited from the repair report. The report does not define a reconstructable derivation; B00 tested 87 plausible canonicalization variants without a match.",
-      "verification": "partial",
       "per_file_verification": "1906/1906 matched in a clean reconstruction",
-      "handling": "Record provenance and do not fabricate a digest; B02 records the resulting commit SHA."
+      "source": "reports/architecture_repair_20261022/REPORT.md",
+      "verification": "partial"
     },
     {
+      "count": 90,
+      "description": "The execution checkout has 90 dirty porcelain paths (39 modified tracked + 51 untracked), not the historical 24-path figure from the 2026-10-21 review.",
+      "handling": "Snapshot stored verbatim; dirty tree is never the baseline.",
+      "historical_count": 24,
       "id": "D-B00-04",
       "kind": "dirty_path_count",
-      "source": "git status --porcelain at B00 execution",
-      "description": "The execution checkout has 90 dirty porcelain paths (39 modified tracked + 51 untracked), not the historical 24-path figure from the 2026-10-21 review.",
-      "count": 90,
-      "historical_count": 24,
-      "handling": "Snapshot stored verbatim; dirty tree is never the baseline."
+      "source": "git status --porcelain at B00 execution"
     },
     {
+      "description": "The value stored by B00 (556d38a3...) is not reproducible from any delivered-subset reading of the documented rule, so B03 recomputes contract_digest from the documented rule and the validator now enforces it. The rule text is authoritative, not the inherited number.",
+      "handling": "never restate the inherited number; recompute at each freeze and let the validator fail on mismatch",
       "id": "D-B03-01",
       "kind": "contract_digest_not_reproducible",
-      "source": "B00 stored contract_digest vs the documented rule applied to the delivered set",
-      "description": "The value stored by B00 (556d38a3...) is not reproducible from any delivered-subset reading of the documented rule, so B03 recomputes contract_digest from the documented rule and the validator now enforces it. The rule text is authoritative, not the inherited number.",
-      "stored_at_b00": "556d38a3c3f25a78694ee456b175d616d491abc1a0790b1c0d4312e7c82db9ac",
       "recomputed_by": "B03 (validator-enforced)",
-      "handling": "never restate the inherited number; recompute at each freeze and let the validator fail on mismatch"
+      "source": "B00 stored contract_digest vs the documented rule applied to the delivered set",
+      "stored_at_b00": "556d38a3c3f25a78694ee456b175d616d491abc1a0790b1c0d4312e7c82db9ac"
     },
     {
+      "description": "A's cross-track dependency file does not exist; the A edge is recorded as NOT_VERIFIED / blocked_fixture with the exact expected path.",
+      "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json",
+      "handling": "runtime/dependencies.json not_verified[0]; B14b/H3 closes it. No A row is fabricated.",
       "id": "D-B03-02",
       "kind": "a_dependency_fixture_absent",
       "source": "A science/cross-track-dependencies.json",
-      "description": "A's cross-track dependency file does not exist; the A edge is recorded as NOT_VERIFIED / blocked_fixture with the exact expected path.",
-      "expected_path": "/opt/acp2-dev/A/docs/reference/next-change/acp2-contracts/science/cross-track-dependencies.json",
-      "status": "NOT_VERIFIED",
-      "handling": "runtime/dependencies.json not_verified[0]; B14b/H3 closes it. No A row is fabricated."
+      "status": "NOT_VERIFIED"
     }
   ],
+  "historical_revisions": {
+    "code_candidate_revision": "bb309134c7b2bb21d8a8bfcb5589516a5b0cf798",
+    "delivery_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
+    "final_debug_candidate": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
   "normative_sync": {
-    "section": "## B00 sync (2026-10-22)",
-    "status": "appended",
-    "documents": [
-      {
-        "path": "docs/reference/next-change/ACP_2.0_Parallel_Plan_B_Runtime_20261020.md",
-        "covers": [
-          "baseline_reading_rule",
-          "path_ownership",
-          "common_enums",
-          "p2_entry"
-        ]
-      },
-      {
-        "path": "docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md",
-        "covers": [
-          "baseline_reading_rule",
-          "path_ownership",
-          "common_enums",
-          "p2_entry"
-        ]
-      },
-      {
-        "path": "docs/reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md",
-        "covers": [
-          "baseline_reading_rule",
-          "path_ownership",
-          "common_enums",
-          "p2_entry"
-        ]
-      }
-    ],
-    "note": "Appended without restructuring existing content; these files remain untracked planning assets and are not part of the B00 commit.",
     "b03": {
-      "section": "## B03 sync (2026-10-22)",
-      "status": "appended",
       "covers": [
         "application_api",
         "entry_call_table",
@@ -766,11 +727,11 @@
         "docs/reference/next-change/ACP_2.0_Parallel_Plan_B_Runtime_20261020.md",
         "docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md",
         "docs/reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md"
-      ]
+      ],
+      "section": "## B03 sync (2026-10-22)",
+      "status": "appended"
     },
     "b06": {
-      "section": "## B06 sync (2026-10-22)",
-      "status": "appended",
       "covers": [
         "application_api_v1_1_0",
         "mcp_initialize_extension",
@@ -781,153 +742,192 @@
         "docs/reference/next-change/ACP_2.0_Parallel_Plan_B_Runtime_20261020.md",
         "docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md",
         "docs/reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md"
-      ]
+      ],
+      "section": "## B06 sync (2026-10-22)",
+      "status": "appended"
+    },
+    "documents": [
+      {
+        "covers": [
+          "baseline_reading_rule",
+          "path_ownership",
+          "common_enums",
+          "p2_entry"
+        ],
+        "path": "docs/reference/next-change/ACP_2.0_Parallel_Plan_B_Runtime_20261020.md"
+      },
+      {
+        "covers": [
+          "baseline_reading_rule",
+          "path_ownership",
+          "common_enums",
+          "p2_entry"
+        ],
+        "path": "docs/reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md"
+      },
+      {
+        "covers": [
+          "baseline_reading_rule",
+          "path_ownership",
+          "common_enums",
+          "p2_entry"
+        ],
+        "path": "docs/reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md"
+      }
+    ],
+    "note": "Appended without restructuring existing content; these files remain untracked planning assets and are not part of the B00 commit.",
+    "section": "## B00 sync (2026-10-22)",
+    "status": "appended"
+  },
+  "old_lane_to_new_lane": {
+    "A": "frontend (old registry) -> science",
+    "B": "services (old registry) -> runtime/platform",
+    "C": "cccp (old registry) -> experience/RPH"
+  },
+  "owners": {
+    "A": {
+      "globs": [
+        "src/cccp/**",
+        "docs/reference/next-change/acp2-contracts/science/**",
+        "scripts/acceptance/acp2_science.py",
+        "tests/test_acp2_science_*.py"
+      ],
+      "role": "science (old lane name: frontend)"
+    },
+    "B": {
+      "globs": [
+        "src/acp/**",
+        "src/acp_services/**",
+        "packaging/**",
+        "docs/reference/next-change/acp2-contracts/manifest.json",
+        "docs/reference/next-change/acp2-contracts/runtime/**",
+        "scripts/acceptance/acp2_runtime.py",
+        "scripts/acceptance/validate_acp2_contracts.py",
+        "scripts/acceptance/four_combinations.py",
+        "scripts/acceptance/compatibility_checks.py",
+        "scripts/acceptance/check_release_artifacts.py",
+        "scripts/acceptance/browser_runtime.py",
+        "scripts/acceptance/release_role_probe.py",
+        "scripts/acceptance/ordinary_legacy_cli.py",
+        "scripts/build_release.py",
+        "tests/test_acp2_runtime_*.py",
+        "tests/test_services_*.py",
+        "tests/test_architecture_*.py"
+      ],
+      "role": "runtime/platform (old lane name: services)"
+    },
+    "C": {
+      "globs": [
+        "frontend/**",
+        "rph/**",
+        "docs/reference/next-change/acp2-contracts/experience/**",
+        "scripts/acceptance/acp2_experience.py",
+        "tests/test_acp2_experience_*.py"
+      ],
+      "role": "experience/RPH (old lane name: cccp)"
     }
   },
-  "contract_version_history": [
+  "p2_entry": {
+    "chosen": "versioned MCP extension",
+    "controller_transport": "loopback HTTP",
+    "eight_tool_allowlist_remains_p1_contract": true,
+    "mcp_protocol_version": "2025-06-18",
+    "reference": "runtime/application-api.v1.json (B03) and B01 acceptance-harness registry",
+    "rejected_alternative": "restricted HTTP client path (not chosen in this plan)",
+    "transport": "stdio JSON-RPC 2.0 over loopback HTTP Controller"
+  },
+  "schema": "acp2.contracts.manifest.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "shared_files": [
     {
-      "note": "initial freeze",
-      "stage": "B00",
-      "version": "1.0.0"
+      "owner": "B",
+      "path": "pyproject.toml",
+      "reason": "single distribution metadata and extras"
     },
     {
-      "note": "additive delivery of planned contracts; no already-delivered wire field changed, so the version is NOT bumped",
-      "stage": "B03",
-      "version": "1.0.0"
+      "owner": "B",
+      "path": "requirements-node.txt",
+      "reason": "remote compute-node runtime dependencies"
     },
     {
-      "note": "delivers controller-topology.v1.json and the shared change-request template; no already-delivered wire field changed, so contract_version stays 1.0.0",
-      "stage": "B04a",
-      "version": "1.0.0"
+      "owner": "B",
+      "path": ".github/workflows/ci.yml",
+      "reason": "CI matrix and extras"
     },
     {
-      "note": "additive B-req-01 fields in application-api, entry-call-table and mcp-launch refresh, and the cross-track-requests ledger; no field removed or renamed",
-      "stage": "B06",
-      "version": "1.1.0"
+      "owner": "B",
+      "path": "src/cccp/__init__.py",
+      "reason": "version location 1/4"
     },
     {
-      "note": "additive approval HTTP operations/events in application-api, p2-research-operations and admission-approval; no delivered field removed or renamed, so contract_version stays 1.1.0",
-      "stage": "B16",
-      "version": "1.1.0"
+      "owner": "B",
+      "path": "src/cccp/version.py",
+      "reason": "version location 2/4"
     },
     {
-      "note": "B18a delivers A schema id/version/digest references in science-binding and adds the bounded step-DAG, evidence-manifest and research-resource sections; no already-delivered wire field was removed or renamed.",
-      "stage": "B18",
-      "version": "1.2.0"
+      "owner": "B",
+      "path": "src/acp/__init__.py",
+      "reason": "version location 3/4"
     },
     {
-      "note": "B19a delivers the cross-research events/recovery contract (event ID, opaque cursor + max_age reset, task/attempt/revision/project scope, payload version, replay/duplicate/out-of-order/terminal/revocation/RPH-exit rules) and its B19a-to-C handoff; no already-delivered wire field was removed or renamed.",
-      "stage": "B19",
-      "version": "1.3.0"
+      "owner": "B",
+      "path": "AGENTS.md",
+      "reason": "root knowledge base"
     },
     {
-      "note": "additive cross_track_edges and p4_sync in runtime/dependencies.json; no delivered field removed or renamed, so contract_version stays 1.3.0",
-      "stage": "B23",
-      "version": "1.3.0"
+      "owner": "B",
+      "path": "src/acp/AGENTS.md",
+      "reason": "nested AGENTS"
     },
     {
-      "note": "M0-01b registers release/scope.json, release/evidence-coverage.schema.json and release/bom.schema.json as planned contracts owned by B (no delivered wire field changed). contract_version is bumped anyway because the release namespace is a new consumer-visible contract family: the coverage validator keys on the planned ids and M5-02 freezes the same files at the B26 release stage.",
-      "stage": "M0-01",
-      "version": "1.4.0"
+      "owner": "B",
+      "path": "src/acp/api/AGENTS.md",
+      "reason": "nested AGENTS"
     },
     {
-      "note": "registers the decision-freeze identity/integration contracts (owner INT) and the application-api 1.3.0 prepare field table; additive, no delivered wire field removed",
-      "stage": "M0-12",
-      "version": "1.5.0"
+      "owner": "B",
+      "path": "src/acp/scheduler/AGENTS.md",
+      "reason": "nested AGENTS"
     },
     {
-      "note": "M1-01 contract unification (application-api 1.4.0, control-and-data 1.2.0, launch tables, implementation_status vocabulary) and the M1-02 research-session contract registration",
-      "stage": "M1-02",
-      "version": "1.6.0"
+      "owner": "B",
+      "path": "src/acp_services/AGENTS.md",
+      "reason": "nested AGENTS"
     },
     {
-      "note": "M5-02 final release registration: release/scope.json, the evidence-coverage and BOM schemas flip from planned to delivered, and the generated bom.current.json / evidence-coverage.current.json instances register as delivered B26 contracts. contract_version is bumped because the release namespace is now a delivered consumer-visible contract family. The BOM instance itself is excluded from contract_digest (it embeds the aggregate digest); both release schemas and the coverage instance stay inside it.",
-      "stage": "B26",
-      "version": "1.7.0"
+      "owner": "B",
+      "path": "src/cccp/AGENTS.md",
+      "reason": "nested AGENTS"
+    },
+    {
+      "owner": "B",
+      "path": "tests/AGENTS.md",
+      "reason": "nested AGENTS"
+    },
+    {
+      "owner": "B",
+      "path": "scripts/install_systemd.sh",
+      "reason": "generated systemd unit source"
+    },
+    {
+      "owner": "B",
+      "path": "tests/baseline/services-evidence/migration_ledger.md",
+      "reason": "Services six-column ledger"
+    },
+    {
+      "owner": "B",
+      "path": "tests/baseline/services-evidence/handoff_registry.md",
+      "reason": "handoff/shim ledger"
+    },
+    {
+      "owner": "B",
+      "path": "tests/baseline/services-evidence/public_shim_inventory.md",
+      "reason": "public shim inventory"
+    },
+    {
+      "owner": "B",
+      "path": "docs/reference/next-change/acp2-contracts/manifest.json",
+      "reason": "contract manifest"
     }
-  ],
-  "b01_deliverables": [
-    "docs/reference/next-change/acp2-contracts/runtime/acceptance-harness.v1.md",
-    "docs/reference/next-change/acp2-contracts/runtime/acceptance-result.schema.json",
-    "scripts/acceptance/acp2_runtime.py",
-    "tests/test_acp2_runtime_acceptance_harness.py"
-  ],
-  "b03_deliverables": [
-    "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
-    "docs/reference/next-change/acp2-contracts/runtime/entry-call-table.v1.md",
-    "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
-    "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.schema.json",
-    "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.template.json",
-    "docs/reference/next-change/acp2-contracts/runtime/canonical-digest-vectors.v1.json",
-    "docs/reference/next-change/acp2-contracts/runtime/science-binding.v1.json",
-    "docs/reference/next-change/acp2-contracts/runtime/control-and-data.v1.json",
-    "docs/reference/next-change/acp2-contracts/runtime/admission-approval.v1.json",
-    "docs/reference/next-change/acp2-contracts/runtime/fallback-deferral.json",
-    "docs/reference/next-change/acp2-contracts/runtime/samples/",
-    "tests/test_acp2_runtime_contracts.py"
-  ],
-  "b06_deliverables": [
-    "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
-    "docs/reference/next-change/acp2-contracts/runtime/entry-call-table.v1.md",
-    "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.schema.json",
-    "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.template.json",
-    "docs/reference/next-change/acp2-contracts/runtime/cross-track-requests.v1.json",
-    "src/acp_services/entrypoints/controller_client.py",
-    "src/acp_services/entrypoints/application_params.py",
-    "src/acp_services/entrypoints/status_projection.py",
-    "src/acp/services_mcp_bootstrap.py"
-  ],
-  "b19": {
-    "owner": "B",
-    "split": {
-      "B19a": "event/cursor/outbox/projection/recovery contract + fixture-level recovery, handed to C without a live client",
-      "B19b": "simulated C-session termination -> new-session cursor recovery + Controller restart duplicate reconciliation; real DSH row stays NOT_VERIFIED(c_dsh_absent)"
-    },
-    "contract": {
-      "path": "docs/reference/next-change/acp2-contracts/runtime/events-recovery.v1.json",
-      "schema": "acp2.runtime.events-recovery.v1",
-      "version": "1.0.0",
-      "sha256": "9e517dbc6cee04f60d1b1e493ce26ba8737c59bfd1031416ccb626952b4b169b",
-      "digest": "sha256:fe8944ded15556bd7461ab2b10036bcaabf181ae5484297a98e80c61ca83f559"
-    },
-    "handoff": {
-      "path": "docs/reference/next-change/acp2-contracts/runtime/B19a-to-C.json",
-      "schema": "acp2.runtime.b19a-handoff.v1",
-      "sha256": "8ba8e0bd9a181d7477cc51280db1ddec6e762e497d24510193ad74bef45f34c1",
-      "to": "C",
-      "status": "delivered"
-    },
-    "reuse": [
-      "runtime/events.py",
-      "runtime/outbox.py",
-      "runtime/projections.py",
-      "runtime/recovery.py"
-    ],
-    "business_state_ownership": {
-      "B": "task/approval/budget",
-      "C": "ResearchRecord question/proposal/round/task references",
-      "double_write": "forbidden"
-    },
-    "cursor": {
-      "wire": "opaque",
-      "max_age_s": 3600,
-      "reset_reasons": [
-        "cursor_expired",
-        "cursor_missing",
-        "cursor_invalid",
-        "cursor_ahead",
-        "retention_gap",
-        "permission_changed",
-        "service_restart",
-        "subscription_changed"
-      ]
-    },
-    "terminal_projection": "write-once per task/approval/budget target; stale or newer status events cannot revive it",
-    "rph_exit": "session exit is not task cancellation; terminal task stops immediately, non-terminal task continues without blocking the LLM",
-    "dsh": {
-      "status": "NOT_VERIFIED",
-      "reason": "c_dsh_absent",
-      "simulated_row_labeled": true
-    }
-  }
+  ]
 }

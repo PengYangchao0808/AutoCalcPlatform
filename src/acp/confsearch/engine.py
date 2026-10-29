@@ -192,9 +192,16 @@ class ConfsearchEngine:
                         LiveMetric(
                             key="conformers_kept",
                             label_key="live.conformers_kept",
-                            value=str(len(selected)),
+                            value=str(len(entries)),
                             kind="count",
                             priority=90,
+                        ),
+                        LiveMetric(
+                            key="conformers_selected",
+                            label_key="live.conformers_selected",
+                            value=str(len(selected)),
+                            kind="count",
+                            priority=85,
                         ),
                     ]
                 )

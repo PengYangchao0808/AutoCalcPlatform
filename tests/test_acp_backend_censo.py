@@ -587,6 +587,13 @@ def test_refine_ensemble_success(tmp_path: Path) -> None:
     assert len(result.records) == 2
     assert result.records[0].conf_id == "CONF1"
     assert result.records[1].conf_id == "CONF2"
+    # P4: verified execution facts, not a request echo.
+    execution = result.execution
+    assert execution["returncode"] == 0
+    assert execution["argv"]
+    assert execution["final_part"] == "screening"
+    assert len(execution["artifacts"]["json"]["sha256"]) == 64
+    assert execution["artifacts"]["xyz"]["sha256"]
 
 
 def test_refine_ensemble_censo_not_available(tmp_path: Path) -> None:

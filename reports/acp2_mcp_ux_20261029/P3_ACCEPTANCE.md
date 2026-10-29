@@ -1,0 +1,65 @@
+# P3 验收记录（闭环：计数 / status / artifact）
+
+> 执行：2026-10-29T17:58–18:05 +08:00
+> 状态：**PASS**（sol 第 5 轮复验：路径权威统一后签收；真实 SDK 整链仍 NOT_VERIFIED）
+
+## 已完成
+
+| 项 | 变更 | 验收 |
+|---|---|---|
+| P3-01 构象计数 | `engine.py`：`conformers_kept=len(entries)`，新增 `conformers_selected=len(selected)`；i18n 中英新增 `live.conformers_selected` | `test_acp_confsearch_progress.py` 3 passed；screen 下 kept=2/selected=0 |
+| P3-02 status 投影 | workflow 从 `spec.workflow` 回退；透传 `current_stage/progress/progress_state/stage_*/live_status/latest_event/snapshot_version` | `test_acp_mcp_ux_p3_status.py::test_progress_fields_pass_through` |
+| P3-03 operation 引用 | `project_operation_status` 保留 `artifact_ref`（含 digest/generation）与同名字段 | `test_operation_status_keeps_artifact_ref` |
+| P3-06 encoding 标签 | `ArtifactRead.to_dict`：非 UTF-8 / 截断多字节 → `encoding="base64"`，不再谎报 identity | 两个 to_dict 用例 |
+| P3-07 摘要作用域 | `_tool_read_artifact` 前置校验：脱敏改变正文 → `artifact_body_redacted`；未截断且 hash 不匹配 → `artifact_digest_mismatch`；base64 不参与路径脱敏；截断仍做脱敏检查、跳过 hash 并标注 `digest_scope=artifact` | 6 个 `_verify_artifact_body` 用例 |
+
+## 复验整改（第一轮后）
+
+| 问题 | 整改 |
+|---|---|
+| `get_job` 不调用 snapshot enrichment，本地进度仍不可见 | `get_job` 增加 `_enrich_job_snapshot(include_event=False)` |
+| 描述符接受 NUL 路径 | `_safe_relative` 拒绝 `\x00` |
+| MCP 投影漏 `artifacts_truncated` | `status_projection` 透传该字段 |
+| 二进制正文被当绝对路径误拒 | 校验器对 `encoding=base64` 跳过脱敏模式检查，只做摘要校验 |
+| 截断正文含路径仍成功 | 截断仍做脱敏检查；命中即 `artifact_body_redacted`，并标注 `digest_scope=artifact` |
+| 计数缺 screen 用例、编码缺截断多字节用例 | 已补（screen kept=2/selected=0；`é` 截断字节往返） |
+| 记录把 4 个校验用例写成 5 个 | 已更正，并补到 6 个 |
+
+## 第二轮复验整改
+
+| 问题 | 整改 |
+|---|---|
+| base64 正文在 `MachineResult` 序列化时仍被当路径改写 | `PASSTHROUGH_FIELD_VALUES["body"]` 增加 base64 形状判定；identity 正文仍走脱敏（校验器先行拒绝被改写的 identity） |
+| 描述符整份解析后才截断、无 attempt/读根 | `get_job` 传 `_job_read_root(request, record)` 与 `record.attempt`；迭代到 `limit+1` 即停 |
+| 产品 `id="../x"` 可被发布 | `_safe_token` 拒绝空/NUL/路径分隔符/`..` |
+| 闭环链漏 relative_path 与 operation status | prepare 带发现到的 `relative_path`；随后 `acp_status({"kind":"operation","id":"op_chain"})` 断言 digest |
+
+## 第三轮复验整改
+
+| 问题 | 整改 |
+|---|---|
+| identity 正文恰为 base64 形状时绕过脱敏 | 去掉字段名级 base64 豁免；改为 `MachineResult.passthrough_body` 显式开关（仅 encoding=base64 时由 read 工具设置），identity 校验改用 `redact()` 直接比对 |
+| 描述符 ID 与 prepare 规则不一致（`a..b` 误拒、`a b` 漏拒） | 直接复用 `is_safe_artifact_token`（prepare/read 的同一权威） |
+| manifest 整份解析无成本上限 | 先 stat：缺失 → 空；> 2 MiB → `([], True)`，不解析 |
+| attempt 仅贴标签 | 记录为已知限制：manifest 不含 attempt，attempt 取自当前 job record，仅作标注；不以它做校验 |
+
+## P3-04/05 产物发现
+
+- 新增 `src/acp/api/artifact_descriptors.py`：从 `RESULT/result_manifest.json` 投影
+  `resource_id / relative_path(RESULT/…) / kind / label / size_bytes=None / prepared=False`；
+  拒绝绝对路径与 `..`；上限 50，超出 `artifacts_truncated=true`。
+- `V1JobRecordModel` 增加 `artifacts` / `artifacts_truncated`；`get_job`、`get_job_summary`
+  通过 `_with_artifact_descriptors` 附加，空清单不改变原响应。
+- 描述符不是 `ArtifactRef`：prepare 仍是产生可读引用的唯一步骤。
+
+## P3-08 端到端闭环
+
+- 已交付 **scripted Controller 整链 fixture**（`test_acp2_runtime_mcp_process.py::test_closed_loop_submit_status_prepare_read`）：
+  `acp_submit → acp_status（发现 artifacts）→ acp_prepare_artifact（拿 artifact_ref）→ acp_read_artifact（正文）`，
+  全程不手填路径/摘要；同时覆盖错 digest、旧 generation、冷资源三类拒绝（`revision_conflict` / `resource_not_ready`）。
+- **仍未交付**：真实 SDK（DSH/Node 客户端）跑同一条链；当前为协议/适配器层全链，标 `NOT_VERIFIED`，不冒充 SDK PASS。
+
+## 证据
+
+- `evidence/p3/p3_batch.txt`：命令、cwd、模块路径、文件哈希、exit code。
+- 批次：P3 status/artifact/descriptors + confsearch progress + v1 science status + services mcp + mcp process + P1/P2 契约 + api → **163 passed，exit 0**（命令与模块清单在证据文件内）。
