@@ -11,7 +11,19 @@
 | P3-02 status 投影 | workflow 从 `spec.workflow` 回退；透传 `current_stage/progress/progress_state/stage_*/live_status/latest_event/snapshot_version` | `test_acp_mcp_ux_p3_status.py::test_progress_fields_pass_through` |
 | P3-03 operation 引用 | `project_operation_status` 保留 `artifact_ref`（含 digest/generation）与同名字段 | `test_operation_status_keeps_artifact_ref` |
 | P3-06 encoding 标签 | `ArtifactRead.to_dict`：非 UTF-8 / 截断多字节 → `encoding="base64"`，不再谎报 identity | 两个 to_dict 用例 |
-| P3-07 摘要作用域 | `_tool_read_artifact` 前置校验：脱敏改变正文 → `artifact_body_redacted`；未截断且 hash 不匹配 → `artifact_digest_mismatch`；截断切片豁免 | 5 个 `_verify_artifact_body` 用例 |
+| P3-07 摘要作用域 | `_tool_read_artifact` 前置校验：脱敏改变正文 → `artifact_body_redacted`；未截断且 hash 不匹配 → `artifact_digest_mismatch`；base64 不参与路径脱敏；截断仍做脱敏检查、跳过 hash 并标注 `digest_scope=artifact` | 6 个 `_verify_artifact_body` 用例 |
+
+## 复验整改（第一轮后）
+
+| 问题 | 整改 |
+|---|---|
+| `get_job` 不调用 snapshot enrichment，本地进度仍不可见 | `get_job` 增加 `_enrich_job_snapshot(include_event=False)` |
+| 描述符接受 NUL 路径 | `_safe_relative` 拒绝 `\x00` |
+| MCP 投影漏 `artifacts_truncated` | `status_projection` 透传该字段 |
+| 二进制正文被当绝对路径误拒 | 校验器对 `encoding=base64` 跳过脱敏模式检查，只做摘要校验 |
+| 截断正文含路径仍成功 | 截断仍做脱敏检查；命中即 `artifact_body_redacted`，并标注 `digest_scope=artifact` |
+| 计数缺 screen 用例、编码缺截断多字节用例 | 已补（screen kept=2/selected=0；`é` 截断字节往返） |
+| 记录把 4 个校验用例写成 5 个 | 已更正，并补到 6 个 |
 
 ## P3-04/05 产物发现
 
@@ -26,9 +38,9 @@
 
 - 已有单元/HTTP 断言覆盖 status 发现、operation artifact_ref、read 的编码与摘要校验。
 - **未完成**：真实 SDK 的 submit → status → prepare → read 全链 fixture 仍为 `NOT_VERIFIED`
-  （需要可执行任务 + prepare 服务装配）；不得用现有分段测试冒充整链 PASS。
+  （需要可执行任务 + prepare 服务装配）；不得用现有分段测试冒充整链 PASS。下一轮补 scripted Controller 闭环。
 
 ## 证据
 
 - `evidence/p3/p3_batch.txt`：命令、cwd、模块路径、文件哈希、exit code。
-- 批次：P3 status/artifact/descriptors + confsearch progress + v1 science status + services mcp + mcp process + P1/P2 契约 + api → **159 passed，exit 0**。
+- 批次：P3 status/artifact/descriptors + confsearch progress + v1 science status + services mcp + mcp process + P1/P2 契约 + api → **163 passed，exit 0**（命令与模块清单在证据文件内）。

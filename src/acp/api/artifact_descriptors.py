@@ -22,7 +22,7 @@ MAX_ARTIFACT_DESCRIPTORS = 50
 def _safe_relative(path: str) -> str | None:
     """Return a task-relative path or None (absolute/traversal/invalid)."""
     text = str(path or "").strip()
-    if not text:
+    if not text or "\x00" in text:
         return None
     candidate = PurePosixPath(text)
     if candidate.is_absolute() or any(part in {"..", ""} for part in candidate.parts):

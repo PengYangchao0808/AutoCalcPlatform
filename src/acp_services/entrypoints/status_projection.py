@@ -206,6 +206,7 @@ def project_task_status(
         "state_reason",
         "waiting",
         "artifacts",
+        "artifacts_truncated",
         "error",
         "plan_digest",
         "submission_id",

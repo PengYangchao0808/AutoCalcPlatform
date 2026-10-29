@@ -2844,17 +2844,23 @@ class McpServer:
         exempt: its digest applies to the whole artifact, not the slice.
         """
         body = data.get("body")
-        if not isinstance(body, str) or data.get("truncated"):
+        if not isinstance(body, str):
             return
+        encoding = data.get("encoding") or "identity"
+        if data.get("truncated"):
+            data.setdefault("digest_scope", "artifact")
         from acp_services.entrypoints.machine_output import redact_value
 
-        if redact_value({"body": body}).get("body") != body:
+        # base64 is opaque bytes: a path-looking payload must not be redacted.
+        if encoding != "base64" and redact_value({"body": body}).get("body") != body:
             raise McpToolError(
                 mo.ErrorCode.UNSUPPORTED_CAPABILITY,
                 "artifact body contains a redacted pattern; the bytes cannot be "
                 "returned under the frozen digest",
                 params={"field": "body", "rule": "artifact_body_redacted"},
             )
+        if data.get("truncated"):
+            return
         digest = str(data.get("digest") or "")
         expected = digest.split(":", 1)[1] if digest.startswith("sha256:") else digest
         if not expected:
@@ -2862,11 +2868,7 @@ class McpServer:
         import base64
         import hashlib
 
-        raw = (
-            base64.b64decode(body)
-            if data.get("encoding") == "base64"
-            else body.encode("utf-8")
-        )
+        raw = base64.b64decode(body) if encoding == "base64" else body.encode("utf-8")
         if hashlib.sha256(raw).hexdigest() != expected:
             raise McpToolError(
                 mo.ErrorCode.UNSUPPORTED_CAPABILITY,

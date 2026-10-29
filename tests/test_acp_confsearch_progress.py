@@ -161,3 +161,34 @@ def test_confsearch_cli_constructs_progress_reporter(
     assert reporter is not None
     state = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
     assert list(state["stages"]) == list(CONFSEARCH_STAGES)
+
+
+def test_engine_reports_screen_zero_refinement(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "job.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "task.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setitem(PROTOCOL_RUNNERS, "censo-crest", _stub_outcome)
+    from acp.io.structures import StructureReader
+
+    xyz = tmp_path / "water.xyz"
+    xyz.write_text(
+        "3\nwater\nO 0.0 0.0 0.0\nH 0.9 0.0 0.0\nH -0.3 0.9 0.0\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(StructureReader, "read", lambda self, *a, **k: _stub_structure())
+    reporter = ProgressReporter(
+        tmp_path,
+        job_name="Confsearch",
+        stages=list(CONFSEARCH_STAGES),
+        min_interval=0.0,
+    )
+    request = ConfsearchRequest(
+        input_source=str(xyz),
+        output_dir=tmp_path,
+        protocol="censo-crest",
+        refinement_policy="screen",
+    )
+    assert ConfsearchEngine(progress_reporter=reporter).run(request).status == "completed"
+    state = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
+    metrics = {metric["key"]: metric for metric in state["live_metrics"]}
+    assert metrics["conformers_kept"]["value"] == "2"
+    assert metrics["conformers_selected"]["value"] == "0"

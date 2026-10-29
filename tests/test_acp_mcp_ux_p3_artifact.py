@@ -86,3 +86,46 @@ def test_truncated_slice_is_exempt() -> None:
             "truncated": True,
         }
     )
+
+
+def test_base64_body_roundtrips_and_is_not_redacted_as_a_path() -> None:
+    import base64
+
+    raw = b"\xff"
+    payload = ArtifactRead(ref=_ref(raw), body=raw).to_dict()
+    assert payload["encoding"] == "base64"
+    assert base64.b64decode(payload["body"]) == raw
+    # "/w==" looks absolute; base64 is opaque and must pass the verifier.
+    McpServer._verify_artifact_body(
+        _payload(
+            {
+                "body": payload["body"],
+                "encoding": "base64",
+                "digest": _ref(raw).digest,
+            }
+        )
+    )
+
+
+def test_truncated_multibyte_slice_decodes_to_the_same_bytes() -> None:
+    import base64
+
+    full = "é".encode("utf-8")
+    sliced = full[:1]
+    payload = ArtifactRead(ref=_ref(full), body=sliced, truncated=True).to_dict()
+    assert payload["encoding"] == "base64"
+    assert base64.b64decode(payload["body"]) == sliced
+    assert payload["truncated"] is True
+
+
+def test_truncated_body_with_a_redacted_pattern_is_refused() -> None:
+    with pytest.raises(mcp.McpToolError) as excinfo:
+        McpServer._verify_artifact_body(
+            {
+                "body": "path=/home/xieningke/secret.txt",
+                "encoding": "identity",
+                "digest": "sha256:" + "a" * 64,
+                "truncated": True,
+            }
+        )
+    assert excinfo.value.params["rule"] == "artifact_body_redacted"

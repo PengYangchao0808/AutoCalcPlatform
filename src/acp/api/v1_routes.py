@@ -5055,6 +5055,7 @@ def get_job(job_id: str, request: Request) -> V1JobRecordModel:
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     model = _record_to_v1_model(record, include_release_facts=True)
+    model = _enrich_job_snapshot(record, model, include_event=False)
     task_row = manager.tasks.get(job_id)
     if task_row is not None:
         model = _enrich_v1_with_names(model, resolve_task_names(task_row))
