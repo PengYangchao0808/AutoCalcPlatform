@@ -339,11 +339,13 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
                 )
             role_id, role_key = _flat_mirror_source(key)
             if role_id is not None:
-                role_values = [
-                    role[role_key]
-                    for role in roles.values()
+                # Prefix-routed field: only its own role is the mirror source.
+                role = roles.get(role_id)
+                role_values = (
+                    [role[role_key]]
                     if isinstance(role, Mapping) and role.get(role_key) is not None
-                ]
+                    else []
+                )
             else:
                 # Unprefixed fields may mirror any role; matching one is enough.
                 role_values = [
