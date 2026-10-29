@@ -38,6 +38,20 @@ _COVERAGE: dict[str, str] = {
     "BatchOptimize": "complete",
 }
 
+_STATUS_VOCABULARY: dict[str, Any] = {
+    "envelope": {"ok": "the call succeeded", "error": "the call failed"},
+    "task_state": [
+        "queued",
+        "running",
+        "paused",
+        "waiting_review",
+        "failed",
+        "cancelled",
+        "completed",
+    ],
+    "legacy_alias": "status mirrors state for older clients",
+}
+
 _CONFSEARCH_CONSTRAINTS = (
     "refinement_policy=screen selects zero refinement candidates; refined=false is expected",
     "pure xTB protocols (xtb-crest, xtb-md) never run DFT refinement",
@@ -62,6 +76,7 @@ _CONFSEARCH_INPUT_PROPERTIES: dict[str, Any] = {
     "input_artifact": {"type": "string", "description": "Upstream artifact reference."},
     "charge": {"type": "integer", "description": "Total charge (default 0)."},
     "multiplicity": {"type": "integer", "description": "Spin multiplicity (default 1)."},
+    "input": {"type": "string", "description": "Inline structure/coordinate text."},
     "source_ref": {"type": "object", "description": "Structure-source provenance."},
     "asset_id": {"type": "string", "description": "Uploaded structure asset id."},
 }
@@ -76,6 +91,8 @@ _BATCH_INPUT_PROPERTIES: dict[str, Any] = {
     "from_artifact": {"type": "string"},
     "items_file": {"type": "string"},
     "selected_ids": {"type": "array", "items": {"type": "string"}},
+    "charge": {"type": "integer", "description": "Total charge (default 0)."},
+    "multiplicity": {"type": "integer", "description": "Spin multiplicity (default 1)."},
 }
 
 _RESOURCE_PROPERTIES: dict[str, Any] = {
@@ -87,7 +104,15 @@ _RESOURCE_PROPERTIES: dict[str, Any] = {
     "walltime_s": {
         "type": "integer",
         "minimum": 1,
-        "description": "Request walltime; admission caps it and execution terminates on it.",
+        "description": (
+            "Request walltime in seconds. The admission ceiling caps it "
+            "(default request 86400 s / 24 h); process termination and the "
+            "queue deadline are separate enforced limits, not this field."
+        ),
+    },
+    "walltime": {
+        "type": "string",
+        "description": "Alias accepted by admission: 'HH:MM' or seconds string.",
     },
 }
 
@@ -102,8 +127,12 @@ def canonical_workflow(value: str) -> str | None:
 
 
 def workflow_suggestion(value: str) -> list[str]:
-    """Closest active workflow ids for a typo (empty when nothing is close)."""
-    return difflib.get_close_matches(str(value).strip(), list(ACTIVE_WORKFLOWS), n=1, cutoff=0.6)
+    """Closest active workflow ids for a typo (case-insensitive, canonical output)."""
+    wanted = str(value).strip()
+    by_fold = {name.casefold(): name for name in ACTIVE_WORKFLOWS}
+    folded = [name.casefold() for name in ACTIVE_WORKFLOWS]
+    matches = difflib.get_close_matches(wanted.casefold(), folded, n=1, cutoff=0.6)
+    return [by_fold[match] for match in matches]
 
 
 def _method_properties(workflow: str) -> tuple[dict[str, Any], dict[str, list[str]]]:
@@ -178,6 +207,7 @@ def _confsearch_block() -> dict[str, Any]:
             },
         ],
         "constraints": list(_CONFSEARCH_CONSTRAINTS),
+        "status_vocabulary": _STATUS_VOCABULARY,
     }
 
 
@@ -223,6 +253,7 @@ def _batch_block() -> dict[str, Any]:
             },
         ],
         "constraints": list(_BATCH_CONSTRAINTS),
+        "status_vocabulary": _STATUS_VOCABULARY,
     }
 
 
@@ -246,4 +277,5 @@ def describe_workflow(workflow: str) -> dict[str, Any]:
             "use the CLI help or the Workbench form, and treat unknown method "
             "keys as unsafe"
         ),
+        "status_vocabulary": _STATUS_VOCABULARY,
     }

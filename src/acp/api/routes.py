@@ -376,19 +376,6 @@ def _capabilities_payload(
             "visible": bool(handshake.negotiated),
             "negotiated": bool(handshake.negotiated),
         },
-        "status_vocabulary": {
-            "envelope": {"ok": "the call succeeded", "error": "the call failed"},
-            "task_state": [
-                "queued",
-                "running",
-                "paused",
-                "waiting_review",
-                "failed",
-                "cancelled",
-                "completed",
-            ],
-            "legacy_alias": "status mirrors state for older clients",
-        },
         "protocol_version": _MCP_PROTOCOL_VERSION,
         "extensions": [dict(entry) for entry in handshake.entries],
         "capability_request": {

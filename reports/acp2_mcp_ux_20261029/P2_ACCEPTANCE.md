@@ -11,9 +11,9 @@
 - `GET|POST /api/capabilities?workflow=`：
   - 大小写不敏感归一（`confsearch` → `Confsearch`）；
   - 未知 ID → 422 `input_invalid` + `params.rule=unknown_workflow` + `allowed` + `suggestion`；
-  - `Confsearch` / `BatchOptimize` → `coverage=complete`，各 2 个示例；
-  - 其余 active 工作流 → `coverage=not_provided`（明确不提供 schema，而不是假装完整）；
-  - 无 `workflow` 参数时**不出现** `workflow_contract`，既有形状不变。
+  - `Confsearch` / `BatchOptimize` → `coverage=complete`，各 2 个示例（四个示例全部经 `submission_contract` 校验）；
+  - 其余 **13 个** active 工作流 → `coverage=not_provided`（明确不提供 schema，而不是假装完整）；
+  - 无 `workflow` 参数时**不出现** `workflow_contract` / `status_vocabulary`，既有形状不变；语汇表随契约块返回。
 - 示例由 `submission_contract` 校验器验证（发布即合法）。
 - 约束写进投影：`screen` 零精修、纯 xTB 不做 DFT 精修、`max_conformers` 仅 NMR。
 
@@ -21,7 +21,7 @@
 
 - `_CAPABILITIES_SCHEMA` 增加可选 `workflow`；`CapabilityPort.capabilities(*, workflow=None)`；
   `_tool_capabilities` 仅在有值时透传（无值路径对旧 fake/旧 Controller 完全不变）。
-- `_ControllerCapabilities` → `ControllerClient.capabilities(workflow=...)` → POST body。
+- `_ControllerCapabilities` → `ControllerClient.capabilities(workflow=...)` → POST body；`workflow=None` 时**不传 kwargs**，旧 fake/旧 Controller 路径不变。
 - 测试覆盖：
   - stdio 进程 → MCP → HTTP，`workflow=Confsearch` 被真实转发并在结果中返回 `workflow_contract`；
   - 无参调用形状不变、八工具集合不变；
@@ -34,7 +34,7 @@
 - prepare 的 `task_ref` / `job_id` 描述去掉 route-path 说法。
 - 公开描述移除 `M1-01b` 等里程碑编号。
 - `project_id` 补充"省略落到 uncategorized 默认项目"。
-- capabilities 增加 `status_vocabulary`（envelope ok/error vs task state，legacy alias）。
+- `status_vocabulary`（envelope ok/error vs task state，legacy alias）随 `workflow_contract` 返回，不再无条件改变无参形状。
 
 ## 证据
 
@@ -44,5 +44,7 @@
 ## 边界（不冒充 PASS）
 
 - 冻结契约语料 `application-api.v1.json`（manifest 1.7.0）**未 bump**：它属于冻结语料 + manifest 自校验/摘要链，需要单独一轮 manifest 周期；本轮只做运行时附加字段，不改冻结文档。
-- 完整 schema 仍只覆盖 Confsearch / BatchOptimize；其余 11 个 active 工作流明确 `not_provided`。
+- 完整 schema 仍只覆盖 Confsearch / BatchOptimize；其余 13 个 active 工作流明确 `not_provided`。
+- **真实 SDK selector 未验证**：仓库无 Python MCP SDK，DSH/Node 真实客户端套件为 contract-marked；本轮以 stdio 进程 + fake Controller 验证协议贯通，真实客户端记 `NOT_VERIFIED`。
+- 冻结契约语料（application-api 1.7.0 / manifest）未 bump，属于单独 manifest 周期；本轮为运行时附加字段。
 - 选择器查询不改变协商状态；真实第三方客户端未接入（沿用 P0 的 NOT_VERIFIED）。

@@ -40,6 +40,7 @@ def test_workflow_selector_returns_complete_contract(client: TestClient) -> None
             method=example["method"],
             resources=example["resources"],
         )
+    assert block["status_vocabulary"]["envelope"]["ok"]
 
 
 def test_workflow_selector_is_case_insensitive(client: TestClient) -> None:
@@ -55,18 +56,28 @@ def test_unknown_workflow_reports_allowed_and_suggestion(client: TestClient) -> 
     assert detail["params"]["rule"] == "unknown_workflow"
     assert "Confsearch" in detail["params"]["allowed"]
     assert detail["params"]["suggestion"] == ["Confsearch"]
+    upper = client.get("/api/capabilities", params={"workflow": "CONFSERCH"})
+    assert upper.status_code == 422
+    assert upper.json()["detail"]["params"]["suggestion"] == ["Confsearch"]
 
 
 def test_post_body_and_query_are_equivalent(client: TestClient) -> None:
     query = client.get("/api/capabilities", params={"workflow": "BatchOptimize"}).json()
     body = client.post("/api/capabilities", json={"workflow": "BatchOptimize"}).json()
     assert query["workflow_contract"] == body["workflow_contract"]
+    for example in body["workflow_contract"]["examples"]:
+        validate_workflow_submission(
+            example["workflow"],
+            input=example["input"],
+            method=example["method"],
+            resources=example["resources"],
+        )
 
 
 def test_no_selector_keeps_the_frozen_shape(client: TestClient) -> None:
     payload = client.get("/api/capabilities").json()
     assert "workflow_contract" not in payload
-    assert payload["status_vocabulary"]["envelope"]["ok"]
+    assert "status_vocabulary" not in payload
     assert payload["limits"]["enforcement"] in {"admission", "not-verified"}
 
 
