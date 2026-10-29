@@ -164,6 +164,26 @@ _CONFSEARCH_LEVELS: dict[str, frozenset[str]] = {
 }
 # ``levels`` also carries scalar knobs at its top level (engine reads them).
 _LEVEL_SCALARS: frozenset[str] = frozenset({"refinement_threshold"})
+
+# Role field -> flat method field (Workbench `applyBatchOptimizeMethodFields`).
+_ROLE_FLAT_ALIASES: dict[str, str] = {
+    "method": "optimization_method",
+    "basis": "optimization_basis",
+    "sp_method": "single_point_method",
+    "sp_basis": "single_point_basis",
+}
+# Workbench 总是带上的 flat 镜像；角色值为 null 时允许它们存在。
+_WORKBENCH_FLAT_DEFAULTS: frozenset[str] = frozenset(
+    {
+        "temperature",
+        "pressure",
+        "scale_factor",
+        "optimization_method",
+        "optimization_basis",
+        "single_point_method",
+        "single_point_basis",
+    }
+)
 _BATCH_LEVELS: dict[str, frozenset[str]] = _level_fields("batch_optimize")
 
 
@@ -286,14 +306,23 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
         roles = _as_mapping(method["batch_roles"], "method.batch_roles")
         for role_id, role_value in roles.items():
             _as_mapping(role_value, f"method.batch_roles.{role_id}")
-        batch_level = (method.get("levels") or {}).get("batch")
-        mirrored: dict[str, Any] = dict(batch_level) if isinstance(batch_level, Mapping) else {}
-        # Workbench also mirrors the INT role at the top level; a differing
-        # mirror is a real conflict (the early return would swallow it).
+        # The flag builder returns early when batch_roles is present, so every
+        # top-level flat setting must be a mirror of a role/level value or it
+        # would be silently ignored.  Aliases follow the Workbench mapping:
+        # int.method -> optimization_method, ts.method -> transition_state_method.
+        mirrored: dict[str, list[Any]] = {}
         for role_value in roles.values():
-            for key in (*_BATCHOPTIMIZE_SCALAR_FLAGS, "opt_recalc_hess", "scf_orbital_inherit"):
-                if isinstance(role_value, Mapping) and role_value.get(key) is not None:
-                    mirrored.setdefault(key, role_value[key])
+            for key, value in role_value.items():
+                if value is None:
+                    continue
+                flat_key = _ROLE_FLAT_ALIASES.get(str(key), str(key))
+                mirrored.setdefault(flat_key, []).append(value)
+        batch_level = (method.get("levels") or {}).get("batch")
+        if isinstance(batch_level, Mapping):
+            for key, value in batch_level.items():
+                if value is None:
+                    continue
+                mirrored.setdefault(str(key), []).append(value)
         for key in (
             *_BATCHOPTIMIZE_SCALAR_FLAGS,
             "opt_recalc_hess",
@@ -301,7 +330,18 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
             "transition_state_opt_recalc_hess",
             "scf_orbital_inherit",
         ):
-            if key in method and key in mirrored and method[key] != mirrored[key]:
+            if key not in method or method[key] in (None, ""):
+                continue
+            values = mirrored.get(key)
+            if not values:
+                if key in _WORKBENCH_FLAT_DEFAULTS:
+                    continue
+                raise SubmissionContractError(
+                    f"method.{key} would be ignored while method.batch_roles is set",
+                    field_name=f"method.{key}",
+                    rule="shadowed_field",
+                )
+            if any(value != method[key] for value in values):
                 raise SubmissionContractError(
                     f"method.{key} disagrees with the mirrored batch setting",
                     field_name=f"method.{key}",

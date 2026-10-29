@@ -37,6 +37,14 @@
 | Batch 只在有 `levels.batch` 时检查镜像，`batch_roles.int.opt_recalc_hess=5` + 顶层 `10` 可绕过 | 镜像值同时从 `batch_roles` 各角色提取，不一致即 `conflicting_fields` |
 | 本地 argv 仍是手拼 base+flags | 新增测试改用生产本地 builder `JobRunner._build_cmd`（NMR 绑定真实 `_build_nmr_cmd`/`_materialize_experiment`），与远端 `build_remote_cli_command` 一样经 `build_parser` 解析 |
 
+### 第四轮验收后
+
+| 问题 | 整改 |
+|---|---|
+| Batch 角色字段与顶层字段的映射不完整（`int.method→optimization_method`、`ts.method→transition_state_method` 等） | 增加 `_ROLE_FLAT_ALIASES`；镜像值同时从各角色与 `levels.batch` 提取，不一致 `conflicting_fields` |
+| 无镜像值的顶层 flat 键被吞（如 `minimum_opt_recalc_hess`） | 不在 Workbench 默认镜像集内的、无对应角色值的 flat 键 → `shadowed_field` 拒绝 |
+| P1-02 副作用证据只核任务数 | 测试改为拒绝前后 `store.counts()`、`admission.snapshot()` 全等，且 `_submission_jobs` 为空 |
+
 ## 本轮变更
 
 | 文件 | 变更 |
@@ -83,7 +91,7 @@
 
 | 批次 | 结果 |
 |---|---|
-| 契约测试 `tests/test_acp_mcp_ux_p1_contract.py` | 36 passed，exit 0 |
+| 契约测试 `tests/test_acp_mcp_ux_p1_contract.py` | 37 passed，exit 0 |
 | 资源链 `tests/test_memory_resource_chain.py` | 60 passed，exit 0 |
 | 批次 A（preflight/digest/discovery/progress/services-mcp/mcp-process） | 101 passed，exit 0 |
 | 批次 B（retirement/v1-science/frame/structure-viewer/api） | 177 passed，exit 0 |

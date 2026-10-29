@@ -91,12 +91,17 @@ def test_confsearch_max_conformers_is_refused(client: TestClient, path: str) -> 
 
 
 def test_preflight_and_submit_report_the_same_violation(client: TestClient) -> None:
-    before = sum(client.app.state.job_manager.store.counts().values())
+    manager = client.app.state.job_manager
+    before_counts = dict(manager.store.counts())
+    before_admission = client.app.state.admission.snapshot()
     body = _confsearch(method={"refinementPolicy": "rank1"})
     preflight = _error(client.post("/api/v1/preflight", json=body))
     submit = _error(client.post("/api/v1/jobs", json=body))
     assert preflight == submit
-    assert sum(client.app.state.job_manager.store.counts().values()) == before
+    # No side effects: no task, no reservation/budget movement, nothing queued.
+    assert dict(manager.store.counts()) == before_counts
+    assert client.app.state.admission.snapshot() == before_admission
+    assert not getattr(manager, "_submission_jobs", {})
 
 
 def test_valid_confsearch_passes_the_contract() -> None:
@@ -470,3 +475,32 @@ def test_resource_validation_does_not_mutate() -> None:
     before = copy.deepcopy(resources)
     validate_resource_request(resources)
     assert resources == before
+
+
+def test_batch_non_mirrored_flat_fields_are_refused() -> None:
+    """Sol round 4: shadowed flat settings must not be swallowed."""
+    base_input = {"source_type": "batch_structures", "items": [{"xyz": "H 0 0 0"}]}
+    with pytest.raises(SubmissionContractError) as excinfo:
+        validate_workflow_submission(
+            "BatchOptimize",
+            input=base_input,
+            method={
+                "profile": "opt_freq",
+                "batch_roles": {"int": {"method": "B3LYP"}},
+                "optimization_method": "PBE0",
+            },
+            resources={},
+        )
+    assert excinfo.value.params()["rule"] == "conflicting_fields"
+    with pytest.raises(SubmissionContractError) as excinfo:
+        validate_workflow_submission(
+            "BatchOptimize",
+            input=base_input,
+            method={
+                "profile": "opt_freq",
+                "batch_roles": {"int": {"opt_recalc_hess": 5}},
+                "minimum_opt_recalc_hess": 10,
+            },
+            resources={},
+        )
+    assert excinfo.value.params()["rule"] == "shadowed_field"
