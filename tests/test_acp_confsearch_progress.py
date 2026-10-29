@@ -90,8 +90,10 @@ def test_engine_reports_confsearch_stages_and_candidate_counts(
     metrics = {metric["key"]: metric for metric in state["live_metrics"]}
     assert metrics["conformers_sampled"]["value"] == "2"
     assert metrics["conformers_sampled"]["label_key"] == "live.conformers_sampled"
-    assert metrics["conformers_kept"]["value"] == "1"
+    assert metrics["conformers_kept"]["value"] == "2"
     assert metrics["conformers_kept"]["label_key"] == "live.conformers_kept"
+    assert metrics["conformers_selected"]["value"] == "1"
+    assert metrics["conformers_selected"]["label_key"] == "live.conformers_selected"
 
 
 def test_engine_reports_only_stages_when_protocol_returns_no_count(

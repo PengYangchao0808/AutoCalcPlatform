@@ -2826,13 +2826,53 @@ class McpServer:
         self, arguments: Mapping[str, Any], context: WorkspaceContext
     ) -> mo.MachineResult:
         record = self._backends.artifacts.read(arguments, workspace_id=context.workspace_id)
-        data = record if isinstance(record, Mapping) else {"result": record}
+        data = dict(record) if isinstance(record, Mapping) else {"result": record}
+        self._verify_artifact_body(data)
         return mo.MachineResult(
             operation=McpTool.READ_ARTIFACT,
             status="ok",
             data=dict(data),
             operation_identity=context.workspace_id,
         )
+
+    @staticmethod
+    def _verify_artifact_body(data: Mapping[str, Any]) -> None:
+        """Refuse reads whose body was altered after the digest was computed.
+
+        MachineResult redacts on serialization, so a path inside the body would
+        otherwise be returned under the original digest.  A truncated slice is
+        exempt: its digest applies to the whole artifact, not the slice.
+        """
+        body = data.get("body")
+        if not isinstance(body, str) or data.get("truncated"):
+            return
+        from acp_services.entrypoints.machine_output import redact_value
+
+        if redact_value({"body": body}).get("body") != body:
+            raise McpToolError(
+                mo.ErrorCode.UNSUPPORTED_CAPABILITY,
+                "artifact body contains a redacted pattern; the bytes cannot be "
+                "returned under the frozen digest",
+                params={"field": "body", "rule": "artifact_body_redacted"},
+            )
+        digest = str(data.get("digest") or "")
+        expected = digest.split(":", 1)[1] if digest.startswith("sha256:") else digest
+        if not expected:
+            return
+        import base64
+        import hashlib
+
+        raw = (
+            base64.b64decode(body)
+            if data.get("encoding") == "base64"
+            else body.encode("utf-8")
+        )
+        if hashlib.sha256(raw).hexdigest() != expected:
+            raise McpToolError(
+                mo.ErrorCode.UNSUPPORTED_CAPABILITY,
+                "artifact body does not match the frozen digest",
+                params={"field": "body", "rule": "artifact_digest_mismatch"},
+            )
 
     def _tool_analyze(
         self, arguments: Mapping[str, Any], context: WorkspaceContext
