@@ -152,7 +152,7 @@
       "NOT_APPLICABLE"
     ]
   },
-  "contract_digest": "01e4a32967eb72466dac62e68794645941064b5429bbe6d1f305330626c9b47b",
+  "contract_digest": "d12504f1ada8ad19d88acc804077dafdd74c286cd92df32379179580fd6fc914",
   "contract_digest_rule": "sha256 over sorted lines '<path> <sha256>\\n' for delivered contracts excluding manifest.json, runtime/baseline-lock.json and release/bom.current.json (self-referential files; the BOM embeds this aggregate digest).",
   "contract_version": "1.7.0",
   "contract_version_history": [
@@ -224,7 +224,7 @@
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/manifest.json",
-      "sha256": "b1c1f952ec529da82dff079f1949f8ebc54d5e564fd1070f3437bb870dc4fb4f",
+      "sha256": "67ddc664f9f814e1c43f9ed413e8677b33f0f6adb0f306349d920782d7ec47c4",
       "status": "delivered"
     },
     {
@@ -447,7 +447,7 @@
       "note": "M0-11 frozen identity/field/migration decisions with the mechanical client inventory digest embedded.",
       "owner": "INT",
       "path": "docs/reference/next-change/acp2-contracts/decision-freeze/identity.v1.json",
-      "sha256": "961b827ec8a5de939233771feaa7641f657cc38a62e132445687140ab0cd68d5",
+      "sha256": "edf61c15f4e09cb2d376af677af549e98e14dd14f844c7a77fb73d4196e674ef",
       "status": "delivered"
     },
     {
@@ -474,7 +474,7 @@
       "note": "M5-02 clean-candidate BOM: 27 artifacts with URI+sha256+size, toolchain/DSH locks, contract digest and coverage canonical digest. Self-referential: excluded from contract_digest because it embeds that aggregate digest.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/release/bom.current.json",
-      "sha256": "f08f9dbc8fff0a435be4a872c9af87097da6b291a7f9a38bb61df7c95f3d9b60",
+      "sha256": "2f6c8fb42691c31b33f35af6ed6a2d4db609ceeb175f17bd9b4b1dcd38dbfb37",
       "status": "delivered"
     },
     {
