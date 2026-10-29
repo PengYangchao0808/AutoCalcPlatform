@@ -1,6 +1,6 @@
 # ACP — 自动化化学计算平台
 
-架构命名与双人协作见[主方案 v1.7 第 37 节](docs/ACP_Architecture_Adjustment_Plan_20261016.md#37-统一命名与双人并行开发计划)：ACR → ACP Services，ACV → ACP Visualization；前端与服务/科学代码分工开发，现有运行入口与导入尚未更名。
+当前科学执行栈为 `cccp/qc → cccp/backends → cccp/calculation → acp`，平台服务实现根为 `acp_services`；Workbench 与 RPH 并列接入同一 Controller。ACP 2.0 / RPH 的交付范围、真实验证和剩余缺口见[2026-10-28 现状说明](docs/reference/current/ACP_RPH_Status_20261028.md)。
 
 **Auto-Calc Platform (ACP)** 是一个模块化的 Python 计算化学平台，旨在降低量子化学计算的入门门槛，通过 CLI 和 Web 界面让不熟悉计算化学流程的研究人员也能轻松提交任务、查看进度、可视化结果。
 
@@ -10,6 +10,7 @@
 - [`acp init` 详细使用方法](#acp-init-详细使用方法)
 - [初始化后启动和验证](#初始化后启动和验证)
 - [常见问题](#安装与初始化常见问题)
+- [MCP 使用指南](#mcp-使用指南) · [ACP / RPH 当前状态](docs/reference/current/ACP_RPH_Status_20261028.md)
 - [工作流示例](#快速开始) · [配置与数据目录](#配置) · [开发](#开发)
 
 ---
@@ -301,7 +302,11 @@ acp run serve --host 127.0.0.1 --port 8765
 
 ## 开发状态
 
-下一次修改统一按[《ACP 完整架构调整方案》v1.5](docs/ACP_Architecture_Adjustment_Plan_20261016.md)实施：ACP / ACR / CCCP 三层九模块，按垂直切片推进并保留科学结果、恢复和旧任务兼容。该方案仍为待实施设计，不表示已完成代码迁移。
+最新[ACP2 功能审查（2026-10-28—29）](reports/acp2_function_audit_20261028/REPORT.md)：非慢 Python 回归 12125 PASS / 1 FAIL / 26 SKIP，真实 DSH SDK 7 PASS；浏览器首次 26 PASS / 18 FAIL，其中 10 项在隔离部署 Origin 后复验通过。Workbench 操作遮挡、数值编辑和默认 RPH 装配等问题仍需处理；完整候选尚未放行。后续建议按[修订路线图第 6 节](<docs/RPH_Agent_Three_Phase_Roadmap_20261027(1).md#6-审查后的开发建议2026-10-29>)推进。
+
+截至 2026-10-28（源码基线 `b32f22bb`），四层科学栈、Services 实现根、MCP 研究工具和 RPH 运行时已落地；真实模型、本地 QC、LSF、浏览器与独立安装已有分项验收。RPH 默认产品装配、同一条真实模型＋QC 科研闭环及完整 DA 配方仍有缺口，完整 ACP2 `candidate_full.allowed=false`。
+
+当前事实与证据统一见[现状说明](docs/reference/current/ACP_RPH_Status_20261028.md)；后续 RPH 方向见[三阶段路线图](<docs/RPH_Agent_Three_Phase_Roadmap_20261027(1).md>)。下表的 Phase 0–4 是早期交付历史，不对应 RPH 三阶段，也不能用于推定 Agent 已交付。[旧架构方案](docs/ACP_Architecture_Adjustment_Plan_20261016.md)和[四组分方案](docs/ACP_2.0_Four_Component_Collaboration_Plan_20261020.md)保留设计沿革。
 
 文档入口见 [docs 导航](docs/README.md)。现行契约与下一轮方案附件分别归入 `docs/reference/current/`、`docs/reference/next-change/`；旧方案、审计记录及演示材料统一保存在 `docs/archive/2026-10-16/`，不作为另一套实施路线。
 
@@ -312,8 +317,370 @@ acp run serve --host 127.0.0.1 --port 8765
 | **Phase 2** | ✅ 完成 | FastAPI Web 后端 + 任务调度器 + 远程 LSF 执行 |
 | **Phase 4** | ✅ 完成 | 极简化重构：mechanism/ 删除，BatchOptimize/irc/scan 独立工作流 |
 | **架构整改** | ✅ 完成（2026-10-05 收口） | 四层架构：`cccp/qc`（子进程+科学适配）→ `cccp/backends`（能力适配）→ `cccp/calculation`（任务层唯一执行驻点）→ `acp`（工作流/规划/发布；primitives/backends 为纯兼容转发）|
+| **ACP 2.0 / Services / MCP** | 已实现并有分项真实验收；完整放行未通过 | 研究记录、审批/预算/恢复、八个基础工具与协商后解锁的研究工具；研究消费接口按部署装配；四个 Python 发行与独立安装回执 |
+| **RPH Agent** | 第一阶段未整体通过；第二阶段已有部分基础；第三阶段待实施 | 默认入口装配、完整真实模型＋QC 轨迹、科研策略、跨 harness 与多 Agent 仍按现状说明逐项记录 |
 
 > 注：conformer / benchmark / ensemble / energy / xtbmd_censo_energy / mechanism / mech-conf / mech-step / mech-confirm / mech-chain / optfreq / optfreqsp / Lowconfirm / Highconfirm 工作流已于 2026-08-28 退役（catalog 中保留为 `status:"retired"` 仅用于历史作业展示）。构象搜索能力统一由 `acp run Confsearch --protocol <4种协议>` 提供；低精度确认由 `acp run BatchOptimize --profile opt_freq` 提供；高精度确认由 `acp run BatchOptimize --profile opt_freq_sp_thermo` 提供。
+
+---
+
+## MCP 使用指南
+
+MCP 是让 AI 客户端**替你跑计算**的一座桥：客户端按 MCP 协议说话，ACP 只收 HTTP，`acp mcp serve` 站在中间做翻译。接好之后，你可以直接说“用 GFN2-xTB 优化乙醇”，客户端会自己完成提交、等待和取结果。
+
+如果这台机器上已经有 Controller 在跑，最短路径只有三步：
+
+1. 在客户端的 MCP 配置里加一条，指向 `acp mcp serve --controller http://127.0.0.1:8765`；
+2. 重启客户端，让它调用一次 `acp_capabilities`（对话式客户端里说一句“列一下 ACP 能做什么”就行）；
+3. 直接用自然语言提计算需求。
+
+下面把这三步展开，并说明每一步实际发生了什么。
+
+### 1. 先看懂三个角色
+
+```text
+你的 AI 客户端（Claude Desktop / DSH / 其他 MCP 客户端）
+   │  启动子进程，用 stdin/stdout 收发一行行 JSON-RPC 消息
+   ▼
+acp mcp serve                 ← 适配器：只做协议转换，无状态
+   │  HTTP
+   ▼
+ACP Controller（acp run serve）← 真正排队、调度、执行
+   │
+   ▼
+CCCP / xTB / ORCA / LSF …
+```
+
+| 角色 | 是什么 | 你要做什么 |
+|---|---|---|
+| Controller | 常驻服务，管任务队列、数据目录和计算软件 | 先启动，记下 URL |
+| `acp mcp serve` | 客户端拉起的翻译进程，不启动服务、不碰数据库 | 一般不用手动运行 |
+| MCP 客户端 | 你平时用的 AI 工具 | 写一段配置指向适配器 |
+
+两个容易误会的地方：
+
+- **适配器不是服务**。它不保存任务状态，关掉它不会取消任何任务；任务都落在 Controller 上，所以在网页和 CLI 里看到的是同一份任务。
+- **适配器不会替你启动 Controller**。Controller 没起来，适配器启动后直接退出（退出码 3）。
+
+### 2. 准备：让 Controller 先跑起来
+
+MCP 入口在 `acp` 命令里：用 `acp` 完整安装（或只装 `acp-web` 角色包）才有；只装 `cccp` 或 `acp-worker` 不会有 `acp mcp serve`。ACP 这一侧不需要 Node、DSH 或模型 API key；这些只在用到对应客户端或模型规划功能时才需要。
+
+已经在跑 Controller 的话，跳过这节，直接用它的地址。没有的话，先初始化（向导和安装步骤里的是同一个），再启动：
+
+```bash
+acp init
+mkdir -p "$HOME/ACP_runs"
+acp run serve --host 127.0.0.1 --port 8765 --run-root "$HOME/ACP_runs"
+```
+
+`$HOME/ACP_runs` 换成你有写权限的本机目录——要用原生文件系统，不要放在 `/tmp` 或网络盘上。如果你已经在 `acp init` 里配过 run root，直接 `acp run serve` 就行，不必再传 `--run-root`。再开一个终端确认它活着：
+
+```bash
+curl --fail --silent http://127.0.0.1:8765/api/health
+```
+
+看到 `"status":"ok"` 就说明 Controller 正常。计算软件的路径、运行目录和远程节点都在 Controller 这一侧配置，MCP 不读这些配置；一个数据根同时只由一个 Controller 使用。
+
+### 3. 接上客户端
+
+多数 MCP 客户端用同一套 `mcpServers` 配置结构。`command` 要写**装有 ACP 那个环境里的** `acp` 绝对路径——桌面应用不一定继承你终端的 PATH，只写 `acp` 很可能找不到：
+
+```json
+{
+  "mcpServers": {
+    "acp": {
+      "command": "/opt/acp/venv/bin/acp",
+      "args": ["mcp", "serve", "--controller", "http://127.0.0.1:8765"],
+      "env": {"ACP2_MCP_LOG_LEVEL": "INFO"}
+    }
+  }
+}
+```
+
+配置文件的位置各个客户端不同（例如 Claude Desktop 用的是 `claude_desktop_config.json`），但字段含义一样；改完记得重启客户端，让它重新读配置。
+
+DSH（DeepSeek Harness）不用 `mcpServers` 结构，而是在 profile 的补丁层里加一条 MCP 客户端配置；工具会以 `mcp__acp__<工具名>` 的形式出现：
+
+```yaml
+# ~/.dsh/profiles/<profile>/cordis.patch.yml
+- insert:
+    - id: mcp-acp
+      name: "@deepseek-ai/dsh-mcp-client"
+      config:
+        serverName: acp
+        transport: stdio
+        command: /opt/acp/venv/bin/acp
+        args: [mcp, serve, --controller, http://127.0.0.1:8765]
+        env:
+          ACP2_MCP_LOG_LEVEL: INFO
+```
+
+`failOnStartupError` 默认 `false`，Controller 没起来时 harness 照常启动、只是没有这组工具；想让它启动即报错可以设为 `true`。改完重启 harness 生效。
+
+想先手动确认能不能启动，也可以自己跑一遍：
+
+```bash
+acp mcp serve --transport stdio --controller http://127.0.0.1:8765
+```
+
+它会安静地停在 stdin 上等输入——这是正常的，不是卡死，也不是聊天窗口。stdout 只走协议帧，诊断日志全部写到 stderr。
+
+#### 认证：本机单人，还是多人共用
+
+- **本机单人**：不设置任何 key，适配器使用 `local-single` 身份，适合自己电脑上的试验。
+- **多人共用**：在 MCP 进程的环境里设置平台签发的 `ACP_API_KEY`。适配器启动时拿它向 Controller 换出用户、项目和权限，之后每次工具调用前都会重新校验；key 被撤销后，已经连着的会话也会被拒绝。注意这是 ACP 平台的凭据，不是模型服务的 key。
+
+key 只能通过环境变量传，`acp mcp serve` 没有 `--api-key` 参数；客户端不一定把你终端里的环境变量传给 MCP 子进程，配完记得核对。请求里的 `project_id` 只是提示，改不了身份和权限。
+
+#### Controller 地址与远程访问
+
+地址优先级从高到低：`--controller` → `ACP_CONTROLLER_URL` → 兼容变量 `ACP2_CONTROLLER`。新配置直接写参数最稳；`ACP2_CONTROLLER_URL` 是 RPH 那一层用的变量，MCP 入口不读它。
+
+Controller 在另一台机器时，不用把端口暴露到公网，开一条 SSH 隧道即可：
+
+```bash
+ssh -N -L 18765:127.0.0.1:8765 user@controller-host
+```
+
+然后配置里写 `--controller http://127.0.0.1:18765`。注意这仍然是“本机 stdio 适配器 → HTTP Controller”：当前没有 MCP Streamable HTTP 服务，不能把 Controller 地址或 `/events` 当成 MCP 的 HTTP/SSE 地址。
+
+#### 排查用的开关
+
+```bash
+acp mcp serve --controller http://127.0.0.1:8765 --log-level DEBUG --max-frame-bytes 1048576
+```
+
+`--log-level` 默认读 `ACP2_MCP_LOG_LEVEL`，没有就用 INFO。单帧默认上限 1 MiB，最小 1024 字节；轨迹和大日志应该走工件读取（工件就是登记过、能按身份读取的结果文件），不要靠放大帧解决。
+
+### 4. 验证：先问一句“你能做什么”
+
+让客户端调用一次 `acp_capabilities`（大多数客户端启动时会自动列工具，也可以手动让它调）。这一步不建任务、不花预算，只做发现：
+
+```json
+{"name": "acp_capabilities", "arguments": {}}
+```
+
+正常返回 `status: "ok"`，`data` 里至少有：
+
+- `workflows`：这台 Controller 可用的工作流（当前是 15 个）；
+- `backends`：本机计算软件是否可用；
+- `limits`：核数、墙钟、读取大小等上限；
+- `tools`：当前会话能看到的工具列表。
+
+这一步失败就先去第 7 节排错，通常是 Controller 地址、进程路径或权限问题。
+
+客户端连上后的调用顺序是 `initialize` → `notifications/initialized`，随后才用 `tools/list` 取工具列表。服务器只认 `2025-06-18` 这个协议版本：你请求别的版本，它仍然回答 `2025-06-18`，由客户端自己判断能不能继续；能力以 `tools/list` 的实际结果为准，不要只看版本字符串。
+
+> 第 5、6 节里的 JSON 都是 MCP `tools/call` 的 `params`，给能直接调工具的客户端和调试用；对话式客户端会替你组织这些参数，你只要把需求说清楚。
+
+### 5. 跑通第一道计算
+
+以“用 GFN2-xTB 优化乙醇”为例，顺序是固定的：预检 → 提交 → 轮询 → 取结果。
+
+**① 预检：只校验、不建任务**
+
+```json
+{
+  "name": "acp_preflight",
+  "arguments": {
+    "workflow": "xtb_optimize",
+    "input": {"source": "CCO", "source_type": "smiles", "charge": 0, "multiplicity": 1},
+    "method": {"gfn": 2},
+    "resources": {"cores": 1},
+    "execution_mode": "local"
+  }
+}
+```
+
+**② 提交：同一份描述，加一个本次操作唯一的 key**
+
+```json
+{
+  "name": "acp_submit",
+  "arguments": {
+    "workflow": "xtb_optimize",
+    "input": {"source": "CCO", "source_type": "smiles", "charge": 0, "multiplicity": 1},
+    "method": {"gfn": 2},
+    "resources": {"cores": 1},
+    "execution_mode": "local",
+    "idempotency_key": "9f1f5e0e-7d2b-4a8e-9b34-2b0f5b1e6c11"
+  }
+}
+```
+
+`idempotency_key` 是这次提交的“重试身份”，也是新人最容易忽略的一项：
+
+- 网络断了要重试：**沿用同一个 key 和同一份请求**，平台会把第一次的结果还给你，不会重复建任务；
+- 换了输入、方法或目标：**换一个新 key**；
+- 同一个 key 配不同请求会冲突（`revision_conflict`），不要靠不停换 key 去猜第一次是否成功。
+
+提交会立刻返回，不等计算跑完。保存返回里的 `data.reference`（任务引用）和 `data.task_ref`（含 attempt 等信息）。要跑远程，把 `execution_mode` 改成 `remote`，按需带 `target_node` / `node_tags`，并重新预检。示例里的 `charge=0`、`multiplicity=1` 只适用于乙醇，换成别的分子要自己判断。
+
+**③ 查状态**
+
+```json
+{"name": "acp_status", "arguments": {"reference": {"kind": "job", "id": "JOB_ID_FROM_SUBMIT"}}}
+```
+
+可以按需轮询，查状态不需要调用模型。**关掉客户端不会取消任务**——任务继续跑，重连后用原 reference 继续查。
+
+**④ 取结果：先 prepare，再 read**
+
+任务完成后，先把要读的文件登记成“工件”。读取不是按文件路径，而是按 prepare 返回的身份；prepare 时要给出文件在任务目录内的相对路径，这样读取也能被权限和大小上限管住：
+
+```json
+{
+  "name": "acp_prepare_artifact",
+  "arguments": {
+    "purpose": "artifact",
+    "job_id": "JOB_ID_FROM_SUBMIT",
+    "artifact_id": "result_manifest",
+    "relative_path": "RESULT/result_manifest.json",
+    "idempotency_key": "REPLACE_WITH_A_NEW_UUID"
+  }
+}
+```
+
+`artifact_id` 只是这次登记的名字，真正读哪个文件由 `relative_path` 决定。prepare 可能立刻完成，也可能返回一个待处理的 `operation_ref`——那就用 `acp_status` 查这个 operation。拿到完整 `artifact_ref` 后再读：
+
+```json
+{
+  "name": "acp_read_artifact",
+  "arguments": {
+    "artifact_ref": {
+      "task_id": "JOB_ID_FROM_SUBMIT",
+      "attempt": 1,
+      "artifact_id": "ARTIFACT_ID_FROM_PREPARE",
+      "generation": 1,
+      "digest": "sha256:REPLACE_WITH_THE_RETURNED_64_HEX_DIGEST"
+    },
+    "max_bytes": 65536,
+    "encoding": "identity"
+  }
+}
+```
+
+`task_id`、`attempt`、`artifact_id`、`generation`、`digest` 必须整组照抄返回的身份，缺一个都读不了；`max_bytes` 上限 1 MiB。没 prepare 就读会得到 `resource_not_ready`，这时应该回头 prepare，而不是反复重试读取。读取不会触发计算，也不会自动远程拉取。
+
+想中途撤销：
+
+```json
+{"name": "acp_cancel", "arguments": {"reference": "JOB_ID_FROM_SUBMIT"}}
+```
+
+取消是请求，不是立刻生效；之后查一次状态确认终态。
+
+**看懂返回**：工具结果同时有 `content` 和 `structuredContent`。判断成败看 `structuredContent.status`、`error` 和 `isError`——工具失败也可能以**正常的 JSON-RPC 响应**返回，别只看有没有 JSON-RPC `error`。
+
+**八个基础工具一览**
+
+| 工具 | 干什么 | 关键参数 |
+|---|---|---|
+| `acp_capabilities` | 问平台能做什么 | 可传 `{}`；协商研究扩展也用它 |
+| `acp_preflight` | 提交前模拟，零副作用 | `workflow`、`input` |
+| `acp_submit` | 提交任务 | `workflow`、`input`、`idempotency_key` |
+| `acp_status` | 查任务或准备操作的状态 | `reference` |
+| `acp_cancel` | 请求取消 | `reference`，可带 `expected_revision` |
+| `acp_prepare_artifact` | 把结果登记成可读工件 | `purpose=artifact` 时还要 `job_id`、`artifact_id`、`relative_path` |
+| `acp_read_artifact` | 读已登记的工件 | 完整 `artifact_ref` |
+| `acp_analyze` | 显式调用已注册的分析 | `analysis_id`、`input_refs`、`explicit=true` |
+
+`acp_analyze` 必须显式触发：传 `explicit=true` 和已经准备好的完整工件引用。`vibration.analyze` 读已有频率证据、不启动计算；`vibration.compute` 是计算能力，要按 `frequency` 任务提交，不能当只读分析。任务 `completed` 只说明任务结束，科学结论是否成立要另外核对分析结果。
+
+### 6. 进阶：研究扩展（协商后解锁更多工具）
+
+研究工具默认**不可见**，要先做一次应用层协商（和 MCP `initialize` 的协议版本协商是两件事）：
+
+```json
+{
+  "name": "acp_capabilities",
+  "arguments": {
+    "research_extension": {"id": "acp.research.v1", "version": "1.0.0"},
+    "client": {"name": "my-research-client", "version": "1"}
+  }
+}
+```
+
+看返回 `data.extensions[]` 里对应项的 `implemented`、`negotiated` 是否为 true、`refusal` 是否为空。确认成功后**重新拉一次 `tools/list`**，工具列表会从 8 个增加：
+
+- 固定多出 10 个 `acp.research.v1` 提案/审批工具；
+- 如果这个入口还接上了研究消费接口（本仓库当前的 `acp mcp serve` 已接入），会再多 10 个研究消费工具（模型规划、用量、研究记录、证据读取、预算、检查点、就绪检查），总数 28 个。
+
+没接消费接口的部署只看到前 18 个；具体以你客户端实际拿到的 `tools/list` 为准。
+
+版本号写错不会让会话崩掉，但那一次 `acp_capabilities` 调用会失败（`isError=true`，`unsupported_capability`，`rule=extension_version_mismatch`），工具列表停在 8 个。
+
+| 研究工具 | 干什么 | 必需参数 |
+|---|---|---|
+| `acp_research_proposal_create_v1` | 建提案 v1，并请求与计划绑定的审批 | `project_id`、`proposal`、`plan` |
+| `acp_research_proposal_read_v1` | 读某个提案版本 | `proposal_ref` |
+| `acp_research_proposal_update_cas_v1` | 按 revision 更新提案；计划变了会开新一轮 | `proposal_ref`、`expected_revision`、`proposal`、`plan` |
+| `acp_research_approval_request_v1` | 请求审批，不替人做决定 | `proposal_ref`、`plan_digest` |
+| `acp_research_approval_query_v1` | 查 pending/approved/rejected/expired/revoked | 无；通常带引用 |
+| `acp_research_approval_decide_v1` | 由有权限的身份批准或拒绝 | `approval_ref`、`decision`、`expected_revision` |
+| `acp_research_approval_revoke_v1` | 撤销审批 | `approval_ref`、`expected_revision` |
+| `acp_research_wait_v1` | 有界等待 approval/saga/proposal/record 事件 | `kinds` |
+| `acp_research_snapshot_v1` | 按 `kind:ref` 读快照 | `refs` |
+| `acp_research_resume_v1` | 按持久研究状态恢复 | `proposal_ref`、`plan_digest` |
+
+消费工具是另外 10 个 `acp_research_model_*` / `acp_research_record_*` / `acp_research_evidence_read_v1` / `acp_research_budget_read_v1` / `acp_research_checkpoint_v1` / `acp_research_readiness_v1`，对应 Controller 的 `/api/v2/model/*` 与 `/api/v2/research/*`，用来读写研究记录、证据视图和预算。普通计算用不到它们。
+
+有界等待长这样：
+
+```json
+{"name": "acp_research_wait_v1", "arguments": {"kinds": ["approval", "saga"], "max_wait_s": 20, "limit": 100}}
+```
+
+返回的 cursor 是不透明字符串，原样存、原样传，别自己解析或拼接；游标 900 秒后过期，过期会得到明确的快照重置，按服务端规则处理，不会静默跳到最新位置。CAS 冲突时重读 revision，再决定怎么合并。
+
+**研究提交**仍然走 `acp_submit`，但要带上已批准计划对应的 `proposal_ref` 和 `plan_digest`。只带其中一部分也会进入研究校验，不匹配就拒绝；有效预算由服务端按审批决定，客户端自己填的数不算。
+
+> 现状边界：研究工具和恢复契约已经实现，但 `rph research` 默认的模型、writer、证据读取和预算装配还没完成。工具可见、握手成功，都不等于“完整的自主科研 Agent 已经可用”，当前范围见 [ACP / RPH 现状说明](docs/reference/current/ACP_RPH_Status_20261028.md)。
+
+### 7. 排错
+
+先跑只读探针。它只做 `initialize`、工具发现和 `acp_capabilities`，不提交任务。新建一个 `mcp-launch.json`（`command` 用绝对路径，`cwd` 是已存在的目录）：
+
+```json
+{
+  "command": "/opt/acp/venv/bin/acp",
+  "args": ["mcp", "serve", "--controller", "http://127.0.0.1:8765"],
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "env": {"ACP2_MCP_LOG_LEVEL": "INFO"}
+}
+```
+
+然后：
+
+```bash
+python3.11 docs/reference/next-change/examples/acp_mcp_stdio_probe.py --launch mcp-launch.json --out /tmp/acp-mcp-probe
+```
+
+`--out` 必须是一个还不存在的目录。探针只验证未协商的八工具路径，不验证研究扩展和真实计算。
+
+| 现象 | 大概原因 |
+|---|---|
+| 客户端说找不到 `acp` | 桌面应用的 PATH 与终端不同，改绝对路径 |
+| 退出码 2 | 缺 Controller 地址、transport 不是 stdio，或参数非法 |
+| 退出码 3 | Controller 连不上或不健康；查 URL、`/api/health`、SSH 隧道 |
+| 退出码 4 | 适配器启动异常，或 `ACP_API_KEY` 在 Controller 端解析失败；看 stderr |
+| 退出码 78 / `mutually_exclusive_distributions` | 根发行与角色发行混装，重建环境 |
+| 进程起来没反应 | 它在等协议输入，正常；用客户端或探针握手 |
+| 协商后还是 8 个工具 | 扩展没协商成功（看 `refusal`），或客户端缓存了旧列表 |
+| 日志出现 `server/discover` unknown method | 新版客户端的探测，会自动回退到 `initialize`，不用管 |
+| `access_denied` | key、项目归属或动作权限不对；请求字段扩不了权 |
+| `backend_unavailable` | 这台 Controller 上缺计算软件；先看 `acp_capabilities.data.backends`，再查 Controller 进程的 PATH 与配置 |
+| `input_invalid` / `idempotency_key_required` | 参数不符合 Schema；submit 必须带 key，未知字段不会被静默忽略 |
+| `invalid_parameter` | 参数不合法，例如 prepare 工件时漏了 `relative_path`；按 `tools/list` 的 Schema 补齐 |
+| `revision_conflict` | 同一个 key 被不同请求复用，或 attempt/工件/revision 过期 |
+| `resource_not_ready` | 先 prepare，再查 operation，最后用返回的完整引用读 |
+| `approval_required` / `budget_exhausted` | 缺匹配审批或预算不足；改客户端字段绕不过去 |
+| `unsupported_capability` | 看扩展的 `refusal`；注册、启用、可执行是三件事 |
+
+干净 EOF 或 Ctrl-C/SIGTERM 关闭适配器返回 0；取消计算要显式调 `acp_cancel`。更早的环境与验收步骤见[旧版 MCP/DSH 手册](docs/reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md)，当前命令以本节和 `acp mcp serve --help` 为准。
+
+本节按 2026-10-29 的当前源码与本机 Controller 实测核对，包括实际完成的握手、`tools/list` 和扩展协商。示例只说明 MCP 的调用方式；各工作流本身的执行完整度，以 `acp_capabilities` 返回的能力和各自的验收记录为准。
 
 ---
 
@@ -805,8 +1172,8 @@ pytest -m "not slow" -v
 | Web 服务 | http://127.0.0.1:8765（启动 `acp run serve` 后；WSL 用户优先使用 127.0.0.1 避免 IPv6 问题）|
 | 前端仪表盘 | `frontend/ACP_Workbench_v2.html`（v1 `ACP_Workbench.html` 为遗留只读）|
 | 开发文档 | `docs/`（CENSO 集成、MethodMeta、Simple Workflows） |
-| 三层架构设计 | `docs/reference/next-change/ACP_Three_Tier_Architecture_20261016.md`（[HTML 阐释版](docs/archive/2026-10-16/history/ACP_Three_Tier_Architecture_20261016.html)，设计阶段） |
-| 产品内核可视化手册 | [docs/archive/2026-10-16/presentations/ACP_Product_Kernel_Manual_20261016.html](docs/archive/2026-10-16/presentations/ACP_Product_Kernel_Manual_20261016.html)（v1.5，投资人/工程双读者） |
+| 三层架构设计 | [设计阶段文档](docs/reference/next-change/ACP_Three_Tier_Architecture_20261016.md)（旧 HTML 阐释版未包含在当前检出中） |
+| 产品内核可视化手册 | 历史 v1.5 HTML 未包含在当前检出中；现有材料见[归档索引](docs/archive/2026-10-16/README.md) |
 
 ---
 

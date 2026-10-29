@@ -114,6 +114,35 @@ module.exports.register = async function (h) {
     assertEq(calls, ["resize", "render"]);
   });
 
+  await test("framing: observer resize skips unchanged size, applies on real change (F09)", async () => {
+    const { viz } = loadViz();
+    const calls = [];
+    const container = { isConnected: true, clientWidth: 300, clientHeight: 200 };
+    const state = { epoch: 0 };
+    const getViewer = () => ({
+      resize() { calls.push("resize"); },
+      center() {}, zoomTo() {}, zoom() {},
+      render() { calls.push("render"); },
+    });
+    viz.framing.scheduleViewerFraming(container, state, getViewer);
+    await new Promise((r) => setTimeout(r, 60)); // settle pass; lastW/lastH recorded
+    assert(state.settled === true, "framing settled before observer fires");
+    const resizeCount = () => calls.filter((c) => c === "resize").length;
+    assertEq(resizeCount(), 1, "settle framed exactly once");
+
+    // Spurious observer fire (e.g. 3Dmol's own canvas swap) with an unchanged
+    // container size must NOT trigger another native resize (audit F09).
+    state.observer.cb();
+    await new Promise((r) => setTimeout(r, 170));
+    assertEq(resizeCount(), 1, "unchanged size → no extra native resize");
+
+    container.clientWidth = 512;
+    state.observer.cb();
+    await new Promise((r) => setTimeout(r, 170));
+    assertEq(resizeCount(), 2, "real size change → resize applied once");
+    assertEq(state.lastW, 512, "lastW tracks the applied size");
+  });
+
   await test("modules register public API only; no auto viewer mounting at load", () => {
     const { sandbox } = loadViz({ $3Dmol: { createViewer: () => { throw new Error("must not be called at load"); } } });
     assertEq(Object.keys(sandbox.window.ACPVisualization.framing).sort(),

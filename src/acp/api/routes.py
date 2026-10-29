@@ -261,9 +261,10 @@ def _backend_capability_summary() -> list[dict[str, Any]]:
     except ImportError:
         return []
     summaries: list[dict[str, Any]] = []
+    probe_config = _backend_probe_config(_load_executables())
     for name in list_backends():
         try:
-            status = cast(dict[str, Any], backend_status(name))
+            status = cast(dict[str, Any], backend_status(name, config=probe_config))
         except (KeyError, OSError, ValueError):
             summaries.append({"name": name, "available": False})
             continue
@@ -522,6 +523,22 @@ def _load_executables() -> dict[str, Any]:
         return {}
 
 
+def _backend_probe_config(executables: dict[str, Any]) -> dict[str, Any]:
+    """Configuration a backend constructor needs to judge binary presence.
+
+    ``/api/backends`` must answer "is this binary present *for this
+    deployment*", and the install pin lives in ``executables.<name>.path``.
+    Constructing a backend with an empty config downgrades every interface to
+    ``PATH``-only resolution, which misreports a config-pinned install as a
+    missing binary whenever the serving process runs with a minimal ``PATH``
+    (systemd's default, where e.g. ``xtb``/``crest``/``censo`` live outside
+    ``/usr/bin``).  Only the ``executables`` section is relevant to these
+    probes, so it is reused from the single :func:`_load_executables`
+    authority instead of loading the config twice.
+    """
+    return {"executables": executables}
+
+
 def _resolve_backend_path(name: str, executables: dict[str, Any]) -> str:
     configured = None
     entry = executables.get(name)
@@ -581,10 +598,11 @@ def get_backends(request: Request) -> BackendsResponse:
     from acp.backends import BackendCapabilityStatus, backend_status, list_backends
 
     executables = _load_executables()
+    probe_config = _backend_probe_config(executables)
     remote = _remote_backend_map(request)
     backends: list[BackendInfo] = []
     for name in list_backends():
-        status = cast(dict[str, Any], backend_status(name))
+        status = cast(dict[str, Any], backend_status(name, config=probe_config))
         capabilities = cast(dict[str, Any], status["capabilities"])
         caps = [
             CapabilityInfo(name=cap, available=(st is BackendCapabilityStatus.AVAILABLE))

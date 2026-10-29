@@ -582,6 +582,9 @@ window.ACPCapabilityForm = (function () {
     } else {
       input = domDoc.createElement("input");
       input.setAttribute("type", field.type === "number" ? "number" : "text");
+      if (field.type === "number") {
+        input.setAttribute("step", field.schema_type === "integer" ? "1" : "any");
+      }
       if (field.minimum !== null) input.setAttribute("min", String(field.minimum));
       if (field.maximum !== null) input.setAttribute("max", String(field.maximum));
     }
@@ -597,6 +600,12 @@ window.ACPCapabilityForm = (function () {
     var commit = function (value) {
       try {
         setValue(field.name, value);
+        state.error = null;
+        if (field.type === "number" && value !== "" && typeof value !== "number") {
+          state.error = failure("ui_value_type", "Invalid " + field.schema_type + " value", {
+            path: field.name,
+          });
+        }
       } catch (error) {
         state.error = typed(error, "ui_value_type");
       }
@@ -607,7 +616,24 @@ window.ACPCapabilityForm = (function () {
         commit(input.checked === true);
       });
     } else {
-      input.addEventListener("change", function () { commit(input.value); });
+      input.addEventListener("change", function () {
+        var value = input.value;
+        if (field.type === "number") {
+          // Browsers sanitize invalid number text to "". Keep badInput
+          // distinct from an intentionally cleared field; schema validation
+          // must reject it rather than silently substituting a default.
+          if (input.validity && input.validity.badInput) value = "NaN";
+          else value = value.trim();
+          if (value !== "") {
+            var numeric = Number(value);
+            if (isFinite(numeric) &&
+                (field.schema_type !== "integer" || Math.floor(numeric) === numeric)) {
+              value = numeric;
+            }
+          }
+        }
+        commit(value);
+      });
     }
     append(row, input);
     if (field.unit) {

@@ -11,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import cccp.software as software
+from cccp.backends.capabilities import BackendCapabilityStatus, backend_status
 from cccp.software import SoftwareCandidate, SoftwareDiscovery
 
 
@@ -130,3 +131,56 @@ def test_software_discovery_empty_install(client: TestClient) -> None:
     assert entry["version"] == ""
     assert entry["multiple"] is False
     assert entry["candidates"] == []
+
+
+def test_backend_status_probes_the_config_pinned_binary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An ``executables.<name>.path`` pin must count as present, not as missing.
+
+    ``is_available()`` is ``self.executable is not None``; the executable comes
+    from the config handed to the backend constructor.  Probing with an empty
+    config therefore degrades to ``PATH`` only.  Both halves are pinned here:
+    an empty config stays PATH-only (no scan/fallback rescue), and a pinned
+    config makes the same backend available with its declared capability
+    restored from ``MISSING_BINARY``.
+    """
+    binary = _make_executable(tmp_path / "pinned", name="crest")
+    monkeypatch.setattr(software, "_search_path", lambda: "")
+    monkeypatch.setattr(software, "_scan_candidates", lambda name: [])
+
+    bare = backend_status("crest")
+    assert bare["is_available"] is False
+    assert bare["capabilities"]["conformer_search"] is BackendCapabilityStatus.MISSING_BINARY
+
+    pinned = backend_status("crest", config={"executables": {"crest": {"path": str(binary)}}})
+    assert pinned["is_available"] is True
+    assert pinned["capabilities"]["conformer_search"] is BackendCapabilityStatus.AVAILABLE
+
+
+def test_backends_available_for_config_pinned_binary_off_path(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression: ``/api/backends`` said ``available: false`` for a pinned install.
+
+    The service runs under systemd's minimal ``PATH``, so a backend probed with
+    an empty config reported ``xtb``/``crest``/``censo`` as missing while the
+    sibling ``path`` field (resolved *with* the deployment config) showed the
+    binary.  ``/api/backends`` must construct its probes from the deployment
+    ``executables`` section so availability and ``path`` can never disagree.
+    """
+    binary = _make_executable(tmp_path / "pinned", name="xtb")
+    monkeypatch.setenv("PATH", "/usr/local/bin:/usr/bin:/bin")
+    monkeypatch.setattr(
+        "acp.api.routes._load_executables",
+        lambda: {"xtb": {"path": str(binary)}},
+    )
+    with patch("acp.api.routes._backend_version", return_value=""):
+        response = client.get("/api/backends")
+
+    assert response.status_code == 200
+    xtb = next(backend for backend in response.json()["backends"] if backend["name"] == "xtb")
+    assert xtb["path"] == str(binary)
+    assert xtb["available"] is True
+    capabilities = {cap["name"]: cap["available"] for cap in xtb["capabilities"]}
+    assert capabilities["geometry_optimization"] is True

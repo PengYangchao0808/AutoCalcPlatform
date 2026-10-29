@@ -743,6 +743,12 @@ class ControllerClient:
 
     # -- P2 research operations (M2-01c; one method per research tool) ------
 
+    def research_consume(
+        self, method: str, path: str, payload: Mapping[str, Any] | None = None
+    ) -> Mapping[str, Any]:
+        """Transport for the closed research consumer route table (not a tool URL)."""
+        return _as_mapping(self._request_json(method, path, payload), "research_consume")
+
     def create_proposal(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
         """Create (or replay) revision 1 of a proposal and its approval request."""
         data = self._request_json("POST", "/api/v2/research/proposals", dict(request))

@@ -71,14 +71,18 @@
         }
       },
       "implemented_by": "M2-01c",
-      "tool_visibility": "tools/list is the model-visible surface: eight P1 tools before negotiation, plus the ten research tools after it. A registration is never a visibility claim."
+      "tool_visibility": "Eight P1 tools before negotiation; ten legacy P2 tools and bound research-consumption.v1 tools after it. Registration alone is not visibility."
     },
     "rejected_alternative": "restricted HTTP client path - not chosen in Plan B; adding one would create a second client contract to keep in sync",
     "forbidden": [
       "an untyped passthrough/shell tool",
       "a model-supplied approver, tenant or role",
       "a second task state machine for research records"
-    ]
+    ],
+    "consumer_surface": {
+      "contract": "runtime/research-consumption.v1.json",
+      "rph_product_rule": "Require additive observed tools after acp.research.v1@1.0.0 handshake; legacy promise unchanged."
+    }
   },
   "tool_naming": {
     "pattern": "^acp_research_[a-z0-9_]+_v[0-9]+$",

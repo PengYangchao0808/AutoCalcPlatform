@@ -377,9 +377,10 @@ def test_t31_support_matrix_is_consistent_and_default_scope_is_explicit() -> Non
     problems = _matrix_problems(text)
     assert problems == [], problems
     assert "singlepoint" in chain.DEFAULT_ENVELOPE_WORKFLOWS
-    # Only one *catalog* workflow freezes an envelope by default; the M2-04
-    # envelope-only recipe workflow is not a catalog workflow.
-    assert len(chain.DEFAULT_ENVELOPE_WORKFLOWS & set(CURRENT_ACTIVE_IDS)) == 1
+    # Two *catalog* workflows freeze an envelope by default (singlepoint and the
+    # evidence-backed xtb_optimize promotion); the M2-04 envelope-only recipe
+    # workflow is not a catalog workflow.
+    assert len(chain.DEFAULT_ENVELOPE_WORKFLOWS & set(CURRENT_ACTIVE_IDS)) == 2
     # Scientific closure is tracked separately; the matrix must not use the
     # closure count as a generic default-enabled count.
     assert "8/15" not in text

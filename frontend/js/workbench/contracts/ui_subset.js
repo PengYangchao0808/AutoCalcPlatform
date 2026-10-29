@@ -725,6 +725,7 @@ ACPWorkbench.contracts.uiSubset = (function () {
         title: typeof node.title === "string" ? node.title : name,
         description: typeof node.description === "string" ? node.description : "",
         type: kind === "integer" || kind === "number" ? "number" : (kind || "string"),
+        schema_type: kind || "string",
         widget: typeof block.widget === "string" ? block.widget : "text",
         enum: Array.isArray(node.enum) ? node.enum.slice() : null,
         default: hasOwn(node, "default") ? node["default"] : null,

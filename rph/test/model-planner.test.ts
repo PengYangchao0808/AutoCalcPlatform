@@ -14,6 +14,7 @@ import { test } from "node:test";
 import {
   FIXTURE_PLANNER,
   FixturePlannerRejectedError,
+  MODEL_PLANNER_SYSTEM_PROMPT,
   ModelPlanRejectedError,
   PLANNER_INPUT_SCHEMA,
   PLANNER_OUTPUT_SCHEMA,
@@ -407,4 +408,23 @@ test("composition: the model adapter is the accepted product planner", TEST_OPTI
   const plan = await skills.plan(input);
   assert.equal(plan.science.charge, 1);
   assert.equal(plan.science.multiplicity, 2);
+});
+
+test("model planner: the system prompt states the exact output contract (C1 regression)", TEST_OPTIONS, () => {
+  const prompt = MODEL_PLANNER_SYSTEM_PROMPT;
+  for (const key of ["capability_steps", "initial_inputs", "allowed_substitutions"]) {
+    assert.ok(prompt.includes(key), `prompt must name the required science key "${key}"`);
+  }
+  assert.ok(
+    prompt.includes("science MUST NOT contain"),
+    "prompt must forbid electronic_state/structure_provenance/constraints inside science",
+  );
+  assert.ok(
+    prompt.includes("science_inputs MUST be ONE OBJECT"),
+    "prompt must describe science_inputs as one object (never an array)",
+  );
+  assert.ok(
+    prompt.includes("notes is an ARRAY"),
+    "prompt must describe notes as an array of strings",
+  );
 });

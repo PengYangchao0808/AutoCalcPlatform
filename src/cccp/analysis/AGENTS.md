@@ -1,7 +1,7 @@
 # analysis/ — Science-Analysis Home (ACP 2.0, 2026-10)
 
 ## OVERVIEW
-The science-analysis subpackage (**87 .py, 47.9k lines**) — created in ACP 2.0 as the single home for domain science that is *not* subprocess execution: NMR/DP4/DP5/FCHL (moved here from `acp/nmr/`, which is now a forwarder surface), research evidence/provenance/question/reaction contracts, PES path analysis, ensemble thermochemistry, bounded science products, structure intake types, confsearch selection science, tsmode bundles, xTB-MD sampling, retired xtbmd helpers. `__init__.py` is docstring-only (no exports — root `cccp/__init__.py` same exception). Never imports `acp`.
+The science-analysis subpackage (**88 .py, 47.9k lines**) — created in ACP 2.0 as the single home for domain science that is *not* subprocess execution: NMR/DP4/DP5/FCHL (moved here from `acp/nmr/`, which is now a forwarder surface), research evidence/provenance/question/reaction contracts, PES path analysis, ensemble thermochemistry, bounded science products, structure intake types, confsearch selection science, tsmode bundles, xTB-MD sampling, retired xtbmd helpers. `__init__.py` is docstring-only (no exports — root `cccp/__init__.py` same exception). Never imports `acp`.
 
 ## STRUCTURE
 ```

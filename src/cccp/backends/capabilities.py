@@ -8,6 +8,9 @@ import from ``matrix`` — never the other way round — so no import cycle.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 from cccp.backends.crest import CrestBackend
 from cccp.backends.external_backend import ExternalBackend
 from cccp.backends.isostat_backend import IsostatBackend
@@ -87,19 +90,36 @@ def list_backends(capability: str | None = None) -> list[str]:
     ]
 
 
-def backend_status(backend_name: str) -> dict[str, object]:
+def backend_status(
+    backend_name: str,
+    config: Mapping[str, Any] | None = None,
+) -> dict[str, object]:
     """Return declared and runtime capability status for *backend_name*.
 
     Declarations answer "is it implemented?"; runtime probes answer "is the
     binary actually present?".  ``external`` uses per-capability probes
     (``is_isostat_available`` / ``is_shermo_available``); other backends fall
     back to the backend-wide ``is_available()``.
+
+    Args:
+        backend_name: Backend key or alias (``"orca"``, ``"xtb"``, ...).
+        config: Effective configuration handed to the backend constructor.
+            Binaries are pinned under ``executables.<name>.path``, which each
+            interface consults before falling back to ``PATH``.  Callers that
+            own the deployment config **must** pass it: probing with an empty
+            config downgrades every interface to ``PATH``-only resolution, so
+            a config-pinned install is reported as a missing binary whenever
+            the serving process runs with a minimal ``PATH`` (e.g. systemd).
+
+    Returns:
+        ``name`` / ``backend_class`` / ``is_available`` /
+        ``declared_capabilities`` / ``capabilities``.
     """
 
     canonical_backend = _normalize_backend_name(backend_name)
     declared_capabilities = list_capabilities(canonical_backend)
     backend_cls = get_backend(canonical_backend)
-    backend = backend_cls({})
+    backend = backend_cls(dict(config or {}))
     backend_available = backend.is_available()
 
     actual_capabilities: dict[str, BackendCapabilityStatus] = {}

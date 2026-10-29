@@ -32,6 +32,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import sqlite3
 from collections.abc import Mapping
 from typing import Any
@@ -752,7 +753,8 @@ def reconcile_research_saga(
 
 def _local_work_dir(request: Request, job_id: str) -> Any:
     """Resolve the local attempt work dir; a remote attempt is typed unavailable."""
-    record = _manager(request).get(job_id)
+    manager = _manager(request)
+    record = manager.get(job_id)
     if record is None:
         raise _command_error(
             404,
@@ -762,7 +764,7 @@ def _local_work_dir(request: Request, job_id: str) -> Any:
             retryable=False,
         )
     work_dir = str(getattr(record, "work_dir", "") or "")
-    if not work_dir:
+    if manager._is_remote_job(record) or not work_dir:
         raise _command_error(
             503,
             "resource_unavailable",
@@ -797,6 +799,13 @@ def get_research_record_evidence(
         project_id=project_id,
     )
     record = json.loads(stored.body)
+    return _project_record_evidence(record, request, session_seed=session_seed, round=round)
+
+
+def _project_record_evidence(
+    record: dict[str, Any], request: Request, *, session_seed: str, round: int | None
+) -> JSONResponse:
+    """Shared projection of exact attempt/report bytes; no model narrative."""
     project = str(record.get("project_id") or "")
     identity = ResearchIdentity.allocate(
         _command_identity(request, project_id=project), session_seed=session_seed
@@ -936,3 +945,283 @@ def get_research_record_evidence(
             params={"rule": exc.code},
         ) from exc
     return JSONResponse(view.to_dict())
+
+
+class EvidenceReadBody(BaseModel):
+    """Pre-record evidence read, bound to an exact attempt and report artifact."""
+
+    model_config = ConfigDict(extra="forbid")
+    project_id: str | None = None
+    session_seed: str
+    research_id: str
+    round: int = Field(ge=0)
+    task_ref: dict[str, Any]
+    report_ref: dict[str, Any]
+
+
+class EvidencePrepareBody(BaseModel):
+    """Produce the attempt's canonical evidence report (deterministic assembly)."""
+
+    model_config = ConfigDict(extra="forbid")
+    project_id: str | None = None
+    session_seed: str
+    research_id: str
+    round: int = Field(ge=0)
+    task_ref: dict[str, Any]
+
+
+@router.post("/research/evidence/prepare")
+def prepare_attempt_evidence(body: EvidencePrepareBody, request: Request) -> JSONResponse:
+    """Assemble and persist the completed attempt's evidence report.
+
+    The A line owns the vocabulary and downgrade rules; this route only binds
+    the request to one verified attempt and returns the digest-bound reference
+    the record evidence projection accepts. Production is deterministic for
+    one attempt state, so retries are idempotent by bytes.
+    """
+    project = _research_project_scope(request, body.project_id)
+    _require_entry_access(request, _EntryClass.CACHE_READ, project_id=project, action="read")
+    from acp_services.runtime.research_consumption import validate_client_attempt
+
+    task = body.task_ref
+    job_id = str(task.get("job_id") or task.get("task_id") or "")
+    _require_entry_access(
+        request, _EntryClass.CACHE_READ, project_id=project, action="read", resource_id=job_id
+    )
+    try:
+        validate_client_attempt(task, _manager(request).get(job_id), project)
+    except ResearchOperationError as exc:
+        raise _operation_error(exc) from exc
+    release = task.get("release") or {}
+    release_digest = str(task.get("release_digest") or release.get("release_digest") or "")
+    import re as _re
+
+    if _re.fullmatch(r"[0-9a-f]{64}", release_digest):
+        release_digest = f"sha256:{release_digest}"
+    attempt = int(task.get("attempt") or 0)
+    work_dir = _local_work_dir(request, job_id)
+    from acp_services.runtime.evidence_production import (
+        EvidenceProductionError,
+        produce_attempt_evidence_report,
+    )
+
+    try:
+        produced = produce_attempt_evidence_report(
+            work_dir=work_dir, job_id=job_id, attempt=attempt
+        )
+    except EvidenceProductionError as exc:
+        raise _command_error(
+            409,
+            "revision_conflict",
+            str(exc),
+            params={"rule": exc.code},
+        ) from exc
+    return JSONResponse(
+        {
+            "schema": "acp2.runtime.evidence-prepare.v1",
+            "report_ref": {
+                "kind": "evidence_report",
+                "report_id": produced["report"]["report_id"],
+                "sha256": produced["sha256"],
+                "relative_path": produced["relative_path"],
+                "artifact_id": "evidence-report",
+                "generation": attempt,
+                "task_id": job_id,
+                "attempt": attempt,
+                "release_digest": release_digest,
+            },
+            "claim_statuses": produced["claim_statuses"],
+        }
+    )
+
+
+@router.post("/research/evidence/read")
+def read_attempt_evidence(body: EvidenceReadBody, request: Request) -> JSONResponse:
+    """Reuse the record projection before a decision record can be created."""
+    project = _research_project_scope(request, body.project_id)
+    _require_entry_access(request, _EntryClass.CACHE_READ, project_id=project, action="read")
+    from acp_services.runtime.research_consumption import validate_client_attempt
+
+    task = body.task_ref
+    job_id = str(task.get("job_id") or task.get("task_id") or "")
+    _require_entry_access(
+        request, _EntryClass.CACHE_READ, project_id=project, action="read", resource_id=job_id
+    )
+    try:
+        validate_client_attempt(task, _manager(request).get(job_id), project)
+    except ResearchOperationError as exc:
+        raise _operation_error(exc) from exc
+    if body.report_ref.get("kind") != "evidence_report":
+        raise _command_error(422, "input_invalid", "report_ref must cite an evidence_report")
+    release = task.get("release") or {}
+    # The evidence projection validates a complete TaskRef, so the frozen
+    # release digest must survive the binding (bare 64-hex is normalised to
+    # the wire scheme exactly like every other digest boundary).
+    release_digest = str(task.get("release_digest") or release.get("release_digest") or "")
+    if re.fullmatch(r"[0-9a-f]{64}", release_digest):
+        release_digest = f"sha256:{release_digest}"
+    binding = {
+        "project_id": project,
+        "job_id": job_id,
+        "attempt": task.get("attempt"),
+        "release_id": task.get("release_id") or release.get("release_id"),
+        "release_digest": release_digest,
+    }
+    return _project_record_evidence(
+        {
+            "project_id": project,
+            "research_id": body.research_id,
+            "round": body.round,
+            "task_refs": [binding],
+            "evidence_refs": [body.report_ref],
+        },
+        request,
+        session_seed=body.session_seed,
+        round=body.round,
+    )
+
+
+@router.get("/research/readiness")
+def research_readiness(request: Request, project_id: str | None = None) -> dict[str, Any]:
+    """Read-only deployment checks. Never executes a model or scientific binary."""
+    import os
+
+    from acp.core.config import load_config
+    from acp.core.paths import resolve_run_root
+    from acp_services.runtime.execution_chain import DEFAULT_ENVELOPE_WORKFLOWS
+    from cccp.software import get_configured_path, resolve_executable
+
+    project = _research_project_scope(request, project_id)
+    _require_entry_access(request, _EntryClass.CACHE_READ, project_id=project, action="read")
+    facts: list[dict[str, Any]] = []
+
+    def fact(name: str, status: str, hint: str, **extra: Any) -> None:
+        facts.append({"id": name, "status": status, "hint": hint, **extra})
+
+    command = _command_identity(request, project_id=project)
+    fact(
+        "identity",
+        "ok",
+        "Controller resolved the caller",
+        project_id=project,
+        principal_id=command.principal_id,
+    )
+    try:
+        _require_entry_access(request, _EntryClass.CACHE_READ, project_id=project, action="write")
+        fact("permissions", "ok", "read/write authorized; approval still required per plan")
+    except HTTPException:
+        fact("permissions", "fail", "use a project credential with read and write access")
+    config = load_config()
+    executable = resolve_executable("orca", get_configured_path(config, "orca"))
+    fact(
+        "software",
+        "ok" if executable else "fail",
+        "ORCA resolved locally" if executable else "configure an executable ORCA for singlepoint",
+    )
+    root = resolve_run_root(getattr(request.app.state, "run_root", None))
+    writable = root.is_dir() and os.access(root, os.W_OK | os.X_OK)
+    fact(
+        "storage", "ok" if writable else "fail", "check Controller run_root exists and is writable"
+    )
+    gateway = getattr(request.app.state, "model_gateway", None)
+    credential = gateway.credential_state() if gateway is not None else {}
+    configured = bool(credential.get("configured"))
+    fact(
+        "model",
+        "ok" if configured else "fail",
+        "gateway configured; provider reachability needs a planning call"
+        if configured
+        else "configure the Controller model gateway credential",
+        credential_configured=configured,
+    )
+    admission = getattr(request.app.state, "admission", None)
+    envelope_ready = admission is not None and "singlepoint" in DEFAULT_ENVELOPE_WORKFLOWS
+    fact(
+        "execution",
+        "ok" if envelope_ready else "fail",
+        "singlepoint envelope enabled; per-plan preflight/admission required"
+        if envelope_ready
+        else "initialize Controller admission and enable the singlepoint envelope",
+        workflow="singlepoint",
+    )
+    return {"schema": "acp2.research.readiness.v1", "facts": facts}
+
+
+class ClientCheckpointBody(BaseModel):
+    """CAS client recovery metadata in the existing proposal document."""
+
+    model_config = ConfigDict(extra="forbid")
+    project_id: str | None = None
+    session_seed: str
+    expected_revision: int = Field(ge=1)
+    plan: dict[str, Any]
+    entry: dict[str, Any]
+
+
+@router.post("/research/proposals/{proposal_ref}/checkpoint")
+def checkpoint_research_client(
+    proposal_ref: str, body: ClientCheckpointBody, request: Request
+) -> dict[str, Any]:
+    """Persist client recovery state with proposal CAS and an attempt guard.
+
+    This never writes worker checkpoints or claims worker execution rights.
+    """
+    project = _research_project_scope(request, body.project_id)
+    _require_entry_access(
+        request,
+        _EntryClass.CACHE_READ,
+        project_id=project,
+        action="write",
+        resource_id=f"research.proposal:{proposal_ref}",
+    )
+    stored = _read_research_document(
+        request, kind="proposal", document_id=proposal_ref, project_id=project
+    )
+    proposal = json.loads(stored.body)
+    from acp_services.runtime.research_consumption import (
+        checkpoint_client_state,
+        client_task_reference,
+    )
+
+    try:
+        task = client_task_reference(body.entry)
+    except ResearchOperationError as exc:
+        raise _operation_error(exc) from exc
+    job_id = str(task.get("job_id") or task.get("task_id") or "")
+    _require_entry_access(
+        request, _EntryClass.CACHE_READ, project_id=project, action="read", resource_id=job_id
+    )
+    try:
+        return checkpoint_client_state(
+            operations=_operations(request),
+            command=_command_identity(request, project_id=project),
+            proposal_ref=proposal_ref,
+            proposal=proposal,
+            current_task=_manager(request).get(job_id),
+            entry=body.entry,
+            expected_revision=body.expected_revision,
+            plan=body.plan,
+            session_seed=body.session_seed,
+        )
+    except ResearchOperationError as exc:
+        raise _operation_error(exc) from exc
+
+
+@router.get("/research/usage")
+def research_consumer_usage(
+    request: Request, proposal_ref: str, session_seed: str, project_id: str | None = None
+) -> dict[str, Any]:
+    """Read the existing admission and model ledgers; never estimates usage."""
+    from acp.api.v2_model_gateway import model_usage
+    from acp_services.runtime.research_budget import budget_id_for
+
+    project = _research_project_scope(request, project_id)
+    _require_entry_access(request, _EntryClass.CACHE_READ, project_id=project, action="read")
+    admission = getattr(request.app.state, "admission", None)
+    if admission is None:
+        raise _command_error(503, "backend_unavailable", "admission ledger unavailable")
+    projection = admission.ledger.research_budget_projection(budget_id_for(project, proposal_ref))
+    model = model_usage(request, session_seed=session_seed, project_id=project)
+    from acp_services.runtime.research_consumption import consumer_budget_usage
+
+    return consumer_budget_usage(projection, model)

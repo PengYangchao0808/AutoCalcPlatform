@@ -1,5 +1,7 @@
 # ACP 2.0 MCP / DSH 本服务器联调与验收手册
 
+> **2026-10-28 使用入口**：[根 README 的 MCP 指南](../../../README.md#mcp-使用指南)提供当前启动命令、认证、工具参数和研究协商。`acp mcp serve --controller <url>` 现已实现；八个基础工具加协商后的十个研究工具有正式装配和后续证据。本文保留历史环境、启动契约和验收设计；下文“入口待交付”“未找到 dsh”以及版本“仅核对未验证”等属于 2026-10-20—21 时点。真实模型与真实 QC 分支仍须分开判断，当前范围见[现状说明](../current/ACP_RPH_Status_20261028.md)。
+
 **日期**：2026-10-20  
 **状态**：后续实施与操作规范；不是全链路验收通过报告。  
 **关联**：[四组分方案](../../ACP_2.0_Four_Component_Collaboration_Plan_20261020.md) §10–11；[debug 验收 Harness 契约](../../../reports/architecture_remediation_20261020/harness-contract.md)。

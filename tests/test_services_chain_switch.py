@@ -2604,7 +2604,7 @@ def test_t29_default_envelope_scope_is_singlepoint_only() -> None:
     # M2-04d adds the envelope-only recipe workflow to the default freeze scope;
     # the ordinary singlepoint default is unchanged and the C01 catalog closure
     # stays exactly the eight (``RECIPE_WORKFLOWS`` is not a catalog workflow).
-    assert chain.DEFAULT_ENVELOPE_WORKFLOWS == frozenset({"singlepoint"}) | chain.RECIPE_WORKFLOWS
+    assert chain.DEFAULT_ENVELOPE_WORKFLOWS == frozenset({"singlepoint", "xtb_optimize"}) | chain.RECIPE_WORKFLOWS
     assert chain.ENABLED_WORKFLOWS == _C01_EIGHT | chain.RECIPE_WORKFLOWS
     assert set(acp_freeze.FREEZE_BUILDERS) == {
         "singlepoint",

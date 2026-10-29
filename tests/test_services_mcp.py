@@ -408,9 +408,13 @@ def test_tools_call_requires_a_name() -> None:
 
 def test_dispatch_table_is_exactly_the_allowlist() -> None:
     server = _server()
-    # M2-01c: the P1 allowlist plus the ten registered research tools; the two
-    # sets are disjoint and neither widens the other.
-    assert set(server._tool_dispatch) == set(mcp.TOOL_ALLOWLIST) | set(mcp.RESEARCH_TOOL_SET)
+    # The frozen P1 and legacy P2 sets plus additive negotiated consumer tools.
+    # Each set is disjoint; tool visibility remains session-bound.
+    from acp_services.entrypoints.research_consumption import CONSUMPTION_TOOL_NAMES
+
+    assert set(server._tool_dispatch) == (
+        set(mcp.TOOL_ALLOWLIST) | set(mcp.RESEARCH_TOOL_SET) | set(CONSUMPTION_TOOL_NAMES)
+    )
     assert set(mcp.TOOL_ALLOWLIST) & set(mcp.RESEARCH_TOOL_SET) == set()
 
 

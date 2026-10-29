@@ -149,6 +149,7 @@ def verified_release_facts(read_root: str | Path | None, attempt: int) -> dict[s
     return facts
 
 
+
 def project_task_status(
     payload: Mapping[str, Any] | None,
     *,

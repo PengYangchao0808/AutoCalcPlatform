@@ -127,7 +127,7 @@ def _assert_no_page_errors(errors: list[str]) -> None:
 
 
 @pytest.fixture(scope="session")
-def server_url() -> Generator[str, None, None]:
+def server_url(isolated_browser_deployment: None) -> Generator[str, None, None]:
     """Boot the real FastAPI app on an ephemeral port for the test session."""
     import os
     import tempfile

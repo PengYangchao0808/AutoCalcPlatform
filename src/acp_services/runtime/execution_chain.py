@@ -271,9 +271,14 @@ ENABLED_WORKFLOWS: Final[frozenset[str]] = frozenset(
 #: Workflows whose ORDINARY submission freezes an envelope attempt by default.
 #: Activation is separate from scientific closure: only workflows with a
 #: request builder + publication/recovery evidence are added here.  Task 29
-#: activates ``singlepoint`` first; other C01 workflows stay on their
-#: registered path until their own evidence lands.
-DEFAULT_ENVELOPE_WORKFLOWS: Final[frozenset[str]] = frozenset({"singlepoint"}) | RECIPE_WORKFLOWS
+#: activated ``singlepoint`` first; the 2026-10-29 batch adds ``xtb_optimize``
+#: after a real pre-flip rehearsal (frozen attempt → real xTB worker → receipt →
+#: publication products) recorded in
+#: ``reports/acp2_dev_batch_20261029/phaseC2/``.  Every later workflow follows
+#: the same evidence-first order; nothing is enabled by closure alone.
+DEFAULT_ENVELOPE_WORKFLOWS: Final[frozenset[str]] = (
+    frozenset({"singlepoint", "xtb_optimize"}) | RECIPE_WORKFLOWS
+)
 
 
 def capability_for(workflow: str) -> WorkflowExecutionCapability:

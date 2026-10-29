@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
 import socket
 import threading
 import time
 from collections.abc import Generator
-
-import os
 
 import pytest
 
@@ -26,7 +25,7 @@ def _find_free_port() -> int:
 
 
 @pytest.fixture(scope="session")
-def server_url() -> Generator[str, None, None]:
+def server_url(isolated_browser_deployment: None) -> Generator[str, None, None]:
     """Boot the real FastAPI app on an ephemeral port for the test session.
 
     Mirrors the sibling browser suites: the server runs in a daemon thread
@@ -108,7 +107,9 @@ def _view(offset: int = 0, total: int = 0) -> dict:
 
 
 @pytest.mark.parametrize("viewer_stalled", [False, True])
-@pytest.mark.skipif(os.environ.get("CI") == "true", reason="headless CI click stability; covered on dev hosts")
+@pytest.mark.skipif(
+    os.environ.get("CI") == "true", reason="headless CI click stability; covered on dev hosts"
+)
 def test_stalled_catalogs_and_missing_viewer_do_not_block_shell(
     page: Page, server_url: str, viewer_stalled: bool
 ) -> None:
@@ -130,7 +131,9 @@ def test_stalled_catalogs_and_missing_viewer_do_not_block_shell(
     assert not errors
 
 
-@pytest.mark.skipif(os.environ.get("CI") == "true", reason="headless CI click stability; covered on dev hosts")
+@pytest.mark.skipif(
+    os.environ.get("CI") == "true", reason="headless CI click stability; covered on dev hosts"
+)
 def test_failed_task_list_has_retry_and_recovers(page: Page, server_url: str) -> None:
     requests = []
 
@@ -161,7 +164,9 @@ def test_status_failure_does_not_block_task_list(page: Page, server_url: str) ->
     expect(page.locator("#queue-counts")).to_contain_text("完成 0")
 
 
-@pytest.mark.skipif(os.environ.get("CI") == "true", reason="headless CI click stability; covered on dev hosts")
+@pytest.mark.skipif(
+    os.environ.get("CI") == "true", reason="headless CI click stability; covered on dev hosts"
+)
 def test_paging_keeps_counts_and_reuses_unchanged_rows(page: Page, server_url: str) -> None:
     from urllib.parse import parse_qs, urlparse
 
@@ -176,6 +181,7 @@ def test_paging_keeps_counts_and_reuses_unchanged_rows(page: Page, server_url: s
     page.goto(server_url, wait_until="domcontentloaded")
     expect(page.locator("#queue-pagination")).to_contain_text("共 201 个任务")
     expect(page.locator("#queue-list .queue-row")).to_have_count(200)
+
     page.evaluate("window._testRow = document.querySelector('#queue-list .queue-row')")
     page.evaluate("refreshJobs()")
     assert page.evaluate("window._testRow === document.querySelector('#queue-list .queue-row')")
@@ -186,3 +192,82 @@ def test_paging_keeps_counts_and_reuses_unchanged_rows(page: Page, server_url: s
     expect(page.locator("#queue-counts")).to_contain_text("完成 201")
     page.locator("#queue-pagination").get_by_role("button", name="上一页").click()
     expect(page.locator("#queue-list .queue-row")).to_have_count(200)
+
+
+@pytest.mark.parametrize("viewport", [(1024, 600), (1280, 800), (1920, 1080)])
+def test_research_panels_do_not_cover_queue_controls(
+    page: Page, server_url: str, viewport: tuple[int, int]
+) -> None:
+    page.set_viewport_size({"width": viewport[0], "height": viewport[1]})
+    page.route("**/js/vendor/3Dmol-*", lambda route: route.abort())
+    page.route("**/api/v2/task-view?**", lambda route: route.fulfill(json=_view(total=201)))
+    page.goto(server_url, wait_until="domcontentloaded")
+    expect(page.locator("#queue-pagination")).to_contain_text("共 201 个任务")
+    # Exercise hit testing with the full research form present, including
+    # after scrolling down to it and returning to queue operations.
+    body = page.locator("#science-question-body")
+    expect(body.locator("#sq-structure")).to_be_attached()
+    page.locator("#science-question-panel").scroll_into_view_if_needed()
+    geometry = page.evaluate("""() => {
+        const panel = document.getElementById('science-question-panel');
+        const queue = document.getElementById('queue-panel');
+        return {height: panel.getBoundingClientRect().height,
+                queueHeight: queue.getBoundingClientRect().height,
+                scrolls: panel.scrollHeight > panel.clientHeight,
+                overflow: getComputedStyle(panel).overflowY};
+    }""")
+    assert geometry["height"] <= viewport[1] - 64
+    assert geometry["queueHeight"] > 200
+    assert geometry["scrolls"] and geometry["overflow"] == "auto"
+    page.locator("#btn-new-project").click()
+    expect(page.locator("#project-modal")).to_be_visible()
+    page.locator("#project-modal-close").click()
+    expect(page.locator("#project-modal")).not_to_be_visible()
+    page.locator("#queue-pagination").get_by_role("button", name="下一页").click(trial=True)
+    page.locator("#queue-panel > .queue-summary .panel-collapse-btn").click()
+    expect(page.locator("#queue-panel")).to_have_class("queue-panel collapsed")
+    page.locator("#queue-panel > .queue-summary .panel-collapse-btn").click()
+    expect(page.locator("#queue-panel")).to_have_class("queue-panel")
+
+
+def test_capability_numeric_fields_use_real_change_events(page: Page, server_url: str) -> None:
+    page.route("**/js/vendor/3Dmol-*", lambda route: route.abort())
+    page.route("**/api/v2/task-view?**", lambda route: route.fulfill(json=_view()))
+    page.goto(server_url, wait_until="domcontentloaded")
+    page.evaluate("""async () => {
+        const response = await fetch('/api/v2/science/capability-forms');
+        if (!response.ok) throw new Error('form discovery failed: ' + response.status);
+        const forms = await response.json();
+        ACPCapabilityForm.init({science: {
+            fetchCapabilityForms: () => Promise.resolve(forms)
+        }});
+        await ACPCapabilityForm.load({projectId: 'test'});
+        ACPCapabilityForm.select('electronic.energy');
+    }""")
+    charge = page.locator("#capability-form-field-charge")
+    expect(charge).to_have_attribute("type", "number")
+    expect(charge).to_have_attribute("step", "1")
+    charge.fill("-2")
+    charge.dispatch_event("change")
+    assert page.evaluate("ACPCapabilityForm.getState().values.charge") == -2
+    assert page.evaluate("typeof ACPCapabilityForm.getState().values.charge") == "number"
+    charge.fill("1.5")
+    charge.dispatch_event("change")
+    assert page.evaluate("ACPCapabilityForm.getState().error.code") == "ui_value_type"
+    charge.fill("")
+    charge.dispatch_event("change")
+    assert page.evaluate("ACPCapabilityForm.getState().values.charge") == ""
+    charge.fill("3")
+    charge.dispatch_event("change")
+    assert page.evaluate("ACPCapabilityForm.getState().values.charge") == 3
+    assert page.evaluate("ACPCapabilityForm.getState().error") is None
+    # Programmatic callers remain strict: only DOM edits are converted.
+    result = page.evaluate("""() => {
+        const state = ACPCapabilityForm.getState();
+        const entry = {form_schema: {type: 'object', required: ['charge'],
+            properties: {charge: {type: 'integer'}}}};
+        const validator = ACPWorkbench.contracts.uiSubset;
+        return {numeric: validator.validateValues(entry, {charge: state.values.charge}).ok,
+                string: validator.validateValues(entry, {charge: '3'}).code};
+    }""")
+    assert result == {"numeric": True, "string": "ui_value_type"}

@@ -125,6 +125,13 @@ from acp_services.entrypoints.application_params import (
     ApplicationParamError,
     normalize_artifact_ref,
 )
+from acp_services.entrypoints.research_consumption import (
+    CONSUMPTION_ACTIONS,
+    CONSUMPTION_SCHEMAS,
+    CONSUMPTION_TOOL_NAMES,
+    CONSUMPTION_VERSION,
+    ConsumptionPort,
+)
 from acp_services.runtime.analysis_capabilities import (
     AnalysisCapabilityRegistry,
     capability_projection,
@@ -391,7 +398,9 @@ RESEARCH_TOOL_SET: frozenset[str] = frozenset(RESEARCH_TOOL_NAMES)
 
 #: Every tool the adapter can dispatch.  ``implemented`` is derived from this set
 #: covering the whole promise set — never asserted by a caller.
-REGISTERED_TOOL_NAMES: frozenset[str] = frozenset(TOOL_ALLOWLIST) | RESEARCH_TOOL_SET
+REGISTERED_TOOL_NAMES: frozenset[str] = (
+    frozenset(TOOL_ALLOWLIST) | RESEARCH_TOOL_SET | frozenset(CONSUMPTION_TOOL_NAMES)
+)
 
 #: Family label per research tool (documentation / client matrix).
 RESEARCH_TOOL_FAMILIES: dict[str, str] = {
@@ -1216,6 +1225,7 @@ _RESEARCH_ARGUMENT_SCHEMAS: dict[str, dict[str, Any]] = {
 }
 
 _ARGUMENT_SCHEMAS.update(_RESEARCH_ARGUMENT_SCHEMAS)
+_ARGUMENT_SCHEMAS.update(CONSUMPTION_SCHEMAS)
 
 
 def _validate_arguments(tool: str, arguments: Mapping[str, Any]) -> None:
@@ -1346,6 +1356,10 @@ def _tool_specs() -> tuple[dict[str, Any], ...]:
             _ANALYZE_SCHEMA,
         ),
         *_research_tool_specs(),
+        *(
+            _tool_spec(name, "Versioned research consumer operation.", CONSUMPTION_SCHEMAS[name])
+            for name in CONSUMPTION_TOOL_NAMES
+        ),
     )
 
 
@@ -1547,6 +1561,7 @@ class McpBackends:
     artifacts: ArtifactPort
     analysis: AnalysisPort
     research: ResearchPort | None = None
+    consumption: ConsumptionPort | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -2176,6 +2191,25 @@ class McpServer:
         for tool_name in RESEARCH_TOOL_NAMES:
             self._tool_dispatch[tool_name] = self._research_handler(tool_name)
 
+        for tool_name in CONSUMPTION_TOOL_NAMES:
+            self._tool_dispatch[tool_name] = self._consumption_handler(tool_name)
+
+    def _consumption_handler(self, tool_name: str) -> _ToolHandler:
+        def handle(arguments: Mapping[str, Any], context: WorkspaceContext) -> mo.MachineResult:
+            if self._backends.consumption is None:
+                raise McpToolError(
+                    mo.ErrorCode.UNSUPPORTED_CAPABILITY, "consumer service unavailable"
+                )
+            result = self._backends.consumption.call(tool_name, arguments)
+            return mo.MachineResult(
+                operation=tool_name,
+                status="ok",
+                data=dict(result),
+                operation_identity=context.workspace_id,
+            )
+
+        return handle
+
     def _research_handler(self, tool_name: str) -> _ToolHandler:
         """Bind one dispatch entry to a research tool name (no client input)."""
 
@@ -2196,6 +2230,8 @@ class McpServer:
         names = sorted(TOOL_ALLOWLIST)
         if self._research_negotiated:
             names.extend(sorted(RESEARCH_TOOL_SET))
+            if self._backends.consumption is not None:
+                names.extend(CONSUMPTION_TOOL_NAMES)
         return tuple(names)
 
     # -- JSON-RPC transport ------------------------------------------------
@@ -2360,7 +2396,10 @@ class McpServer:
                 f"unknown or non-allowlisted tool {name!r}",
                 data={"code": "unknown_tool", "allowlist": sorted(REGISTERED_TOOL_NAMES)},
             )
-        if name in RESEARCH_TOOL_SET and not self._research_negotiated:
+        if (
+            name in (RESEARCH_TOOL_SET | frozenset(CONSUMPTION_TOOL_NAMES))
+            and not self._research_negotiated
+        ):
             # M2-01c fail-closed: a research tool exists only for a session that
             # negotiated the extension.  Never a transport error, never a silent
             # downgrade to a P1 tool.
@@ -2425,8 +2464,10 @@ class McpServer:
     # -- authorization -----------------------------------------------------
 
     def _authorize(self, name: str, context: WorkspaceContext) -> None:
-        required = TOOL_REQUIRED_ACTION.get(name) or RESEARCH_TOOL_REQUIRED_ACTION.get(
-            name, AccessAction.READ
+        required = (
+            CONSUMPTION_ACTIONS.get(name)
+            or TOOL_REQUIRED_ACTION.get(name)
+            or RESEARCH_TOOL_REQUIRED_ACTION.get(name, AccessAction.READ)
         )
         if required not in context.available_actions:
             raise McpToolError(
@@ -2497,6 +2538,13 @@ class McpServer:
             # here and never in a shared module-level default.
             self._research_negotiated = True
         data["tools"] = list(self.visible_tool_names())
+        data["research_consumer_tools"] = {
+            "version": CONSUMPTION_VERSION,
+            "available": self._backends.consumption is not None,
+            "tools": list(CONSUMPTION_TOOL_NAMES)
+            if self._research_negotiated and self._backends.consumption is not None
+            else [],
+        }
         data["research_tools"] = {
             "registered": sorted(RESEARCH_TOOL_SET),
             "visible": self._research_negotiated,

@@ -17,6 +17,9 @@
  * leaves this module.
  */
 
+import { accessSync, constants } from "node:fs";
+
+import { callResearchConsumer, PRODUCT_TOOL_NAMES } from "./product-parts.js";
 import { BRIDGE_EXTENSION_ID, BRIDGE_EXTENSION_VERSION } from "@rph/bridge";
 
 import type { ConnectedPlatform } from "./compose.js";
@@ -68,7 +71,15 @@ export interface DoctorSettingView {
   readonly value: string | null;
 }
 
+export interface ProductReadinessFact {
+  readonly id: string;
+  readonly status: "ok" | "warn" | "fail";
+  readonly hint: string;
+}
+
 export interface DoctorReport {
+  readonly readiness: readonly ProductReadinessFact[];
+  readonly ready: boolean;
   readonly schema: typeof DOCTOR_SCHEMA;
   readonly mode: "static" | "connect";
   readonly environment: RuntimeEnvironment;
@@ -161,8 +172,24 @@ export async function runDoctor(input: DoctorInput): Promise<DoctorReport> {
   const strict = isStrict(input.environment);
   const nodeVersion = input.nodeVersion ?? process.version;
   const profile = resolveRuntimeProfile(input.environment, input.env);
-  const readiness = input.readiness ?? {};
+  let readiness = input.readiness ?? {};
   const checks: DoctorCheck[] = [];
+  const readinessFacts: ProductReadinessFact[] = [];
+  const unverified = strict ? "fail" as const : "warn" as const;
+  readinessFacts.push({ id: "model", status: "warn", hint: "use --connect to inspect gateway and credential configuration; no model call is made" });
+  readinessFacts.push({ id: "permissions", status: "warn", hint: "use --connect to resolve Controller identity and read/write permission" });
+  readinessFacts.push({ id: "software", status: "warn", hint: "use --connect for Controller-local executable resolution" });
+  const paths = ["working_directory", "run_root", "config_path", "artifact_evidence_path"] as const;
+  const inaccessible = paths.filter((name) => {
+    const path = profile.get(name);
+    if (path === null) return strict;
+    try { accessSync(path, name === "run_root" || name === "artifact_evidence_path" ? constants.W_OK : constants.R_OK); return false; }
+    catch { return true; }
+  });
+  readinessFacts.push({ id: "profile_paths", status: inaccessible.length === 0 ? (paths.every((name) => profile.get(name) !== null) ? "ok" : "warn") : unverified,
+    hint: inaccessible.length === 0 ? "configured local profile paths are accessible" : `check local profile paths: ${inaccessible.join(", ")}` });
+  readinessFacts.push({ id: "storage", status: "warn", hint: "use --connect for Controller run_root accessibility" });
+  readinessFacts.push({ id: "execution", status: "warn", hint: "use --connect to check singlepoint envelope; actual feasibility requires plan preflight" });
 
   // 1. version — one product version and a supported Node.
   const versionsAgree = input.productVersion === BUNDLE_VERSION;
@@ -226,6 +253,25 @@ export async function runDoctor(input: DoctorInput): Promise<DoctorReport> {
   } else {
     try {
       connected = await input.connect();
+      const missingConsumers = PRODUCT_TOOL_NAMES.filter((tool) => !connected?.toolNames.includes(tool));
+      if (missingConsumers.length > 0) {
+        readinessFacts.push({ id: "product_tools", status: "fail", hint: `upgrade Controller MCP adapter: missing ${missingConsumers.join(", ")}` });
+      } else {
+        readiness = { ...readiness, writerKind: "platform-research-cas", modelGateway: true };
+        const facts = await callResearchConsumer(connected.session, "readiness", {
+          ...(profile.get("project_id") === null ? {} : { project_id: profile.get("project_id") }),
+        });
+        const observed = facts["facts"];
+        if (!Array.isArray(observed)) throw new Error("readiness facts missing from Controller");
+        for (const entry of observed) {
+          if (typeof entry !== "object" || entry === null || !["ok", "warn", "fail"].includes(String(entry.status)) || typeof entry.hint !== "string") {
+            throw new Error("malformed Controller readiness fact");
+          }
+          const index = readinessFacts.findIndex((fact) => fact.id === entry.id);
+          if (index >= 0) readinessFacts.splice(index, 1);
+          readinessFacts.push({ id: String(entry.id), status: entry.status as "ok" | "warn" | "fail", hint: entry.hint });
+        }
+      }
       const protocolOk = connected.protocolVersion === MCP_PROTOCOL_VERSION;
       checks.push(
         check(
@@ -271,6 +317,7 @@ export async function runDoctor(input: DoctorInput): Promise<DoctorReport> {
           ? String((error as { code?: unknown }).code)
           : "connect_failed";
       const message = error instanceof Error ? error.message : String(error);
+      readinessFacts.push({ id: "controller", status: "fail", hint: `connection/readiness unavailable (${code}); check Controller URL, identity and MCP installation` });
       checks.push(check("handshake", "fail", `${code}: ${message}`, { code }));
       checks.push(check("permissions", "skip", `no session (${code})`));
       checks.push(check("extensions", "skip", `no session (${code})`));
@@ -349,10 +396,12 @@ export async function runDoctor(input: DoctorInput): Promise<DoctorReport> {
     ),
   );
 
-  const failed = checks.some((entry) => entry.status === "fail");
-  return Object.freeze({
+  const failed = checks.some((entry) => entry.status === "fail") || readinessFacts.some((fact) => fact.status === "fail");
+  const report: DoctorReport = {
+    ready: !failed && ["model", "permissions", "software", "storage", "execution"].every((id) => readinessFacts.some((fact) => fact.id === id && fact.status === "ok")),
+    readiness: Object.freeze(readinessFacts),
     schema: DOCTOR_SCHEMA,
-    mode: connected === null ? "static" : "connect",
+    mode: input.connect === null || input.connect === undefined ? "static" : "connect",
     environment: input.environment,
     status: failed ? "failed" : "ok",
     product_version: input.productVersion,
@@ -360,5 +409,13 @@ export async function runDoctor(input: DoctorInput): Promise<DoctorReport> {
     node_version: nodeVersion,
     settings: settingView(profile),
     checks: Object.freeze(checks),
-  });
+  };
+  // A failed upstream diagnostic must not echo a credential into its error text.
+  const redact = (value: unknown): unknown => {
+    if (typeof value === "string") return typeof apiKey === "string" && apiKey.length > 0 ? value.split(apiKey).join("<redacted:env>") : value;
+    if (Array.isArray(value)) return value.map(redact);
+    if (typeof value === "object" && value !== null) return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, redact(item)]));
+    return value;
+  };
+  return Object.freeze(redact(report) as DoctorReport);
 }

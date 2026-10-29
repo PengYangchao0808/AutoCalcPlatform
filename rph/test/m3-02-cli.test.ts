@@ -585,8 +585,9 @@ test("doctor --connect reports the real handshake and extension answer", { ...TE
   assert.equal(checks.get("handshake"), "pass");
   assert.equal(checks.get("extensions"), "pass");
   assert.equal(checks.get("writer"), "pass");
-  assert.equal(report["status"], "ok");
-  assert.equal(code, EXIT_OK);
+  assert.equal(report["status"], "failed");
+  assert.ok((report["readiness"] as Array<{id: string; status: string}>).some((fact) => fact.id === "product_tools" && fact.status === "fail"));
+  assert.equal(code, 1);
 });
 
 test("doctor masks the controller credential", { ...TEST_OPTIONS }, async () => {

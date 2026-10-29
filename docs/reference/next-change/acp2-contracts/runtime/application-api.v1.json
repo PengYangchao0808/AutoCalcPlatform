@@ -811,8 +811,25 @@
       ],
       "tool_name_prefix": "acp_research_",
       "tool_sets_authority": "runtime/p2-research-operations.v1.json::client_path.tool_sets",
-      "tool_visibility": "tools/list = the eight P1 tools before negotiation and the ten research tools after it; an unnegotiated research call is unsupported_capability with params.rule=extension_not_negotiated",
-      "version": "1.0.0"
+      "tool_visibility": "Eight P1 tools before negotiation; ten legacy P2 tools plus bound research-consumption.v1 operations after negotiation. Product clients check actual tools/list coverage. Unnegotiated research calls return unsupported_capability with params.rule=extension_not_negotiated.",
+      "version": "1.0.0",
+      "consumer_surface": {
+        "contract": "runtime/research-consumption.v1.json",
+        "version": "1.0.0",
+        "optional_for_legacy_p2": true,
+        "required_for_rph_product": [
+          "acp_research_model_plan_v1",
+          "acp_research_model_usage_v1",
+          "acp_research_model_statement_v1",
+          "acp_research_record_create_v1",
+          "acp_research_record_read_v1",
+          "acp_research_record_append_v1",
+          "acp_research_evidence_read_v1",
+          "acp_research_budget_read_v1",
+          "acp_research_checkpoint_v1",
+          "acp_research_readiness_v1"
+        ]
+      }
     }
   },
   "operations": {

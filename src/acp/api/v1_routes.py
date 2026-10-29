@@ -471,10 +471,14 @@ def _command_identity(request: Request, *, project_id: str | None = None) -> Any
         return CommandIdentity.from_verified_http(
             resolved, project_id=project_id, entry_class=EntryClass.HTTP
         )
+    # No verified credential: the command runs as the Controller process, so
+    # the entry class is CONTROLLER — the same label the model gateway and the
+    # research saga use. A transport label ("http") here forked the derived
+    # ResearchIdentity from every other local path for the same request.
     return CommandIdentity.from_server(
         _server_identity(request),
         project_id=project_id,
-        entry_class=EntryClass.HTTP,
+        entry_class=EntryClass.CONTROLLER,
     )
 
 

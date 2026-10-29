@@ -134,6 +134,9 @@ ACPVisualization.scene = (function () {
 
     var state = {
       viewer: viewer, // internal only — never exposed on the instance
+      container: opts.container || null, // size probe target for resize()
+      resizeW: null, // last container size actually applied by a native resize
+      resizeH: null,
       disposed: false,
       playing: false,
       paused: false,
@@ -576,7 +579,25 @@ ACPVisualization.scene = (function () {
       zoom: function (factor, duration) { return simpleArgs("zoom", arguments); },
       zoomTo: function (sel, duration) { return simpleArgs("zoomTo", arguments); },
       render: function () { return simpleArgs("render", arguments); },
-      resize: function () { return simpleArgs("resize", arguments); },
+      /** Size-guarded resize: 3Dmol's resize() destroys and recreates the
+       * canvas (and its WebGL context); when the container size did not
+       * change, the native call is skipped so spurious resize triggers
+       * cannot churn contexts into loss (audit F09). */
+      resize: function () {
+        if (!state.disposed && state.container && state.container.isConnected) {
+          var w = state.container.clientWidth;
+          var h = state.container.clientHeight;
+          if (w > 0 && h > 0 && w === state.resizeW && h === state.resizeH) {
+            return ok("resize");
+          }
+        }
+        var result = simpleArgs("resize", arguments);
+        if (result !== false && state.container && state.container.isConnected) {
+          state.resizeW = state.container.clientWidth;
+          state.resizeH = state.container.clientHeight;
+        }
+        return result;
+      },
       pngURI: pngURI,
       /** Single framing entry (framing.js via mol3d.frame); null when the
        * namespace is unavailable or the scene is disposed. */

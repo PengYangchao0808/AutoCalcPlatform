@@ -1,7 +1,7 @@
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
   display: grid;
-  grid-template-rows: 64px 1fr;
+  grid-template-rows: 64px minmax(0, 1fr);
 }
 
 .topbar {
@@ -233,6 +233,7 @@
   grid-template-areas: "left-col canvas right-col";
   height: calc(100vh - 64px);
   min-height: 0;
+  min-width: 0;
 }
 
 .left-col,
