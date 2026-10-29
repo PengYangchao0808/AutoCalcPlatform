@@ -1965,9 +1965,18 @@ def _amendment_x_censo_ranges(worktree: str) -> list[tuple[int, int]]:
         resolved = _func_range(worktree, function, "CensoInterface")
         if resolved:
             ranges.append(resolved)
-    for index, line in enumerate(lines):
-        if "hashlib.sha256(ensemble_xyz" in line or "hashlib.sha256(Path(rcfile)" in line:
-            ranges.append((index - 1, index + 4))
+    refine = _func_range(worktree, "refine_ensemble", "CensoInterface")
+    if refine is not None:
+        start = next(
+            (i for i, line in enumerate(lines) if "rcfile_sha256 =" in line),
+            None,
+        )
+        end = next(
+            (i for i, line in enumerate(lines) if "env: Optional[Dict[str, str]] = None" in line),
+            None,
+        )
+        if start is not None and end is not None and start >= refine[0] and end <= refine[1]:
+            ranges.append((start - 1, end + 1))
     start = next(
         (i for i, line in enumerate(lines) if line.strip() == "enabled_parts = {"),
         None,
@@ -3202,3 +3211,9 @@ def test_services_scope_audits_acp_services_import_discipline() -> None:
     target = "src/acp_services/runtime/rogue.py"
     issues = _migration_audit_issues([target], {target: "from acp.scheduler import jobs\n"})
     assert issues and ("imports" in issues[0] or "from acp" in issues[0]), issues
+
+
+def test_amendment_x_is_function_scoped() -> None:
+    source = _worktree_content("src/cccp/qc/interfaces/censo.py")
+    outside = len(source.splitlines()) + 5
+    assert not _is_amendment_x_censo_addition(outside, 'input_sha256 = "x"', source)

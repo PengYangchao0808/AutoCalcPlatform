@@ -64,7 +64,7 @@
 
 ## astra 复审后的加固（同一 PR）
 
-- `_execution_verified` 现在重算 JSON/XYZ 文件摘要，并绑定本次 `input_path`/`rcfile_path` 的摘要；成员列表必须非空且含该构象。
+- `_execution_verified` 曾尝试重算 JSON/XYZ 并绑定 `input_path`/`rcfile_path`；astra 复审判定“证据自报路径、不能证明本次执行”，本轮已统一降级为 `unverified`（见下）。
 - 报告公开投影去掉 `cwd/input_path/rcfile_path` 与绝对 argv 前缀（`<run>`），避免正文内容策略拒绝合法报告。
 - 仍 **DEFERRED**：同 part 旧产物与模板/成员在文件层面的完整绑定、真实 QC 执行、历史回执改写；这些写入 residual，不冒充已关闭。
 

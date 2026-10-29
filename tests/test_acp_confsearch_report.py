@@ -624,3 +624,16 @@ def test_report_does_not_publish_absolute_workspace_paths(tmp_path: Path) -> Non
     assert "argv" not in executed
     assert executed["workspace"] == "<run>"
     assert str(tmp_path) not in json.dumps(executed)
+
+
+def test_out_of_scope_table_reference_is_omitted(tmp_path: Path) -> None:
+    from acp.confsearch.report import normalize_table_reference
+
+    mol = tmp_path / "mol"
+    mol.mkdir()
+    assert normalize_table_reference(str(tmp_path / "elsewhere.json"), mol) is None
+    assert normalize_table_reference(123, mol) is None
+    inside = mol / "RESULT" / "table.json"
+    inside.parent.mkdir(parents=True)
+    inside.write_text("{}", encoding="utf-8")
+    assert normalize_table_reference(str(inside), mol) == "RESULT/table.json"

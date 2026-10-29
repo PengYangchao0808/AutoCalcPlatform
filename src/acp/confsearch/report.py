@@ -40,14 +40,15 @@ def normalize_table_reference(raw: Any, mol_dir: Path) -> Any:
     locations, non-string values, ``None`` — passes through unchanged.
     """
     if not isinstance(raw, str) or not raw:
-        return raw
+        return None
     candidate = Path(raw)
     if not candidate.is_absolute():
         candidate = Path(mol_dir) / candidate
     try:
         return candidate.resolve().relative_to(Path(mol_dir).resolve()).as_posix()
     except ValueError:
-        return raw
+        # Out-of-scope or unrepresentable references are omitted, never echoed.
+        return None
 
 
 def write_final_report(
