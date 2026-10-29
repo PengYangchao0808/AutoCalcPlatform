@@ -1,170 +1,178 @@
-# RPH Agent 三阶段开发大纲
+# RPH Agent 三阶段 Perspective 与开发路线
 
-初稿：2026-10-27；现状修订：2026-10-28；功能审查后的开发建议：2026-10-29。
-定位：ACP 四组分方案的 RPH 专项附件；说明目标、阶段边界与建议实施顺序。第 6 节是基于审查的开发建议，尚未开始功能实现。
-核查仓库：`/ACPServer/AutoCalcPlatform`，最新审查基线 `main/fd2087c7`（与 `b32f22bb` 的 Git 树相同）。初稿的 Windows 路径及 `484764f6` 仅为当时观察，不能作为当前候选或验收 revision。
+初稿：2026-10-27；本次更新：2026-10-29。核查基线：`094a9fa0`（含上一轮 `281884ac` 及后续报告/审查修正）。
 
-当前实现、证据来源、未完成事项及台账过期叙述统一见[ACP / RPH 现状说明](reference/current/ACP_RPH_Status_20261028.md)。本文不构成发布签字，也不声明下述三阶段已完成。
+定位：ACP 四组分方案的研究 Agent 专项 perspective，讨论产品方向、职责与实施顺序。本文区分当前源码、历史验收与后续建议；不构成发布签字或功能开发授权。本次为源码及仓库记录核查，未重新执行模型、QC、LSF、浏览器或全量测试。
 
-最新[功能审查](../reports/acp2_function_audit_20261028/REPORT.md)发现 Workbench 操作遮挡、数值编辑缺陷、测试隔离/构建断言问题及发行物取回缺口。因此三阶段前增加基线修复，不再把“已有分项 PASS”视为可直接扩展 Agent 的充分前提。
+**核心判断：ACP 已从“把计算程序接给 Agent”推进到“向 Agent 提供可发现、受控、可追溯的研究操作”。近期优先改善 MCP，让已有 harness 的用户仅靠公开接口就能方便地完成真实计算和结果消费。** 三阶段仍保留，但第一阶段已有不少代码交付，重点转为正式入口验收、消费体验和身份闭合；第二阶段重点是受证据约束的研究决策；第三阶段以可测量的协作收益为前提。
 
-## 1. 要解决的问题与当前起点
+## 1. 相比上次讨论，起点发生了什么变化
 
-目标是让用户通过自然语言和结构输入提出科研问题，由 Agent 发现平台能力、形成计划、受控执行、读取科学证据，并据此继续、修订或停止研究。研究进度、任务与结论需要在断线、重启、会话或 harness 切换后可追溯，科学结论与任务完成分开判断。
+旧版以 `fd2087c7` 审查为起点，认为默认 RPH 产品组件、研究消费入口及 xtb_optimize 执行链尚待补齐。当前代码已发生以下变化，不能继续照搬旧待办。
 
-需求沿用初稿提炼：skills＋MCP 调用 ACP；保留 CCCP 和集群能力；兼容不同 harness；RPH 与 Workbench 并列接入平台。初稿关于历史聊天的读取过程，本次没有重新验证；聊天叙述本身不作为 ResearchRecord 中的科学证据。
-
-现有四组分是 CCCP、ACP CLI/Services、Workbench、RPH；科学执行四层是 `cccp/qc → cccp/backends → cccp/calculation → acp`。两种划分并存，新科学计算能力仍以 CCCP 任务层为唯一执行根。
-
-当前已经有 RPH 四包、Supervisor、四种 skill 接口，以及研究记录、审批、预算、事件、恢复和证据投影。MCP 不止历史 B26a 握手：后续已有真实 DSH/模型、本地 QC、LSF、浏览器和独立安装的分项回执。不过，M4-02 的真实模型分支使用 fake 科学派发，真实 QC 在独立分支执行，尚不能认定同一条模型＋QC 自主研究链已通过。
-
-## 2. 三阶段目标与当前距离
-
-| 阶段 | 目标与代表场景 | 当前已有基础 | 尚需满足的阶段条件 |
-|---|---|---|---|
-| 第一阶段：skills＋MCP 交互闭环 | 固定输入、方法和预算，完成自然语言请求→发现→预检→一次真实 xtb_optimize→查询→prepare/read→带任务/工件引用的结果 | MCP 8+10 工具、真实模型接线、本地 QC、同任务多入口展示、幂等/恢复/取消的分项证据 | 默认产品装配和便携 skill；同一条真实模型＋QC 轨迹；在该链上核对重连不重复提交及取消；第一阶段尚未整体通过 |
-| 第二阶段：单 Agent 科研闭环 | 一个 Supervisor 调用不同 skill，推进构象筛选→优化→频率→单点/热化学，并按适用范围扩展 TS/IRC | 持久研究运行时、可恢复 Supervisor、模型 Planner、bounded DAG、真实 DA 部分科学链 | 科研理解/假设/审查/策略修订、完整配方或跨任务依赖、原生证据消费、受控失败恢复、预算/轮次停止；Local 与 LSF 分别留证 |
-| 第三阶段：多 Agent 机理研究 | 主管接收专业 Agent 的结构化提案，管理竞争机理、路径、验证、可比自由能与报告 | 可复用既有 Proposal、ResearchRecord、证据引用、预算和执行平台 | 角色调度、共享假设图、提案冲突处理、去重/恢复及相对单 Agent 的收益验证；尚无该阶段交付证据 |
-
-第二阶段的四种 skill 是同一 Agent/主管的不同职责，不表示四个专业 Agent 已就绪。当前生产组合要求模型 Planner，另外三类默认 helper 为确定性实现。阶段验收要检查实际科研行为，不能只检查函数名和 Schema。
-
-DSH 是参考接入，第二个 harness 用于验证迁移；当前 `rph/` 尚无便携 `SKILL.md` 包或第二 harness 迁移回执。TS/IRC 按能力注册与适用范围启用；已知候选的验证不能写成自主发现路径。结论证据不足时保留 inconclusive/not_evaluated，证伪时保留 refuted。
-
-## 3. 代码职责与需要讨论的缺口
-
-依赖方向沿用 `cli → dsh-bundle → bridge → research`。
-
-| 位置 | 已有职责 | 尚需补齐或讨论 |
+| 方面 | 当前源码已经具备 | 仍不能据此认定 |
 |---|---|---|
-| `rph/packages/research` | ResearchRecord、Proposal、证据引用、记忆与提交意图契约 | 假设图与跨任务研究状态的表达；不持有任务数据库 |
-| `rph/packages/bridge` | 科研操作、TaskRef、错误、扩展协商；注入 PlatformClient | 补齐所需公开消费路径，保持无 HTTP/fetch/进程执行 |
-| `rph/packages/dsh-bundle/skills` | Supervisor、四种 skill 契约、模型 Planner 与恢复逻辑 | 便携提示/Schema、科研理解、假设、审查和受证据约束的策略调整 |
-| `rph/packages/dsh-bundle` | MCP 会话、DSH 适配、profile 与端口组合 | 模型/持久 writer/证据/预算/提交映射的正式产品装配；其他 harness 薄适配 |
-| `rph/packages/cli` | research/resume/doctor 入口与 readiness 拒绝 | 默认二进制未自动提供完整产品组件；不能宣称填环境变量后即可真实研究 |
-| `src/acp/services_mcp_bootstrap.py` | MCP 与 Controller 装配 | 复用 Application API，按需补全研究消费入口 |
-| `src/acp_services` | 身份、审批、预算、研究资源、Saga、工件、执行恢复 | 普通工作流 attempt 链推广、完整科研配方或跨 TaskRef 依赖与证据闭环 |
-| `src/cccp/calculation/tasks` | 科学任务唯一执行根 | 真正缺失的科学计算能力在此补齐并注册 |
-| `tests`、`rph/test`、`scripts/acceptance` | 契约、回归、故障和真实验收 | 同一条模型＋QC＋后续决策轨迹，以及跨 harness/多 Agent 验证 |
+| RPH 产品入口 | CLI 默认调用 `createProductParts`，装配模型 Planner、研究 writer、证据/预算 reader、提交映射与恢复；保留测试注入接口 | 安装后的 bin 已完成真实模型＋QC 同链验收；配置完即可处理任意研究问题 |
+| 研究消费面 | 在既有 proposal/approval/wait/snapshot/resume 之外，增加模型、记录、证据准备/读取、预算、checkpoint、readiness 操作 | 所有 harness 已兼容；工具存在即证明持久化、恢复和科学消费整链已通过 |
+| 执行入口 | 默认 envelope 为 `singlepoint`、`xtb_optimize` 与已注册 recipe；产品映射支持前两种普通工作流 | optimize/frequency 等全部普通入口已统一；完整 DA 配方已通过 |
+| MCP 自描述 | capabilities 可按 workflow 查询提交契约、示例、资源与限制；Confsearch/BatchOptimize 已有共用 preflight/submit 校验 | 15 个工作流都有完整 schema；当前两项返回 `coverage=partial`，其他项为 `not_provided` |
+| 状态与产物 | status 增加 workflow、进度、受限产物描述；prepare 产生可读引用，read 校验 generation/digest | 描述符就是 ArtifactRef；旧 manifest 与当前 attempt 的归属已完全证明；生产 SDK 整链已验收 |
+| 正文与方法信息 | 完整正文在截断前执行内容检查；不可验证编码被拒；CENSO 信息向报告传递并区分请求/执行信息 | 所有二进制工件均可读；文件摘要一致就能证明本次科学执行 |
+| 基线缺陷 | Workbench 布局、数值编辑、查看器及测试隔离已有相关代码修改 | 旧审查所有失败已在当前 HEAD 整组复验并关闭 |
 
-当前默认 envelope 范围是 `singlepoint` 加已注册 recipe；普通 optimize/frequency/xtb_optimize 尚未全部推广。bounded DAG 已存在，但限定 DA 的完整九步配方不能通过既定公开入口编译，多个 attempt 的真实执行不能替代该项单 TaskRef 验收。后续需要决定计算 DAG 与研究层跨任务编排的边界，本附件不预先指定实现。
+依据：[CLI 装配](../rph/packages/cli/src/compose.ts)、[产品组件和映射](../rph/packages/dsh-bundle/src/product-parts.ts)、[消费操作](../src/acp_services/entrypoints/research_consumption.py)、[执行范围](../src/acp_services/runtime/execution_chain.py)、[工作流契约](../src/acp/api/workflow_contracts.py)、[产物读取](../src/acp_services/data/artifacts.py)。
 
-## 4. ACP–RPH 通信与长期状态
+需要特别保留三个判断边界：
+
+- **产品装配已写入代码，真实科研闭环仍需证明。** M4-02 的模型分支使用 fake 科学派发，真实 QC 在独立分支执行；不能拼成同一研究轨迹。
+- **信息更丰富，科学可信度尚未全部闭合。** 当前 CENSO 报告的 `_execution_verified` 明确返回 False；`execution_facts_well_formed` 仅表示形状/文件摘要检查，不能作为执行已验证或命题 supported 的依据。
+- **文档也有版本差。** [旧现状说明](reference/current/ACP_RPH_Status_20261028.md)、[RPH README](../rph/README.md)仍描述默认 parts 缺失；[产品入口说明](reference/next-change/acp2-contracts/experience/rph-product-entry.v1.md)仍主要描述 singlepoint，且消费工具数量滞后。P3/P4 历史 PASS 标题、后续审查和当前实现必须按 revision 与范围分别阅读。
+
+## 2. 产品定位：ACP 提供研究操作，RPH 组织研究决策
+
+用户最终需要的不是一次工具调用成功，而是：给出问题与结构后，知道平台能做什么、哪些科学选择需要确认、计算进行到哪里、结果支持什么，以及下一步为什么值得做。
+
+因此产品体验应围绕四个连续问题设计：
+
+1. **能否做？** 发现工作流、输入格式、方法适用范围、资源和校验覆盖；缺信息时补充输入，不靠猜字段提交。
+2. **是否应该做？** 明确计算所检验的命题、预期产物、成本与停止条件，适用时获得审批。
+3. **实际做了什么？** 用任务、attempt、冻结输入、方法与原生产物回答，区分请求配置和执行事实。
+4. **据此下一步做什么？** 对证据作有范围的解释，继续、修订或停止，保留 inconclusive/not_evaluated/refuted。
+
+四组分继续保留：CCCP 是科学实现根，ACP CLI/Services 是执行与平台权威，Workbench 提供结构/任务/证据/审批交互，RPH 提供研究循环。科学执行四层仍为 `cccp/qc → cccp/backends → cccp/calculation → acp`；新科学计算能力进入 CCCP 任务层。
+
+**近期方向已明确：优先服务已有 harness 的用户，先把 MCP 做好用；RPH 专用循环作为后续产品目标，共用同一套平台契约。**
+
+| 使用方式 | 用户获得什么 | 主要责任 |
+|---|---|---|
+| 通用 harness＋便携 skill＋ACP MCP | 在已有 Agent 会话中完成发现、确认、提交、取回和解释 | harness 管理对话；skill 指导调用；ACP 保证授权、执行与事实 |
+| RPH 专用研究循环 | 持久研究记录、受限多轮决策、重启续接与预算约束 | RPH 组织研究策略；通过相同 MCP 操作消费平台能力 |
+
+这是后续设计建议，便携 skill 和第二 harness 尚无交付证据。DSH 继续作为参考实现，`rph research/resume` 是专用循环的参考入口；无需要求所有使用者先迁移到 RPH，也不另建浏览器 Agent 状态机。Workbench 应能让用户检查同一研究的计划、任务、证据与人工决定。
+
+## 3. 三阶段目标与当前距离
+
+| 阶段 | 可交付体验 | 当前进展 | 下一出口 |
+|---|---|---|---|
+| 一：可靠使用平台 | 给定结构/方法/预算，完成自然语言→发现/确认→真实计算→引用结果；断线后找回 | 默认装配、singlepoint/xtb_optimize 映射、MCP 消费与工件链已有代码 | 安装后正式入口同链真实验收；恢复与取消负例；便携 skill；明确可支持范围 |
+| 二：有限自主科研 | 给定候选结构，优化→频率检查→依据证据继续、修订或停止，再扩展排序与路径验证 | Supervisor、ResearchRecord、预算/审批、bounded DAG 和部分真实科学链 | 跨任务证据绑定、有限策略修订、正负例基准；第二 harness 迁移 |
+| 三：有收益的多 Agent | 专业角色提出方案或独立审查，由主管合并与授权 | 可复用平台与研究契约；尚无协作交付证据 | 同预算对照证明质量/效率收益，再增加角色与共享假设图 |
+
+四种 skill 是职责划分，不等于四个专业 Agent。当前生产组合要求模型 Planner，其他 helper 默认确定性；后续按需要增加科研理解、假设和审查能力，不以模型调用数或角色名称数量衡量进步。
+
+第一阶段优先验收已有 harness 经 MCP 完成真实任务，不以 RPH 专用入口就绪为前置。RPH 的正式装配和恢复另行验收，不重复建设平台能力。第二 harness 测的是可迁移性，多 Agent 测的是协作收益，两者分别验收。
+
+## 4. 通信、状态与证据的边界
 
 ```text
-用户 → Harness/RPH → MCP stdio 适配器 → Controller HTTP Application API
-                                     → Services/科学工作流 → CCCP/Worker → 本地或 LSF
-Workbench ───────────────────────────→ 同一 Controller
+通用 Harness/便携 skill ─┐
+RPH 研究循环 ──────────┴→ MCP stdio → Controller Application API
+Workbench ────────────────────────→ 同一 Controller
+                                     → Services → CCCP/Worker → 本地或 LSF
 ```
 
-入口为 `acp mcp serve --controller <url>`。适配器可随 harness 启停，任务持续由 Controller 管理，集群连接由 ACP 持有。现有 Controller HTTP/SSE 不表示 MCP Streamable HTTP 已实现。
+入口继续为 `acp mcp serve --controller <url>`。MCP 适配器可随会话启停，任务由 Controller 持有。HTTP/SSE 的存在不表示 MCP Streamable HTTP 已实现。RPH 依赖方向保持 `cli → dsh-bundle → bridge → research`；bridge 不直接 HTTP/SSH、不起 QC、不写任务数据库。
 
-基础工具继续复用：
+当前未协商会话有八个基础工具。协商 `acp.research.v1` 后有既有十个研究工具；消费后端装配时还开放十一项消费操作，即当前完整装配可见 **8＋10＋11**。依据为 [visible_tool_names](../src/acp_services/entrypoints/mcp.py) 与 [CONSUMPTION_ROUTES](../src/acp_services/entrypoints/research_consumption.py)，不能继续把 18 当固定总数。客户端须协商后重新 tools/list，并检查需要的实际工具；数量本身不是兼容性保证。
 
-- `acp_capabilities`：发现能力与协商扩展。
-- `acp_preflight`：检查输入、参数和平台条件。
-- `acp_submit` / `acp_status` / `acp_cancel`：提交、观察、取消。
-- `acp_prepare_artifact` / `acp_read_artifact`：显式准备与读取工件。
-- `acp_analyze`：调用已注册分析，不把任务完成自动解释为科学命题得到支持。
+下一步应遵守以下状态规则：
 
-研究扩展已注册十个工具，覆盖 proposal 的创建/读取/CAS 更新、审批请求/查询/决定/撤销、wait、snapshot、resume。须先以 `acp_capabilities` 协商 `acp.research.v1`，再读取协商后的工具列表；未协商会话只看到八个基础工具。
+- 任务事实归 ACP，研究问题/计划/决策经平台资源与 revision/CAS 持久化。聊天摘要不能替代研究记录。
+- 恢复先对账已有 proposal、任务、attempt 和证据，再决定是否重新规划。重试复用原幂等键；计划/输入改变则形成新身份。
+- status 的产物描述只供发现，prepare 后才取得可读 ArtifactRef。缓存未知须明确表达，轮询不能隐式下载远端结果。
+- 科学证据至少区分“已发现”“可读且摘要一致”“属于当前执行”“足以支持命题”。这些是讨论中的语义层次，不在本文新增状态枚举。
+- 长任务采用有界 wait/事件或限频查询，不让等待持续消耗模型调用。token/core-hours 累计硬强制仍 DEFERRED，统计值和客户端停止规则不得冒充平台硬上限。
 
-通信和状态约束：
+**一个新增优先问题是跨会话找回。** 已知 proposal/TaskRef 的 resume 不等于用户忘记引用后仍能找到研究。建议补充按项目与权限限定的研究/任务查询，支持分页和有限筛选；是否新增工具由用例与兼容设计决定，不能为了维持工具数量而让 Agent 猜 ID 或读数据库。
 
-1. 提交返回持久 TaskRef；长任务用有界 wait/事件或限频状态查询，等待不持续消耗模型调用。
-2. 重试复用原幂等键，计划/输入改变更新身份与键；绑定 job/attempt/release，工件绑定 generation/digest。
-3. 任务状态归 ACP；研究轮次与决策通过平台资源持久保存，更新使用 revision/CAS。跨会话恢复不依赖聊天搬运。
-4. 结构化错误与引用进入工具结果，大日志/轨迹作为工件按需读取。证据 HTTP 路由存在不等于 RPH 的 MCP 消费入口已闭合，当前仍需证据 reader 正式装配。
-5. 多 Agent 的结构化提案、主管合并和统一预算是第三阶段目标；当前不据此宣称协作功能已实现。
+## 5. 科学与验收判断
 
-单 Controller 权威状态继续沿用；Raft、多主及 Rust 重构不作为三阶段前置，未来替换内部实现时保持公开契约兼容。
+真实科研轨迹必须同时保留：输入和模型计划、适用的审批、TaskRef/attempt/release、冻结科学配置、原生产物与摘要、验证结果、后续决定和停止原因。同链中的实际模型与实际 QC 不能被不同分支的记录替代。
 
-## 5. 科学结论、验收与发布状态
+科学评价允许正确拒绝或停止。已有 DA route-a 执行 PASS，但端点关联命题 refuted，平台/RPH 要求 revise；计算级别偏差、Local 专属回执、计时基准和 DA-ENV-LSF 仍须分别处理。普通跨 TaskRef 循环不能替代完整单 TaskRef DA 配方验收。
 
-研究循环为“问题→假设→规划→计算→证据→接受/修订/停止”。模型叙述不作为验证证据。
+[MCP UX P3](../reports/acp2_mcp_ux_20261029/P3_ACCEPTANCE.md)记录了 scripted Controller 的提交→发现→prepare→read fixture；真实 SDK/生产 manifest→prepare→store 同链仍未闭合。[P4](../reports/acp2_mcp_ux_20261029/P4_ACCEPTANCE.md)有后续降级说明；当前源码不声称 CENSO 执行 verified。[第二轮审查](../reports/acp2_mcp_ux_20261029/ASTRA_FIX_VERIFICATION_2.md)针对 `3cba191c`，不能直接充当 `281884ac` 的验收结果。
 
-现有 DA route-a 的执行链为 PASS，但端点关联命题 refuted，平台/RPH 均要求 revise；采用了有明确偏差记录的计算级别，不能写成原定级别已通过。DA 的 Local 回执、计时基准与 LSF 科学行仍有缺口。M4-03 通用 LSF deadline 的通过不关闭这些 DA 专属要求。
+正式[机器台账](reference/next-change/acp2-contracts/release/evidence-coverage.current.json)仍有 G05/G10/G13/G15/G18、H3/H4/H7 等 OPEN，`candidate_full.allowed=false`。M5-03 第二轮独立安装通过不关闭这些聚合门。旧 BOM 的本机可取回性问题需在新候选上明确对账，不能把重构建称为恢复同一制品。
 
-M5-03 独立操作者第二轮安装复验已 PASS；正式台账仍有 G05/G10/G13/G15/G18 与 H3/H4/H7 等 OPEN，`candidate_full.allowed=false`。部分台账 notes 尚称“独立安装未执行”或“执行约束未 enforced”，与后续证据/代码不一致，按[现状说明第 4 节](reference/current/ACP_RPH_Status_20261028.md#4-正式台账与过期叙述的对应关系)区分。文档更正不自动变更冻结门或生产发布状态。
-
-开发闭环继续采用“失败案例→定位归属→回归→修复→候选验收→可回退发行”。记录 ACP/RPH revision、契约/skill、harness/模型、科学软件与测试集版本；评价分别包括协议、流程、科学证据、恢复和成本。已有证据才能进入研究记忆，skill/recipe 升级经回归后晋升。
+后续每个交付应分别说明源码实现、fixture 回归、实际 SDK、真实科学与安装后产品验收，引用确切 revision。历史日志和审查意见不自动成为当前 PASS；本次仅核查文本和源码，不补写运行结果。
 
 ## 6. 审查后的开发建议（2026-10-29）
 
-**保留三阶段方向，但把工作顺序改成“修复基线 → 正式入口真实闭环 → 有限自主科研 → 经比较验证的多 Agent”。** 以用户能完成的研究场景划分交付，每批都留下可回退版本和可复核回执。无需再建一套 Agent 框架、任务库或调度器。
+旧顺序是“基线修复→补产品装配→真实闭环”。现在更适合调整为：**对账最近 MCP 改动→已有 harness 真实使用闭环→补齐消费体验→RPH 有限科研循环→评估多 Agent**。原 B0/B1/B2 中已落代码的部分不再从零实施。
 
-### 6.1 前置批次：形成可信的开发基线
+### 6.1 先建立一个可信、可安装的当前候选
 
-先解决审查 F01/F03 的科研面板遮挡与数值编辑，定位 F09 的查看器首次加载失败；F02 构建器参数断言与 F04 临时测试服务继承部署 Origin 分别修在测试层。10 项 Origin 相关测试已在隔离配置后通过，不能据原始失败去关闭产品跨域保护。修复后跑真实点击、输入与查看器回归，模块测试单独通过不足以放行。
+核对已经修改的 Workbench、产品装配、消费工具、映射与执行入口；对实际受影响范围重跑回归，记录未通过和未验证项。同步 README、产品入口文档、工具说明与测试所指的 revision，保留旧报告的历史范围。
 
-核对 F08 的候选发行物保存位置：本机冻结 BOM 的 31 个 URI 均缺失，历史独立安装通过不等于当前可取回。应恢复/定位原制品并核对摘要；若重新构建，明确是新候选并重新验收。
+优先解决真实场景上的阻塞：产物 attempt 归属、证据可读性和科学归因、审批续接与恢复。全仓格式化、所有 DEFERRED 能力及完整 DA 放行不作为这条有限场景的前置。
 
-完成条件是受影响回归通过、剩余 NOT_VERIFIED 有具体范围、后续第一阶段所用入口可安装和复现。已有 1064 条 lint 诊断与 189 个格式文件作为存量治理单独安排；不把一轮全仓格式化、全部 DEFERRED 实现或完整 DA 放行混进这一批。
+### 6.2 第一条产品链：已有 harness 直接使用 MCP
 
-### 6.2 第一阶段：先让一个正式产品入口可用
+以一个用户已经使用的 harness 为入口，固定一个小分子、明确输入/电荷/多重度/方法/预算，通过公开 MCP 完成发现、预检、提交、观察与结果读取。singlepoint/xtb_optimize 可作为小型场景；最近重点修改的 Confsearch/BatchOptimize 另选代表请求验证参数发现和结果消费。先完成本地场景，再按同契约验证 LSF，并单独声明支持范围。
 
-建议主入口选**安装后的 `rph research` / `rph resume`，DSH 作为第一个参考 harness**。Workbench 用于查看同一任务、证据和审批，复用平台能力；暂不同时建设另一套浏览器 Agent 主循环。
+验收至少包含：真实模型计划→平台预检/审批→真实 QC→原生证据→有引用的解释或停止；同时覆盖适用的审批续接、MCP 断开、harness 会话重启、重试不重复提交、取消/超时、旧 attempt 证据拒绝、证据缺失和非法计划。不能靠读源码、手工补服务器路径或伪造产物引用完成验收。RPH 进程重启与专用 checkpoint 恢复在其产品批次单独验证。
 
-按以下次序完成：
+本批的产出应让用户回答：如何启动，何时需要确认，如何看进度，退出后如何继续，结果不足时会发生什么。用户应确认科学选择，Agent 应能从发现和预检结果获得下一步所需引用，而非要求用户手填内部 digest。简化交互时保留服务端身份绑定。
 
-1. **打通产品装配。** 在现有 CLI/bundle 组合根提供真实模型 Planner、持久 writer、EvidenceReader、预算读取与提交映射；测试注入接口保留。`doctor` 明确指出模型、权限、软件、存储及执行能力是否就绪。正常安装后的 bin 不需要开发者手动传 `dependencies.parts`。
-2. **补齐公开研究消费面。** 逐项核对上述端口可否经现有 MCP/研究扩展访问，复用已有契约；确实缺失时在 Services/Application API 与 MCP 适配器补最小版本化操作，并更新扩展协商、工具表和文档。不要预先承诺 18 个工具永远不变，也不要让 bridge 私自 HTTP/SSH 或写数据库。
-3. **先跑 `singlepoint` 工程闭环。** 它已默认走 envelope，适合先验证模型计划、审批、冻结、一次真实 QC、工件引用和恢复能否串通。这只是中间检查，不替代原定 `xtb_optimize` 场景。
-4. **完成小分子 `xtb_optimize` 正式场景。** 固定输入、电荷/多重度、方法、资源与预算，补齐该普通入口所需的冻结/回执/发布/恢复路径，避免首条产品链继续依赖不完整的 legacy 回执。逐个工作流推广，不一次性切换全部 15 项。
-5. **交付便携 skill。** 明确能力发现、预检、审批、提交、等待、证据读取和停止规则；提示/Schema/示例与 harness 装配代码分离，先在 DSH 上运行。第二 harness 的真实迁移验收放在第一阶段收尾至第二阶段早期，早于多 Agent，防止过晚发现接口依赖 DSH。
+### 6.3 让通用 Agent 可靠消费 ACP
 
-阶段验收必须来自**同一条真实轨迹**：自然语言输入 → 模型计划 → 平台预检/审批 → 真 xTB → 原生结果/ArtifactRef → 有引用的解释。先在本地通过，再按相同契约记录 LSF 场景，分别声明支持范围。模型可以选择拒绝或请求补充信息，不能为了通过测试硬发任务。
+以实际错误案例为顺序补契约：先覆盖下一研究循环需要的 singlepoint/xtb_optimize/optimize/frequency，再扩展其他工作流。Confsearch/BatchOptimize 的 partial 也需按消费分支逐项收敛，不能仅修改 coverage 标签。
 
-同链至少验证：断开 MCP 后重连不重复提交；RPH 重启后继续已有研究；取消/超时真正结束执行；证据缺失时给出 inconclusive；模型无效输出或越权计划被拒绝。记录输入、TaskRef/attempt/release、模型/skill/software 版本、证据摘要与实际使用量。调用数、轮次、任务数和墙钟限额要有明确执行位置；累计 token/core-hours 硬强制尚未交付，不能以统计值冒充硬上限。
+优先交付便携 skill、版本化示例、跨会话查询和有限结果摘要。skill 说明发现→确认→预检→提交→等待→证据→停止规则，科学事实仍由平台提供。大工件分页或专用二进制读取按真实需求设计，不通过放宽正文策略解决。
 
-### 6.3 第二阶段：有限、可审查的单 Agent 科研
+用第二 harness 执行相同输入与负例，检查它是否需要读源码、猜参数、手填服务器路径或绕过 MCP 才能完成任务。如果需要，优先修接口或文档。此处不增加第二任务库或第二执行权威。
 
-首个场景建议收窄到**给定候选结构的优化 → 频率检查 → 按证据继续、修订或停止**。稳定后加入可比方法下的单点/热化学与候选排序，再接构象筛选；已知 TS/IRC 验证随后加入。首版不以“自主发现完整反应机理”为验收目标。
+### 6.4 第二阶段：把单步结果变成可审查的研究决定
 
-四种 skill 按职责实现，不要求四个独立模型或每步都调用模型：结构/参数/能力校验用确定性代码；模型承担问题解释、提出受限计划和解释证据；科学断言仍由验证器与原生产物判定。扩展默认确定性 helper 时，按真实失败案例增加能力，不以角色名字齐全判定完成。
+首个场景收窄为给定候选结构的优化→频率检查→依据证据继续、修订或停止。稳定后增加可比方法下的单点/热化学与候选排序，再扩展构象搜索和已知 TS/IRC 验证。自主发现完整反应机理不作为首版出口。
 
-研究状态至少持久化：问题/假设标识、待检验命题、计划 revision、依赖 TaskRef、证据引用、决策理由与停止原因。先扩展现有 ResearchRecord/Proposal；等多个候选和相互依赖确实需要时，再扩大假设图模型。
-
-建议明确两层编排边界：
-
-| 层次 | 负责什么 | 何时创建下一步 |
+| 层次 | 负责什么 | 下一步如何产生 |
 |---|---|---|
-| ACP bounded DAG | 提交前已确定的计算依赖、固定参数与产物传递；冻结为可恢复的计算执行单元 | 满足预先定义的依赖/条件后执行，内部不运行开放式模型决策 |
-| RPH 研究循环 | 读取证据，修订假设/方法，选择下一项任务或 DAG，决定停止 | 一个研究决策点形成新 Proposal/revision，并重新执行适用的预检/审批 |
+| ACP bounded DAG | 提交前确定的计算依赖、参数与产物传递，冻结为可恢复执行单元 | 满足预定义依赖/条件后执行，内部不运行开放式模型策略 |
+| RPH 研究循环 | 解释证据、修订问题/方法、选择下一任务或 DAG、决定停止 | 形成新 Proposal/revision，再执行适用预检、审批与预算检查 |
 
-跨 TaskRef 依赖保存生产者 attempt 与产物 generation/digest，重新计算使旧证据失效时显式处理；恢复先对账已有任务和证据，再决定是否新增提交。不能每恢复一次就重新规划并重复启动，也不能绕过预算/审批自动升级计算级别。
+研究状态保存问题/命题、计划 revision、依赖 TaskRef、生产者 attempt、产物 generation/digest、决策理由与停止原因。先扩展已有 ResearchRecord/Proposal；多个候选与依赖确实需要时再扩大假设图。重算导致证据失效须显式处理，不得把旧证据接到新 attempt。
 
-跨任务科研循环与完整单 TaskRef DA 配方是两个独立交付项：本路线允许先做前者，但 G15 的 endpoint_prep/candidate_path/energy_thermochemistry 缺口仍保持 OPEN，后续按原要求补齐和验收。
+评价基准包含成功、未收敛、虚频不符、证据不足、端点 refuted、预算停止和服务重启。评价正确决策、重复/无效任务、恢复一致性、耗时与费用；不以“最后都 supported”作为成功。
 
-阶段评估使用小型、固定且包含负例的基准：正常成功、未收敛、虚频不符、证据不足、端点 refuted、预算停止、服务重启。检查决策是否正确、无效/重复任务数、恢复是否一致、耗时及成本；预先冻结判定规则。必须保留 DA 端点 refuted 这类反例，允许正确停止，不以“最后都输出 supported”为成功标准。
+### 6.5 第三阶段：先验证一种协作收益
 
-### 6.4 第三阶段：有明确收益时再增加多 Agent
+在单 Agent 基准和第二 harness 稳定后，先试主管＋独立证据审查角色。用相同输入、模型条件和总预算，与单 Agent 比较决策质量、重复计算、时间和费用。收益不足则不扩展。
 
-开始条件：单 Agent 的正例/负例与恢复基准稳定，第二 harness 可迁移，真实瓶颈已能归因到任务分工。先试一种主管＋一种专业角色，例如主管请求独立证据审查；比较相同输入、模型与预算下相对单 Agent 的决策质量、重复计算、时间和费用。收益不足则保留单 Agent。
+专业 Agent 提交结构化提案/审查意见，主管合并，平台保持统一授权与预算。之后再按实际瓶颈增加构象、TS、IRC、热化学角色和冲突处理。Raft、多主、Rust 重写不作为阶段前置。
 
-专业 Agent 提交结构化提案/审查意见，统一经主管合并和平台提交策略授权。新增多个角色不能产生多个任务权威或各自独立的无限预算。之后再按证据增加构象、TS、IRC、热化学角色、共享假设图和冲突处理。第二 harness 验收只验证可迁移性，本身不是多 Agent 协作验收。
+### 6.6 建议的下一批工作
 
-### 6.5 建议拆分的开发批次
-
-| 顺序 | 范围 / 主要代码驻点 | 可审查的交付物 |
+| 顺序 | 工作 | 出口 |
 |---|---|---|
-| B0 | Workbench 布局/数值输入、浏览器夹具、插件构建断言、发行物核对 | 缺陷复现 → 修复 → 定向与浏览器整组通过；制品取回记录 |
-| B1 | 端口缺口清单；`rph/packages/cli`、`dsh-bundle`；Services/MCP 最小补口 | 正式 bin 与 doctor 可用，singlepoint 同链工程回执 |
-| B2 | xtb_optimize 所需 attempt 链、便携 skill、同链故障验收 | 第一阶段本地完整回执；LSF 支持另列；没有 fixture parts 的安装后验收 |
-| B3 | 有限科研决策、ResearchRecord 的跨任务依赖、optimize/frequency 所需执行链 | 正例/负例/恢复基准；第二 harness 迁移回执 |
-| B4 | 构象/热化学扩展、已知 TS/IRC 与 DA 配方逐项补齐 | 适用场景验收；原 G/H 门逐项对账 |
-| B5 | 有限专业角色、主管合并、共享研究状态 | 与单 Agent 相同预算的对照结果，收益成立再扩大 |
+| N0 | 当前代码/文档/候选与回归对账，修复场景阻塞 | 可安装版本、清楚的支持矩阵和未验证项 |
+| N1 | 已有 harness 经 MCP 的发现→预检→提交→状态→产物闭环 | 一条真实轨迹及负例回执；不依赖 RPH 或源码知识，Local/LSF 分列 |
+| N2 | 根据 N1 反馈完善契约、错误、结果摘要与任务找回；便携 skill 和第二 harness | Agent 可发现、可纠错、可取回、可续接 |
+| N3 | RPH 正式入口与恢复验收、optimize/frequency 证据链、跨任务研究决策 | 有限科研正负例基准与一致恢复 |
+| N4 | 构象/热化学/已知 TS/IRC、DA 配方按范围补齐 | 科学适用范围和原 G/H 门逐项对账 |
+| N5 | 单一专业角色试验 | 同预算对照收益，决定是否扩大多 Agent |
 
-本表是优先级与依赖建议，不是已授权的实现或发布日期承诺。每批以可运行场景验收；阶段性受限交付不自动满足完整候选发布门。
+本表是讨论建议，不是发布日期或全部实现承诺。N2 的接口设计可与 N1 验收交替推进，以真实使用暴露的问题决定范围。
 
-## 7. 参考与证据入口
+## 7. 接下来值得讨论的产品选择
 
-- [当前实现与缺口说明](reference/current/ACP_RPH_Status_20261028.md)
-- [2026-10-28—29 功能审查及原始证据](../reports/acp2_function_audit_20261028/REPORT.md)
-- [四组分架构方案](ACP_2.0_Four_Component_Collaboration_Plan_20261020.md)
-- [RPH / Workbench 原实施附件](reference/next-change/ACP_2.0_Parallel_Plan_C_RPH_Workbench_20261020.md)
-- [MCP / DSH 历史联调手册](reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md)
-- [RPH 包与装配说明](../rph/README.md)
-- [当前机器覆盖台账](reference/next-change/acp2-contracts/release/evidence-coverage.current.json)
-- [独立操作者第二轮结果](../reports/acp2_remediation_20261026/m5-03/m503-operator-receipt-round2/RESULTS.md)
+**建议优先讨论“第一位用户怎样完成第一项研究”，再决定新增模块。** 可以从三个选择收敛：
 
-2026-10-28 的现状修订未重做真实运行；随后功能审查新增了 Python、真实 DSH SDK、浏览器与打包回归，结果及范围见审查报告。未新增真实模型/QC/LSF 科学提交，未操作生产服务，也未开始上述功能开发。
+1. **主使用方式已确定。** 近期优先已有 harness＋ACP MCP，便携 skill 辅助使用；RPH 专用研究循环后置。下一步需要用实际任务找出最近一波 MCP 改动之后仍存在的交互阻力。
+2. **首次科研场景。** 建议用 singlepoint/xtb_optimize 证明工程链，再以“候选优化＋频率判断”检验有限科研能力；若实际需求更偏构象筛选，应据此调整契约与证据优先级。
+3. **自主程度。** 建议先允许 Agent 在预先确认的结构、方法范围与预算内决策；改变科学问题、显著升级方法或扩大计算范围时重新确认。具体边界应体现为计划和平台策略，不能只写在提示词里。
+
+这三个选择会决定后续最值得补的是接口覆盖、证据身份还是研究策略；当前不宜仅因已有多个 skill 就优先投入多 Agent。
+
+## 8. 参考与证据入口
+
+- [原现状说明（历史基线）](reference/current/ACP_RPH_Status_20261028.md)
+- [功能审查（fd2087c7）](../reports/acp2_function_audit_20261028/REPORT.md)
+- [MCP UX 实施计划（历史计划，不作当前完成清单）](reference/next-change/ACP_MCP_UX_Remediation_Plan_20261029.md)
+- [P1 校验](../reports/acp2_mcp_ux_20261029/P1_ACCEPTANCE.md)、[P2 发现](../reports/acp2_mcp_ux_20261029/P2_ACCEPTANCE.md)、[P3 产物](../reports/acp2_mcp_ux_20261029/P3_ACCEPTANCE.md)、[P4 方法信息](../reports/acp2_mcp_ux_20261029/P4_ACCEPTANCE.md)
+- [产品入口契约](reference/next-change/acp2-contracts/experience/rph-product-entry.v1.md)、[研究消费契约](reference/next-change/acp2-contracts/runtime/research-consumption.v1.json)
+- [四组分方案](ACP_2.0_Four_Component_Collaboration_Plan_20261020.md)
+- [独立安装第二轮](../reports/acp2_remediation_20261026/m5-03/m503-operator-receipt-round2/RESULTS.md)
+
+本次仅更新 perspective；未改代码、正式门或历史回执，未新增真实模型/QC/LSF 提交，未操作生产服务。
