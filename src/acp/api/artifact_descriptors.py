@@ -12,11 +12,15 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from acp.results.manifest import MANIFEST_FILENAME, load_result_manifest
+from acp_services.data.artifacts import is_safe_artifact_token
 
 __all__ = ["describe_job_artifacts"]
 
 #: Hard bound so a polling status call cannot walk an arbitrarily large tree.
 MAX_ARTIFACT_DESCRIPTORS = 50
+
+#: A status poll may not pay for an arbitrarily large manifest.
+MAX_MANIFEST_BYTES = 2 * 1024 * 1024
 
 
 def _safe_relative(path: str) -> str | None:
@@ -31,11 +35,9 @@ def _safe_relative(path: str) -> str | None:
 
 
 def _safe_token(value: object) -> str | None:
-    """A resource id that :func:`prepare` will accept (no path syntax)."""
+    """A resource id prepare accepts — the same single authority."""
     text = str(value or "").strip()
-    if not text or "\x00" in text or "/" in text or "\\" in text or ".." in text:
-        return None
-    return text
+    return text if text and is_safe_artifact_token(text) else None
 
 
 def describe_job_artifacts(
@@ -55,7 +57,16 @@ def describe_job_artifacts(
     """
     if not task_dir:
         return [], False
-    manifest = load_result_manifest(Path(task_dir))
+    root = Path(task_dir)
+    manifest_path = root / "RESULT" / MANIFEST_FILENAME
+    try:
+        if not manifest_path.is_file():
+            return [], False
+        if manifest_path.stat().st_size > MAX_MANIFEST_BYTES:
+            return [], True
+    except OSError:
+        return [], False
+    manifest = load_result_manifest(root)
     if manifest is None:
         return [], False
     bounded = max(1, int(limit))

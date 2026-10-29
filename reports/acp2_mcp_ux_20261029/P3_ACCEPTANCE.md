@@ -34,6 +34,15 @@
 | 产品 `id="../x"` 可被发布 | `_safe_token` 拒绝空/NUL/路径分隔符/`..` |
 | 闭环链漏 relative_path 与 operation status | prepare 带发现到的 `relative_path`；随后 `acp_status({"kind":"operation","id":"op_chain"})` 断言 digest |
 
+## 第三轮复验整改
+
+| 问题 | 整改 |
+|---|---|
+| identity 正文恰为 base64 形状时绕过脱敏 | 去掉字段名级 base64 豁免；改为 `MachineResult.passthrough_body` 显式开关（仅 encoding=base64 时由 read 工具设置），identity 校验改用 `redact()` 直接比对 |
+| 描述符 ID 与 prepare 规则不一致（`a..b` 误拒、`a b` 漏拒） | 直接复用 `is_safe_artifact_token`（prepare/read 的同一权威） |
+| manifest 整份解析无成本上限 | 先 stat：缺失 → 空；> 2 MiB → `([], True)`，不解析 |
+| attempt 仅贴标签 | 记录为已知限制：manifest 不含 attempt，attempt 取自当前 job record，仅作标注；不以它做校验 |
+
 ## P3-04/05 产物发现
 
 - 新增 `src/acp/api/artifact_descriptors.py`：从 `RESULT/result_manifest.json` 投影

@@ -138,6 +138,7 @@ def test_base64_body_survives_machine_serialization() -> None:
         operation="read_artifact",
         status="ok",
         data={"body": "/w==", "encoding": "base64", "truncated": False},
+        passthrough_body=True,
     )
     assert result.to_dict()["data"]["body"] == "/w=="
 
@@ -151,3 +152,15 @@ def test_identity_body_is_still_redacted() -> None:
         data={"body": "path=/home/xieningke/secret.txt", "encoding": "identity"},
     )
     assert result.to_dict()["data"]["body"] != "path=/home/xieningke/secret.txt"
+
+
+def test_identity_body_that_looks_like_base64_is_still_redacted() -> None:
+    with pytest.raises(mcp.McpToolError) as excinfo:
+        McpServer._verify_artifact_body(
+            {
+                "body": "/home/secret",
+                "encoding": "identity",
+                "digest": "sha256:" + "a" * 64,
+            }
+        )
+    assert excinfo.value.params["rule"] == "artifact_body_redacted"

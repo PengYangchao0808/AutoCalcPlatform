@@ -72,7 +72,6 @@ __all__ = [
     "error_spec",
     "default_error_for_exit",
     "dry_run_result",
-    "is_base64_artifact_body",
     "is_opaque_wait_cursor",
     "redact",
     "redact_value",
@@ -442,25 +441,8 @@ def is_opaque_wait_cursor(value: str) -> bool:
 #: is explicit (a declared field name) *and* value-shaped (the published cursor
 #: encoding), never a general entropy exception: an undeclared field, or a
 #: credential under the declared name, is still redacted.
-_BASE64_BODY_RE = re.compile(r"^[A-Za-z0-9+/]+={0,2}$")
-
-
-def is_base64_artifact_body(text: str) -> bool:
-    """True for a base64 artifact body: opaque bytes, not a path to redact.
-
-    Identity bodies never reach this branch: the read verifier rejects a body
-    whose redaction would change it, so only base64-encoded bytes are carried
-    verbatim.  The predicate is shape-only and never authorizes anything.
-    """
-    value = str(text or "")
-    if not value or len(value) % 4 != 0:
-        return False
-    return bool(_BASE64_BODY_RE.fullmatch(value))
-
-
 PASSTHROUGH_FIELD_VALUES: Mapping[str, Callable[[str], bool]] = {
     "cursor": is_opaque_wait_cursor,
-    "body": is_base64_artifact_body,
 }
 
 
@@ -663,6 +645,9 @@ class MachineResult:
     operation_identity: str | None = None
     diagnostic_ref: str | None = None
     schema_version: int = MACHINE_SCHEMA_VERSION
+    #: Keep ``data["body"]`` verbatim (base64 artifact bytes only).  The
+    #: identity branch is verified by the read tool before this is ever set.
+    passthrough_body: bool = False
 
     def __post_init__(self) -> None:
         if self.status not in ("ok", "error"):
@@ -673,6 +658,13 @@ class MachineResult:
             raise ValueError("a failed result must carry an error object")
 
     def to_dict(self) -> dict[str, Any]:
+        data: dict[str, Any] | None = None
+        if self.data is not None:
+            cleaned = dict(self.data)
+            body = cleaned.pop("body", None) if self.passthrough_body else None
+            data = redact_value(cleaned)
+            if self.passthrough_body and isinstance(body, str):
+                data["body"] = body
         return {
             "schema_version": self.schema_version,
             "operation": self.operation,
@@ -681,7 +673,7 @@ class MachineResult:
             "dry_run": self.dry_run,
             "operation_identity": self.operation_identity,
             "diagnostic_ref": self.diagnostic_ref,
-            "data": redact_value(dict(self.data)) if self.data is not None else None,
+            "data": data,
             "error": self.error.to_dict() if self.error is not None else None,
         }
 

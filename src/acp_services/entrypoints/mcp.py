@@ -2833,6 +2833,7 @@ class McpServer:
             status="ok",
             data=dict(data),
             operation_identity=context.workspace_id,
+            passthrough_body=data.get("encoding") == "base64",
         )
 
     @staticmethod
@@ -2849,10 +2850,10 @@ class McpServer:
         encoding = data.get("encoding") or "identity"
         if data.get("truncated"):
             data.setdefault("digest_scope", "artifact")
-        from acp_services.entrypoints.machine_output import redact_value
+        from acp_services.entrypoints.machine_output import redact
 
-        # base64 is opaque bytes: a path-looking payload must not be redacted.
-        if encoding != "base64" and redact_value({"body": body}).get("body") != body:
+        # base64 is opaque bytes; identity text must survive redaction verbatim.
+        if encoding != "base64" and redact(body) != body:
             raise McpToolError(
                 mo.ErrorCode.UNSUPPORTED_CAPABILITY,
                 "artifact body contains a redacted pattern; the bytes cannot be "
