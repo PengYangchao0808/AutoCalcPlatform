@@ -45,7 +45,7 @@
 
 ## 边界（不冒充 PASS）
 
-- 冻结契约语料 `application-api.v1.json`（manifest 1.7.0）**未 bump**：它属于冻结语料 + manifest 自校验/摘要链，需要单独一轮 manifest 周期；本轮只做运行时附加字段，不改冻结文档。
+- 冻结契约已按 manifest 规则同步（application-api 1.7.0，entry/digest/self/BOM 重算，`validate_acp2_contracts.py` VALID）。
 - 完整 schema 仍只覆盖 Confsearch / BatchOptimize；其余 13 个 active 工作流明确 `not_provided`。
 - 真实 SDK 已用 DSH/Node 客户端验证（8 passed）；非 DSH 第三方客户端仍 `NOT_VERIFIED`。
 - 冻结契约已按 manifest 规则同步（见上）；仍属"待冻结实现"的只有真实第三方非 DSH 客户端。
