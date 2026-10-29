@@ -330,31 +330,40 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
         ):
             if key not in method or method[key] in (None, ""):
                 continue
-            expected: list[Any] = []
-            if key in batch_values and batch_values[key] is not None:
-                expected.append(batch_values[key])
+            batch_value = batch_values.get(key)
+            if batch_value is not None and batch_value != method[key]:
+                raise SubmissionContractError(
+                    f"method.{key} disagrees with method.levels.batch.{key}",
+                    field_name=f"method.{key}",
+                    rule="conflicting_fields",
+                )
             role_id, role_key = _flat_mirror_source(key)
             if role_id is not None:
-                role = roles.get(role_id)
-                if isinstance(role, Mapping) and role.get(role_key) is not None:
-                    expected.append(role[role_key])
+                role_values = [
+                    role[role_key]
+                    for role in roles.values()
+                    if isinstance(role, Mapping) and role.get(role_key) is not None
+                ]
             else:
-                for role in roles.values():
-                    if isinstance(role, Mapping) and role.get(role_key) is not None:
-                        expected.append(role[role_key])
-            if not expected:
+                # Unprefixed fields may mirror any role; matching one is enough.
+                role_values = [
+                    role[role_key]
+                    for role in roles.values()
+                    if isinstance(role, Mapping) and role.get(role_key) is not None
+                ]
+            if role_values and not any(value == method[key] for value in role_values):
+                raise SubmissionContractError(
+                    f"method.{key} disagrees with the mirrored batch setting",
+                    field_name=f"method.{key}",
+                    rule="conflicting_fields",
+                )
+            if not role_values and batch_value is None:
                 if key in _WORKBENCH_FLAT_DEFAULTS and method[key] == _WORKBENCH_FLAT_DEFAULTS[key]:
                     continue
                 raise SubmissionContractError(
                     f"method.{key} would be ignored while method.batch_roles is set",
                     field_name=f"method.{key}",
                     rule="shadowed_field",
-                )
-            if any(value != method[key] for value in expected):
-                raise SubmissionContractError(
-                    f"method.{key} disagrees with the mirrored batch setting",
-                    field_name=f"method.{key}",
-                    rule="conflicting_fields",
                 )
     if "select" in method and method["select"] is not None:
         select = method["select"]

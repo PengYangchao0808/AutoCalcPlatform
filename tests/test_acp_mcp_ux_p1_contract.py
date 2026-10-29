@@ -40,6 +40,25 @@ def client(tmp_path: Path) -> Generator[TestClient, None, None]:
         yield test_client
 
 
+def _table_counts(db_path: str) -> dict[str, int]:
+    import sqlite3
+
+    connection = sqlite3.connect(db_path)
+    try:
+        names = [
+            row[0]
+            for row in connection.execute(
+                "select name from sqlite_master where type='table'"
+            )
+        ]
+        return {
+            name: connection.execute(f"select count(*) from {name}").fetchone()[0]
+            for name in names
+        }
+    finally:
+        connection.close()
+
+
 def _confsearch(**overrides: Any) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "workflow": "Confsearch",
@@ -96,6 +115,7 @@ def test_preflight_and_submit_report_the_same_violation(
     manager = client.app.state.job_manager
     before_tree = sorted(str(path.relative_to(tmp_path)) for path in tmp_path.rglob("*"))
     before_counts = dict(manager.store.counts())
+    before_tables = _table_counts(str(manager.store.db_path))
     before_admission = client.app.state.admission.snapshot()
     body = _confsearch(method={"refinementPolicy": "rank1"})
     preflight = _error(client.post("/api/v1/preflight", json=body))
@@ -103,6 +123,7 @@ def test_preflight_and_submit_report_the_same_violation(
     assert preflight == submit
     # No side effects: no task, no reservation/budget movement, nothing queued.
     assert dict(manager.store.counts()) == before_counts
+    assert _table_counts(str(manager.store.db_path)) == before_tables
     assert client.app.state.admission.snapshot() == before_admission
     assert not getattr(manager, "_submission_jobs", {})
     after_tree = sorted(str(path.relative_to(tmp_path)) for path in tmp_path.rglob("*"))
