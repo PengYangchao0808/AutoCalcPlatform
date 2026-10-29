@@ -1946,7 +1946,7 @@ def test_diff_only_allowed_py_files() -> None:
 
 
 
-# ── Amendment S — CENSO execution evidence (MCP UX P4, 2026-10-29) ──────────
+# ── Amendment X — CENSO execution evidence (MCP UX P4, 2026-10-29) ──────────
 # The plan requires verified execution facts (argv/rc/final part/artifact
 # digests) and a part-bound final-part choice.  Those additions are confined to
 # CensoRunResult.execution, the allowed= parameter of _resolve_final_part, and
@@ -1954,7 +1954,7 @@ def test_diff_only_allowed_py_files() -> None:
 # control-flow algorithm line is touched (teeth below).
 
 
-def _amendment_s_censo_ranges(worktree: str) -> list[tuple[int, int]]:
+def _amendment_x_censo_ranges(worktree: str) -> list[tuple[int, int]]:
     lines = worktree.splitlines()
     ranges: list[tuple[int, int]] = []
     for index, line in enumerate(lines):
@@ -1982,20 +1982,13 @@ def _amendment_s_censo_ranges(worktree: str) -> list[tuple[int, int]]:
     return ranges
 
 
-def _is_amendment_s_censo_addition(ln: int, txt: str, worktree: str) -> bool:
-    stripped = txt.strip()
-    if stripped in {
-        "import hashlib",
-        "from __future__ import annotations",
-        "from cccp.utils.resource_utils import mem_to_mb, resolve_orca_maxcore",
-    }:
+def _is_amendment_x_censo_addition(ln: int, txt: str, worktree: str) -> bool:
+    if txt.strip() == "import hashlib":
         return True
-    if stripped.startswith("effective_templates = self._memory_templates("):
-        return True
-    return any(start <= ln <= end for start, end in _amendment_s_censo_ranges(worktree))
+    return any(start <= ln <= end for start, end in _amendment_x_censo_ranges(worktree))
 
 
-def _amendment_s_censo_teeth(worktree: str) -> list[str]:
+def _amendment_x_censo_teeth(worktree: str) -> list[str]:
     issues: list[str] = []
     checks = (
         ("execution: Dict[str, Any] = field(", "execution field"),
@@ -2005,11 +1998,10 @@ def _amendment_s_censo_teeth(worktree: str) -> list[str]:
         ('"artifacts"', "artifact digests"),
         ('"enabled_parts"', "enabled parts"),
         ('"conformers"', "conformer membership"),
-        ("def _memory_templates(", "memory-template injection"),
     )
     for needle, label in checks:
         if needle not in worktree:
-            issues.append(f"  censo.py: Amendment S scope missing {label}")
+            issues.append(f"  censo.py: Amendment X scope missing {label}")
     return issues
 
 
@@ -2035,7 +2027,7 @@ def test_algorithm_body_untouched() -> None:
     for fp in ALLOWED_PY:
         added, deleted = _diff_hunks(fp)
 
-        # ── censo.py: Amendment S (execution evidence) ────────────────────
+        # ── censo.py: Amendment S (memory) + X (execution evidence) ───────
         if fp == "src/cccp/qc/interfaces/censo.py":
             worktree = _worktree_content(fp)
             for ln, txt in added:
@@ -2044,8 +2036,11 @@ def test_algorithm_body_untouched() -> None:
                     continue
                 if _is_amendment_s_censo_addition(ln, txt, worktree):
                     continue
+                if _is_amendment_x_censo_addition(ln, txt, worktree):
+                    continue
                 violations.append(f"  {fp}:{ln}: {txt!r}")
-            violations.extend(_amendment_s_censo_teeth(worktree))
+            violations.extend(_amendment_s_teeth(worktree, censo=True))
+            violations.extend(_amendment_x_censo_teeth(worktree))
             continue
 
         # ── orca_ts.py: Amendment F + G ───────────────────────────────────
