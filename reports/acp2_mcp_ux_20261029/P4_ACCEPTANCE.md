@@ -75,4 +75,4 @@
 - 本轮**不再声称 verified**：`_execution_verified` 统一返回 False，`executed_status=unverified`；另给 `execution_facts_well_formed` 仅表示事实形状/文件摘要一致。
 - 公开报告改为白名单字段，不发布 `argv`（可能含绝对可执行路径）。
 - 非 UTF-8 正文（完整或截断）统一 `artifact_body_unverifiable`，不再用 surrogateescape 放行。
-- **仍 DEFERRED**：完整正文预扫描（截断前）、本次执行/成员/模板的完整绑定、attempt 归属、历史回执改写、SDK 生产整链、真实 QC、残留门禁扩展与历史清理；历史 blob 仍可达、敏感性 NOT_VERIFIED。局部修复不代表整体验收通过。
+- **仍 DEFERRED**：本次执行/成员/模板的完整绑定、attempt 归属、SDK 生产整链、真实 QC、残留门禁扩展与历史清理；历史 blob 仍可达、敏感性 NOT_VERIFIED。**完整正文预扫描已在读取层实现**（见 P3，不再列为延期）。局部修复不代表整体验收通过。
