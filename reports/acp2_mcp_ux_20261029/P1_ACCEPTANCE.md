@@ -45,6 +45,15 @@
 | 无镜像值的顶层 flat 键被吞（如 `minimum_opt_recalc_hess`） | 不在 Workbench 默认镜像集内的、无对应角色值的 flat 键 → `shadowed_field` 拒绝 |
 | P1-02 副作用证据只核任务数 | 测试改为拒绝前后 `store.counts()`、`admission.snapshot()` 全等，且 `_submission_jobs` 为空 |
 
+### 第五轮验收后
+
+| 问题 | 整改 |
+|---|---|
+| 顶层 `optimization_method` 与 ts 角色比较导致误拒 | 前缀路由：`optimization_*` / `minimum_*` → int，`transition_state_*` → ts |
+| `minimum_opt_recalc_hess` 与 int 角色同名值无法匹配 | 前缀映射到 int 角色的同名后缀（`opt_recalc_hess`） |
+| Workbench 默认 `temperature=298.15` 被白名单无条件放过（400 也被吞） | 默认值表改为精确值：只有等于 Workbench 默认的镜像才放行，非默认且无角色/levels 依据 → `shadowed_field` |
+| P1-02 未覆盖 prepare／持久记录 | 拒绝前后比较 run_root 文件树、`store.counts()`、`admission.snapshot()`，并断言 `_submission_jobs` 为空 |
+
 ## 本轮变更
 
 | 文件 | 变更 |

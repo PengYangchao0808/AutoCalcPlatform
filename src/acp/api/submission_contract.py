@@ -173,17 +173,26 @@ _ROLE_FLAT_ALIASES: dict[str, str] = {
     "sp_basis": "single_point_basis",
 }
 # Workbench 总是带上的 flat 镜像；角色值为 null 时允许它们存在。
-_WORKBENCH_FLAT_DEFAULTS: frozenset[str] = frozenset(
-    {
-        "temperature",
-        "pressure",
-        "scale_factor",
-        "optimization_method",
-        "optimization_basis",
-        "single_point_method",
-        "single_point_basis",
-    }
-)
+_WORKBENCH_FLAT_DEFAULTS: dict[str, Any] = {
+    "temperature": 298.15,
+    "pressure": 1.0,
+    "scale_factor": 0.9905,
+}
+
+
+def _flat_mirror_source(key: str) -> tuple[str | None, str]:
+    """Return the (role, role field) a flat method key mirrors."""
+    if key.startswith("transition_state_"):
+        return "ts", key[len("transition_state_") :]
+    if key.startswith("minimum_"):
+        return "int", key[len("minimum_") :]
+    if key.startswith("optimization_"):
+        suffix = key[len("optimization_") :]
+        return "int", suffix
+    if key.startswith("single_point_"):
+        suffix = key[len("single_point_") :]
+        return "int", f"sp_{suffix}"
+    return None, key
 _BATCH_LEVELS: dict[str, frozenset[str]] = _level_fields("batch_optimize")
 
 
@@ -308,21 +317,10 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
             _as_mapping(role_value, f"method.batch_roles.{role_id}")
         # The flag builder returns early when batch_roles is present, so every
         # top-level flat setting must be a mirror of a role/level value or it
-        # would be silently ignored.  Aliases follow the Workbench mapping:
-        # int.method -> optimization_method, ts.method -> transition_state_method.
-        mirrored: dict[str, list[Any]] = {}
-        for role_value in roles.values():
-            for key, value in role_value.items():
-                if value is None:
-                    continue
-                flat_key = _ROLE_FLAT_ALIASES.get(str(key), str(key))
-                mirrored.setdefault(flat_key, []).append(value)
+        # would be silently ignored.  Prefixes select the role they mirror:
+        # optimization_*/minimum_* <- int, transition_state_* <- ts.
         batch_level = (method.get("levels") or {}).get("batch")
-        if isinstance(batch_level, Mapping):
-            for key, value in batch_level.items():
-                if value is None:
-                    continue
-                mirrored.setdefault(str(key), []).append(value)
+        batch_values: Mapping[str, Any] = batch_level if isinstance(batch_level, Mapping) else {}
         for key in (
             *_BATCHOPTIMIZE_SCALAR_FLAGS,
             "opt_recalc_hess",
@@ -332,16 +330,23 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
         ):
             if key not in method or method[key] in (None, ""):
                 continue
-            values = mirrored.get(key)
-            if not values:
-                if key in _WORKBENCH_FLAT_DEFAULTS:
+            expected: list[Any] = []
+            if key in batch_values and batch_values[key] is not None:
+                expected.append(batch_values[key])
+            role_id, role_key = _flat_mirror_source(key)
+            if role_id is not None:
+                role = roles.get(role_id)
+                if isinstance(role, Mapping) and role.get(role_key) is not None:
+                    expected.append(role[role_key])
+            if not expected:
+                if key in _WORKBENCH_FLAT_DEFAULTS and method[key] == _WORKBENCH_FLAT_DEFAULTS[key]:
                     continue
                 raise SubmissionContractError(
                     f"method.{key} would be ignored while method.batch_roles is set",
                     field_name=f"method.{key}",
                     rule="shadowed_field",
                 )
-            if any(value != method[key] for value in values):
+            if any(value != method[key] for value in expected):
                 raise SubmissionContractError(
                     f"method.{key} disagrees with the mirrored batch setting",
                     field_name=f"method.{key}",

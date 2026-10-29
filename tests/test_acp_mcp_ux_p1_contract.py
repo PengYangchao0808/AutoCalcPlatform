@@ -90,8 +90,11 @@ def test_confsearch_max_conformers_is_refused(client: TestClient, path: str) -> 
     assert detail["params"]["rule"] == "unknown_field"
 
 
-def test_preflight_and_submit_report_the_same_violation(client: TestClient) -> None:
+def test_preflight_and_submit_report_the_same_violation(
+    client: TestClient, tmp_path: Path
+) -> None:
     manager = client.app.state.job_manager
+    before_tree = sorted(str(path.relative_to(tmp_path)) for path in tmp_path.rglob("*"))
     before_counts = dict(manager.store.counts())
     before_admission = client.app.state.admission.snapshot()
     body = _confsearch(method={"refinementPolicy": "rank1"})
@@ -102,6 +105,8 @@ def test_preflight_and_submit_report_the_same_violation(client: TestClient) -> N
     assert dict(manager.store.counts()) == before_counts
     assert client.app.state.admission.snapshot() == before_admission
     assert not getattr(manager, "_submission_jobs", {})
+    after_tree = sorted(str(path.relative_to(tmp_path)) for path in tmp_path.rglob("*"))
+    assert after_tree == before_tree  # no task dir, prepare record or artifact
 
 
 def test_valid_confsearch_passes_the_contract() -> None:
@@ -216,7 +221,7 @@ def test_batch_roles_with_flat_scalars_is_accepted() -> None:
         },
         method={
             "profile": "opt_freq",
-            "batch_roles": {"reactant": {"role": "reactant"}},
+            "batch_roles": {"int": {"role": "int", "method": "B3LYP"}},
             "optimization_method": "B3LYP",
             "temperature": 298.15,
         },
@@ -349,7 +354,8 @@ def test_batch_mirror_must_match_batch_level() -> None:
         input={"source_type": "batch_structures", "items": [{"xyz": "H 0 0 0"}]},
         method={
             "profile": "opt_freq",
-            "batch_roles": {"int": {"role": "int"}},
+            "batch_roles": {"int": {"role": "int", "method": "B3LYP"}},
+            "optimization_method": "B3LYP",
             "temperature": 298.15,
             "levels": {"batch": {"temperature": 298.15}},
         },
@@ -361,7 +367,8 @@ def test_batch_mirror_must_match_batch_level() -> None:
             input={"source_type": "batch_structures", "items": [{"xyz": "H 0 0 0"}]},
             method={
                 "profile": "opt_freq",
-                "batch_roles": {"int": {"role": "int"}},
+                "batch_roles": {"int": {"role": "int", "method": "B3LYP"}},
+                "optimization_method": "B3LYP",
                 "temperature": 298.15,
                 "levels": {"batch": {"temperature": 310.15}},
             },
@@ -500,6 +507,18 @@ def test_batch_non_mirrored_flat_fields_are_refused() -> None:
                 "profile": "opt_freq",
                 "batch_roles": {"int": {"opt_recalc_hess": 5}},
                 "minimum_opt_recalc_hess": 10,
+            },
+            resources={},
+        )
+    assert excinfo.value.params()["rule"] == "conflicting_fields"
+    with pytest.raises(SubmissionContractError) as excinfo:
+        validate_workflow_submission(
+            "BatchOptimize",
+            input=base_input,
+            method={
+                "profile": "opt_freq",
+                "batch_roles": {"int": {"method": "B3LYP"}},
+                "scf_orbital_inherit": True,
             },
             resources={},
         )
