@@ -30,10 +30,20 @@
 - 混合 refined/unrefined 不共用同一方法声明；缺证据写 `unverified`，不猜 `dft`。
 - 旧报告仍可读：只新增键，未改既有字段语义。
 
+## 第一轮验收后整改
+
+| 问题 | 整改 |
+|---|---|
+| interface→task→adapter→workflow 传递链断裂，`censo_execution` 恒空 | `censo_refine` 任务把 `execution` 放进 TaskResult.metadata；`energy_adapters.censo_refine_via_task` 重建 `CensoRunResult(execution=...)`；`energy.py` 转发；新增 `test_acp_mcp_ux_p4_chain` 断言 adapter 保留执行事实 |
+| `verified` 只看字典非空，可被 `{"returncode":1}` 伪证 | `_execution_verified` 要求 `returncode==0`、非空 `argv`、`final_part`、json/xyz 两个 64-hex digest；弱证据测试全部 `unverified` |
+| 所有构象共用 verified，refined 直接写 dft | 按运行 part 判定：screening 运行时仅 screening 条目 `executed`，refined 条目 `unverified`；refinement 运行时反之；新增 `energy_kind_verified` |
+| 非 CENSO 报告无条件加 method_identity | 仅当存在 requested levels 或执行事实时才添加该块 |
+| 测试手填 `"a"*64` 固化漏拒 | 改为完整执行事实夹具，并补 rc=1 / 空 argv / 短 digest 三类负例 |
+
 ## 证据
 
 - `evidence/p4/p4_batch.txt`：命令、模块清单、源文件哈希、exit code。
-- CENSO/confsearch/report 批次：**188 passed，exit 0**。
+- CENSO/confsearch/report/chain 批次：**190 passed，exit 0**。
 
 ## 边界（不冒充 PASS）
 
