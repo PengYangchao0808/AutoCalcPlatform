@@ -152,7 +152,7 @@
       "NOT_APPLICABLE"
     ]
   },
-  "contract_digest": "d5087f07c5b5b74a3167af038bc5cda8650a42b03d8d0b76e1f56a826bdb9f8e",
+  "contract_digest": "36b3d876f489535451d3d9897cbf2c660a99910e0ffc0415eb86a118e8258e45",
   "contract_digest_rule": "sha256 over sorted lines '<path> <sha256>\\n' for delivered contracts excluding manifest.json, runtime/baseline-lock.json and release/bom.current.json (self-referential files; the BOM embeds this aggregate digest).",
   "contract_version": "1.7.0",
   "contract_version_history": [
@@ -224,7 +224,7 @@
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/manifest.json",
-      "sha256": "fb1393839dd4841c71f40268ffe456c14dae507d99df0ff5e0f32f47245ea641",
+      "sha256": "6c1c3e264be5b26b04fa0744c60be0af6a7eb5f92dcf31097f3f9f5b015aa970",
       "status": "delivered"
     },
     {
@@ -308,7 +308,7 @@
       "id": "p2-research-operations",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
-      "sha256": "a80f2db16af01b4229c8dfc0ba9d775a65eb9ef4cf72c3f4c96bcee76947500b",
+      "sha256": "9155aa64234d61b53ce06f8d882cf409d91922f220d696baaeaf86996fcef9b3",
       "status": "delivered",
       "updated_by": "B16"
     },
@@ -317,7 +317,7 @@
       "id": "mcp-launch-schema",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.schema.json",
-      "sha256": "4bce30916b54e3b2d17fd136da4eadb0b62a3c717ac97c7800fe305b68e55147",
+      "sha256": "d18138ab639c000b04975b785c72bf34cd89b6e48e37b2ab8c066e952fe00792",
       "status": "delivered",
       "updated_by": "B06"
     },
@@ -326,7 +326,7 @@
       "id": "mcp-launch-template",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.template.json",
-      "sha256": "798ba06e3088b4d20f37654f9656e1c48fcb3a73ccbaaf3dce9cb4d7524aaef8",
+      "sha256": "c39e8504e7752e9d5af03f04447726b5fb9551bbfde0737c3bf0e13c1c660f9e",
       "status": "delivered",
       "updated_by": "B06"
     },
@@ -385,7 +385,7 @@
       "id": "samples",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/samples/",
-      "sha256": "bdef569d27348ff8f3450670ed60d28d3014eca98ebdae37f8f145b013282f0c",
+      "sha256": "a8532bb51ad9f71745f8785ca2ef3baa97914fbf8cfb19a4c9c5a9e973dfed0c",
       "status": "delivered"
     },
     {
@@ -474,7 +474,7 @@
       "note": "M5-02 clean-candidate BOM: 27 artifacts with URI+sha256+size, toolchain/DSH locks, contract digest and coverage canonical digest. Self-referential: excluded from contract_digest because it embeds that aggregate digest.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/release/bom.current.json",
-      "sha256": "3def550d2ba48b13f2f16c99721c02ede78f50e461c0bed0465fcf7f26677ddc",
+      "sha256": "9b5b0d0fe50a17591ba2b7492544aaa55ef84c5e87da530056f5b5cf4b1fb3b5",
       "status": "delivered"
     },
     {
@@ -483,7 +483,7 @@
       "note": "M5-02 final coverage ledger: 39 tasks / 32 checkpoints / 26 gaps / 8 H rows + 3 DEFERRED rows, each with a receipt+sha256, candidate, reuse and required_observations. Delivery status lives only here, never in the BOM.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/release/evidence-coverage.current.json",
-      "sha256": "aaf24c5e07526565bf39b64172b41f153fc5677e7e3d8d47780f7b6884575751",
+      "sha256": "390e64edf4222a16e9542a54448f4935f567eb13cd2911e8d977d12264357e6d",
       "status": "delivered"
     }
   ],

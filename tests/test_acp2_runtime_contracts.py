@@ -50,8 +50,9 @@ MCP_TOOL_NAMES = {
     "acp_prepare_artifact",
     "acp_read_artifact",
     "acp_analyze",
-    # 2026-10-30 guidance batch: additive read-only registration (plan §5).
+    # 2026-10-30 guidance batch: additive read-only registrations (plan §5).
     "acp_get_guidance",
+    "acp_list_jobs",
 }
 #: The ten P2 research promise names (M1-01a).  A promise is not implemented:
 #: none of them is in the P1 allowlist, so the extension never reports negotiated.
@@ -486,6 +487,7 @@ def test_mcp_launch_tool_inputs_match_the_runtime_and_application_tables() -> No
         "acp_read_artifact": 2,
         "acp_analyze": 2,
         "acp_get_guidance": 1,
+        "acp_list_jobs": 1,
     }
     declared = schema["$defs"]["tool"]["properties"]["input_schema_version"]
     assert declared["type"] == "integer"
@@ -531,6 +533,7 @@ def test_mcp_launch_template_is_placeholder_only(
         "acp_read_artifact",
         "acp_analyze",
         "acp_get_guidance",
+        "acp_list_jobs",
     ]
     for tool in launch_template["instance"]["tools"]:
         assert tool["inputSchema"] == tool_inputs[tool["name"]]

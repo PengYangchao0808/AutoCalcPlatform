@@ -56,8 +56,9 @@ _EXPECTED_TOOL_FAMILIES = {
     "status_cancel",
     "artifact_prepare_read",
     "explicit_analysis",
-    # 2026-10-30 guidance batch (plan §5): additive read-only family.
+    # 2026-10-30 guidance batch (plan §5): additive read-only families.
     "guidance_discovery_read",
+    "task_lookup",
 }
 
 
@@ -390,7 +391,7 @@ def test_tools_list_is_the_frozen_allowlist() -> None:
 def test_tool_allowlist_covers_six_families() -> None:
     assert set(mcp.TOOL_FAMILIES) == set(mcp.TOOL_ALLOWLIST)
     assert set(mcp.TOOL_FAMILIES.values()) == _EXPECTED_TOOL_FAMILIES
-    assert len(_EXPECTED_TOOL_FAMILIES) == 7
+    assert len(_EXPECTED_TOOL_FAMILIES) == 8
 
 
 def test_unknown_tool_rejected_at_protocol_layer() -> None:

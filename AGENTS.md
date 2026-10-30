@@ -41,7 +41,7 @@ Automated computational chemistry platform. Python 侧三包：`cccp`（科学�
 - **兼容与恢复**：旧人工记录可读，不重写成 Agent 来源；新 wire/schema 通过显式协商/版本发布。绑定 source task/attempt、profile/structure digest、selection revision 与 Batch item；旧帧/旧授权拒绝，回包丢失先对账原幂等意图。复用 frames、候选权威、Controller/Services，不建第二状态库或 writer。
 - **验证**：MCP 基础易用性、指南行为、全自动科研链分开验收。fixture/真实 SDK/真模型＋QC/安装与 Local/LSF 各留范围；prompt 文字存在、工具数或一次 PASS 均不能证明整链已交付。文档、review、回归不隐含生产重启或真实计算授权。
 
-**当前 MCP 表面**：未协商 9 基础（2026-10-30 指南批增补只读 `acp_get_guidance`，见 `src/acp/api/guidance_pack.py` + `v1_guidance.py`，P0 基线 `docs/reference/next-change/ACP_MCP_Guidance_P0_Baseline_20261030.md`）；协商后 10 研究；consumption 后端装配时另有 11 消费操作（本次源码核查）。权威是 `mcp.py::visible_tool_names` 与 `research_consumption.py::CONSUMPTION_TOOL_NAMES`；客户端重新 tools/list 核对，勿把 18/29 写成永久固定协议或测试捷径。
+**当前 MCP 表面**：未协商 10 基础（2026-10-30 指南批增补只读 `acp_get_guidance` 与 `acp_list_jobs`（U08 任务定位），见 `src/acp/api/guidance_pack.py` + `v1_guidance.py`，P0 基线 `docs/reference/next-change/ACP_MCP_Guidance_P0_Baseline_20261030.md`）；协商后 10 研究；consumption 后端装配时另有 11 消费操作（本次源码核查）。权威是 `mcp.py::visible_tool_names` 与 `research_consumption.py::CONSUMPTION_TOOL_NAMES`；客户端重新 tools/list 核对，勿把 18/29 写成永久固定协议或测试捷径。
 
 ## STRUCTURE（地图 — 叶级明细一律看嵌套 AGENTS.md）
 ```
@@ -214,7 +214,7 @@ acp run casscf --input molecule.xyz
 acp run serve --port 8765
 acp init [--answers answers.yaml | --plan]        # 初始化向导（资源菜单/新节点 TOFU/三态 doctor）
 acp task --help                                   # Services 本地任务管理（--controller <url> 远程）
-acp mcp serve --controller http://127.0.0.1:8765  # MCP stdio（未协商 9 基础工具，扩展见实际 tools/list）
+acp mcp serve --controller http://127.0.0.1:8765  # MCP stdio（未协商 10 基础工具，扩展见实际 tools/list）
 acp doctor
 
 # Retired → 现役替代

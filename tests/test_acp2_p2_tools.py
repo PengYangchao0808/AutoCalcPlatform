@@ -291,7 +291,7 @@ def test_the_ten_tool_schemas_keep_the_m1_01_conventions() -> None:
 def test_tools_list_hides_research_tools_until_the_session_negotiates() -> None:
     server = _server(_RecordingResearchPort())
     before = _tools_list(server)
-    assert len(before) == 9
+    assert len(before) == 10
     assert not set(before) & mcp.RESEARCH_TOOL_SET
     payload = _negotiate(server)
     data = payload["structuredContent"]["data"]
@@ -300,7 +300,7 @@ def test_tools_list_hides_research_tools_until_the_session_negotiates() -> None:
     entry = data["extensions"][0]
     assert (entry["implemented"], entry["negotiated"]) == (True, True)
     after = _tools_list(server)
-    assert len(after) == 19
+    assert len(after) == 20
     assert set(after) == set(mcp.TOOL_ALLOWLIST) | mcp.RESEARCH_TOOL_SET
 
 

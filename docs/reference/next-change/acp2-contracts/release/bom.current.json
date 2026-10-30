@@ -406,12 +406,12 @@
   ],
   "bom_version": 1,
   "evidence": {
-    "contract_digest": "d5087f07c5b5b74a3167af038bc5cda8650a42b03d8d0b76e1f56a826bdb9f8e",
+    "contract_digest": "36b3d876f489535451d3d9897cbf2c660a99910e0ffc0415eb86a118e8258e45",
     "contract_version": "1.7.0",
     "coverage_gap_rows": 26,
     "coverage_path": "docs/reference/next-change/acp2-contracts/release/evidence-coverage.current.json",
     "coverage_scope_rows": 39,
-    "coverage_sha256": "530540421eb7e9efdeebbac7ad49d862ca5bdf3945804a751324a93443794a26",
+    "coverage_sha256": "5ed49da2ee4e9fa7b4d1ae0d9e0939cc7a66c99dd2d08443f2975c9c2363331b",
     "reuse_rule": "exact",
     "reused_from": [
       "reports/acp2_remediation_20261026/m5-01/summary.json",

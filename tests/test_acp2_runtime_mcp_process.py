@@ -39,6 +39,7 @@ EXPECTED_TOOLS = {
     "acp_analyze",
     # 2026-10-30 guidance batch (plan §5): additive read-only registration.
     "acp_get_guidance",
+    "acp_list_jobs",
 }
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SRC = _REPO_ROOT / "src"

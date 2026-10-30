@@ -56,8 +56,9 @@ GUIDE_FORMAT = "acp.guidance.v1"
 #: Pack-level version.  Bump when any entry changes; entry digests make cache
 #: invalidation per-guide precise.  1.1.0: BatchOptimize role wire-syntax +
 #: PESsearch unit/bond-side vocabulary (DA validation round,
-#: reports/acp2_mcp_guidance_20261030).
-PACK_VERSION = "1.1.0"
+#: reports/acp2_mcp_guidance_20261030).  1.2.0: method-selection ladder and
+#: artifact-locating topics (agent feedback round 2).
+PACK_VERSION = "1.2.0"
 
 #: Byte budgets (plan §4.2): UTF-8 bytes, not tokens.  A guide that would
 #: exceed a caller-supplied bound is returned with explicit omissions — never
@@ -647,6 +648,50 @@ _TOPIC_SELECTION = GuideEntry(
     },
 )
 
+_TOPIC_METHOD_SELECTION = GuideEntry(
+    guide_id="topic.method_selection",
+    kind="topic",
+    title="方法与精度阶梯（泛函/基组选择）",
+    version="1.0.0",
+    summary="默认 r2SCAN-3c 优化 + wB97X-mV 单点；CCSD(T) 只用于极高精度单点，不做默认。",
+    sections={
+        "body": (
+            "按精度需求选级别，不无脑上高阶方法（高阶方法成本急剧上升且对几何通常无必要）：\n"
+            "1. 预筛/构象/初猜：GFN2-xTB（xtb_optimize、Confsearch 纯 xTB 协议、PES scan_optimizer）。\n"
+            "2. 常规 DFT（默认档）：几何优化用 r2SCAN-3c（复合方法，自带基组，不填 basis）；单点用 "
+            "wB97X-mV 或 wB97X-D4 + def2-TZVP(D)。能量比较与频率验证在此档完成即可满足多数研究。\n"
+            "3. 高精度档（仅在关键量需要 ~1 kcal/mol 级精度时）：在 DFT 几何上做 DLPNO-CCSD(T) 单点"
+            "（必要时配更大基组/外推）；不做 CCSD(T) 优化，不把 CCSD(T) 当默认或『更保险』的选择。\n"
+            "4. 表达：优化级别与单点级别分开填——BatchOptimize 的 batch_roles 中 method=优化方法、"
+            "sp_method=单点方法；singlepoint 工作流只算单点级别。\n"
+            "5. 同一比较集内级别必须一致；升级级别属于新的科学决定，须记录理由并重新预检。"
+        ),
+    },
+)
+
+_TOPIC_ARTIFACT_LOCATING = GuideEntry(
+    guide_id="topic.artifact_locating",
+    kind="topic",
+    title="计算产物定位与读取",
+    version="1.0.0",
+    summary="终态 status 自带产物描述符；prepare→read 用五元组；目录名由 molecule_name/task_name 控制。",
+    sections={
+        "body": (
+            "1. 正路是描述符链：作业终态后 acp_status 的返回携带 artifacts 描述符（artifact_id、"
+            "generation、digest、size 等）——五元组 (task_id, attempt, artifact_id, generation, digest) "
+            "全部来自该描述符与提交回包，不需要猜路径或手填摘要；随后 acp_prepare_artifact 等待 ready，"
+            "再 acp_read_artifact 读取（支持 max_bytes 分段与 base64）。\n"
+            "2. 目录命名：submit 的 molecule_name / task_name 字段控制 run_root 下的任务目录名；不传时平台"
+            "按 mol_<Workflow>__<序号> 命名。多作业并发时建议显式传 molecule_name 以免对照目录。\n"
+            "3. 多作业定位：acp_list_jobs（按状态过滤、分页）列出权限范围内任务及其引用；不要遍历文件系统"
+            "猜目录。\n"
+            "4. 结构帧类产物（PES profile/帧、Batch 结构/频率）优先经描述符读取；MCP 面不暴露宿主绝对路径，"
+            "需要落到文件时由用户/客户端在 read 后自行保存。\n"
+            "5. 工作脚本与中间几何放持久工作区（如仓库工作目录），不要放 /tmp——会话环境可能被清理。"
+        ),
+    },
+)
+
 _TOPIC_NON_STANDARD = GuideEntry(
     guide_id="topic.non_standard_entries",
     kind="topic",
@@ -686,6 +731,8 @@ _ENTRIES: tuple[GuideEntry, ...] = (
     _TOPIC_STATIONARY,
     _TOPIC_RECOVERY,
     _TOPIC_SELECTION,
+    _TOPIC_METHOD_SELECTION,
+    _TOPIC_ARTIFACT_LOCATING,
     _TOPIC_NON_STANDARD,
 )
 

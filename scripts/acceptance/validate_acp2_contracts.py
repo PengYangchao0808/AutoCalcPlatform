@@ -431,11 +431,12 @@ def validate_p2_implementation_status(root: Path) -> None:
         "acp_read_artifact",
         "acp_analyze",
     }
-    expected_p1 = _FROZEN_P1 | {"acp_get_guidance"}
+    expected_p1 = _FROZEN_P1 | {"acp_get_guidance", "acp_list_jobs"}
     if set(advertised) != expected_p1:
         fail(
             "P2 p1_advertised must list the frozen P1 tools plus the additive "
-            f"acp_get_guidance; got {sorted(set(advertised) ^ expected_p1)}"
+            "acp_get_guidance/acp_list_jobs; got "
+            f"{sorted(set(advertised) ^ expected_p1)}"
         )
     if len(promised) != 10:
         fail(f"P2 p2_promised must list the ten research tools; got {len(promised)}")

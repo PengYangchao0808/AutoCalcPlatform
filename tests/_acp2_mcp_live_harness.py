@@ -61,6 +61,7 @@ EXPECTED_TOOLS = frozenset(
         "acp_prepare_artifact",
         "acp_read_artifact",
         "acp_get_guidance",
+        "acp_list_jobs",
         "acp_analyze",
     }
 )

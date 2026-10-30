@@ -201,9 +201,9 @@
     },
     "tools": {
       "type": "array",
-      "description": "The P1 allowlist: the frozen eight plus the additive read-only acp_get_guidance (2026-10-30 guidance batch). Exactly nine entries; names and input schemas are part of the contract.",
-      "minItems": 9,
-      "maxItems": 9,
+      "description": "The P1 allowlist: the frozen eight plus the additive read-only acp_get_guidance and acp_list_jobs (2026-10-30 guidance batch). Exactly ten entries; names and input schemas are part of the contract.",
+      "minItems": 10,
+      "maxItems": 10,
       "items": {
         "$ref": "#/$defs/tool"
       },
@@ -497,7 +497,8 @@
             "acp_prepare_artifact",
             "acp_read_artifact",
             "acp_analyze",
-            "acp_get_guidance"
+            "acp_get_guidance",
+            "acp_list_jobs"
           ]
         },
         "version": {
@@ -1089,6 +1090,28 @@
           }
         },
         "description": "Read one versioned guidance document (read-only, bounded, digest-bound for caching); discover ids via acp_capabilities(workflow=...)."
+      },
+      "acp_list_jobs": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "enum": [
+              1
+            ],
+            "default": 1
+          },
+          "status": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200
+          }
+        },
+        "description": "Bounded read-only task listing in the permission scope (U08)."
       }
     },
     "constraints": {

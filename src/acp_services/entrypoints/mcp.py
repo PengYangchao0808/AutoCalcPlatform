@@ -300,6 +300,13 @@ class McpToolError(Exception):
 # ---------------------------------------------------------------------------
 
 
+#: Terminal job states for the cancel already-terminal marker (report
+#: vocabulary; the scheduler's own JobStatus stays the authority).
+_TERMINAL_STATES: frozenset[str] = frozenset(
+    {"failed", "cancelled", "completed", "canceled"}
+)
+
+
 class McpTool(str):
     """The closed set of MCP tools exposed by this adapter.
 
@@ -317,6 +324,7 @@ class McpTool(str):
     READ_ARTIFACT = "acp_read_artifact"
     ANALYZE = "acp_analyze"
     GUIDANCE = "acp_get_guidance"
+    LIST_JOBS = "acp_list_jobs"
 
     ALL = frozenset(
         {
@@ -329,6 +337,7 @@ class McpTool(str):
             READ_ARTIFACT,
             ANALYZE,
             GUIDANCE,
+            LIST_JOBS,
         }
     )
 
@@ -344,6 +353,7 @@ TOOL_FAMILIES: dict[str, str] = {
     McpTool.READ_ARTIFACT: "artifact_prepare_read",
     McpTool.ANALYZE: "explicit_analysis",
     McpTool.GUIDANCE: "guidance_discovery_read",
+    McpTool.LIST_JOBS: "task_lookup",
 }
 
 #: Access action each tool requires; enforced against the resolved scope.
@@ -357,6 +367,7 @@ TOOL_REQUIRED_ACTION: dict[str, str] = {
     McpTool.READ_ARTIFACT: AccessAction.READ,
     McpTool.ANALYZE: AccessAction.WRITE,
     McpTool.GUIDANCE: AccessAction.READ,
+    McpTool.LIST_JOBS: AccessAction.READ,
 }
 
 #: The frozen allowlist — the only tool names ``tools/list`` advertises and
@@ -1108,6 +1119,43 @@ _PREPARE_SCHEMA: dict[str, Any] = {
 #: The declared argument tables the adapter enforces itself (required fields +
 #: ``additionalProperties: false``).  Status is absent on purpose: a historical
 #: read preserves unknown fields (unknown_field_policy U2).
+#: ``acp_list_jobs`` — bounded task lookup (U08 first slice).  Read-only,
+#: permission-scoped; the agent's way to answer "which of my jobs is which"
+#: without walking the filesystem (agent feedback round 2).
+_LIST_JOBS_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "description": (
+        "Bounded, read-only listing of tasks in the caller's permission scope. "
+        "Use it to map concurrent submissions back to their references (and to "
+        "the molecule_name/task_name you chose at submit time) instead of "
+        "scanning the run root."
+    ),
+    "properties": {
+        "schema_version": {"type": "integer", "enum": [1], "default": 1},
+        "status": {
+            "type": "string",
+            "enum": [
+                "queued",
+                "running",
+                "paused",
+                "waiting_review",
+                "failed",
+                "cancelled",
+                "completed",
+            ],
+            "description": "Optional state filter.",
+        },
+        "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "default": 50,
+            "description": "Page size (server clamps to its own bound).",
+        },
+    },
+    "additionalProperties": False,
+}
+
 _ARGUMENT_SCHEMAS: dict[str, dict[str, Any]] = {
     McpTool.PREFLIGHT: _PREFLIGHT_SCHEMA,
     McpTool.SUBMIT: _SUBMIT_SCHEMA,
@@ -1116,6 +1164,7 @@ _ARGUMENT_SCHEMAS: dict[str, dict[str, Any]] = {
     McpTool.READ_ARTIFACT: _READ_SCHEMA,
     McpTool.ANALYZE: _ANALYZE_SCHEMA,
     McpTool.GUIDANCE: _GUIDANCE_SCHEMA,
+    McpTool.LIST_JOBS: _LIST_JOBS_SCHEMA,
 }
 
 
@@ -1436,6 +1485,15 @@ def _tool_specs() -> tuple[dict[str, Any], ...]:
                 "for caching."
             ),
             _GUIDANCE_SCHEMA,
+        ),
+        _tool_spec(
+            McpTool.LIST_JOBS,
+            (
+                "Bounded read-only listing of tasks in the permission scope; maps "
+                "concurrent submissions back to their references without filesystem "
+                "scanning."
+            ),
+            _LIST_JOBS_SCHEMA,
         ),
         *_research_tool_specs(),
         *(
@@ -2289,6 +2347,7 @@ class McpServer:
             McpTool.READ_ARTIFACT: self._tool_read_artifact,
             McpTool.ANALYZE: self._tool_analyze,
             McpTool.GUIDANCE: self._tool_guidance,
+            McpTool.LIST_JOBS: self._tool_list_jobs,
         }
         for tool_name in RESEARCH_TOOL_NAMES:
             self._tool_dispatch[tool_name] = self._research_handler(tool_name)
@@ -2895,6 +2954,17 @@ class McpServer:
         projection = dict(projection)
         projection.setdefault("reference", reference)
         projection.setdefault("cancel_requested", True)
+        # Agent feedback round 2: cancelling an already-terminal job must say
+        # so explicitly — a bare "completed" next to cancel_requested read as
+        # an error.  The marker separates "cancelled by this call" from "was
+        # already finished".
+        terminal_state = projection.get("state") or projection.get("status")
+        if isinstance(terminal_state, str) and str(terminal_state).lower() in _TERMINAL_STATES:
+            projection["cancelled"] = False
+            projection["already_terminal"] = True
+            projection["terminal_state"] = str(terminal_state)
+        else:
+            projection.setdefault("cancelled", True)
         return mo.MachineResult(
             operation=McpTool.CANCEL,
             status="ok",
@@ -3062,6 +3132,40 @@ class McpServer:
             operation=McpTool.ANALYZE,
             status="ok",
             data=dict(data),
+            operation_identity=context.workspace_id,
+        )
+
+    def _tool_list_jobs(
+        self, arguments: Mapping[str, Any], context: WorkspaceContext
+    ) -> mo.MachineResult:
+        """Bounded task listing (read-only; U08 first slice)."""
+        status = arguments.get("status")
+        if status is not None and (not isinstance(status, str) or not status.strip()):
+            raise McpToolError(
+                mo.ErrorCode.INPUT_INVALID,
+                "status must be a non-empty string when present",
+                params={"field": "status", "rule": "invalid_type"},
+            )
+        raw_limit = arguments.get("limit", 50)
+        try:
+            limit = max(1, min(int(raw_limit), 200))
+        except (TypeError, ValueError) as exc:
+            raise McpToolError(
+                mo.ErrorCode.INPUT_INVALID,
+                "limit must be an integer",
+                params={"field": "limit", "rule": "invalid_type"},
+            ) from exc
+        payload = self._backends.status.list_tasks(
+            status=str(status).strip() if status else None,
+            limit=limit,
+            workspace_id=context.workspace_id,
+        )
+        data = dict(payload) if isinstance(payload, Mapping) else {"jobs": payload}
+        data.setdefault("query_tool", McpTool.STATUS)
+        return mo.MachineResult(
+            operation=McpTool.LIST_JOBS,
+            status="ok",
+            data=data,
             operation_identity=context.workspace_id,
         )
 
