@@ -545,8 +545,14 @@ def _normalize_legacy_simple_method(req: Any) -> None:
                 f"method.{key} must be an integer",
                 params={"field": f"method.{key}", "rule": "invalid_type"},
             )
-        if key not in inp:
-            inp[key] = value
+        if key in inp and inp[key] != value:
+            raise _command_error(
+                422,
+                "input_invalid",
+                f"method.{key} conflicts with input.{key}",
+                params={"field": f"method.{key}", "rule": f"conflicting_{key}"},
+            )
+        inp[key] = value
     direct = method.pop("method", None)
     if direct is not None:
         if not isinstance(direct, str) or not direct.strip():
@@ -576,6 +582,13 @@ def _normalize_legacy_simple_method(req: Any) -> None:
             if level.get("level_id")
         ]
         target = level_ids[0] if level_ids else None
+        if target is None:
+            raise _command_error(
+                422,
+                "input_invalid",
+                f"{workflow} has no level id to receive method.method",
+                params={"field": "method.method", "rule": "unsupported_combination"},
+            )
         if target is not None:
             level = levels.get(target)
             if level is None:

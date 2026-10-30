@@ -307,12 +307,14 @@ def _materialize_single_input(
     inputs_dir.mkdir(parents=True, exist_ok=True)
     dest = inputs_dir / f"{stem}.xyz"
 
-    if source_type == "xyz_text" or (
-        not source_type and isinstance(xyz_text, str) and xyz_text.strip()
-    ):
-        # a bare top-level xyz_text is a contract-accepted input (v1); it must
-        # materialize as XYZ text, never fall through to the SMILES parser
+    if source_type == "xyz_text":
         dest.write_text(source, encoding="utf-8")
+        return dest
+    if not source_type and isinstance(xyz_text, str) and xyz_text.strip():
+        # a bare top-level xyz_text is a contract-accepted input (v1); write the
+        # xyz_text itself — a mixed payload (source="CCO" + xyz_text) must not
+        # write the SMILES string into a .xyz file
+        dest.write_text(xyz_text, encoding="utf-8")
         return dest
 
     if source_type == "structure_asset":

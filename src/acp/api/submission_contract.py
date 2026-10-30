@@ -161,8 +161,10 @@ _PESSEARCH_STRATEGIES: frozenset[str] = frozenset(
 #: and per-level ``electronic_state`` modules are read by the scheduler's
 #: ``electronic_state_from_method``.
 #: Reviewed schema-id aliases: a workflow may accept more than one schema id
-#: only when both are known representations of the same capability (the
-#: Workbench's PES wizard sends ``pes_bond_scan`` for the ``pes_scan`` workflow).
+#: only when the alias is the *same catalog schema object* (``catalog.py``
+#: registers ``pes_bond_scan`` as an alias of ``pes_scan`` for historical
+#: frontend/task records).  A diverging schema must never be added here —
+#: ``test_schema_aliases_are_the_same_catalog_object`` pins that.
 _SCHEMA_ALIASES: dict[str, frozenset[str]] = {
     "PESsearch": frozenset({"pes_scan", "pes_bond_scan"}),
 }
@@ -558,7 +560,7 @@ WORKFLOW_CONTRACTS: dict[str, WorkflowContract] = {
         # source_job_id+source_product_id and source_ref.source_id (see
         # _resolve_irc_source_reference); ts_source/input_role are companions,
         # never sufficient on their own
-        required_input_any=("source_job_id", "source_ref"),
+        required_input_any=("source_job_id", "source_ref", "source_id"),
         levels=_level_fields("irc"),
     ),
     "tsmode": WorkflowContract(
@@ -626,12 +628,13 @@ def _allowed_schemas(workflow: str) -> frozenset[str]:
 def _levels_for_method(
     workflow: str, method: Mapping[str, Any], contract: WorkflowContract
 ) -> Mapping[str, frozenset[str]]:
-    """Pick the level table: an explicit ``method.schema_id`` wins over the workflow.
+    """Pick the level table for ``method.levels``.
 
-    The science routes may resolve a workflow from a question while the caller
-    reuses one method payload (e.g. a dft_singlepoint schema with the optimize
-    workflow).  The schema_id is the method-definition identity, so its level
-    ids are the ones being validated; the workflow table stays the fallback.
+    ``method.schema_id`` must match the workflow's catalog schema or a reviewed
+    same-object alias (``_allowed_schemas``); cross-schema payloads are refused
+    before this point.  The schema table supplies the level ids and the
+    contract adds its documented compatibility mirrors (e.g. scan's
+    ``scan_coordinate_atoms``).
     """
     schema_id = method.get("schema_id")
     if isinstance(schema_id, str) and schema_id:

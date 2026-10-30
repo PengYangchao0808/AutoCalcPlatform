@@ -1654,7 +1654,9 @@ def _summary_result_size(data: Mapping[str, Any]) -> int:
         "status": "ok",
         "exit_code": 0,
         "dry_run": False,
-        "operation_identity": "",
+        # a realistic workspace id placeholder: the real value is added after the
+        # budget check, so the estimate must not undercount it (×2 for text+data)
+        "operation_identity": "x" * 64,
         "diagnostic_ref": None,
         "data": dict(data),
         "error": None,
@@ -1678,6 +1680,14 @@ def _enforce_summary_budget(data: dict[str, Any]) -> dict[str, Any]:
     def _measure(candidate: dict[str, Any], dropped: list[str]) -> int:
         probe = dict(candidate)
         probe["omitted"] = dropped
+        if dropped:
+            # the continuation block is appended after clipping; it must be part
+            # of the measurement or the boundary window can exceed the budget
+            probe["continuation"] = {
+                "tool": "acp_capabilities",
+                "arguments": {"detail": "full"},
+                "note": "omitted blocks are available in the full scope",
+            }
         probe["budget"] = {
             "limit_bytes": limit,
             "actual_bytes": 0,

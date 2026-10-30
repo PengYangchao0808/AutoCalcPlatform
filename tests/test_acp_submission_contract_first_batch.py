@@ -322,3 +322,21 @@ def test_batch_b_required_sources_are_enforced() -> None:
     with pytest.raises(SubmissionContractError) as excinfo:
         validate_workflow_submission("tsmode", input={"input": "CCO"}, method=None, resources=None)
     assert excinfo.value.params()["rule"] == "missing_input"
+
+
+def test_schema_aliases_are_the_same_catalog_object() -> None:
+    """A reviewed alias must be the same schema object, never a diverging table."""
+    from acp.api.submission_contract import _SCHEMA_ALIASES
+    from acp.catalog import METHOD_SCHEMAS, get_workflow_by_id
+
+    for workflow, aliases in _SCHEMA_ALIASES.items():
+        default_schema = str(
+            (get_workflow_by_id(workflow) or {}).get("method_schema_id") or ""
+        )
+        assert default_schema in METHOD_SCHEMAS, workflow
+        for alias in aliases:
+            assert alias in METHOD_SCHEMAS, (workflow, alias)
+            assert METHOD_SCHEMAS[alias] is METHOD_SCHEMAS[default_schema], (
+                workflow,
+                alias,
+            )

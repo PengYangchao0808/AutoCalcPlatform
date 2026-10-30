@@ -669,10 +669,14 @@ def _basic_workflow_block(
         "examples": [
             {
                 "workflow": workflow,
+                # A bare multi-line XYZ in input.input would pass the validator and
+                # then be treated as a --input *path* by the runner (astra round-4
+                # review: the example itself must be an executable submission).
                 "input": {
-                    "input": (
+                    "source_type": "xyz_text",
+                    "xyz_text": (
                         "3\n\nO 0 0 0\nH 0.96 0 0\nH -0.24 0.93 0\n"
-                    )
+                    ),
                 },
                 "method": (
                     {"levels": {level_id[0]: _example_level(schema_id)}}
