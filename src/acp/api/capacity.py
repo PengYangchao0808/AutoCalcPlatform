@@ -194,9 +194,8 @@ def build_capacity_projection(manager: Any, *, admission: Any = None) -> dict[st
         "available": {"cores": available_cores, "memory_mb": available_mem_mb},
         "concurrency": concurrency,
         "guidance": (
-            "choose nproc/mem at or below available.* and never above "
-            "limits.max_cores/max_memory_mb; a request above the free quota "
-            "queues or is refused by admission"
+            "choose nproc/mem <= available.*, never above limits.*; "
+            "over-quota requests queue or are refused"
         ),
         "unknown": sorted(set(unknown)),
     }

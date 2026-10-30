@@ -82,8 +82,28 @@
         "inputSchema": {
           "type": "object",
           "additionalProperties": false,
-          "properties": {},
-          "description": "No arguments. Read-only discovery."
+          "properties": {
+            "workflow": {
+              "type": "string"
+            },
+            "detail": {
+              "type": "string",
+              "enum": [
+                "summary",
+                "full"
+              ]
+            },
+            "research_extension": {
+              "type": "object"
+            },
+            "project_id": {
+              "type": "string"
+            },
+            "client": {
+              "type": "object"
+            }
+          },
+          "description": "Read-only discovery. No arguments keeps the historical shape; workflow=<id> returns only that contract; detail='summary' returns the bounded navigation package."
         },
         "input_schema_version": 1
       },

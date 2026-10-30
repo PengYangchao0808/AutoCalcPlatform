@@ -406,7 +406,7 @@
   ],
   "bom_version": 1,
   "evidence": {
-    "contract_digest": "36b3d876f489535451d3d9897cbf2c660a99910e0ffc0415eb86a118e8258e45",
+    "contract_digest": "799e40735128b8d112030e07c889ff7342393332efaaa1f1d3734a39b9537712",
     "contract_version": "1.7.0",
     "coverage_gap_rows": 26,
     "coverage_path": "docs/reference/next-change/acp2-contracts/release/evidence-coverage.current.json",

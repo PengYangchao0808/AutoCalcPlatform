@@ -764,11 +764,21 @@ _CAPABILITIES_SCHEMA: dict[str, Any] = {
         "workflow": {
             "type": "string",
             "description": (
-                "Optional workflow id (case-insensitive). Returns workflow_contract "
-                "with the input/method/resources schema, examples and known "
-                "constraints. Unknown ids return input_invalid with allowed ids "
-                "and a suggestion; other active workflows are marked coverage="
-                "not_provided."
+                "Optional workflow id (case-insensitive). Returns ONLY that "
+                "workflow's contract (input/method/resources schema, examples, "
+                "known constraints) plus the small public refs — never the full "
+                "payload. Unknown ids return input_invalid with allowed ids and a "
+                "suggestion."
+            ),
+        },
+        "detail": {
+            "type": "string",
+            "enum": ["summary", "full"],
+            "description": (
+                "Optional response scope. 'summary' returns a bounded navigation "
+                "package (workflow contract index, task recipes, capacity, limits "
+                "summary, capability index); 'full' is the historical shape. Omitted "
+                "keeps the historical shape for old clients."
             ),
         },
     },
@@ -2728,10 +2738,21 @@ class McpServer:
                 "workflow must be a string",
                 params={"field": "workflow"},
             )
-        if workflow is None:
+        detail = arguments.get("detail")
+        if detail is not None and detail not in ("summary", "full"):
+            raise McpToolError(
+                mo.ErrorCode.INPUT_INVALID,
+                "detail must be 'summary' or 'full'",
+                params={"field": "detail", "rule": "invalid_enum", "allowed": ["summary", "full"]},
+            )
+        if workflow is None and detail is None:
             data = dict(self._backends.capabilities.capabilities())
         else:
-            data = dict(self._backends.capabilities.capabilities(workflow=workflow))
+            data = dict(
+                self._backends.capabilities.capabilities(
+                    workflow=workflow, detail=detail
+                )
+            )
         data.setdefault("protocol_version", MCP_PROTOCOL_VERSION)
         # M1-01b/M2-02: the frozen three-state analysis-capability projection.  A
         # descriptor is never "available": registered/executable/unavailable are
