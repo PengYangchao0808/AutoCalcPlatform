@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ACP Next · ACP 分子计算工作台</title>
+<!-- 3D viewer library: async + stable id, same non-blocking semantics as the
+     classic entry — the Shell must boot whether or not the library arrives. -->
+<script async id="viewer-library" src="/js/vendor/3Dmol-2.5.5.min.js"></script>
+<link rel="stylesheet" href="/css/workbench/base.css">
+<link rel="stylesheet" href="/css/shell/shell.css">
+<link rel="stylesheet" href="/css/shell/agent.css">
+<link rel="stylesheet" href="/css/modules/molecule-viewer.css">
+<link rel="stylesheet" href="/css/modules/task-explorer.css">
+<link rel="stylesheet" href="/css/modules/workspace-details.css">
+</head>
+<body>
+<!-- file:// guard. Every asset below is an absolute URL (/css, /js), so an
+     HTML file opened straight from disk resolves them at the filesystem root,
+     loads zero styles and zero scripts, and renders the bare DOM skeleton that
+     reads as "the new UI is unstyled". Say so explicitly instead. Kept first in
+     <body> so it explains the state before the fallback markup shows. -->
+<script>
+(function () {
+  if (location.protocol !== "file:") return;
+  function explain() {
+    var box = document.createElement("div");
+    box.setAttribute("role", "alert");
+    box.setAttribute("style", "margin:0;padding:14px 20px;background:#1d2430;color:#f2f6fb;" +
+      "font:14px/1.7 system-ui,-apple-system,'Segoe UI',sans-serif;border-bottom:2px solid #4ea1ff;");
+    box.innerHTML = "<strong>此页面必须由 ACP 服务打开，不能直接双击本地 HTML 文件。</strong><br>" +
+      "直接打开本地文件时，绝对路径 <code>/css</code>、<code>/js</code> 会解析到磁盘根目录，" +
+      "样式与脚本全部加载失败，于是只剩这份无样式骨架，且不会启动 Shell。<br>" +
+      "请访问 <code>http://&lt;主机&gt;:8765/next/</code>（本机：<code>http://127.0.0.1:8765/next/</code>）。";
+    document.body.insertBefore(box, document.body.firstChild);
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", explain);
+  } else {
+    explain();
+  }
+})();
+</script>
+<!-- ① icon sprite: one inline definition, classic environment, no deps -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" hidden aria-hidden="true">
+  <defs>
+    <symbol id="acp-i-research" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M7 3h6M9 3v4l-4.5 8a2 2 0 0 0 1.8 3h7.4a2 2 0 0 0 1.8-3L11 7V3"/>
+    </symbol>
+    <symbol id="acp-i-structure" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10 2l7 4v8l-7 4-7-4V6l7-4zM3 6l7 4 7-4M10 10v8"/>
+    </symbol>
+    <symbol id="acp-i-task" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M7 5h9M7 10h9M7 15h9M4 5h.01M4 10h.01M4 15h.01"/>
+    </symbol>
+    <symbol id="acp-i-reload" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M16.5 10a6.5 6.5 0 1 1-2-4.7M16.5 3v3.5H13"/>
+    </symbol>
+    <symbol id="acp-i-error" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10 3l8 14H2L10 3zM10 8v4M10 14.5h.01"/>
+    </symbol>
+    <symbol id="acp-i-lock" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 9h10v8H5zM7.5 9V7a2.5 2.5 0 0 1 5 0v2"/>
+    </symbol>
+    <symbol id="acp-i-external" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 4H4v12h12v-5M11 4h5v5M16 4l-7 7"/>
+    </symbol>
+    <symbol id="acp-i-spark" viewBox="0 0 20 20" fill="currentColor">
+      <path d="M10 2l1.6 4.9L16.5 8.5l-4.9 1.6L10 15l-1.6-4.9L3.5 8.5l4.9-1.6L10 2zM17 14l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2z"/>
+    </symbol>
+    <symbol id="acp-i-shield" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10 2l6 2.4v4.1c0 3.8-2.8 6.7-6 8.5-3.2-1.8-6-4.7-6-8.5V4.4L10 2zM7.4 9.6l2 2 3.4-4"/>
+    </symbol>
+    <symbol id="acp-i-pin" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10 4a3 3 0 0 1 3 3c0 2.4-3 4.5-3 4.5S7 9.4 7 7a3 3 0 0 1 3-3zM10 11.5V17"/>
+    </symbol>
+    <symbol id="acp-i-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 8l5 5 5-5"/>
+    </symbol>
+    <symbol id="acp-i-copy" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 8h8v8H8zM5 12V4h8"/>
+    </symbol>
+    <symbol id="acp-i-signal" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 16v-2M8 16v-5M12 16v-8M16 16V4"/>
+    </symbol>
+  </defs>
+</svg>
+
+<!-- Server guard anchor: tests/test_acp_api_next_entry.py pins
+     `id="acp-next-root"` + "ACP Next" on this entry. Keep both. -->
+<div id="acp-next-root">
+<div class="acp-shell" id="acp-shell" data-workspace="research" data-acp-ready="false">
+  <a class="acp-skip-link" href="#acp-ws-research" data-i18n="shell.a11y.skip">跳到工作区</a>
+
+  <header class="acp-shell-topbar">
+    <div class="acp-shell-brand">
+      <div class="acp-shell-brand-mark" aria-hidden="true">A</div>
+      <div class="acp-shell-brand-copy">
+        <h1 data-i18n="shell.app.title">ACP 分子计算工作台 · Next</h1>
+        <span class="acp-shell-badge-lab" data-i18n="shell.app.badge">实验入口</span>
+      </div>
+    </div>
+
+    <nav class="acp-shell-switch" role="tablist" aria-label="工作区" data-i18n-aria="shell.workspace.switch_label">
+      <button class="acp-shell-tab is-active" id="acp-tab-research" role="tab"
+              aria-selected="true" aria-controls="acp-ws-research" data-workspace-id="research"
+              tabindex="0" title="Alt+1/2/3 切换工作区" data-i18n-title="shell.workspace.shortcut_hint" type="button">
+        <svg class="acp-shell-tab-icon" width="16" height="16" aria-hidden="true"><use href="#acp-i-research"/></svg>
+        <span data-i18n="shell.workspace.research">研究</span>
+      </button>
+      <button class="acp-shell-tab" id="acp-tab-molecular" role="tab"
+              aria-selected="false" aria-controls="acp-ws-molecular" data-workspace-id="molecular"
+              tabindex="-1" title="Alt+1/2/3 切换工作区" data-i18n-title="shell.workspace.shortcut_hint" type="button">
+        <svg class="acp-shell-tab-icon" width="16" height="16" aria-hidden="true"><use href="#acp-i-structure"/></svg>
+        <span data-i18n="shell.workspace.molecular">分子</span>
+      </button>
+      <button class="acp-shell-tab" id="acp-tab-execution" role="tab"
+              aria-selected="false" aria-controls="acp-ws-execution" data-workspace-id="execution"
+              tabindex="-1" title="Alt+1/2/3 切换工作区" data-i18n-title="shell.workspace.shortcut_hint" type="button">
+        <svg class="acp-shell-tab-icon" width="16" height="16" aria-hidden="true"><use href="#acp-i-task"/></svg>
+        <span data-i18n="shell.workspace.execution">执行</span>
+      </button>
+    </nav>
+
+    <div class="acp-shell-focus" id="acp-focus-chip" role="status" aria-live="polite" data-empty="true">
+      <span class="acp-shell-focus-empty" data-i18n="shell.focus.empty">未选择结构或任务</span>
+    </div>
+
+    <div class="acp-shell-actions">
+      <button class="acp-shell-lang" id="acp-layout-edit" data-i18n="layout.title" type="button">配置布局</button>
+      <a class="acp-shell-link-classic" href="/">
+        <span data-i18n="shell.link.classic">经典工作台</span>
+        <svg width="14" height="14" aria-hidden="true"><use href="#acp-i-external"/></svg>
+      </a>
+      <button class="acp-shell-lang" id="acp-lang-toggle" data-i18n="shell.lang.toggle" type="button">中文 | EN</button>
+      <div class="acp-shell-pill" id="acp-conn-pill" data-conn="unknown" data-i18n="shell.conn.unknown">连接状态未知</div>
+    </div>
+  </header>
+
+  <main class="acp-shell-main" id="acp-shell-main">
+    <section class="acp-workspace" id="acp-ws-research" role="tabpanel"
+             aria-labelledby="acp-tab-research" tabindex="0"
+             data-workspace-id="research" data-has-side="true" data-has-bottom="true">
+      <div class="acp-slot" data-slot="main"   id="acp-slot-research-main"></div>
+      <div class="acp-slot" data-slot="side"   id="acp-slot-research-side"></div>
+      <div class="acp-slot" data-slot="bottom" id="acp-slot-research-bottom"></div>
+    </section>
+    <section class="acp-workspace" id="acp-ws-molecular" role="tabpanel"
+             aria-labelledby="acp-tab-molecular" tabindex="0" hidden
+             data-workspace-id="molecular" data-has-side="true" data-has-bottom="false">
+      <div class="acp-slot" data-slot="main" id="acp-slot-molecular-main"></div>
+      <div class="acp-slot" data-slot="side" id="acp-slot-molecular-side"></div>
+    </section>
+    <section class="acp-workspace" id="acp-ws-execution" role="tabpanel"
+             aria-labelledby="acp-tab-execution" tabindex="0" hidden
+             data-workspace-id="execution" data-has-side="true" data-has-bottom="false">
+      <div class="acp-slot" data-slot="main" id="acp-slot-execution-main"></div>
+      <div class="acp-slot" data-slot="side" id="acp-slot-execution-side"></div>
+    </section>
+  </main>
+
+  <!-- whole-page fatal layer (registry/bootstrap failure), design §2.2 -->
+  <div class="acp-shell-fatal" id="acp-shell-fatal" hidden role="alert"></div>
+</div>
+</div>
+
+<!-- ── classic script stack, explicit order, no build step ── -->
+<!-- client transport + shared cache -->
+<script src="/js/client/transport.js"></script>
+<script src="/js/client/resource-store.js"></script>
+<!-- frozen read-model contracts -->
+<script src="/js/workbench/contracts/task_view_contract.js"></script>
+<script src="/js/workbench/contracts/experience_contract.js"></script>
+<!-- client query/command facades (init in shell bootstrap; no polling started) -->
+<script src="/js/client/task-view-query.js"></script>
+<script src="/js/client/job-detail-query.js"></script>
+<script src="/js/client/event-stream.js"></script>
+<script src="/js/client/event-invalidation.js"></script>
+<script src="/js/client/polling-strategy.js"></script>
+<script src="/js/client/job-commands.js"></script>
+<script src="/js/client/wizard-endpoints.js"></script>
+<script src="/js/client/science-query.js"></script>
+<script src="/js/client/research-query.js"></script>
+<script src="/js/client/system-endpoints.js"></script>
+<!-- shell core (load order matters: i18n → context → registry → loader → commands → layout → recipes → bootstrap) -->
+<script src="/js/shell/i18n.js"></script>
+<script src="/js/shell/workspace-context.js"></script>
+<script src="/js/shell/module-registry.js"></script>
+<script src="/js/shell/module-loader.js"></script>
+<script src="/js/shell/commands.js"></script>
+<script src="/js/shell/layout-manager.js"></script>
+<script src="/js/shell/recipes.js"></script>
+<script src="/js/shell/layout-preferences.js"></script>
+<script src="/js/shell/layout-editor.js"></script>
+<script src="/js/shell/bootstrap.js"></script>
+<!-- UI-02/UI-03A module runtime deps: shared geometry store + visualization
+     stack (the only sanctioned $3Dmol station is mol3d_adapter) + the three
+     pure controllers (factories adopted by task-explorer; compat singletons
+     stay inert without the classic bootstrap). -->
+<script src="/js/geometry_store.js"></script>
+<script src="/js/visualization/mol3d_adapter.js"></script>
+<script src="/js/visualization/framing.js"></script>
+<script src="/js/visualization/scene_instance.js"></script>
+<script src="/js/workbench/controllers/job_detail_controller.js"></script>
+<script src="/js/workbench/controllers/task_session_controller.js"></script>
+<script src="/js/workbench/controllers/task_list_controller.js"></script>
+<!-- real modules (register into window.ACPNextModules; consumed by the shell
+     registry during bootstrap.boot() below) -->
+<script src="/js/modules/molecule-viewer/module.js"></script>
+<script src="/js/modules/task-explorer/module.js"></script>
+<script src="/js/modules/agent-workspace/module.js"></script>
+<script src="/js/modules/task-config/module.js"></script>
+<script src="/js/modules/exec-detail/module.js"></script>
+<!-- demo mocks: registered into ACPNextModules, used by ?demo=1 + module tests only -->
+<script src="/js/shell/mock/mock-alpha.js"></script>
+<script src="/js/shell/mock/mock-beta.js"></script>
+<script>
+ACPShell.bootstrap.boot();
+</script>
+</body>
+</html>

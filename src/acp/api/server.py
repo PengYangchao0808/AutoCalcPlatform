@@ -235,7 +235,7 @@ _IDENTITY_EXEMPT_PATHS = frozenset(
         "/favicon.ico",
     }
 )
-_IDENTITY_EXEMPT_PREFIXES = ("/docs/", "/redoc/", "/assets/", "/static/")
+_IDENTITY_EXEMPT_PREFIXES = ("/docs/", "/redoc/", "/assets/", "/static/", "/next/")
 
 
 def _identity_exempt(path: str) -> bool:
@@ -466,6 +466,31 @@ def create_app(
             return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
         return HTMLResponse(
             content="<h1>ACP Server Running</h1><p>frontend/ACP_Workbench.html not found</p>"
+        )
+
+    # /next/ = the frontend experimental entry (B-req-19). The explicit HTML
+    # routes are registered BEFORE the /next static mount below so they win the
+    # match — StaticFiles (html=False) would 404 directory paths like /next/.
+    @app.get("/next/", response_class=HTMLResponse, include_in_schema=False)
+    def next_index() -> HTMLResponse:
+        html_path = _FRONTEND_DIR / "next" / "index.html"
+        if html_path.exists():
+            return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+        return HTMLResponse(content="<h1>Not Found</h1>", status_code=404)
+
+    @app.get("/next/index.html", response_class=HTMLResponse, include_in_schema=False)
+    def next_index_html() -> HTMLResponse:
+        return next_index()
+
+    # Experimental next assets revalidate like /js|/css; skipped silently when
+    # the directory is absent (packaged installs without frontend/next must
+    # still boot, and the HTML routes above keep returning 404).
+    next_dir = _FRONTEND_DIR / "next"
+    if next_dir.is_dir():
+        app.mount(
+            "/next",
+            _RevalidatingStaticFiles(directory=next_dir),
+            name="frontend-next",
         )
 
     return app

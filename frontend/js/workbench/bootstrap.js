@@ -648,7 +648,12 @@ window.addEventListener("DOMContentLoaded", async function() {
   document.addEventListener("visibilitychange", function() { if (!document.hidden) startPolling(); });
   safeLoad("loadStatus", loadStatus);
   safeLoad("loadProjects", loadProjects);
-  safeLoad("initializeMethodDefaults", initializeMethodDefaults);
+  safeLoad("initializeMethodDefaults", initializeMethodDefaults).then(function() {
+    if (window.location.hash === "#new-calculation") {
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+      openModal();
+    }
+  });
   safeLoad("refreshJobs", refreshJobs).then(function() {
     if (jobsCache.length && !selectedJobId) {
       safeLoad("selectJob", function() { return selectJob(jobsCache[0].id || jobsCache[0].job_id); });

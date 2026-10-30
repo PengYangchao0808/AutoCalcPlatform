@@ -1,0 +1,5 @@
+.acp-detail-intro, .acp-detail-note { color: var(--text-muted, #65748b); font-size: 13px; line-height: 1.5; }
+.acp-detail-action, .acp-detail-retry { display: inline-block; margin: 8px 0; padding: 8px 12px; border: 1px solid #2868b2; border-radius: 6px; background: #2868b2; color: white; text-decoration: none; cursor: pointer; }
+.acp-workflow-list { display: grid; gap: 8px; }
+.acp-workflow-card { display: grid; gap: 3px; padding: 10px; border: 1px solid var(--border-subtle, #dce3ec); border-radius: 7px; }
+.acp-detail-row { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border-subtle, #dce3ec); overflow-wrap: anywhere; }

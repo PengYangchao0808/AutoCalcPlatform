@@ -1,0 +1,378 @@
+/*
+ * ACP 2.0 next-entry module styles — task-explorer (UI-02b).
+ *
+ * Scope: ONLY the task-explorer module host DOM (.acp-mod-tasks-*). All
+ * colors/sizes come from css/workbench/base.css tokens — no hardcoded hex.
+ * Class prefix acp-mod-tasks-* keeps zero name collision with the legacy
+ * workbench styles (.queue-row/.badge) and the shell chrome (acp-shell-*,
+ * acp-panel-*, acp-card-*).
+ */
+
+.acp-mod-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+/* ── toolbar ─────────────────────────────────────────────────────────── */
+
+.acp-mod-tasks-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.acp-mod-tasks-project {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--toolbar-control-height);
+  padding: 0 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.acp-mod-tasks-refresh,
+.acp-mod-tasks-retry,
+.acp-mod-tasks-page-btn,
+.acp-mod-tasks-open {
+  height: var(--small-button-height);
+  padding: 0 12px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 12px;
+  flex-shrink: 0;
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.acp-mod-tasks-refresh:hover,
+.acp-mod-tasks-retry:hover,
+.acp-mod-tasks-page-btn:hover:not(:disabled),
+.acp-mod-tasks-open:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.acp-mod-tasks-page-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.acp-mod-tasks-counts {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  flex-shrink: 0;
+  min-height: 14px;
+}
+
+.acp-mod-tasks-stale {
+  color: var(--amber);
+  font-size: 11px;
+  border: 1px dashed rgba(242, 184, 75, 0.45);
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+  flex-shrink: 0;
+}
+
+/* ── body / states ───────────────────────────────────────────────────── */
+
+.acp-mod-tasks-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  padding: 6px;
+}
+
+.acp-mod-tasks-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 12px;
+  text-align: center;
+}
+
+.acp-mod-tasks-state-label {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+/* Error label: red is constrained to 11px+/600 chip usage per contrast rule
+ * (spec §5.3) — chip outline, not bare 12px red body text (2026-10-30 修订). */
+.acp-mod-tasks-state--error .acp-mod-tasks-state-label {
+  color: var(--red);
+  font-weight: 600;
+  border: 1px solid rgba(229, 83, 83, 0.45);
+  background: rgba(229, 83, 83, 0.10);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+
+.acp-mod-tasks-state--forbidden .acp-mod-tasks-state-label {
+  color: var(--amber);
+}
+
+.acp-mod-tasks-state-detail {
+  color: var(--text-secondary);
+  font-size: 11px;
+  word-break: break-all;
+  max-width: 100%;
+}
+
+/* Skeleton (list-type panel; static under prefers-reduced-motion). */
+
+.acp-mod-tasks-skel {
+  padding: 6px 4px;
+}
+
+.acp-mod-tasks-skel-line {
+  height: 14px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  animation: acp-mod-tasks-skel-pulse 1.2s ease-in-out infinite;
+}
+
+.acp-mod-tasks-skel-line:nth-child(1) { width: 82%; }
+.acp-mod-tasks-skel-line:nth-child(2) { width: 65%; }
+.acp-mod-tasks-skel-line:nth-child(3) { width: 74%; }
+.acp-mod-tasks-skel-line:nth-child(4) { width: 58%; }
+.acp-mod-tasks-skel-line:nth-child(5) { width: 80%; }
+.acp-mod-tasks-skel-line:nth-child(6) { width: 40%; }
+
+@keyframes acp-mod-tasks-skel-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+/* ── groups + rows ───────────────────────────────────────────────────── */
+
+.acp-mod-tasks-group {
+  margin-bottom: 8px;
+}
+
+.acp-mod-tasks-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.acp-mod-tasks-group-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acp-mod-tasks-group-count {
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-weight: 400;
+  flex-shrink: 0;
+}
+
+.acp-mod-tasks-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  margin-bottom: 2px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.acp-mod-tasks-row:hover {
+  background: var(--bg-elevated);
+  border-color: var(--border-subtle);
+}
+
+.acp-mod-tasks-row:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.acp-mod-tasks-row.is-selected {
+  border-color: rgba(78, 161, 255, 0.42);
+  background: var(--accent-soft);
+}
+
+.acp-mod-tasks-row-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acp-mod-tasks-row-workflow {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+/* Status badge — mirrors the legacy .badge palette via base.css tokens. */
+
+.acp-mod-tasks-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  border: 1px solid var(--border-default);
+  padding: 1px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  background: rgba(176, 190, 200, 0.08);
+}
+
+.acp-mod-tasks-badge::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: currentColor;
+  flex-shrink: 0;
+}
+
+.acp-mod-tasks-badge--queued,
+.acp-mod-tasks-badge--starting,
+.acp-mod-tasks-badge--cancelling,
+.acp-mod-tasks-badge--paused {
+  color: var(--amber);
+  border-color: rgba(242, 184, 75, 0.28);
+  background: rgba(242, 184, 75, 0.10);
+}
+
+.acp-mod-tasks-badge--paused { border-style: dashed; }
+
+.acp-mod-tasks-badge--running,
+.acp-mod-tasks-badge--pending {
+  color: var(--accent);
+  border-color: rgba(78, 161, 255, 0.35);
+  background: rgba(78, 161, 255, 0.12);
+}
+
+.acp-mod-tasks-badge--waiting_review {
+  color: #d7b8ff;
+  border-color: rgba(186, 122, 255, 0.34);
+  background: rgba(186, 122, 255, 0.14);
+}
+
+.acp-mod-tasks-badge--completed {
+  color: var(--green);
+  border-color: rgba(56, 193, 114, 0.32);
+  background: rgba(56, 193, 114, 0.10);
+}
+
+.acp-mod-tasks-badge--failed {
+  color: var(--red);
+  border-color: rgba(229, 83, 83, 0.28);
+  background: rgba(229, 83, 83, 0.10);
+}
+
+.acp-mod-tasks-attempt {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 10px;
+}
+
+/* ── pagination ──────────────────────────────────────────────────────── */
+
+.acp-mod-tasks-pagination {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  min-height: 0;
+}
+
+.acp-mod-tasks-pagination:empty { display: none; }
+
+.acp-mod-tasks-page-info {
+  flex: 1 1 auto;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── detail summary ──────────────────────────────────────────────────── */
+
+.acp-mod-tasks-detail {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 8px;
+}
+
+.acp-mod-tasks-detail-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.acp-mod-tasks-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.acp-mod-tasks-detail-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.acp-mod-tasks-detail-failure {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  color: var(--red);
+  font-size: 11px;
+}
+
+.acp-mod-tasks-detail-failure-label {
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.acp-mod-tasks-detail-failure-text {
+  min-width: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  word-break: break-all;
+}
+
+.acp-mod-tasks-open {
+  align-self: flex-start;
+}

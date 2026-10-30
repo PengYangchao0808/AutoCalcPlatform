@@ -1,0 +1,478 @@
+/*
+ * ACP Next — agent-workspace card styles (UI-03A read-only first slice).
+ *
+ * Owner: frontend/css/shell/agent.css (OpenCode). Serves ONLY the
+ * agent-workspace module (research main slot); loaded as a static <link>
+ * after base.css and shell.css. Classic environment: no @import, no CSS-in-JS.
+ *
+ * Implements design spec §4 (ACP_Frontend_UI01_Shell_Design_20261030.md):
+ *   acp-card-* 通用骨架 / 研究摘要卡 / 计划时间线四态节点 / 证据卡 /
+ *   acp-tag-* 语义 chip / 模型解释 vs 验证事实强制二分（§4.5）/
+ *   连接态与数据缺失态（§4.6）。保留类名（本期无 DOM）：
+ *   .acp-card-tools .acp-card-approval。
+ *
+ * Token discipline (spec §0.2/§0.4): shared tokens come from base.css;
+ * --shell-* tokens are declared on .acp-shell by shell.css. Every use here
+ * carries a fallback so agent.css degrades gracefully if referenced without
+ * the shell scope (module unit tests / standalone debugging).
+ */
+
+/* ------------------------------------------------------------------ */
+/* 卡片通用骨架（§4.1）                                                  */
+/* ------------------------------------------------------------------ */
+
+.acp-card {
+  border: 1px solid var(--border-subtle, #1e2832);
+  border-radius: var(--radius, 10px);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+
+.acp-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.acp-card-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary, #b0bec8);
+}
+
+.acp-card-meta {
+  font-size: 11px;
+  color: var(--text-tertiary, #6b7b8a);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acp-card-body {
+  min-width: 0;
+}
+
+/* <dl> 行式键值：dt 固定 88px（§4.2） */
+.acp-card-rows {
+  margin: 0;
+}
+
+.acp-card-row {
+  display: flex;
+  gap: 10px;
+  padding: 4px 0;
+  min-width: 0;
+}
+
+.acp-card-row dt {
+  flex: 0 0 88px;
+  font-size: 11px;
+  color: var(--text-tertiary, #6b7b8a);
+  padding-top: 2px;
+}
+
+.acp-card-row dd {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary, #b0bec8);
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+/* 缺失行：amber 左边条（§4.4）——把注意力引向缺口 */
+.acp-card-row.is-missing,
+.acp-card-row:has(.acp-missing) {
+  border-left: 2px solid rgba(242, 184, 75, 0.5);
+  padding-left: 8px;
+}
+
+.acp-missing {
+  color: var(--text-tertiary, #6b7b8a);
+}
+
+.acp-missing-reason {
+  font-size: 10px;
+  color: var(--amber, #f2b84b);
+}
+
+.acp-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.acp-card-actions .acp-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* 卡片局部骨架（加载态，spec §2.3 骨架精神的卡片级实现） */
+.acp-card-skel span {
+  display: block;
+  height: 12px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  background: var(--shell-skel-base, rgba(255, 255, 255, 0.045));
+  animation: acp-skel-pulse 1.2s ease-in-out infinite;
+}
+
+.acp-card-skel span:nth-child(1) { width: 72%; }
+.acp-card-skel span:nth-child(2) { width: 54%; }
+.acp-card-skel span:nth-child(3) { width: 40%; height: 22px; }
+
+@keyframes acp-skel-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+/* ------------------------------------------------------------------ */
+/* 面板根（模块 mount 宿主内的包裹层）                                    */
+/* ------------------------------------------------------------------ */
+
+.acp-agent-root {
+  min-width: 0;
+}
+
+.acp-agent-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.acp-agent-section {
+  margin: 12px 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-tertiary, #6b7b8a);
+}
+
+.acp-agent-section:first-child {
+  margin-top: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* 计划/步骤时间线（§4.3）                                              */
+/* ------------------------------------------------------------------ */
+
+.acp-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: relative;
+}
+
+.acp-timeline::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background: var(--border-default, #24303b);
+}
+
+.acp-timeline-item {
+  position: relative;
+  padding: 0 0 14px 0;
+}
+
+.acp-timeline-node {
+  position: absolute;
+  left: 5px;
+  top: 4px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+}
+
+/* 四态节点视觉映射（§4.3 表） */
+.acp-timeline-item.is-candidate .acp-timeline-node {
+  border: 1.5px solid var(--text-tertiary, #6b7b8a);
+  background: var(--bg-panel, #111821);
+}
+
+.acp-timeline-item.is-pending .acp-timeline-node {
+  border: 1.5px dashed var(--shell-violet-border, rgba(186, 122, 255, 0.34));
+  background: var(--bg-panel, #111821);
+}
+
+.acp-timeline-item.is-submitted .acp-timeline-node {
+  background: var(--accent, #4ea1ff);
+  box-shadow: 0 0 0 2px rgba(78, 161, 255, 0.22);
+}
+
+.acp-timeline-item.is-result .acp-timeline-node {
+  background: var(--amber, #f2b84b);
+}
+
+.acp-timeline-item.is-result[data-tone="pass"] .acp-timeline-node {
+  background: var(--green, #38c172);
+}
+
+.acp-timeline-item.is-result[data-tone="fail"] .acp-timeline-node {
+  background: var(--red, #e55353);
+}
+
+.acp-timeline-item.is-result[data-tone="warn"] .acp-timeline-node {
+  background: var(--amber, #f2b84b);
+}
+
+/* 工具调用占位（UI-03B 保留）：disabled 样式，不显示假数据 */
+.acp-timeline-item.is-disabled {
+  opacity: 0.55;
+}
+
+.acp-timeline-item.is-disabled .acp-timeline-node {
+  border: 1.5px solid var(--border-default, #24303b);
+  background: transparent;
+}
+
+.acp-timeline-title--muted {
+  color: var(--text-tertiary, #6b7b8a);
+  font-style: italic;
+}
+
+.acp-timeline-content {
+  padding-left: 26px;
+  min-width: 0;
+}
+
+.acp-timeline-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.acp-timeline-title {
+  font-size: 12px;
+  color: var(--text-primary, #e5edf5);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.acp-timeline-meta {
+  margin: 2px 0 0;
+  font-size: 10px;
+  color: var(--text-tertiary, #6b7b8a);
+}
+
+.acp-timeline-actions {
+  margin-top: 6px;
+  display: flex;
+  gap: 8px;
+}
+
+/* ------------------------------------------------------------------ */
+/* 语义 chip acp-tag（§4.5/§4.7；与旧 .badge 同族）                     */
+/* ------------------------------------------------------------------ */
+
+.acp-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  border: 1px solid;
+  padding: 2px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  height: var(--status-chip-height, 22px);
+  white-space: nowrap;
+}
+
+.acp-tag--neutral {
+  color: var(--text-secondary, #b0bec8);
+  border-color: var(--border-default, #24303b);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.acp-tag--model {
+  color: var(--text-secondary, #b0bec8);
+  border-color: var(--border-default, #24303b);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Connection-state chip (§4.6, 2026-10-30 修订): neutral family — connection
+ * status is not model-explanation semantics; acp-tag--model stays reserved
+ * for model-output chips only. */
+.acp-tag--conn {
+  color: var(--text-secondary, #b0bec8);
+  border-color: var(--border-default, #24303b);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.acp-tag--candidate {
+  color: var(--text-secondary, #b0bec8);
+  border-color: var(--border-default, #24303b);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.acp-tag--pending {
+  color: var(--shell-violet, #d7b8ff);
+  border-color: var(--shell-violet-border, rgba(186, 122, 255, 0.34));
+  background: var(--shell-violet-bg, rgba(186, 122, 255, 0.14));
+}
+
+.acp-tag--submitted,
+.acp-tag--result[data-tone="submitted"] {
+  color: var(--accent, #4ea1ff);
+  border-color: rgba(78, 161, 255, 0.44);
+  background: rgba(78, 161, 255, 0.11);
+}
+
+.acp-tag--result {
+  color: var(--text-secondary, #b0bec8);
+  border-color: var(--border-default, #24303b);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.acp-tag--pass {
+  color: var(--green, #38c172);
+  border-color: rgba(56, 193, 114, 0.4);
+  background: rgba(56, 193, 114, 0.10);
+}
+
+.acp-tag--fail {
+  color: var(--red, #e55353);
+  border-color: rgba(229, 83, 83, 0.45);
+  background: rgba(229, 83, 83, 0.10);
+}
+
+.acp-tag--warn {
+  color: var(--amber, #f2b84b);
+  border-color: rgba(242, 184, 75, 0.35);
+  background: rgba(242, 184, 75, 0.10);
+}
+
+/* 缺失 chip：amber 虚线边（§4.6） */
+.acp-tag--missing {
+  color: var(--amber, #f2b84b);
+  border: 1px dashed rgba(242, 184, 75, 0.5);
+  background: rgba(242, 184, 75, 0.07);
+}
+
+/* ------------------------------------------------------------------ */
+/* 模型解释 vs 科学验证 —— 强制视觉二分（§4.5）                          */
+/* ------------------------------------------------------------------ */
+
+/* 模型解释：中性虚线容器。禁止 green/red/amber 任何形式。 */
+.acp-model-note {
+  border: 1px dashed var(--border-default, #24303b);
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: var(--radius-sm, 6px);
+  padding: 8px 10px;
+  margin-top: 10px;
+}
+
+.acp-model-note .acp-model-note-text {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary, #b0bec8);
+}
+
+/* 验证事实：语义色左边条 + 数据行 mono。 */
+.acp-verified-fact {
+  border-left: 2px solid var(--border-default, #24303b);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 6px 10px;
+  margin-top: 8px;
+}
+
+.acp-verified-fact.is-pass { border-left-color: var(--green, #38c172); }
+.acp-verified-fact.is-fail { border-left-color: var(--red, #e55353); }
+.acp-verified-fact.is-warn { border-left-color: var(--amber, #f2b84b); }
+
+.acp-verified-fact .acp-claim-statement,
+.acp-claim-row .acp-claim-statement {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-primary, #e5edf5);
+  overflow-wrap: anywhere;
+}
+
+.acp-verified-fact .acp-claim-reason,
+.acp-claim-row .acp-claim-reason {
+  margin: 2px 0 0;
+  font-size: 10px;
+  color: var(--text-tertiary, #6b7b8a);
+}
+
+/* not_evaluated：普通缺失行，非 verified-fact 容器、无语义色 */
+.acp-claim-row {
+  border-left: 2px dashed rgba(242, 184, 75, 0.5);
+  background: rgba(255, 255, 255, 0.01);
+  padding: 6px 10px;
+  margin-top: 8px;
+}
+
+/* ------------------------------------------------------------------ */
+/* 四态局部状态（模块自渲染；借用 shell 的 acp-state 画法）               */
+/* ------------------------------------------------------------------ */
+
+.acp-agent-root .acp-state-empty {
+  min-height: 90px;
+  border: 1px dashed var(--border-default, #24303b);
+  border-radius: var(--radius, 10px);
+  background: rgba(255, 255, 255, 0.02);
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 4px;
+  padding: 14px;
+  text-align: center;
+}
+
+.acp-agent-root .acp-state-title {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary, #b0bec8);
+}
+
+.acp-agent-root .acp-state-msg {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-tertiary, #6b7b8a);
+}
+
+.acp-agent-root .acp-state-error {
+  border: 1px solid var(--shell-danger-border, rgba(229, 83, 83, 0.45));
+  border-radius: var(--radius, 10px);
+  padding: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.acp-agent-root .acp-state-error .acp-state-title {
+  color: var(--text-primary, #e5edf5);
+}
+
+.acp-agent-root .acp-state-actions {
+  justify-self: end;
+  display: flex;
+  gap: 8px;
+}
+
+/* ------------------------------------------------------------------ */
+/* 窄屏（spec §5.4 同一断点；卡片单列已天然流式，仅收紧间距）              */
+/* ------------------------------------------------------------------ */
+
+@media (max-width: 1023px) {
+  .acp-card-row dt {
+    flex-basis: 76px;
+  }
+}

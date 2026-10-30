@@ -44,10 +44,17 @@
  *   (optional) onSelectionError(err, jobId, session) — current-session
  *        failures only; the error is rethrown after the hook, matching the
  *        former inline behavior where fetch errors propagated to the caller.
+ *
+ * v20261030.1 (UI-02b): the module-level singleton below is now an instance
+ * of the exported factory createTaskSessionController(). The page keeps
+ * consuming ACPWorkbench.controllers.taskSession with an unchanged API, while
+ * isolated consumers (the ACP 2.0 task-explorer module) create their own
+ * instance with an independent monotonic token sequence — two instances can
+ * never supersede each other's sessions.
  */
 window.ACPWorkbench = window.ACPWorkbench || {};
 ACPWorkbench.controllers = ACPWorkbench.controllers || {};
-ACPWorkbench.controllers.taskSession = (function () {
+ACPWorkbench.controllers.createTaskSessionController = function createTaskSessionController() {
   "use strict";
 
   // Monotonic for the module lifetime. init() deliberately NEVER resets it:
@@ -152,4 +159,7 @@ ACPWorkbench.controllers.taskSession = (function () {
     clear: clear,
     dispose: dispose,
   };
-})();
+};
+
+// Legacy page singleton (old entry + old tests consume this unchanged).
+ACPWorkbench.controllers.taskSession = ACPWorkbench.controllers.createTaskSessionController();

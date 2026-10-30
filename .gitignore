@@ -52,6 +52,7 @@ conformer_search.yaml
 # --- Generated HTML reports (except frontend) ---
 *.html
 !frontend/*.html
+!frontend/next/*.html
 
 # --- SQLite databases ---
 *.db

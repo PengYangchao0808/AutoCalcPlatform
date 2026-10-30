@@ -23,10 +23,17 @@
  *     views.onEmptyError (legacy queue-counts failure text)
  *   - a local serial guard keeps late async follow-ups (merge suggestions)
  *     from running after a newer refresh started
+ *
+ * v20261030.1 (UI-02b): the module-level singleton below is now an instance of
+ * the exported factory createTaskListController(). The page keeps consuming
+ * ACPWorkbench.controllers.taskList with an unchanged API, while isolated
+ * consumers (the ACP 2.0 task-explorer module) create their own instance with
+ * independent offset/queryKey/serial/abort state — two instances can never
+ * supersede each other's refreshes.
  */
 window.ACPWorkbench = window.ACPWorkbench || {};
 ACPWorkbench.controllers = ACPWorkbench.controllers || {};
-ACPWorkbench.controllers.taskList = (function () {
+ACPWorkbench.controllers.createTaskListController = function createTaskListController() {
   "use strict";
 
   var deps = null;
@@ -128,4 +135,7 @@ ACPWorkbench.controllers.taskList = (function () {
     isSilentCancel: isSilentCancel,
     dispose: dispose,
   };
-})();
+};
+
+// Legacy page singleton (old entry + old tests consume this unchanged).
+ACPWorkbench.controllers.taskList = ACPWorkbench.controllers.createTaskListController();
