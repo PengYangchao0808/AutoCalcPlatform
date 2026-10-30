@@ -11,6 +11,8 @@ PESsearch 键长扫描 → 选点确认 → BatchOptimize OptTS + 频率验证�
 | `DA_VALIDATION_REPORT.md` | 验证报告（按 codex 验收 notes 修订后）。TS 驻点 supported（−424.44 cm⁻¹ 单虚频）；路径连接 inconclusive（缺 IRC）。注：报告记录的指南 digest 为当时 v1.0.0；缺陷 1/2 的指南侧修复已在内容包 **v1.1.0** 落地（BatchOptimize 角色 wire 语法、PESsearch unit/键侧语汇），平台侧 typed 提示仍归 P1a/P3 |
 | `codex_result_acceptance.md` | 计算结果独立验收（gpt-6-astra，**PASS-with-notes**，109k tokens：逐帧能量重算、频率结构、虚模键轴余弦 −0.9978、磁盘 SHA 核对） |
 | `codex_code_review.md` | 分支代码评审结论（gpt-6-astra，1×P1 + 4×P2，全部在本仓 `a588132d` 修复并带行为测试） |
+| `proposal_round4.md` | 第 4 轮改进提案（基于 Cope 测试会话分析，含时间线澄清） |
+| `astra_round4_review.md` | 第 4 轮提案的 external 评审（gpt-6-astra：有界发现须版本化、单坐标阈值不得冒充科学判据、B 类先冻结测量定义） |
 
 ## 登记的缺陷（后续批次）
 
