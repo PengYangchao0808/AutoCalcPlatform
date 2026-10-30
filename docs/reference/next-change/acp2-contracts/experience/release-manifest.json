@@ -84,7 +84,7 @@
   "schema_version": "1.0.0",
   "static_assets": {
     "bytes": 3554243,
-    "digest": "ceae6edabf4714cbec4a82ef7f4bd748729376edd62ae2d626102f80a8d6bdd4",
+    "digest": "6d0948eabf395e9af767fbc30e9d8f18967d5c033af4abe60baa32c70943b1f8",
     "files": 76,
     "note": "regenerated after the CI-lane fixes; module_tests are Node-only doubles and are excluded from shipped assets",
     "release_id": "acp2-experience-0.3.0"

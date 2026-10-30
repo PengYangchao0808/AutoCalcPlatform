@@ -4,7 +4,7 @@ B06 (plan ``.omo/plans/acp2-parallel-plan-b-runtime.md`` todo 7).  This module i
 the only place that wires the stdlib-only Controller client into the
 protocol/allowlist/policy owner :mod:`acp_services.entrypoints.mcp`.
 
-Every one of the nine tools is bound to **one Controller application command**:
+Every one of the ten tools is bound to **one Controller application command**:
 
 ======================================  =========================================
 MCP tool                                Controller command
@@ -19,6 +19,7 @@ MCP tool                                Controller command
 ``acp_read_artifact``                   ``GET /api/v1/jobs/{id}/prepared/{r}``
 ``acp_analyze``                         ``POST /api/v1/jobs/{id}/analyze``
 ``acp_get_guidance``                    ``GET /api/v1/guidance/{guide_id}``
+``acp_list_jobs``                       ``GET /api/v1/jobs?status=&limit=``
 ======================================  =========================================
 
 Parameters pass through the shared :mod:`acp_services.entrypoints.
@@ -259,6 +260,15 @@ class _ControllerStatus:
             return ""
         value = str(reference or "")
         return value if value.startswith("op_") else ""
+
+    def list_tasks(
+        self, *, status: str | None = None, limit: int = 50, workspace_id: str = ""
+    ) -> dict[str, Any]:
+        del workspace_id
+        try:
+            return dict(self._client.list_tasks(status=status, limit=limit))
+        except ControllerClientError as exc:
+            raise _tool_error("list_tasks", exc) from None
 
     def get(self, reference: Any, *, workspace_id: str) -> Mapping[str, Any] | None:
         del workspace_id

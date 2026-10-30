@@ -55,6 +55,7 @@ P1_TOOLS = frozenset(
     {
         "acp_capabilities",
         "acp_get_guidance",
+    "acp_list_jobs",
         "acp_preflight",
         "acp_submit",
         "acp_status",

@@ -61,6 +61,7 @@ PUBLIC_TOOLS = (
     "acp_cancel",
     "acp_capabilities",
     "acp_get_guidance",
+    "acp_list_jobs",
     "acp_preflight",
     "acp_prepare_artifact",
     "acp_read_artifact",

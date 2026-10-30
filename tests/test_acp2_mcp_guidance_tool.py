@@ -95,14 +95,14 @@ def test_guidance_is_a_base_tool_always_advertised() -> None:
     server = _server(extension=None)
     names = _tools_list(server)
     assert mcp.McpTool.GUIDANCE in names
-    assert len(names) == 9
+    assert len(names) == 10
     # even a research-negotiated session keeps exactly the P1 + research union
     spec = mcp.ExtensionSpec(
         extension_id="acp.research.v1", version="1.0.0", promised_tools=mcp.RESEARCH_TOOL_NAMES
     )
     negotiated = _server(_FakeGuidance(), extension=spec)
     _call_capabilities_negotiate(negotiated)
-    assert len(_tools_list(negotiated)) == 19
+    assert len(_tools_list(negotiated)) == 20
 
 
 def _call_capabilities_negotiate(server: mcp.McpServer) -> None:

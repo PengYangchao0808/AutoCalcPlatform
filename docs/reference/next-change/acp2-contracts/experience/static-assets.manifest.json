@@ -4,10 +4,10 @@
   "release_id": "acp2-experience-0.3.0",
   "package_version": "0.3.0",
   "digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\"",
-  "digest": "ceae6edabf4714cbec4a82ef7f4bd748729376edd62ae2d626102f80a8d6bdd4",
+  "digest": "6d0948eabf395e9af767fbc30e9d8f18967d5c033af4abe60baa32c70943b1f8",
   "counts": {
     "files": 76,
-    "bytes": 3557748,
+    "bytes": 3557765,
     "js": 61,
     "css": 10,
     "html": 3
@@ -302,8 +302,8 @@
     },
     {
       "path": "js/workbench/contracts/experience_contract.js",
-      "sha256": "c92f4dc0cabf9a83520db91099143cce66f70c5d64a68bf5c4cb0a54788fdce7",
-      "size_bytes": 19896,
+      "sha256": "46f237ba038687dcebb9d7ae49bef6f5d6fc14bd4887252aaadaabc6425f53aa",
+      "size_bytes": 19913,
       "media_type": "text/javascript"
     },
     {

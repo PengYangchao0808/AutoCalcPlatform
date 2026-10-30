@@ -586,6 +586,36 @@
           "description": "Read one versioned guidance document (read-only, bounded, digest-bound for caching); discover ids via acp_capabilities(workflow=...)."
         },
         "input_schema_version": 1
+      },
+      {
+        "name": "acp_list_jobs",
+        "version": "1.0.0",
+        "description": "Bounded read-only listing of tasks in the permission scope.",
+        "side_effects": "none",
+        "required_action": "read",
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "schema_version": {
+              "type": "integer",
+              "enum": [
+                1
+              ],
+              "default": 1
+            },
+            "status": {
+              "type": "string"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          "description": "Bounded read-only task listing in the permission scope (U08)."
+        },
+        "input_schema_version": 1
       }
     ]
   },

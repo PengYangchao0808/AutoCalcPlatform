@@ -33,7 +33,7 @@ ACPWorkbench.contracts.experience = (function () {
   var ACP_TOOLS = [
     "acp_capabilities", "acp_preflight", "acp_submit", "acp_status",
     "acp_cancel", "acp_prepare_artifact", "acp_read_artifact", "acp_analyze",
-    "acp_get_guidance",
+    "acp_get_guidance", "acp_list_jobs",
   ];
   var TASK_STATE_KEYS = ["status", "state", "lifecycle", "job_id", "attempt",
     "queue_position", "running", "queued"];

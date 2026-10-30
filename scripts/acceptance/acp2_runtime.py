@@ -86,6 +86,7 @@ EVIDENCE_KINDS = ("fixture", "live", "aggregate")
 MCP_TOOLS = (
     "acp_capabilities",
         "acp_get_guidance",
+        "acp_list_jobs",
     "acp_preflight",
     "acp_submit",
     "acp_status",

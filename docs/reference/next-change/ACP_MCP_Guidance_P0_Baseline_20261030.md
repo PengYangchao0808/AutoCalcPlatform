@@ -71,6 +71,16 @@
 - 验收脚本：`validate_acp2_contracts.py`（P1 面期望改为 冻结八名 ∪ {acp_get_guidance}）。
 - 测试计数：8→9、18→19 全部改为随注册表派生或与 `MCP_TOOL_NAMES`/`TOOL_ALLOWLIST` 集合比较（tests/AGENTS 2026-10-30 约定：不永久钉死数量）。
 
-## 6. 服务生效说明
+## 6b. Agent 反馈第二轮（2026-10-30 下午）处置记录
+
+**已交付**（PR #44）：`acp_list_jobs`（U08 首片：bounded 只读任务列表，status 过滤+分页）；`acp_cancel` 对已终态作业显式返回 `already_terminal/terminal_state/cancelled=false`；指南 v1.2.0 新增 `topic.method_selection`（方法精度阶梯：GFN2-xTB 预筛 → r2SCAN-3c 几何 + wB97X-mV/D4 单点为默认档，DLPNO-CCSD(T) 仅 ~1 kcal/mol 级问题做单点、绝不作默认，优化/单点级别分开表达）与 `topic.artifact_locating`（描述符→prepare→read 正路、molecule_name/task_name 目录控制、持久工作区）。
+
+**登记未修**（下批 P1a/P3）：①preflight 不校验 runner 层布局约束（MCP 通道 single_flat 单 item），布局检查应提升到提交校验；②基础操作四件套（singlepoint/optimize/frequency/xtb_optimize）提交契约未覆盖——这些工作流的 method 未知键仍静默透传；③PES 曲线帧间结构连续性（分支切换）应作为曲线概况的品质信息标注——约束面上一维扫描出现分支切换是正常物理，不报错，只标注供选点参考；④回包冗余（U09：admission/identity 重复层、内部里程碑编号外泄、cancel/status 混合语义已部分处理）。
+
+## 6c. MCP 进程与远程一致性
+
+**本机部署运维事实（已验证）**：DSH 的 MCP 共享桥是 `acp mcp serve` 子进程（用户级，父进程为 DSH web）；**kill 后 DSH 自动 respawn 并加载最新代码**（无需 sudo）。代码更新后的完整生效顺序：merge → `sudo systemctl restart acp`（Controller）→ `pkill -f "acp mcp serve"`（桥，自动重生）。进行中的 MCP 调用失败一次、重试即恢复。
+
+**远程调用者的一致性**：MCP 工具与 Controller HTTP 命令 1:1 同源（单一权威，无第二实现），远程接入三通道——①HTTP Controller 直连（8765，功能与 MCP 面等价，`/api/capabilities?workflow=` 同样返回契约）；②SSH + stdio spawn（远程 MCP client 经 ssh 在本机 spawn `acp mcp serve`，每次连接即最新代码，无共享桥陈旧问题）；③自装 acp 包 + 远程 Controller（版本随安装走，协议协商 + capabilities/tools/list 自描述使其优雅降级；部署契约见 `runtime/mcp-launch.schema.json`）。**待实现**：原生 Streamable HTTP transport（`--transport http`）——mcp.py 协议层已与传输解耦（stdio 仅为帧实现），挂 FastAPI + 复用 B15 api-key 身份即可支撑远程 harness 原生 MCP 直连，登记为下批候选。
 
 生产 Controller（systemd `acp.service`，editable 指向本 checkout）与常驻 `acp mcp serve` 桥需重启后新路由/新工具才可见；重启属受控操作，由用户执行。重启前旧客户端行为完全不变（纯增量注册）。
