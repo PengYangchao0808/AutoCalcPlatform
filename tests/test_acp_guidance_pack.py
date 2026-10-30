@@ -127,13 +127,27 @@ def test_describe_workflow_carries_guide_refs_for_all_active_workflows() -> None
         assert block["guide_ref"]["guide_id"] == mapping[workflow], workflow
         assert block["guide_ref"]["pack_version"] == PACK_VERSION
         assert block["guide_ref"]["tool"] == "acp_get_guidance"
-    # Coverage stays honest: only the staged four publish a schema.
+    # Coverage stays honest: the staged batches publish partial schemas; only
+    # casscf/nmr remain unconttracted.
     published = {wf: describe_workflow(wf)["coverage"] for wf in _ACTIVE}
-    assert published["Confsearch"] == "partial"
-    assert published["BatchOptimize"] == "partial"
-    assert published["PESsearch"] == "partial"
-    assert published["scan"] == "partial"
-    assert published["irc"] == "not_provided"
+    for name in (
+        "Confsearch",
+        "BatchOptimize",
+        "PESsearch",
+        "scan",
+        "XtbPathSearch",
+        "OrcaGradient",
+        "XtbConstrainedOpt",
+        "singlepoint",
+        "optimize",
+        "frequency",
+        "xtb_optimize",
+        "irc",
+        "tsmode",
+    ):
+        assert published[name] == "partial", name
+    assert published["casscf"] == "not_provided"
+    assert published["nmr"] == "not_provided"
 
 
 def test_pessearch_rejects_method_levels_and_bad_enums() -> None:
@@ -225,3 +239,56 @@ def test_task_multireference_names_the_scientific_decisions() -> None:
     assert "CASSCF" in chain and "NEVPT2" in chain
     stop = read_guide("task.multireference_analysis")["sections"]["stop"]
     assert "收敛" in stop
+
+
+def test_every_published_example_passes_its_own_validator() -> None:
+    """describe_workflow examples must be legal requests, not illustrative prose.
+
+    astra round-4 review: the IRC/tsmode examples were plain water molecules
+    that failed their own validator, while the published properties also drifted
+    from the contract (xyz_text/profile missing).  This is the one guard that
+    keeps the public example and the shared submission validator in sync.
+    """
+    from acp.api.submission_contract import (
+        WORKFLOW_CONTRACTS,
+        SubmissionContractError,
+        validate_workflow_submission,
+    )
+    from acp.api.workflow_contracts import ACTIVE_WORKFLOWS, describe_workflow
+
+    failures: list[str] = []
+    for workflow in ACTIVE_WORKFLOWS:
+        block = describe_workflow(workflow)
+        examples = block.get("examples") or []
+        if workflow not in WORKFLOW_CONTRACTS:
+            assert not examples, f"{workflow} publishes examples without a contract"
+            continue
+        assert examples, f"{workflow} has a contract but no example"
+        for example in examples:
+            try:
+                validate_workflow_submission(
+                    workflow,
+                    input=example.get("input"),
+                    method=example.get("method"),
+                    resources=example.get("resources"),
+                )
+            except SubmissionContractError as exc:
+                failures.append(f"{workflow}: {exc}")
+    assert not failures, failures
+
+
+def test_describe_exposes_every_contract_accepted_input_key() -> None:
+    """The public properties must not silently omit a contract-allowed input key."""
+    from acp.api.submission_contract import WORKFLOW_CONTRACTS
+    from acp.api.workflow_contracts import describe_workflow
+
+    for workflow, contract in WORKFLOW_CONTRACTS.items():
+        block = describe_workflow(workflow)
+        properties = set(block.get("input", {}).get("properties") or {})
+        missing = sorted(contract.input_keys - properties)
+        assert not missing, f"{workflow} input properties omit {missing}"
+
+    for workflow in ("singlepoint", "optimize", "frequency"):
+        method_block = describe_workflow(workflow).get("method") or {}
+        method_properties = set(method_block.get("properties") or {})
+        assert {"levels", "schema_id", "profile_id", "method"} <= method_properties

@@ -152,7 +152,7 @@
       "NOT_APPLICABLE"
     ]
   },
-  "contract_digest": "36b3d876f489535451d3d9897cbf2c660a99910e0ffc0415eb86a118e8258e45",
+  "contract_digest": "799e40735128b8d112030e07c889ff7342393332efaaa1f1d3734a39b9537712",
   "contract_digest_rule": "sha256 over sorted lines '<path> <sha256>\\n' for delivered contracts excluding manifest.json, runtime/baseline-lock.json and release/bom.current.json (self-referential files; the BOM embeds this aggregate digest).",
   "contract_version": "1.7.0",
   "contract_version_history": [
@@ -224,7 +224,7 @@
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/manifest.json",
-      "sha256": "6c1c3e264be5b26b04fa0744c60be0af6a7eb5f92dcf31097f3f9f5b015aa970",
+      "sha256": "f23687300190d33ba867512b04769ce9fa5f5bf8f5f7e859cea2ab96e098d358",
       "status": "delivered"
     },
     {
@@ -317,7 +317,7 @@
       "id": "mcp-launch-schema",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.schema.json",
-      "sha256": "d18138ab639c000b04975b785c72bf34cd89b6e48e37b2ab8c066e952fe00792",
+      "sha256": "5fd996f4b03763da97bce39bcb51e05b30a51e555e5efa5364cdd1558ba9e1d6",
       "status": "delivered",
       "updated_by": "B06"
     },
@@ -326,7 +326,7 @@
       "id": "mcp-launch-template",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.template.json",
-      "sha256": "c39e8504e7752e9d5af03f04447726b5fb9551bbfde0737c3bf0e13c1c660f9e",
+      "sha256": "b1d1afbd4ec956c3ada43fd0fc3f85996a25e49d4882e22479ee316d45d21f5e",
       "status": "delivered",
       "updated_by": "B06"
     },
@@ -474,7 +474,7 @@
       "note": "M5-02 clean-candidate BOM: 27 artifacts with URI+sha256+size, toolchain/DSH locks, contract digest and coverage canonical digest. Self-referential: excluded from contract_digest because it embeds that aggregate digest.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/release/bom.current.json",
-      "sha256": "9b5b0d0fe50a17591ba2b7492544aaa55ef84c5e87da530056f5b5cf4b1fb3b5",
+      "sha256": "557a694d6c648d81cf646b5f48b6e79852145a27b469e57427d088fa8551916c",
       "status": "delivered"
     },
     {

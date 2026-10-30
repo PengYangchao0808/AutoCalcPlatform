@@ -764,11 +764,21 @@ _CAPABILITIES_SCHEMA: dict[str, Any] = {
         "workflow": {
             "type": "string",
             "description": (
-                "Optional workflow id (case-insensitive). Returns workflow_contract "
-                "with the input/method/resources schema, examples and known "
-                "constraints. Unknown ids return input_invalid with allowed ids "
-                "and a suggestion; other active workflows are marked coverage="
-                "not_provided."
+                "Optional workflow id (case-insensitive). Returns ONLY that "
+                "workflow's contract (input/method/resources schema, examples, "
+                "known constraints) plus the small public refs — never the full "
+                "payload. Unknown ids return input_invalid with allowed ids and a "
+                "suggestion."
+            ),
+        },
+        "detail": {
+            "type": "string",
+            "enum": ["summary", "full"],
+            "description": (
+                "Optional response scope. 'summary' returns a bounded navigation "
+                "package (workflow contract index, task recipes, capacity, limits "
+                "summary, capability index); 'full' is the historical shape. Omitted "
+                "keeps the historical shape for old clients."
             ),
         },
     },
@@ -1627,11 +1637,110 @@ def _research_tool_specs() -> tuple[dict[str, Any], ...]:
 # ---------------------------------------------------------------------------
 
 
+#: Bounded discovery at the final MCP surface.  The budget is enforced on the
+#: *complete serialized tool result* (envelope + visible text + structured
+#: content), because that is what the harness actually receives — a budget on
+#: the inner data dict alone can be exceeded by the wrapping layers (astra
+#: round-4 review).  Oversized blocks are dropped explicitly with a
+#: continuation pointer; JSON is never truncated.
+SUMMARY_BUDGET_BYTES = 8192
+
+
+def _summary_result_size(data: Mapping[str, Any]) -> int:
+    """Bytes of the final tool-result payload for ``data`` (as the server sends it)."""
+    envelope = {
+        "schema_version": 1,
+        "operation": "acp_capabilities",
+        "status": "ok",
+        "exit_code": 0,
+        "dry_run": False,
+        # a realistic workspace id placeholder: the real value is added after the
+        # budget check, so the estimate must not undercount it (×2 for text+data)
+        "operation_identity": "x" * 64,
+        "diagnostic_ref": None,
+        "data": dict(data),
+        "error": None,
+    }
+    text = json.dumps(envelope, ensure_ascii=False)
+    payload = {
+        "content": [{"type": "text", "text": text}],
+        "structuredContent": envelope,
+        "isError": False,
+    }
+    return len(json.dumps(payload, ensure_ascii=False).encode())
+
+
+def _enforce_summary_budget(data: dict[str, Any]) -> dict[str, Any]:
+    """Clip the ``summary`` scope to the final-surface budget, explicitly."""
+    if data.get("detail") != "summary":
+        return data
+    limit = SUMMARY_BUDGET_BYTES
+    omitted: list[str] = []
+
+    def _measure(candidate: dict[str, Any], dropped: list[str]) -> int:
+        probe = dict(candidate)
+        probe["omitted"] = dropped
+        if dropped:
+            # the continuation block is appended after clipping; it must be part
+            # of the measurement or the boundary window can exceed the budget
+            probe["continuation"] = {
+                "tool": "acp_capabilities",
+                "arguments": {"detail": "full"},
+                "note": "omitted blocks are available in the full scope",
+            }
+        probe["budget"] = {
+            "limit_bytes": limit,
+            "actual_bytes": 0,
+            "enforced_at": "final_mcp_result",
+            "omitted": dropped,
+            "overflow": False,
+        }
+        size = _summary_result_size(probe)
+        # the budget block itself must fit too (fixed point on the header size)
+        probe["budget"]["actual_bytes"] = size
+        return _summary_result_size(probe)
+
+    # optional blocks from heaviest/least essential to most essential
+    for key in (
+        "capability_index",
+        "analysis_capabilities",
+        "research_tools",
+        "research_consumer_tools",
+        "identity_binding",
+        "capability_request",
+        "task_instructions",
+        "workflow_contracts",
+    ):
+        if key not in data:
+            continue
+        if _measure(data, omitted) <= limit:
+            break
+        data.pop(key)
+        omitted.append(key)
+    actual = _measure(data, omitted)
+    data["omitted"] = omitted
+    data["budget"] = {
+        "limit_bytes": limit,
+        "actual_bytes": actual,
+        "enforced_at": "final_mcp_result",
+        "omitted": omitted,
+        "overflow": actual > limit,
+    }
+    if omitted:
+        data["continuation"] = {
+            "tool": "acp_capabilities",
+            "arguments": {"detail": "full"},
+            "note": "omitted blocks are available in the full scope",
+        }
+    return data
+
 @runtime_checkable
 class CapabilityPort(Protocol):
     """Capability discovery (read-only)."""
 
-    def capabilities(self, *, workflow: str | None = None) -> Mapping[str, Any]:
+    def capabilities(
+        self, *, workflow: str | None = None, detail: str | None = None
+    ) -> Mapping[str, Any]:
         """Return the current capability descriptor.
 
         ``workflow`` selects the optional per-workflow contract projection
@@ -2728,10 +2837,21 @@ class McpServer:
                 "workflow must be a string",
                 params={"field": "workflow"},
             )
-        if workflow is None:
+        detail = arguments.get("detail")
+        if detail is not None and detail not in ("summary", "full"):
+            raise McpToolError(
+                mo.ErrorCode.INPUT_INVALID,
+                "detail must be 'summary' or 'full'",
+                params={"field": "detail", "rule": "invalid_enum", "allowed": ["summary", "full"]},
+            )
+        if workflow is None and detail is None:
             data = dict(self._backends.capabilities.capabilities())
         else:
-            data = dict(self._backends.capabilities.capabilities(workflow=workflow))
+            data = dict(
+                self._backends.capabilities.capabilities(
+                    workflow=workflow, detail=detail
+                )
+            )
         data.setdefault("protocol_version", MCP_PROTOCOL_VERSION)
         # M1-01b/M2-02: the frozen three-state analysis-capability projection.  A
         # descriptor is never "available": registered/executable/unavailable are
@@ -2856,7 +2976,7 @@ class McpServer:
         return mo.MachineResult(
             operation=McpTool.CAPABILITIES,
             status="ok",
-            data=data,
+            data=_enforce_summary_budget(data),
             operation_identity=context.workspace_id,
         )
 

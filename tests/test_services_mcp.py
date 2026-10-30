@@ -71,9 +71,19 @@ class _FakeCapabilities:
     def __init__(self) -> None:
         self.calls = 0
 
-    def capabilities(self) -> dict[str, Any]:
+    def capabilities(
+        self, *, workflow: str | None = None, detail: str | None = None
+    ) -> dict[str, Any]:
         self.calls += 1
-        return {"workflows": ["singlepoint", "optimize"], "backends": ["orca"]}
+        data: dict[str, Any] = {
+            "workflows": ["singlepoint", "optimize"],
+            "backends": ["orca"],
+        }
+        if detail is not None:
+            data["detail"] = detail
+        if workflow is not None:
+            data["workflow_contract"] = {"workflow": workflow, "coverage": "partial"}
+        return data
 
 
 class _FakePreflight:
@@ -1126,3 +1136,77 @@ def test_capabilities_project_the_three_analysis_states() -> None:
     for entry in projection:
         assert entry["registered"] is False
         assert entry["executable"] is False
+
+
+# --------------------------------------------------------------------------- #
+# Bounded discovery at the final MCP surface (round-4 design review)
+# --------------------------------------------------------------------------- #
+
+
+class _BigSummaryCapabilities:
+    """A summary payload far beyond the budget, to exercise final-surface clipping."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def capabilities(
+        self, *, workflow: str | None = None, detail: str | None = None
+    ) -> dict[str, Any]:
+        self.calls += 1
+        return {
+            "detail": "summary",
+            "navigation": {"task_recipe": {"tool": "acp_capabilities"}},
+            "workflow_contracts": {"singlepoint": {"coverage": "partial"}},
+            "task_instructions": [],
+            "capacity": {"schema": "acp2.capacity.view.v1"},
+            "capability_index": [{"capability_id": "x" * 200} for _ in range(80)],
+            "limits": {"max_cores": 8},
+        }
+
+
+def test_summary_scope_is_clipped_at_the_mcp_surface() -> None:
+    """The final MCP result must fit the budget — by explicit omission, not truncation."""
+    fakes = _Fakes()
+    fakes.capabilities = _BigSummaryCapabilities()  # type: ignore[assignment]
+    server = _server(fakes=fakes)
+    result = _call_tool(server, "acp_capabilities", {"detail": "summary"})
+    data = result["structuredContent"]["data"]
+    # measure the final serialized result, not a self-reported counter
+    text_bytes = len(result["content"][0]["text"].encode("utf-8"))
+    assert text_bytes <= 8192, text_bytes
+    assert data["budget"]["limit_bytes"] == 8192
+    assert data["budget"]["enforced_at"] == "final_mcp_result"
+    assert data["budget"]["overflow"] is False
+    assert "capability_index" in data["omitted"]
+    assert data["continuation"]["arguments"] == {"detail": "full"}
+    # the navigation blocks survive
+    for key in ("navigation", "workflow_contracts", "capacity"):
+        assert key in data, key
+
+
+def test_summary_budget_marks_overflow_when_nothing_is_clippable() -> None:
+    """An oversized non-essential-free payload is flagged, never silently truncated."""
+    class _HugeNavigationCapabilities:
+        def capabilities(self, *, workflow=None, detail=None):
+            return {
+                "detail": "summary",
+                "navigation": {"note": "x" * 20000},
+                "capacity": {"schema": "acp2.capacity.view.v1"},
+            }
+
+    fakes = _Fakes()
+    fakes.capabilities = _HugeNavigationCapabilities()  # type: ignore[assignment]
+    server = _server(fakes=fakes)
+    result = _call_tool(server, "acp_capabilities", {"detail": "summary"})
+    data = result["structuredContent"]["data"]
+    assert data["budget"]["overflow"] is True
+    assert len(result["content"][0]["text"].encode("utf-8")) > 8192
+
+
+def test_full_scope_is_never_clipped() -> None:
+    fakes = _Fakes()
+    fakes.capabilities = _BigSummaryCapabilities()  # type: ignore[assignment]
+    server = _server(fakes=fakes)
+    result = _call_tool(server, "acp_capabilities", {"detail": "full"})
+    data = result["structuredContent"]["data"]
+    assert "budget" not in data or data["detail"] == "summary"

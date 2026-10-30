@@ -690,8 +690,13 @@ def test_two_real_mcp_processes_replay_one_task_and_restart(tmp_path: Path) -> N
     xyz_text = "2\nH2\nH 0 0 0\nH 0 0 0.74\n"
     arguments = {
         "workflow": "singlepoint",
-        "input": {"source_type": "xyz_text", "source": xyz_text},
-        "method": {"method": "r2SCAN-3c", "charge": 0, "multiplicity": 1},
+        "input": {
+            "source_type": "xyz_text",
+            "source": xyz_text,
+            "charge": 0,
+            "multiplicity": 1,
+        },
+        "method": {"levels": {"single_point": {"functional": "r2SCAN-3c"}}},
         # Deliberately a legacy (non-research) launch: a bare one-off plan digest
         # would make every submit a research launch and the Controller refuses it
         # (403 approval_required) before the idempotency claim is ever reached.

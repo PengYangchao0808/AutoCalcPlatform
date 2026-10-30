@@ -83,9 +83,9 @@ def test_no_selector_keeps_the_frozen_shape(client: TestClient) -> None:
 
 
 def test_uncovered_workflow_is_marked_not_provided(client: TestClient) -> None:
-    # PESsearch/scan gained staged partial coverage (2026-10-30 first-batch
-    # contracts); irc is still outside the published set.
-    payload = client.get("/api/capabilities", params={"workflow": "irc"}).json()
+    # The staged batches contracted PESsearch/scan, the PES2TS trio and the six
+    # simple/step workflows; casscf/nmr are still outside the published set.
+    payload = client.get("/api/capabilities", params={"workflow": "casscf"}).json()
     block = payload["workflow_contract"]
     assert block["coverage"] == "not_provided"
     assert "not published" in block["reason"]
@@ -99,10 +99,7 @@ def test_capabilities_publish_task_instruction_routing(client: TestClient) -> No
     by_id = {entry["guide_id"]: entry for entry in tasks}
     ts = by_id["task.find_transition_state"]
     assert ts["coverage"] == "first_batch"
-    assert ts["detail"] == {
-        "tool": "acp_get_guidance",
-        "arguments": {"guide_id": "task.find_transition_state"},
-    }
+    assert ts["guide_id"] == "task.find_transition_state"
     assert "多参考" in by_id["task.multireference_analysis"]["title"]
 
 
@@ -114,14 +111,19 @@ def test_capabilities_publish_a_workflow_contract_index(client: TestClient) -> N
     assert isinstance(index, dict) and len(index) == 15
     pes = index["PESsearch"]
     assert pes["coverage"] == "partial"
-    assert pes["detail"] == {"tool": "acp_capabilities", "arguments": {"workflow": "PESsearch"}}
+    # the per-entry pointer moved to the top-level navigation block; the entry
+    # keeps coverage + guide id (bounded response, round 4)
     assert pes["guidance"] == "workflow.PESsearch"
+    assert "detail" not in pes
     # frozen-payload entries are now contracted
     assert index["XtbPathSearch"]["coverage"] == "partial"
     assert index["OrcaGradient"]["coverage"] == "partial"
     assert index["XtbConstrainedOpt"]["coverage"] == "partial"
-    # uncontracted workflows carry an actionable fallback instead of silence
-    irc = index["irc"]
-    assert irc["coverage"] == "not_provided"
-    assert "uncontracted in MCP" in irc["fallback"]
-    assert irc["detail"]["arguments"] == {"workflow": "irc"}
+    # the six simple/step workflows are contracted since batch B
+    for name in ("singlepoint", "optimize", "frequency", "xtb_optimize", "irc", "tsmode"):
+        assert index[name]["coverage"] == "partial", name
+    # remaining uncovered workflows carry an actionable fallback instead of silence
+    casscf = index["casscf"]
+    assert casscf["coverage"] == "not_provided"
+    assert casscf["fallback"]["status"] == "uncontracted"
+    assert "acp run casscf" in casscf["fallback"]["supported_entries"]

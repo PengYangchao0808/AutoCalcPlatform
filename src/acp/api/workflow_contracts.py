@@ -86,6 +86,14 @@ _CONFSEARCH_INPUT_PROPERTIES: dict[str, Any] = {
 }
 
 _BATCH_INPUT_PROPERTIES: dict[str, Any] = {
+    "schema_version": {
+        "type": "integer",
+        "description": "Optional payload schema version (accepted for stage payloads).",
+    },
+    "source_job_id": {
+        "type": "string",
+        "description": "Source task reference (stage payloads / selection provenance).",
+    },
     "source_type": {"type": "string", "enum": ["batch_structures"]},
     "items": {
         "type": "array",
@@ -226,6 +234,10 @@ _PES_INPUT_PROPERTIES: dict[str, Any] = {
 
 _SCAN_INPUT_PROPERTIES: dict[str, Any] = {
     **_CONFSEARCH_INPUT_PROPERTIES,
+    "xyz_text": {
+        "type": "string",
+        "description": "Top-level XYZ text read by the scan atom-selection validator.",
+    },
     "scan_coordinates": {
         "type": "array",
         "items": _COORDINATE_OBJECT,
@@ -532,6 +544,13 @@ def _frozen_payload_block(
                     "type": "object",
                     "description": description,
                 },
+                "request": {
+                    "type": "object",
+                    "description": (
+                        "Generic request alias accepted by the frozen-payload entries "
+                        "(prefer the specific *_request key)."
+                    ),
+                },
                 "input": {
                     "type": "string",
                     "description": "Inline structure input (when the payload omits it).",
@@ -575,6 +594,140 @@ def _frozen_payload_block(
     }
 
 
+def _basic_workflow_block(
+    workflow: str,
+    schema_id: str,
+    description: str,
+    constraints: tuple[str, ...],
+) -> dict[str, Any]:
+    """Project one simple-workflow contract (chemistry envelope + levels)."""
+    contract = WORKFLOW_CONTRACTS[workflow]
+    level_id = _level_ids(schema_id)
+    return {
+        "workflow": workflow,
+        "coverage": "partial",
+        "partial_scope": (
+            f"input envelope and the '{level_id[0] if level_id else schema_id}' level keys "
+            "are published; level values are type-checked only"
+        ),
+        "gaps": [
+            "nested level value semantics stay with the CLI/consumer; the submit "
+            "contract validates keys, enums and container types",
+        ],
+        "description": description,
+        "input": {
+            "required_any": list(contract.required_input_any),
+            "properties": {
+                **_CONFSEARCH_INPUT_PROPERTIES,
+                "xyz_text": {
+                    "type": "string",
+                    "description": "Top-level XYZ text (v1 accepts it alongside source).",
+                },
+            },
+            "additional_properties": False,
+        },
+        "method": {
+            "properties": {
+                "levels": {
+                    "type": "object",
+                    "description": (
+                        f"Level map: {level_id}; per-level keys are the schema fields."
+                        if level_id
+                        else "Level map keyed by schema level id."
+                    ),
+                },
+                "schema_id": {"type": "string"},
+                "profile_id": {
+                    "type": "string",
+                    "description": (
+                        "Edit-projection metadata: a profile is expanded on edit, "
+                        "NOT on the initial submit; execution reads levels."
+                    ),
+                },
+                "profile": {
+                    "type": "string",
+                    "description": "Alias of profile_id (edit projection only).",
+                },
+                **(
+                    {
+                        "method": {
+                            "type": "string",
+                            "description": (
+                                "Direct method name consumed by the frozen attempt "
+                                "envelope (attempt_freeze); prefer levels.functional."
+                            ),
+                        }
+                    }
+                    if workflow in ("singlepoint", "optimize", "frequency")
+                    else {}
+                ),
+            },
+            "levels": _level_table(workflow),
+            "additional_properties": False,
+        },
+        "resources": {"properties": _RESOURCE_PROPERTIES},
+        "examples": [
+            {
+                "workflow": workflow,
+                # A bare multi-line XYZ in input.input would pass the validator and
+                # then be treated as a --input *path* by the runner (astra round-4
+                # review: the example itself must be an executable submission).
+                "input": {
+                    "source_type": "xyz_text",
+                    "xyz_text": (
+                        "3\n\nO 0 0 0\nH 0.96 0 0\nH -0.24 0.93 0\n"
+                    ),
+                },
+                "method": (
+                    {"levels": {level_id[0]: _example_level(schema_id)}}
+                    if level_id and workflow != "tsmode"
+                    else {}
+                ),
+                "resources": {"nproc": 4, "mem": "8GB"},
+            }
+        ],
+        "constraints": list(constraints),
+        "status_vocabulary": _STATUS_VOCABULARY,
+    }
+
+
+def _level_ids(schema_id: str) -> list[str]:
+    from acp.catalog import METHOD_SCHEMAS
+
+    schema = METHOD_SCHEMAS.get(schema_id) or {}
+    return [
+        str(level.get("level_id"))
+        for level in schema.get("method_levels", [])
+        if level.get("level_id")
+    ]
+
+
+def _example_level(schema_id: str) -> dict[str, Any]:
+    kind = {
+        "dft_singlepoint": {"functional": "wB97X-D4", "basis": "def2-TZVP"},
+        "dft_optimize": {"functional": "r2SCAN-3c"},
+        "dft_frequency": {"functional": "B97-3c"},
+        "xtb_optimize": {"gfn": 2, "opt_level": "normal"},
+        "irc": {"maxpoints": 40},
+    }.get(schema_id, {})
+    return dict(kind)
+
+
+_IRC_CONSTRAINTS = (
+    "the TS source is a formal task-result product; a bare coordinate file is not a TS",
+    "runner requires the verified ts_source provenance (irc_ts_source_v1)",
+    "directions are forward, reverse or both; a single exhausted direction is not "
+    "a confirmed connection",
+)
+
+_TSMODE_CONSTRAINTS = (
+    "source_job_id must reference a task with a discoverable frequency source",
+    "source_mode_index is the raw mode index from the source bundle (not a display rank)",
+    "allow_unverified_mapping must not be used to bypass a source-mapping problem",
+    "the runner consumes no method keys for tsmode; pass null/absent method",
+)
+
+
 _PES2TS_LOCAL_ONLY = (
     "local-only entry: never dispatched to a remote node",
     "the request payload is frozen upstream; ACP never fills scientific defaults",
@@ -598,6 +751,152 @@ def describe_workflow(workflow: str) -> dict[str, Any]:
         block = _batch_block()
     elif canonical == "PESsearch":
         block = _pes_block()
+    elif canonical == "singlepoint":
+        block = _basic_workflow_block(
+            "singlepoint",
+            "dft_singlepoint",
+            "Fixed-geometry electronic energy (no relaxation, no thermochemistry).",
+            (
+                "one supplied geometry; an electronic energy is not a free energy",
+                "composite methods carry their own basis — do not add another basis field",
+            ),
+        )
+    elif canonical == "optimize":
+        block = _basic_workflow_block(
+            "optimize",
+            "dft_optimize",
+            "Plain geometry optimization (constraints follow the current contract).",
+            (
+                "convergence does not prove a local or global minimum; use frequency "
+                "to verify",
+                "TS guesses from published PES/scan candidates belong to BatchOptimize, "
+                "not this entry",
+            ),
+        )
+    elif canonical == "frequency":
+        block = _basic_workflow_block(
+            "frequency",
+            "dft_frequency",
+            "Vibrational frequencies on a given geometry (not an optimization entry).",
+            (
+                "one imaginary frequency alone does not prove a TS; check the mode and endpoints",
+                "thermochemistry only when actually produced by the run",
+            ),
+        )
+    elif canonical == "xtb_optimize":
+        block = _basic_workflow_block(
+            "xtb_optimize",
+            "xtb_optimize",
+            "GFN-xTB fast geometry optimization (screening/pre-optimization level).",
+            (
+                "xTB results never substitute for an authorized DFT-level result",
+                "native constraints and physical single points belong to XtbConstrainedOpt",
+            ),
+        )
+    elif canonical == "irc":
+        block = _basic_workflow_block(
+            "irc",
+            "irc",
+            "IRC from a TS candidate with explicit provenance.",
+            _IRC_CONSTRAINTS,
+        )
+        block["examples"] = [
+            {
+                "workflow": "irc",
+                "input": {
+                    "source_job_id": "20260101_001_BatchOptimize",
+                    "source_product_id": "ts_candidate",
+                    "ts_source": {"schema": "irc_ts_source_v1"},
+                    "directions": ["forward", "reverse"],
+                },
+                "method": {"maxpoints": 40},
+                "resources": {"nproc": 4, "mem": "8GB"},
+            }
+        ]
+        block["input"]["properties"] = {
+            **_CONFSEARCH_INPUT_PROPERTIES,
+            "source_job_id": {
+                "type": "string",
+                "description": "Task whose TS product starts the IRC.",
+            },
+            "source_product_id": {"type": "string", "description": "Registered TS product id."},
+            "source_id": {
+                "type": "string",
+                "description": "Workbench selection reference (job_<id>:RESULT/...).",
+            },
+            "ts_source": {
+                "type": "object",
+                "description": "Resolved provenance (irc_ts_source_v1).",
+            },
+            "ts_provenance": {"type": "object", "description": "CLI --ts-provenance-json carrier."},
+            "input_role": {"type": "string", "description": "transition_state | intermediate."},
+            "directions": {
+                "type": "array",
+                "items": {"type": "string", "enum": ["forward", "reverse", "both"]},
+            },
+        }
+        block["method"]["properties"] = {
+            "levels": {"type": "object", "description": "Level map: irc (maxpoints/step)."},
+            "schema_id": {"type": "string"},
+            "method": {"type": "string"},
+            "functional": {"type": "string"},
+            "basis": {"type": "string"},
+            "maxpoints": {"type": "integer", "minimum": 1},
+            "step": {"type": "number"},
+        }
+    elif canonical == "tsmode":
+        block = _basic_workflow_block(
+            "tsmode",
+            "tsmode",
+            "Directed OptTS along a mode from an existing frequency source bundle.",
+            _TSMODE_CONSTRAINTS,
+        )
+        block["method"] = {
+            "properties": {},
+            "additional_properties": False,
+            "note": "tsmode accepts no method keys; pass null/absent method",
+        }
+        block["examples"] = [
+            {
+                "workflow": "tsmode",
+                "input": {
+                    "source_job_id": "20260101_002_frequency",
+                    "source_mode_index": 6,
+                },
+                "method": {},
+                "resources": {"nproc": 4, "mem": "8GB"},
+            }
+        ]
+        block["input"]["properties"] = {
+            "source_job_id": {
+                "type": "string",
+                "description": "Task with a discoverable frequency source.",
+            },
+            "entry_id": {"type": "string", "description": "Frequency entry id inside the source."},
+            "source_mode_index": {"type": "integer", "minimum": 0},
+            "allow_unverified_mapping": {"type": "boolean"},
+            "max_iterations": {"type": "integer", "minimum": 1},
+            "recalc_hess": {"type": "boolean"},
+            "trust_radius": {"type": "number"},
+            "retry_limit": {"type": "integer", "minimum": 0},
+            "final_frequency": {"type": "boolean"},
+            "level_overrides": {
+                "type": "object",
+                "description": "solvent/solvent_model/scf overrides.",
+            },
+            "bundle": {
+                "type": "object",
+                "description": "Materialized tsmode bundle (API-resolved).",
+            },
+            "source_type": {
+                "type": "string",
+                "description": "Rewritten to tsmode_bundle by the API prepare step.",
+            },
+            "input": {
+                "type": "string",
+                "description": "Inline structure (when the bundle is API-resolved).",
+            },
+        }
     elif canonical == "scan":
         block = _scan_block()
     elif canonical == "XtbPathSearch":

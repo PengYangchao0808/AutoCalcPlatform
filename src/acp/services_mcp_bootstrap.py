@@ -159,13 +159,14 @@ class _ControllerCapabilities:
     def __init__(self, client: ControllerClient) -> None:
         self._client = client
 
-    def capabilities(self, *, workflow: str | None = None) -> dict[str, Any]:
+    def capabilities(
+        self, *, workflow: str | None = None, detail: str | None = None
+    ) -> dict[str, Any]:
         try:
-            snapshot = (
-                self._client.capabilities()
-                if workflow is None
-                else self._client.capabilities(workflow=workflow)
-            )
+            if workflow is None and detail is None:
+                snapshot = self._client.capabilities()
+            else:
+                snapshot = self._client.capabilities(workflow=workflow, detail=detail)
         except ControllerClientError as exc:
             raise _tool_error("capabilities", exc) from None
         data = dict(snapshot.raw)

@@ -156,6 +156,109 @@ _PESSEARCH_STRATEGIES: frozenset[str] = frozenset(
     {"guided_scan", "reverse_peb", "direct_ts"}
 )
 
+#: The three simple ORCA workflows share one chemistry envelope and one method
+#: shape: ``levels`` is consumed by ``method_levels_to_cli_flags(workflow=...)``,
+#: and per-level ``electronic_state`` modules are read by the scheduler's
+#: ``electronic_state_from_method``.
+#: Reviewed schema-id aliases: a workflow may accept more than one schema id
+#: only when the alias is the *same catalog schema object* (``catalog.py``
+#: registers ``pes_bond_scan`` as an alias of ``pes_scan`` for historical
+#: frontend/task records).  A diverging schema must never be added here —
+#: ``test_schema_aliases_are_the_same_catalog_object`` pins that.
+_SCHEMA_ALIASES: dict[str, frozenset[str]] = {
+    "PESsearch": frozenset({"pes_scan", "pes_bond_scan"}),
+}
+
+
+_SIMPLE_INPUT_KEYS: frozenset[str] = frozenset(
+    {
+        "input_artifact",
+        "source",
+        "input",
+        "smiles",
+        "source_type",
+        "charge",
+        "multiplicity",
+        "source_ref",
+        "asset_id",
+        # v1 API accepts a top-level xyz_text (inp.get("source") or inp.get("xyz_text")
+        # in v1_routes) alongside the structured source envelope.
+        "xyz_text",
+    }
+)
+#: profile_id/profile select the schema profile whose levels the edit
+#: projection expands (scheduler edit_parameters.method_projection_for_edit).
+_SIMPLE_METHOD_KEYS: frozenset[str] = frozenset(
+    {
+        "levels",
+        "schema_id",
+        # edit-projection metadata (profile expansion happens on edit, not on
+        # the initial submit; execution reads levels)
+        "profile_id",
+        "profile",
+        # consumed by the frozen attempt envelope (attempt_freeze reads
+        # method.method as the direct method name)
+        "method",
+    }
+)
+
+#: xtb_optimize has its own consumption path (``levels.xtb_opt``:
+#: gfn/opt_level/max_steps/solvent/solvent_model — runner.py:1693), not the ORCA
+#: simple field set.
+_XTB_OPTIMIZE_METHOD_KEYS: frozenset[str] = frozenset(
+    {"levels", "schema_id", "profile_id", "profile"}
+)
+
+#: IRC reads its source reference through ``_resolve_irc_source_reference``
+#: (source_job_id/source_product_id/source_id/source_ref) and requires the
+#: verified ``ts_source`` provenance (runner).  The public source reference, the
+#: internal ``ts_source`` and the CLI ``--ts-provenance-json`` carrier are
+#: distinct surfaces — they are accepted but never documented as one writable
+#: table (astra round-4 review).
+_IRC_INPUT_KEYS: frozenset[str] = frozenset(
+    {
+        "source_job_id",
+        "source_product_id",
+        "source_id",
+        "source_ref",
+        "ts_source",
+        "ts_provenance",
+        "input",
+        "input_role",
+        "directions",
+        "charge",
+        "multiplicity",
+        "source_type",
+        "source",
+        "smiles",
+        "input_artifact",
+    }
+)
+_IRC_METHOD_KEYS: frozenset[str] = frozenset(
+    {"levels", "schema_id", "method", "functional", "basis", "maxpoints", "step"}
+)
+
+#: tsmode consumes a frequency source bundle resolved by
+#: ``_prepare_tsmode_input`` (source_job_id + entry_id/source_mode_index), plus
+#: optimization knobs read straight from input; the runner reads no method keys.
+_TSMODE_INPUT_KEYS: frozenset[str] = frozenset(
+    {
+        "source_job_id",
+        "entry_id",
+        "source_mode_index",
+        "allow_unverified_mapping",
+        "max_iterations",
+        "recalc_hess",
+        "trust_radius",
+        "retry_limit",
+        "final_frequency",
+        "level_overrides",
+        "bundle",
+        "input",
+        "source_type",
+    }
+)
+
 #: scan — the simple-workflow relaxed scan.  Coordinates may sit in method or
 #: input (``scan_method_flags`` reads both); ``levels`` follows the dft_scan
 #: schema (level id ``scan``).
@@ -426,6 +529,46 @@ WORKFLOW_CONTRACTS: dict[str, WorkflowContract] = {
         ),
         required_input_any=("constrained_opt_request",),
     ),
+    "singlepoint": WorkflowContract(
+        method_keys=_SIMPLE_METHOD_KEYS,
+        input_keys=_SIMPLE_INPUT_KEYS,
+        required_input_any=("input", "smiles", "source", "input_artifact", "xyz_text"),
+        levels=_level_fields("dft_singlepoint"),
+    ),
+    "optimize": WorkflowContract(
+        method_keys=_SIMPLE_METHOD_KEYS,
+        input_keys=_SIMPLE_INPUT_KEYS,
+        required_input_any=("input", "smiles", "source", "input_artifact", "xyz_text"),
+        levels=_level_fields("dft_optimize"),
+    ),
+    "frequency": WorkflowContract(
+        method_keys=_SIMPLE_METHOD_KEYS,
+        input_keys=_SIMPLE_INPUT_KEYS,
+        required_input_any=("input", "smiles", "source", "input_artifact", "xyz_text"),
+        levels=_level_fields("dft_frequency"),
+    ),
+    "xtb_optimize": WorkflowContract(
+        method_keys=_XTB_OPTIMIZE_METHOD_KEYS,
+        input_keys=_SIMPLE_INPUT_KEYS,
+        required_input_any=("input", "smiles", "source", "input_artifact", "xyz_text"),
+        levels=_level_fields("xtb_optimize"),
+    ),
+    "irc": WorkflowContract(
+        method_keys=_IRC_METHOD_KEYS,
+        input_keys=_IRC_INPUT_KEYS,
+        # a bare structure file is not an IRC input: the two real entries are
+        # source_job_id+source_product_id and source_ref.source_id (see
+        # _resolve_irc_source_reference); ts_source/input_role are companions,
+        # never sufficient on their own
+        required_input_any=("source_job_id", "source_ref", "source_id"),
+        levels=_level_fields("irc"),
+    ),
+    "tsmode": WorkflowContract(
+        method_keys=frozenset(),
+        input_keys=_TSMODE_INPUT_KEYS,
+        # bundle is the API-resolved materialized form, never a public entry
+        required_input_any=("source_job_id",),
+    ),
     "scan": WorkflowContract(
         method_keys=_SCAN_METHOD_KEYS,
         input_keys=frozenset(
@@ -443,9 +586,11 @@ WORKFLOW_CONTRACTS: dict[str, WorkflowContract] = {
                 # coordinates may also ride in input (scan_method_flags)
                 "scan_coordinates",
                 "coordinate",
+                # the scan validator reads a top-level xyz_text for atom checks
+                "xyz_text",
             }
         ),
-        required_input_any=("input", "smiles", "source", "input_artifact"),
+        required_input_any=("input", "smiles", "source", "input_artifact", "xyz_text"),
         levels={
             **_level_fields("dft_scan"),
             # Consumers beyond the UI schema: the edit-recalculate path reads
@@ -468,6 +613,47 @@ def _as_mapping(value: Any, field_name: str) -> Mapping[str, Any]:
     return value
 
 
+def _allowed_schemas(workflow: str) -> frozenset[str]:
+    """Schema ids this workflow may carry (default + reviewed aliases)."""
+    from acp.catalog import get_workflow_by_id
+
+    default_schema = str(
+        (get_workflow_by_id(workflow) or {}).get("method_schema_id") or ""
+    )
+    if not default_schema:
+        return frozenset()
+    return frozenset({default_schema}) | _SCHEMA_ALIASES.get(workflow, frozenset())
+
+
+def _levels_for_method(
+    workflow: str, method: Mapping[str, Any], contract: WorkflowContract
+) -> Mapping[str, frozenset[str]]:
+    """Pick the level table for ``method.levels``.
+
+    ``method.schema_id`` must match the workflow's catalog schema or a reviewed
+    same-object alias (``_allowed_schemas``); cross-schema payloads are refused
+    before this point.  The schema table supplies the level ids and the
+    contract adds its documented compatibility mirrors (e.g. scan's
+    ``scan_coordinate_atoms``).
+    """
+    schema_id = method.get("schema_id")
+    if isinstance(schema_id, str) and schema_id:
+        from acp.catalog import METHOD_SCHEMAS
+
+        if schema_id in METHOD_SCHEMAS:
+            try:
+                schema_levels = _level_fields(schema_id)
+            except (KeyError, ValueError):
+                return contract.levels
+            # Contract mirrors (e.g. the 1-based scan_coordinate_atoms that the
+            # edit path consumes) stay additive on top of the schema table.
+            merged = dict(schema_levels)
+            for level_id, fields in contract.levels.items():
+                merged[level_id] = merged.get(level_id, frozenset()) | fields
+            return merged
+    return contract.levels
+
+
 def _validate_method(workflow: str, method: Mapping[str, Any], contract: WorkflowContract) -> None:
     unknown = sorted(str(key) for key in method if str(key) not in contract.method_keys)
     if unknown:
@@ -477,6 +663,20 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
             rule="unknown_field",
             allowed=tuple(sorted(contract.method_keys)),
         )
+    # The schema/workflow consistency is independent of the levels container:
+    # a wrong schema_id must be refused even when levels is omitted.
+    schema_id = method.get("schema_id")
+    if isinstance(schema_id, str) and schema_id:
+        allowed_schemas = _allowed_schemas(workflow)
+        if allowed_schemas and schema_id not in allowed_schemas:
+            raise SubmissionContractError(
+                f"{workflow} method.schema_id must be one of "
+                f"{sorted(allowed_schemas)} (got {schema_id!r}); cross-schema "
+                "method payloads would be accepted but ignored by the runner",
+                field_name="method.schema_id",
+                rule="unsupported_combination",
+                allowed=tuple(sorted(allowed_schemas)),
+            )
     for key, allowed in contract.method_enums.items():
         if key not in method or method[key] is None or method[key] == "":
             continue
@@ -493,6 +693,7 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
             _as_mapping(method[container], f"method.{container}")
     if "levels" in method and method["levels"] is not None:
         levels = _as_mapping(method["levels"], "method.levels")
+        allowed_levels = _levels_for_method(workflow, method, contract)
         for level_id, level_value in levels.items():
             if level_id in _LEVEL_SCALARS:
                 if isinstance(level_value, bool) or not isinstance(level_value, (int, float)):
@@ -502,7 +703,6 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
                         rule="invalid_type",
                     )
                 continue
-            allowed_levels = contract.levels
             if level_id not in allowed_levels:
                 raise SubmissionContractError(
                     f"{workflow} method.levels has an undeclared level {level_id!r}",

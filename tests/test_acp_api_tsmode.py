@@ -255,7 +255,10 @@ class TestTsmodeSubmit:
         )
         assert resp.status_code == 422
         detail = resp.json()["detail"]
-        assert detail["error"] == "frequency_source_incomplete"
+        # the shared submission contract refuses the missing source reference
+        # before the prepare step runs
+        assert detail["code"] == "input_invalid"
+        assert detail["params"]["rule"] == "missing_input"
 
     def test_unknown_source_job_404(
         self, client: TestClient, tmp_path: Path

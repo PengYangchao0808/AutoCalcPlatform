@@ -129,3 +129,21 @@
 
 `A（有界发现） → B（契约覆盖 + 预检一致性） → C1/C2（几何提示与证据状态，可小批并行） → D（校准后启用） → E（贯穿验收）`
 ——依据：先让已有契约真正可读（A），再消除"猜形状"的动机（B），最后才是需要校准的科学提示（C/D）。
+
+## 7. 实施状态（2026-10-30 晚，同一变更集；第二轮评审后修订）
+
+第一轮 external 评审（astra，consult 模式）判定"需先修"，指出 5 组 P1。修复后状态：
+
+| 批次 | 状态 | 交付/证据 |
+|---|---|---|
+| A 有界发现 | **已实现（含最终面预算）** | 三作用域；HTTP summary 7,229 B；**MCP 最终面预算** `SUMMARY_BUDGET_BYTES=8192`（超预算显式 `omitted` + `continuation`，不截断 JSON）；`CapabilityPort` 协议补 `detail`；`capability_index` 保留四态语义 |
+| B 契约覆盖 | **已实现（消费者对齐）** | 六工作流契约；`xyz_text` 在契约与 **runner 真实消费**双侧补齐（`_extract_input_source`）；`profile_id/profile` 标注为编辑投影元数据；`method.schema_id` 必须等于 workflow 的契约 schema（跨 schema 组合 `unsupported_combination` 拒绝）；irc 必需入口 = `source_job_id`/`source_ref`；tsmode 必需 `source_job_id`（bundle 为 API 内部形态）；**所有公开 examples 由守护测试验证过自身 validator**；describe properties 与契约 input_keys 对账测试（BatchOptimize/XtbPathSearch/scan/tsmode 漂移已修） |
+| B2 预检一致性 | **已实现（边界修正）** | 先经 `_require_job_scope_access` 授权（跨项目同 404 不泄漏）；远端来源跳过判定（不为冷缓存误拒）；本地 sources 全缺 Hessian → `frequency_hessian_missing`；异常收窄为 `(OSError, ValueError, TypeError)` |
+| C1 几何提示 | **已实现（不另建坐标权威）** | 只消费显式 dict 形态的 `kind` 事实；CLI 字符串形态不解析（3 原子角度不再被误报为距离）；提示阈值仍为 `calibrated:false` 的版本化策略参数 |
+| C2 证据状态 | **已实现（按角色投影）** | `verification` 按候选 role 投影（TS 含 IRC/单虚频；INT 不含 TS 义务）；状态 `not_evaluated`（未评估，不断言证据缺失）；绑定来源 attempt 与 review revision；每项带 guide |
+| B3 指南对账 | 已实现 | `bond_stretch` 平台限制 vs 科学建议分离；拼接残句已修 |
+| 旧形状兼容 | 已实现 | `_normalize_legacy_simple_method`（create_job 与 preflight 共用，发生在 plan digest 之前）：`method.method`→level functional、`method.charge/multiplicity`→input；旧形状回归测试 + 真实 JobSpec 断言 |
+| D 连续性指标 | 后置（未实现） | 先冻结测量定义再校准阈值 |
+| E 归因验收 | 待真实会话复验 | 冻结条件重跑 Cope 任务并分档比较；本次不做归因结论 |
+
+本批不含：B4 跨工作流衔接的显式操作链（依赖未交付的选点/发布链）；D 批次。

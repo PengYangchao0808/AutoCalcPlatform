@@ -24,6 +24,9 @@ _PREFLIGHT_KEYS = {
     "schema_version",
     "feasible",
     "reasons",
+    # C1 (round-4): additive advisory list; an empty list is the default and
+    # old clients ignore the extra key.
+    "advisories",
     "plan_digest",
     "plan_summary",
     "estimate",
@@ -86,6 +89,7 @@ def test_preflight_v1_response_shape_is_unchanged(client: TestClient) -> None:
     assert set(body) == _PREFLIGHT_KEYS
     assert isinstance(body["feasible"], bool)
     assert isinstance(body["reasons"], list)
+    assert isinstance(body["advisories"], list)
     assert body["plan_digest"] is None or isinstance(body["plan_digest"], str)
     assert body["admission"] is None
     assert body["would_create_task"] is False
