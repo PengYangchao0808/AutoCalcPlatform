@@ -89,3 +89,13 @@ def test_uncovered_workflow_is_marked_not_provided(client: TestClient) -> None:
     block = payload["workflow_contract"]
     assert block["coverage"] == "not_provided"
     assert "not published" in block["reason"]
+
+
+def test_capabilities_publish_a_workflow_contract_index(client: TestClient) -> None:
+    """Round 3: one read answers which workflows publish a contract."""
+    payload = client.get("/api/capabilities").json()
+    index = payload.get("workflow_contracts")
+    assert isinstance(index, dict) and len(index) == 15
+    assert index["PESsearch"] == "partial"
+    assert index["BatchOptimize"] == "partial"
+    assert index["irc"] == "not_provided"

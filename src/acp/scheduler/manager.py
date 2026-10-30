@@ -6195,7 +6195,7 @@ class JobManager:
                 result_payload = dict(record.result or {})
             else:
                 status = JobStatus.FAILED
-                error = error or f"workflow exited with code {exit_code}"
+                error = error or self._terminal_error_from_logs(record, exit_code)
             if status.is_terminal:
                 # Explicit False scopes the reconcile side-effect retry to
                 # jobs whose terminal transition went through this path —
@@ -6971,6 +6971,32 @@ class JobManager:
             except Exception:
                 logger.exception("Reconcile loop iteration failed")
         logger.info("Reconcile loop stopped")
+
+    def _terminal_error_from_logs(self, record: JobRecord, exit_code: int) -> str:
+        """Return a failure reason from the worker log tail (round 3).
+
+        The bare "workflow exited with code N" forced agents to read
+        ``WORK/00_RUNTIME/stdout.log`` on disk.  The static/runner-level reason
+        (a ValueError line, a traceback tail, or the last non-empty stderr line)
+        is already there — surface it in ``status.error`` instead.
+        """
+        parts: list[str] = []
+        for name in ("stderr.log", "stdout.log"):
+            try:
+                path = runtime_file(Path(record.work_dir), name)
+                if not path.is_file():
+                    continue
+                tail = path.read_text(encoding="utf-8", errors="replace").splitlines()[-40:]
+                interesting = [line.strip() for line in tail if line.strip()]
+                if interesting:
+                    parts.append(interesting[-1][:400])
+                    break
+            except OSError:
+                continue
+        reason = "; ".join(parts) if parts else ""
+        if reason:
+            return f"workflow exited with code {exit_code}: {reason}"
+        return f"workflow exited with code {exit_code}"
 
     def _collect_result(self, record: JobRecord) -> dict[str, Any]:
         state_path = find_workflow_state(Path(record.work_dir))

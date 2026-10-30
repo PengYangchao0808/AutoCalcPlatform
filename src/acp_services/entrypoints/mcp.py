@@ -300,6 +300,60 @@ class McpToolError(Exception):
 # ---------------------------------------------------------------------------
 
 
+#: Fields a summary row keeps (round 3: a 20-job listing returned 213 KB of
+#: inline xyz/spec/result payloads and was truncated by the client).
+_SUMMARY_JOB_FIELDS: tuple[str, ...] = (
+    "id",
+    "task_id",
+    "workflow",
+    "state",
+    "status",
+    "name",
+    "task_name",
+    "molecule_name",
+    "progress",
+    "current_stage",
+    "created_at",
+    "updated_at",
+    "attempt",
+    "directory_name",
+    "exit_code",
+    "error",
+)
+
+
+def _summarize_job_listing(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Project a Controller job listing onto compact summary rows."""
+    rows = payload.get("jobs")
+    if not isinstance(rows, (list, tuple)):
+        return dict(payload)
+    summarized = []
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        spec = row.get("spec") if isinstance(row.get("spec"), Mapping) else {}
+        flat: dict[str, Any] = {}
+        for key in _SUMMARY_JOB_FIELDS:
+            value = row.get(key)
+            if value is None and key in {"workflow", "name", "task_name", "molecule_name"}:
+                value = spec.get(key if key != "workflow" else "workflow")
+            if value is not None:
+                flat[key] = value
+        if "task_id" not in flat:
+            flat["task_id"] = row.get("id") or row.get("job_id")
+        work_dir = row.get("work_dir")
+        if isinstance(work_dir, str) and work_dir and "directory_name" not in flat:
+            flat["directory_name"] = work_dir.rstrip("/").rsplit("/", 1)[-1]
+        # Errors are capped: a summary is not a log reader.
+        if isinstance(flat.get("error"), str) and len(flat["error"]) > 300:
+            flat["error"] = flat["error"][:300] + "…"
+        summarized.append(flat)
+    out = {k: v for k, v in payload.items() if k != "jobs"}
+    out["jobs"] = summarized
+    out["fields"] = "summary"
+    return out
+
+
 #: Terminal job states for the cancel already-terminal marker (report
 #: vocabulary; the scheduler's own JobStatus stays the authority).
 _TERMINAL_STATES: frozenset[str] = frozenset(
@@ -1151,6 +1205,15 @@ _LIST_JOBS_SCHEMA: dict[str, Any] = {
             "maximum": 200,
             "default": 50,
             "description": "Page size (server clamps to its own bound).",
+        },
+        "fields": {
+            "type": "string",
+            "enum": ["summary", "full"],
+            "default": "summary",
+            "description": (
+                "summary (default) keeps task_id/workflow/state/name/progress/"
+                "timestamps only; full passes the whole listing through."
+            ),
         },
     },
     "additionalProperties": False,
@@ -3155,12 +3218,21 @@ class McpServer:
                 "limit must be an integer",
                 params={"field": "limit", "rule": "invalid_type"},
             ) from exc
+        fields = str(arguments.get("fields") or "summary").strip().lower()
+        if fields not in {"summary", "full"}:
+            raise McpToolError(
+                mo.ErrorCode.INPUT_INVALID,
+                "fields must be 'summary' or 'full'",
+                params={"field": "fields", "rule": "invalid_enum", "allowed": ["summary", "full"]},
+            )
         payload = self._backends.status.list_tasks(
             status=str(status).strip() if status else None,
             limit=limit,
             workspace_id=context.workspace_id,
         )
         data = dict(payload) if isinstance(payload, Mapping) else {"jobs": payload}
+        if fields == "summary":
+            data = _summarize_job_listing(data)
         data.setdefault("query_tool", McpTool.STATUS)
         return mo.MachineResult(
             operation=McpTool.LIST_JOBS,

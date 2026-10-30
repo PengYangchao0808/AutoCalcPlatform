@@ -87,6 +87,9 @@ _TOOL_ERROR_CODES: dict[str, str] = {
     "resource_unavailable": mo.ErrorCode.RESOURCE_UNAVAILABLE,
     "resource_not_ready": mo.ErrorCode.RESOURCE_NOT_READY,
     "revision_conflict": mo.ErrorCode.REVISION_CONFLICT,
+    # P3 (round 3): "preflight fingerprint does not match the submitted plan"
+    # is a caller-side input error, never backend_failure.
+    "preflight_stale": mo.ErrorCode.INPUT_INVALID,
     "idempotency_conflict": mo.ErrorCode.REVISION_CONFLICT,
     "idempotency_in_progress": mo.ErrorCode.REVISION_CONFLICT,
     "admission_denied": mo.ErrorCode.ACCESS_DENIED,

@@ -62,3 +62,16 @@ def test_operation_status_keeps_artifact_ref() -> None:
         {"operation_id": "op_1", "artifact_ref": ref, "state": "ready"}
     )
     assert projection["artifact_ref"] == ref
+
+
+def test_directory_name_survives_redaction() -> None:
+    """Round 3: the absolute work_dir is redacted; the relative name must not be."""
+    projection = project_task_status(
+        {
+            "id": "j1",
+            "spec": {"workflow": "PESsearch"},
+            "state": "completed",
+            "work_dir": "/var/lib/acp/runs/uncategorized/mol_PESsearch__05",
+        }
+    )
+    assert projection["directory_name"] == "mol_PESsearch__05"

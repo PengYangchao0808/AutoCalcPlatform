@@ -150,6 +150,16 @@ def verified_release_facts(read_root: str | Path | None, attempt: int) -> dict[s
 
 
 
+def _directory_name(work_dir: Any) -> str | None:
+    """Return the task directory basename (a relative identifier, no host path)."""
+    if not isinstance(work_dir, str) or not work_dir.strip():
+        return None
+    cleaned = work_dir.strip().rstrip("/\\")
+    if not cleaned:
+        return None
+    return cleaned.replace("\\", "/").rsplit("/", 1)[-1] or None
+
+
 def project_task_status(
     payload: Mapping[str, Any] | None,
     *,
@@ -202,6 +212,11 @@ def project_task_status(
         "workflow": workflow,
         "project_id": row.get("project_id"),
         "work_dir": row.get("work_dir"),
+        # Round 3: the absolute work_dir is redacted on the wire, which left the
+        # agent unable to name the task directory at all.  The basename is a
+        # relative identifier (mol_<Workflow>__<n> or the submitted
+        # molecule_name/task_name) and survives the redaction net.
+        "directory_name": _directory_name(row.get("work_dir")),
     }
     for key in (
         "state_reason",

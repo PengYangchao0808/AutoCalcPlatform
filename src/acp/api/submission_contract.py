@@ -38,8 +38,8 @@ from typing import Any
 from acp.catalog import METHOD_SCHEMAS
 from acp.confsearch.contracts import (
     BACKENDS,
-    PROTOCOLS,
     PROFILES,
+    PROTOCOLS,
     REFINEMENT_POLICIES,
 )
 from acp.scheduler.jobs import (
@@ -572,6 +572,20 @@ def _validate_input(
     # ``batch_structures`` item lists are validated by the resolver downstream:
     # the legacy API accepts an empty list at create time (create-now-fail-later),
     # so the contract must not turn that into a 422.
+    #
+    # Round 3: the scheduler pins ``--layout-mode single_flat`` for every
+    # BatchOptimize dispatch (runner), so >1 inline item fails 30 s later
+    # inside the engine.  This is statically knowable — refuse it here.
+    if contract.batch_structures_only:
+        items = payload.get("items")
+        if isinstance(items, (list, tuple)) and len(items) > 1:
+            raise SubmissionContractError(
+                "BatchOptimize runs one structure per task (single_flat layout); "
+                f"got {len(items)} items — submit one task per structure",
+                field_name="input.items",
+                rule="layout_limit",
+                details={"limit": 1, "received": len(items)},
+            )
 
 
 def validate_workflow_submission(

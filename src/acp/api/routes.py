@@ -431,6 +431,32 @@ def _capabilities_payload(
             )
         payload["workflow_contract"] = describe_workflow(canonical)
 
+    # Round 3: one compact index so a discovery read answers "which workflows
+    # publish a contract" without probing 15 candidates one by one.
+    from acp.api.workflow_contracts import ACTIVE_WORKFLOWS as _ACTIVE_WF
+    from acp.api.workflow_contracts import describe_workflow as _describe
+
+    payload["workflow_contracts"] = {
+        name: str(_describe(name).get("coverage") or "not_provided")
+        for name in _ACTIVE_WF
+    }
+
+    # Round 3 / U04: the Controller's admission-view capacity so an agent can
+    # choose nproc/mem from measured numbers instead of guessing.
+    from acp.api.capacity import build_capacity_projection
+
+    try:
+        payload["capacity"] = build_capacity_projection(
+            request.app.state.job_manager,
+            admission=getattr(request.app.state, "admission", None),
+        )
+    except Exception:  # noqa: BLE001 - discovery must survive a probe failure
+        payload["capacity"] = {
+            "schema": "acp2.capacity.view.v1",
+            "semantics": "unavailable",
+            "unknown": ["capacity"],
+        }
+
     if handshake.refusal is not None:
         # Typed, in-band refusal: the client still receives extensions[] so it
         # can read the supported version instead of guessing.
