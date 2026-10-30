@@ -481,6 +481,21 @@ def _capabilities_payload(
         for name in _ACTIVE_WF
     }
 
+    # Task-level routing: goal -> recommended chain (task.* guidance entries).
+    from acp.api.guidance_pack import guidance_index as _guidance_index
+
+    payload["task_instructions"] = [
+        {
+            "guide_id": card["guide_id"],
+            "title": card["title"],
+            "summary": card["summary"],
+            "coverage": card["coverage"],
+            "detail": {"tool": "acp_get_guidance", "arguments": {"guide_id": card["guide_id"]}},
+        }
+        for card in _guidance_index()["guides"]
+        if card["kind"] == "task"
+    ]
+
     # Round 3 / U04: the Controller's admission-view capacity so an agent can
     # choose nproc/mem from measured numbers instead of guessing.
     from acp.api.capacity import build_capacity_projection

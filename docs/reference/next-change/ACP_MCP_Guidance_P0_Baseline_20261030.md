@@ -71,6 +71,20 @@
 - 验收脚本：`validate_acp2_contracts.py`（P1 面期望改为 冻结八名 ∪ {acp_get_guidance}）。
 - 测试计数：8→9、18→19 全部改为随注册表派生或与 `MCP_TOOL_NAMES`/`TOOL_ALLOWLIST` 集合比较（tests/AGENTS 2026-10-30 约定：不永久钉死数量）。
 
+## 6a. 任务级 instruction（第 4 轮，2026-10-30 傍晚）
+
+per-workflow 指南回答了"每个工具怎么用"，但 agent 接到的是任务目标（"找 Cope 重排 TS"），缺"目标→链路"路由层，于是它去读源码拼配方。现新增 `kind="task"` 内容层（pack v1.3.0）：
+
+| guide_id | 目标 | coverage |
+|---|---|---|
+| `task.find_transition_state` | 扫描/路径 → 选初猜 → review 发布 → BatchOptimize(TS) → 频率判定 | first_batch |
+| `task.verify_reaction_path` | IRC 双向追踪 + 端点比对 | documented_partial |
+| `task.conformer_and_energy` | Confsearch → 候选 → 批量优化 → 可比能量 | first_batch |
+| `task.barrier_high_accuracy` | 端点/频率 → 默认级别单点 → 必要时 DLPNO-CCSD(T) | documented_partial |
+| `task.multireference_analysis` | CASSCF/NEVPT2 多参考单点（活性空间须用户/专家决定） | documented_partial |
+
+每份六段：when_to_use / chain / decisions / completion / stop / not_supported；只**引用** workflow 指南与契约，不复制参数权威；`capabilities.task_instructions` 给出索引与 `acp_get_guidance` 指针；通用 prompt 的发现协议改为四步（先查任务配方，再查契约、读指南）。多参考任务明确：活性空间/态选择缺失时向用户询问、不做机械猜测；CAS 未收敛保持 unknown。
+
 ## 6b. Agent 反馈第二轮（2026-10-30 下午）处置记录
 
 **已交付**（PR #44）：`acp_list_jobs`（U08 首片：bounded 只读任务列表，status 过滤+分页）；`acp_cancel` 对已终态作业显式返回 `already_terminal/terminal_state/cancelled=false`；指南 v1.2.0 新增 `topic.method_selection`（方法精度阶梯：GFN2-xTB 预筛 → r2SCAN-3c 几何 + wB97X-mV/D4 单点为默认档，DLPNO-CCSD(T) 仅 ~1 kcal/mol 级问题做单点、绝不作默认，优化/单点级别分开表达）与 `topic.artifact_locating`（描述符→prepare→read 正路、molecule_name/task_name 目录控制、持久工作区）。

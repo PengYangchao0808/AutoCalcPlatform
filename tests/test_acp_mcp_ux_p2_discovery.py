@@ -91,6 +91,21 @@ def test_uncovered_workflow_is_marked_not_provided(client: TestClient) -> None:
     assert "not published" in block["reason"]
 
 
+def test_capabilities_publish_task_instruction_routing(client: TestClient) -> None:
+    """Goal -> chain routing: task_instructions index in one read (round 4)."""
+    payload = client.get("/api/capabilities").json()
+    tasks = payload.get("task_instructions")
+    assert isinstance(tasks, list) and len(tasks) == 5
+    by_id = {entry["guide_id"]: entry for entry in tasks}
+    ts = by_id["task.find_transition_state"]
+    assert ts["coverage"] == "first_batch"
+    assert ts["detail"] == {
+        "tool": "acp_get_guidance",
+        "arguments": {"guide_id": "task.find_transition_state"},
+    }
+    assert "多参考" in by_id["task.multireference_analysis"]["title"]
+
+
 def test_capabilities_publish_a_workflow_contract_index(client: TestClient) -> None:
     """Round 3+: one read answers which workflows publish a contract, and how
     to fetch the detail or what to do when there is none (no source reading)."""

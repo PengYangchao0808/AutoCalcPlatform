@@ -57,8 +57,9 @@ GUIDE_FORMAT = "acp.guidance.v1"
 #: invalidation per-guide precise.  1.1.0: BatchOptimize role wire-syntax +
 #: PESsearch unit/bond-side vocabulary (DA validation round,
 #: reports/acp2_mcp_guidance_20261030).  1.2.0: method-selection ladder and
-#: artifact-locating topics (agent feedback round 2).
-PACK_VERSION = "1.2.0"
+#: artifact-locating topics (agent feedback round 2).  1.3.0: task-level
+#: instructions (goal->chain routing, not per-workflow manuals).
+PACK_VERSION = "1.3.0"
 
 #: Byte budgets (plan §4.2): UTF-8 bytes, not tokens.  A guide that would
 #: exceed a caller-supplied bound is returned with explicit omissions — never
@@ -129,11 +130,13 @@ _SHARED_EXECUTION = GuideEntry(
         "body": (
             "你通过 ACP MCP 协助用户完成受控的计算化学任务。使用当前会话实际开放的工具和服务端契约，"
             "不以本指南代替执行权限、科学验证或参数校验。\n"
-            "1. 发现协议（按此三步，不要靠读平台源码猜接口）：①acp_capabilities() 读 workflow_contracts "
-            "索引——每个工作流给出 coverage 与 {tool, arguments} 详情指针及未契约化时的 fallback；②"
-            "acp_capabilities(workflow=<id>) 读该工作流完整 input/method/resources schema、示例与 constraints；"
-            "③acp_get_guidance(guide_id) 读操作指南。区分 registered、当前可执行、参数覆盖完整与真实验收范围；"
-            "coverage=not_provided 时按 fallback 行动（用 CLI 路径或报告缺口），不读源码不猜字段。\n"
+            "1. 发现协议（按此四步，不要靠读平台源码猜接口）：⓪acp_capabilities() 的 task_instructions "
+            "索引按用户目标给出任务配方（如找过渡态、构象+能量、多参考分析）——命中则先读该 task instruction "
+            "作为链路地图；①workflow_contracts 索引给出每个工作流的 coverage、{tool, arguments} 详情指针与"
+            "未契约化时的 fallback；②acp_capabilities(workflow=<id>) 读完整 input/method/resources schema、"
+            "示例与 constraints；③acp_get_guidance(guide_id) 读工作流/专题指南。区分 registered、当前可执行、"
+            "参数覆盖完整与真实验收范围；coverage=not_provided 时按 fallback 行动（用 CLI 或报告缺口），"
+            "不读源码不猜字段。\n"
             "2. 优先复用已存在的结构、任务和工件。核对项目、来源 attempt、generation/digest 与电子态；"
             "保留原子顺序和映射。不要猜绝对路径、手填摘要或把展示序号当原子/帧身份。\n"
             "3. 从已有记录或授权读取科学选择；真正缺少且影响计算含义的信息集中询问。参数默认值必须来自契约；"
@@ -697,6 +700,185 @@ _TOPIC_ARTIFACT_LOCATING = GuideEntry(
     },
 )
 
+_TASK_FIND_TS = GuideEntry(
+    guide_id="task.find_transition_state",
+    kind="task",
+    title="任务：寻找反应过渡态",
+    version="1.0.0",
+    summary="从结构+反应假设到 TS 候选：扫描/路径 → 选初猜 → 发布 → BatchOptimize(TS) → 频率判定。",
+    coverage="first_batch",
+    sections={
+        "when_to_use": (
+            "适用：用户要找一个反应（分子内重排、双分子加成、σ 迁移等）的过渡态结构。\n"
+            "必需输入：①至少一侧结构（反应物或产物均可）；②反应假设/关键原子（哪些键断裂、哪些键形成）；"
+            "③方法/资源授权。缺少反应假设时先询问，不做猜测性位点识别（矩阵位点算法未接入）。"
+        ),
+        "chain": (
+            "链路 A（键长扫描，通用）：\n"
+            "1. PESsearch（mode=bond_length_scan）——多坐标同步扫描；产物侧拉伸已成键对、反应物侧压缩须为感知键；"
+            "协议见 workflow.PESsearch。\n"
+            "2. 读曲线概况+点覆盖；极大点邻域取候选，关注分支切换（连续段内取点），见 topic.selection_supplement。\n"
+            "3. 选点必须经 review 确认（当前唯一合法发布路径；agent 自动发布未开放）→ 确认后得到 candidate_id。\n"
+            "4. BatchOptimize（profile=opt_freq，item 显式 role:\"ts\"）——role 的 wire 语法见 workflow.BatchOptimize；"
+            "每任务一个结构（single_flat）。\n"
+            "5. 读逐 item 频率：恰一个显著虚频 + 模式对应成键/断键方向 → 见 topic.stationary_point_verification。\n"
+            "链路 B（上游冻结 payload 已存在时）：XtbPathSearch 路径帧 → 同第 3 步起。"
+        ),
+        "decisions": (
+            "决策点：①扫描坐标与初始键距（来源结构决定）；②TS/INT 角色（TS=尝试过渡态优化）；③profile 必须含频率；"
+            "④方法级别按 topic.method_selection 的阶梯，不无脑上高阶。"
+        ),
+        "completion": (
+            "完成定义：OptTS 收敛 + 恰一个虚频 + 模式方向一致 = TS 驻点 supported；"
+            "路径连接性未做 IRC 时保持 inconclusive（不写\"找到反应路径\"）；"
+            "Batch completed 不等于验证完成。"
+        ),
+        "stop": (
+            "停止条件：曲线无可信极大/全部候选失败/预算耗尽/候选人角色与目标不符 → 停止并报告（含缺项）；"
+            "不通过改角色、改输入或删模式来\"成功\"。"
+        ),
+        "not_supported": (
+            "当前不支持：矩阵反应位点自动识别（待接入，不冒充）；扫描自动发布（需 review 确认）；"
+            "irc 提交键未契约化（fallback 见 workflow_contracts 索引）。"
+        ),
+    },
+    topics=("topic.stationary_point_verification", "topic.method_selection", "topic.selection_supplement"),
+)
+
+_TASK_VERIFY_PATH = GuideEntry(
+    guide_id="task.verify_reaction_path",
+    kind="task",
+    title="任务：验证 TS 连接反应物与产物",
+    version="1.0.0",
+    summary="对已判定的 TS 候选做 IRC 双向追踪与端点比对，给出连接性强证据。",
+    coverage="documented_partial",
+    sections={
+        "when_to_use": (
+            "适用：已有一个判定为 TS 的候选（有频率/模式证据），需要验证它连接目标反应物与产物。\n"
+            "必需输入：TS 几何 + 频率/模式证据（provenance）+ 原子映射 + 方法与电子态。缺 TS provenance 不伪造。"
+        ),
+        "chain": (
+            "1. irc 工作流（input_role=transition_state，带 ts_provenance）：双方向追踪，见 workflow.irc。\n"
+            "2. 读各方向状态/终止原因/轨迹/端点；单方向失败不写成双向确认。\n"
+            "3. 端点结构 → BatchOptimize（INT 角色）做端点优化与频率确认（可选但推荐）。\n"
+            "4. 端点与目标反应物/产物的原子映射比对 → 判定 supported/refuted/inconclusive。"
+        ),
+        "decisions": (
+            "决策点：方向与步数上限（来自契约）；端点是否需要自由优化；是否接受\"端点接近但未优化\"的弱证据（要如实标注）。"
+        ),
+        "completion": (
+            "完成定义：双向都到达终点且端点与目标一致 = supported；单侧/端点不符 = refuted 或 inconclusive，保留轨迹。"
+        ),
+        "stop": (
+            "停止条件：TS provenance 缺失、映射不可靠、端点持续不收敛 → 停止并报告缺项；不重命名端点制造\"连接成功\"。"
+        ),
+        "not_supported": (
+            "当前限制：irc 的 MCP 提交键未契约化（workflow_contracts 索引 fallback：用 CLI 或报告缺口）；"
+            "端点分类与目标映射需用户给定反应假设。"
+        ),
+    },
+    topics=("topic.stationary_point_verification",),
+)
+
+_TASK_CONFORMER = GuideEntry(
+    guide_id="task.conformer_and_energy",
+    kind="task",
+    title="任务：构象搜索与批量能量比较",
+    version="1.0.0",
+    summary="Confsearch 生成/筛选 → 候选 → BatchOptimize 逐项优化/频率 → 可比能量比较。",
+    coverage="first_batch",
+    sections={
+        "when_to_use": (
+            "适用：给定分子（含立体化学/电荷/多重度），要获得构象集合并按能量排序或继续下游计算。\n"
+            "必需输入：结构（SMILES/XYZ/资产）、电子态、协议与筛选/精修策略、资源。"
+        ),
+        "chain": (
+            "1. Confsearch（协议 xtb-crest/xtb-md/censo-crest/xtbmd-censo；screen 允许零精修），见 workflow.Confsearch。\n"
+            "2. 读分阶段计数（产生/保留/精修选中/精修成功），不互换。\n"
+            "3. 选下游候选（稳定引用+多样性+预算）→ BatchOptimize（profile=opt_freq，item role:\"int\"）逐项优化与频率。\n"
+            "4. 能量比较：同一方法/基组/电子态/环境；电子能与热校正分开，不重复加校正（topic.method_energy_comparability）。"
+        ),
+        "decisions": (
+            "决策点：协议（纯 xTB 不宣称 DFT 精修）；精修策略；候选数与多样性；是否继续优化/频率。"
+        ),
+        "completion": (
+            "完成定义：逐候选来源/方法/能量类别可读；混合级别不直接排序；构象搜索完成不证明全局最低点或空间穷尽。"
+        ),
+        "stop": (
+            "停止条件：某阶段失败时区分已有可用集合与未完成部分；只在授权内恢复/补算，不伪称全套协议完成。"
+        ),
+        "not_supported": "当前限制：无自动去重的 RMSD 分析不得捏造；NMR 专属参数不得用于 Confsearch。",
+    },
+    topics=("topic.method_energy_comparability", "topic.partial_failure_recovery"),
+)
+
+_TASK_BARRIER = GuideEntry(
+    guide_id="task.barrier_high_accuracy",
+    kind="task",
+    title="任务：反应能垒与高精度单点",
+    version="1.0.0",
+    summary="端点几何/频率确认 → 默认级别单点 → 需要 ~1 kcal/mol 时 DLPNO-CCSD(T) 单点。",
+    coverage="documented_partial",
+    sections={
+        "when_to_use": (
+            "适用：已有反应物/产物/TS 几何（最好有频率确认），要给出可比较的反应能垒或热化学量。\n"
+            "必需输入：端点与 TS 几何及其电子态、方法授权、比较条件（化学计量/标准态/温度）。"
+        ),
+        "chain": (
+            "1. 端点优化与频率：r2SCAN-3c 几何优化 + 频率（优化收敛不证明最小值，频率确认；见 workflow.optimize/frequency）。\n"
+            "2. 默认单点：wB97X-mV 或 wB97X-D4 + def2-TZVP(D)（singlepoint；复合方法不填 basis，见 topic.method_selection）。\n"
+            "3. 仅当关键量需要 ~1 kcal/mol 级精度：DLPNO-CCSD(T) 单点（在 DFT 几何上；不做 CCSD(T) 优化）。\n"
+            "4. 能垒组合：TS−反应物（电子能）；需要热化学校正时按实际生成的相位校正规则明确引用，不重复加。"
+        ),
+        "decisions": (
+            "决策点：级别选择（默认 vs 高精度）；端点是否自由优化；ZPE/热校正是否纳入；标准态与温度。"
+        ),
+        "completion": (
+            "完成定义：端点/TS 的来源与级别可追溯；电子能与校正项分开报告；比较前核对化学计量/平衡关系。"
+        ),
+        "stop": "停止条件：端点未收敛/级别不可比/缺频率校正依据 → 停止并标注缺项，不硬拼能垒。",
+        "not_supported": "当前限制：DLPNO-CCSD(T) 优化、CBS 外推与自动标准态换算未在首版配方内。",
+    },
+    topics=("topic.method_selection", "topic.method_energy_comparability"),
+)
+
+_TASK_MULTIREF = GuideEntry(
+    guide_id="task.multireference_analysis",
+    kind="task",
+    title="任务：多参考分析（CASSCF / NEVPT2）",
+    version="1.0.0",
+    summary="近简并/双自由基场景的多参考单点：活性空间须用户/专家决定，CASSCF 与 NEVPT2 能量分开报。",
+    coverage="documented_partial",
+    sections={
+        "when_to_use": (
+            "适用：近简并电子态、双自由基/开壳层单重态、单参考 DFT 明显不可信、需要定性/定量多参考分析。\n"
+            "必需输入：结构 + 电子态（电荷/多重度）、活性空间（电子数/轨道数或初猜来源）、目标根/态平均设置、"
+            "是否 NEVPT2。**活性空间与态选择是科学决定，缺失时向用户询问，不做机械猜测。**"
+        ),
+        "chain": (
+            "1. casscf 工作流：给定几何的单点（不自动优化），见 workflow.casscf。\n"
+            "2. 读 CAS 收敛事实与请求产物：CASSCF 能量、目标态、若请求的 NEVPT2。\n"
+            "3. 与单参考结果对比时确认活性空间/态定义一致；异常根变化先报告，不自动改活性空间凑数。"
+        ),
+        "decisions": (
+            "决策点：活性空间大小与轨道选择（用户/专家）；态平均与根跟踪；是否/哪种 NEVPT2；与 DFT 结果如何并列。"
+        ),
+        "completion": (
+            "完成定义：CAS 收敛 + 请求产物完整 + 能量类型明确（CASSCF vs NEVPT2 分开）；"
+            "缺收敛事实保持 unknown；不做\"进程成功=收敛\"的推断。"
+        ),
+        "stop": (
+            "停止条件：活性空间不明、目标态不可比、CAS 未收敛 → 停止并报告缺项；"
+            "不自动扩大/缩小活性空间来获得\"更好数值\"。"
+        ),
+        "not_supported": (
+            "当前限制：自动活性空间选择/自动化多参考诊断未交付；casscf 的 MCP 提交键未契约化"
+            "（workflow_contracts 索引 fallback：用 CLI 或报告缺口）。"
+        ),
+    },
+    topics=("topic.method_selection", "topic.method_energy_comparability", "topic.stationary_point_verification"),
+)
+
 _TOPIC_NON_STANDARD = GuideEntry(
     guide_id="topic.non_standard_entries",
     kind="topic",
@@ -738,6 +920,11 @@ _ENTRIES: tuple[GuideEntry, ...] = (
     _TOPIC_SELECTION,
     _TOPIC_METHOD_SELECTION,
     _TOPIC_ARTIFACT_LOCATING,
+    _TASK_FIND_TS,
+    _TASK_VERIFY_PATH,
+    _TASK_CONFORMER,
+    _TASK_BARRIER,
+    _TASK_MULTIREF,
     _TOPIC_NON_STANDARD,
 )
 
