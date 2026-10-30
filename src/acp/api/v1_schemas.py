@@ -1713,7 +1713,10 @@ class InitialGuessStatus(BaseModel):
 
     source: dict[str, str] = Field(default_factory=dict)
     candidates: list[PesReviewCandidate] = Field(default_factory=list)
-    missing_verification: list[str] = Field(default_factory=list)
+    #: per-candidate, role-scoped obligations; status is ``not_evaluated`` until
+    #: the evidence authority evaluates the candidate (never a claim of missing
+    #: evidence, and an INT candidate never receives TS-only obligations)
+    verification: list[dict[str, Any]] = Field(default_factory=list)
     next_step: dict[str, Any] | None = None
     note: str = "publishing a candidate starts the chain; it is not a TS/INT verdict"
 

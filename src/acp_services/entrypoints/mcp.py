@@ -1637,11 +1637,62 @@ def _research_tool_specs() -> tuple[dict[str, Any], ...]:
 # ---------------------------------------------------------------------------
 
 
+#: Bounded discovery at the final MCP surface: the summary scope must fit a
+#: navigation package (measured on the compact serialization the structured
+#: content uses).  Blocks beyond the budget are dropped *explicitly* and a
+#: continuation pointer is returned — a JSON body is never truncated.
+SUMMARY_BUDGET_BYTES = 8192
+
+
+def _enforce_summary_budget(data: dict[str, Any]) -> dict[str, Any]:
+    """Keep the ``summary`` scope within the final-surface budget."""
+    if data.get("detail") != "summary":
+        return data
+
+    def _size(payload: Any) -> int:
+        return len(
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()
+        )
+
+    actual = _size(data)
+    if actual <= SUMMARY_BUDGET_BYTES:
+        data["budget"] = {
+            "limit_bytes": SUMMARY_BUDGET_BYTES,
+            "actual_bytes": actual,
+            "omitted": [],
+        }
+        return data
+    omitted: list[str] = []
+    for key in (
+        "capability_index",
+        "analysis_capabilities",
+        "research_tools",
+        "research_consumer_tools",
+        "identity_binding",
+        "capability_request",
+    ):
+        if key not in data:
+            continue
+        data.pop(key)
+        omitted.append(key)
+        if _size(data) <= SUMMARY_BUDGET_BYTES:
+            break
+    data["omitted"] = omitted
+    data["budget"] = {"limit_bytes": SUMMARY_BUDGET_BYTES, "actual_bytes": _size(data)}
+    data["continuation"] = {
+        "tool": "acp_capabilities",
+        "arguments": {"detail": "full"},
+        "note": "omitted blocks are available in the full scope",
+    }
+    return data
+
 @runtime_checkable
 class CapabilityPort(Protocol):
     """Capability discovery (read-only)."""
 
-    def capabilities(self, *, workflow: str | None = None) -> Mapping[str, Any]:
+    def capabilities(
+        self, *, workflow: str | None = None, detail: str | None = None
+    ) -> Mapping[str, Any]:
         """Return the current capability descriptor.
 
         ``workflow`` selects the optional per-workflow contract projection
@@ -2877,7 +2928,7 @@ class McpServer:
         return mo.MachineResult(
             operation=McpTool.CAPABILITIES,
             status="ok",
-            data=data,
+            data=_enforce_summary_budget(data),
             operation_identity=context.workspace_id,
         )
 

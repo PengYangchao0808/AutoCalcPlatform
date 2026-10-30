@@ -179,7 +179,17 @@ _SIMPLE_INPUT_KEYS: frozenset[str] = frozenset(
 #: profile_id/profile select the schema profile whose levels the edit
 #: projection expands (scheduler edit_parameters.method_projection_for_edit).
 _SIMPLE_METHOD_KEYS: frozenset[str] = frozenset(
-    {"levels", "schema_id", "profile_id", "profile"}
+    {
+        "levels",
+        "schema_id",
+        # edit-projection metadata (profile expansion happens on edit, not on
+        # the initial submit; execution reads levels)
+        "profile_id",
+        "profile",
+        # consumed by the frozen attempt envelope (attempt_freeze reads
+        # method.method as the direct method name)
+        "method",
+    }
 )
 
 #: xtb_optimize has its own consumption path (``levels.xtb_opt``:
@@ -536,15 +546,18 @@ WORKFLOW_CONTRACTS: dict[str, WorkflowContract] = {
     "irc": WorkflowContract(
         method_keys=_IRC_METHOD_KEYS,
         input_keys=_IRC_INPUT_KEYS,
-        # a bare structure file is not an IRC input: the verified provenance or
-        # a registered TS source is mandatory (runner rejects both otherwise)
-        required_input_any=("source_job_id", "source_id", "ts_source", "input_role"),
+        # a bare structure file is not an IRC input: the two real entries are
+        # source_job_id+source_product_id and source_ref.source_id (see
+        # _resolve_irc_source_reference); ts_source/input_role are companions,
+        # never sufficient on their own
+        required_input_any=("source_job_id", "source_ref"),
         levels=_level_fields("irc"),
     ),
     "tsmode": WorkflowContract(
         method_keys=frozenset(),
         input_keys=_TSMODE_INPUT_KEYS,
-        required_input_any=("source_job_id", "bundle"),
+        # bundle is the API-resolved materialized form, never a public entry
+        required_input_any=("source_job_id",),
     ),
     "scan": WorkflowContract(
         method_keys=_SCAN_METHOD_KEYS,
@@ -563,6 +576,8 @@ WORKFLOW_CONTRACTS: dict[str, WorkflowContract] = {
                 # coordinates may also ride in input (scan_method_flags)
                 "scan_coordinates",
                 "coordinate",
+                # the scan validator reads a top-level xyz_text for atom checks
+                "xyz_text",
             }
         ),
         required_input_any=("input", "smiles", "source", "input_artifact", "xyz_text"),
@@ -600,8 +615,20 @@ def _levels_for_method(
     """
     schema_id = method.get("schema_id")
     if isinstance(schema_id, str) and schema_id:
-        from acp.catalog import METHOD_SCHEMAS
+        from acp.catalog import METHOD_SCHEMAS, get_workflow_by_id
 
+        default_schema = str(
+            (get_workflow_by_id(workflow) or {}).get("method_schema_id") or ""
+        )
+        if default_schema and schema_id != default_schema:
+            raise SubmissionContractError(
+                f"{workflow} method.schema_id must be {default_schema!r} "
+                f"(got {schema_id!r}); cross-schema method payloads would be "
+                "accepted but ignored by the runner",
+                field_name="method.schema_id",
+                rule="unsupported_combination",
+                allowed=(default_schema,),
+            )
         if schema_id in METHOD_SCHEMAS:
             try:
                 schema_levels = _level_fields(schema_id)

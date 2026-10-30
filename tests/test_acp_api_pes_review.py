@@ -785,3 +785,35 @@ def test_remote_pes_without_cached_files_keeps_404(client: TestClient, tmp_path:
     response = client.get(f"/api/v1/jobs/{job_id}/energy-graph")
     assert response.status_code == 404
     assert "No PES profile" in response.json()["detail"]
+
+
+def test_confirm_status_is_role_scoped_and_not_evaluated(
+    client: TestClient, tmp_path: Path
+) -> None:
+    """C2: obligations follow the candidate role; nothing is claimed evaluated."""
+    work_dir = _make_pes_task(tmp_path)
+    job_id = _register_job(client, tmp_path, work_dir)
+    response = client.post(
+        f"/api/v1/jobs/{job_id}/pes/review",
+        json={
+            "candidates": [
+                {"frame_index": 1, "role": "TS"},
+                {"frame_index": 2, "role": "INT"},
+            ]
+        },
+    )
+    assert response.status_code == 200
+    status = response.json()["initial_guess_status"]
+    assert status["source"]["review_revision"] == "1"
+    by_role = {item["role"].upper(): item for item in status["verification"]}
+    ts_ids = {obligation["id"] for obligation in by_role["TS"]["obligations"]}
+    int_ids = {obligation["id"] for obligation in by_role["INT"]["obligations"]}
+    assert "irc_connectivity" in ts_ids
+    assert "irc_connectivity" not in int_ids
+    assert "single_imaginary_mode" in ts_ids
+    assert "single_imaginary_mode" not in int_ids
+    obligations = [
+        obligation for item in status["verification"] for obligation in item["obligations"]
+    ]
+    assert obligations and all(item["status"] == "not_evaluated" for item in obligations)
+    assert all(item["guide"] for item in obligations)

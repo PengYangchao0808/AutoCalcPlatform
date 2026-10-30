@@ -506,6 +506,64 @@ def _require_submit_access(request: Request, project_hint: str | None) -> str | 
     return decision.project_id
 
 
+#: Simple ORCA workflows whose legacy method mirrors are normalized below.
+_SIMPLE_LEGACY_WORKFLOWS = frozenset({"singlepoint", "optimize", "frequency"})
+
+
+def _normalize_legacy_simple_method(req: Any) -> None:
+    """Normalize the legacy simple-workflow payload before any digest.
+
+    Old clients (and the MCP submit fixtures) send a flat
+    ``method = {method, charge, multiplicity}`` block plus a top-level
+    ``input.xyz_text``.  The runner consumes ``levels``, ``input.charge``/
+    ``multiplicity`` and ``input.source``; a contract that merely *accepts* the
+    legacy keys would execute defaults and silently ignore the request.  The
+    conversion here is an equivalent mapping (direct method name -> the level's
+    ``functional``; charge/multiplicity -> the input envelope; xyz_text ->
+    source), applied before the plan digest so a preflight fingerprint and the
+    submit see the same plan.
+    """
+    workflow = str(getattr(req, "workflow", "") or "")
+    if workflow not in _SIMPLE_LEGACY_WORKFLOWS:
+        return
+    method = getattr(req, "method", None)
+    inp = getattr(req, "input", None)
+    if not isinstance(method, dict):
+        method = {}
+    if not isinstance(inp, dict):
+        inp = {}
+    # NOTE: the input block is never rewritten here — that would change the plan
+    # digest a preflight fingerprint was computed on.  xyz_text is instead read
+    # by the scheduler's _extract_input_source.
+    for key in ("charge", "multiplicity"):
+        if key in method and key not in inp:
+            inp[key] = method.pop(key)
+    direct = method.get("method")
+    if isinstance(direct, str) and direct:
+        from acp.catalog import METHOD_SCHEMAS, get_workflow_by_id
+
+        levels = method.get("levels")
+        if not isinstance(levels, dict):
+            levels = {}
+        workflow_row = get_workflow_by_id(workflow) or {}
+        schema = METHOD_SCHEMAS.get(str(workflow_row.get("method_schema_id") or "")) or {}
+        level_ids = [
+            str(level.get("level_id"))
+            for level in schema.get("method_levels", [])
+            if level.get("level_id")
+        ]
+        target = level_ids[0] if level_ids else None
+        if target is not None:
+            level = levels.get(target)
+            if not isinstance(level, dict):
+                level = {}
+            level.setdefault("functional", direct)
+            levels[target] = level
+        method["levels"] = levels
+    req.method = method
+    req.input = inp
+
+
 def _require_job_scope_access(
     request: Request,
     job_id: str,
@@ -2567,6 +2625,7 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
     # before any resolution/snapshot/dispatch side effect, and the canonical form
     # is the same object MCP and the CLI build (so the request digest and the
     # effective JobSpec cannot drift per entry).
+    _normalize_legacy_simple_method(req)
     raw_input = req.input
     request_payload = req.model_dump(exclude_none=True)
     if raw_input is None:
@@ -3616,15 +3675,41 @@ def save_job_s2_review(
 
 _PES_REVIEW_PARTIAL_STATUSES = frozenset({"FAILED", "CANCELLED"})
 
-#: What a published candidate still needs before any stationary-point claim
-#: (C2, round-4 plan).  Kept as data so the response and the guidance cannot
-#: drift apart silently.
-_INITIAL_GUESS_MISSING_VERIFICATION = (
-    "opt_freq verdict from BatchOptimize (optTS convergence + frequency job)",
-    "exactly one significant imaginary frequency",
-    "imaginary mode corresponds to the intended forming/breaking bonds",
-    "IRC connectivity to the intended endpoints (not implied by a frequency alone)",
-)
+#: Per-role obligations a published candidate still needs (C2, round-4 plan).
+#: Structured and role-scoped: an INT candidate must not receive TS-only
+#: requirements.  Status starts at ``not_evaluated`` — the review projection has
+#: not evaluated any of these yet, so it must not claim the evidence is missing.
+_INITIAL_GUESS_OBLIGATIONS: dict[str, list[dict[str, str]]] = {
+    "ts": [
+        {
+            "id": "opt_freq_verdict",
+            "status": "not_evaluated",
+            "guide": "workflow.BatchOptimize",
+        },
+        {
+            "id": "single_imaginary_mode",
+            "status": "not_evaluated",
+            "guide": "topic.stationary_point_verification",
+        },
+        {
+            "id": "irc_connectivity",
+            "status": "not_evaluated",
+            "guide": "task.verify_reaction_path",
+        },
+    ],
+    "int": [
+        {
+            "id": "opt_freq_verdict",
+            "status": "not_evaluated",
+            "guide": "workflow.BatchOptimize",
+        },
+        {
+            "id": "frequency_minimum",
+            "status": "not_evaluated",
+            "guide": "topic.stationary_point_verification",
+        },
+    ],
+}
 
 
 def _pes_review_work_dir(request: Request, job_id: str, *, for_write: bool) -> tuple[Path, str]:
@@ -3980,14 +4065,30 @@ def save_pes_review_endpoint(
     ]
     from acp.api.v1_schemas import InitialGuessStatus
 
+    source_record = _manager(request).get(job_id)
+    attempt = getattr(source_record, "attempt", None) if source_record is not None else None
     guess_status = InitialGuessStatus(
         source={
             "job_id": job_id,
             "task_status": str(source_block.get("task_status") or ""),
             "frame_source": str(source_block.get("frame_source") or ""),
+            "attempt": "" if attempt is None else str(attempt),
+            "review_revision": str(payload.get("revision") or 0),
         },
         candidates=selected_rows,
-        missing_verification=list(_INITIAL_GUESS_MISSING_VERIFICATION),
+        verification=[
+            {
+                "candidate_id": row.candidate_id,
+                "role": row.role,
+                "obligations": [
+                    dict(obligation)
+                    for obligation in _INITIAL_GUESS_OBLIGATIONS.get(
+                        row.role.strip().lower(), _INITIAL_GUESS_OBLIGATIONS["int"]
+                    )
+                ],
+            }
+            for row in selected_rows
+        ],
         next_step={
             "tool": "acp_capabilities",
             "arguments": {"workflow": "BatchOptimize"},
@@ -8810,38 +8911,41 @@ _SCAN_ADVISORY_POLICY = {
 def _coerce_scan_coordinates(
     payload: Mapping[str, Any], method: Mapping[str, Any]
 ) -> list[tuple[str, float, float]]:
-    """Read the scan coordinates in their actual representations (dict/str)."""
-    raw: Any = None
+    """Read only *explicitly normalized* coordinate facts (dict form).
+
+    The CLI string form (``"a,b,start,end"``) is interpreted by the scheduling
+    consumer, not here: re-parsing it would create a second interpretation of
+    the same payload (a 3-atom entry is an angle, not a distance).  Only the
+    structured dict form — which carries its own ``kind`` — is a trustworthy
+    fact for an advisory.
+    """
+    candidates: list[Any] = []
     for source in (payload, method):
         for key in ("scan_coordinates", "coordinates", "coordinate"):
             candidate = source.get(key)
             if candidate is not None:
-                raw = candidate
-                break
-        if raw is not None:
-            break
-    if raw is None:
-        return []
-    items = raw if isinstance(raw, (list, tuple)) else [raw]
+                candidates.append(candidate)
+    # the nested PES envelope is also a real entry (input.scan_request.coordinate)
+    scan_request = payload.get("scan_request")
+    if isinstance(scan_request, Mapping):
+        nested = scan_request.get("coordinate")
+        if nested is not None:
+            candidates.append(nested)
     parsed: list[tuple[str, float, float]] = []
-    for item in items:
-        kind = "distance"
-        start: Any = None
-        end: Any = None
-        if isinstance(item, Mapping):
-            kind = str(item.get("kind") or "distance").lower()
-            start, end = item.get("start"), item.get("end")
-        elif isinstance(item, str):
-            parts = [part.strip() for part in item.split(",")]
-            if len(parts) < 3:
+    for raw in candidates:
+        items = raw if isinstance(raw, (list, tuple)) else [raw]
+        for item in items:
+            if not isinstance(item, Mapping):
+                # never interpret the string form here
                 continue
-            start, end = parts[-2], parts[-1]
-        else:
-            continue
-        try:
-            parsed.append((kind, float(start), float(end)))
-        except (TypeError, ValueError):
-            continue
+            kind = str(item.get("kind") or "").strip().lower()
+            start, end = item.get("start"), item.get("end")
+            if not kind:
+                continue
+            try:
+                parsed.append((kind, float(start), float(end)))
+            except (TypeError, ValueError):
+                continue
     return parsed
 
 
@@ -8905,8 +9009,11 @@ def _preflight_source_reasons(
     if not isinstance(source_job_id, str) or not source_job_id:
         return []
     manager = _manager(request)
-    record = manager.get(source_job_id)
-    if record is None:
+    # Reuse the shared job-scope authorization: a job from another project must
+    # look exactly like an unknown job (existence never leaks across projects).
+    try:
+        record = _require_job_scope_access(request, source_job_id, require_exists=True)
+    except HTTPException:
         return [
             {
                 "code": "source_job_not_found",
@@ -8916,6 +9023,12 @@ def _preflight_source_reasons(
                 "params": {"source_job_id": source_job_id},
             }
         ]
+    if record is None:
+        return []
+    # A remote source is a submit/prepare decision, never a preflight verdict:
+    # its material may legitimately be absent from this host.
+    if _is_remote_job(record):
+        return []
     work_dir = getattr(record, "work_dir", None)
     if not work_dir:
         return []
@@ -8925,7 +9038,7 @@ def _preflight_source_reasons(
     if workflow == "tsmode":
         try:
             sources = _discover_frequency_sources(work_path, source_job_id)
-        except Exception:  # noqa: BLE001 - preflight must not crash on odd layouts
+        except (OSError, ValueError, TypeError):
             return []
         if not sources:
             return [
@@ -8937,6 +9050,19 @@ def _preflight_source_reasons(
                     ),
                     "field": "source_job_id",
                     "rule": "frequency_source_unavailable",
+                    "params": {"source_job_id": source_job_id},
+                }
+            ]
+        if not any(entry.hessian_available for entry in sources):
+            return [
+                {
+                    "code": "frequency_source_incomplete",
+                    "message": (
+                        f"source job {source_job_id!r} has frequency output but no Hessian; "
+                        "tsmode needs the Hessian to map the mode"
+                    ),
+                    "field": "source_job_id",
+                    "rule": "frequency_hessian_missing",
                     "params": {"source_job_id": source_job_id},
                 }
             ]
@@ -9000,6 +9126,7 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
             f"Unsupported workflow '{req.workflow}'",
             params={"field": "workflow", "allowed": list(PUBLIC_WORKFLOWS)},
         )
+    _normalize_legacy_simple_method(req)
     raw_input = req.input
     payload = req.model_dump(exclude_none=True)
     if raw_input is None:

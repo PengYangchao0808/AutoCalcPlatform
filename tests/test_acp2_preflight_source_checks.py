@@ -136,3 +136,38 @@ def test_other_workflows_get_no_scan_advisory(client: TestClient) -> None:
     )
     assert response.status_code == 200
     assert response.json()["advisories"] == []
+
+
+def test_cli_string_coordinate_is_not_interpreted_as_a_distance(client: TestClient) -> None:
+    """A CLI string coordinate has no trustworthy kind here — never guess.
+
+    ``"0,1,2,10,100"`` is a three-atom (angle) scan; a naive split would read
+    "10 -> 100 A" and fabricate a geometry fact (astra round-4 review).
+    """
+    xyz = "6\n\nC 0 0 0\nC 1.5 0 0\nC 2.5 1 0\nC 3.5 0 0\nC 4.5 1 0\nC 5.5 0 0\n"
+    response = client.post(
+        "/api/v1/preflight",
+        json={
+            "workflow": "scan",
+            "input": {"xyz_text": xyz},
+            "method": {"coordinate": "0,1,2,10,100"},
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["advisories"] == []
+
+
+def test_scan_request_envelope_is_outside_the_pes_contract(client: TestClient) -> None:
+    """input.scan_request is a runner fallback carrier, not a public PES shape.
+
+    The contract refuses it, so the advisory never has to interpret it (and the
+    refusal carries the allowed keys instead of a silent ignore).
+    """
+    payload = _pes_input(4.9, 1.55)
+    coordinate = payload.pop("coordinate")
+    payload["scan_request"] = {"coordinate": coordinate}
+    response = client.post(
+        "/api/v1/preflight", json={"workflow": "PESsearch", "input": payload}
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"]["params"]["rule"] == "unknown_field"

@@ -188,6 +188,14 @@ def test_preflight_resolves_workflow_from_question_id(client: TestClient) -> Non
     payload = _singlepoint_payload()
     payload.pop("workflow")
     payload["question_id"] = "geometry_optimization"
+    # the resolved workflow carries its own method schema: cross-schema method
+    # payloads are refused by the shared contract (a payload accepted but
+    # ignored by the runner is worse than a typed refusal)
+    payload["method"] = {
+        "schema_id": "dft_optimize",
+        "profile_id": "default",
+        "levels": {"optimize": {"engine": "orca", "functional": "r2SCAN-3c"}},
+    }
 
     response = _post(client, f"{_PREFLIGHT}?project_id=uncategorized", payload)
 

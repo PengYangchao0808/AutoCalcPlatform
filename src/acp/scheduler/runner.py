@@ -240,6 +240,9 @@ def _extract_input_source(inp: dict[str, Any]) -> str:
         or inp.get("source")
         or inp.get("input")
         or inp.get("smiles")
+        # v1 accepts a top-level xyz_text (inp.get("source") or inp.get("xyz_text")
+        # in the API); the scheduler is a real consumer and must see it too.
+        or inp.get("xyz_text")
         or ""
     )
     return str(source)

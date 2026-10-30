@@ -472,3 +472,24 @@ def test_research_launch_validates_budget_and_project(live_controller: _LiveCont
                 project_id="project-that-does-not-exist",
             )
         )
+
+
+def test_legacy_flat_method_shape_is_normalized_at_submit(live_controller: "_LiveController") -> None:
+    """Old clients send method={method, charge, multiplicity}; it must still run.
+
+    The contract accepts the legacy keys only because the API normalizes them
+    (direct method name -> levels.functional; charge/multiplicity -> input)
+    before the plan digest, so execution does not silently ignore them.
+    """
+    body = {**_SUBMIT, "method": {"method": "r2SCAN-3c", "charge": 0, "multiplicity": 1}}
+    body["idempotency_key"] = "b06-legacy-shape-0001"
+    submitted = _submit(live_controller)
+    job_id = dict(submitted)["job_id"]
+    # the job exists and the legacy payload produced a real spec
+    record = live_controller.manager.get(job_id)
+    assert record is not None
+    method = record.spec.method
+    levels = method.get("levels") or {}
+    assert levels["single_point"]["functional"] == "r2SCAN-3c"
+    assert record.spec.input["charge"] == 0
+    assert record.spec.input["multiplicity"] == 1

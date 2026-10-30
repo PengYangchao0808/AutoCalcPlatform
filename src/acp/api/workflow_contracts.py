@@ -86,6 +86,14 @@ _CONFSEARCH_INPUT_PROPERTIES: dict[str, Any] = {
 }
 
 _BATCH_INPUT_PROPERTIES: dict[str, Any] = {
+    "schema_version": {
+        "type": "integer",
+        "description": "Optional payload schema version (accepted for stage payloads).",
+    },
+    "source_job_id": {
+        "type": "string",
+        "description": "Source task reference (stage payloads / selection provenance).",
+    },
     "source_type": {"type": "string", "enum": ["batch_structures"]},
     "items": {
         "type": "array",
@@ -226,6 +234,10 @@ _PES_INPUT_PROPERTIES: dict[str, Any] = {
 
 _SCAN_INPUT_PROPERTIES: dict[str, Any] = {
     **_CONFSEARCH_INPUT_PROPERTIES,
+    "xyz_text": {
+        "type": "string",
+        "description": "Top-level XYZ text read by the scan atom-selection validator.",
+    },
     "scan_coordinates": {
         "type": "array",
         "items": _COORDINATE_OBJECT,
@@ -532,6 +544,13 @@ def _frozen_payload_block(
                     "type": "object",
                     "description": description,
                 },
+                "request": {
+                    "type": "object",
+                    "description": (
+                        "Generic request alias accepted by the frozen-payload entries "
+                        "(prefer the specific *_request key)."
+                    ),
+                },
                 "input": {
                     "type": "string",
                     "description": "Inline structure input (when the payload omits it).",
@@ -598,7 +617,13 @@ def _basic_workflow_block(
         "description": description,
         "input": {
             "required_any": list(contract.required_input_any),
-            "properties": dict(_CONFSEARCH_INPUT_PROPERTIES),
+            "properties": {
+                **_CONFSEARCH_INPUT_PROPERTIES,
+                "xyz_text": {
+                    "type": "string",
+                    "description": "Top-level XYZ text (v1 accepts it alongside source).",
+                },
+            },
             "additional_properties": False,
         },
         "method": {
@@ -612,6 +637,30 @@ def _basic_workflow_block(
                     ),
                 },
                 "schema_id": {"type": "string"},
+                "profile_id": {
+                    "type": "string",
+                    "description": (
+                        "Edit-projection metadata: a profile is expanded on edit, "
+                        "NOT on the initial submit; execution reads levels."
+                    ),
+                },
+                "profile": {
+                    "type": "string",
+                    "description": "Alias of profile_id (edit projection only).",
+                },
+                **(
+                    {
+                        "method": {
+                            "type": "string",
+                            "description": (
+                                "Direct method name consumed by the frozen attempt "
+                                "envelope (attempt_freeze); prefer levels.functional."
+                            ),
+                        }
+                    }
+                    if workflow in ("singlepoint", "optimize", "frequency")
+                    else {}
+                ),
             },
             "levels": _level_table(workflow),
             "additional_properties": False,
@@ -747,6 +796,19 @@ def describe_workflow(workflow: str) -> dict[str, Any]:
             "IRC from a TS candidate with explicit provenance.",
             _IRC_CONSTRAINTS,
         )
+        block["examples"] = [
+            {
+                "workflow": "irc",
+                "input": {
+                    "source_job_id": "20260101_001_BatchOptimize",
+                    "source_product_id": "ts_candidate",
+                    "ts_source": {"schema": "irc_ts_source_v1"},
+                    "directions": ["forward", "reverse"],
+                },
+                "method": {"maxpoints": 40},
+                "resources": {"nproc": 4, "mem": "8GB"},
+            }
+        ]
         block["input"]["properties"] = {
             **_CONFSEARCH_INPUT_PROPERTIES,
             "source_job_id": {
@@ -790,6 +852,17 @@ def describe_workflow(workflow: str) -> dict[str, Any]:
             "additional_properties": False,
             "note": "tsmode accepts no method keys; pass null/absent method",
         }
+        block["examples"] = [
+            {
+                "workflow": "tsmode",
+                "input": {
+                    "source_job_id": "20260101_002_frequency",
+                    "source_mode_index": 6,
+                },
+                "method": {},
+                "resources": {"nproc": 4, "mem": "8GB"},
+            }
+        ]
         block["input"]["properties"] = {
             "source_job_id": {
                 "type": "string",
@@ -810,6 +883,10 @@ def describe_workflow(workflow: str) -> dict[str, Any]:
             "bundle": {
                 "type": "object",
                 "description": "Materialized tsmode bundle (API-resolved).",
+            },
+            "source_type": {
+                "type": "string",
+                "description": "Rewritten to tsmode_bundle by the API prepare step.",
             },
             "input": {
                 "type": "string",
