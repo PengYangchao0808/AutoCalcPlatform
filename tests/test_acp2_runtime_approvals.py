@@ -40,8 +40,12 @@ VECTORS = json.loads((CONTRACTS / "canonical-digest-vectors.v1.json").read_text(
 
 PLAN = frozen_plan_definition(
     workflow="singlepoint",
-    input={"xyz_text": "1\nH\nH 0 0 0.74\n"},
-    method={"method": "STO-3G", "charge": 0, "multiplicity": 1},
+    input={
+        "xyz_text": "1\nH\nH 0 0 0.74\n",
+        "charge": 0,
+        "multiplicity": 1,
+    },
+    method={"levels": {"single_point": {"functional": "STO-3G"}}},
     resources={"cores": 1, "memory_mb": 512},
 )
 PLAN_DIGEST = plan_digest(PLAN).digest

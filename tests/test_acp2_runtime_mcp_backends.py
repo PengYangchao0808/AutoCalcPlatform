@@ -31,10 +31,10 @@ import pytest
 import uvicorn
 
 _XYZ = "2\nH2\nH 0 0 0\nH 0 0 0.74\n"
-_METHOD = {"method": "r2SCAN-3c", "charge": 0, "multiplicity": 1}
+_METHOD = {"levels": {"single_point": {"functional": "r2SCAN-3c"}}}
 _SUBMIT = {
     "workflow": "singlepoint",
-    "input": {"xyz_text": _XYZ},
+    "input": {"xyz_text": _XYZ, "charge": 0, "multiplicity": 1},
     "method": _METHOD,
     "resources": {"cores": 1},
     # M1-01b: acp_submit requires the retry key; the HTTP body does not.

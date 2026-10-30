@@ -171,6 +171,9 @@ _SIMPLE_INPUT_KEYS: frozenset[str] = frozenset(
         "multiplicity",
         "source_ref",
         "asset_id",
+        # v1 API accepts a top-level xyz_text (inp.get("source") or inp.get("xyz_text")
+        # in v1_routes) alongside the structured source envelope.
+        "xyz_text",
     }
 )
 #: profile_id/profile select the schema profile whose levels the edit
@@ -509,25 +512,25 @@ WORKFLOW_CONTRACTS: dict[str, WorkflowContract] = {
     "singlepoint": WorkflowContract(
         method_keys=_SIMPLE_METHOD_KEYS,
         input_keys=_SIMPLE_INPUT_KEYS,
-        required_input_any=("input", "smiles", "source", "input_artifact"),
+        required_input_any=("input", "smiles", "source", "input_artifact", "xyz_text"),
         levels=_level_fields("dft_singlepoint"),
     ),
     "optimize": WorkflowContract(
         method_keys=_SIMPLE_METHOD_KEYS,
         input_keys=_SIMPLE_INPUT_KEYS,
-        required_input_any=("input", "smiles", "source", "input_artifact"),
+        required_input_any=("input", "smiles", "source", "input_artifact", "xyz_text"),
         levels=_level_fields("dft_optimize"),
     ),
     "frequency": WorkflowContract(
         method_keys=_SIMPLE_METHOD_KEYS,
         input_keys=_SIMPLE_INPUT_KEYS,
-        required_input_any=("input", "smiles", "source", "input_artifact"),
+        required_input_any=("input", "smiles", "source", "input_artifact", "xyz_text"),
         levels=_level_fields("dft_frequency"),
     ),
     "xtb_optimize": WorkflowContract(
         method_keys=_XTB_OPTIMIZE_METHOD_KEYS,
         input_keys=_SIMPLE_INPUT_KEYS,
-        required_input_any=("input", "smiles", "source", "input_artifact"),
+        required_input_any=("input", "smiles", "source", "input_artifact", "xyz_text"),
         levels=_level_fields("xtb_optimize"),
     ),
     "irc": WorkflowContract(
@@ -562,7 +565,7 @@ WORKFLOW_CONTRACTS: dict[str, WorkflowContract] = {
                 "coordinate",
             }
         ),
-        required_input_any=("input", "smiles", "source", "input_artifact"),
+        required_input_any=("input", "smiles", "source", "input_artifact", "xyz_text"),
         levels={
             **_level_fields("dft_scan"),
             # Consumers beyond the UI schema: the edit-recalculate path reads
