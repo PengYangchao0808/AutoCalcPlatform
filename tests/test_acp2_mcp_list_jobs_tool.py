@@ -115,3 +115,47 @@ def test_cancel_on_a_live_job_reports_cancelled() -> None:
     data = _call(server, mcp.McpTool.CANCEL, {"reference": "j1"})["structuredContent"]["data"]
     assert data["cancelled"] is True
     assert "already_terminal" not in data
+
+
+def test_list_jobs_summary_is_compact_by_default() -> None:
+    """Round 3: a 20-job listing returned 213 KB of xyz/spec/result payloads."""
+    rows = [
+        {
+            "id": "20261030_095632_004_PESsearch",
+            "spec": {
+                "workflow": "PESsearch",
+                "name": "d05scan",
+                "input": {"source": {"xyz_text": "3\n\nO 0 0 0\nH 1 0 0\nH 0 1 0" * 200}},
+            },
+            "state": "completed",
+            "created_at": "2026-10-30T01:00:00Z",
+            "result": {"huge": "x" * 50000},
+            "work_dir": "/var/lib/acp/runs/uncategorized/mol_PESsearch__04",
+            "error": "boom " * 120,
+        }
+    ]
+    port = _FakeStatusList({"jobs": rows})
+    result = _call(_server(status=port), mcp.McpTool.LIST_JOBS, {})
+    row = result["structuredContent"]["data"]["jobs"][0]
+    assert row["id"] == "20261030_095632_004_PESsearch"
+    assert row["workflow"] == "PESsearch"
+    assert row["name"] == "d05scan"
+    assert row["directory_name"] == "mol_PESsearch__04"
+    assert "spec" not in row and "result" not in row
+    assert len(row["error"]) <= 301  # capped, not a log reader
+
+
+def test_list_jobs_fields_full_passes_everything_through() -> None:
+    port = _FakeStatusList({"jobs": [{"id": "j1", "spec": {"workflow": "x"}}]})
+    result = _call(_server(status=port), mcp.McpTool.LIST_JOBS, {"fields": "full"})
+    assert result["structuredContent"]["data"]["jobs"][0]["spec"] == {"workflow": "x"}
+
+
+def test_list_jobs_rejects_unknown_fields_value() -> None:
+    result = _call(
+        _server(status=_FakeStatusList({"jobs": []})),
+        mcp.McpTool.LIST_JOBS,
+        {"fields": "wide"},
+    )
+    assert result["isError"] is True
+    assert result["structuredContent"]["error"]["params"]["rule"] == "invalid_enum"

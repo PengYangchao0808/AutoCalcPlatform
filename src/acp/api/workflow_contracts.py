@@ -160,8 +160,18 @@ _COORDINATE_OBJECT: dict[str, Any] = {
             "description": "0-based atom indices (2 distance / 3 angle / 4 dihedral).",
         },
         "unit": {"type": "string", "enum": ["angstrom", "degree"]},
-        "start": {"type": "number"},
-        "end": {"type": "number"},
+        "start": {
+            "type": "string",
+            "description": (
+                "Decimal string (e.g. \"3.66\"). A JSON float is refused by the "
+                "canonical-digest rule (non_canonical_number) — the string form keeps "
+                "the plan digest stable across clients."
+            ),
+        },
+        "end": {
+            "type": "string",
+            "description": "Decimal string (e.g. \"1.60\"); same rule as start.",
+        },
         "n_points": {"type": "integer", "minimum": 3, "maximum": 101},
         "bond_type": {"type": "string"},
     },
@@ -209,7 +219,11 @@ _SCAN_INPUT_PROPERTIES: dict[str, Any] = {
     "scan_coordinates": {
         "type": "array",
         "items": _COORDINATE_OBJECT,
-        "description": "Coordinates may ride in input or method; the shared validator reads input FIRST (input.scan_coordinates/input.coordinate before method) — do not override an input coordinate via method.",
+        "description": (
+            "Coordinates may ride in input or method; the shared validator reads "
+            "input FIRST (input.scan_coordinates/input.coordinate before method) "
+            "— do not override an input coordinate via method."
+        ),
     },
     "coordinate": {
         "oneOf": [

@@ -431,6 +431,16 @@ def _capabilities_payload(
             )
         payload["workflow_contract"] = describe_workflow(canonical)
 
+    # Round 3: one compact index so a discovery read answers "which workflows
+    # publish a contract" without probing 15 candidates one by one.
+    from acp.api.workflow_contracts import ACTIVE_WORKFLOWS as _ACTIVE_WF
+    from acp.api.workflow_contracts import describe_workflow as _describe
+
+    payload["workflow_contracts"] = {
+        name: str(_describe(name).get("coverage") or "not_provided")
+        for name in _ACTIVE_WF
+    }
+
     if handshake.refusal is not None:
         # Typed, in-band refusal: the client still receives extensions[] so it
         # can read the supported version instead of guessing.
