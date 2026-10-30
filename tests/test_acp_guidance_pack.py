@@ -289,5 +289,6 @@ def test_describe_exposes_every_contract_accepted_input_key() -> None:
         assert not missing, f"{workflow} input properties omit {missing}"
 
     for workflow in ("singlepoint", "optimize", "frequency"):
-        method_properties = set(describe_workflow(workflow).get("method", {}).get("properties") or {})
+        method_block = describe_workflow(workflow).get("method") or {}
+        method_properties = set(method_block.get("properties") or {})
         assert {"levels", "schema_id", "profile_id", "method"} <= method_properties

@@ -1637,32 +1637,60 @@ def _research_tool_specs() -> tuple[dict[str, Any], ...]:
 # ---------------------------------------------------------------------------
 
 
-#: Bounded discovery at the final MCP surface: the summary scope must fit a
-#: navigation package (measured on the compact serialization the structured
-#: content uses).  Blocks beyond the budget are dropped *explicitly* and a
-#: continuation pointer is returned — a JSON body is never truncated.
+#: Bounded discovery at the final MCP surface.  The budget is enforced on the
+#: *complete serialized tool result* (envelope + visible text + structured
+#: content), because that is what the harness actually receives — a budget on
+#: the inner data dict alone can be exceeded by the wrapping layers (astra
+#: round-4 review).  Oversized blocks are dropped explicitly with a
+#: continuation pointer; JSON is never truncated.
 SUMMARY_BUDGET_BYTES = 8192
 
 
+def _summary_result_size(data: Mapping[str, Any]) -> int:
+    """Bytes of the final tool-result payload for ``data`` (as the server sends it)."""
+    envelope = {
+        "schema_version": 1,
+        "operation": "acp_capabilities",
+        "status": "ok",
+        "exit_code": 0,
+        "dry_run": False,
+        "operation_identity": "",
+        "diagnostic_ref": None,
+        "data": dict(data),
+        "error": None,
+    }
+    text = json.dumps(envelope, ensure_ascii=False)
+    payload = {
+        "content": [{"type": "text", "text": text}],
+        "structuredContent": envelope,
+        "isError": False,
+    }
+    return len(json.dumps(payload, ensure_ascii=False).encode())
+
+
 def _enforce_summary_budget(data: dict[str, Any]) -> dict[str, Any]:
-    """Keep the ``summary`` scope within the final-surface budget."""
+    """Clip the ``summary`` scope to the final-surface budget, explicitly."""
     if data.get("detail") != "summary":
         return data
-
-    def _size(payload: Any) -> int:
-        return len(
-            json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()
-        )
-
-    actual = _size(data)
-    if actual <= SUMMARY_BUDGET_BYTES:
-        data["budget"] = {
-            "limit_bytes": SUMMARY_BUDGET_BYTES,
-            "actual_bytes": actual,
-            "omitted": [],
-        }
-        return data
+    limit = SUMMARY_BUDGET_BYTES
     omitted: list[str] = []
+
+    def _measure(candidate: dict[str, Any], dropped: list[str]) -> int:
+        probe = dict(candidate)
+        probe["omitted"] = dropped
+        probe["budget"] = {
+            "limit_bytes": limit,
+            "actual_bytes": 0,
+            "enforced_at": "final_mcp_result",
+            "omitted": dropped,
+            "overflow": False,
+        }
+        size = _summary_result_size(probe)
+        # the budget block itself must fit too (fixed point on the header size)
+        probe["budget"]["actual_bytes"] = size
+        return _summary_result_size(probe)
+
+    # optional blocks from heaviest/least essential to most essential
     for key in (
         "capability_index",
         "analysis_capabilities",
@@ -1670,20 +1698,30 @@ def _enforce_summary_budget(data: dict[str, Any]) -> dict[str, Any]:
         "research_consumer_tools",
         "identity_binding",
         "capability_request",
+        "task_instructions",
+        "workflow_contracts",
     ):
         if key not in data:
             continue
+        if _measure(data, omitted) <= limit:
+            break
         data.pop(key)
         omitted.append(key)
-        if _size(data) <= SUMMARY_BUDGET_BYTES:
-            break
+    actual = _measure(data, omitted)
     data["omitted"] = omitted
-    data["budget"] = {"limit_bytes": SUMMARY_BUDGET_BYTES, "actual_bytes": _size(data)}
-    data["continuation"] = {
-        "tool": "acp_capabilities",
-        "arguments": {"detail": "full"},
-        "note": "omitted blocks are available in the full scope",
+    data["budget"] = {
+        "limit_bytes": limit,
+        "actual_bytes": actual,
+        "enforced_at": "final_mcp_result",
+        "omitted": omitted,
+        "overflow": actual > limit,
     }
+    if omitted:
+        data["continuation"] = {
+            "tool": "acp_capabilities",
+            "arguments": {"detail": "full"},
+            "note": "omitted blocks are available in the full scope",
+        }
     return data
 
 @runtime_checkable

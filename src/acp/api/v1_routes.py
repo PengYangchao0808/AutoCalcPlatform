@@ -528,23 +528,46 @@ def _normalize_legacy_simple_method(req: Any) -> None:
         return
     method = getattr(req, "method", None)
     inp = getattr(req, "input", None)
-    if not isinstance(method, dict):
-        method = {}
-    if not isinstance(inp, dict):
-        inp = {}
-    # NOTE: the input block is never rewritten here — that would change the plan
-    # digest a preflight fingerprint was computed on.  xyz_text is instead read
-    # by the scheduler's _extract_input_source.
+    if not isinstance(method, dict) or not isinstance(inp, dict):
+        # malformed containers are the contract's business, not this conversion
+        return
+    # NOTE: the input block is never rewritten here for structure (that would
+    # change the plan digest a preflight fingerprint was computed on);
+    # xyz_text is instead read by the scheduler's shared materializer.
     for key in ("charge", "multiplicity"):
-        if key in method and key not in inp:
-            inp[key] = method.pop(key)
-    direct = method.get("method")
-    if isinstance(direct, str) and direct:
+        if key not in method:
+            continue
+        value = method.pop(key)
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise _command_error(
+                422,
+                "input_invalid",
+                f"method.{key} must be an integer",
+                params={"field": f"method.{key}", "rule": "invalid_type"},
+            )
+        if key not in inp:
+            inp[key] = value
+    direct = method.pop("method", None)
+    if direct is not None:
+        if not isinstance(direct, str) or not direct.strip():
+            raise _command_error(
+                422,
+                "input_invalid",
+                "method.method must be a non-empty string",
+                params={"field": "method.method", "rule": "invalid_type"},
+            )
+        levels = method.get("levels")
+        if levels is None:
+            levels = {}
+        if not isinstance(levels, dict):
+            raise _command_error(
+                422,
+                "input_invalid",
+                "method.levels must be an object",
+                params={"field": "method.levels", "rule": "invalid_type"},
+            )
         from acp.catalog import METHOD_SCHEMAS, get_workflow_by_id
 
-        levels = method.get("levels")
-        if not isinstance(levels, dict):
-            levels = {}
         workflow_row = get_workflow_by_id(workflow) or {}
         schema = METHOD_SCHEMAS.get(str(workflow_row.get("method_schema_id") or "")) or {}
         level_ids = [
@@ -555,9 +578,30 @@ def _normalize_legacy_simple_method(req: Any) -> None:
         target = level_ids[0] if level_ids else None
         if target is not None:
             level = levels.get(target)
-            if not isinstance(level, dict):
+            if level is None:
                 level = {}
-            level.setdefault("functional", direct)
+            if not isinstance(level, dict):
+                raise _command_error(
+                    422,
+                    "input_invalid",
+                    f"method.levels.{target} must be an object",
+                    params={"field": f"method.levels.{target}", "rule": "invalid_type"},
+                )
+            existing = level.get("functional")
+            if existing is not None and str(existing) != direct.strip():
+                # two consumers would pick different methods; refuse the ambiguity
+                raise _command_error(
+                    422,
+                    "input_invalid",
+                    "method.method conflicts with levels."
+                    f"{target}.functional ({direct.strip()!r} vs {existing!r})",
+                    params={
+                        "field": "method.method",
+                        "rule": "conflicting_method",
+                        "level": target,
+                    },
+                )
+            level["functional"] = direct.strip()
             levels[target] = level
         method["levels"] = levels
     req.method = method
@@ -8993,28 +9037,37 @@ def _scan_geometry_advisories(
     ]
 
 
-def _preflight_source_reasons(
+def _preflight_source_facts(
     request: Request, workflow: str, payload: Mapping[str, Any]
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Read-only source feasibility for tsmode/irc (preflight, zero side effects).
 
-    Judged only when the source job is local: a missing job, a source without a
-    work dir, a frequency source with no discoverable entries, or an IRC source
-    whose TS product is not registered.  Remote or not-yet-prepared sources stay
-    a submit-time decision.
+    Returns ``(reasons, advisories)``.  Reasons mark a *deterministically*
+    infeasible local source; advisories mark states that cannot be verified
+    without touching remote material (``needs_prepare``/``not_verified``) and
+    must never be reported as unconditionally feasible.  The checks mirror the
+    submit-time selection: the *selected* entry/TS product, not just "any entry
+    in the job".
     """
+    reasons: list[dict[str, Any]] = []
+    advisories: list[dict[str, Any]] = []
     if workflow not in ("tsmode", "irc"):
-        return []
+        return reasons, advisories
     source_job_id = payload.get("source_job_id")
+    ref = payload.get("source_ref")
+    if (not isinstance(source_job_id, str) or not source_job_id) and isinstance(ref, Mapping):
+        source_id = str(ref.get("source_id") or "")
+        prefix, separator, relative = source_id.partition(":")
+        if separator and prefix.startswith("job_") and relative.startswith("RESULT/"):
+            source_job_id = prefix.removeprefix("job_")
     if not isinstance(source_job_id, str) or not source_job_id:
-        return []
-    manager = _manager(request)
+        return reasons, advisories
     # Reuse the shared job-scope authorization: a job from another project must
     # look exactly like an unknown job (existence never leaks across projects).
     try:
         record = _require_job_scope_access(request, source_job_id, require_exists=True)
     except HTTPException:
-        return [
+        reasons.append(
             {
                 "code": "source_job_not_found",
                 "message": f"source job {source_job_id!r} does not exist",
@@ -9022,26 +9075,43 @@ def _preflight_source_reasons(
                 "rule": "source_job_unavailable",
                 "params": {"source_job_id": source_job_id},
             }
-        ]
+        )
+        return reasons, advisories
     if record is None:
-        return []
-    # A remote source is a submit/prepare decision, never a preflight verdict:
-    # its material may legitimately be absent from this host.
-    if _is_remote_job(record):
-        return []
-    work_dir = getattr(record, "work_dir", None)
-    if not work_dir:
-        return []
+        return reasons, advisories
+    # A remote or not-yet-prepared source cannot be verified here: it is a
+    # submit/prepare decision and must be reported as such, never as feasible.
+    if _is_remote_job(record) or not getattr(record, "work_dir", None):
+        advisories.append(
+            {
+                "id": "source_not_verified",
+                "severity": "info",
+                "message": (
+                    f"source job {source_job_id!r} is remote or not materialized on this "
+                    "host; the submit/prepare step will decide"
+                ),
+                "policy": {"id": "source_not_verified", "version": "1", "calibrated": True},
+            }
+        )
+        return reasons, advisories
     from pathlib import Path
 
-    work_path = Path(work_dir)
+    work_path = Path(record.work_dir)
     if workflow == "tsmode":
         try:
             sources = _discover_frequency_sources(work_path, source_job_id)
         except (OSError, ValueError, TypeError):
-            return []
+            advisories.append(
+                {
+                    "id": "source_not_verified",
+                    "severity": "info",
+                    "message": f"frequency sources of {source_job_id!r} could not be read here",
+                    "policy": {"id": "source_not_verified", "version": "1", "calibrated": True},
+                }
+            )
+            return reasons, advisories
         if not sources:
-            return [
+            reasons.append(
                 {
                     "code": "frequency_source_incomplete",
                     "message": (
@@ -9052,30 +9122,84 @@ def _preflight_source_reasons(
                     "rule": "frequency_source_unavailable",
                     "params": {"source_job_id": source_job_id},
                 }
-            ]
-        if not any(entry.hessian_available for entry in sources):
-            return [
-                {
-                    "code": "frequency_source_incomplete",
-                    "message": (
-                        f"source job {source_job_id!r} has frequency output but no Hessian; "
-                        "tsmode needs the Hessian to map the mode"
-                    ),
-                    "field": "source_job_id",
-                    "rule": "frequency_hessian_missing",
-                    "params": {"source_job_id": source_job_id},
-                }
-            ]
-        return []
+            )
+            return reasons, advisories
+        entry_id = payload.get("entry_id")
+        available = [source.entry_id for source in sources]
+        if isinstance(entry_id, str) and entry_id:
+            matched = next((source for source in sources if source.entry_id == entry_id), None)
+            if matched is None:
+                reasons.append(
+                    {
+                        "code": "frequency_source_incomplete",
+                        "message": (
+                            f"frequency entry {entry_id!r} not found in {source_job_id!r}; "
+                            f"available: {available}"
+                        ),
+                        "field": "entry_id",
+                        "rule": "frequency_entry_unavailable",
+                        "params": {"entry_id": entry_id, "available": available},
+                    }
+                )
+                return reasons, advisories
+            if not matched.hessian_available:
+                reasons.append(
+                    {
+                        "code": "frequency_source_incomplete",
+                        "message": (
+                            f"frequency entry {entry_id!r} has no Hessian; tsmode needs it "
+                            "to map the mode"
+                        ),
+                        "field": "entry_id",
+                        "rule": "frequency_hessian_missing",
+                        "params": {"entry_id": entry_id},
+                    }
+                )
+            return reasons, advisories
+        if len(sources) == 1:
+            if not sources[0].hessian_available:
+                reasons.append(
+                    {
+                        "code": "frequency_source_incomplete",
+                        "message": (
+                            f"the only frequency source in {source_job_id!r} has no Hessian"
+                        ),
+                        "field": "source_job_id",
+                        "rule": "frequency_hessian_missing",
+                        "params": {"source_job_id": source_job_id},
+                    }
+                )
+            return reasons, advisories
+        reasons.append(
+            {
+                "code": "frequency_source_incomplete",
+                "message": (
+                    f"source job {source_job_id!r} has several frequency entries; pass "
+                    f"entry_id (available: {available})"
+                ),
+                "field": "entry_id",
+                "rule": "frequency_entry_required",
+                "params": {"available": available},
+            }
+        )
+        return reasons, advisories
     # irc: only the local manifest is judged (no remote fetch during preflight)
     from acp.calculations.irc.source import load_ts_result_manifest
 
     try:
         manifest = load_ts_result_manifest(record, None)
     except (OSError, ValueError, TypeError):
-        manifest = None
+        advisories.append(
+            {
+                "id": "source_not_verified",
+                "severity": "info",
+                "message": f"TS result manifest of {source_job_id!r} could not be read here",
+                "policy": {"id": "source_not_verified", "version": "1", "calibrated": True},
+            }
+        )
+        return reasons, advisories
     if manifest is None:
-        return [
+        reasons.append(
             {
                 "code": "ts_source_unavailable",
                 "message": f"source job {source_job_id!r} has no local TS result manifest",
@@ -9083,12 +9207,19 @@ def _preflight_source_reasons(
                 "rule": "ts_source_unavailable",
                 "params": {"source_job_id": source_job_id},
             }
-        ]
+        )
+        return reasons, advisories
     product_id = payload.get("source_product_id")
+    relative: str | None = None
+    if isinstance(ref, Mapping):
+        source_id = str(ref.get("source_id") or "")
+        _, separator, path = source_id.partition(":")
+        if separator and path.startswith("RESULT/"):
+            relative = path.removeprefix("RESULT/")
     if isinstance(product_id, str) and product_id:
         product = next((item for item in manifest.products if item.id == product_id), None)
         if product is None:
-            return [
+            reasons.append(
                 {
                     "code": "ts_source_unavailable",
                     "message": f"source product {product_id!r} is not registered as a TS product",
@@ -9096,8 +9227,20 @@ def _preflight_source_reasons(
                     "rule": "ts_product_not_registered",
                     "params": {"source_product_id": product_id},
                 }
-            ]
-    return []
+            )
+    elif relative is not None:
+        product = next((item for item in manifest.products if item.path == relative), None)
+        if product is None:
+            reasons.append(
+                {
+                    "code": "ts_source_unavailable",
+                    "message": f"source reference {relative!r} is not a registered TS product",
+                    "field": "source_ref",
+                    "rule": "ts_product_not_registered",
+                    "params": {"relative_path": relative},
+                }
+            )
+    return reasons, advisories
 
 
 def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str, Any]:
@@ -9180,8 +9323,11 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
     # B2 (round-4 plan): source-feasibility checks for step workflows, using only
     # locally-verifiable facts.  Remote material stays a submit/prepare decision —
     # the prepare chain is the legitimate path, so a cold remote source is never
-    # reported infeasible here.
-    for source_reason in _preflight_source_reasons(request, req.workflow, raw_input or {}):
+    # reported infeasible; it is surfaced as a not-verified advisory instead.
+    _source_reasons, _source_advisories = _preflight_source_facts(
+        request, req.workflow, raw_input or {}
+    )
+    for source_reason in _source_reasons:
         feasible = False
         reasons.append(source_reason)
     try:
@@ -9220,7 +9366,10 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
                 str(exc),
                 params={"field": "plan", **exc.params()},
             ) from exc
-    advisories = _scan_geometry_advisories(req.workflow, raw_input or {}, req.method or {})
+    advisories = [
+        *_scan_geometry_advisories(req.workflow, raw_input or {}, req.method or {}),
+        *_source_advisories,
+    ]
     return {
         "schema_version": 1,
         "feasible": feasible,

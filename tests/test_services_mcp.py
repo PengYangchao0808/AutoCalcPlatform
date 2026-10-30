@@ -1171,13 +1171,36 @@ def test_summary_scope_is_clipped_at_the_mcp_surface() -> None:
     server = _server(fakes=fakes)
     result = _call_tool(server, "acp_capabilities", {"detail": "summary"})
     data = result["structuredContent"]["data"]
+    # measure the final serialized result, not a self-reported counter
+    text_bytes = len(result["content"][0]["text"].encode("utf-8"))
+    assert text_bytes <= 8192, text_bytes
     assert data["budget"]["limit_bytes"] == 8192
-    assert data["budget"]["actual_bytes"] <= 8192
+    assert data["budget"]["enforced_at"] == "final_mcp_result"
+    assert data["budget"]["overflow"] is False
     assert "capability_index" in data["omitted"]
     assert data["continuation"]["arguments"] == {"detail": "full"}
     # the navigation blocks survive
     for key in ("navigation", "workflow_contracts", "capacity"):
         assert key in data, key
+
+
+def test_summary_budget_marks_overflow_when_nothing_is_clippable() -> None:
+    """An oversized non-essential-free payload is flagged, never silently truncated."""
+    class _HugeNavigationCapabilities:
+        def capabilities(self, *, workflow=None, detail=None):
+            return {
+                "detail": "summary",
+                "navigation": {"note": "x" * 20000},
+                "capacity": {"schema": "acp2.capacity.view.v1"},
+            }
+
+    fakes = _Fakes()
+    fakes.capabilities = _HugeNavigationCapabilities()  # type: ignore[assignment]
+    server = _server(fakes=fakes)
+    result = _call_tool(server, "acp_capabilities", {"detail": "summary"})
+    data = result["structuredContent"]["data"]
+    assert data["budget"]["overflow"] is True
+    assert len(result["content"][0]["text"].encode("utf-8")) > 8192
 
 
 def test_full_scope_is_never_clipped() -> None:

@@ -299,6 +299,7 @@ def _materialize_single_input(
 ) -> Path | None:
     source_type = str(inp.get("source_type", ""))
     source = _extract_input_source(inp)
+    xyz_text = inp.get("xyz_text")
 
     if not source:
         return None
@@ -306,7 +307,11 @@ def _materialize_single_input(
     inputs_dir.mkdir(parents=True, exist_ok=True)
     dest = inputs_dir / f"{stem}.xyz"
 
-    if source_type == "xyz_text":
+    if source_type == "xyz_text" or (
+        not source_type and isinstance(xyz_text, str) and xyz_text.strip()
+    ):
+        # a bare top-level xyz_text is a contract-accepted input (v1); it must
+        # materialize as XYZ text, never fall through to the SMILES parser
         dest.write_text(source, encoding="utf-8")
         return dest
 

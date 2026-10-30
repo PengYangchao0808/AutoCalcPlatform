@@ -652,6 +652,24 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
             rule="unknown_field",
             allowed=tuple(sorted(contract.method_keys)),
         )
+    # The schema/workflow consistency is independent of the levels container:
+    # a wrong schema_id must be refused even when levels is omitted.
+    schema_id = method.get("schema_id")
+    if isinstance(schema_id, str) and schema_id:
+        from acp.catalog import get_workflow_by_id
+
+        default_schema = str(
+            (get_workflow_by_id(workflow) or {}).get("method_schema_id") or ""
+        )
+        if default_schema and schema_id != default_schema:
+            raise SubmissionContractError(
+                f"{workflow} method.schema_id must be {default_schema!r} "
+                f"(got {schema_id!r}); cross-schema method payloads would be "
+                "accepted but ignored by the runner",
+                field_name="method.schema_id",
+                rule="unsupported_combination",
+                allowed=(default_schema,),
+            )
     for key, allowed in contract.method_enums.items():
         if key not in method or method[key] is None or method[key] == "":
             continue

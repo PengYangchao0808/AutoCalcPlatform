@@ -474,7 +474,9 @@ def test_research_launch_validates_budget_and_project(live_controller: _LiveCont
         )
 
 
-def test_legacy_flat_method_shape_is_normalized_at_submit(live_controller: "_LiveController") -> None:
+def test_legacy_flat_method_shape_is_normalized_at_submit(
+    live_controller: _LiveController,
+) -> None:
     """Old clients send method={method, charge, multiplicity}; it must still run.
 
     The contract accepts the legacy keys only because the API normalizes them
@@ -483,13 +485,33 @@ def test_legacy_flat_method_shape_is_normalized_at_submit(live_controller: "_Liv
     """
     body = {**_SUBMIT, "method": {"method": "r2SCAN-3c", "charge": 0, "multiplicity": 1}}
     body["idempotency_key"] = "b06-legacy-shape-0001"
-    submitted = _submit(live_controller)
+    submitted = _submit(live_controller, body)
     job_id = dict(submitted)["job_id"]
-    # the job exists and the legacy payload produced a real spec
+    # the legacy payload produced one canonical spec: both consumers see the
+    # same method (method.method was folded into levels.functional, not kept
+    # alongside it)
     record = live_controller.manager.get(job_id)
     assert record is not None
     method = record.spec.method
     levels = method.get("levels") or {}
     assert levels["single_point"]["functional"] == "r2SCAN-3c"
+    assert "method" not in method
     assert record.spec.input["charge"] == 0
     assert record.spec.input["multiplicity"] == 1
+    from acp.calculations.attempt_freeze import _singlepoint_method_kwargs
+
+    assert _singlepoint_method_kwargs(method).get("method") == "r2SCAN-3c"
+
+
+def test_legacy_method_conflict_is_refused(live_controller: _LiveController) -> None:
+    """Two consumers disagreeing on the method is an input error, not a silent pick."""
+    from acp_services.entrypoints.controller_client import UnsupportedError
+
+    body = {
+        **_SUBMIT,
+        "method": {"method": "B3LYP", "levels": {"single_point": {"functional": "PBE0"}}},
+        "idempotency_key": "b06-legacy-conflict-0001",
+    }
+    with pytest.raises(UnsupportedError) as excinfo:
+        _submit(live_controller, body)
+    assert "conflict" in str(excinfo.value).lower()
