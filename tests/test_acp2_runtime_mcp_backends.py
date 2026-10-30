@@ -515,3 +515,23 @@ def test_legacy_method_conflict_is_refused(live_controller: _LiveController) -> 
     with pytest.raises(UnsupportedError) as excinfo:
         _submit(live_controller, body)
     assert "conflict" in str(excinfo.value).lower()
+
+
+def test_real_summary_keeps_the_navigation_core(live_controller: _LiveController) -> None:
+    """On the real assembly the bounded summary must still carry the recipe.
+
+    The first post-merge probe found the MCP envelope additions pushing the
+    summary over budget and the clipper eating task_instructions and
+    workflow_contracts — a summary without the navigation core is useless.
+    """
+    mcp_runtime = _runtime(live_controller)
+    result = _tool(mcp_runtime, "acp_capabilities", {"detail": "summary"})
+    assert result.get("isError") is not True
+    text = result["content"][0]["text"]
+    assert len(text.encode("utf-8")) <= 8192, len(text.encode("utf-8"))
+    data = result["structuredContent"]["data"]
+    assert data["detail"] == "summary"
+    assert "task_instructions" in data, data.get("omitted")
+    assert "workflow_contracts" in data, data.get("omitted")
+    assert "capacity" in data
+    assert data["budget"]["overflow"] is False
