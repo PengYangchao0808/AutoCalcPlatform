@@ -194,6 +194,13 @@ def test_confsearch_and_batch_contracts_unchanged() -> None:
         "XtbPathSearch",
         "OrcaGradient",
         "XtbConstrainedOpt",
+        # batch B: the six previously uncontracted workflows
+        "singlepoint",
+        "optimize",
+        "frequency",
+        "xtb_optimize",
+        "irc",
+        "tsmode",
     }
     validate_workflow_submission(
         "Confsearch",
@@ -211,10 +218,11 @@ def test_confsearch_and_batch_contracts_unchanged() -> None:
 
 
 def test_workflows_outside_staged_coverage_pass_through() -> None:
-    # irc/singlepoint stay accepted unchanged (the validator never widens scope
-    # by guessing) — this is the documented pass-through, not a published schema.
+    # Workflows without a published contract (casscf/nmr + the PES2TS consumer
+    # surfaces beyond the contracted three) still pass the validator unchanged:
+    # this is the documented pass-through, not a published schema.
     validate_workflow_submission(
-        "irc", input={"input": "ts.xyz"}, method={"whatever": 1}, resources=None
+        "casscf", input={"input": "ts.xyz"}, method={"whatever": 1}, resources=None
     )
 
 
@@ -251,3 +259,66 @@ def test_frozen_payload_entries_reject_undeclared_top_level_keys() -> None:
             resources=None,
         )
     assert excinfo.value.params()["rule"] == "unknown_field"
+
+
+# --------------------------------------------------------------------------- #
+# Batch B: six simple/step workflows from the shared semantic authority
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    ("workflow", "input_payload", "method_payload"),
+    [
+        ("singlepoint", {"input": "CCO"}, {"levels": {"single_point": {"functional": "wB97X-D4"}}}),
+        ("optimize", {"input": "CCO"}, {"levels": {"optimize": {"functional": "r2SCAN-3c"}}}),
+        ("frequency", {"input": "CCO"}, {"levels": {"frequency": {"functional": "B97-3c"}}}),
+        ("xtb_optimize", {"input": "CCO"}, {"levels": {"xtb_opt": {"gfn": 2}}}),
+        (
+            "irc",
+            {
+                "source_job_id": "20260101_001_BatchOptimize",
+                "source_product_id": "ts_candidate",
+                "ts_source": {"schema": "irc_ts_source_v1"},
+                "directions": ["forward", "reverse"],
+            },
+            {"maxpoints": 40},
+        ),
+        ("tsmode", {"source_job_id": "20260101_002_frequency", "source_mode_index": 6}, None),
+    ],
+)
+def test_batch_b_workflows_validate(
+    workflow: str, input_payload: dict, method_payload: dict | None
+) -> None:
+    validate_workflow_submission(
+        workflow, input=input_payload, method=method_payload, resources=None
+    )
+
+
+def test_batch_b_wrong_level_ids_and_undeclared_methods_are_typed() -> None:
+    with pytest.raises(SubmissionContractError) as excinfo:
+        validate_workflow_submission(
+            "singlepoint",
+            input={"input": "CCO"},
+            method={"levels": {"wrong_level": {}}},
+            resources=None,
+        )
+    assert excinfo.value.params()["rule"] == "unknown_field"
+
+    with pytest.raises(SubmissionContractError) as excinfo:
+        validate_workflow_submission(
+            "tsmode",
+            input={"source_job_id": "j"},
+            method={"levels": {}},
+            resources=None,
+        )
+    assert excinfo.value.params()["rule"] == "unknown_field"
+
+
+def test_batch_b_required_sources_are_enforced() -> None:
+    with pytest.raises(SubmissionContractError) as excinfo:
+        validate_workflow_submission("irc", input={"charge": 0}, method=None, resources=None)
+    assert excinfo.value.params()["rule"] == "missing_input"
+
+    with pytest.raises(SubmissionContractError) as excinfo:
+        validate_workflow_submission("tsmode", input={"input": "CCO"}, method=None, resources=None)
+    assert excinfo.value.params()["rule"] == "missing_input"

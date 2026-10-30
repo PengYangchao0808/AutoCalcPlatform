@@ -83,9 +83,9 @@ def test_no_selector_keeps_the_frozen_shape(client: TestClient) -> None:
 
 
 def test_uncovered_workflow_is_marked_not_provided(client: TestClient) -> None:
-    # PESsearch/scan gained staged partial coverage (2026-10-30 first-batch
-    # contracts); irc is still outside the published set.
-    payload = client.get("/api/capabilities", params={"workflow": "irc"}).json()
+    # The staged batches contracted PESsearch/scan, the PES2TS trio and the six
+    # simple/step workflows; casscf/nmr are still outside the published set.
+    payload = client.get("/api/capabilities", params={"workflow": "casscf"}).json()
     block = payload["workflow_contract"]
     assert block["coverage"] == "not_provided"
     assert "not published" in block["reason"]
@@ -119,8 +119,11 @@ def test_capabilities_publish_a_workflow_contract_index(client: TestClient) -> N
     assert index["XtbPathSearch"]["coverage"] == "partial"
     assert index["OrcaGradient"]["coverage"] == "partial"
     assert index["XtbConstrainedOpt"]["coverage"] == "partial"
-    # uncontracted workflows carry an actionable fallback instead of silence
-    irc = index["irc"]
-    assert irc["coverage"] == "not_provided"
-    assert irc["fallback"]["status"] == "uncontracted"
-    assert "acp run irc" in irc["fallback"]["supported_entries"]
+    # the six simple/step workflows are contracted since batch B
+    for name in ("singlepoint", "optimize", "frequency", "xtb_optimize", "irc", "tsmode"):
+        assert index[name]["coverage"] == "partial", name
+    # remaining uncovered workflows carry an actionable fallback instead of silence
+    casscf = index["casscf"]
+    assert casscf["coverage"] == "not_provided"
+    assert casscf["fallback"]["status"] == "uncontracted"
+    assert "acp run casscf" in casscf["fallback"]["supported_entries"]

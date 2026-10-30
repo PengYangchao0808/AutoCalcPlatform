@@ -127,13 +127,27 @@ def test_describe_workflow_carries_guide_refs_for_all_active_workflows() -> None
         assert block["guide_ref"]["guide_id"] == mapping[workflow], workflow
         assert block["guide_ref"]["pack_version"] == PACK_VERSION
         assert block["guide_ref"]["tool"] == "acp_get_guidance"
-    # Coverage stays honest: only the staged four publish a schema.
+    # Coverage stays honest: the staged batches publish partial schemas; only
+    # casscf/nmr remain unconttracted.
     published = {wf: describe_workflow(wf)["coverage"] for wf in _ACTIVE}
-    assert published["Confsearch"] == "partial"
-    assert published["BatchOptimize"] == "partial"
-    assert published["PESsearch"] == "partial"
-    assert published["scan"] == "partial"
-    assert published["irc"] == "not_provided"
+    for name in (
+        "Confsearch",
+        "BatchOptimize",
+        "PESsearch",
+        "scan",
+        "XtbPathSearch",
+        "OrcaGradient",
+        "XtbConstrainedOpt",
+        "singlepoint",
+        "optimize",
+        "frequency",
+        "xtb_optimize",
+        "irc",
+        "tsmode",
+    ):
+        assert published[name] == "partial", name
+    assert published["casscf"] == "not_provided"
+    assert published["nmr"] == "not_provided"
 
 
 def test_pessearch_rejects_method_levels_and_bad_enums() -> None:

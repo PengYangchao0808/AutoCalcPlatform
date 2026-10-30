@@ -104,14 +104,15 @@ def test_not_provided_entries_carry_a_structured_fallback(client: TestClient) ->
     index = client.get("/api/capabilities", params={"detail": "summary"}).json()[
         "workflow_contracts"
     ]
-    irc = index["irc"]
-    assert irc["coverage"] == "not_provided"
-    fallback = irc["fallback"]
+    casscf = index["casscf"]
+    assert casscf["coverage"] == "not_provided"
+    fallback = casscf["fallback"]
     assert fallback["status"] == "uncontracted"
-    assert "acp run irc" in fallback["supported_entries"]
-    assert "report the gap" in fallback["message"]
+    assert "acp run casscf" in fallback["supported_entries"]
+    assert "decision" in fallback["message"]
     # contracted entries carry no fallback
     assert "fallback" not in index["PESsearch"]
+    assert "fallback" not in index["singlepoint"]
 
 
 def test_invalid_detail_value_is_typed(client: TestClient) -> None:

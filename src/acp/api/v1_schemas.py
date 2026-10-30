@@ -1703,6 +1703,21 @@ class PesReviewCandidate(BaseModel):
     structure_path: str = ""
 
 
+class InitialGuessStatus(BaseModel):
+    """Structured evidence state after a candidate publish (never a verdict).
+
+    A published candidate is an *initial guess*: the response lists what still
+    must be verified before any stationary-point claim, so an agent does not
+    have to re-read the guidance text for the obligations.
+    """
+
+    source: dict[str, str] = Field(default_factory=dict)
+    candidates: list[PesReviewCandidate] = Field(default_factory=list)
+    missing_verification: list[str] = Field(default_factory=list)
+    next_step: dict[str, Any] | None = None
+    note: str = "publishing a candidate starts the chain; it is not a TS/INT verdict"
+
+
 class PesReviewResponse(BaseModel):
     job_id: str
     status: str
@@ -1718,6 +1733,7 @@ class PesReviewResponse(BaseModel):
     frame_source: str = ""
     candidates: list[PesReviewCandidate] = Field(default_factory=list)
     result_manifest: str = "RESULT/result_manifest.json"
+    initial_guess_status: InitialGuessStatus | None = None
 
 
 class PesReviewBackupSummary(BaseModel):

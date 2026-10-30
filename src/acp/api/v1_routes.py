@@ -53,11 +53,6 @@ except ImportError:  # pragma: no cover
     ZipStream = None
 
 from acp.api.job_status_view import build_live_status, resolve_display_method
-from acp.api.submission_contract import (
-    SubmissionContractError,
-    validate_workflow_submission,
-)
-from acp.scheduler.resources import validate_resource_request
 from acp.api.routes import (
     get_backends as legacy_get_backends,
 )
@@ -81,6 +76,10 @@ from acp.api.schemas import (
     ProtocolsResponse,
     StatusResponse,
     WorkflowsResponse,
+)
+from acp.api.submission_contract import (
+    SubmissionContractError,
+    validate_workflow_submission,
 )
 from acp.api.v1_schemas import (
     ArtifactListResponse,
@@ -266,6 +265,7 @@ from acp.scheduler.remote.fetcher import (
     RemoteResultFetcher as _RemoteResultFetcher,
 )
 from acp.scheduler.remote.node_manager import NodeManager
+from acp.scheduler.resources import validate_resource_request
 from acp.scheduler.runner import find_workflow_state
 from acp.scheduler.stage_tasks import StageTask, StageTaskStore
 from acp.scheduler.store import JobStore
@@ -2595,7 +2595,8 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         validate_resource_request(req.resources or {})
     except ValueError as exc:
         raise _command_error(
-            422, "input_invalid", str(exc), params={"field": "resources", "rule": "invalid_resource"}
+            422, "input_invalid", str(exc), params={"field": "resources",
+            "rule": "invalid_resource"}
         ) from exc
     fingerprint = normalized_submit.get("preflight_fingerprint")
     if fingerprint:
@@ -3615,6 +3616,16 @@ def save_job_s2_review(
 
 _PES_REVIEW_PARTIAL_STATUSES = frozenset({"FAILED", "CANCELLED"})
 
+#: What a published candidate still needs before any stationary-point claim
+#: (C2, round-4 plan).  Kept as data so the response and the guidance cannot
+#: drift apart silently.
+_INITIAL_GUESS_MISSING_VERIFICATION = (
+    "opt_freq verdict from BatchOptimize (optTS convergence + frequency job)",
+    "exactly one significant imaginary frequency",
+    "imaginary mode corresponds to the intended forming/breaking bonds",
+    "IRC connectivity to the intended endpoints (not implied by a frequency alone)",
+)
+
 
 def _pes_review_work_dir(request: Request, job_id: str, *, for_write: bool) -> tuple[Path, str]:
     """Resolve (task dir, task status) of a PESsearch job for manual review.
@@ -3957,6 +3968,32 @@ def save_pes_review_endpoint(
 
     _notify_structure_sources_updated(request, job_id)
 
+    selected_rows = [
+        PesReviewCandidate(
+            candidate_id=str(row.get("candidate_id") or ""),
+            role=str(row.get("role") or ""),
+            frame_index=int(row.get("frame_index") or 0),
+            name=str(row.get("name") or ""),
+            structure_path=str(row.get("structure_path") or ""),
+        )
+        for row in payload.get("selected") or []
+    ]
+    from acp.api.v1_schemas import InitialGuessStatus
+
+    guess_status = InitialGuessStatus(
+        source={
+            "job_id": job_id,
+            "task_status": str(source_block.get("task_status") or ""),
+            "frame_source": str(source_block.get("frame_source") or ""),
+        },
+        candidates=selected_rows,
+        missing_verification=list(_INITIAL_GUESS_MISSING_VERIFICATION),
+        next_step={
+            "tool": "acp_capabilities",
+            "arguments": {"workflow": "BatchOptimize"},
+            "reason": "continue with the BatchOptimize opt_freq step for each candidate",
+        },
+    )
     return PesReviewResponse(
         job_id=job_id,
         status=str(payload.get("status") or "confirmed"),
@@ -3967,16 +4004,8 @@ def save_pes_review_endpoint(
         source_task_status=str(source_block.get("task_status") or ""),
         scan_complete=source_block.get("scan_complete"),
         frame_source=str(source_block.get("frame_source") or ""),
-        candidates=[
-            PesReviewCandidate(
-                candidate_id=str(row.get("candidate_id") or ""),
-                role=str(row.get("role") or ""),
-                frame_index=int(row.get("frame_index") or 0),
-                name=str(row.get("name") or ""),
-                structure_path=str(row.get("structure_path") or ""),
-            )
-            for row in payload.get("selected") or []
-        ],
+        candidates=selected_rows,
+        initial_guess_status=guess_status,
     )
 
 
@@ -8768,6 +8797,183 @@ def _research_project(manager: JobManager, project_id: str | None) -> str | None
     return project_id
 
 
+#: C1 (round-4 plan): a geometry-fact advisory, never a scientific criterion.
+#: The thresholds are versioned, uncalibrated policy parameters (astra review).
+_SCAN_ADVISORY_POLICY = {
+    "id": "scan_single_coordinate_geometry",
+    "version": "1",
+    "calibrated": False,
+    "note": "heuristic prompt policy parameter, not a scientific criterion",
+}
+
+
+def _coerce_scan_coordinates(
+    payload: Mapping[str, Any], method: Mapping[str, Any]
+) -> list[tuple[str, float, float]]:
+    """Read the scan coordinates in their actual representations (dict/str)."""
+    raw: Any = None
+    for source in (payload, method):
+        for key in ("scan_coordinates", "coordinates", "coordinate"):
+            candidate = source.get(key)
+            if candidate is not None:
+                raw = candidate
+                break
+        if raw is not None:
+            break
+    if raw is None:
+        return []
+    items = raw if isinstance(raw, (list, tuple)) else [raw]
+    parsed: list[tuple[str, float, float]] = []
+    for item in items:
+        kind = "distance"
+        start: Any = None
+        end: Any = None
+        if isinstance(item, Mapping):
+            kind = str(item.get("kind") or "distance").lower()
+            start, end = item.get("start"), item.get("end")
+        elif isinstance(item, str):
+            parts = [part.strip() for part in item.split(",")]
+            if len(parts) < 3:
+                continue
+            start, end = parts[-2], parts[-1]
+        else:
+            continue
+        try:
+            parsed.append((kind, float(start), float(end)))
+        except (TypeError, ValueError):
+            continue
+    return parsed
+
+
+def _scan_geometry_advisories(
+    workflow: str, payload: Mapping[str, Any], method: Mapping[str, Any]
+) -> list[dict[str, Any]]:
+    """Geometry-fact advisories for relaxed scans (PESsearch / scan).
+
+    Trigger (all): a bond-length scan, exactly one distance coordinate, and a
+    start-to-end span of at least 2.5 A.  The text states the geometry and a
+    conditional consequence; it never asserts the chemistry, never blocks, and
+    carries the uncalibrated policy id so a false positive is attributable.
+    """
+    if workflow not in ("PESsearch", "scan"):
+        return []
+    coordinates = _coerce_scan_coordinates(payload, method)
+    if len(coordinates) != 1:
+        return []
+    kind, start, end = coordinates[0]
+    if kind not in ("distance", "bond_stretch"):
+        return []
+    if abs(end - start) < 2.5:
+        return []
+    return [
+        {
+            "id": "scan_single_coordinate_geometry",
+            "severity": "info",
+            "policy": dict(_SCAN_ADVISORY_POLICY),
+            "message": (
+                f"this plan drives one distance coordinate only ({start:.2f} -> {end:.2f} A). "
+                "The scan does not guarantee coverage of every relevant structural change of "
+                "the target reaction; the curve maximum is an initial guess only. If the "
+                "reaction hypothesis involves several bonds changing, inspect how they "
+                "evolve along the path and read the multi-coordinate guidance "
+                "(task.find_transition_state)."
+            ),
+            "references": [
+                {
+                    "tool": "acp_get_guidance",
+                    "arguments": {"guide_id": "task.find_transition_state"},
+                },
+                {"tool": "acp_get_guidance", "arguments": {"guide_id": "workflow.PESsearch"}},
+            ],
+        }
+    ]
+
+
+def _preflight_source_reasons(
+    request: Request, workflow: str, payload: Mapping[str, Any]
+) -> list[dict[str, Any]]:
+    """Read-only source feasibility for tsmode/irc (preflight, zero side effects).
+
+    Judged only when the source job is local: a missing job, a source without a
+    work dir, a frequency source with no discoverable entries, or an IRC source
+    whose TS product is not registered.  Remote or not-yet-prepared sources stay
+    a submit-time decision.
+    """
+    if workflow not in ("tsmode", "irc"):
+        return []
+    source_job_id = payload.get("source_job_id")
+    if not isinstance(source_job_id, str) or not source_job_id:
+        return []
+    manager = _manager(request)
+    record = manager.get(source_job_id)
+    if record is None:
+        return [
+            {
+                "code": "source_job_not_found",
+                "message": f"source job {source_job_id!r} does not exist",
+                "field": "source_job_id",
+                "rule": "source_job_unavailable",
+                "params": {"source_job_id": source_job_id},
+            }
+        ]
+    work_dir = getattr(record, "work_dir", None)
+    if not work_dir:
+        return []
+    from pathlib import Path
+
+    work_path = Path(work_dir)
+    if workflow == "tsmode":
+        try:
+            sources = _discover_frequency_sources(work_path, source_job_id)
+        except Exception:  # noqa: BLE001 - preflight must not crash on odd layouts
+            return []
+        if not sources:
+            return [
+                {
+                    "code": "frequency_source_incomplete",
+                    "message": (
+                        f"source job {source_job_id!r} has no discoverable frequency source "
+                        "(need an ORCA frequency output and its Hessian)"
+                    ),
+                    "field": "source_job_id",
+                    "rule": "frequency_source_unavailable",
+                    "params": {"source_job_id": source_job_id},
+                }
+            ]
+        return []
+    # irc: only the local manifest is judged (no remote fetch during preflight)
+    from acp.calculations.irc.source import load_ts_result_manifest
+
+    try:
+        manifest = load_ts_result_manifest(record, None)
+    except (OSError, ValueError, TypeError):
+        manifest = None
+    if manifest is None:
+        return [
+            {
+                "code": "ts_source_unavailable",
+                "message": f"source job {source_job_id!r} has no local TS result manifest",
+                "field": "source_job_id",
+                "rule": "ts_source_unavailable",
+                "params": {"source_job_id": source_job_id},
+            }
+        ]
+    product_id = payload.get("source_product_id")
+    if isinstance(product_id, str) and product_id:
+        product = next((item for item in manifest.products if item.id == product_id), None)
+        if product is None:
+            return [
+                {
+                    "code": "ts_source_unavailable",
+                    "message": f"source product {product_id!r} is not registered as a TS product",
+                    "field": "source_product_id",
+                    "rule": "ts_product_not_registered",
+                    "params": {"source_product_id": product_id},
+                }
+            ]
+    return []
+
+
 def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str, Any]:
     """Build the zero-side-effect preflight projection.
 
@@ -8844,6 +9050,13 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
     )
     reasons: list[dict[str, Any]] = []
     feasible = True
+    # B2 (round-4 plan): source-feasibility checks for step workflows, using only
+    # locally-verifiable facts.  Remote material stays a submit/prepare decision —
+    # the prepare chain is the legitimate path, so a cold remote source is never
+    # reported infeasible here.
+    for source_reason in _preflight_source_reasons(request, req.workflow, raw_input or {}):
+        feasible = False
+        reasons.append(source_reason)
     try:
         validate_execution_request(spec)
         # Only a target the client actually chose is validated here: an auto job's
@@ -8880,10 +9093,12 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
                 str(exc),
                 params={"field": "plan", **exc.params()},
             ) from exc
+    advisories = _scan_geometry_advisories(req.workflow, raw_input or {}, req.method or {})
     return {
         "schema_version": 1,
         "feasible": feasible,
         "reasons": reasons,
+        "advisories": advisories,
         "plan_digest": digest,
         "plan_summary": {
             "workflow": req.workflow,
