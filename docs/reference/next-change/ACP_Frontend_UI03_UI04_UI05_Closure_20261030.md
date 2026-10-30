@@ -72,6 +72,7 @@
 | 浏览器（隔离服务 `next_entry_server.py`，chromium） | 目录 15 项/4 可用、解析 C2H6O、`validate-method` 通过、预检通过、提交按钮启用、草稿落库（`/api/v1/drafts` 1 条） |
 | 浏览器（真实服务，只读） | 选中真实任务 → 证据面板 ready（4 个工件、时间戳、下载链接）；反应网络空态；**0 console error / 0 failed request** |
 | 浏览器（结构交接） | 解析后在共享查看器渲染 3D 乙醇（截图 `reports/frontend-layout-review/ui05-config-viewer.png`） |
+| 冷加载基线（chromium 1440×960，本机服务，三次取中位） | 经典 `/`：82 请求 / 3988 KB / DCL 372 ms；Next `/next/`：53 请求 / 1294 KB / DCL 261 ms（`performance.getEntriesByType` transferSize 合计，仅记录不设阈值） |
 
 ## 5. 关键实现约束（防止回归）
 
@@ -88,7 +89,7 @@
 3. **DSH 受控交互 NOT_VERIFIED**：无真实 DSH 安装、模型与会话闭环；Agent 面板仍是只读投影。
 4. **2D 化学描绘未交付**：仓库无 `depict/svg/png` 路由，浏览器无 RDKit；2D 工具选型在方案 §8 属未决项。本轮唯一的 2D 渲染是网络 SVG 与坐标投影图，不声称是化学二维结构。
 5. **化学网络仅历史数据**：`mechanism` 工作流已退役，现役工作流不产出 `reaction_network`；真实环境实测为空态（文案已说明数据来源）。
-6. **性能基线未测**：请求数/字节/TTI 未与经典页对比，未设阈值。
+6. **性能基线**：只记录了单机冷加载的请求数/传输字节/DCL（见 §4），未做 TTI、交互延迟或与经典页的阈值对比，也未覆盖远程/LSF 场景。
 7. **窄屏与键盘**：配置面板沿用 Shell 的栅格与按钮，未做专门的 320px 断点回归；键盘可达性沿用原生控件与 Shell 的 tab 模型。
 
 ## 7. 回退路径
