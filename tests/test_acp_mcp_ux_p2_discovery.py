@@ -92,10 +92,21 @@ def test_uncovered_workflow_is_marked_not_provided(client: TestClient) -> None:
 
 
 def test_capabilities_publish_a_workflow_contract_index(client: TestClient) -> None:
-    """Round 3: one read answers which workflows publish a contract."""
+    """Round 3+: one read answers which workflows publish a contract, and how
+    to fetch the detail or what to do when there is none (no source reading)."""
     payload = client.get("/api/capabilities").json()
     index = payload.get("workflow_contracts")
     assert isinstance(index, dict) and len(index) == 15
-    assert index["PESsearch"] == "partial"
-    assert index["BatchOptimize"] == "partial"
-    assert index["irc"] == "not_provided"
+    pes = index["PESsearch"]
+    assert pes["coverage"] == "partial"
+    assert pes["detail"] == {"tool": "acp_capabilities", "arguments": {"workflow": "PESsearch"}}
+    assert pes["guidance"] == "workflow.PESsearch"
+    # frozen-payload entries are now contracted
+    assert index["XtbPathSearch"]["coverage"] == "partial"
+    assert index["OrcaGradient"]["coverage"] == "partial"
+    assert index["XtbConstrainedOpt"]["coverage"] == "partial"
+    # uncontracted workflows carry an actionable fallback instead of silence
+    irc = index["irc"]
+    assert irc["coverage"] == "not_provided"
+    assert "uncontracted in MCP" in irc["fallback"]
+    assert irc["detail"]["arguments"] == {"workflow": "irc"}

@@ -129,8 +129,11 @@ _SHARED_EXECUTION = GuideEntry(
         "body": (
             "你通过 ACP MCP 协助用户完成受控的计算化学任务。使用当前会话实际开放的工具和服务端契约，"
             "不以本指南代替执行权限、科学验证或参数校验。\n"
-            "1. 识别用户目标，读取当前工作流能力、输入契约和适用指南。区分 registered、当前可执行、"
-            "参数覆盖完整与真实验收范围；必需部分缺失则报告缺口，不猜字段。\n"
+            "1. 发现协议（按此三步，不要靠读平台源码猜接口）：①acp_capabilities() 读 workflow_contracts "
+            "索引——每个工作流给出 coverage 与 {tool, arguments} 详情指针及未契约化时的 fallback；②"
+            "acp_capabilities(workflow=<id>) 读该工作流完整 input/method/resources schema、示例与 constraints；"
+            "③acp_get_guidance(guide_id) 读操作指南。区分 registered、当前可执行、参数覆盖完整与真实验收范围；"
+            "coverage=not_provided 时按 fallback 行动（用 CLI 路径或报告缺口），不读源码不猜字段。\n"
             "2. 优先复用已存在的结构、任务和工件。核对项目、来源 attempt、generation/digest 与电子态；"
             "保留原子顺序和映射。不要猜绝对路径、手填摘要或把展示序号当原子/帧身份。\n"
             "3. 从已有记录或授权读取科学选择；真正缺少且影响计算含义的信息集中询问。参数默认值必须来自契约；"

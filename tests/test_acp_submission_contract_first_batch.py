@@ -186,7 +186,15 @@ def test_scan_unknown_keys_refused() -> None:
 
 
 def test_confsearch_and_batch_contracts_unchanged() -> None:
-    assert set(WORKFLOW_CONTRACTS) == {"Confsearch", "BatchOptimize", "PESsearch", "scan"}
+    assert set(WORKFLOW_CONTRACTS) == {
+        "Confsearch",
+        "BatchOptimize",
+        "PESsearch",
+        "scan",
+        "XtbPathSearch",
+        "OrcaGradient",
+        "XtbConstrainedOpt",
+    }
     validate_workflow_submission(
         "Confsearch",
         input={"source_type": "smiles", "source": "CCO"},
@@ -208,3 +216,38 @@ def test_workflows_outside_staged_coverage_pass_through() -> None:
     validate_workflow_submission(
         "irc", input={"input": "ts.xyz"}, method={"whatever": 1}, resources=None
     )
+
+
+# --------------------------------------------------------------------------- #
+# Frozen-payload PES2TS entries (local-only, upstream-owned request objects)
+# --------------------------------------------------------------------------- #
+
+
+def test_frozen_payload_entries_require_their_request_object() -> None:
+    for workflow, key in (
+        ("XtbPathSearch", "path_request"),
+        ("OrcaGradient", "gradient_request"),
+        ("XtbConstrainedOpt", "constrained_opt_request"),
+    ):
+        validate_workflow_submission(
+            workflow,
+            input={key: {"request_version": "see-the-upstream-contract"}},
+            method={},
+            resources={"nproc": 2, "mem": "4GB"},
+        )
+    with pytest.raises(SubmissionContractError) as excinfo:
+        validate_workflow_submission(
+            "XtbPathSearch", input={"input": "molecule.xyz"}, method={}, resources=None
+        )
+    assert excinfo.value.params()["rule"] == "missing_input"
+
+
+def test_frozen_payload_entries_reject_undeclared_top_level_keys() -> None:
+    with pytest.raises(SubmissionContractError) as excinfo:
+        validate_workflow_submission(
+            "OrcaGradient",
+            input={"gradient_request": {}, "surprise": 1},
+            method={},
+            resources=None,
+        )
+    assert excinfo.value.params()["rule"] == "unknown_field"
