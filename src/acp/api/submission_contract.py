@@ -160,6 +160,14 @@ _PESSEARCH_STRATEGIES: frozenset[str] = frozenset(
 #: shape: ``levels`` is consumed by ``method_levels_to_cli_flags(workflow=...)``,
 #: and per-level ``electronic_state`` modules are read by the scheduler's
 #: ``electronic_state_from_method``.
+#: Reviewed schema-id aliases: a workflow may accept more than one schema id
+#: only when both are known representations of the same capability (the
+#: Workbench's PES wizard sends ``pes_bond_scan`` for the ``pes_scan`` workflow).
+_SCHEMA_ALIASES: dict[str, frozenset[str]] = {
+    "PESsearch": frozenset({"pes_scan", "pes_bond_scan"}),
+}
+
+
 _SIMPLE_INPUT_KEYS: frozenset[str] = frozenset(
     {
         "input_artifact",
@@ -603,6 +611,18 @@ def _as_mapping(value: Any, field_name: str) -> Mapping[str, Any]:
     return value
 
 
+def _allowed_schemas(workflow: str) -> frozenset[str]:
+    """Schema ids this workflow may carry (default + reviewed aliases)."""
+    from acp.catalog import get_workflow_by_id
+
+    default_schema = str(
+        (get_workflow_by_id(workflow) or {}).get("method_schema_id") or ""
+    )
+    if not default_schema:
+        return frozenset()
+    return frozenset({default_schema}) | _SCHEMA_ALIASES.get(workflow, frozenset())
+
+
 def _levels_for_method(
     workflow: str, method: Mapping[str, Any], contract: WorkflowContract
 ) -> Mapping[str, frozenset[str]]:
@@ -615,20 +635,8 @@ def _levels_for_method(
     """
     schema_id = method.get("schema_id")
     if isinstance(schema_id, str) and schema_id:
-        from acp.catalog import METHOD_SCHEMAS, get_workflow_by_id
+        from acp.catalog import METHOD_SCHEMAS
 
-        default_schema = str(
-            (get_workflow_by_id(workflow) or {}).get("method_schema_id") or ""
-        )
-        if default_schema and schema_id != default_schema:
-            raise SubmissionContractError(
-                f"{workflow} method.schema_id must be {default_schema!r} "
-                f"(got {schema_id!r}); cross-schema method payloads would be "
-                "accepted but ignored by the runner",
-                field_name="method.schema_id",
-                rule="unsupported_combination",
-                allowed=(default_schema,),
-            )
         if schema_id in METHOD_SCHEMAS:
             try:
                 schema_levels = _level_fields(schema_id)
@@ -656,19 +664,15 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
     # a wrong schema_id must be refused even when levels is omitted.
     schema_id = method.get("schema_id")
     if isinstance(schema_id, str) and schema_id:
-        from acp.catalog import get_workflow_by_id
-
-        default_schema = str(
-            (get_workflow_by_id(workflow) or {}).get("method_schema_id") or ""
-        )
-        if default_schema and schema_id != default_schema:
+        allowed_schemas = _allowed_schemas(workflow)
+        if allowed_schemas and schema_id not in allowed_schemas:
             raise SubmissionContractError(
-                f"{workflow} method.schema_id must be {default_schema!r} "
-                f"(got {schema_id!r}); cross-schema method payloads would be "
-                "accepted but ignored by the runner",
+                f"{workflow} method.schema_id must be one of "
+                f"{sorted(allowed_schemas)} (got {schema_id!r}); cross-schema "
+                "method payloads would be accepted but ignored by the runner",
                 field_name="method.schema_id",
                 rule="unsupported_combination",
-                allowed=(default_schema,),
+                allowed=tuple(sorted(allowed_schemas)),
             )
     for key, allowed in contract.method_enums.items():
         if key not in method or method[key] is None or method[key] == "":
