@@ -239,6 +239,19 @@ def test_redaction_keeps_lowercase_hex_identity() -> None:
     assert mo.redact(identity) == identity
 
 
+# 2026-10-30 guidance batch: the three frozen pes2ts payload ids are published
+# contract identifiers (they name the request schema an agent must submit);
+# the opaque net must not rewrite them inside guidance bodies.
+def test_redaction_keeps_published_pes2ts_wire_identifiers() -> None:
+    for identifier in (
+        "pes2ts_xtb_path_request_v1",
+        "pes2ts_orca_gradient_request_v1",
+        "pes2ts_xtb_constrained_opt_request_v1",
+    ):
+        assert mo.redact(identifier) == identifier, identifier
+        assert mo.redact(f"consume {identifier} payload") == f"consume {identifier} payload"
+
+
 # M3-01b (F5): the published platform identifiers must survive so RPH can
 # attribute a submit.  The net keeps its named namespaces; a random opaque run
 # is still redacted.

@@ -227,3 +227,28 @@ def test_full_body_policy_refuses_binary() -> None:
     with pytest.raises(ArtifactBodyRefusedError) as excinfo:
         _assert_body_content_safe(b"\xff\xfe\x00")
     assert excinfo.value.params["rule"] == "artifact_body_unverifiable"
+
+
+# ---------------------------------------------------------------------------
+# Bounded reads never split a transport unit (codex P2, 2026-10-30)
+# ---------------------------------------------------------------------------
+
+
+def test_read_limit_aligns_to_utf8_character_boundary() -> None:
+    from acp_services.data.artifacts import _align_read_limit
+
+    body = "é".encode("utf-8") * 4  # 8 bytes, 2-byte characters
+    aligned = _align_read_limit(body, 1, encoding="identity")
+    assert aligned == 0  # slicing into the first é is refused: drop to whole chars
+    assert body[: _align_read_limit(body, 5, encoding="identity")] == "éé".encode("utf-8")
+
+
+def test_read_limit_aligns_base64_to_whole_blocks() -> None:
+    from base64 import b64encode
+
+    from acp_services.data.artifacts import _align_read_limit
+
+    body = b64encode(b"abcdefghij")  # 16 base64 chars
+    aligned = _align_read_limit(body, 6, encoding="base64")
+    assert aligned % 4 == 0
+    assert body[:aligned]

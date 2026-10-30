@@ -209,7 +209,7 @@ _SCAN_INPUT_PROPERTIES: dict[str, Any] = {
     "scan_coordinates": {
         "type": "array",
         "items": _COORDINATE_OBJECT,
-        "description": "Coordinates may ride in input or method (method wins the read order).",
+        "description": "Coordinates may ride in input or method; the shared validator reads input FIRST (input.scan_coordinates/input.coordinate before method) — do not override an input coordinate via method.",
     },
     "coordinate": {
         "oneOf": [

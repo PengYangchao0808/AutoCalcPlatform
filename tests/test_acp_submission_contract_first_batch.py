@@ -51,6 +51,20 @@ def _scan_input() -> dict[str, object]:
 # --------------------------------------------------------------------------- #
 
 
+def test_pessearch_wizard_metadata_fields_pass() -> None:
+    """The Workbench wizard sends schema_id/profile_id with every submit."""
+    validate_workflow_submission(
+        "PESsearch",
+        input=_pes_input(),
+        method={
+            "mode": "bond_length_scan",
+            "schema_id": "pes_bond_scan",
+            "profile_id": "default",
+        },
+        resources=None,
+    )
+
+
 def test_pessearch_bond_scan_positive_passes() -> None:
     validate_workflow_submission(
         "PESsearch", input=_pes_input(), method={"mode": "bond_length_scan"}, resources={"nproc": 4}

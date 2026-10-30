@@ -15,6 +15,7 @@ Unit-level pins over the protocol owner (``acp_services.entrypoints.mcp``):
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -151,6 +152,32 @@ def test_wired_port_returns_versioned_payload() -> None:
     assert data["guide_id"] == "workflow.PESsearch"
     assert data["version"] == "1.0.0"
     assert port.requests == [{"guide_id": "workflow.PESsearch", "section": "purpose"}]
+
+
+def test_wire_content_keeps_public_identifiers_under_the_secret_net() -> None:
+    """Serialized guidance must equal the pack body (codex P2, 2026-10-30).
+
+    The opaque-token net used to rewrite ``pes2ts_*_request_v1`` to
+    ``<redacted>`` inside the tool result while the digest stayed unchanged —
+    an information loss on the MCP face only.  The wire body must match the
+    pack payload exactly.
+    """
+    from acp.api.guidance_pack import read_guide as pack_read
+
+    class _PassThrough:
+        def guidance(self, request: dict[str, Any], *, workspace_id: str) -> dict[str, Any]:
+            return dict(pack_read(str(request["guide_id"])))
+
+    server = _server(_PassThrough())
+    result = _call(server, {"guide_id": "workflow.XtbConstrainedOpt"})
+    assert result["isError"] is False
+    serialized = json.dumps(result, ensure_ascii=False)
+    assert "pes2ts_xtb_constrained_opt_request_v1" in serialized
+    assert "<redacted>" not in serialized
+    data = result["structuredContent"]["data"]
+    pack_payload = pack_read("workflow.XtbConstrainedOpt")
+    assert data["sections"] == pack_payload["sections"]
+    assert data["digest"] == pack_payload["digest"]
 
 
 def test_unwired_port_is_a_typed_refusal() -> None:

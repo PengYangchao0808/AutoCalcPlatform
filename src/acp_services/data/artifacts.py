@@ -1074,7 +1074,7 @@ def resolve_artifact_read(
         source_schema=str(payload.get("source_schema") or stored.source_schema),
     )
     total = len(body)
-    limit = max(0, int(max_bytes))
+    limit = _align_read_limit(body, max(0, int(max_bytes)), encoding=str(encoding))
     truncated = limit < total
     return ArtifactRead(
         ref=ref,
@@ -1082,6 +1082,21 @@ def resolve_artifact_read(
         encoding="base64" if str(encoding) == "base64" else "identity",
         truncated=truncated,
     )
+
+
+def _align_read_limit(body: bytes, limit: int, *, encoding: str) -> int:
+    """Align a read bound to the body's transport shape.
+
+    A base64 body is ASCII blocks of four: an unaligned slice fails the MCP
+    decode, so the bound drops to a whole block.  An identity body is UTF-8: a
+    slice through a multibyte character is refused by the content check, so the
+    bound drops to the last full character (codex P2, 2026-10-30).
+    """
+    if limit >= len(body):
+        return limit
+    if encoding == "base64":
+        return limit - (limit % 4)
+    return len(body[:limit].decode("utf-8", errors="ignore").encode("utf-8"))
 
 
 def operation_to_artifact_ref(

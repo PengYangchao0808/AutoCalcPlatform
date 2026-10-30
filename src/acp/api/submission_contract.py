@@ -145,6 +145,10 @@ _PESSEARCH_METHOD_KEYS: frozenset[str] = frozenset(
         "select",
         "coordinate_plan",  # manifest path --plan JSON
         "scan_request",  # runner fallback carrier (input.scan_request preferred)
+        # Workbench wizard metadata (submit-edit.js sends both with every
+        # PESsearch submit); consumers treat them as capability metadata.
+        "schema_id",
+        "profile_id",
     }
 )
 
