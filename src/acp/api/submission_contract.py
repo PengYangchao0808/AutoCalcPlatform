@@ -601,9 +601,15 @@ def _levels_for_method(
 
         if schema_id in METHOD_SCHEMAS:
             try:
-                return _level_fields(schema_id)
+                schema_levels = _level_fields(schema_id)
             except (KeyError, ValueError):
                 return contract.levels
+            # Contract mirrors (e.g. the 1-based scan_coordinate_atoms that the
+            # edit path consumes) stay additive on top of the schema table.
+            merged = dict(schema_levels)
+            for level_id, fields in contract.levels.items():
+                merged[level_id] = merged.get(level_id, frozenset()) | fields
+            return merged
     return contract.levels
 
 
