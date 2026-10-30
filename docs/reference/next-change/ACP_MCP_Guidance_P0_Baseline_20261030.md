@@ -60,6 +60,7 @@
 ## 4. 真实验收场景（P0 出口项 5，范围声明）
 
 - **基础门**（§3.3）：连接→发现→构造请求→预检→提交→等待→产物→read→找回。当前可通过既有 8+1 工具完成；本批新增指南读取一步。
+- **已验证**（2026-10-30，回执 `reports/acp2_mcp_guidance_20261030/`）：DA 科研门真实链路 PASS-with-notes（codex/gpt-6-astra 独立验收）。同轮登记的缺陷：①BatchOptimize inline item 未标 role 时静默按 INT+默认方法执行、TS 意图无 typed 提示（负例 job 005，归 P1a/P3）；②PES coordinate.unit 非法枚举未在提交校验拦截（负例 job 001，归 P1a）；③pes_profile geometry_path 与落盘不一致等观察项（归 P1a/P2）。
 - **科研门**（DA 验证，用户授权的真实 QC）：环戊二烯+乙烯 DA，经 MCP 提交 PESsearch（bond_length_scan，新建 C–C 键）→ 读曲线/帧 → 选初猜 → BatchOptimize（opt_freq，TS 角色）→ 读逐项结果判定虚频。**当前链路的发布段走现有确认门**；P2/P3 落地前不宣称"全自动发布已交付"。验证回执落 `reports/`（另行登记）。
 
 ## 5. 同步清单（本批触碰面）
