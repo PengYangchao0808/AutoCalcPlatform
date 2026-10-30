@@ -441,6 +441,19 @@ def _capabilities_payload(
         for name in _ACTIVE_WF
     }
 
+    # Round 3 / U04: the Controller's admission-view capacity so an agent can
+    # choose nproc/mem from measured numbers instead of guessing.
+    from acp.api.capacity import build_capacity_projection
+
+    try:
+        payload["capacity"] = build_capacity_projection(request.app.state.job_manager)
+    except Exception:  # noqa: BLE001 - discovery must survive a probe failure
+        payload["capacity"] = {
+            "schema": "acp2.capacity.view.v1",
+            "semantics": "unavailable",
+            "unknown": ["capacity"],
+        }
+
     if handshake.refusal is not None:
         # Typed, in-band refusal: the client still receives extensions[] so it
         # can read the supported version instead of guessing.

@@ -102,7 +102,17 @@ _BATCH_INPUT_PROPERTIES: dict[str, Any] = {
 }
 
 _RESOURCE_PROPERTIES: dict[str, Any] = {
-    "nproc": {"type": "integer", "minimum": 1, "description": "Cores (preferred key)."},
+    # Round 3 / U04: choose from the measured admission view, not a guess.
+    # capabilities.capacity reports total/in_use/available cores+memory and the
+    # concurrency slots; admission.limits stays the hard ceiling.
+    "nproc": {
+        "type": "integer",
+        "minimum": 1,
+        "description": (
+            "Cores (preferred key). Choose at or below capabilities.capacity."
+            "available.cores; never above admission.limits.max_cores."
+        ),
+    },
     "ncores": {"type": "integer", "minimum": 1, "description": "Alias of nproc."},
     "cores": {"type": "integer", "minimum": 1, "description": "Alias of nproc."},
     "mem": {"type": "string", "description": "Memory with unit, e.g. 8GB."},
