@@ -1,20 +1,47 @@
-"""Admission-view capacity projection (U04: agents choose resources from facts)."""
+"""Admission-view capacity projection (U04: agents choose resources from facts).
+
+The projection must reuse the existing authorities — AdmissionLimits/Capacity,
+``resolve_job_resources`` and the single memory parser — instead of re-deriving
+resource rules (round-12 maintainer note).
+"""
 
 from __future__ import annotations
 
-from acp.api.capacity import _parse_mem_mb, build_capacity_projection
+from acp.api.capacity import build_capacity_projection
+from acp_services.runtime.local_admission import AdmissionLimits
+
+
+class _Capacity:
+    cores = 16
+    memory_mb = 65536
+    concurrency = 4
+    storage_bytes = 10**12
+    source = "local-single-enforced"
+    available = True
+
+
+class _Controller:
+    def capacity(self) -> _Capacity:
+        return _Capacity()
+
+
+class _Admission:
+    limits = AdmissionLimits(
+        max_cores=32, max_memory_mb=131072, max_tasks=8, max_walltime_s=86400,
+        max_storage_bytes=2 * 10**12,
+    )
+    controller = _Controller()
 
 
 class _Record:
-    def __init__(self, cores: int, mem: str) -> None:
-        class _Spec:
-            resources = {"nproc": cores, "mem": mem}
+    class _Spec:
+        resources = {"nproc": 4, "mem": "8GB"}
 
-        self.spec = _Spec()
+    spec = _Spec()
 
 
 class _Store:
-    def __init__(self, running: list[_Record], queued: list[_Record]) -> None:
+    def __init__(self, running: list, queued: list) -> None:
         self._running = running
         self._queued = queued
 
@@ -27,44 +54,51 @@ class _Store:
             "completed": 3,
         }
 
-    def list(self, status: str | None = None, limit: int = 200) -> list[_Record]:
+    def list(self, status: str | None = None, limit: int = 200) -> list:
         return list(self._running if status == "running" else self._queued)
 
 
 class _Manager:
-    def __init__(self, running: list[_Record], queued: list[_Record], max_running: int = 4) -> None:
+    def __init__(self, running: list, queued: list, max_running: int = 4) -> None:
         self.store = _Store(running, queued)
         self.max_running = max_running
 
 
-def test_memory_parser_handles_units_and_plain_numbers() -> None:
-    assert _parse_mem_mb("8GB") == 8192
-    assert _parse_mem_mb("4GiB") == 4096
-    assert _parse_mem_mb("4096") == 4096
-    assert _parse_mem_mb("512MB") == 512
-    assert _parse_mem_mb(None) is None
-    assert _parse_mem_mb("lots") is None
-
-
-def test_projection_sums_active_reservations_and_slots() -> None:
+def test_projection_reads_the_admission_authority() -> None:
     cap = build_capacity_projection(
-        _Manager([_Record(4, "8GB"), _Record(2, "4GB")], [_Record(1, "1GB")])
+        _Manager([_Record(), _Record()], [_Record()]), admission=_Admission()
     )
     assert cap["schema"] == "acp2.capacity.view.v1"
     assert "admission-view" in cap["semantics"]
-    assert cap["in_use"]["cores"] == 7
-    assert cap["in_use"]["memory_mb"] == 13312
-    assert cap["in_use"]["active_jobs"] == 3
-    assert cap["concurrency"]["running"] == 2
+    # limits come from AdmissionLimits (the same definitions admission enforces)
+    assert cap["limits"]["max_cores"] == 32
+    assert cap["limits"]["max_memory_mb"] == 131072
+    # pool comes from controller.capacity()
+    assert cap["pool"]["cores"] == 16
+    assert cap["pool"]["source"] == "local-single-enforced"
+    # reservations are normalised by the shared resolver: 3 x (4 cores, 8 GB)
+    assert cap["in_use"]["cores"] == 12
+    assert cap["in_use"]["memory_mb"] == 3 * 8192
+    assert cap["available"]["cores"] == 4
     assert cap["concurrency"]["slots_free"] == 2
-    assert cap["available"]["cores"] is not None
-    assert cap["guidance"]
+    assert "unknown" in cap
 
 
-def test_unknown_is_explicit_not_a_zero() -> None:
+def test_missing_authority_is_explicit_unknown_not_a_zero() -> None:
     class _NoStore:
         pass
 
     cap = build_capacity_projection(_NoStore())
     assert "in_use" in cap["unknown"]
-    assert cap["available"]["cores"] is None or cap["in_use"]["cores"] == 0
+    assert "limits" in cap["unknown"]
+    assert cap["available"]["cores"] is None
+
+
+def test_fallback_to_limits_when_no_pool_authority() -> None:
+    class _NoController:
+        limits = _Admission.limits
+
+    cap = build_capacity_projection(_Manager([], []), admission=_NoController())
+    assert cap["pool"]["source"] == "admission_limits_fallback"
+    assert cap["pool"]["cores"] == 32
+    assert "pool" in cap["unknown"]

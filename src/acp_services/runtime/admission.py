@@ -3249,6 +3249,16 @@ class AdmissionController:
 
     # -- public API ----------------------------------------------------------
 
+    def capacity(self) -> Capacity:
+        """Return the current pool capacity snapshot (read-only projection).
+
+        The Capacity authority is the injected :class:`CapacityProvider`; this
+        accessor exposes it without letting callers reach into ``_capacity``
+        (the capacity view backs discovery projections such as
+        ``capabilities.capacity``).
+        """
+        return self._capacity.capacity()
+
     def admit(
         self,
         request: AdmissionRequest,

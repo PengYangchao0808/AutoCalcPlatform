@@ -110,7 +110,7 @@ _RESOURCE_PROPERTIES: dict[str, Any] = {
         "minimum": 1,
         "description": (
             "Cores (preferred key). Choose at or below capabilities.capacity."
-            "available.cores; never above admission.limits.max_cores."
+            "available.cores; never above capacity.limits.max_cores."
         ),
     },
     "ncores": {"type": "integer", "minimum": 1, "description": "Alias of nproc."},

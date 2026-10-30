@@ -446,7 +446,10 @@ def _capabilities_payload(
     from acp.api.capacity import build_capacity_projection
 
     try:
-        payload["capacity"] = build_capacity_projection(request.app.state.job_manager)
+        payload["capacity"] = build_capacity_projection(
+            request.app.state.job_manager,
+            admission=getattr(request.app.state, "admission", None),
+        )
     except Exception:  # noqa: BLE001 - discovery must survive a probe failure
         payload["capacity"] = {
             "schema": "acp2.capacity.view.v1",
