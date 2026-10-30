@@ -1,0 +1,360 @@
+/*
+ * ACP Next — task-config panel (UI-03).
+ * Scope: `.acp-cfg*` only. Tokens come from base.css (:root) / shell.css
+ * (`.acp-shell`); this file defines no new global tokens.
+ */
+
+.acp-cfg {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: auto;
+  background: var(--bg-base, #0b0f14);
+  color: var(--text-primary, #e5edf5);
+}
+
+.acp-cfg-body {
+  display: grid;
+  gap: 18px;
+  padding: 12px 14px 72px;
+}
+
+.acp-cfg-section {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-default, #24303b);
+}
+
+.acp-cfg-section:last-of-type {
+  border-bottom: 0;
+  padding-bottom: 4px;
+}
+
+.acp-cfg-heading {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary, #9fb0c3);
+  text-transform: uppercase;
+}
+
+.acp-cfg-label {
+  font-size: 12px;
+  color: var(--text-secondary, #9fb0c3);
+}
+
+.acp-cfg-label + .acp-cfg-input,
+.acp-cfg-label + .acp-cfg-select {
+  margin-top: 4px;
+}
+
+.acp-cfg-text,
+.acp-cfg-input,
+.acp-cfg-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #131a23);
+  color: var(--text-primary, #e5edf5);
+  font: inherit;
+  font-size: 12px;
+}
+
+.acp-cfg-text {
+  min-height: 92px;
+  resize: vertical;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  line-height: 1.45;
+}
+
+.acp-cfg-text:focus,
+.acp-cfg-input:focus,
+.acp-cfg-select:focus {
+  outline: 1px solid var(--accent, #4ea1ff);
+  outline-offset: 0;
+  border-color: var(--accent, #4ea1ff);
+}
+
+.acp-cfg-select:disabled,
+.acp-cfg-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.acp-cfg-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.acp-cfg-file {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 11px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--text-primary, #e5edf5);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.acp-cfg-file:hover {
+  border-color: var(--accent, #4ea1ff);
+  color: var(--text-primary, #e5edf5);
+}
+
+.acp-cfg-file input[type="file"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.acp-cfg-note,
+.acp-cfg-help {
+  margin: 0;
+  color: var(--text-muted, #74859a);
+  font-size: 11px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.acp-cfg-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.acp-cfg-field {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.acp-cfg-field--wide {
+  grid-column: 1 / -1;
+}
+
+.acp-cfg-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.acp-cfg-level {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.acp-cfg-level-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #e5edf5);
+}
+
+.acp-cfg-advanced {
+  border-top: 1px dashed var(--border-default, #24303b);
+  padding-top: 8px;
+}
+
+.acp-cfg-advanced > summary {
+  cursor: pointer;
+  color: var(--text-secondary, #9fb0c3);
+  font-size: 11px;
+  list-style: none;
+}
+
+.acp-cfg-advanced > summary::-webkit-details-marker {
+  display: none;
+}
+
+.acp-cfg-advanced > summary::before {
+  content: "▸ ";
+}
+
+.acp-cfg-advanced[open] > summary::before {
+  content: "▾ ";
+}
+
+.acp-cfg-advanced .acp-cfg-field {
+  margin-top: 8px;
+}
+
+.acp-cfg-notes {
+  margin: 0;
+  padding-left: 16px;
+  color: var(--text-muted, #74859a);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.acp-cfg-notes[hidden] {
+  display: none;
+}
+
+.acp-cfg-summary {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.acp-cfg-summary dt {
+  color: var(--text-muted, #74859a);
+}
+
+.acp-cfg-summary dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.acp-cfg-summary-empty {
+  grid-column: 1 / -1;
+  color: var(--text-muted, #74859a);
+  margin: 0;
+}
+
+.acp-cfg-status {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.acp-cfg-status[hidden],
+.acp-cfg-errors[hidden],
+.acp-cfg-receipt[hidden],
+.acp-cfg-banner[hidden] {
+  display: none;
+}
+
+.acp-cfg-errors {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.acp-cfg-error {
+  color: #ff9b9b;
+  overflow-wrap: anywhere;
+}
+
+.acp-cfg-warning {
+  color: #f0c674;
+  overflow-wrap: anywhere;
+}
+
+.acp-cfg-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-default, #24303b);
+  background: linear-gradient(180deg, rgba(11, 15, 20, 0.86), var(--bg-base, #0b0f14) 60%);
+  backdrop-filter: blur(4px);
+}
+
+.acp-cfg-actions .acp-btn {
+  flex: 1;
+}
+
+.acp-cfg-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 10px 14px 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(78, 161, 255, 0.4);
+  border-radius: var(--radius-sm, 6px);
+  background: rgba(78, 161, 255, 0.1);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.acp-cfg-banner-text {
+  flex: 1 1 100%;
+  overflow-wrap: anywhere;
+}
+
+.acp-cfg-draft-status {
+  margin: 0;
+  padding: 0 14px 10px;
+  min-height: 14px;
+  color: var(--text-muted, #74859a);
+  font-size: 11px;
+}
+
+.acp-cfg-receipt {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid rgba(88, 190, 140, 0.45);
+  border-radius: 8px;
+  background: rgba(88, 190, 140, 0.08);
+}
+
+.acp-cfg-receipt-title {
+  margin: 0;
+  font-size: 12px;
+  color: #7fe0ad;
+}
+
+.acp-cfg-receipt p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.acp-cfg-mono {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  color: var(--text-secondary, #9fb0c3);
+}
+
+.acp-cfg-classic-link {
+  display: block;
+  margin: 0 14px 14px;
+  padding: 8px 10px;
+  border: 1px dashed var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text-secondary, #9fb0c3);
+  font-size: 11px;
+  line-height: 1.55;
+  text-decoration: none;
+}
+
+.acp-cfg-classic-link[hidden] {
+  display: none;
+}
+
+.acp-cfg-classic-link:hover {
+  color: var(--text-primary, #e5edf5);
+  border-color: var(--accent, #4ea1ff);
+}
+
+@media (max-width: 420px) {
+  .acp-cfg-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

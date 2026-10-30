@@ -100,6 +100,18 @@ ACPShell.commands = (function () {
     return deliver(target, "openTask", taskRef, { taskRef: taskRef }, source);
   }
 
+  /** ref: { source, jobId?, attempt?, nodeId? } — network browsing only. */
+  function openNetwork(ref) {
+    if (!ref || typeof ref !== "object") return result(false, { error: "ref must be an object" });
+    var source = typeof ref.source === "string" && ref.source ? ref.source : "shell.commands.openNetwork";
+    var patch = {};
+    if (ref.jobId) patch.taskRef = { jobId: ref.jobId, attempt: typeof ref.attempt === "number" ? ref.attempt : null };
+    if (ref.nodeId) patch.networkNodeId = String(ref.nodeId);
+    var target = resolvePanel("networkNodeId", "network.read");
+    navigate(target, target ? target.workspaceId : null);
+    return deliver(target, "openNetwork", ref, patch, source);
+  }
+
   /** ref: { source, jobId, attempt?, artifactId? } — evidence browsing only. */
   function openEvidence(ref) {
     if (!ref || typeof ref !== "object") return result(false, { error: "ref must be an object" });
@@ -128,6 +140,7 @@ ACPShell.commands = (function () {
     init: init,
     openStructure: openStructure,
     openTask: openTask,
+    openNetwork: openNetwork,
     openEvidence: openEvidence,
     openProposal: openProposal
   };

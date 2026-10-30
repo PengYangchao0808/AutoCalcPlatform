@@ -13,6 +13,9 @@
 <link rel="stylesheet" href="/css/modules/molecule-viewer.css">
 <link rel="stylesheet" href="/css/modules/task-explorer.css">
 <link rel="stylesheet" href="/css/modules/workspace-details.css">
+<link rel="stylesheet" href="/css/modules/task-config.css">
+<link rel="stylesheet" href="/css/modules/exec-detail.css">
+<link rel="stylesheet" href="/css/modules/reaction-network.css">
 </head>
 <body>
 <!-- file:// guard. Every asset below is an absolute URL (/css, /js), so an
@@ -153,9 +156,10 @@
     </section>
     <section class="acp-workspace" id="acp-ws-execution" role="tabpanel"
              aria-labelledby="acp-tab-execution" tabindex="0" hidden
-             data-workspace-id="execution" data-has-side="true" data-has-bottom="false">
+             data-workspace-id="execution" data-has-side="true" data-has-bottom="true">
       <div class="acp-slot" data-slot="main" id="acp-slot-execution-main"></div>
       <div class="acp-slot" data-slot="side" id="acp-slot-execution-side"></div>
+      <div class="acp-slot" data-slot="bottom" id="acp-slot-execution-bottom"></div>
     </section>
   </main>
 
@@ -209,8 +213,10 @@
 <script src="/js/modules/molecule-viewer/module.js"></script>
 <script src="/js/modules/task-explorer/module.js"></script>
 <script src="/js/modules/agent-workspace/module.js"></script>
+<script src="/js/modules/task-config/model.js"></script>
 <script src="/js/modules/task-config/module.js"></script>
 <script src="/js/modules/exec-detail/module.js"></script>
+<script src="/js/modules/reaction-network/module.js"></script>
 <!-- demo mocks: registered into ACPNextModules, used by ?demo=1 + module tests only -->
 <script src="/js/shell/mock/mock-alpha.js"></script>
 <script src="/js/shell/mock/mock-beta.js"></script>

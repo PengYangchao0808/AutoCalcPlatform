@@ -270,6 +270,14 @@
       if (fx) {
         request = Promise.resolve(fx.taskStatus || null);
       } else {
+        if (!scope().projectId) {
+          // The science read contract requires a project scope. With "all
+          // projects" selected there is nothing to read, and calling the
+          // adapter would throw out of updateContext.
+          state.planExecution = { status: "empty", taskStatus: null };
+          renderIf(gen);
+          return Promise.resolve();
+        }
         var c = client();
         if (!c || !c.science || typeof c.science.fetchTaskStatus !== "function") {
           state.planExecution = { status: "error", taskStatus: null, error: "no_client" };
@@ -306,6 +314,11 @@
       if (fx) {
         request = Promise.resolve(fx.view || null);
       } else {
+        if (!scope().projectId) {
+          state.evidence = { status: "empty", view: null, errorKind: null };
+          renderIf(gen);
+          return Promise.resolve();
+        }
         var c = client();
         if (!c || !c.science || typeof c.science.fetchView !== "function") {
           state.evidence = { status: "error", view: null, errorKind: "no_client" };

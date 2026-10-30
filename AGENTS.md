@@ -86,7 +86,7 @@ pyproject.toml            # api/remote/nmr/dev extras；console script `acp = ac
 - **Services 证据/收口**: 层记录 `docs/reference/current/ACP_Services_Closure_20261019.md`（三态 PASS/FAIL/NOT_VERIFIED）+ 四组合 `docs/reference/current/ACP_Services_Four_Combination_Acceptance.md`；台账 `tests/baseline/services-evidence/{migration_ledger,public_shim_inventory,handoff_registry}.md`；守护 `tests/test_services_*.py` + `tests/test_acp_services_isolation.py` + `tests/test_services_doc_sync.py`
 - **公开 shim/历史 reader**: `acp.calculations.primitives`（→ `cccp.calculation.tasks`）、`acp.backends`（→ `cccp.backends`）、`src/acp/compat/legacy/` 只读 reader 均**保留**；调用者审计见 `tests/baseline/services-evidence/public_shim_inventory.md`。禁止以缩代码为由删除兼容面
 - **NMR**: 全套见 `src/acp/nmr/AGENTS.md`；工作流入口 `workflows/nmr.py`
-- **Frontend**: `frontend/ACP_Workbench_v2.html` — 能量/轨迹查看器、任务向导、结构来源面板、job_editor
+- **Frontend**: `frontend/ACP_Workbench_v2.html` — 经典工作台（能量/轨迹、向导、结构来源、job_editor）；`frontend/next/` 为 ACP Next 实验入口（`js/shell/*` + `js/modules/{molecule-viewer,task-explorer,task-config,exec-detail,agent-workspace,reaction-network}`），设计与收口见 `docs/reference/next-change/`
 - **权威设计文档**: `docs/reference/current/ACP_Job_File_Layout_Spec.md`（文件布局契约）、`docs/reference/current/ACP_Energy_Trajectory_Viewer_DevDoc.md`（帧契约/采样管线）、`docs/reference/current/ACP_PES_Manual_Review_DevDoc.md`（PES 人工选点 → BatchOptimize）、`docs/reference/current/ACP_Simple_Workflows_DevDoc.html`（simple 工作流）
 
 ## CONVENTIONS

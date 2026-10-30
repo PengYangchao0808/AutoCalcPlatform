@@ -1,0 +1,169 @@
+/*
+ * ACP Next — reaction-network panel styles (UI-04, read-only SVG).
+ * Scope: `.acp-net*` only; the SVG palette is local (role colors).
+ */
+
+.acp-net {
+  --net-reactant: #4ea1ff;
+  --net-product: #7fe0ad;
+  --net-ts: #f0c674;
+  --net-intermediate: #d7b8ff;
+  --net-unknown: #9fb0c3;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  min-height: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  background: var(--bg-base, #0b0f14);
+  color: var(--text-primary, #e5edf5);
+  font-size: 12px;
+}
+
+.acp-net-head[hidden] {
+  display: none;
+}
+
+.acp-net-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 14px 6px;
+  border-bottom: 1px solid var(--border-default, #24303b);
+}
+
+.acp-net-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary, #9fb0c3);
+}
+
+.acp-net-sub {
+  margin: 0;
+  color: var(--text-muted, #74859a);
+  font-size: 10px;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.acp-net-canvas {
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 10px;
+}
+
+.acp-net-svg {
+  display: block;
+  min-width: 320px;
+  max-height: 100%;
+  color: var(--text-muted, #74859a);
+}
+
+.acp-net-state {
+  margin: 0;
+  padding: 6px 14px;
+  color: var(--text-muted, #74859a);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.acp-net-state-hint {
+  color: var(--text-muted, #74859a);
+}
+
+.acp-net-node .acp-net-shape {
+  fill: rgba(255, 255, 255, 0.035);
+  stroke: var(--net-unknown);
+  stroke-width: 1.2;
+}
+
+.acp-net-node.is-reactant .acp-net-shape { stroke: var(--net-reactant); }
+.acp-net-node.is-product .acp-net-shape { stroke: var(--net-product); }
+.acp-net-node.is-ts .acp-net-shape { stroke: var(--net-ts); fill: rgba(240, 198, 116, 0.1); }
+.acp-net-node.is-intermediate .acp-net-shape { stroke: var(--net-intermediate); }
+
+.acp-net-node.is-selected .acp-net-shape {
+  stroke-width: 2.2;
+  fill: rgba(78, 161, 255, 0.18);
+}
+
+.acp-net-node {
+  cursor: pointer;
+}
+
+.acp-net-node-label {
+  fill: var(--text-primary, #e5edf5);
+  font-size: 10px;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  pointer-events: none;
+}
+
+.acp-net-node-meta {
+  fill: var(--text-muted, #74859a);
+  font-size: 8.5px;
+  pointer-events: none;
+}
+
+.acp-net-edge {
+  cursor: pointer;
+  color: var(--text-muted, #74859a);
+}
+
+.acp-net-edge.is-selected {
+  color: var(--accent, #4ea1ff);
+}
+
+.acp-net-edge-label {
+  fill: var(--text-secondary, #9fb0c3);
+  font-size: 8.5px;
+  pointer-events: none;
+}
+
+.acp-net-detail {
+  display: grid;
+  gap: 4px;
+  max-height: 132px;
+  overflow: auto;
+  padding: 8px 14px;
+  border-top: 1px solid var(--border-default, #24303b);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.acp-net-detail[hidden] {
+  display: none;
+}
+
+.acp-net-detail-title {
+  margin: 0 0 2px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.acp-net-detail-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+}
+
+.acp-net-detail-label {
+  color: var(--text-muted, #74859a);
+}
+
+.acp-net-detail-value {
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.acp-net-hint {
+  margin: 0;
+  padding: 4px 14px 8px;
+  color: var(--text-muted, #74859a);
+  font-size: 10px;
+}
+
+.acp-net-hint[hidden] {
+  display: none;
+}

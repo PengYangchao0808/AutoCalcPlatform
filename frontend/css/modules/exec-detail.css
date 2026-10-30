@@ -1,0 +1,206 @@
+/*
+ * ACP Next — exec-detail / evidence panel styles (UI-03).
+ * Scope: `.acp-ev*` only; tokens come from base.css / shell.css.
+ */
+
+.acp-ev {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: auto;
+  background: var(--bg-base, #0b0f14);
+  color: var(--text-primary, #e5edf5);
+  font-size: 12px;
+}
+
+.acp-ev-head {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid var(--border-default, #24303b);
+}
+
+.acp-ev-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.acp-ev-sub {
+  margin: 0;
+  color: var(--text-muted, #74859a);
+  font-size: 11px;
+}
+
+.acp-ev-status {
+  justify-self: start;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-default, #24303b);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.acp-ev-status[data-status="ok"] {
+  border-color: rgba(88, 190, 140, 0.5);
+  background: rgba(88, 190, 140, 0.12);
+  color: #7fe0ad;
+}
+
+.acp-ev-status[data-status="bad"] {
+  border-color: rgba(229, 83, 83, 0.55);
+  background: rgba(229, 83, 83, 0.12);
+  color: #ff9b9b;
+}
+
+.acp-ev-status[data-status="run"] {
+  border-color: rgba(78, 161, 255, 0.5);
+  background: rgba(78, 161, 255, 0.12);
+  color: #8ec2ff;
+}
+
+.acp-ev-status[data-status="idle"] {
+  color: var(--text-secondary, #9fb0c3);
+}
+
+.acp-ev-body {
+  display: grid;
+  gap: 14px;
+  padding: 12px 14px 18px;
+}
+
+.acp-ev-grid {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0;
+}
+
+.acp-ev-grid[hidden] {
+  display: none;
+}
+
+.acp-ev-grid dt {
+  color: var(--text-muted, #74859a);
+}
+
+.acp-ev-grid dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.acp-ev-mono {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+}
+
+.acp-ev-failure {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(229, 83, 83, 0.45);
+  border-radius: 6px;
+  background: rgba(229, 83, 83, 0.08);
+  color: #ffb4b4;
+  font-size: 11px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.acp-ev-failure[hidden] {
+  display: none;
+}
+
+.acp-ev-artifacts {
+  display: grid;
+  gap: 6px;
+}
+
+.acp-ev-artifacts[hidden] {
+  display: none;
+}
+
+.acp-ev-section-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary, #9fb0c3);
+}
+
+.acp-ev-note {
+  margin: 0;
+  color: var(--text-muted, #74859a);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.acp-ev-note[hidden] {
+  display: none;
+}
+
+.acp-ev-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.acp-ev-artifact {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.acp-ev-artifact-type {
+  color: var(--text-muted, #74859a);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.acp-ev-artifact-path {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.acp-ev-artifact-size {
+  color: var(--text-muted, #74859a);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.acp-ev-artifact-link {
+  color: var(--accent, #4ea1ff);
+  font-size: 10px;
+  text-decoration: none;
+}
+
+.acp-ev-artifact-link:hover {
+  text-decoration: underline;
+}
+
+.acp-ev-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 0 14px 14px;
+}
+
+.acp-ev-actions .acp-btn {
+  flex: 1;
+  min-width: 120px;
+  text-align: center;
+  text-decoration: none;
+}

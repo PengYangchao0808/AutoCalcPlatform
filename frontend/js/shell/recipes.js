@@ -96,6 +96,16 @@ ACPShell.recipes = (function () {
           titleKey: "shell.module.task_detail",
           loading: "list",
           binding: "follow-focus"
+        },
+        // UI-04: read-only reaction network for the selected task (legacy
+        // mechanism-study projection; explicit empty state otherwise).
+        {
+          instanceId: "exec-network",
+          moduleId: "reaction-network",
+          slot: "bottom",
+          titleKey: "shell.module.reaction_network",
+          loading: "canvas",
+          binding: "follow-focus"
         }
       ]
     }

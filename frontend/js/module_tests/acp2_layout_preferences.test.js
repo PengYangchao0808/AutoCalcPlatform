@@ -36,4 +36,18 @@ module.exports.register = async function (h) {
     const b = setup({ getItem: () => JSON.stringify({ version: 999, workspaces: {} }) });
     assertEq(b.preferences.get("research"), b.preferences.defaults("research"));
   });
+  await test("layout preferences re-derive execution defaults for a pre-UI-04 layout", function () {
+    const saved = {};
+    saved["acp-next-layout-v1"] = JSON.stringify({
+      version: 1,
+      active: "execution",
+      workspaces: {
+        execution: { main: "task-explorer", side: "exec-detail", bottom: "", sideWidth: 30, bottomHeight: 30 },
+      },
+    });
+    const a = setup({ getItem: (k) => saved[k], setItem() {} });
+    const recipe = a.recipes.get("execution");
+    assertEq(recipe.panels.map((p) => p.slot + ":" + p.moduleId),
+      ["main:task-explorer", "side:exec-detail", "bottom:reaction-network"]);
+  });
 };

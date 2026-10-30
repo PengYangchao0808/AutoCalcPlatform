@@ -45,6 +45,13 @@ ACPShell.preferences = (function () {
       if (!saved || saved.version !== 1) return;
       if (Object.prototype.hasOwnProperty.call(ACPShell.recipes.RECIPES, saved.active)) active = saved.active;
       Object.keys(ACPShell.recipes.RECIPES).forEach(function (id) {
+        // UI-04 migration: a layout saved before the execution workspace had a
+        // bottom slot has no way to express "reaction-network". Re-derive the
+        // execution defaults once instead of silently hiding the new panel.
+        if (id === "execution" && saved.workspaces && saved.workspaces.execution &&
+            JSON.stringify(saved.workspaces.execution).indexOf("reaction-network") === -1) {
+          return;
+        }
         try { if (saved.workspaces && saved.workspaces[id]) memory[id] = validate(id, saved.workspaces[id]); } catch (e) { /* Invalid workspace falls back independently. */ }
       });
     } catch (e) { /* Unavailable or corrupt storage: defaults remain usable. */ }
