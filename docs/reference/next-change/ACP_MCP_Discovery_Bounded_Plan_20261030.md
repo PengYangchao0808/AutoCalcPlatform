@@ -129,3 +129,17 @@
 
 `A（有界发现） → B（契约覆盖 + 预检一致性） → C1/C2（几何提示与证据状态，可小批并行） → D（校准后启用） → E（贯穿验收）`
 ——依据：先让已有契约真正可读（A），再消除"猜形状"的动机（B），最后才是需要校准的科学提示（C/D）。
+
+## 7. 实施状态（2026-10-30 晚，同一变更集）
+
+| 批次 | 状态 | 交付/证据 |
+|---|---|---|
+| A 有界发现 | 已实现 | 三作用域（旧无参原形 / `detail:"summary"` 8,165 B / `workflow=<id>` 单契约）；`capability_index`；结构化 fallback；`detail` 全链（HTTP/MCP/launch schema）；作用域测试 8 项 |
+| B 契约覆盖 | 已实现 | 六工作流契约（singlepoint/optimize/frequency/xtb_optimize/irc/tsmode）从共用语义权威投影；`profile_id/profile` 与 `schema_id` 驱动的 level 表；`bond_stretch` 指南措辞对账（建议 vs 平台限制） |
+| B2 预检一致性 | 已实现（本地可判定项） | preflight 对 tsmode/irc 的只读来源检查（missing job / 无 frequency source / 未注册 TS 产品 → infeasible reasons）；冷远端保持 submit/prepare 决定 |
+| C1 几何提示 | 已实现 | preflight `advisories`：单距离坐标 + 跨度 ≥2.5 Å 时给出几何事实 + 条件性后果；阈值标注 `calibrated:false` 的版本化策略参数，不阻断 |
+| C2 证据状态 | 已实现 | PES review confirm 响应 `initial_guess_status`：来源、候选、缺失验证项、下一步；不复制指南正文 |
+| D 连续性指标 | 后置（未实现） | 按评审先冻结测量定义再校准阈值；`not_evaluated` 语义与边级证据复用 `compute_neighbor_rmsds` 为后续批次 |
+| E 归因验收 | 待真实会话复验 | 需冻结条件重跑 Cope 任务并按 §3 六指标分档比较；本次不做归因结论 |
+
+本批不含：B4 跨工作流衔接的显式操作链（依赖 P2/P3 的选点/发布链，非本轮可交付）；D 批次；U09 之外的后续项。
