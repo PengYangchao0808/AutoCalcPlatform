@@ -1179,8 +1179,8 @@ def test_summary_scope_is_clipped_at_the_mcp_surface() -> None:
     assert data["budget"]["overflow"] is False
     assert "capability_index" in data["omitted"]
     assert data["continuation"]["arguments"] == {"detail": "full"}
-    # the navigation blocks survive
-    for key in ("navigation", "workflow_contracts", "capacity"):
+    # the navigation core is never clipped: summary without the index is useless
+    for key in ("navigation", "workflow_contracts", "task_instructions", "capacity"):
         assert key in data, key
 
 
@@ -1201,6 +1201,8 @@ def test_summary_budget_marks_overflow_when_nothing_is_clippable() -> None:
     data = result["structuredContent"]["data"]
     assert data["budget"]["overflow"] is True
     assert len(result["content"][0]["text"].encode("utf-8")) > 8192
+    # overflow is reported, but the unclippable core is still delivered whole
+    assert "navigation" in data
 
 
 def test_full_scope_is_never_clipped() -> None:

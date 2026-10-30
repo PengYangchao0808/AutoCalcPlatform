@@ -1646,8 +1646,13 @@ def _research_tool_specs() -> tuple[dict[str, Any], ...]:
 SUMMARY_BUDGET_BYTES = 8192
 
 
-def _summary_result_size(data: Mapping[str, Any]) -> int:
-    """Bytes of the final tool-result payload for ``data`` (as the server sends it)."""
+def _summary_text_bytes(data: Mapping[str, Any]) -> int:
+    """UTF-8 bytes of the visible text the harness reads (``content[0].text``).
+
+    The structuredContent copy repeats the same payload (envelope mechanics), so
+    budgeting on the doubled result would halve the meaningful navigation space;
+    the bound is applied to the visible text layer and the counters report it.
+    """
     envelope = {
         "schema_version": 1,
         "operation": "acp_capabilities",
@@ -1655,19 +1660,13 @@ def _summary_result_size(data: Mapping[str, Any]) -> int:
         "exit_code": 0,
         "dry_run": False,
         # a realistic workspace id placeholder: the real value is added after the
-        # budget check, so the estimate must not undercount it (×2 for text+data)
+        # budget check, so the estimate must not undercount it
         "operation_identity": "x" * 64,
         "diagnostic_ref": None,
         "data": dict(data),
         "error": None,
     }
-    text = json.dumps(envelope, ensure_ascii=False)
-    payload = {
-        "content": [{"type": "text", "text": text}],
-        "structuredContent": envelope,
-        "isError": False,
-    }
-    return len(json.dumps(payload, ensure_ascii=False).encode())
+    return len(json.dumps(envelope, ensure_ascii=False).encode())
 
 
 def _enforce_summary_budget(data: dict[str, Any]) -> dict[str, Any]:
@@ -1695,21 +1694,21 @@ def _enforce_summary_budget(data: dict[str, Any]) -> dict[str, Any]:
             "omitted": dropped,
             "overflow": False,
         }
-        size = _summary_result_size(probe)
+        size = _summary_text_bytes(probe)
         # the budget block itself must fit too (fixed point on the header size)
         probe["budget"]["actual_bytes"] = size
-        return _summary_result_size(probe)
+        return _summary_text_bytes(probe)
 
-    # optional blocks from heaviest/least essential to most essential
+    # Optional/derived blocks are clipped in this order.  The navigation core
+    # (navigation, workflow_contracts, task_instructions, capacity, limits,
+    # admission) is never clipped: losing it defeats the purpose of the scope.
     for key in (
-        "capability_index",
         "analysis_capabilities",
         "research_tools",
         "research_consumer_tools",
         "identity_binding",
         "capability_request",
-        "task_instructions",
-        "workflow_contracts",
+        "capability_index",
     ):
         if key not in data:
             continue
@@ -2860,9 +2859,18 @@ class McpServer:
         # payload that already carries the projection is forwarded verbatim; the
         # fallback is an explicitly empty table, never the process-global default
         # registry (that module-level object is not a production authority).
-        data.setdefault(
-            "analysis_capabilities", list(capability_projection(AnalysisCapabilityRegistry()))
-        )
+        analysis_rows = list(capability_projection(AnalysisCapabilityRegistry()))
+        if data.get("detail") == "summary":
+            # bounded scope: the full projection lives in detail="full"
+            data.setdefault(
+                "analysis_capabilities",
+                {
+                    "count": len(analysis_rows),
+                    "detail": {"tool": "acp_capabilities", "arguments": {"detail": "full"}},
+                },
+            )
+        else:
+            data.setdefault("analysis_capabilities", analysis_rows)
 
         raw_extension = arguments.get("research_extension")
         if raw_extension is not None and not isinstance(raw_extension, Mapping):
@@ -2892,19 +2900,32 @@ class McpServer:
             # here and never in a shared module-level default.
             self._research_negotiated = True
         data["tools"] = list(self.visible_tool_names())
-        data["research_consumer_tools"] = {
-            "version": CONSUMPTION_VERSION,
-            "available": self._backends.consumption is not None,
-            "tools": list(CONSUMPTION_TOOL_NAMES)
-            if self._research_negotiated and self._backends.consumption is not None
-            else [],
-        }
-        data["research_tools"] = {
-            "registered": sorted(RESEARCH_TOOL_SET),
-            "visible": self._research_negotiated,
-            "negotiated": bool(handshake.negotiated),
-            "promise_covers_registered": RESEARCH_TOOL_SET <= REGISTERED_TOOL_NAMES,
-        }
+        if data.get("detail") == "summary":
+            data["research_consumer_tools"] = {
+                "available": self._backends.consumption is not None,
+                "count": len(CONSUMPTION_TOOL_NAMES)
+                if self._research_negotiated and self._backends.consumption is not None
+                else 0,
+            }
+            data["research_tools"] = {
+                "visible": self._research_negotiated,
+                "negotiated": bool(handshake.negotiated),
+                "registered_count": len(RESEARCH_TOOL_SET),
+            }
+        else:
+            data["research_consumer_tools"] = {
+                "version": CONSUMPTION_VERSION,
+                "available": self._backends.consumption is not None,
+                "tools": list(CONSUMPTION_TOOL_NAMES)
+                if self._research_negotiated and self._backends.consumption is not None
+                else [],
+            }
+            data["research_tools"] = {
+                "registered": sorted(RESEARCH_TOOL_SET),
+                "visible": self._research_negotiated,
+                "negotiated": bool(handshake.negotiated),
+                "promise_covers_registered": RESEARCH_TOOL_SET <= REGISTERED_TOOL_NAMES,
+            }
 
         client = arguments.get("client")
         if client is not None and not isinstance(client, Mapping):
