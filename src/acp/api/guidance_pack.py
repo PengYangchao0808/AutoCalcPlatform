@@ -54,8 +54,10 @@ __all__ = [
 GUIDE_FORMAT = "acp.guidance.v1"
 
 #: Pack-level version.  Bump when any entry changes; entry digests make cache
-#: invalidation per-guide precise.
-PACK_VERSION = "1.0.0"
+#: invalidation per-guide precise.  1.1.0: BatchOptimize role wire-syntax +
+#: PESsearch unit/bond-side vocabulary (DA validation round,
+#: reports/acp2_mcp_guidance_20261030).
+PACK_VERSION = "1.1.0"
 
 #: Byte budgets (plan §4.2): UTF-8 bytes, not tokens.  A guide that would
 #: exceed a caller-supplied bound is returned with explicit omissions — never
@@ -169,12 +171,13 @@ def _workflow_entry(
     *,
     coverage: str,
     topics: tuple[str, ...] = (),
+    version: str = "1.0.0",
 ) -> GuideEntry:
     return GuideEntry(
         guide_id=guide_id,
         kind="workflow",
         title=title,
-        version="1.0.0",
+        version=version,
         workflows=(guide_id.split(".", 1)[1],),
         coverage=coverage,
         summary=summary,
@@ -223,9 +226,13 @@ _BATCHOPTIMIZE = _workflow_entry(
     ),
     (
         "当前工作流：BatchOptimize。将候选初猜推进为可检查的计算结果。\n"
-        "1. 读取输入集合与发布状态。PES/scan 初猜应来自合法发布，绑定来源 task/attempt、selection revision、"
-        "candidate ID 和结构 digest；未确认推荐点不能直接当最终输入。\n"
-        "2. 明确每个 item 的用途角色：TS 表示尝试过渡态优化的初猜，INT 表示相应最低点优化用途。\n"
+        "1. 读取输入集合与发布状态。PES/scan 初猜的推荐链路：上游 PES review 确认选点后，以 "
+        "input.from_artifact（上游 RESULT/result_manifest.json）+ selected_ids（如 pes_ts_frame_005）消费已确认"
+        "候选；未确认的推荐点不能直接当最终输入。\n"
+        "2. 每个 item 的用途角色必须是 wire 级显式，TS 的两种正确表达：①inline item 携带 role/tag 字段"
+        '（role:"ts"）；②from_artifact 候选经 review 确认的角色。关键：未标角色的 inline item 默认按 '
+        "INT（最低点优化）执行，method.batch_roles 的 ts 配置不会自动套用到未标角色的 item，当前预检不提示"
+        "该失配——提交前逐 item 自查角色标注。TS 表示尝试过渡态优化的初猜，INT 表示相应最低点优化用途。\n"
         "3. 读取 profile 和生效配置；需要频率/单点/热化学时选择包含这些阶段的配置，不把 opt_only 报成 opt_freq。\n"
         "4. 核对每项电荷/多重度、优化/频率/单点级别、温度与资源；遵守 batch_roles 与平铺参数一致性检查。\n"
         "5. 预检、提交与等待；读取逐 item/stage 的成功、失败、跳过及原因。\n"
@@ -241,6 +248,7 @@ _BATCHOPTIMIZE = _workflow_entry(
         "topic.method_energy_comparability",
         "topic.partial_failure_recovery",
     ),
+    version="1.1.0",
 )
 
 _PESSEARCH = _workflow_entry(
@@ -256,7 +264,10 @@ _PESSEARCH = _workflow_entry(
     (
         "当前工作流：PESsearch。键长势能面扫描优先采用此入口。\n"
         "1. 核对用户给定或确认的反应假设、关键原子及结构映射；缺少关键位点则询问，不假称已运行自动位点识别。\n"
-        "2. 读取当前可执行的扫描模式和请求契约；核对原子索引约定（0-based）、坐标类型/单位、范围/点数及多坐标关系。\n"
+        "2. 读取当前可执行的扫描模式和请求契约；核对原子索引约定（0-based）、坐标类型/单位（合法 unit："
+        "distance 用 angstrom、angle/dihedral 用 degree；非法值当前要到执行层才失败，提交前自查）、范围/点数"
+        "及多坐标关系；double_bond_scan 类选择要求扫描原子对为感知键——从产物侧拉伸已成键对，勿从反应物侧"
+        "压缩非键对。\n"
         "3. 绑定扫描方法与逐帧能量方法、电子态、资源和预算。大体系例外须记录理由，不自行按原子数拍阈值。\n"
         "4. 执行后先读曲线概况和全部点覆盖状态，再读候选区间的完整邻域点表及必要结构；区分扫描能与单点能，"
         "保留失败点、缺点和不收敛标记。\n"
@@ -274,6 +285,7 @@ _PESSEARCH = _workflow_entry(
         "topic.stationary_point_verification",
         "topic.partial_failure_recovery",
     ),
+    version="1.1.0",
 )
 
 _SCAN = _workflow_entry(

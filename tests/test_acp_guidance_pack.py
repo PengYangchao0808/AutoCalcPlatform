@@ -165,3 +165,25 @@ def test_pessearch_rejects_method_levels_and_bad_enums() -> None:
             "PESsearch", input=base_input, method={"strategy": "voodoo"}, resources=None
         )
     assert excinfo.value.params()["rule"] == "invalid_enum"
+
+
+def test_wire_syntax_guidance_present_v1_1_0() -> None:
+    """v1.1.0: the DA validation findings must stay in the published guides.
+
+    The untagged-inline-role trap (job 20261030_100432_005: silent INT
+    semantics + default method) and the unit/bond-side vocabulary are
+    guidance-level fixes; dropping these passages would reintroduce the
+    prompt-side gap (reports/acp2_mcp_guidance_20261030).
+    """
+    batch = read_guide("workflow.BatchOptimize")
+    assert batch["version"] == "1.1.0"
+    steps = batch["sections"]["steps"]
+    assert 'role:"ts"' in steps
+    assert "默认按 INT" in steps
+    assert "from_artifact" in steps and "selected_ids" in steps
+    assert "不会自动套用到未标角色的 item" in steps
+    pes = read_guide("workflow.PESsearch")
+    assert pes["version"] == "1.1.0"
+    pes_steps = pes["sections"]["steps"]
+    assert "angstrom" in pes_steps and "degree" in pes_steps
+    assert "产物侧拉伸已成键" in pes_steps
