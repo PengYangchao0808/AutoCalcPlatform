@@ -187,3 +187,41 @@ def test_wire_syntax_guidance_present_v1_1_0() -> None:
     pes_steps = pes["sections"]["steps"]
     assert "angstrom" in pes_steps and "degree" in pes_steps
     assert "产物侧拉伸已成键" in pes_steps
+
+
+def test_task_instructions_are_complete_and_routable() -> None:
+    """Task-level routing entries (goal -> chain), v1.3.0.
+
+    Each task instruction must be self-contained for its decision points and
+    must only *reference* workflow guides — never duplicate parameter authority.
+    """
+    from acp.api.guidance_pack import guidance_index
+
+    tasks = [card for card in guidance_index()["guides"] if card["kind"] == "task"]
+    ids = {card["guide_id"] for card in tasks}
+    assert ids == {
+        "task.find_transition_state",
+        "task.verify_reaction_path",
+        "task.conformer_and_energy",
+        "task.barrier_high_accuracy",
+        "task.multireference_analysis",
+    }
+    required_sections = {"when_to_use", "chain", "decisions", "completion", "stop", "not_supported"}
+    known = set(guide_ids())
+    for guide_id in ids:
+        payload = read_guide(guide_id)
+        assert set(payload["sections"]) == required_sections, guide_id
+        # referenced topics/workflows resolve
+        for topic in payload["topics"]:
+            assert topic in known, (guide_id, topic)
+        # chain text must point at workflow guides explicitly
+        assert "workflow." in payload["sections"]["chain"], guide_id
+
+
+def test_task_multireference_names_the_scientific_decisions() -> None:
+    body = read_guide("task.multireference_analysis")["sections"]["when_to_use"]
+    assert "活性空间" in body and "询问" in body
+    chain = read_guide("task.multireference_analysis")["sections"]["chain"]
+    assert "CASSCF" in chain and "NEVPT2" in chain
+    stop = read_guide("task.multireference_analysis")["sections"]["stop"]
+    assert "收敛" in stop

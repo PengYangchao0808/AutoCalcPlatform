@@ -436,10 +436,65 @@ def _capabilities_payload(
     from acp.api.workflow_contracts import ACTIVE_WORKFLOWS as _ACTIVE_WF
     from acp.api.workflow_contracts import describe_workflow as _describe
 
+    _fallbacks = {
+        "singlepoint": (
+            "uncontracted in MCP: use the CLI (`acp run singlepoint`) or report the gap"
+        ),
+        "optimize": (
+            "uncontracted in MCP: use the CLI (`acp run optimize`) or report the gap"
+        ),
+        "frequency": (
+            "uncontracted in MCP: use the CLI (`acp run frequency`) or report the gap"
+        ),
+        "xtb_optimize": (
+            "uncontracted in MCP: use the CLI (`acp run xtb_optimize`) or report the gap"
+        ),
+        "irc": (
+            "uncontracted in MCP: needs a TS bundle/provenance; use the CLI or report the gap"
+        ),
+        "tsmode": (
+            "uncontracted in MCP: needs a frequency source bundle; use the CLI or report the gap"
+        ),
+        "casscf": (
+            "uncontracted in MCP: active-space choices need an explicit scientific "
+            "decision; use the CLI"
+        ),
+        "nmr": (
+            "uncontracted in MCP: protocol/asset discovery first; use the CLI or report the gap"
+        ),
+    }
     payload["workflow_contracts"] = {
-        name: str(_describe(name).get("coverage") or "not_provided")
+        name: {
+            "coverage": str(_describe(name).get("coverage") or "not_provided"),
+            "detail": {"tool": "acp_capabilities", "arguments": {"workflow": name}},
+            **(
+                {"guidance": str(_describe(name)["guide_ref"]["guide_id"])}
+                if isinstance(_describe(name).get("guide_ref"), dict)
+                else {}
+            ),
+            **(
+                {"fallback": _fallbacks[name]}
+                if str(_describe(name).get("coverage")) == "not_provided" and name in _fallbacks
+                else {}
+            ),
+        }
         for name in _ACTIVE_WF
     }
+
+    # Task-level routing: goal -> recommended chain (task.* guidance entries).
+    from acp.api.guidance_pack import guidance_index as _guidance_index
+
+    payload["task_instructions"] = [
+        {
+            "guide_id": card["guide_id"],
+            "title": card["title"],
+            "summary": card["summary"],
+            "coverage": card["coverage"],
+            "detail": {"tool": "acp_get_guidance", "arguments": {"guide_id": card["guide_id"]}},
+        }
+        for card in _guidance_index()["guides"]
+        if card["kind"] == "task"
+    ]
 
     # Round 3 / U04: the Controller's admission-view capacity so an agent can
     # choose nproc/mem from measured numbers instead of guessing.

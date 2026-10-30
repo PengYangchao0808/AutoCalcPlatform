@@ -505,6 +505,82 @@ def _scan_block() -> dict[str, Any]:
     }
 
 
+def _frozen_payload_block(
+    workflow: str,
+    request_key: str,
+    description: str,
+    constraints: tuple[str, ...],
+) -> dict[str, Any]:
+    """Project a local-only frozen-request entry (upstream-owned payload)."""
+    contract = WORKFLOW_CONTRACTS[workflow]
+    return {
+        "workflow": workflow,
+        "coverage": "partial",
+        "partial_scope": (
+            f"input.{request_key} is the frozen upstream payload; ACP validates "
+            "presence and top-level keys only — the payload schema is owned by "
+            "the upstream contract, not projected here"
+        ),
+        "gaps": [
+            f"input.{request_key} inner schema is not projected: read the frozen "
+            "payload contract from the upstream tool that produced it",
+        ],
+        "input": {
+            "required_any": list(contract.required_input_any),
+            "properties": {
+                request_key: {
+                    "type": "object",
+                    "description": description,
+                },
+                "input": {
+                    "type": "string",
+                    "description": "Inline structure input (when the payload omits it).",
+                },
+                "source": {"type": "string", "description": "Structure source alias."},
+                "charge": {
+                    "type": "integer",
+                    "description": "Total charge (default 0).",
+                },
+                "multiplicity": {
+                    "type": "integer",
+                    "description": "Spin multiplicity (default 1).",
+                },
+                "input_artifact": {
+                    "type": "string",
+                    "description": "Upstream artifact reference.",
+                },
+            },
+            "additional_properties": False,
+        },
+        "method": {
+            "properties": {
+                request_key: {
+                    "type": "object",
+                    "description": "Runner fallback carrier (input.<key> is preferred).",
+                },
+            },
+            "additional_properties": False,
+        },
+        "resources": {"properties": _RESOURCE_PROPERTIES},
+        "examples": [
+            {
+                "workflow": workflow,
+                "input": {request_key: {"request_version": "see-the-upstream-contract"}},
+                "method": {},
+                "resources": {"nproc": 4, "mem": "8GB"},
+            }
+        ],
+        "constraints": list(constraints),
+        "status_vocabulary": _STATUS_VOCABULARY,
+    }
+
+
+_PES2TS_LOCAL_ONLY = (
+    "local-only entry: never dispatched to a remote node",
+    "the request payload is frozen upstream; ACP never fills scientific defaults",
+)
+
+
 def describe_workflow(workflow: str) -> dict[str, Any]:
     """Return the published contract block for *workflow*.
 
@@ -524,6 +600,33 @@ def describe_workflow(workflow: str) -> dict[str, Any]:
         block = _pes_block()
     elif canonical == "scan":
         block = _scan_block()
+    elif canonical == "XtbPathSearch":
+        block = _frozen_payload_block(
+            "XtbPathSearch",
+            "path_request",
+            "pes2ts_xtb_path_request_v1 payload (endpoints/recipe/seed owned by upstream).",
+            _PES2TS_LOCAL_ONLY,
+        )
+    elif canonical == "OrcaGradient":
+        block = _frozen_payload_block(
+            "OrcaGradient",
+            "gradient_request",
+            "pes2ts_orca_gradient_request_v1 payload (geometry/method/rcfile owned by upstream).",
+            _PES2TS_LOCAL_ONLY
+            + ("published gradient is dE/dX in Hartree/bohr — not a force",),
+        )
+    elif canonical == "XtbConstrainedOpt":
+        block = _frozen_payload_block(
+            "XtbConstrainedOpt",
+            "constrained_opt_request",
+            "pes2ts_xtb_constrained_opt_request_v1 payload (constraints/recipe owned by upstream).",
+            _PES2TS_LOCAL_ONLY
+            + (
+                "constrained total energy includes the restraint potential; "
+                "physical_sp is separate",
+                "process exit is not geometric convergence",
+            ),
+        )
     else:
         block = {
             "workflow": canonical,

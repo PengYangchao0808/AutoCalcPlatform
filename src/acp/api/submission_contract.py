@@ -378,6 +378,54 @@ WORKFLOW_CONTRACTS: dict[str, WorkflowContract] = {
             "from_artifact",
         ),
     ),
+    # Frozen-payload PES2TS entries (local-only): the request object ships
+    # verbatim from the documented upstream schema; ACP validates only that the
+    # payload is present and that no undeclared top-level key sneaks in.
+    "XtbPathSearch": WorkflowContract(
+        method_keys=frozenset({"path_request"}),
+        input_keys=frozenset(
+            {
+                "path_request",
+                "request",
+                "input",
+                "source",
+                "charge",
+                "multiplicity",
+                "input_artifact",
+            }
+        ),
+        required_input_any=("path_request",),
+    ),
+    "OrcaGradient": WorkflowContract(
+        method_keys=frozenset({"gradient_request"}),
+        input_keys=frozenset(
+            {
+                "gradient_request",
+                "request",
+                "input",
+                "source",
+                "charge",
+                "multiplicity",
+                "input_artifact",
+            }
+        ),
+        required_input_any=("gradient_request",),
+    ),
+    "XtbConstrainedOpt": WorkflowContract(
+        method_keys=frozenset({"constrained_opt_request"}),
+        input_keys=frozenset(
+            {
+                "constrained_opt_request",
+                "request",
+                "input",
+                "source",
+                "charge",
+                "multiplicity",
+                "input_artifact",
+            }
+        ),
+        required_input_any=("constrained_opt_request",),
+    ),
     "scan": WorkflowContract(
         method_keys=_SCAN_METHOD_KEYS,
         input_keys=frozenset(
