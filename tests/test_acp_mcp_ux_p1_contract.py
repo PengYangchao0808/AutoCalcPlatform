@@ -741,3 +741,49 @@ def test_resource_validation_does_not_mutate() -> None:
     assert resources == before
 
 
+
+
+def test_conflicting_mirror_value_is_refused() -> None:
+    """A flat mirror with a different value than the executed role is a swallow."""
+    base_input = {"source_type": "batch_structures", "items": [{"xyz": "H 0 0 0"}]}
+    with pytest.raises(SubmissionContractError) as excinfo:
+        validate_workflow_submission(
+            "BatchOptimize",
+            input=base_input,
+            method={
+                "profile": "opt_freq",
+                "batch_roles": {"int": {"temperature": 298.15}},
+                "temperature": 400,
+            },
+            resources={},
+        )
+    params = excinfo.value.params()
+    assert params["rule"] == "shadowed_field"
+    assert params["field"] == "method.temperature"
+    assert params["role"] == "batch_roles.int.temperature"
+
+    # Numeric strings compare like the consumer sees them.
+    validate_workflow_submission(
+        "BatchOptimize",
+        input=base_input,
+        method={
+            "profile": "opt_freq",
+            "batch_roles": {"int": {"temperature": 298.15}},
+            "temperature": "298.15",
+        },
+        resources={},
+    )
+
+
+def test_workbench_default_mirror_does_not_block_the_role_value() -> None:
+    """The wizard keeps 298.15 top-level while the user sets a role temperature."""
+    validate_workflow_submission(
+        "BatchOptimize",
+        input={"source_type": "batch_structures", "items": [{"xyz": "H 0 0 0"}]},
+        method={
+            "profile": "opt_freq",
+            "batch_roles": {"int": {"temperature": 400}},
+            "temperature": 298.15,
+        },
+        resources={},
+    )

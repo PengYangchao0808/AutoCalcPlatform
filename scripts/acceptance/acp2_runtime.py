@@ -85,6 +85,7 @@ SCOPE_VALUES = ("IN_SCOPE", "DEFERRED", "NOT_APPLICABLE")
 EVIDENCE_KINDS = ("fixture", "live", "aggregate")
 MCP_TOOLS = (
     "acp_capabilities",
+        "acp_get_guidance",
     "acp_preflight",
     "acp_submit",
     "acp_status",
@@ -1404,6 +1405,10 @@ def _artifact_errors(document: dict[str, Any], artifact_root: Path | None) -> li
     artifacts = document.get("artifacts")
     if not isinstance(artifacts, list):
         return errors
+    historical = document.get("historical") is True
+    if historical and not str(document.get("historical_note") or "").strip():
+        errors.append("historical_receipt_missing_note")
+        return errors
     cwd = document.get("cwd")
     for artifact in artifacts:
         if not isinstance(artifact, dict):
@@ -1426,6 +1431,10 @@ def _artifact_errors(document: dict[str, Any], artifact_root: Path | None) -> li
         found = next((candidate for candidate in candidates if candidate.is_file()), None)
         if found is None:
             errors.append(f"artifact_missing:{raw_path}")
+            continue
+        if historical:
+            # The receipt records the run-time bytes, not the current tree;
+            # existence is checked, digest/size drift is expected.
             continue
         size_bytes = artifact.get("size_bytes")
         if isinstance(size_bytes, int) and size_bytes != found.stat().st_size:

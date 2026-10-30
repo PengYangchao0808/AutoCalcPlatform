@@ -91,19 +91,13 @@ def test_truncated_slice_is_exempt() -> None:
 def test_base64_body_roundtrips_and_is_not_redacted_as_a_path() -> None:
     import base64
 
-    raw = b"\xff"
+    raw = b"hello"
     payload = ArtifactRead(ref=_ref(raw), body=raw).to_dict()
-    assert payload["encoding"] == "base64"
-    assert base64.b64decode(payload["body"]) == raw
-    # "/w==" looks absolute; base64 is opaque and must pass the verifier.
+    assert payload["encoding"] == "identity"
+    # A UTF-8 text body encoded as base64 round-trips and passes the verifier.
+    encoded = base64.b64encode(raw).decode("ascii")
     McpServer._verify_artifact_body(
-        _payload(
-            {
-                "body": payload["body"],
-                "encoding": "base64",
-                "digest": _ref(raw).digest,
-            }
-        )
+        _payload({"body": encoded, "encoding": "base64", "digest": _ref(raw).digest})
     )
 
 
@@ -164,3 +158,97 @@ def test_identity_body_that_looks_like_base64_is_still_redacted() -> None:
             }
         )
     assert excinfo.value.params["rule"] == "artifact_body_redacted"
+
+
+def test_base64_cannot_smuggle_a_redacted_path() -> None:
+    import base64
+
+    encoded = base64.b64encode(b"/home/xieningke/secret.txt").decode("ascii")
+    with pytest.raises(mcp.McpToolError) as excinfo:
+        McpServer._verify_artifact_body(
+            {
+                "body": encoded,
+                "encoding": "base64",
+                "digest": "sha256:" + "a" * 64,
+            }
+        )
+    assert excinfo.value.params["rule"] == "artifact_body_redacted"
+
+
+def test_invalid_base64_is_refused() -> None:
+    with pytest.raises(mcp.McpToolError) as excinfo:
+        McpServer._verify_artifact_body(
+            {"body": "!!!!", "encoding": "base64", "digest": "sha256:" + "a" * 64}
+        )
+    assert excinfo.value.params["rule"] == "artifact_encoding_invalid"
+
+
+def test_truncated_base64_is_still_content_checked() -> None:
+    import base64
+
+    encoded = base64.b64encode(b"prefix /home/secret").decode("ascii")
+    with pytest.raises(mcp.McpToolError) as excinfo:
+        McpServer._verify_artifact_body(
+            {
+                "body": encoded,
+                "encoding": "base64",
+                "digest": "sha256:" + "a" * 64,
+                "truncated": True,
+            }
+        )
+    assert excinfo.value.params["rule"] == "artifact_body_redacted"
+
+
+def test_non_utf8_body_is_unverifiable() -> None:
+    import base64
+
+    raw = b"\xff"
+    encoded = base64.b64encode(raw).decode("ascii")
+    with pytest.raises(mcp.McpToolError) as excinfo:
+        McpServer._verify_artifact_body(
+            {"body": encoded, "encoding": "base64", "digest": _ref(raw).digest}
+        )
+    assert excinfo.value.params["rule"] == "artifact_body_unverifiable"
+
+
+def test_full_body_policy_runs_before_truncation() -> None:
+    """A path straddling the truncation boundary is still refused."""
+    from acp_services.data.artifacts import ArtifactBodyRefusedError, _assert_body_content_safe
+
+    body = b"x" * 31 + b" /home/xieningke/secret"
+    with pytest.raises(ArtifactBodyRefusedError) as excinfo:
+        _assert_body_content_safe(body)
+    assert excinfo.value.params["rule"] == "artifact_body_redacted"
+
+
+def test_full_body_policy_refuses_binary() -> None:
+    from acp_services.data.artifacts import ArtifactBodyRefusedError, _assert_body_content_safe
+
+    with pytest.raises(ArtifactBodyRefusedError) as excinfo:
+        _assert_body_content_safe(b"\xff\xfe\x00")
+    assert excinfo.value.params["rule"] == "artifact_body_unverifiable"
+
+
+# ---------------------------------------------------------------------------
+# Bounded reads never split a transport unit (codex P2, 2026-10-30)
+# ---------------------------------------------------------------------------
+
+
+def test_read_limit_aligns_to_utf8_character_boundary() -> None:
+    from acp_services.data.artifacts import _align_read_limit
+
+    body = "é".encode("utf-8") * 4  # 8 bytes, 2-byte characters
+    aligned = _align_read_limit(body, 1, encoding="identity")
+    assert aligned == 0  # slicing into the first é is refused: drop to whole chars
+    assert body[: _align_read_limit(body, 5, encoding="identity")] == "éé".encode("utf-8")
+
+
+def test_read_limit_aligns_base64_to_whole_blocks() -> None:
+    from base64 import b64encode
+
+    from acp_services.data.artifacts import _align_read_limit
+
+    body = b64encode(b"abcdefghij")  # 16 base64 chars
+    aligned = _align_read_limit(body, 6, encoding="base64")
+    assert aligned % 4 == 0
+    assert body[:aligned]

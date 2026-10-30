@@ -456,3 +456,9 @@ def test_package_install_candidate_revision_rejects_baseline_only(tmp_path: Path
         json.dumps({"source": {"revision": "not-a-sha"}}), encoding="utf-8"
     )
     assert module.candidate_revision_from_release(tmp_path) == (None, "unavailable")
+
+
+def test_historical_receipt_requires_a_note() -> None:
+    assert harness._artifact_errors({"historical": True, "artifacts": []}, None) == [
+        "historical_receipt_missing_note"
+    ]

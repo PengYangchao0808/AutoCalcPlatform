@@ -6,6 +6,7 @@
 - [ACP / RPH 现状说明](reference/current/ACP_RPH_Status_20261028.md)：已实现、真实验证、剩余缺口及过期台账叙述的对账。
 - [MCP 使用指南](../README.md#mcp-使用指南)：Controller 准备、客户端配置、工具调用、研究扩展和排错。
 - [RPH 三阶段路线图](<RPH_Agent_Three_Phase_Roadmap_20261027(1).md>)：第 6 节按审查结果提出基线修复、正式入口闭环、有限科研与多 Agent 的实施顺序；尚未启动新功能开发。
+- [MCP 易用性优化、科研指导与自动科研闭环实施计划（2026-10-30）](reference/next-change/ACP_MCP_Agent_Guidance_PES_Batch_Plan_20261030.md)：统一包含参数发现/校验、纠错、状态/产物读取、跨会话恢复和科研指导；首批覆盖复合工作流与 PES/scan，支持授权范围内全自动；选点为初猜，后续进入 Batch 与适用验证。含全部 15 个 active 工作流说明、通用/专用及全自动编排 prompt 正文。设计计划，尚未实施。
 - [ACP 2.0 四组分方案](ACP_2.0_Four_Component_Collaboration_Plan_20261020.md)与[原架构调整方案](ACP_Architecture_Adjustment_Plan_20261016.md)：设计约束与历史实施依据，不能从计划中的“拟新增”反推当前仍未实现。
 
 当前完整 ACP2 放行仍为 `NOT_VERIFIED`；独立安装通过与科研闭环通过分别记录。

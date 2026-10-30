@@ -153,7 +153,7 @@
       "owner": "B",
       "parent": "M0-03",
       "receipt": "tests/test_acp2_runtime_acceptance_harness.py",
-      "receipt_sha256": "f3dd57431ac1fa194dff6650309cb92ca2893f3d2808c29d2e266897836a9b1e",
+      "receipt_sha256": "ac083deb310319f8e74b098864d3730217ebddb7ee0dc48ab028be1ea4b8157f",
       "required_observations": {
         "evidence_labels": "present",
         "required_observations": "present"
@@ -229,7 +229,7 @@
       "owner": "B",
       "parent": "M1-01",
       "receipt": "tests/test_acp2_runtime_contracts.py",
-      "receipt_sha256": "e02e82be369c40bd93edd23df85b99abbb932a8992b37cfe9ff88803a6f3efe8",
+      "receipt_sha256": "c05471b6891c7ebff98c5272a2973b234e985453f0f95638a11981d089483f09",
       "required_observations": {
         "negotiation": "present",
         "version_axis": "present"
@@ -254,7 +254,7 @@
       "owner": "B",
       "parent": "M1-01",
       "receipt": "tests/test_acp2_runtime_contracts.py",
-      "receipt_sha256": "e02e82be369c40bd93edd23df85b99abbb932a8992b37cfe9ff88803a6f3efe8",
+      "receipt_sha256": "c05471b6891c7ebff98c5272a2973b234e985453f0f95638a11981d089483f09",
       "required_observations": {
         "artifact_schema": "present",
         "operation_schema": "present"
@@ -428,7 +428,7 @@
       "owner": "B",
       "parent": "M2-01",
       "receipt": "tests/test_acp2_p2_tools.py",
-      "receipt_sha256": "d00e4b12d15e11853821ac6f9c0815a056cbced91d81115ca5a64012cdb75b4d",
+      "receipt_sha256": "e2946c28ebd17193e2f13e3ee27d1856878d7e2d859416d011d438401b84649a",
       "required_observations": {
         "p2_tools": "present",
         "recovery": "present"
@@ -813,7 +813,7 @@
       "status": "CLOSED"
     }
   ],
-  "coverage_sha256": "323232dfee34e762b5d30c728fc03a84f7da9ba7a35bc8238f269859fb282044",
+  "coverage_sha256": "530540421eb7e9efdeebbac7ad49d862ca5bdf3945804a751324a93443794a26",
   "deferred_rows": [
     {
       "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
@@ -2410,7 +2410,7 @@
       "notes": "MCP idempotency now routes through CommandIdentity; prepare key v2 and lookup-only auto_ keys are covered by the process/backends tests. Revocation is re-tested on the remote path by M4-03.",
       "owner": "B + C-RPH",
       "receipt": "tests/test_acp2_runtime_mcp_process.py",
-      "receipt_sha256": "6e3c5bd6241888fe57f62b84632942ab472ddfceadddc345a9e5e7eb52d16e17",
+      "receipt_sha256": "09355ba02b9712968feefc9ca8a8be526f5101d1c0f913b78e081f35ab7c5390",
       "required_observations": {
         "auto_lookup_only": "present",
         "mcp_idempotency": "present",
@@ -2443,7 +2443,7 @@
       "notes": "Exhaustive v1 field policy and cross-entry JobSpec equivalence with digest v2; the HTTP prepare route is the single prepare-field authority (M0-06 followup 927d92f).",
       "owner": "B",
       "receipt": "tests/test_acp2_runtime_contracts.py",
-      "receipt_sha256": "e02e82be369c40bd93edd23df85b99abbb932a8992b37cfe9ff88803a6f3efe8",
+      "receipt_sha256": "c05471b6891c7ebff98c5272a2973b234e985453f0f95638a11981d089483f09",
       "required_observations": {
         "digest_v2": "present",
         "jobspec_equivalence": "present",
@@ -2709,7 +2709,7 @@
       "notes": "Application/MCP/artifact/analysis contract unification and the reviewed wire-id allowlist (M1-01a/b/c). Later additive contract versions are registered in the manifest.",
       "owner": "B，A/C 消费确认",
       "receipt": "tests/test_acp2_runtime_contracts.py",
-      "receipt_sha256": "e02e82be369c40bd93edd23df85b99abbb932a8992b37cfe9ff88803a6f3efe8",
+      "receipt_sha256": "c05471b6891c7ebff98c5272a2973b234e985453f0f95638a11981d089483f09",
       "required_observations": {
         "application_api": "present",
         "operation_schema": "present",

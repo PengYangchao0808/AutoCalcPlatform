@@ -66,16 +66,19 @@ class SubmissionContractError(ValueError):
         field_name: str,
         rule: str = "unknown_field",
         allowed: tuple[str, ...] | None = None,
+        details: Mapping[str, Any] | None = None,
     ) -> None:
         super().__init__(message)
         self.field_name = field_name
         self.rule = rule
         self.allowed = allowed
+        self.details = dict(details or {})
 
     def params(self) -> dict[str, Any]:
         params: dict[str, Any] = {"field": self.field_name, "rule": self.rule}
         if self.allowed is not None:
             params["allowed"] = list(self.allowed)
+        params.update(self.details)
         return params
 
 
@@ -125,6 +128,50 @@ _BATCHOPTIMIZE_METHOD_KEYS: frozenset[str] = frozenset(
         "minimum_opt_recalc_hess",
         "transition_state_opt_recalc_hess",
         "scf_orbital_inherit",
+    }
+)
+
+#: PESsearch — the direct ``mode=bond_length_scan`` branch is the first-batch
+#: documented surface (plan 2026-10-30 §3).  Method carries the branch selector
+#: and the manifest-path knobs the runner reads; the scan protocol itself rides
+#: in ``input.scan_request``/``input.protocol`` (validated by the pydantic bond
+#: scan model downstream), so ``levels`` is deliberately absent: the PESsearch
+#: argv builder consumes no ``method.levels`` and a rejected key is safer than a
+#: silently dropped one.
+_PESSEARCH_METHOD_KEYS: frozenset[str] = frozenset(
+    {
+        "mode",  # "bond_length_scan" selects the direct branch
+        "strategy",  # manifest-path strategy (guided_scan/reverse_peb/direct_ts)
+        "select",
+        "coordinate_plan",  # manifest path --plan JSON
+        "scan_request",  # runner fallback carrier (input.scan_request preferred)
+        # Workbench wizard metadata (submit-edit.js sends both with every
+        # PESsearch submit); consumers treat them as capability metadata.
+        "schema_id",
+        "profile_id",
+    }
+)
+
+_PESSEARCH_STRATEGIES: frozenset[str] = frozenset(
+    {"guided_scan", "reverse_peb", "direct_ts"}
+)
+
+#: scan — the simple-workflow relaxed scan.  Coordinates may sit in method or
+#: input (``scan_method_flags`` reads both); ``levels`` follows the dft_scan
+#: schema (level id ``scan``).
+_SCAN_METHOD_KEYS: frozenset[str] = frozenset(
+    {
+        "scan_coordinates",
+        "coordinate",
+        "scan_points",
+        "scan_use_scants",
+        "use_scants",
+        "levels",
+        "schema_id",
+        # The Workbench scan wizard sends the capability profile selection
+        # alongside the coordinates (scheduler/capabilities.py ``pes_scan``
+        # exposes a ``default`` profile); metadata-only for the runner.
+        "profile_id",
     }
 )
 
@@ -187,6 +234,34 @@ _ROLE_FLAT_ALIASES: dict[str, str] = {
     "sp_method": "single_point_method",
     "sp_basis": "single_point_basis",
 }
+
+_WORKBENCH_MIRROR_DEFAULTS: dict[str, tuple[float, ...]] = {
+    "temperature": (298.15,),
+    "pressure": (1.0,),
+    "scale_factor": (0.9905,),
+}
+
+
+def _is_workbench_default(key: str, value: object) -> bool:
+    """The Workbench keeps these flat defaults next to a user-set role value."""
+    defaults = _WORKBENCH_MIRROR_DEFAULTS.get(key)
+    if not defaults:
+        return False
+    try:
+        return any(float(value) == item for item in defaults)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return False
+
+
+def _same_mirror_value(flat: object, role: object) -> bool:
+    """Compare a mirror with its role value the way the consumer would."""
+    if flat == role:
+        return True
+    try:
+        return float(flat) == float(role)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return str(flat).strip().lower() == str(role).strip().lower()
+
 
 def _flat_mirror_source(key: str) -> tuple[str, str]:
     """Return the (role, role field) a flat method key mirrors.
@@ -259,6 +334,78 @@ WORKFLOW_CONTRACTS: dict[str, WorkflowContract] = {
         required_input_any=("items", "from_artifact", "items_file", "input", "source"),
         batch_structures_only=True,
         levels=_BATCH_LEVELS,
+    ),
+    "PESsearch": WorkflowContract(
+        method_keys=_PESSEARCH_METHOD_KEYS,
+        method_enums={
+            "mode": frozenset({"bond_length_scan"}),
+            "strategy": _PESSEARCH_STRATEGIES,
+        },
+        input_keys=frozenset(
+            {
+                # chemistry envelope (input_chemistry_flags)
+                "input_artifact",
+                "source",
+                "input",
+                "smiles",
+                "source_type",
+                "charge",
+                "multiplicity",
+                "source_ref",
+                "asset_id",
+                # mode=bond_length_scan branch (BondLengthScanJobInput)
+                "coordinate",
+                "coordinates",
+                "selection",
+                "protocol",
+                "source_job_id",
+                "from_artifact",
+                # manifest-path extras the runner reads from input
+                "from",
+                "coordinate_plan",
+                "product",
+                "ts_guess",
+            }
+        ),
+        required_input_any=(
+            "source",
+            "coordinate",
+            "from",
+            "input",
+            "smiles",
+            "input_artifact",
+            "source_job_id",
+            "from_artifact",
+        ),
+    ),
+    "scan": WorkflowContract(
+        method_keys=_SCAN_METHOD_KEYS,
+        input_keys=frozenset(
+            {
+                # chemistry envelope
+                "input_artifact",
+                "source",
+                "input",
+                "smiles",
+                "source_type",
+                "charge",
+                "multiplicity",
+                "source_ref",
+                "asset_id",
+                # coordinates may also ride in input (scan_method_flags)
+                "scan_coordinates",
+                "coordinate",
+            }
+        ),
+        required_input_any=("input", "smiles", "source", "input_artifact"),
+        levels={
+            **_level_fields("dft_scan"),
+            # Consumers beyond the UI schema: the edit-recalculate path reads
+            # 1-based ``scan_coordinate_atoms`` from the scan level
+            # (scheduler/edit_parameters.py); declaring it keeps a legal
+            # Workbench payload submittable instead of silently refused.
+            "scan": _level_fields("dft_scan")["scan"] | {"scan_coordinate_atoms"},
+        },
     ),
 }
 
@@ -353,6 +500,29 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
                 field_name=f"method.{unsupported[0]}",
                 rule="shadowed_field",
             )
+        # A Workbench mirror that carries a *different* value than the role the
+        # engine executes is a silent swallow; the role value wins downstream.
+        for flat_key in sorted(_WORKBENCH_FLAT_MIRRORS & set(method)):
+            role_id, role_field = _flat_mirror_source(flat_key)
+            role_value = roles.get(role_id)
+            if not isinstance(role_value, Mapping) or role_field not in role_value:
+                continue
+            if role_value[role_field] is None:
+                continue
+            if _is_workbench_default(flat_key, method[flat_key]):
+                continue
+            if not _same_mirror_value(method[flat_key], role_value[role_field]):
+                raise SubmissionContractError(
+                    f"method.{flat_key} conflicts with batch_roles.{role_id}.{role_field}; "
+                    "the role value is the one executed",
+                    field_name=f"method.{flat_key}",
+                    rule="shadowed_field",
+                    details={
+                        "role": f"batch_roles.{role_id}.{role_field}",
+                        "role_value": role_value[role_field],
+                        "flat_value": method[flat_key],
+                    },
+                )
     if "select" in method and method["select"] is not None:
         select = method["select"]
         if not isinstance(select, str) and not isinstance(select, (list, tuple)):

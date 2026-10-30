@@ -1,6 +1,16 @@
 # acp/ — ACP Unified Module
 
-> **2026-10-29 baseline (`fd2087c7`, main):** see the [functional audit](../../reports/acp2_function_audit_20261028/REPORT.md) before new work. Default envelope entry is `singlepoint` plus internal `BoundedRecipe`; catalog closure and default activation are distinct. Research routes now include writes/Saga/evidence/model gateway. MCP has eight base plus ten negotiated research tools; API evidence routes alone do not compose the RPH reader. Existing scientific workflows and compatibility paths remain in scope.
+> **Historical audit (`fd2087c7`):** [functional audit](../../reports/acp2_function_audit_20261028/REPORT.md). Its runtime/tool/assembly scope is a historical snapshot; use the 2026-10-30 notes below and current code for changed capabilities. Existing scientific workflows and compatibility paths remain in scope.
+
+## MCP / Agent 集成开发（2026-10-30）
+
+读[统一计划](../../docs/reference/next-change/ACP_MCP_Agent_Guidance_PES_Batch_Plan_20261030.md)与[根约定](../../AGENTS.md)。指南与自动选点是待实现计划，不把 prompt 当能力证明。
+
+- 当前默认 envelope 含 singlepoint/xtb_optimize/recipe；RPH 默认产品装配已有代码，真实闭环另验。历史 fd2087c7 说明不能覆盖新代码。
+- 输入事实与校验由 API/消费者契约投影，ACP 负责工作流编排/结果发布，Services 持有授权/身份/预算；不在指南里复制科学实现或任务默认值。
+- PES `calculations/pes/review.py`、通用 `results/frame_candidates.py` 与 Batch loader 是自动初猜发布的联动修改面；复用各自权威与来源适配，不增加第二候选文件。
+- 驻点研究流程为初猜→合法发布→BatchOptimize→逐项证据判断；全自动无需逐点人审，但必须真实标识 Agent 来源与平台授权。当前 loader 的 manual/manual_frame 限制须和 writer/schema 一起整改，不能只放宽来源字符串。
+- 保存候选与提交任务保持独立操作，可由 Agent 自动连续调用；energy viewer 不新增提交入口。保留旧人工记录、幂等、CAS 与远端写回恢复语义。
 
 ## OVERVIEW
 The unified `acp` CLI, stage-based workflow pipeline, capability-driven QC backends, and generic core models. 298 `.py` files (incl. API + scheduler + nmr + init_wizard). ACP is the workflow/planning/persistence layer (fourth layer) on top of the `cccp` QC base: task cores live in `cccp/calculation/tasks/`, capability backends in `cccp/backends/` — `acp.calculations.primitives` and `acp.backends` are pure compat forward/re-export shims plus ACP publish contracts (see root AGENTS.md ANTI #17). Platform services (store/schema, Data prepare/read, Runtime use cases, access boundary) live in `src/acp_services/`; the old `acp` paths for migrated symbols are **identity forwarders** (`is` same object), never second implementations (root ANTI #29–#32).

@@ -11,7 +11,7 @@
 - `GET|POST /api/capabilities?workflow=`：
   - 大小写不敏感归一（`confsearch` → `Confsearch`）；
   - 未知 ID → 422 `input_invalid` + `params.rule=unknown_workflow` + `allowed` + `suggestion`；
-  - `Confsearch` / `BatchOptimize` → `coverage=complete`，各 2 个示例（四个示例全部经 `submission_contract` 校验）；
+  - `Confsearch` / `BatchOptimize` → `coverage=partial`，各 2 个示例（四个示例全部经 `submission_contract` 校验）；
   - 其余 **13 个** active 工作流 → `coverage=not_provided`（明确不提供 schema，而不是假装完整）；
   - 无 `workflow` 参数时**不出现** `workflow_contract` / `status_vocabulary`，既有形状不变；语汇表随契约块返回。
 - 示例由 `submission_contract` 校验器验证（发布即合法）；四个示例（两个工作流各两个）全部有断言。
@@ -24,7 +24,7 @@
   `_tool_capabilities` 仅在有值时透传（无值路径对旧 fake/旧 Controller 完全不变）。
 - `_ControllerCapabilities` → `ControllerClient.capabilities(workflow=...)` → POST body；`workflow=None` 时**不传 kwargs**，旧 fake/旧 Controller 路径不变。
 - 测试覆盖：
-  - **真实 SDK 客户端**（冻结的 DSH → `@modelcontextprotocol/client` 2.2.0 客户端脚本）：`acp_capabilities{workflow:"Confsearch"}` 返回 `coverage=complete` 与状态词表；随后再次 `tools/list` 仍可见研究工具（协商状态保持）。`tests/test_acp2_mcp_sdk_contract.py` 8 passed（`ACP2_DSH_SOURCE=/ACPServer/acp2-tools/deepseek-harness`）；
+  - **真实 SDK 客户端**（冻结的 DSH → `@modelcontextprotocol/client` 2.2.0 客户端脚本）：`acp_capabilities{workflow:"Confsearch"}` 返回 `coverage=partial` 与状态词表；随后再次 `tools/list` 仍可见研究工具（协商状态保持）。`tests/test_acp2_mcp_sdk_contract.py` 8 passed（`ACP2_DSH_SOURCE=/ACPServer/acp2-tools/deepseek-harness`）；
   - stdio 进程 → MCP → HTTP，`workflow=Confsearch` 被真实转发并在结果中返回 `workflow_contract`；
   - 无参调用形状不变、八工具集合不变；
   - 研究协商后再次 `tools/list` 可见研究工具；

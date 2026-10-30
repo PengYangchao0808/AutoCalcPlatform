@@ -35,6 +35,21 @@ def test_progress_fields_pass_through() -> None:
     assert projection["live_status"] == {"stage_label": "CENSO"}
 
 
+def test_artifact_uncertainty_reason_passes_through() -> None:
+    """A cold remote cache explains WHY artifacts are empty (codex P2, 2026-10-30)."""
+    projection = project_task_status(
+        {
+            "id": "job_r1",
+            "spec": {"workflow": "PESsearch"},
+            "state": "completed",
+            "artifacts": [],
+            "artifacts_truncated": False,
+            "artifacts_unknown_reason": "remote_cache_only",
+        }
+    )
+    assert projection["artifacts_unknown_reason"] == "remote_cache_only"
+
+
 def test_operation_status_keeps_artifact_ref() -> None:
     ref = {
         "task_id": "job_1",

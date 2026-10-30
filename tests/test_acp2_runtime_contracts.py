@@ -50,6 +50,8 @@ MCP_TOOL_NAMES = {
     "acp_prepare_artifact",
     "acp_read_artifact",
     "acp_analyze",
+    # 2026-10-30 guidance batch: additive read-only registration (plan §5).
+    "acp_get_guidance",
 }
 #: The ten P2 research promise names (M1-01a).  A promise is not implemented:
 #: none of them is in the P1 allowlist, so the extension never reports negotiated.
@@ -483,6 +485,7 @@ def test_mcp_launch_tool_inputs_match_the_runtime_and_application_tables() -> No
         "acp_prepare_artifact": 2,
         "acp_read_artifact": 2,
         "acp_analyze": 2,
+        "acp_get_guidance": 1,
     }
     declared = schema["$defs"]["tool"]["properties"]["input_schema_version"]
     assert declared["type"] == "integer"
@@ -527,6 +530,7 @@ def test_mcp_launch_template_is_placeholder_only(
         "acp_prepare_artifact",
         "acp_read_artifact",
         "acp_analyze",
+        "acp_get_guidance",
     ]
     for tool in launch_template["instance"]["tools"]:
         assert tool["inputSchema"] == tool_inputs[tool["name"]]
@@ -692,7 +696,9 @@ def test_p2_research_operations_are_complete_and_owned() -> None:
             assert row["delivered_by"], row["id"]
     # Advertised is never implemented: only a covering registered set negotiates.
     tool_sets = contract["client_path"]["tool_sets"]
-    assert len(tool_sets["p1_advertised"]) == 8
+    # Registry-derived (2026-10-30 guidance batch): the count follows the
+    # allowlist registration instead of a permanent literal.
+    assert len(tool_sets["p1_advertised"]) == len(MCP_TOOL_NAMES)
     assert set(tool_sets["p1_advertised"]) == MCP_TOOL_NAMES
     promised = tool_sets["p2_promised"]
     assert len(promised) == 10

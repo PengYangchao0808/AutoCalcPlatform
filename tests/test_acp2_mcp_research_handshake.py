@@ -225,13 +225,13 @@ def test_capabilities_always_advertises_the_extension_without_claiming_it() -> N
     assert entry["refusal"] is None
     data = result["structuredContent"]["data"]
     assert data["research_tools"]["visible"] is False
-    assert len(data["tools"]) == 8
+    assert len(data["tools"]) == 9
 
 
 def test_exact_version_request_negotiates_only_a_covering_implementation() -> None:
     server = _server()
     before = server.visible_tool_names()
-    assert len(before) == 8
+    assert len(before) == 9
     result = _call_tool(
         server, {"research_extension": {"id": "acp.research.v1", "version": "1.0.0"}}
     )
@@ -243,10 +243,10 @@ def test_exact_version_request_negotiates_only_a_covering_implementation() -> No
     assert entry["implemented"] is True
     assert entry["negotiated"] is True
     assert entry["refusal"] is None
-    assert len(mcp.TOOL_ALLOWLIST) == 8
+    assert len(mcp.TOOL_ALLOWLIST) == 9
     # Only now does the model-visible surface grow.
     assert server.research_negotiated is True
-    assert len(server.visible_tool_names()) == 18
+    assert len(server.visible_tool_names()) == 19
 
 
 def test_a_covering_implementation_set_is_the_only_way_to_negotiate() -> None:
@@ -432,7 +432,7 @@ def test_http_plain_read_still_answers_the_advertisement(api_client: Any) -> Non
     # No request in this read: nothing is negotiated, so the P1 surface stands.
     assert payload["extensions"][0]["negotiated"] is False
     assert payload["capability_request"]["research_extension"] is None
-    assert len(payload["tools"]) == 8
+    assert len(payload["tools"]) == 9
 
 
 def test_http_version_mismatch_and_unknown_fields_are_typed(api_client: Any) -> None:

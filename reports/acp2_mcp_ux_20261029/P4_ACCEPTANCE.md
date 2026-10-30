@@ -1,7 +1,7 @@
 # P4 验收记录（科学可解释性：执行证据 / 方法身份）
 
 > 执行：2026-10-29T19:05–19:20 +08:00
-> 状态：**PASS**（sol 第 4 轮复验；P4-01/P4-02/phase PASS）
+> 状态：**PASS（限定范围）**（sol 第 4 轮复验；后续 astra 复审触发加固，见下）
 
 ## P4-01 CENSO 成功执行证据
 
@@ -60,3 +60,19 @@
 - 只有 CENSO 路径产生 `executed` 事实；纯 xTB / CREST-only 路径为 `unverified`（没有可核验的 DFT 执行证据）。
 - 非 CENSO 协议的报告不新增方法身份（本轮范围外）。
 - 真实 QC 未提交（本轮全部为 mocked subprocess / fixture）。
+
+
+## astra 复审后的加固（同一 PR）
+
+- `_execution_verified` 曾尝试重算 JSON/XYZ 并绑定 `input_path`/`rcfile_path`；astra 复审判定“证据自报路径、不能证明本次执行”，本轮已统一降级为 `unverified`（见下）。
+- 报告公开投影去掉 `cwd/input_path/rcfile_path` 与绝对 argv 前缀（`<run>`），避免正文内容策略拒绝合法报告。
+- 仍 **DEFERRED**：同 part 旧产物与模板/成员在文件层面的完整绑定、真实 QC 执行、历史回执改写；这些写入 residual，不冒充已关闭。
+
+
+## 第三轮（astra 复审后，降级声明）
+
+- 历史回执 `h1-r2.json` 恢复为运行时的原摘要，并加 `historical/historical_note`；h7 门只对历史回执跳过当前树比较（负例：无 note 的历史回执失败）。
+- 本轮**不再声称 verified**：`_execution_verified` 统一返回 False，`executed_status=unverified`；另给 `execution_facts_well_formed` 仅表示事实形状/文件摘要一致。
+- 公开报告改为白名单字段，不发布 `argv`（可能含绝对可执行路径）。
+- 非 UTF-8 正文（完整或截断）统一 `artifact_body_unverifiable`，不再用 surrogateescape 放行。
+- **仍 DEFERRED**：本次执行/成员/模板的完整绑定、attempt 归属、SDK 生产整链、真实 QC、残留门禁扩展与历史清理；历史 blob 仍可达、敏感性 NOT_VERIFIED。**完整正文预扫描已在读取层实现**（见 P3，不再列为延期）。局部修复不代表整体验收通过。

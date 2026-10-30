@@ -1961,10 +1961,22 @@ def _amendment_x_censo_ranges(worktree: str) -> list[tuple[int, int]]:
         if line.strip().startswith("execution: Dict[str, Any] = field("):
             ranges.append((index + 1, index + 3))
             break
-    for function in ("_resolve_final_part", "_memory_templates"):
+    for function in ("_resolve_final_part",):
         resolved = _func_range(worktree, function, "CensoInterface")
         if resolved:
             ranges.append(resolved)
+    refine = _func_range(worktree, "refine_ensemble", "CensoInterface")
+    if refine is not None:
+        start = next(
+            (i for i, line in enumerate(lines) if "rcfile_sha256 =" in line),
+            None,
+        )
+        end = next(
+            (i for i, line in enumerate(lines) if "env: Optional[Dict[str, str]] = None" in line),
+            None,
+        )
+        if start is not None and end is not None and start >= refine[0] and end <= refine[1]:
+            ranges.append((start - 1, end + 1))
     start = next(
         (i for i, line in enumerate(lines) if line.strip() == "enabled_parts = {"),
         None,
@@ -1998,6 +2010,8 @@ def _amendment_x_censo_teeth(worktree: str) -> list[str]:
         ('"artifacts"', "artifact digests"),
         ('"enabled_parts"', "enabled parts"),
         ('"conformers"', "conformer membership"),
+        ('"input_sha256"', "input digest"),
+        ('"rcfile_sha256"', "rcfile digest"),
     )
     for needle, label in checks:
         if needle not in worktree:
@@ -3197,3 +3211,9 @@ def test_services_scope_audits_acp_services_import_discipline() -> None:
     target = "src/acp_services/runtime/rogue.py"
     issues = _migration_audit_issues([target], {target: "from acp.scheduler import jobs\n"})
     assert issues and ("imports" in issues[0] or "from acp" in issues[0]), issues
+
+
+def test_amendment_x_is_function_scoped() -> None:
+    source = _worktree_content("src/cccp/qc/interfaces/censo.py")
+    outside = len(source.splitlines()) + 5
+    assert not _is_amendment_x_censo_addition(outside, 'input_sha256 = "x"', source)

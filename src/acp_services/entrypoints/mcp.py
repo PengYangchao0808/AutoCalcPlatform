@@ -316,6 +316,7 @@ class McpTool(str):
     PREPARE_ARTIFACT = "acp_prepare_artifact"
     READ_ARTIFACT = "acp_read_artifact"
     ANALYZE = "acp_analyze"
+    GUIDANCE = "acp_get_guidance"
 
     ALL = frozenset(
         {
@@ -327,6 +328,7 @@ class McpTool(str):
             PREPARE_ARTIFACT,
             READ_ARTIFACT,
             ANALYZE,
+            GUIDANCE,
         }
     )
 
@@ -341,6 +343,7 @@ TOOL_FAMILIES: dict[str, str] = {
     McpTool.PREPARE_ARTIFACT: "artifact_prepare_read",
     McpTool.READ_ARTIFACT: "artifact_prepare_read",
     McpTool.ANALYZE: "explicit_analysis",
+    McpTool.GUIDANCE: "guidance_discovery_read",
 }
 
 #: Access action each tool requires; enforced against the resolved scope.
@@ -353,6 +356,7 @@ TOOL_REQUIRED_ACTION: dict[str, str] = {
     McpTool.PREPARE_ARTIFACT: AccessAction.WRITE,
     McpTool.READ_ARTIFACT: AccessAction.READ,
     McpTool.ANALYZE: AccessAction.WRITE,
+    McpTool.GUIDANCE: AccessAction.READ,
 }
 
 #: The frozen allowlist — the only tool names ``tools/list`` advertises and
@@ -705,6 +709,51 @@ _CAPABILITIES_SCHEMA: dict[str, Any] = {
     },
     "additionalProperties": False,
 }
+#: ``acp_get_guidance`` reads one versioned guide from the content pack
+#: (plan 2026-10-30 §5).  Read-only and bounded: an oversized selection is
+#: answered with explicit omissions by the server, never a silent truncation.
+_GUIDANCE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "description": (
+        "Read one versioned guidance document (shared prompt, workflow guide, "
+        "orchestration guide or topic). The response carries the entry version, "
+        "a stable sha256 digest for caching and explicit omissions when a byte "
+        "bound degrades the body to section names. Discover ids through "
+        "acp_capabilities(workflow=...), which returns each workflow's guide_ref."
+    ),
+    "properties": {
+        "schema_version": {"type": "integer", "enum": [1], "default": 1},
+        "guide_id": {
+            "type": "string",
+            "description": (
+                "Guide id, e.g. workflow.PESsearch, shared.execution, "
+                "orchestration.pes_to_batch or topic.stationary_point_verification."
+            ),
+        },
+        "section": {
+            "type": "string",
+            "description": "Optional single section name (e.g. purpose or steps).",
+        },
+        "version": {
+            "type": "string",
+            "description": (
+                "Cached entry version; a mismatch is a typed revision_conflict "
+                "so a stale cache is never served as current."
+            ),
+        },
+        "max_bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "description": (
+                "Optional byte bound for the returned body; an oversized selection "
+                "degrades to section names plus sizes with omitted_reason=budget."
+            ),
+        },
+    },
+    "required": ["guide_id"],
+    "additionalProperties": False,
+}
+
 #: Shared declared field table of the submit family.  The names are the
 #: ``acp_services.entrypoints.application_params.SUBMIT_FIELD_POLICY`` set (minus
 #: the two server-path fields a client may never choose), so the adapter's
@@ -1066,6 +1115,7 @@ _ARGUMENT_SCHEMAS: dict[str, dict[str, Any]] = {
     McpTool.PREPARE_ARTIFACT: _PREPARE_SCHEMA,
     McpTool.READ_ARTIFACT: _READ_SCHEMA,
     McpTool.ANALYZE: _ANALYZE_SCHEMA,
+    McpTool.GUIDANCE: _GUIDANCE_SCHEMA,
 }
 
 
@@ -1378,6 +1428,15 @@ def _tool_specs() -> tuple[dict[str, Any], ...]:
             "Run an explicit analysis request (requires analysis_id, input_refs, explicit=true).",
             _ANALYZE_SCHEMA,
         ),
+        _tool_spec(
+            McpTool.GUIDANCE,
+            (
+                "Read one versioned guidance document (shared/workflow/orchestration/"
+                "topic) by guide_id, optionally one section; versioned and digest-bound "
+                "for caching."
+            ),
+            _GUIDANCE_SCHEMA,
+        ),
         *_research_tool_specs(),
         *(
             _tool_spec(name, "Versioned research consumer operation.", CONSUMPTION_SCHEMAS[name])
@@ -1521,6 +1580,20 @@ class AnalysisPort(Protocol):
 
 
 @runtime_checkable
+class GuidancePort(Protocol):
+    """Versioned guidance read (plan 2026-10-30 §5: 指南读取).
+
+    Read-only and bounded; the implementation is a thin Controller forward, so
+    the HTTP route and this tool cannot drift.  The port never authorizes
+    anything — a guide is guidance, not an execution permission.
+    """
+
+    def guidance(self, request: Mapping[str, Any], *, workspace_id: str) -> Any:
+        """Read one guide (``guide_id`` required; optional section/version/max_bytes)."""
+        ...
+
+
+@runtime_checkable
 class ResearchPort(Protocol):
     """The ten P2 research operations (M2-01c), one method per operation.
 
@@ -1587,6 +1660,7 @@ class McpBackends:
     cancel: CancelPort
     artifacts: ArtifactPort
     analysis: AnalysisPort
+    guidance: GuidancePort | None = None
     research: ResearchPort | None = None
     consumption: ConsumptionPort | None = None
 
@@ -2214,6 +2288,7 @@ class McpServer:
             McpTool.PREPARE_ARTIFACT: self._tool_prepare_artifact,
             McpTool.READ_ARTIFACT: self._tool_read_artifact,
             McpTool.ANALYZE: self._tool_analyze,
+            McpTool.GUIDANCE: self._tool_guidance,
         }
         for tool_name in RESEARCH_TOOL_NAMES:
             self._tool_dispatch[tool_name] = self._research_handler(tool_name)
@@ -2896,12 +2971,46 @@ class McpServer:
         if not isinstance(body, str):
             return
         encoding = data.get("encoding") or "identity"
-        if data.get("truncated"):
-            data.setdefault("digest_scope", "artifact")
+        import base64
+        import binascii
+        import hashlib
+
         from acp_services.entrypoints.machine_output import redact
 
-        # base64 is opaque bytes; identity text must survive redaction verbatim.
-        if encoding != "base64" and redact(body) != body:
+        if encoding == "base64":
+            try:
+                raw = base64.b64decode(body, validate=True)
+            except (binascii.Error, ValueError):
+                raise McpToolError(
+                    mo.ErrorCode.INPUT_INVALID,
+                    "artifact body is not valid base64",
+                    params={"field": "body", "rule": "artifact_encoding_invalid"},
+                    retryable=False,
+                ) from None
+        elif encoding == "identity":
+            raw = body.encode("utf-8")
+        else:
+            raise McpToolError(
+                mo.ErrorCode.INPUT_INVALID,
+                f"unknown artifact body encoding {encoding!r}",
+                params={"field": "encoding", "rule": "artifact_encoding_invalid"},
+                retryable=False,
+            )
+        # One content policy for both encodings: a decoded path/secret is
+        # refused, never smuggled through base64.  Undecodable bytes decode with
+        # surrogate escapes so ASCII path fragments are still visible.
+        try:
+            decoded = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            # Binary bodies cannot be content-checked this round; neither a
+            # slice nor the whole blob is returned (residual: binary allowlist).
+            raise McpToolError(
+                mo.ErrorCode.UNSUPPORTED_CAPABILITY,
+                "non-UTF-8 artifact body cannot be verified",
+                params={"field": "body", "rule": "artifact_body_unverifiable"},
+                retryable=False,
+            ) from None
+        if redact(decoded) != decoded:
             raise McpToolError(
                 mo.ErrorCode.UNSUPPORTED_CAPABILITY,
                 "artifact body contains a redacted pattern; the bytes cannot be "
@@ -2909,15 +3018,12 @@ class McpServer:
                 params={"field": "body", "rule": "artifact_body_redacted"},
             )
         if data.get("truncated"):
+            data.setdefault("digest_scope", "artifact")
             return
         digest = str(data.get("digest") or "")
         expected = digest.split(":", 1)[1] if digest.startswith("sha256:") else digest
         if not expected:
             return
-        import base64
-        import hashlib
-
-        raw = base64.b64decode(body) if encoding == "base64" else body.encode("utf-8")
         if hashlib.sha256(raw).hexdigest() != expected:
             raise McpToolError(
                 mo.ErrorCode.UNSUPPORTED_CAPABILITY,
@@ -2954,6 +3060,27 @@ class McpServer:
         data = record if isinstance(record, Mapping) else {"result": record}
         return mo.MachineResult(
             operation=McpTool.ANALYZE,
+            status="ok",
+            data=dict(data),
+            operation_identity=context.workspace_id,
+        )
+
+    def _tool_guidance(
+        self, arguments: Mapping[str, Any], context: WorkspaceContext
+    ) -> mo.MachineResult:
+        """Read one versioned guide (read-only; no budget, no side effects)."""
+        port = self._backends.guidance
+        if port is None:
+            raise McpToolError(
+                mo.ErrorCode.UNSUPPORTED_CAPABILITY,
+                "no guidance service is wired for this Controller",
+                params={"rule": "guidance_service_unavailable", "tool": McpTool.GUIDANCE},
+                retryable=False,
+            )
+        record = port.guidance(dict(arguments), workspace_id=context.workspace_id)
+        data = record if isinstance(record, Mapping) else {"result": record}
+        return mo.MachineResult(
+            operation=McpTool.GUIDANCE,
             status="ok",
             data=dict(data),
             operation_identity=context.workspace_id,

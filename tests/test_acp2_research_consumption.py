@@ -64,7 +64,7 @@ def server_with_consumer(consumer: RecordingConsumer, **kwargs: Any) -> mcp.McpS
 def test_consumer_surface_is_additive_and_hidden_before_negotiation() -> None:
     consumer = RecordingConsumer()
     server = server_with_consumer(consumer)
-    assert len(mcp.TOOL_ALLOWLIST) == 8
+    assert len(mcp.TOOL_ALLOWLIST) == 9
     assert len(mcp.RESEARCH_TOOL_NAMES) == 10
     assert len(CONSUMPTION_TOOL_NAMES) == 11
     assert set(_tools_list(server)) == mcp.TOOL_ALLOWLIST

@@ -203,6 +203,7 @@ def test_client_read_only_surface(controller: LiveController) -> None:
         "acp_prepare_artifact",
         "acp_read_artifact",
         "acp_analyze",
+        "acp_get_guidance",
     }
 
     health = client.health()

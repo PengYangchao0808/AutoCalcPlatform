@@ -566,6 +566,41 @@ class ControllerClient:
             raise ControllerClientError("list response is not an object")
         return data
 
+    def guidance(
+        self,
+        guide_id: str,
+        *,
+        section: str | None = None,
+        version: str | None = None,
+        max_bytes: int | None = None,
+    ) -> Mapping[str, Any]:
+        """Read one versioned guidance document (read-only; plan 2026-10-30 §5).
+
+        A 404 for an unknown id and a 409 for a stale cached version arrive as
+        typed :class:`ControllerClientError` values (``unknown`` /
+        ``revision_conflict``), never as raw transport failures.
+        """
+        quoted = urllib.parse.quote(str(guide_id), safe="")
+        query: dict[str, Any] = {}
+        if section is not None:
+            query["section"] = str(section)
+        if version is not None:
+            query["version"] = str(version)
+        if max_bytes is not None:
+            query["max_bytes"] = int(max_bytes)
+        suffix = "?" + urllib.parse.urlencode(query) if query else ""
+        data = self._request_json("GET", f"/api/v1/guidance/{quoted}{suffix}")
+        if not isinstance(data, Mapping):
+            raise ControllerClientError("guidance response is not an object")
+        return data
+
+    def guidance_index(self) -> Mapping[str, Any]:
+        """Discovery index of the guidance pack (read-only)."""
+        data = self._request_json("GET", "/api/v1/guidance")
+        if not isinstance(data, Mapping):
+            raise ControllerClientError("guidance index response is not an object")
+        return data
+
     # -- application commands (signatures frozen; B06 binds the routes) ----
     def preflight(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
         """Zero-side-effect feasibility/estimate for a would-be submit."""

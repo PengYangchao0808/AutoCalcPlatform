@@ -1,5 +1,17 @@
 # acp/workflows/ — Workflow Modules
 
+## 工作流与 Prompt 同步清单（2026-10-30）
+
+[统一计划](../../../docs/reference/next-change/ACP_MCP_Agent_Guidance_PES_Batch_Plan_20261030.md) §13—15 是 15 个 active 工作流的说明与 prompt 草案；未来内容包落地后须指向其唯一权威，不维护两份漂移正文。新指南/自动选点尚未上线。
+
+新增或改变对外行为时，同批核对：catalog/registry 与 active edit coverage、共用 preflight/submit 契约、产物/错误/恢复、指南版本及引用、有效请求示例、失败/不适用例、发行可读取性。已有 partial 可明确保留，不因有 prompt 就提升覆盖；计划中的 CI 检查必须实现后才可写为已强制。
+
+- 指南按需组合通用段＋目标工作流＋专题，不复制全部默认值/枚举。科研指导不执行 QC；新的科学实现仍在 CCCP 唯一驻点。
+- Confsearch/BatchOptimize/PESsearch/scan 同属首批；键长扫描默认 PESsearch，允许用户显式选择和已确认例外；反应位点矩阵算法仅留接入位置。
+- 初猜 TS/INT 是用途角色；驻点研究必须进入 BatchOptimize，按真实 profile/角色执行并逐项检查结果。选点/发布/Batch completed 均不自动等于 TS 或端点验证通过。
+- 全自动为首版要求，在平台授权内不逐点人审；实现联动 PES writer、scan 候选适配和 Batch loader，兼容 manual 历史记录，不伪造 manual 来源。
+- 三个 PES2TS 入口仍遵循冻结 payload 与实际本地/远端支持；tsmode 保持源 Hessian/模式映射检查；scan 的 ScanTS 显式 opt-in；PES 策略名称被校验不代表独立策略已执行。Prompt 必须反映这些实际边界。
+
 ## OVERVIEW
 Workflow implementations + the registry that maps CLI subcommands to `WorkflowSpec` builders. **15 active workflows** (registry-driven, catalog `status:"active"`): `Confsearch, PESsearch, BatchOptimize, XtbPathSearch, OrcaGradient, XtbConstrainedOpt, irc, scan, tsmode, casscf, nmr, singlepoint, optimize, frequency, xtb_optimize`. Simple 系列 + scan/irc 由 `simple.py` 组装；XtbPathSearch/OrcaGradient/XtbConstrainedOpt 消费冻结 `pes2ts_*_request_v1` payload（PES2TS → ACP 执行统一，本地专用，不在远程允许集）。`ensemble.py`/`energy.py`/`energy_shared.py`/`xtbmd_censo_energy.py`/`xtbmd_md.py` 是**退役工作流引擎**（CLI 已拦截），但仍被 `confsearch/protocols/` 懒加载复用为 Confsearch 协议引擎。
 

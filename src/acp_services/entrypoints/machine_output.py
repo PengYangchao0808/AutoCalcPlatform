@@ -356,6 +356,7 @@ _OPAQUE_RE = re.compile(
 #: names in the capability/projection payloads).
 _WIRE_IDENTIFIER_RE = re.compile(
     r"^acp[_a-z0-9]*$|^rph[_a-z0-9]*$|^acp\.[a-z0-9_.]+$|^rph\.[a-z0-9_.]+$"
+    r"|^pes2ts[_a-z0-9]+$"
 )
 #: The frozen error ``params.rule`` vocabulary is a *published enum* of lowercase
 #: snake-case tokens (``analysis_capability_not_executable``,

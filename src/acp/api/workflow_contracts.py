@@ -16,6 +16,8 @@ from __future__ import annotations
 import difflib
 from typing import Any
 
+from acp.api.guidance_pack import PACK_VERSION as GUIDANCE_PACK_VERSION
+from acp.api.guidance_pack import workflow_guide_map
 from acp.api.submission_contract import WORKFLOW_CONTRACTS
 from acp.catalog import WORKFLOW_CATALOG
 
@@ -36,6 +38,8 @@ ACTIVE_WORKFLOWS: tuple[str, ...] = tuple(
 _COVERAGE: dict[str, str] = {
     "Confsearch": "complete",
     "BatchOptimize": "complete",
+    "PESsearch": "partial_bond_length_scan",
+    "scan": "partial",
 }
 
 _STATUS_VOCABULARY: dict[str, Any] = {
@@ -119,6 +123,106 @@ _RESOURCE_PROPERTIES: dict[str, Any] = {
 }
 
 
+_PES_CONSTRAINTS = (
+    "coverage is the direct mode=bond_length_scan branch; the manifest path "
+    "(from-job/from-artifact) is not published yet",
+    "coordinate atoms are 0-based indices into the source structure; verify "
+    "the atom mapping before submitting",
+    "input.protocol levels follow the pes_bond_scan schema "
+    "(scan_coordinate/scan_driver/scan_optimizer/single_point)",
+    "method.levels is rejected for PESsearch: the scan protocol rides in "
+    "input.protocol (or input.scan_request)",
+    "TS/INT candidates picked from a scan are initial guesses only; publish "
+    "and BatchOptimize before any stationary-point claim (see "
+    "orchestration.pes_to_batch)",
+)
+
+_SCAN_CONSTRAINTS = (
+    "bond-length tasks default to PESsearch; scan needs an explicit user "
+    "choice or a recorded, confirmed limitation",
+    "coordinates require a confirmable atom count: submit explicit geometry "
+    "(xyz_text/inline input) so 0-based indices can be verified",
+    "kind-aware ranges: distance > 0; angle 0-180; dihedral -360..360; "
+    "start != end; integer scan_points >= 2",
+    "ScanTS is opt-in (scan_use_scants/use_scants) and defaults to off; a "
+    "plain scan never implies an internal TS optimization",
+)
+
+_COORDINATE_OBJECT: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "kind": {"type": "string", "enum": ["distance", "angle", "dihedral"]},
+        "atoms": {
+            "type": "array",
+            "items": {"type": "integer", "minimum": 0},
+            "minItems": 2,
+            "maxItems": 4,
+            "description": "0-based atom indices (2 distance / 3 angle / 4 dihedral).",
+        },
+        "unit": {"type": "string", "enum": ["angstrom", "degree"]},
+        "start": {"type": "number"},
+        "end": {"type": "number"},
+        "n_points": {"type": "integer", "minimum": 3, "maximum": 101},
+        "bond_type": {"type": "string"},
+    },
+    "required": ["atoms", "start", "end"],
+}
+
+_PES_INPUT_PROPERTIES: dict[str, Any] = {
+    **_CONFSEARCH_INPUT_PROPERTIES,
+    "source": {
+        "type": "object",
+        "description": (
+            "BondLengthScanSource for mode=bond_length_scan: source_type "
+            "(task_artifact|structure_asset|xyz_text), xyz_text/asset_path/"
+            "artifact_path, source_job_id, structure_selector, charge, multiplicity."
+        ),
+    },
+    "coordinate": {**_COORDINATE_OBJECT, "description": "Primary scan coordinate (0-based atoms)."},
+    "coordinates": {
+        "type": "array",
+        "items": _COORDINATE_OBJECT,
+        "description": "Synchronous coordinates (max 64); keeps topology, never flattened.",
+    },
+    "selection": {
+        "type": "object",
+        "description": "Functional selection metadata (kind/atom_indices/groups).",
+    },
+    "protocol": {
+        "type": "object",
+        "description": (
+            "Scan protocol: scan_driver (software/mode/reuse_previous_geometry/"
+            "use_scants/...), scan_optimizer (method GFN2-xTB, ...), single_point "
+            "(enabled/software/method/B97-3c/...). Levels follow pes_bond_scan."
+        ),
+    },
+    "source_job_id": {"type": "string", "description": "Upstream job id (manifest path)."},
+    "from_artifact": {"type": "string", "description": "Upstream artifact (manifest path)."},
+    "from": {"type": "string", "description": "Resolved manifest path (post-resolution mirror)."},
+    "coordinate_plan": {"type": "object", "description": "Manifest-path --plan JSON."},
+    "product": {"type": "string"},
+    "ts_guess": {"type": "string"},
+}
+
+_SCAN_INPUT_PROPERTIES: dict[str, Any] = {
+    **_CONFSEARCH_INPUT_PROPERTIES,
+    "scan_coordinates": {
+        "type": "array",
+        "items": _COORDINATE_OBJECT,
+        "description": "Coordinates may ride in input or method; the shared validator reads input FIRST (input.scan_coordinates/input.coordinate before method) — do not override an input coordinate via method.",
+    },
+    "coordinate": {
+        "oneOf": [
+            {
+                "type": "string",
+                "description": "Compact form 'atom_i,atom_j[,atom_k[,atom_l]],start,end'.",
+            },
+            _COORDINATE_OBJECT,
+        ]
+    },
+}
+
+
 def canonical_workflow(value: str) -> str | None:
     """Return the catalog spelling of *value* (case-insensitive), else ``None``."""
     wanted = str(value).strip().lower()
@@ -170,7 +274,11 @@ def _confsearch_block() -> dict[str, Any]:
     properties, enums = _method_properties("Confsearch")
     return {
         "workflow": "Confsearch",
-        "coverage": "complete",
+        "coverage": "partial",
+        "gaps": [
+            "value-level mirror equivalence is not enforced: the engine's "
+            "role fallbacks (TS→INT, recalc auto→numeric) are not reproduced here",
+        ],
         "input": {
             "required_any": list(contract.required_input_any),
             "properties": _CONFSEARCH_INPUT_PROPERTIES,
@@ -218,7 +326,11 @@ def _batch_block() -> dict[str, Any]:
     properties, enums = _method_properties("BatchOptimize")
     return {
         "workflow": "BatchOptimize",
-        "coverage": "complete",
+        "coverage": "partial",
+        "gaps": [
+            "value-level batch_roles mirror equivalence is enforced only when the "
+            "role field is explicitly present; engine fallbacks stay unverified",
+        ],
         "input": {
             "required_any": list(contract.required_input_any),
             "properties": _BATCH_INPUT_PROPERTIES,
@@ -259,25 +371,151 @@ def _batch_block() -> dict[str, Any]:
     }
 
 
+def _pes_block() -> dict[str, Any]:
+    contract = WORKFLOW_CONTRACTS["PESsearch"]
+    properties, enums = _method_properties("PESsearch")
+    return {
+        "workflow": "PESsearch",
+        "coverage": "partial",
+        "partial_scope": (
+            "mode=bond_length_scan direct branch only; the manifest path is not published"
+        ),
+        "gaps": [
+            "input.protocol level values are type-checked only; per-level value "
+            "semantics stay with the pes_bond_scan schema and the pydantic bond "
+            "scan model downstream",
+        ],
+        "input": {
+            "required_any": list(contract.required_input_any),
+            "properties": _PES_INPUT_PROPERTIES,
+            "additional_properties": False,
+        },
+        "method": {
+            "properties": properties,
+            "enums": enums,
+            "additional_properties": False,
+        },
+        "resources": {"properties": _RESOURCE_PROPERTIES},
+        "examples": [
+            {
+                "workflow": "PESsearch",
+                "input": {
+                    "source": {
+                        "source_type": "xyz_text",
+                        "xyz_text": "3\n\nO 0.0 0.0 0.0\nH 0.957 0.0 0.0\nH -0.24 0.927 0.0",
+                        "charge": 0,
+                        "multiplicity": 1,
+                    },
+                    "coordinate": {
+                        "kind": "distance",
+                        "atoms": [0, 1],
+                        "unit": "angstrom",
+                        "start": 0.957,
+                        "end": 2.4,
+                        "n_points": 15,
+                    },
+                    "protocol": {
+                        "scan_driver": {
+                            "software": "orca",
+                            "mode": "relaxed_scan",
+                            "reuse_previous_geometry": True,
+                        },
+                        "scan_optimizer": {"method": "GFN2-xTB"},
+                        "single_point": {
+                            "enabled": True,
+                            "software": "orca",
+                            "method": "B97-3c",
+                        },
+                    },
+                },
+                "method": {"mode": "bond_length_scan"},
+                "resources": {"nproc": 4, "mem": "8GB"},
+            },
+        ],
+        "constraints": list(_PES_CONSTRAINTS),
+        "status_vocabulary": _STATUS_VOCABULARY,
+    }
+
+
+def _scan_block() -> dict[str, Any]:
+    contract = WORKFLOW_CONTRACTS["scan"]
+    properties, enums = _method_properties("scan")
+    return {
+        "workflow": "scan",
+        "coverage": "partial",
+        "partial_scope": "relaxed internal-coordinate scan (ORCA path); ScanTS opt-in",
+        "gaps": [
+            "multi-coordinate coupling semantics beyond the shared validator are "
+            "not projected here; the backend contract remains authoritative",
+        ],
+        "input": {
+            "required_any": list(contract.required_input_any),
+            "properties": _SCAN_INPUT_PROPERTIES,
+            "additional_properties": False,
+        },
+        "method": {
+            "properties": properties,
+            "enums": enums,
+            "levels": _level_table("scan"),
+            "additional_properties": False,
+        },
+        "resources": {"properties": _RESOURCE_PROPERTIES},
+        "examples": [
+            {
+                "workflow": "scan",
+                "input": {
+                    "source_type": "xyz_text",
+                    "source": "3\n\nO 0.0 0.0 0.0\nH 0.957 0.0 0.0\nH -0.24 0.927 0.0",
+                    "charge": 0,
+                    "multiplicity": 1,
+                },
+                "method": {
+                    "coordinate": "0,1,0.957,2.4",
+                    "scan_points": 12,
+                },
+                "resources": {"nproc": 4, "mem": "8GB"},
+            },
+        ],
+        "constraints": list(_SCAN_CONSTRAINTS),
+        "status_vocabulary": _STATUS_VOCABULARY,
+    }
+
+
 def describe_workflow(workflow: str) -> dict[str, Any]:
     """Return the published contract block for *workflow*.
 
     A workflow outside the staged coverage returns an explicit
     ``not_provided`` block: the caller must not infer a schema that does not
-    exist, and the rest of the capabilities payload still answers.
+    exist, and the rest of the capabilities payload still answers.  Every
+    block (including ``not_provided``) carries the workflow's ``guide_ref``:
+    the guidance content pack covers all active workflows, and a guide is
+    guidance — never a parameter authority or an execution permission.
     """
     canonical = canonical_workflow(workflow) or workflow
     if canonical == "Confsearch":
-        return _confsearch_block()
-    if canonical == "BatchOptimize":
-        return _batch_block()
-    return {
-        "workflow": canonical,
-        "coverage": "not_provided",
-        "reason": (
-            "the submit schema for this workflow is not published yet; "
-            "use the CLI help or the Workbench form, and treat unknown method "
-            "keys as unsafe"
-        ),
-        "status_vocabulary": _STATUS_VOCABULARY,
-    }
+        block = _confsearch_block()
+    elif canonical == "BatchOptimize":
+        block = _batch_block()
+    elif canonical == "PESsearch":
+        block = _pes_block()
+    elif canonical == "scan":
+        block = _scan_block()
+    else:
+        block = {
+            "workflow": canonical,
+            "coverage": "not_provided",
+            "reason": (
+                "the submit schema for this workflow is not published yet; "
+                "use the CLI help or the Workbench form, and treat unknown method "
+                "keys as unsafe"
+            ),
+            "status_vocabulary": _STATUS_VOCABULARY,
+        }
+    guide_id = workflow_guide_map().get(canonical)
+    if guide_id is not None:
+        block["guide_ref"] = {
+            "guide_id": guide_id,
+            "pack_version": GUIDANCE_PACK_VERSION,
+            "tool": "acp_get_guidance",
+        }
+    return block
