@@ -3994,6 +3994,103 @@ def _stage_remote_review_backups(request: Request, job_id: str) -> None:
     )
 
 
+@router.get("/jobs/{job_id}/pes/review/status")
+def get_pes_review_status(job_id: str, request: Request) -> dict[str, Any]:
+    """Cache-only selection status (round-5 PR-07).
+
+    Never fetches the compute node, never prepares and never writes: a remote
+    job with nothing in the cache reports ``not_prepared`` plus the prepare
+    endpoint instead of a hidden fetch.  This is the read surface the MCP
+    ``acp_get_pes_review`` tool forwards to.
+    """
+    from acp.calculations.pes.publication import PUBLICATION_INTENT_RELATIVE_PATH
+    from acp.calculations.pes.review import load_pes_review, load_pes_review_backups
+
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    if str(record.spec.workflow or "") != "PESsearch":
+        raise HTTPException(status_code=400, detail=f"Not a PESsearch job: {job_id}")
+    remote = _is_remote_job(record)
+    if remote:
+        cache = _remote_structure_cache(request)
+        work_dir = Path(cache.job_root(record.id))
+    else:
+        work_dir = Path(record.work_dir)
+    payload: dict[str, Any] = {
+        "schema_version": "acp2.pes.selection-status.v1",
+        "job_id": job_id,
+        "workflow": "PESsearch",
+        "cache_only": True,
+        "remote": remote,
+        "capability": {
+            "autopublish": _selection_autopublish_enabled(),
+            "publish_endpoint": f"/api/v1/jobs/{job_id}/pes/review",
+            "prepare_endpoint": f"/api/v1/jobs/{job_id}/prepare",
+        },
+    }
+    review = load_pes_review(work_dir) if work_dir.is_dir() else None
+    intent = None
+    try:
+        store = getattr(request.app.state, "job_manager", None)
+        store = getattr(store, "store", None)
+        if store is not None and hasattr(store, "load_selection_publication"):
+            intent = store.load_selection_publication(job_id)
+    except Exception:  # a status read never fails on an optional receipt
+        intent = None
+    if review is None:
+        payload.update(
+            {
+                "status": "not_prepared" if remote else "pending",
+                "reason": (
+                    "selection artifacts are not in the local cache; prepare them"
+                    if remote
+                    else "no confirmed selection yet"
+                ),
+                "review": {},
+                "backups": [],
+                "publication": intent,
+            }
+        )
+        return payload
+    selected = review.get("selected") or []
+    payload.update(
+        {
+            "status": str(review.get("status") or "confirmed"),
+            "revision": int(review.get("revision") or 0),
+            "confirmed_at": review.get("confirmed_at"),
+            "selector": review.get("selector") or "manual",
+            "actor": review.get("actor"),
+            "authorization": review.get("authorization"),
+            "source": review.get("source") or {},
+            "review": review,
+            "selected": [
+                {
+                    "candidate_id": row.get("candidate_id"),
+                    "role": row.get("role"),
+                    "frame_index": row.get("frame_index"),
+                    "structure_path": row.get("structure_path"),
+                    "selection_source": row.get("selection_source"),
+                }
+                for row in selected
+                if isinstance(row, dict)
+            ],
+            "backups": [
+                {
+                    "n": int(row.get("n") or 0),
+                    "confirmed_at": row.get("confirmed_at"),
+                    "selected_count": int(row.get("selected_count") or 0),
+                }
+                for row in load_pes_review_backups(work_dir)
+            ],
+            "publication": intent,
+            "publication_intent_path": f"RESULT/pes_search/{Path(PUBLICATION_INTENT_RELATIVE_PATH).name}",
+        }
+    )
+    return payload
+
+
 @router.get("/jobs/{job_id}/pes/review", response_model=PesReviewStateResponse)
 def get_pes_review(job_id: str, request: Request) -> PesReviewStateResponse:
     """Return the saved manual-review state plus backup rounds (``pending`` when never saved)."""
