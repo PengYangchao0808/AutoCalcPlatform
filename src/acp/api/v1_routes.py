@@ -1868,6 +1868,56 @@ def _persist_method_warning_event(
         logger.debug("method_validation_warning event append failed", exc_info=True)
 
 
+def _validate_batch_cardinality(inp: dict[str, Any]) -> None:
+    """Refuse a multi-structure Batch submission before any side effect (PR-08).
+
+    The single_flat layout is one scheduler task per selected structure; the old
+    behaviour only surfaced the split after submit.  *actual* is the count after
+    source resolution (inline items or a manifest expansion), never the
+    pre-expansion request shape.
+    """
+    actual: int | None = None
+    items = inp.get("items")
+    if isinstance(items, list) and items:
+        actual = len(items)
+    else:
+        manifest = inp.get("from") or inp.get("manifest_path")
+        if isinstance(manifest, str) and manifest:
+            root = Path(manifest)
+            if root.name == "result_manifest.json" and root.parent.name == "RESULT":
+                root = root.parent.parent
+            try:
+                from acp.calculations.batch.loaders import load_items_from_result_manifest
+
+                actual = len(load_items_from_result_manifest(root))
+            except ValueError:
+                # loader refusals (unconfirmed selection / unsettled publication)
+                # keep their own actionable message; cardinality is not the issue
+                return
+    if actual is None or actual == 1:
+        return
+    raise HTTPException(
+        status_code=422,
+        detail={
+            "code": "input_invalid",
+            "message": (
+                "BatchOptimize accepts exactly one selected structure per scheduler "
+                "task (single_flat); split the request into one task per structure"
+            ),
+            "params": {
+                "field": "input.items",
+                "rule": "layout_limit",
+                "limit": 1,
+                "received": int(actual),
+                "hint": (
+                    "submit one BatchOptimize task per selected structure and keep "
+                    "the candidate source revision/role on each item"
+                ),
+            },
+        },
+    )
+
+
 def _resolve_batch_structures_input(
     inp: dict[str, Any], request: Request
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -2801,6 +2851,7 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
     elif req.workflow == "BatchOptimize":
         req.input, resolved_batch_snapshots = _resolve_batch_structures_input(req.input, request)
         batch_snapshots.extend(resolved_batch_snapshots)
+        _validate_batch_cardinality(req.input)
     elif req.workflow == "tsmode":
         req.input = _prepare_tsmode_input(req.input, manager)
         bundle_level = req.input.pop("_bundle_level", None)

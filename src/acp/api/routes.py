@@ -275,6 +275,35 @@ def _capability_limits(request: Request) -> dict[str, Any]:
     when it is not assembled, say so instead of inventing a limit.
     """
     published = dict(_CONTROLLER_LIMITS)
+    manager = getattr(request.app.state, "job_manager", None)
+    registry = getattr(manager, "registry", None)
+    local = getattr(registry, "local", None)
+    local_max_jobs = getattr(local, "max_jobs", None)
+    if local_max_jobs is not None:
+        running = None
+        counter = getattr(manager, "count_local_running_jobs", None)
+        if callable(counter):
+            try:
+                running = int(counter())
+            except Exception:  # a discovery read never fails on a counter
+                running = None
+        published["local"] = {
+            "max_jobs": int(local_max_jobs),
+            "running_count": running,
+            "count_scope": (
+                "local STARTING/RUNNING jobs only; remote jobs hold node "
+                "reservations and never occupy a local slot"
+            ),
+            "source": "registry.local.max_jobs",
+        }
+    published["max_running"] = {
+        "status": "legacy_noop",
+        "effective_config": "registry.local.max_jobs",
+        "note": (
+            "the legacy max_running / ACP_MAX_RUNNING value does not cap local "
+            "concurrency; the effective limit is registry.local.max_jobs"
+        ),
+    }
     admission = getattr(request.app.state, "admission", None)
     limits = getattr(admission, "limits", None)
     if limits is None:

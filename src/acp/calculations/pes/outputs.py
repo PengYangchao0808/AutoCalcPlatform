@@ -115,6 +115,18 @@ def persist_pes_outputs(
         "ts_candidates": ts_candidates,
         "int_candidates": int_candidates,
         "recommendations": {"ts": ts_candidates, "intermediates": int_candidates},
+        # Round-5 PR-08: the native recommendation algorithm stays disabled; the
+        # empty arrays are policy, not a "no peak found" result.  Authorized
+        # agents may still publish initial guesses through the PR-06 path.
+        "recommendation_status": {
+            "status": "disabled",
+            "reason_code": "manual_only_policy",
+            "note": (
+                "native algorithmic recommendations are disabled; authorized "
+                "agents publish selections via POST /jobs/{id}/pes/review "
+                "(selector=agent) and manual confirmation remains available"
+            ),
+        },
         "frames_count": len(frames),
         "candidate_structures": {},
         "recommendations_file": "pes_search/pes_recommendations.json",
@@ -129,6 +141,8 @@ def persist_pes_outputs(
         "note": "Algorithmic recommendations — audit only, never batch inputs; "
         "confirm selections via POST /jobs/{id}/pes/review.",
         "scan_dir": scan_dir,
+        "status": "disabled",
+        "reason_code": "manual_only_policy",
         "ts": ts_candidates,
         "intermediates": int_candidates,
     }

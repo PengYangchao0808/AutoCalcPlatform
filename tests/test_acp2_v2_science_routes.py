@@ -155,7 +155,7 @@ def test_capabilities_are_metadata_only(client: TestClient) -> None:
     body = response.json()
     assert set(body) == {"protocol_version", "tools", "capabilities"}
     assert isinstance(body["protocol_version"], str) and body["protocol_version"]
-    assert len(body["tools"]) == 10
+    assert len(body["tools"]) == 12  # + the two PR-07 selection tools
     assert set(body["tools"]) == set(TOOL_ALLOWLIST)
     questions = body["capabilities"]["questions"]
     assert len(questions) == 3
