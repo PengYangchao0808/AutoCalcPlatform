@@ -85,10 +85,10 @@
 | F5 | 结构叠加 / RMSD | scene_instance（第二 model） | overlay | 无 | **并入** `molecule-viewer`（overlay 模式） |
 | F6 | NMR 谱图 + 归属 | 新写 | **无端点**（经典页读文件） | 无 | **新建** `nmr-panel`，先走 `live(file)` + fixture |
 | F7 | 化学网络 | SVG | **无端点**；`reaction-network` 用历史 mechanism | 已交付（只读、历史） | **保留**；现役数据待 BE-GAP-02 |
-| F8 | 2D 结构绘制 | — | **无端点、无 Ketcher** | 未交付 | **推迟**（BE-GAP-03），用 SMILES/文件预览兜底 |
+| F8 | 2D 结构绘制 | — | **无端点、无 Ketcher** | 无 | **非迁移项**：老 UI 从来没有 2D 绘制；这是目标形态的新能力，阻塞于 BE-GAP-03，本计划**不排期** |
 | F9 | 属性/表格（构象、频率、能量） | 原生表格 | detail / artifacts | `exec-detail` 有工件清单 | **扩**：结构化表格 + 排序/筛选 |
 | F10 | 工件预览（文本/日志/图片/结构） | 原生 + 结构预览 | files / artifacts / prepared | 部分 | **扩** `exec-detail` 为通用预览 |
-| F11 | 波函数/轨道 | — | **无端点** | 无 | **推迟**（BE-GAP-05），显式"未接入"态 |
+| F11 | 波函数/轨道 | — | **无端点** | 无 | **非迁移项**：老 UI 的"波函数" tab 是**占位**（无实现，见 §2.4 判定规则）；新 UI **不复制空入口**，待后端有轨道产品再作为新功能引入（BE-GAP-05） |
 | F12 | 研究证据视图 | 原生卡片 | v2 research/science | `agent-workspace` 已交付只读首片 | **保留**，补 fixture/real 标识 |
 
 ### 2.4 老 UI 功能面 → 新 UI 迁移矩阵（parity 清单，D5）
@@ -107,7 +107,7 @@
 | P08 | 任务详情（阶段进度 / 实时日志 / 文件 / 工件） | `features/job-detail.js`（52 KB）+ `files-logs.js` | `exec-detail` 部分（工件清单 + 下载） | V5 |
 | P09 | 文件与日志浏览（目录树 / 日志尾 / 预览） | `features/files-logs.js`（26 KB） | 未移植 | V5 |
 | P10 | 系统与资源（节点列表 / 状态 / ping / bootstrap、软件发现、后端） | `controllers/system_resources_controller.js`、`client/system-endpoints.js` | Shell 仅读 `/api/backends` | V5 |
-| P11 | 结构查看器（energy/path/structure/wavefunction 四 tab、叠加、IRC 播放、样式、相机、视图状态、窄屏抽屉） | `structure_viewer.js`（165 KB） | `molecule-viewer` P0（单帧 XYZ、无交互） | V1 / V2 |
+| P11 | 结构查看器（**三个有实现的 tab**：结构 / 能量与轨迹 / 反应路径；另有 1 个"功能开发中"占位 tab；叠加、IRC 播放、样式、相机、视图状态、窄屏抽屉） | `structure_viewer.js`（165 KB）+ `molecule-view.js::setViewerTab` | `molecule-viewer` P0（单帧 XYZ、无交互） | V1 / V2 |
 | P12 | 能量 / 轨迹与候选评审（曲线、候选带、保存候选、帧联动） | `features/energy.js`（254 KB） | 未移植 | V1 |
 | P13 | 振动检查器（频率表 / 箭头 / 动画） | `vibration_viewer.js`（76 KB） | 未移植 | V2 |
 | P14 | 结构编辑（测量 / 内坐标编辑 / 事务 / 资产保存） | `structure_editor.js`（77 KB）+ `geometry_store.js` | 未移植 | V2 |
@@ -129,7 +129,13 @@
 - 两套字典**设计上零重叠**（shell 独立字典，见其文件头注释），因此**对等度按功能面判定**，键组只作为每个面的完成度下界：`24 个功能面，6 个已有实现（且均为部分），18 个未移植`。
 - 每面完成 = **模块已注册 + 四态可用 + 对应测试通过 + 键组覆盖达标**；四项缺一不算迁移完成。
 
-> 变更规则：老功能**不得因新设计缺位而删除**。确需废弃（例如 `wavefunction` tab 在后端无产品），必须走 ADR 并在本表标注"ADR 废弃 + 理由"，不得静默消失。
+**判定规则：什么算"一个功能面"（避免把空壳当功能）**
+
+1. **点击后有实现**才算功能：有面板、有处理代码、有数据来源。只有按钮、或点击后显示"功能开发中"占位的**不算**——老 UI 的"波函数" tab 正是这种：`setViewerTab` 只处理 `structure / energy / path`，其它值一律落到 `renderMechanismPlaceholder()`（文案 `viewer.coming_title` = "功能开发中"）。
+2. 老 UI 的**占位入口不迁移**。新 UI 若要表达同一意图，只能给显式"未接入"（并挂 BE-GAP），**不得做成空按钮**。
+3. 只有"老 UI 有、新 UI 没有"才计入缺口；老 UI 从来没有的能力（如 2D 绘制）属于**新功能**，记 §6 或后续计划，**不算 parity 欠账**。
+
+> 变更规则：老功能**不得因新设计缺位而删除**。确需废弃，必须走 ADR 并在本表标注"ADR 废弃 + 理由"，不得静默消失。
 
 ---
 
@@ -268,9 +274,9 @@ DSH 插件打包、`/u/{account}/panel/*`、v3 事件流、多用户隔离。v1 
 |---|---|---|---|---|
 | BE-GAP-01 | 无 v3 端点（`/api/v3/{tasks,artifacts,events/stream}` 等，架构 §3.3 全为"建议路径"） | V8 阶段（宿主）、SSE 续传 | 用 v1/v2 轮询 + 适配层；`mode:"v3"` 预留 | 后端 WP0 冻结 v3 契约 |
 | BE-GAP-02 | 无化学网络端点（`/api/v2/projects/{id}/chemical-network` 未实现；`structure_connectivity` 表与索引器未落地） | F7 现役网络 | 只读历史 mechanism 数据 + fixture；显式"历史/示意" | 连接性归并算法 + 索引器就绪 |
-| BE-GAP-03 | 无 2D 坐标与 depiction；Ketcher 未 vendor | F8 | SMILES/文件预览；面板显式"未接入" | 选定 Ketcher 或 `depict2d` |
+| BE-GAP-03 | 无 2D 坐标与 depiction；Ketcher 未 vendor | F8（非迁移项：老 UI 无此功能） | SMILES/文件预览；面板显式"未接入" | 选定 Ketcher 或 `depict2d` |
 | BE-GAP-04 | 无 NMR 谱图数据端点（经典页读文件） | F6 | 文件端点 + fixture | 谱图契约冻结 |
-| BE-GAP-05 | 无波函数/轨道端点（架构 §2.4 明示 ABSENT） | F11 | 隐藏面板 + "未接入" | 科学侧定义轨道产品 |
+| BE-GAP-05 | 无波函数/轨道端点（架构 §2.4 明示 ABSENT） | F11（老 UI 只有占位 tab） | 隐藏面板 + "未接入" | 科学侧定义轨道产品 |
 | BE-GAP-06 | `TaskRowProjection` 缺 `stage_order / stage_progress` | F9 进度条准确性 | 读 v1 `stage_*` 字段 | 投影扩展或明确二选一 |
 | BE-GAP-07 | 通用多帧端点缺失（仅 s2/irc 专用） | F2 轨迹 | 用 structure-viewer 多帧 XYZ | 轨迹产品契约 |
 | BE-GAP-08 | 迁移号冲突：代码已用 **024/025/027**（026 按约定缺号），文档中的 024/025 提案已撞号 | 后端建表 | 与本计划无关（前端不建表） | 后端改用 **028+** |
@@ -315,6 +321,7 @@ DSH 插件打包、`/u/{account}/panel/*`、v3 事件流、多用户隔离。v1 
 | C6 | Ketcher OCR/NOT_VERIFIED、WASM 体积未测 | 目标形态 §2.3、§6.5 | V8 推迟，选型决策前不动工 |
 | C7 | 能量图两套形状不得拼合（`energy-graph` vs 退役 mechanism profile） | 目标形态 §2.4、§6.6 | 只实现 `energy-graph` 一条路径 |
 | C8 | 后端 §1 称"迁移最后 023"、文档称 MCP"八工具" | 后端 §1；仓库为 027、工具 10/11 | **BE-GAP-12** 记录，前端不依赖 |
+| C9 | 老 UI 有空壳入口：`data-tab="wavefunction"` 只有按钮，点击落到"功能开发中"占位（不是功能） | `molecule-view.js:275-340`、`viewer.coming_title` 文案 | 按 §2.4 判定规则：**占位不算功能面**，不列入 parity；新 UI 不复制空入口 |
 
 ---
 
