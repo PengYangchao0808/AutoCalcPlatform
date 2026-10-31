@@ -256,6 +256,10 @@ class JobLiveStatus(BaseModel):
     stage_index: int | None = None
     stage_total: int | None = None
     metrics: list[JobLiveMetric] = Field(default_factory=list)
+    # Round-5 PR-09: the observation behind this view (time/source/unknown reason)
+    observed_at: str | None = None
+    source: str | None = None
+    unknown_reason: str | None = None
 
 
 class V1JobRecordModel(BaseModel):

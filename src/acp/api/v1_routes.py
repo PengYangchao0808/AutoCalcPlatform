@@ -9917,6 +9917,61 @@ def _operation_response(
     return response
 
 
+def _prepare_fast_path(
+    request: Request,
+    record: Any,
+    job_id: str,
+    *,
+    purpose: str,
+    artifact_id: str,
+    relative_path: str,
+    attempt: int,
+    expected_revision: int,
+) -> dict[str, Any] | None:
+    """Return a ready receipt for an already-prepared local artifact (PR-09).
+
+    Uses the existing cache-only Data reader (validation + prepared index), never
+    an ad-hoc ``exists()`` check; a remote or unprepared artifact falls through
+    to the durable operation path unchanged.
+    """
+    if purpose != "artifact":
+        return None
+    if _is_remote_job(record):
+        return None
+    status_value = str(getattr(getattr(record, "status", ""), "value", getattr(record, "status", "")))
+    if status_value not in {"completed", "failed", "cancelled"}:
+        # only a terminal attempt can have verified, already-published products
+        return None
+    try:
+        reader = _cache_only_resource_reader(request)
+        snapshot = reader.availability(
+            "artifact",
+            job_id=job_id,
+            workflow=str(record.spec.workflow or ""),
+            relative_path=relative_path,
+            expected_revision=expected_revision,
+            attempt=attempt,
+        )
+    except Exception:  # an unavailable reader is not a fast-path failure
+        return None
+    if not snapshot.is_readable():
+        return None
+    freshness = str(getattr(snapshot.freshness, "value", snapshot.freshness))
+    if freshness == "stale":
+        return None
+    return {
+        "schema_version": "acp2.prepare.v1",
+        "status": "ready",
+        "fast_path": True,
+        "job_id": job_id,
+        "attempt": attempt,
+        "artifact_id": artifact_id,
+        "availability": snapshot.to_dict(),
+        "read": f"/api/v1/jobs/{job_id}/prepared/artifact?artifact_id={artifact_id}",
+        "reused_prepared": True,
+    }
+
+
 @router.post("/jobs/{job_id}/prepare")
 def prepare_artifact(
     job_id: str,
@@ -10040,6 +10095,18 @@ def prepare_artifact(
     else:
         resource_id = f"structure-input:{relative_path or 'input.xyz'}"
         resource_kind = ResourceKind.INPUT
+    fast_ready = _prepare_fast_path(
+        request,
+        record,
+        job_id,
+        purpose=purpose,
+        artifact_id=artifact_id,
+        relative_path=relative_path,
+        attempt=attempt,
+        expected_revision=int(normalized.get("expected_revision") or 0),
+    )
+    if fast_ready is not None:
+        return fast_ready
     identity = f"{job_id}\x1f{attempt}\x1f{resource_id}".encode()
     resource_digest = expected_digest or ("sha256:" + hashlib.sha256(identity).hexdigest())
     service = getattr(manager, "_prepare_operations", None)

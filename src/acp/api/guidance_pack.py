@@ -249,6 +249,10 @@ _BATCHOPTIMIZE = _workflow_entry(
         "7. 只对可比的物种/方法/能量定义/环境做比较；区分电子能与热化学校正，不重复加校正。\n"
         "8. 失败项先判断可修复原因，再在剩余范围与预算内补算；复用已完成阶段的身份校验机制。\n"
         "9. TS 研究若缺模式关联或 IRC/端点证据，继续适用验证或明确停在候选阶段。\n\n"
+        "提交约束（机器可读）：single_flat 布局下每个 scheduler task 恰好一个选中结构；"
+        "两个候选必须拆成两个 BatchOptimize 任务，各自保留候选来源 revision/role（from_artifact 引用上游 "
+        "RESULT/result_manifest.json 的已提交版本）。每个意图生成一次幂等键并重试复用；两个有意重复的计算"
+        "使用不同幂等键。task_id 与 job_id 是兼容别名，记录引用时保存带 attempt 的 TaskRef。\n\n"
         "输出：逐候选来源、角色、实际阶段、结构/结果引用、科学判定与缺项、失败恢复、下一验证任务或停止原因。"
     ),
     coverage="first_batch",
@@ -257,7 +261,7 @@ _BATCHOPTIMIZE = _workflow_entry(
         "topic.method_energy_comparability",
         "topic.partial_failure_recovery",
     ),
-    version="1.1.0",
+    version="1.2.0",
 )
 
 _PESSEARCH = _workflow_entry(
