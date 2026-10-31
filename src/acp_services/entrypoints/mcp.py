@@ -806,10 +806,11 @@ _GUIDANCE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "description": (
         "Read one versioned guidance document (shared prompt, workflow guide, "
-        "orchestration guide or topic). The response carries the entry version, "
-        "a stable sha256 digest for caching and explicit omissions when a byte "
-        "bound degrades the body to section names. Discover ids through "
-        "acp_capabilities(workflow=...), which returns each workflow's guide_ref."
+        "orchestration guide or topic). Call it with no guide_id to get the full "
+        "discovery index (all ids, titles, versions, coverage) instead of scanning "
+        "the capabilities index. The response carries the entry version, a stable "
+        "sha256 digest for caching and explicit omissions when a byte bound "
+        "degrades the body to section names."
     ),
     "properties": {
         "schema_version": {"type": "integer", "enum": [1], "default": 1},
@@ -840,7 +841,6 @@ _GUIDANCE_SCHEMA: dict[str, Any] = {
             ),
         },
     },
-    "required": ["guide_id"],
     "additionalProperties": False,
 }
 
@@ -2697,6 +2697,10 @@ class McpServer:
             )
             if key in arguments
         }
+        # This tool *is* the authorized agent publication path (round-6): the
+        # selector is server-owned so the authorization cannot be bypassed by a
+        # client that omits it and silently lands on the manual path.
+        request["selector"] = "agent"
         data = port.publish_review(job_id, request, workspace_id=context.workspace_id)
         payload = dict(data) if isinstance(data, Mapping) else {"result": data}
         revision = payload.get("revision")

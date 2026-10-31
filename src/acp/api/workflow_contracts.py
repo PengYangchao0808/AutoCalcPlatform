@@ -232,8 +232,9 @@ _PES_INPUT_PROPERTIES: dict[str, Any] = {
     "protocol": {
         "type": "object",
         "description": (
-            "Scan protocol: scan_driver (software/mode/reuse_previous_geometry/"
-            "use_scants/...), scan_optimizer (method GFN2-xTB, ...), single_point "
+            "Scan protocol: scan_driver (software/mode/use_scants/...; reuse_previous_geometry "
+            "et al. are pointwise-scan only and are refused by native_scan), "
+            "scan_optimizer (method GFN2-xTB, ...), single_point "
             "(enabled/software/method/B97-3c/...). Levels follow pes_bond_scan."
         ),
     },
@@ -475,7 +476,8 @@ def _pes_block() -> dict[str, Any]:
                         "scan_driver": {
                             "software": "orca",
                             "mode": "relaxed_scan",
-                            "reuse_previous_geometry": True,
+                            # reuse_previous_geometry is pointwise-only; a
+                            # native single-coordinate scan must omit it.
                         },
                         "scan_optimizer": {"method": "GFN2-xTB"},
                         "single_point": {

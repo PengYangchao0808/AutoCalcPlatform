@@ -307,7 +307,10 @@ _SCAN = _workflow_entry(
     "scan — 指定坐标扫描",
     "用户显式选择或确有适用理由的内坐标扫描；ScanTS 显式 opt-in，扫描结束不等于找到驻点。",
     (
-        "执行契约支持的内坐标扫描（distance/angle/dihedral），获得逐点结构与能量；公开说明以 ORCA relaxed "
+        "执行契约支持的内坐标扫描（distance/angle/dihedral），获得逐点结构与能量；"
+        "reuse_previous_geometry / retry_count / retry_strategy / failure_policy 是 pointwise scan 的逐点字段，"
+        "native scan 会明确拒绝（parameter_effects 登记为 rejected），不要从旧示例照抄；"
+        "公开说明以 ORCA relaxed "
         "scan 为主。ScanTS 默认关闭。键长任务默认推荐 PESsearch；scan 用于明确选择或已确认限制的例外。"
         "scan 与 PES 共享底层能力不代表上层候选契约相同。"
     ),
@@ -686,8 +689,11 @@ _TOPIC_ARTIFACT_LOCATING = GuideEntry(
     guide_id="topic.artifact_locating",
     kind="topic",
     title="计算产物定位与读取",
-    version="1.0.0",
-    summary="终态 status 自带产物描述符；prepare→read 用五元组；目录名由 molecule_name/task_name 控制。",
+    version="1.1.0",
+    summary=(
+        "终态 status 自带产物描述符；prepare→read 用五元组；目录名由 molecule_name/task_name "
+        "控制；附「结果字段地图」（频率/相对能量/轨迹在哪个文件）。"
+    ),
     sections={
         "body": (
             "1. 正路是描述符链：作业终态后 acp_status 的返回携带 artifacts 描述符（artifact_id、"
@@ -701,6 +707,25 @@ _TOPIC_ARTIFACT_LOCATING = GuideEntry(
             "4. 结构帧类产物（PES profile/帧、Batch 结构/频率）优先经描述符读取；MCP 面不暴露宿主绝对路径，"
             "需要落到文件时由用户/客户端在 read 后自行保存。\n"
             "5. 工作脚本与中间几何放持久工作区（如仓库工作目录），不要放 /tmp——会话环境可能被清理。"
+        ),
+        "result_fields": (
+            "结果字段地图（路径相对 RESULT/；先读 acp_status 的 artifacts 描述符，不要猜路径）：\n"
+            "· 频率（frequency 工作流）：RESULT/frequencies/normal_modes.json，schema normal_modes_v1，"
+            "频率在 modes[].frequency_cm1（没有顶层 frequencies 数组）；result_manifest.json 的 "
+            "frequency_modes 产品是同一数据的简写。\n"
+            "· 频率（BatchOptimize）：每个 item 的 RESULT/result_manifest.json → structure 产品的 "
+            "metadata.frequency.frequencies（cm^-1 列表）与 frequency_status；逐模细节在 "
+            "RESULT/frequencies/<item>__normal_modes.json 的 modes[].frequency_cm1。\n"
+            "· step_result.json：内部/恢复用的 step 级数组，不是规范读数面。\n"
+            "· 相对能量：PES 曲线读 RESULT/pes_search/pes_profile.json 的 "
+            "energy_profile.relative_energies_kcal_mol（相对该曲线最优点）；Batch/优化只存逐 item "
+            "原始 energy_hartree，相对能量按同一 method/profile 在读取时计算，不要手拼不同级别能量。\n"
+            "· IRC：轨迹在 RESULT/irc/irc_<direction>_path.xyz 与 RESULT/trajectories/irc_trajectory.json"
+            "（frames/directions）；"
+            "formal endpoint 只来自收敛确认的端点文件，last_observed_geometries 仅是诊断证据，不能当端点。\n"
+            "· 何时走 prepare→read：本地已终态且描述符可用时可直接 read；远端/冷缓存、或需要固定 "
+            "digest/generation 复现时先 acp_prepare_artifact 再 acp_read_artifact；read 永不触发 "
+            "fetch/prepare。"
         ),
     },
 )
@@ -723,7 +748,13 @@ _TASK_FIND_TS = GuideEntry(
             "1. PESsearch（mode=bond_length_scan）——多坐标同步扫描。布局建议（平台不强制）：从产物侧拉伸已成键对更易得到连续曲线；反应物侧压缩非感知键对也可提交（bond_stretch 允许任意两原子），但更易分支切换，读曲线按连续段取点；"
             "协议见 workflow.PESsearch。\n"
             "2. 读曲线概况+点覆盖；极大点邻域取候选，关注分支切换（连续段内取点），见 topic.selection_supplement。\n"
-            "3. 选点必须经 review 确认（当前唯一合法发布路径；agent 自动发布未开放）→ 确认后得到 candidate_id。\n"
+            "3. 选点发布：\n"
+            "   · 人工确认走 Workbench / REST review（selector=manual）；MCP 的 acp_publish_pes_review "
+            "恒为受限 Agent 路径（服务端固定 selector=agent），纯 MCP 会话不能替人做 manual 发布。\n"
+            "   · Agent 自动发布需先由管理员铸造有界授权：POST /api/v1/selection-authorizations"
+            "（local-single 的 operator 身份；body 至少含 source_job_id、allowed_attempts、valid_until、"
+            "limits:{max_candidates>=1,...}；owner 与 authorization_id 由服务端生成，不能自授权）→ "
+            "拿 authorization_id 调 acp_publish_pes_review → 发布后得到 candidate_id。\n"
             "4. BatchOptimize（profile=opt_freq，item 显式 role:\"ts\"）——role 的 wire 语法见 workflow.BatchOptimize；"
             "每任务一个结构（single_flat）。\n"
             "5. 读逐 item 频率：恰一个显著虚频 + 模式对应成键/断键方向 → 见 topic.stationary_point_verification。\n"

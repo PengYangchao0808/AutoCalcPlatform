@@ -162,3 +162,19 @@ def test_manifest_expansion_cardinality_is_checked_before_submit(
     params = excinfo.value.detail["params"]
     assert params["rule"] == "layout_limit"
     assert params["received"] == 2
+
+
+def test_capacity_slots_match_the_effective_local_limit(client: TestClient) -> None:
+    """Round-6 complaint #8: slots_free came from the legacy max_running knob.
+
+    The capacity projection must agree with the limit admission actually
+    enforces, otherwise discovery says "1 slot free" while two jobs run.
+    """
+    body = client.get("/api/capabilities").json()
+    limits = body["limits"]
+    concurrency = body["capacity"]["concurrency"]
+    assert concurrency["max_running"] == limits["local"]["max_jobs"]
+    assert concurrency["max_running_source"] == "registry.local.max_jobs"
+    assert concurrency["slots_free"] == max(
+        0, limits["local"]["max_jobs"] - concurrency["running"]
+    )

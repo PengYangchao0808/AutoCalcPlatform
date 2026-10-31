@@ -173,3 +173,32 @@ def test_irc_maxpoints_mirror_conflict_is_refused_in_analysis() -> None:
             {"source_job_id": "j"},
             {"maxpoints": 40, "levels": {"irc": {"maxpoints": 60}}},
         )
+
+
+def test_preflight_and_submit_agree_on_batch_manifest_cardinality(
+    client: TestClient, tmp_path: Path
+) -> None:
+    """Round-6 #4: a two-structure manifest must fail preflight, not only submit."""
+    from acp.storage.manifest import ResultManifest
+
+    result_dir = tmp_path / "src_batch" / "RESULT"
+    structures = result_dir / "structures"
+    structures.mkdir(parents=True)
+    for name in ("a", "b"):
+        (structures / f"{name}.xyz").write_text(_XYZ, encoding="utf-8")
+    manifest = ResultManifest(task_id="src", workflow="PESsearch", status="completed")
+    manifest.publication = {"revision": 1, "status": "committed", "digest": "d"}
+    for name in ("a", "b"):
+        manifest.add_product(
+            id=f"pes_candidate_{name}",
+            label=name,
+            path=f"structures/{name}.xyz",
+            kind="structure",
+            metadata={"selection_source": "manual", "candidate_id": name, "role": "INT"},
+        )
+    manifest.write(result_dir)
+    payload = {"from_artifact": str(result_dir / "result_manifest.json")}
+    pre = _preflight(client, "BatchOptimize", payload)
+    sub = _submit(client, "BatchOptimize", payload)
+    _assert_parity(pre, sub)
+    assert pre.json()["detail"]["params"]["rule"] == "layout_limit"

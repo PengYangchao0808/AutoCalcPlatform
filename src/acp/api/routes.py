@@ -645,6 +645,18 @@ def _capabilities_payload(
             "workflow_contract": describe_workflow(canonical),
         }
     if detail == "summary":
+        capacity_block = _capacity_block(request)
+        concurrency = capacity_block.get("concurrency")
+        if isinstance(concurrency, dict) and "max_running_source" in concurrency:
+            # presentation-only label; the full scope keeps it
+            capacity_block = {
+                **capacity_block,
+                "concurrency": {
+                    key: value
+                    for key, value in concurrency.items()
+                    if key != "max_running_source"
+                },
+            }
         return {
             "schema_version": 1,
             "detail": "summary",
@@ -661,7 +673,7 @@ def _capabilities_payload(
             "workflows": _active_workflows(),
             "workflow_contracts": _workflow_contract_index(),
             "task_instructions": _task_instruction_index(),
-            "capacity": _capacity_block(request),
+            "capacity": capacity_block,
             "capability_index": _capability_index(request),
             "limits": _capability_limits(request),
             "admission": _admission_summary(admission_snapshot),

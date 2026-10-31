@@ -1466,13 +1466,11 @@ class JobManager:
             raise ValueError("IRC maxpoints must be a valid number") from exc
         if maxpoints < 1:
             raise ValueError("IRC maxpoints must be a positive integer")
-        directions = inp.get("directions") or ["forward", "reverse"]
-        if (
-            not isinstance(directions, (list, tuple))
-            or not directions
-            or set(directions) - {"forward", "reverse"}
-        ):
-            raise ValueError("IRC directions must be forward and/or reverse")
+        from acp.calculations.irc_directions import normalize_irc_directions
+
+        directions = normalize_irc_directions(
+            inp.get("directions") or ["forward", "reverse"]
+        )
         # An XYZ snapshot is persisted in the IRC spec and materialized by
         # the runner. No path into another task is used during execution.
         return replace(

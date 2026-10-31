@@ -1110,16 +1110,12 @@ def build_irc_freeze_spec(
     method_kwargs = _singlepoint_method_kwargs(method_payload)
     method = str(method_kwargs.pop("method", "") or "r2SCAN-3c")
     basis = str(method_kwargs.pop("basis", "") or "")
+    from acp.calculations.irc_directions import normalize_irc_directions
+
     raw_directions = input_payload.get("directions") or method_payload.get("direction")
-    if isinstance(raw_directions, str):
-        if raw_directions == "both":
-            directions = ("forward", "reverse")
-        else:
-            directions = (raw_directions,)
-    elif isinstance(raw_directions, (list, tuple)) and raw_directions:
-        directions = tuple(str(value) for value in raw_directions)
-    else:
-        directions = ("forward", "reverse")
+    directions = tuple(
+        normalize_irc_directions(raw_directions or ["forward", "reverse"])
+    )
     resources: dict[str, Any] = {
         **method_kwargs,
         "backend": "orca",

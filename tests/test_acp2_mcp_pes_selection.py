@@ -173,3 +173,126 @@ def test_publish_tool_requires_the_authorization_arguments() -> None:
     assert schema["additionalProperties"] is False
     get_schema = mcp._ARGUMENT_SCHEMAS[mcp.McpTool.GET_PES_REVIEW]
     assert set(get_schema["required"]) == {"job_id"}
+
+
+# --------------------------------------------------------------------------- #
+# typed error mapping for the selection tools
+# --------------------------------------------------------------------------- #
+
+
+def test_controller_selection_maps_not_prepared_to_a_typed_mcp_error() -> None:
+    from acp.services_mcp_bootstrap import _ControllerSelection
+    from acp_services.entrypoints import mcp as mcp_mod
+    from acp_services.entrypoints.controller_client import NotPreparedError
+
+    class _Client:
+        def get_pes_review_status(self, job_id: str):
+            raise NotPreparedError(f"Job not found: {job_id}")
+
+        def publish_pes_review(self, job_id: str, request: dict):
+            raise NotPreparedError("selection not prepared")
+
+    port = _ControllerSelection(_Client())
+    import pytest as _pytest
+
+    with _pytest.raises(mcp_mod.McpToolError) as excinfo:
+        port.get_review_status("20990101_000_missing", workspace_id="")
+    error = excinfo.value
+    assert error.code == mcp_mod.mo.ErrorCode.RESOURCE_NOT_READY
+    assert error.params["field"] == "job_id"
+    assert error.params["rule"] == "not_found"
+    assert error.params["command"] == "selection.status"
+    assert error.retryable is True
+
+
+def test_selection_read_end_to_end_returns_the_typed_error() -> None:
+    from tests.test_services_mcp import _Fakes
+    from acp.services_mcp_bootstrap import _ControllerSelection
+    from acp_services.entrypoints import mcp as mcp_mod
+    from acp_services.entrypoints.controller_client import NotPreparedError
+
+    class _Client:
+        def get_pes_review_status(self, job_id: str):
+            raise NotPreparedError(f"Job not found: {job_id}")
+
+        def publish_pes_review(self, job_id: str, request: dict):
+            raise NotPreparedError("selection not prepared")
+
+    import dataclasses
+
+    fakes = _Fakes()
+    backends = dataclasses.replace(
+        fakes.backends(), selection=_ControllerSelection(_Client())
+    )
+    server = mcp_mod.McpServer(backends=backends)
+    response = server.handle(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": mcp_mod.McpTool.GET_PES_REVIEW,
+                "arguments": {"job_id": "20990101_000_missing"},
+            },
+        }
+    )
+    assert response is not None
+    result = response["result"]
+    assert result["isError"] is True
+    error = result["structuredContent"]["error"]
+    assert error["code"] == mcp_mod.mo.ErrorCode.RESOURCE_NOT_READY
+    assert error["params"]["field"] == "job_id"
+    assert error["params"]["rule"] == "not_found"
+
+
+def test_publish_tool_forwards_the_server_owned_agent_selector() -> None:
+    """The MCP publish tool is the agent path; it must send selector=agent.
+
+    A client omitting the selector used to land on the manual REST default and
+    bypass the authorization entirely (round-6 complaint #1); the selector is
+    now server-owned and never a schema field.
+    """
+    import dataclasses
+
+    from tests.test_services_mcp import _Fakes
+    from acp_services.entrypoints import mcp as mcp_mod
+
+    class _Port:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, dict]] = []
+
+        def get_review_status(self, job_id: str, *, workspace_id: str) -> dict:
+            return {"job_id": job_id}
+
+        def publish_review(
+            self, job_id: str, request: dict, *, workspace_id: str
+        ) -> dict:
+            self.calls.append((job_id, dict(request)))
+            return {"job_id": job_id, "revision": 1, "publication": {"status": "published"}}
+
+    port = _Port()
+    backends = dataclasses.replace(_Fakes().backends(), selection=port)
+    server = mcp_mod.McpServer(backends=backends)
+    response = server.handle(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": mcp_mod.McpTool.PUBLISH_PES_REVIEW,
+                "arguments": {
+                    "job_id": "job-1",
+                    "authorization_id": "auth-1",
+                    "candidates": [{"frame_index": 1, "role": "TS"}],
+                },
+            },
+        }
+    )
+    assert response is not None
+    assert response["result"]["isError"] is False
+    job_id, request = port.calls[0]
+    assert job_id == "job-1"
+    assert request["selector"] == "agent"
+    assert request["authorization_id"] == "auth-1"
+    schema = mcp_mod._ARGUMENT_SCHEMAS[mcp_mod.McpTool.PUBLISH_PES_REVIEW]
+    assert "selector" not in schema["properties"]

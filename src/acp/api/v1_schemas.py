@@ -1717,6 +1717,26 @@ class PesReviewRequest(BaseModel):
     actor: str | None = None
 
 
+class SelectionAuthorizationCreateRequest(BaseModel):
+    """Admin-created bounded authorization for agent PES publication.
+
+    The owner (principal/project) and the authorization id are server-owned;
+    an agent can only use an authorization minted here by the local operator,
+    so "agent auto publish" is bounded rather than self-granted (round-6 P0).
+    """
+
+    source_job_id: str
+    allowed_attempts: list[int] = Field(default_factory=list)
+    valid_until: str
+    actions: list[str] = Field(default_factory=lambda: ["publish_pes_selection"])
+    workflow: str = "PESsearch"
+    roles: list[str] = Field(default_factory=lambda: ["TS", "INT"])
+    methods: list[str] = Field(default_factory=list)
+    nproc_max: int = 0
+    limits: dict[str, int] = Field(default_factory=dict)
+    policy_revision: str = "acp2.selection.v1"
+
+
 class PesReviewCandidate(BaseModel):
     candidate_id: str
     role: str

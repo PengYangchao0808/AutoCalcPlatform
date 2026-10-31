@@ -506,3 +506,112 @@ def test_api_agent_publication_refuses_a_stale_source_digest(api_client, tmp_pat
     detail = response.json()["detail"]
     assert detail["code"] == "stale_source"
     assert detail["params"]["field"] == "source_binding.profile_digest"
+
+
+def test_api_manual_selector_with_authorization_is_refused(api_client, tmp_path: Path) -> None:
+    """An authorization_id on the manual path is a mismatch, never ignored."""
+    job_id = _api_job(api_client, tmp_path)
+    response = api_client.post(
+        f"/api/v1/jobs/{job_id}/pes/review",
+        json={
+            "candidates": [{"frame_index": 1, "role": "TS"}],
+            "authorization_id": "auth-api",
+        },
+    )
+    assert response.status_code == 422, response.text
+    params = response.json()["detail"]["params"]
+    assert params["field"] == "authorization_id"
+    assert params["rule"] == "inconsistent_selector"
+    from acp.calculations.pes.review import load_pes_review
+
+    work_dir = api_client.app.state.job_manager.get(job_id).work_dir
+    assert load_pes_review(work_dir) is None
+
+
+def test_api_agent_publication_with_a_probe_authorization_is_refused(
+    api_client, tmp_path: Path
+) -> None:
+    """The reported scenario: a made-up authorization id must not publish."""
+    from acp.calculations.pes.review import load_pes_review
+
+    job_id = _api_job(api_client, tmp_path)
+    response = api_client.post(
+        f"/api/v1/jobs/{job_id}/pes/review",
+        json={
+            "candidates": [{"frame_index": 1, "role": "TS"}],
+            "selector": "agent",
+            "authorization_id": "probe",
+            "source_binding": {"job_id": job_id, "attempt": 1},
+            "idempotency_key": "probe-1",
+        },
+    )
+    assert response.status_code == 403, response.text
+    detail = response.json()["detail"]
+    assert detail["code"] == "authorization_not_found"
+    work_dir = api_client.app.state.job_manager.get(job_id).work_dir
+    assert load_pes_review(work_dir) is None
+
+
+def test_api_operator_mints_an_authorization_then_agent_publishes(
+    api_client, tmp_path: Path
+) -> None:
+    """Round-6 P0: the admin creation entry must exist and unlock agent publish.
+
+    Minting is operator-only (the body cannot name the owner/id); the agent then
+    consumes the bounded authorization, so auto-selection is open but never
+    self-granted.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    job_id = _api_job(api_client, tmp_path)
+    created = api_client.post(
+        "/api/v1/selection-authorizations",
+        json={
+            "source_job_id": job_id,
+            "allowed_attempts": [1],
+            "valid_until": (
+                datetime.now(timezone.utc) + timedelta(days=1)
+            ).isoformat(timespec="seconds"),
+            "limits": {"max_candidates": 4, "max_batch_jobs": 1},
+        },
+    )
+    assert created.status_code == 201, created.text
+    authorization_id = created.json()["authorization_id"]
+    assert authorization_id.startswith("auth-")
+    assert created.json()["authorization"]["owner_principal_id"]
+
+    published = api_client.post(
+        f"/api/v1/jobs/{job_id}/pes/review",
+        json={
+            "candidates": [{"frame_index": 1, "role": "TS"}],
+            "selector": "agent",
+            "authorization_id": authorization_id,
+            "source_binding": {"job_id": job_id, "attempt": 1},
+        },
+    )
+    assert published.status_code == 200, published.text
+    assert published.json()["status"] == "confirmed"
+
+
+def test_api_authorization_mint_requires_a_positive_candidate_quota(
+    api_client, tmp_path: Path
+) -> None:
+    """A minted authorization with max_candidates=0 would 403 every publish."""
+    from datetime import datetime, timedelta, timezone
+
+    job_id = _api_job(api_client, tmp_path)
+    response = api_client.post(
+        "/api/v1/selection-authorizations",
+        json={
+            "source_job_id": job_id,
+            "allowed_attempts": [1],
+            "valid_until": (
+                datetime.now(timezone.utc) + timedelta(days=1)
+            ).isoformat(timespec="seconds"),
+            "limits": {"max_candidates": 0},
+        },
+    )
+    assert response.status_code == 422, response.text
+    params = response.json()["detail"]["params"]
+    assert params["field"] == "limits.max_candidates"
+    assert params["rule"] == "positive_required"

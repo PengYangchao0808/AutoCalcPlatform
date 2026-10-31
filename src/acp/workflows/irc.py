@@ -99,17 +99,9 @@ def run_irc_workflow(
             "omit it — maxpoints controls the iteration cap"
         )
 
-    raw_directions = tuple(str(direction).strip().lower() for direction in directions)
-    if raw_directions == ("both",):
-        normalized_directions = ("forward", "reverse")
-    elif raw_directions and all(
-        direction in {"forward", "reverse"} for direction in raw_directions
-    ):
-        normalized_directions = tuple(
-            direction for direction in ("forward", "reverse") if direction in raw_directions
-        )
-    else:
-        raise ValueError("IRC directions must be forward, reverse, or both")
+    from acp.calculations.irc_directions import normalize_irc_directions
+
+    normalized_directions = tuple(normalize_irc_directions(directions))
 
     artifact = input_artifact
     if input_role is not None:

@@ -387,13 +387,26 @@ class _ControllerSelection:
 
     def get_review_status(self, job_id: str, *, workspace_id: str) -> Any:
         del workspace_id
-        return self._client.get_pes_review_status(job_id)
+        try:
+            return self._client.get_pes_review_status(job_id)
+        except NotPreparedError as exc:
+            # An unknown task / uncached selection is a typed not-ready outcome
+            # (the whole point of the cache-only read), never an internal error.
+            error = _tool_error("selection.status", exc)
+            error.params.setdefault("field", "job_id")
+            error.params.setdefault("rule", "not_found")
+            raise error from None
+        except ControllerClientError as exc:
+            raise _tool_error("selection.status", exc) from None
 
     def publish_review(
         self, job_id: str, request: Mapping[str, Any], *, workspace_id: str
     ) -> Any:
         del workspace_id
-        return self._client.publish_pes_review(job_id, dict(request))
+        try:
+            return self._client.publish_pes_review(job_id, dict(request))
+        except ControllerClientError as exc:
+            raise _tool_error("selection.publish", exc) from None
 
 
 class _ControllerGuidance:
@@ -411,12 +424,15 @@ class _ControllerGuidance:
         del workspace_id
         guide_id = str(request.get("guide_id") or "").strip()
         if not guide_id:
-            raise mcp.McpToolError(
-                mo.ErrorCode.INPUT_INVALID,
-                "guidance read requires a non-empty guide_id",
-                params={"field": "guide_id", "rule": "missing_required_field"},
-                retryable=False,
-            )
+            # No id = discovery list; the index was otherwise only reachable
+            # through the capabilities projection.
+            try:
+                return self._client.guidance_index()
+            except ControllerClientError as exc:
+                raise _tool_error("guidance.index", exc) from None
+        return self._guidance_body(guide_id, request)
+
+    def _guidance_body(self, guide_id: str, request: Mapping[str, Any]) -> Any:
         section = request.get("section")
         version = request.get("version")
         max_bytes = request.get("max_bytes")
