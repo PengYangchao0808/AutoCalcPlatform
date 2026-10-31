@@ -44,6 +44,16 @@
 | `step/initial_hessian` 守卫被无界替换复制到 8 个 ORCA 方法，且把 `optimize` 的 initial_hessian 转发变为不可达 | P1 | 仅 `irc()` 保留守卫；`optimize` 转发恢复（ORCA 套件 47 passed） |
 | `loaders.py` 未导入 `Any`（F821）；agent 发布 body `actor` 被静默忽略；状态投影缺 `source.attempt`；工具总数固定断言 | P2 | 导入修复；body actor 显式 422 `server_identity_owned`；投影加 attempt；握手/能力测试改子集断言 |
 
+## 验收后续（工具清单契约漂移、迁移基线与静态资产）
+
+修复 P0/P1 后复跑全仓 `test_acp2_*` 发现的是「工具清单/契约副本漂移」而不是行为回归，均已按权威源同步：
+
+- 前端 `experience_contract.js` 的 `ACP_TOOLS`、三个 acceptance receipt 脚本的工具元组、`runtime/mcp-launch.schema.json` 的 `tool_inputs`、`runtime/p2-research-operations.v1.json` 的 `p1_allowlist_unchanged` 与 `tool_sets.p1_advertised`、以及对应测试常量都补上 `acp_get_pes_review`/`acp_publish_pes_review`；validator 的 P1 期望改为 registry-derived 集合并保留移除即失败。
+- migration acceptance fixture 的 target/legacy 改为 helper 的「已应用迁移条数」口径（含 migration 028）。
+- `experience/static-assets.manifest.json` 与 `release-manifest.json` 的 static_assets 按产品 helper 重新生成（origin/main 上原本已 stale；本轮 frontend 契约更新使其必须刷新），文件数断言改为 build-derived；契约 digest 重锚，两个 validator VALID。
+- 本地 `test_acp2_*` 非 slow 全量：除 `test_fixture_wheel_offline_toolchains[build]`（本机 venv 缺 `build` 模块的环境依赖）外全绿；该测试在 CI 的 `[dev]` 环境另验。
+- CI 的 `mcp-conformance` 首轮红是已知 flaky `test_signal_shutdown_is_clean[2]`（子进程 300 s 超时，非本轮代码），structural 子集本地 36 passed；重跑/新提交后复验。
+
 ## 独立验收标注的覆盖缺口（诚实保留）
 
 - PR-01 条目 4/5/7（prepare/预算/派发 spy、执行输入探针、历史/rerun）；PR-02 条目 9（旧回执读取）；PR-03 条目 2/3（不可变性、冷远端 preflight）；PR-04 条目 6/7（关联失败交科学验证、失败诊断找回）；PR-05 条目 4/6/9/10（4 个故障点只覆盖 2 个、远端上传边界、restore 事务、发布能力关闭）；PR-06 条目 5/9（approval 复用、旧 attempt/冻结历史恢复）；PR-07 条目 8（真实 SDK 全选择链，本次只同步工具集）/9（初猜状态）；PR-08 条目 1(部分)/2/4/8/9/10（单 item 多帧、manifest 单结构正例、两拆分示例 preflight、远端容量、TaskRef 示例、幂等服务端用例）；PR-09 条目 5/6/7/8/9（真实 reader 快速路径、负例矩阵、竞争、回退、QUEUED+ABSENT 语义）。
