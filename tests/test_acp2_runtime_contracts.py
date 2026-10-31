@@ -53,6 +53,9 @@ MCP_TOOL_NAMES = {
     # 2026-10-30 guidance batch: additive read-only registrations (plan §5).
     "acp_get_guidance",
     "acp_list_jobs",
+    # round-5 PR-07: selection read/publish.
+    "acp_get_pes_review",
+    "acp_publish_pes_review",
 }
 #: The ten P2 research promise names (M1-01a).  A promise is not implemented:
 #: none of them is in the P1 allowlist, so the extension never reports negotiated.

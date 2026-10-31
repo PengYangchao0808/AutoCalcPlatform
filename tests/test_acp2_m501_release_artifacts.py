@@ -61,6 +61,8 @@ PUBLIC_TOOLS = (
     "acp_cancel",
     "acp_capabilities",
     "acp_get_guidance",
+    "acp_get_pes_review",
+    "acp_publish_pes_review",
     "acp_list_jobs",
     "acp_preflight",
     "acp_prepare_artifact",
