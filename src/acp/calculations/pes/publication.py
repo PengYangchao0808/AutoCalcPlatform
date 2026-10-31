@@ -139,6 +139,8 @@ def publication_digest(
     source_digest: str,
     source_task_status: str,
     frame_source: str,
+    selector: str = "manual",
+    authorization_digest: str = "",
 ) -> str:
     """Deterministic digest of the requested selection (idempotency payload)."""
     canonical = {
@@ -150,6 +152,8 @@ def publication_digest(
         "source_digest": source_digest,
         "source_task_status": source_task_status,
         "frame_source": frame_source,
+        "selector": selector,
+        "authorization_digest": authorization_digest,
     }
     encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()

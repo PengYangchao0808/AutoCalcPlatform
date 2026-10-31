@@ -433,6 +433,8 @@ def _update_result_manifest(
     entries: list[dict[str, str]],
     *,
     publication: Mapping[str, Any] | None = None,
+    selector: str = "manual",
+    authorization: Mapping[str, Any] | None = None,
 ) -> Path:
     """Replace PES structure products so only confirmed candidates remain.
 
@@ -465,11 +467,33 @@ def _update_result_manifest(
                 "role": candidate.role,
                 "frame_index": candidate.frame_index,
                 "source": "PESsearch",
-                "selection_source": "manual",
+                "selection_source": selector,
                 "task_status": source.task_status,
                 "scan_complete": source.scan_complete,
                 "frame_converged": candidate.frame_converged,
                 "data_source": source.data_source,
+                **(
+                    {
+                        "publication_revision": int(publication.get("revision") or 0),
+                        "publication_digest": str(publication.get("digest") or ""),
+                    }
+                    if isinstance(publication, Mapping)
+                    else {}
+                ),
+                **(
+                    {
+                        "authorization_id": str(authorization.get("authorization_id") or ""),
+                        "authorization_revision": int(
+                            authorization.get("authorization_revision") or 0
+                        ),
+                        "authorization_digest": str(
+                            authorization.get("authorization_digest") or ""
+                        ),
+                        "selector": "agent",
+                    }
+                    if selector == "agent" and isinstance(authorization, Mapping)
+                    else {}
+                ),
             },
         )
     return manifest.write(result_dir)
@@ -487,8 +511,17 @@ def save_pes_review(
     source_task_status: str = "COMPLETED",
     idempotency_key: str | None = None,
     intent_store: Any | None = None,
+    selector: str = "manual",
+    actor: str | None = None,
+    authorization: Mapping[str, Any] | None = None,
+    source_binding: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Validate and persist a manual PES review as one recoverable publication.
+    """Validate and persist a PES review as one recoverable publication.
+
+    ``selector`` separates the historical manual path from an *authorized agent*
+    publication: an agent request must carry the authorization decision receipt
+    and the source binding; the runtime authorization itself is validated by the
+    Services layer before this writer runs.
 
     ``intent_store`` is the Services-backed publication intent (production API
     path); it defaults to the local file store for CLI/no-store callers.
@@ -523,6 +556,20 @@ def save_pes_review(
         PesReviewError: Any candidate failed validation; nothing is written.
         RevisionConflictError: ``expected_revision`` does not match the stored one.
     """
+    selector = str(selector or "manual")
+    if selector == "agent":
+        if not isinstance(authorization, Mapping) or not (
+            authorization.get("authorization_id") and authorization.get("authorization_digest")
+        ):
+            raise PesReviewError(
+                "agent selection publication requires an authorization decision receipt"
+            )
+        if not isinstance(source_binding, Mapping) or not source_binding.get("job_id"):
+            raise PesReviewError(
+                "agent selection publication requires a source binding (job/attempt/profile)"
+            )
+    elif selector not in {"manual", "manual_frame"}:
+        raise PesReviewError(f"unsupported selection selector {selector!r}")
     root = Path(task_root).expanduser().resolve()
     task_status = re.sub(r"[^A-Za-z0-9_]", "_", str(source_task_status or "UNKNOWN")).upper()
     source = _resolve_frame_source(root, task_status=task_status)
@@ -565,7 +612,7 @@ def save_pes_review(
                 "frame_index": candidate.frame_index,
                 "role": candidate.role,
                 "name": candidate.name,
-                "selection_source": "manual",
+                "selection_source": "manual" if selector == "manual" else selector,
                 "structure_path": entry["structure_path"],
                 "frame_converged": candidate.frame_converged,
             }
@@ -591,6 +638,11 @@ def save_pes_review(
         }
         if restored_from is not None:
             payload["restored_from"] = int(restored_from)
+        if selector == "agent":
+            payload["selector"] = "agent"
+            payload["actor"] = actor or ""
+            payload["authorization"] = dict(authorization or {})
+            payload["source_binding"] = dict(source_binding or {})
 
         digest = publication_digest(
             job_id=job_id,
@@ -601,6 +653,12 @@ def save_pes_review(
             source_digest=source.data_sha256,
             source_task_status=source.task_status,
             frame_source=source.kind,
+            selector=selector,
+            authorization_digest=(
+                str(authorization.get("authorization_digest") or "")
+                if isinstance(authorization, Mapping)
+                else ""
+            ),
         )
 
         def backup_step() -> None:
@@ -622,6 +680,8 @@ def save_pes_review(
                     "status": "pending",
                     "digest": digest,
                 },
+                selector=selector,
+                authorization=authorization,
             )
 
         def manifest_commit_step() -> None:
@@ -636,6 +696,8 @@ def save_pes_review(
                     "status": "committed",
                     "digest": digest,
                 },
+                selector=selector,
+                authorization=authorization,
             )
 
         def review_step() -> dict[str, Any]:

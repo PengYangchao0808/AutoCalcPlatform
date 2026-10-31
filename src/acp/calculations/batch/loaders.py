@@ -52,6 +52,24 @@ def _product_metadata(task_dir: Path) -> dict[str, JsonObject]:
     return {_text(row.get("id")): row for row in _rows(raw.get("products")) if _text(row.get("id"))}
 
 
+def _product_metadata_fields(task_dir: Path) -> dict[str, JsonObject]:
+    """Product id -> its ``metadata`` object (authorization/publication lineage)."""
+    path = task_dir / "RESULT" / "result_manifest.json"
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    fields: dict[str, JsonObject] = {}
+    for row in _rows(raw.get("products")):
+        product_id = _text(row.get("id"))
+        metadata = row.get("metadata")
+        if product_id and isinstance(metadata, Mapping):
+            fields[product_id] = dict(metadata)
+    return fields
+
+
 def _product_candidate(product_id: str, label: str, path: str, metadata: JsonObject) -> str:
     explicit = _text(metadata.get("candidate_id"))
     if explicit:
@@ -127,7 +145,11 @@ def load_items_from_result_manifest(task_dir: Path | str) -> list[BatchStructure
     from acp.results.structure_policy import reusable_product, single_geometry
     products = [p for p in manifest.products if reusable_product(p.to_dict())]
     if manifest.workflow == "PESsearch":
-        products = [p for p in products if p.metadata.get("selection_source") in {"manual", "manual_frame"}]
+        products = [
+            p
+            for p in products
+            if p.metadata.get("selection_source") in {"manual", "manual_frame", "agent"}
+        ]
 
     if not products:
         _raise_unconfirmed_pes(root)
@@ -138,12 +160,32 @@ def load_items_from_result_manifest(task_dir: Path | str) -> list[BatchStructure
         )
         return []
     metadata_by_id = _product_metadata(root)
+    fields_by_id = _product_metadata_fields(root)
     items: list[BatchStructureItem] = []
     for product in products:
         geometry = root / "RESULT" / product.path
         if not geometry.is_file():
             continue
         metadata = metadata_by_id.get(product.id, {})
+        fields = fields_by_id.get(product.id, {})
+        selection_source = str(fields.get("selection_source") or "")
+        if selection_source == "agent":
+            missing = [
+                key
+                for key in (
+                    "authorization_id",
+                    "authorization_revision",
+                    "authorization_digest",
+                    "publication_digest",
+                    "publication_revision",
+                )
+                if fields.get(key) in (None, "")
+            ]
+            if missing:
+                raise ValueError(
+                    f"agent selection product {product.id!r} is missing its "
+                    f"authorization/publication receipt: {missing}"
+                )
         text = geometry.read_text(encoding="utf-8")
         if single_geometry(text) is None:
             continue
@@ -156,6 +198,16 @@ def load_items_from_result_manifest(task_dir: Path | str) -> list[BatchStructure
             item.tag = tag
             item.role = StructureRole.TRANSITION_STATE if tag == "TS" else StructureRole.MINIMUM
             item.candidate_id = candidate_id
+            if selection_source == "agent":
+                # Batch lineage: the consumed publication version is pinned on the
+                # item, so a later selection revision cannot silently replace it.
+                item.source_type = "pes_publication"
+                item.source_ref = (
+                    f"revision={fields.get('publication_revision')};"
+                    f"digest={fields.get('publication_digest')};"
+                    f"auth={fields.get('authorization_id')}"
+                    f"@{fields.get('authorization_revision')}"
+                )
             item.xyz = _rewrite_comment(
                 item.xyz, build_tag_title(tag, candidate_id=candidate_id, source="result_manifest")
             )
