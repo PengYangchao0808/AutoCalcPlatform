@@ -184,7 +184,7 @@ def test_review_failure_leaves_structures_but_no_review(
         _save(pes_task, idempotency_key="key-review-fail")
     intent = load_publication_intent(pes_task)
     assert intent is not None and intent["status"] == "failed"
-    assert "manifest" in intent["completed_stages"]
+    assert "manifest_pending" in intent["completed_stages"]
     assert "review" not in intent["completed_stages"]
     assert load_pes_review(pes_task) is None
 
@@ -264,3 +264,28 @@ def test_source_change_before_commit_is_refused(
     with pytest.raises(PesReviewError, match="frame source changed"):
         _save(pes_task)
     assert load_pes_review(pes_task) is None
+
+
+def test_loader_refuses_a_pending_publication_group(
+    pes_task: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A crash after the manifest marker leaves an explicitly unsettled group."""
+    from acp.calculations.batch.loaders import load_items_from_result_manifest
+    import acp.calculations.pes.review as review_mod
+
+    def boom(*args, **kwargs):
+        raise OSError("simulated review write failure")
+
+    monkeypatch.setattr(review_mod, "_write_json_atomic", boom)
+    with pytest.raises(PublicationRecoveryError):
+        _save(pes_task, idempotency_key="key-unsettled")
+    with pytest.raises(ValueError, match="not settled"):
+        load_items_from_result_manifest(pes_task)
+
+    monkeypatch.undo()
+    recovered = _save(pes_task, idempotency_key="key-unsettled")
+    assert recovered["revision"] == 1
+    items = load_items_from_result_manifest(pes_task)
+    assert len(items) == 2
+    manifest = ResultManifest.read(pes_task / "RESULT")
+    assert manifest.publication == {"revision": 1, "status": "committed", "digest": manifest.publication["digest"]}

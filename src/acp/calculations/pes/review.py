@@ -431,14 +431,22 @@ def _update_result_manifest(
     source: _FrameSource,
     validated: list[_ValidatedCandidate],
     entries: list[dict[str, str]],
+    *,
+    publication: Mapping[str, Any] | None = None,
 ) -> Path:
-    """Replace PES structure products so only confirmed candidates remain."""
+    """Replace PES structure products so only confirmed candidates remain.
+
+    The ``publication`` marker records the group revision/status: readers must
+    refuse a ``pending`` group (round-5 PR-05 invariant 7).
+    """
     try:
         manifest = ResultManifest.read(result_dir)
     except (FileNotFoundError, OSError, json.JSONDecodeError, ValueError, TypeError, KeyError):
         manifest = ResultManifest()
     manifest.task_id = manifest.task_id or task_id
     manifest.workflow = manifest.workflow or "PESsearch"
+    if publication is not None:
+        manifest.publication = dict(publication)
     # Drop previous PES structure references (recommendations + earlier saves);
     # recommendation data stays in pes_profile.json for audit.
     manifest.products = [
@@ -478,8 +486,12 @@ def save_pes_review(
     restored_from: int | None = None,
     source_task_status: str = "COMPLETED",
     idempotency_key: str | None = None,
+    intent_store: Any | None = None,
 ) -> dict[str, Any]:
     """Validate and persist a manual PES review as one recoverable publication.
+
+    ``intent_store`` is the Services-backed publication intent (production API
+    path); it defaults to the local file store for CLI/no-store callers.
 
     Frame lookup accepts the final ``pes_profile.json`` (successful scans) or
     the live partial frames (interrupted scans of FAILED/CANCELLED tasks);
@@ -598,8 +610,33 @@ def save_pes_review(
         def structures_step() -> None:
             _materialise_structures(structures_dir, validated)
 
-        def manifest_step() -> None:
-            _update_result_manifest(result_dir, job_id, source, validated, entries)
+        def manifest_pending_step() -> None:
+            _update_result_manifest(
+                result_dir,
+                job_id,
+                source,
+                validated,
+                entries,
+                publication={
+                    "revision": current_revision + 1,
+                    "status": "pending",
+                    "digest": digest,
+                },
+            )
+
+        def manifest_commit_step() -> None:
+            _update_result_manifest(
+                result_dir,
+                job_id,
+                source,
+                validated,
+                entries,
+                publication={
+                    "revision": current_revision + 1,
+                    "status": "committed",
+                    "digest": digest,
+                },
+            )
 
         def review_step() -> dict[str, Any]:
             _write_json_atomic(root / PES_REVIEW_RELATIVE_PATH, payload)
@@ -615,9 +652,11 @@ def save_pes_review(
             stages=(
                 ("backup", backup_step),
                 ("structures", structures_step),
-                ("manifest", manifest_step),
+                ("manifest_pending", manifest_pending_step),
                 ("review", review_step),
+                ("manifest_commit", manifest_commit_step),
             ),
+            intent_store=intent_store,
         )
         publication_block = {
             "intent_path": PUBLICATION_INTENT_RELATIVE_PATH,
@@ -691,6 +730,7 @@ def restore_pes_review(
     now: datetime | None = None,
     source_task_status: str = "COMPLETED",
     idempotency_key: str | None = None,
+    intent_store: Any | None = None,
 ) -> dict[str, Any]:
     """Re-activate backup *backup_n* as the current review (rotation-aware).
 
@@ -734,6 +774,7 @@ def restore_pes_review(
         restored_from=int(backup_n),
         source_task_status=source_task_status,
         idempotency_key=idempotency_key,
+        intent_store=intent_store,
     )
     payload["restored_from"] = int(backup_n)
     return payload

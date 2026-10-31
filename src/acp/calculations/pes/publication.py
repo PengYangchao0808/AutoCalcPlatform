@@ -25,6 +25,7 @@ from typing import Any
 from acp_services.runtime.selection_publication import (
     PublicationConflictError,
     PublicationInProgressError,
+    PublicationLeaseLostError,
     SelectionPublicationService,
 )
 
@@ -33,7 +34,9 @@ __all__ = [
     "FileIntentStore",
     "PublicationConflictError",
     "PublicationInProgressError",
+    "PublicationLeaseLostError",
     "PublicationRecoveryError",
+    "StoreIntentStore",
     "load_publication_intent",
     "publication_digest",
     "run_publication",
@@ -77,6 +80,34 @@ def load_publication_intent(task_root: Path | str) -> dict[str, Any] | None:
     except (OSError, json.JSONDecodeError):
         return None
     return payload if isinstance(payload, dict) else None
+
+
+class StoreIntentStore:
+    """Publication intent persisted in the existing JobStore (plan §9.3).
+
+    The API path uses this adapter; CLI/no-store paths fall back to
+    :class:`FileIntentStore` so the pure review function stays usable.
+    """
+
+    def __init__(self, store: Any, job_id: str) -> None:
+        self._store = store
+        self._job_id = job_id
+
+    def load(self) -> dict[str, Any] | None:
+        loader = getattr(self._store, "load_selection_publication", None)
+        if loader is None:
+            raise RuntimeError(
+                "the configured store has no selection-publication support"
+            )
+        return loader(self._job_id)
+
+    def save(self, payload: dict[str, Any]) -> None:
+        saver = getattr(self._store, "save_selection_publication", None)
+        if saver is None:
+            raise RuntimeError(
+                "the configured store has no selection-publication support"
+            )
+        saver(self._job_id, payload)
 
 
 class FileIntentStore:
@@ -133,6 +164,7 @@ def run_publication(
     expected_revision: int | None,
     current_revision: int,
     stages: Sequence[tuple[str, Callable[[], Any]]],
+    intent_store: Any | None = None,
 ) -> tuple[Any, bool, dict[str, Any]]:
     """Run (or resume) the publication group; returns ``(review, replayed, intent)``.
 
@@ -142,13 +174,17 @@ def run_publication(
         PublicationRecoveryError: a step failed; the persisted intent records
             the completed stages so the caller can retry the same request.
     """
-    store = FileIntentStore(task_root)
+    import uuid
+
+    store = intent_store if intent_store is not None else FileIntentStore(task_root)
     service = SelectionPublicationService(store)
+    owner_id = uuid.uuid4().hex
     decision = service.begin(
         key=key,
         digest=digest,
         expected_revision=expected_revision,
         current_revision=current_revision,
+        owner_id=owner_id,
     )
     if decision.action == "replay":
         return None, True, decision.intent
@@ -175,6 +211,7 @@ def run_publication(
                 stages=stage_names,
                 completed=tuple(completed),
                 status="failed",
+                owner_id=owner_id,
                 error=str(exc),
             )
             raise PublicationRecoveryError(
@@ -192,6 +229,7 @@ def run_publication(
             stages=stage_names,
             completed=tuple(completed),
             status="pending",
+            owner_id=owner_id,
         )
     intent = service.record(
         job_id=job_id,
@@ -202,6 +240,7 @@ def run_publication(
         stages=stage_names,
         completed=tuple(completed),
         status="published",
+        owner_id=owner_id,
     )
     return value, False, intent
 

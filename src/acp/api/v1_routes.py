@@ -4017,6 +4017,16 @@ def get_pes_review(job_id: str, request: Request) -> PesReviewStateResponse:
     return PesReviewStateResponse(job_id=job_id, status="confirmed", review=review, backups=backups)
 
 
+def _publication_intent_store(request: Request, job_id: str) -> Any:
+    """The Services-backed publication intent store for the API path."""
+    from acp.calculations.pes.publication import StoreIntentStore
+
+    manager = getattr(request.app.state, "job_manager", None)
+    if manager is None or getattr(manager, "store", None) is None:
+        return None
+    return StoreIntentStore(manager.store, job_id)
+
+
 def _publication_http_error(exc: Exception) -> HTTPException:
     """Map publication-group failures to typed HTTP errors (retry/recovery info)."""
     from acp.calculations.pes.publication import (
@@ -4094,6 +4104,7 @@ def restore_pes_review_endpoint(
             expected_revision=req.expected_revision,
             source_task_status=task_status,
             idempotency_key=req.idempotency_key,
+            intent_store=_publication_intent_store(request, job_id),
         )
     except RevisionConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -4179,6 +4190,7 @@ def save_pes_review_endpoint(
             expected_revision=req.expected_revision,
             source_task_status=task_status,
             idempotency_key=req.idempotency_key,
+            intent_store=_publication_intent_store(request, job_id),
         )
     except RevisionConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

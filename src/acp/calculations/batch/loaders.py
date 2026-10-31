@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 import re
 from pathlib import Path
 
@@ -79,6 +80,31 @@ def _product_tag(product_id: str, label: str, path: str, metadata: JsonObject, c
     )
 
 
+def _refuse_unsettled_publication(root: Path, manifest: Any) -> None:
+    """Refuse a half-published PES selection (round-5 PR-05 invariant 7)."""
+    publication = getattr(manifest, "publication", None)
+    if not isinstance(publication, Mapping):
+        return
+    status = str(publication.get("status") or "")
+    if status != "committed":
+        raise ValueError(
+            "PES publication is not settled "
+            f"(status={status or 'missing'}); wait for the save to finish or retry it"
+        )
+    review_path = root / _PES_REVIEW_RELPATH
+    if review_path.is_file():
+        try:
+            review = json.loads(review_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            review = {}
+        revision = int(publication.get("revision") or 0)
+        if int((review or {}).get("revision") or 0) != revision:
+            raise ValueError(
+                "PES publication mismatch: the manifest and review revisions differ; "
+                "re-confirm the selection"
+            )
+
+
 def _raise_unconfirmed_pes(root: Path) -> None:
     """Raise an actionable error for a PES task whose picks were never confirmed."""
     if (root / _PES_PROFILE_RELPATH).is_file() and not (root / _PES_REVIEW_RELPATH).is_file():
@@ -93,6 +119,8 @@ def load_items_from_result_manifest(task_dir: Path | str) -> list[BatchStructure
     """Load structure products from a task's unified result manifest."""
     root = Path(task_dir)
     manifest = load_result_manifest(root)
+    if manifest is not None:
+        _refuse_unsettled_publication(root, manifest)
     if manifest is None:
         _raise_unconfirmed_pes(root)
         return []
