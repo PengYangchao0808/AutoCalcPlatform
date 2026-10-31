@@ -1,5 +1,9 @@
 # 2026-10-16 文档归档
 
+> **本文件是 2026-10-16 批次的位置记录，正文已冻结。**
+> 下表 `新位置` 列始终指向**当前实际位置**：其中 7 份稿件已在 **2026-10-31 批次** 再次迁入 `archive/2026-10-31/history/`（本文件只改链接，不改正文）。
+> 本批次当时的落点见 `relocations.json`；全部批次见 [2026-10-31 迁移表](../2026-10-31/README.md)，文档入口见 [docs/README.md](../../README.md)。
+
 当前唯一实施入口：[ACP 完整架构调整方案 v1.5](../../ACP_Architecture_Adjustment_Plan_20261016.md)。
 
 归档表示退出当前实施入口，不等同于每项功能都已完成或每份材料都错误。旧稿中的未结事项只有重新纳入主方案后才进入下一轮范围。
@@ -15,9 +19,9 @@
 | `ACP_Architecture_Deck` | [archive/2026-10-16/presentations/ACP_Architecture_Deck](presentations/ACP_Architecture_Deck) |
 | `reports` | [archive/2026-10-16/evidence/reports](evidence/reports) |
 | `ACP_ACR_CCCP_Submodule_Layering_20261015.md` | [archive/2026-10-16/history/ACP_ACR_CCCP_Submodule_Layering_20261015.md](history/ACP_ACR_CCCP_Submodule_Layering_20261015.md) |
-| `ACP_ACV_Frontend_Feasibility_20261016.md` | [reference/next-change/ACP_ACV_Frontend_Feasibility_20261016.md](../../reference/next-change/ACP_ACV_Frontend_Feasibility_20261016.md) |
+| `ACP_ACV_Frontend_Feasibility_20261016.md` | [reference/next-change/ACP_ACV_Frontend_Feasibility_20261016.md](../2026-10-31/history/ACP_ACV_Frontend_Feasibility_20261016.md) |
 | `ACP_API_Web_Response_Issue_Audit_20261012.md` | [archive/2026-10-16/history/ACP_API_Web_Response_Issue_Audit_20261012.md](history/ACP_API_Web_Response_Issue_Audit_20261012.md) |
-| `ACP_Architecture_Code_Quality_Audit_20261016.md` | [reference/next-change/ACP_Architecture_Code_Quality_Audit_20261016.md](../../reference/next-change/ACP_Architecture_Code_Quality_Audit_20261016.md) |
+| `ACP_Architecture_Code_Quality_Audit_20261016.md` | [reference/next-change/ACP_Architecture_Code_Quality_Audit_20261016.md](../2026-10-31/history/ACP_Architecture_Code_Quality_Audit_20261016.md) |
 | `ACP_Architecture_Deck_Source.zip` | [archive/2026-10-16/presentations/ACP_Architecture_Deck_Source.zip](presentations/ACP_Architecture_Deck_Source.zip) |
 | `ACP_Architecture_Deck.zip` | [archive/2026-10-16/presentations/ACP_Architecture_Deck.zip](presentations/ACP_Architecture_Deck.zip) |
 | `ACP_Architecture_Hierarchy_20261015.html` | [archive/2026-10-16/history/ACP_Architecture_Hierarchy_20261015.html](history/ACP_Architecture_Hierarchy_20261015.html) |
@@ -45,17 +49,17 @@
 | `ACP_Mechanism_Research_DevDoc.md` | [archive/2026-10-16/history/ACP_Mechanism_Research_DevDoc.md](history/ACP_Mechanism_Research_DevDoc.md) |
 | `ACP_Memory_Resource_Chain.md` | [reference/current/ACP_Memory_Resource_Chain.md](../../reference/current/ACP_Memory_Resource_Chain.md) |
 | `ACP_MethodMeta_Frontend_DevDoc.txt` | [reference/current/ACP_MethodMeta_Frontend_DevDoc.txt](../../reference/current/ACP_MethodMeta_Frontend_DevDoc.txt) |
-| `ACP_Module_Boundaries_and_Interfaces_20261016.md` | [reference/next-change/ACP_Module_Boundaries_and_Interfaces_20261016.md](../../reference/next-change/ACP_Module_Boundaries_and_Interfaces_20261016.md) |
+| `ACP_Module_Boundaries_and_Interfaces_20261016.md` | [reference/next-change/ACP_Module_Boundaries_and_Interfaces_20261016.md](../2026-10-31/history/ACP_Module_Boundaries_and_Interfaces_20261016.md) |
 | `ACP_New_Task_Candidate_Workspace_Plan.md` | [archive/2026-10-16/history/ACP_New_Task_Candidate_Workspace_Plan.md](history/ACP_New_Task_Candidate_Workspace_Plan.md) |
 | `ACP_NMR_DP4_DevDoc.md` | [reference/current/ACP_NMR_DP4_DevDoc.md](../../reference/current/ACP_NMR_DP4_DevDoc.md) |
-| `ACP_Open_Source_Reuse_Assessment_20261016.md` | [reference/next-change/ACP_Open_Source_Reuse_Assessment_20261016.md](../../reference/next-change/ACP_Open_Source_Reuse_Assessment_20261016.md) |
+| `ACP_Open_Source_Reuse_Assessment_20261016.md` | [reference/next-change/ACP_Open_Source_Reuse_Assessment_20261016.md](../2026-10-31/history/ACP_Open_Source_Reuse_Assessment_20261016.md) |
 | `ACP_ORCA_Hessian_Defaults_Plan.txt` | [archive/2026-10-16/history/ACP_ORCA_Hessian_Defaults_Plan.txt](history/ACP_ORCA_Hessian_Defaults_Plan.txt) |
 | `ACP_PES_DFT_Scan_Extension_Plan.md` | [archive/2026-10-16/history/ACP_PES_DFT_Scan_Extension_Plan.md](history/ACP_PES_DFT_Scan_Extension_Plan.md) |
 | `ACP_PES_Manual_Review_DevDoc.md` | [reference/current/ACP_PES_Manual_Review_DevDoc.md](../../reference/current/ACP_PES_Manual_Review_DevDoc.md) |
 | `ACP_PES_Task_Alignment.md` | [reference/current/ACP_PES_Task_Alignment.md](../../reference/current/ACP_PES_Task_Alignment.md) |
 | `ACP_Product_Architecture_Optimization_Plan_20261015.md` | [archive/2026-10-16/history/ACP_Product_Architecture_Optimization_Plan_20261015.md](history/ACP_Product_Architecture_Optimization_Plan_20261015.md) |
 | `ACP_Product_Kernel_Manual_20261016.html` | [archive/2026-10-16/presentations/ACP_Product_Kernel_Manual_20261016.html](presentations/ACP_Product_Kernel_Manual_20261016.html) |
-| `ACP_Product_Strategy_and_Differentiation_20261016.md` | [reference/next-change/ACP_Product_Strategy_and_Differentiation_20261016.md](../../reference/next-change/ACP_Product_Strategy_and_Differentiation_20261016.md) |
+| `ACP_Product_Strategy_and_Differentiation_20261016.md` | [reference/next-change/ACP_Product_Strategy_and_Differentiation_20261016.md](../2026-10-31/history/ACP_Product_Strategy_and_Differentiation_20261016.md) |
 | `ACP_Project_Task_Storage_Design_v2.md` | [reference/current/ACP_Project_Task_Storage_Design_v2.md](../../reference/current/ACP_Project_Task_Storage_Design_v2.md) |
 | `ACP_Real_QC_Gap_Remediation_Plan.md` | [archive/2026-10-16/history/ACP_Real_QC_Gap_Remediation_Plan.md](history/ACP_Real_QC_Gap_Remediation_Plan.md) |
 | `ACP_Refactor_Wave0_Inventory.md` | [archive/2026-10-16/history/ACP_Refactor_Wave0_Inventory.md](history/ACP_Refactor_Wave0_Inventory.md) |
@@ -81,8 +85,8 @@
 | `ACP_Three_Ends_Four_Modules_Architecture_20261015.md` | [archive/2026-10-16/history/ACP_Three_Ends_Four_Modules_Architecture_20261015.md](history/ACP_Three_Ends_Four_Modules_Architecture_20261015.md) |
 | `ACP_Three_Module_Boundaries_ADR_20261015.md` | [archive/2026-10-16/history/ACP_Three_Module_Boundaries_ADR_20261015.md](history/ACP_Three_Module_Boundaries_ADR_20261015.md) |
 | `ACP_Three_Tier_Architecture_20261016.html` | [archive/2026-10-16/history/ACP_Three_Tier_Architecture_20261016.html](history/ACP_Three_Tier_Architecture_20261016.html) |
-| `ACP_Three_Tier_Architecture_20261016.md` | [reference/next-change/ACP_Three_Tier_Architecture_20261016.md](../../reference/next-change/ACP_Three_Tier_Architecture_20261016.md) |
-| `ACP_Three_Tier_Cohesive_Modules_20261016.md` | [reference/next-change/ACP_Three_Tier_Cohesive_Modules_20261016.md](../../reference/next-change/ACP_Three_Tier_Cohesive_Modules_20261016.md) |
+| `ACP_Three_Tier_Architecture_20261016.md` | [reference/next-change/ACP_Three_Tier_Architecture_20261016.md](../2026-10-31/history/ACP_Three_Tier_Architecture_20261016.md) |
+| `ACP_Three_Tier_Cohesive_Modules_20261016.md` | [reference/next-change/ACP_Three_Tier_Cohesive_Modules_20261016.md](../2026-10-31/history/ACP_Three_Tier_Cohesive_Modules_20261016.md) |
 | `ACP_TSMode_Optimization_Implementation_Plan.md` | [archive/2026-10-16/history/ACP_TSMode_Optimization_Implementation_Plan.md](history/ACP_TSMode_Optimization_Implementation_Plan.md) |
 | `ACP_Unified_Execution_Target_DevDoc.txt` | [reference/current/ACP_Unified_Execution_Target_DevDoc.txt](../../reference/current/ACP_Unified_Execution_Target_DevDoc.txt) |
 | `ACP_Vibration_Viewer_UX_Optimization_Plan.md` | [archive/2026-10-16/history/ACP_Vibration_Viewer_UX_Optimization_Plan.md](history/ACP_Vibration_Viewer_UX_Optimization_Plan.md) |

@@ -15,12 +15,12 @@
 
 | 文档 | 行数 | 实施 todo / 终验 | 本次 SHA-256 |
 | --- | ---: | ---: | --- |
-| [主计划](../../ACP_2.0_Four_Component_Collaboration_Plan_20261020.md) | 292 | — | `e789936fd65c13752e70edabc4983bb608431f821ce34a45cbfb631f28c71986` |
+| [主计划](../../../ACP_2.0_Four_Component_Collaboration_Plan_20261020.md) | 292 | — | `e789936fd65c13752e70edabc4983bb608431f821ce34a45cbfb631f28c71986` |
 | [A 科学轨](../../../.omo/plans/acp2-plan-a-cccp-science.md) | 780 | 51 / 4 | `8410ed69a532add15d2e950e6032e72ae8987d07187c4c34556b15e48e7f5801` |
 | [B Runtime 轨](../../../.omo/plans/acp2-parallel-plan-b-runtime.md) | 541 | 33 / 4 | `2bdf7cee901d80c8073aa487050b1efe2efdb1465517f588407c735f5ab9b70f` |
 | [C RPH/Workbench 轨](../../../.omo/plans/acp2-plan-c-rph-workbench.md) | 680 | 46 / 4 | `f5ac439b12e319c1d1f3d471106bd44735cebd63b8a5dc2997d8e117966c0cc5` |
-| [并行总索引](ACP_2.0_Parallel_Execution_Index_20261020.md) | 248 | — | `f803e36a597bab129d80431de7d413b029770f139117e5d8a385fd4d2e8e95a8` |
-| [服务器验收手册](ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md) | 542 | — | `e26a0b2a680a7207d54db1a3f5b730af901f0af289b9149583b014cc1466bdf5` |
+| [并行总索引](../../../reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md) | 248 | — | `f803e36a597bab129d80431de7d413b029770f139117e5d8a385fd4d2e8e95a8` |
+| [服务器验收手册](../../../reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md) | 542 | — | `e26a0b2a680a7207d54db1a3f5b730af901f0af289b9149583b014cc1466bdf5` |
 
 三轨共 130 个实施 todo、12 个终验条目。任务数量不等于工期，也不能据此推算三 Agent 会获得三倍速度。
 
@@ -113,7 +113,7 @@ S0/S1 是本报告的风险优先级，与主计划 P0～P5 阶段编号无关�
 
 ### R3-01：不能把通用 Recipe DAG 视为已有执行接口的简单绑定
 
-**位置与证据。** [A-07b](../../../.omo/plans/acp2-plan-a-cccp-science.md#L373)、[A-15a](../../../.omo/plans/acp2-plan-a-cccp-science.md#L503)、[B18](../../../.omo/plans/acp2-parallel-plan-b-runtime.md#L360)。现有 [`StepKind`](../../../src/acp_services/runtime/plan_contracts.py#L69)有 singlepoint/optimize/frequency/scan/thermochemistry/casscf 六项，明确说明 IRC 为独立请求；[`CccpTaskExecutor`](../../../src/acp_services/runtime/worker.py#L313)从一个 `plan.payload` 构造一个 TaskRequest 并调用一个 `run_*`；[`FrozenWorker`](../../../src/acp_services/runtime/worker.py#L1344)遍历步骤做前置校验，随后只调用一次 executor。
+**位置与证据。** [A-07b](../../../.omo/plans/acp2-plan-a-cccp-science.md#L373)、[A-15a](../../../.omo/plans/acp2-plan-a-cccp-science.md#L503)、[B18](../../../.omo/plans/acp2-parallel-plan-b-runtime.md#L360)。现有 [`StepKind`](../../../../src/acp_services/runtime/plan_contracts.py#L69)有 singlepoint/optimize/frequency/scan/thermochemistry/casscf 六项，明确说明 IRC 为独立请求；[`CccpTaskExecutor`](../../../../src/acp_services/runtime/worker.py#L313)从一个 `plan.payload` 构造一个 TaskRequest 并调用一个 `run_*`；[`FrozenWorker`](../../../../src/acp_services/runtime/worker.py#L1344)遍历步骤做前置校验，随后只调用一次 executor。
 
 **判断。** 现有单任务核心、线性 CalculationPlan、BatchOptimize 与专用 IRC 工作流提供了基础，但静态阅读不能据此认定它们已经承载任意有分支、跨步骤产物引用、双向路径、失败阻断和持久恢复的科学 DAG。B18 把这部分主要描述为“映射/绑定”，明显低估实现量。
 
@@ -137,7 +137,7 @@ S0/S1 是本报告的风险优先级，与主计划 P0～P5 阶段编号无关�
 
 ### R3-02：P2 研究资源与审批在客户端侧没有完整调用路径
 
-**位置与证据。** [C T-09](../../../.omo/plans/acp2-plan-c-rph-workbench.md#L270)规定 Bridge 底层只调用 DSH 注册的官方 MCP 工具；[T-25](../../../.omo/plans/acp2-plan-c-rph-workbench.md#L430)又要求创建/读取/CAS 更新 B Data 项目资源；[B16](../../../.omo/plans/acp2-parallel-plan-b-runtime.md#L340)、[B18](../../../.omo/plans/acp2-parallel-plan-b-runtime.md#L360)新增审批及资源能力。现有[八工具白名单](../../../src/acp_services/entrypoints/mcp.py#L186)没有显式研究资源写入、审批请求/查询或事件订阅工具。
+**位置与证据。** [C T-09](../../../.omo/plans/acp2-plan-c-rph-workbench.md#L270)规定 Bridge 底层只调用 DSH 注册的官方 MCP 工具；[T-25](../../../.omo/plans/acp2-plan-c-rph-workbench.md#L430)又要求创建/读取/CAS 更新 B Data 项目资源；[B16](../../../.omo/plans/acp2-parallel-plan-b-runtime.md#L340)、[B18](../../../.omo/plans/acp2-parallel-plan-b-runtime.md#L360)新增审批及资源能力。现有[八工具白名单](../../../../src/acp_services/entrypoints/mcp.py#L186)没有显式研究资源写入、审批请求/查询或事件订阅工具。
 
 **判断。** 不是断言八工具绝不可能扩展，而是当前计划未说明新增能力走哪条受控通路、怎样被 RPH 调用。仅交付服务端 API 不等于 Bridge 可达。
 
@@ -264,7 +264,7 @@ capability 重复 ID 属于集合/注册表检查，已安装 Provider 是否可
 
 ### R3-09：浏览器依赖和各 worktree 的解释器需要独立归属
 
-**位置与证据。** [B02](../../../.omo/plans/acp2-parallel-plan-b-runtime.md#L190)安装 `.[dev,api,remote]`；[C T-08](../../../.omo/plans/acp2-plan-c-rph-workbench.md#L260)直接在 B venv 运行 `python -m playwright`。当前 [pyproject.toml](../../../pyproject.toml#L41)把 Playwright 放在独立 browser extra；服务器手册仍写“随 dev 依赖安装”。
+**位置与证据。** [B02](../../../.omo/plans/acp2-parallel-plan-b-runtime.md#L190)安装 `.[dev,api,remote]`；[C T-08](../../../.omo/plans/acp2-plan-c-rph-workbench.md#L260)直接在 B venv 运行 `python -m playwright`。当前 [pyproject.toml](../../../../pyproject.toml#L41)把 Playwright 放在独立 browser extra；服务器手册仍写“随 dev 依赖安装”。
 
 第二个问题是 A/C 要求开发测试导入各自 worktree，而又共用 B 提供的 `$ACP2_PYTHON`。一个 venv 中的一份 editable install 不会仅因 cwd 改变就切换到另一个 checkout。只打印路径、没有检查解析位置，也不足以证明测试了对应代码。
 
@@ -322,7 +322,7 @@ C 的 `c_accept()` 当前固定从 C 源码路径取 Harness，而 live 声明�
 
 ### R3-12：CDXML 输入链需要具体 owner 或明确阶段范围
 
-**位置与证据。** 主计划把 ChemDraw/CDXML 列为化学研究入口；[C T-23](../../../.omo/plans/acp2-plan-c-rph-workbench.md#L410)要求 CDXML 走 B 的公开解析服务，没有服务则子行 NOT_VERIFIED。当前[结构解析分发](../../../src/cccp/analysis/structure/parsers.py#L273)没有 CDXML 分支；A/B 也没有清楚指认的 CDXML 交付任务。
+**位置与证据。** 主计划把 ChemDraw/CDXML 列为化学研究入口；[C T-23](../../../.omo/plans/acp2-plan-c-rph-workbench.md#L410)要求 CDXML 走 B 的公开解析服务，没有服务则子行 NOT_VERIFIED。当前[结构解析分发](../../../../src/cccp/analysis/structure/parsers.py#L273)没有 CDXML 分支；A/B 也没有清楚指认的 CDXML 交付任务。
 
 **判断。** 这里不是要求首期支持所有 ChemDraw 特性，而是当前“消费者需要、生产者未安排”的范围缺口。
 
@@ -560,12 +560,12 @@ R3-10 的开发门解耦应随调度修订立即处理；R3-14 的最小打包�
 
 | 文件 | 本次 SHA-256 |
 | --- | --- |
-| [runtime/worker.py](../../../src/acp_services/runtime/worker.py) | `5b8e5d00ecbbc8e26385f6fa9c693986f642b5ac10f416092cca0722164b68b9` |
-| [runtime/plan_contracts.py](../../../src/acp_services/runtime/plan_contracts.py) | `2bbca71a78829816dcdb63c34608d5b56628b263132b5ebf2400f82720c6f112` |
-| [entrypoints/mcp.py](../../../src/acp_services/entrypoints/mcp.py) | `0bcc34ad249b2f6e2fa60208f8cb966feec3ca25fbae44343a5f80bba50ed184` |
-| [scheduler/manager.py](../../../src/acp/scheduler/manager.py) | `ab6978b275f366ec1ce1e07401b5dff90459ed549edf33df881e8a3274e4b492` |
-| [structure/parsers.py](../../../src/cccp/analysis/structure/parsers.py) | `a4b1817bb6785b911bfce55619b62b7317b765fbc8979146580e19ac0131f7ff` |
-| [pyproject.toml](../../../pyproject.toml) | `4d40cf842a31b9d04d18136a24086418422a17019b1bb90daa1bfc774423bbfb` |
+| [runtime/worker.py](../../../../src/acp_services/runtime/worker.py) | `5b8e5d00ecbbc8e26385f6fa9c693986f642b5ac10f416092cca0722164b68b9` |
+| [runtime/plan_contracts.py](../../../../src/acp_services/runtime/plan_contracts.py) | `2bbca71a78829816dcdb63c34608d5b56628b263132b5ebf2400f82720c6f112` |
+| [entrypoints/mcp.py](../../../../src/acp_services/entrypoints/mcp.py) | `0bcc34ad249b2f6e2fa60208f8cb966feec3ca25fbae44343a5f80bba50ed184` |
+| [scheduler/manager.py](../../../../src/acp/scheduler/manager.py) | `ab6978b275f366ec1ce1e07401b5dff90459ed549edf33df881e8a3274e4b492` |
+| [structure/parsers.py](../../../../src/cccp/analysis/structure/parsers.py) | `a4b1817bb6785b911bfce55619b62b7317b765fbc8979146580e19ac0131f7ff` |
+| [pyproject.toml](../../../../pyproject.toml) | `4d40cf842a31b9d04d18136a24086418422a17019b1bb90daa1bfc774423bbfb` |
 
 ### 9.2 下轮复审应提交的材料
 

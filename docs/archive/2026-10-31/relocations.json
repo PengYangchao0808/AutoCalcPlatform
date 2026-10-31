@@ -1,0 +1,147 @@
+[
+    {
+        "old":  "docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_20261021.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_2.0_Parallel_Plans_Review_20261021.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R2_20261021.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_2.0_Parallel_Plans_Review_R2_20261021.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R3_20261021.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_2.0_Parallel_Plans_Review_R3_20261021.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R4_20261022.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_2.0_Parallel_Plans_Review_R4_20261022.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R5_20261022.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_2.0_Parallel_Plans_Review_R5_20261022.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_2.0_Parallel_Plans_Review_R6_20261022.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_2.0_Parallel_Plans_Review_R6_20261022.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_ACV_Frontend_Feasibility_20261016.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_ACV_Frontend_Feasibility_20261016.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_20261020.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_Architecture_Acceptance_Remediation_Review_20261020.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R2_20261020.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_Architecture_Acceptance_Remediation_Review_R2_20261020.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R3_20261020.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_Architecture_Acceptance_Remediation_Review_R3_20261020.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_Architecture_Acceptance_Remediation_Review_R4_20261020.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_Architecture_Acceptance_Remediation_Review_R4_20261020.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_Architecture_Code_Quality_Audit_20261016.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_Architecture_Code_Quality_Audit_20261016.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_Frontend_Architecture_OpenCode_20261016.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_Frontend_Architecture_OpenCode_20261016.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_Frontend_Cleanup_Impl_20261016.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_Frontend_Cleanup_Impl_20261016.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_Frontend_Cleanup_Impl_20261017.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_Frontend_Cleanup_Impl_20261017.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_Frontend_Integration_Handoff_OpenCode_20261016.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_Frontend_Integration_Handoff_OpenCode_20261016.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_Frontend_Redundancy_Audit_20261016.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_Frontend_Redundancy_Audit_20261016.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_Frontend_UI_Antigravity_Gemini_20261016.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_Frontend_UI_Antigravity_Gemini_20261016.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_HTML_Decomposition_Antigravity_20261016.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_HTML_Decomposition_Antigravity_20261016.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_Module_Boundaries_and_Interfaces_20261016.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_Module_Boundaries_and_Interfaces_20261016.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_Open_Source_Reuse_Assessment_20261016.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_Open_Source_Reuse_Assessment_20261016.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_Parallel_Plans_Review_20261018.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_Parallel_Plans_Review_20261018.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_Parallel_Plans_Review_R2_20261018.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_Parallel_Plans_Review_R2_20261018.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_Parallel_Plans_Review_R3_20261018.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_Parallel_Plans_Review_R3_20261018.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_Parallel_Plans_Review_R4_20261018.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_Parallel_Plans_Review_R4_20261018.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_Parallel_Plans_Review_R5_20261018.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_Parallel_Plans_Review_R5_20261018.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_Product_Strategy_and_Differentiation_20261016.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_Product_Strategy_and_Differentiation_20261016.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_Three_Tier_Architecture_20261016.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_Three_Tier_Architecture_20261016.md",
+        "category":  "archive/2026-10-31/history"
+    },
+    {
+        "old":  "docs/reference/next-change/ACP_Three_Tier_Cohesive_Modules_20261016.md",
+        "new":  "docs/archive/2026-10-31/history/ACP_Three_Tier_Cohesive_Modules_20261016.md",
+        "category":  "archive/2026-10-31/history"
+    }
+]

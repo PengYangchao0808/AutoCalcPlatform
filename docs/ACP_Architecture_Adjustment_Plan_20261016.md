@@ -8,11 +8,11 @@
 
 多用户方向进一步确认为：**ACR 内统一管理账户、个人 API Key、账户等级、管理员权限、个人/项目工作区、计算和存储配额以及 Credit；Web/CLI/Agent 共用同一套身份、授权、资源与计量规则。** 开源自部署保留多用户/资源管理，商业支付可关闭。实现采用部署档位，避免要求每个部署者搭建独立 IAM/KMS/容器编排平台，详见第 22—25 节。
 
-成熟组件候选、官方依据和轻量/线上组合见[《开源组件复用评估》](reference/next-change/ACP_Open_Source_Reuse_Assessment_20261016.md)。该评估是候选选型，不表示已接入；各组件通过现有 owner 的 adapter/Port 使用，不改变三层九模块及科学/恢复/计量权威。
+成熟组件候选、官方依据和轻量/线上组合见[《开源组件复用评估》](archive/2026-10-31/history/ACP_Open_Source_Reuse_Assessment_20261016.md)。该评估是候选选型，不表示已接入；各组件通过现有 owner 的 adapter/Port 使用，不改变三层九模块及科学/恢复/计量权威。
 
 本轮正式纳入两条研究与交付路线：**实验室版 ACP Lab、线上多用户版 ACP Hosted**，共用代码、科学能力与产品契约，以部署配置和适配器组合区分。每个开源组件均归入现有模块的内部实现或受限基础设施，不新增业务层；双版本矩阵、组件归属和研究验证工作包见第 26—28 节。
 
-v1.5 将两版路线展开为三种交付配置：**ACP Lab Standalone（个人本地）→ ACP Lab Server（实验室共享）→ ACP Hosted（按需托管）**，不新增科学分支或业务层。近期先交付本地完整图形科研闭环，再扩大协作与托管能力。第 30—35 节补充 AiiDA 借鉴边界、插件、可迁移项目、MCP、异构资源和切片里程碑；[战略与差异化路线](reference/next-change/ACP_Product_Strategy_and_Differentiation_20261016.md)提供竞品依据和用户价值判据。v1.4 的安全、恢复、清理门继续有效。
+v1.5 将两版路线展开为三种交付配置：**ACP Lab Standalone（个人本地）→ ACP Lab Server（实验室共享）→ ACP Hosted（按需托管）**，不新增科学分支或业务层。近期先交付本地完整图形科研闭环，再扩大协作与托管能力。第 30—35 节补充 AiiDA 借鉴边界、插件、可迁移项目、MCP、异构资源和切片里程碑；[战略与差异化路线](archive/2026-10-31/history/ACP_Product_Strategy_and_Differentiation_20261016.md)提供竞品依据和用户价值判据。v1.4 的安全、恢复、清理门继续有效。
 
 > 文档整理（2026-10-16）：本文件是下一次修改的唯一实施方案。`reference/current/` 保存仍生效的运行契约，`reference/next-change/` 保存本方案的解释与证据附件；`archive/` 只供追溯，不构成并行待办或其他实施顺序。
 
@@ -53,7 +53,7 @@ v1.12 按用户要求改为 **Antigravity 与 OpenCode 同时开发、按功能�
 ### 1.1 文档和规范的关系
 
 1. 现行 [AGENTS.md](../AGENTS.md)、[作业文件布局](reference/current/ACP_Job_File_Layout_Spec.md)、[执行完整性说明](reference/current/ACP_Execution_Integrity_Rebaseline_Notes.md)、[CCCP Task API](reference/current/ACP_CCCP_Task_API_DevDoc.md) 仍约束实际运行行为。
-2. 本方案是最新架构调整和实施顺序入口；[高内聚设计](reference/next-change/ACP_Three_Tier_Cohesive_Modules_20261016.md)解释模块归并，[三层主设计](reference/next-change/ACP_Three_Tier_Architecture_20261016.md)提供详细上下文，[接口细则](reference/next-change/ACP_Module_Boundaries_and_Interfaces_20261016.md)作为内部职责参考。
+2. 本方案是最新架构调整和实施顺序入口；[高内聚设计](archive/2026-10-31/history/ACP_Three_Tier_Cohesive_Modules_20261016.md)解释模块归并，[三层主设计](archive/2026-10-31/history/ACP_Three_Tier_Architecture_20261016.md)提供详细上下文，[接口细则](archive/2026-10-31/history/ACP_Module_Boundaries_and_Interfaces_20261016.md)作为内部职责参考。
 3. [此前评审方案](archive/2026-10-16/history/ACP_Architecture_Review_and_Execution_Plan_20261015.md)的需求治理优先、传输与 cache-only 配套交付原则保留；其历史性能推算不作为当前实测指标。
 4. 旧稿中的后端 ACV、九个中段业务模块、强制每个组件独立服务的解释均不作为当前目标。
 5. 新驻点与现有架构门冲突时，先对具体切片登记规则修订、增加等效或更强检查，再切换实现；不得用本文为理由关闭或静默放宽现有护栏。
@@ -1044,7 +1044,7 @@ MU-13/OS-03 先生成迁移预览：旧主体、新绑定、受影响项目/角�
 
 Lago 等通用计费服务只能通过 Workspace 内 BillingProvider adapter 接入。Runtime 仍提供确认用量/价格政策和结算请求，Workspace 仍负责账户准入、原子预留与可审计账本。Data 保留证据引用，不调用计费 API 扣余额。
 
-首期采用 **ACR 自有窄账本/预留＋可选外部商业账单** 的研究基线，避免双钱包。后续若改由外部服务承担某项权威，须先完成 ADR、实时性/并发/幂等/回滚验证和数据迁移，不能内外同时扣费。已核验的 Lago 文档将 Real time wallet balance 标为 Premium；不把候选的宣传功能直接视为免费社区能力。详见[复用评估及官方链接](reference/next-change/ACP_Open_Source_Reuse_Assessment_20261016.md)。
+首期采用 **ACR 自有窄账本/预留＋可选外部商业账单** 的研究基线，避免双钱包。后续若改由外部服务承担某项权威，须先完成 ADR、实时性/并发/幂等/回滚验证和数据迁移，不能内外同时扣费。已核验的 Lago 文档将 Real time wallet balance 标为 Premium；不把候选的宣传功能直接视为免费社区能力。详见[复用评估及官方链接](archive/2026-10-31/history/ACP_Open_Source_Reuse_Assessment_20261016.md)。
 
 开源/免费模式无需安装 Lago 或支付连接器即可运行用户、配额和完整科学流程。商业模式也不按图形/查询/认证/加密请求加价，只按既定托管核时政策记 Credit。
 
@@ -1105,7 +1105,7 @@ Lago 等通用计费服务只能通过 Workspace 内 BillingProvider adapter 接
 
 每项至少记录：所属九模块/基础设施 owner、解决的问题、内嵌库或独立服务、上游官方链接、候选版本/发布时间与支持策略、许可证/模型资产与社区/付费边界、Python/OS/科学软件兼容、部署/内存/服务/秘密增量、公开契约映射、数据 owner/迁移、故障/恢复/回退、PoC 样例和证据、Lab/Hosted 启用状态。
 
-本轮候选状态：现有 FastAPI/Uvicorn、Paramiko、3Dmol、科学基础库已在代码/依赖中使用；Keycloak、Authlib/pwdlib/PyCasbin、PostgreSQL、Caddy、Slurm/Podman、SeaweedFS、ECharts、QCElemental/QCEngine/cclib、Lago、Prometheus/restic 均需按实际采用范围验证。它们的官方能力依据见[复用评估](reference/next-change/ACP_Open_Source_Reuse_Assessment_20261016.md)，**不因列名而成为新增安装依赖**。
+本轮候选状态：现有 FastAPI/Uvicorn、Paramiko、3Dmol、科学基础库已在代码/依赖中使用；Keycloak、Authlib/pwdlib/PyCasbin、PostgreSQL、Caddy、Slurm/Podman、SeaweedFS、ECharts、QCElemental/QCEngine/cclib、Lago、Prometheus/restic 均需按实际采用范围验证。它们的官方能力依据见[复用评估](archive/2026-10-31/history/ACP_Open_Source_Reuse_Assessment_20261016.md)，**不因列名而成为新增安装依赖**。
 
 固定版本 PoC 通过后才将状态更新为已批准，并在同一切片更新 packaging、角色依赖、配置和等效护栏。实现新 `acp run` 运行时依赖需同步 pyproject/requirements-node；Web/IAM/账单组件不得误入 CCCP 最小科学发行。外部组件发行后功能/许可变化需重新核验，不以本文日期替代后续维护。
 
@@ -1122,7 +1122,7 @@ Lago 等通用计费服务只能通过 Workspace 内 BillingProvider adapter 接
 
 ## 29. 本轮代码质量与冗余清理交付门
 
-本节与 P0—P7 同步实施，不以搬目录或减少文件数作为质量提升。代码证据、候选与保护清单见[代码质量清理台账](reference/next-change/ACP_Architecture_Code_Quality_Audit_20261016.md)。本轮为静态审计与设计补全，清理代码尚未实施；候选不等于已证实无用。
+本节与 P0—P7 同步实施，不以搬目录或减少文件数作为质量提升。代码证据、候选与保护清单见[代码质量清理台账](archive/2026-10-31/history/ACP_Architecture_Code_Quality_Audit_20261016.md)。本轮为静态审计与设计补全，清理代码尚未实施；候选不等于已证实无用。
 
 ### 29.1 清理范围与顺序
 
@@ -1398,9 +1398,9 @@ D1/D2 可在 D0 各自契约冻结后并行，D3 不要求所有科学代码迁�
 
 本轮前端只做维护结构、架构拆分、内部接线和等价回归，**没有独立的界面重设计需求，不以界面美化或新组件设计作为架构实施前置。** 保持布局、主题、文案、可见功能、入口和用户操作流程。新增的 HTML/CSS/JS 文件拆分由 Antigravity 按第 39 节执行，模块职责调整由 OpenCode 接手；两阶段均不重设计界面。Services／CCCP 仍由第 37 节的服务与科学负责人维护。
 
-- [Antigravity 主 HTML 拆分任务书](reference/next-change/ACP_HTML_Decomposition_Antigravity_20261016.md)：本轮新增的文件组织任务，写权按第 39 节交接。
-- [Antigravity／Gemini 界面范围说明](reference/next-change/ACP_Frontend_UI_Antigravity_Gemini_20261016.md)：无界面重设计任务，指向新增 HTML 拆分职责。
-- [OpenCode 前端架构调整任务书](reference/next-change/ACP_Frontend_Architecture_OpenCode_20261016.md)：Workbench 控制器、Client、Visualization、兼容接线与行为验证。
+- [Antigravity 主 HTML 拆分任务书](archive/2026-10-31/history/ACP_HTML_Decomposition_Antigravity_20261016.md)：本轮新增的文件组织任务，写权按第 39 节交接。
+- [Antigravity／Gemini 界面范围说明](archive/2026-10-31/history/ACP_Frontend_UI_Antigravity_Gemini_20261016.md)：无界面重设计任务，指向新增 HTML 拆分职责。
+- [OpenCode 前端架构调整任务书](archive/2026-10-31/history/ACP_Frontend_Architecture_OpenCode_20261016.md)：Workbench 控制器、Client、Visualization、兼容接线与行为验证。
 
 | 对象 | Antigravity／Gemini | OpenCode |
 |---|---|---|
@@ -1537,7 +1537,7 @@ Client 对当前 v1/v2 和按任务 SSE 提供内部统一 facade；统一内部
 
 ### 39.1 目标与实际规模
 
-执行附件：[ACP 主 HTML 拆分方案 — Antigravity](reference/next-change/ACP_HTML_Decomposition_Antigravity_20261016.md)，附可直接派发的提示词。保留现有界面、默认入口、全部功能和独立运行要求；本次只制定方案，未拆页面代码。
+执行附件：[ACP 主 HTML 拆分方案 — Antigravity](archive/2026-10-31/history/ACP_HTML_Decomposition_Antigravity_20261016.md)，附可直接派发的提示词。保留现有界面、默认入口、全部功能和独立运行要求；本次只制定方案，未拆页面代码。
 
 本次工作区只读盘点：`ACP_Workbench_v2.html` 共 35,076 行、1,734,232 字节，其中主内联 JS 约 28,978 行、内联 CSS 约 4,590 行，其余页面结构/标签/资源引用约 1,508 行。问题主要是代码混驻，不需要重画三栏界面或把静态 DOM 改成异步加载。
 

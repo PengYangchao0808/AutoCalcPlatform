@@ -42,7 +42,7 @@ src/acp_services/         # 平台服务层（acp → acp_services 单向；禁 
 frontend/                 # ACP_Workbench_v2.html（v1 遗留）；js/ 含 structure_viewer/structure_editor/vibration_viewer/structure_source_picker/task_input_workspace/candidate_details/job_editor
 config/defaults.yaml      # 仅供参考 — Python built-in `_get_default_config()` 权威
 tests/                    # ≈247 文件；conftest/fixtures/baseline（审计痕迹，勿提交 e2e-task-root.txt）
-docs/                     # 权威设计文档（CENSO、Job File Layout、Simple、EVT Viewer、Electronic State CASSCF…）
+docs/                     # 文档入口 docs/README.md：reference/current（现行契约）+ reference/next-change（在役方案 + acp2-contracts 机器契约）+ archive（冻结归档）
 requirements-node.txt     # 远端计算节点运行时依赖（numpy/rdkit/pyyaml）— 新增 `acp run` 运行时 import 需同步 HERE + pyproject.toml
 pyproject.toml            # api/remote/nmr/dev extras；console script `acp = acp.cli:main`
 ```
@@ -87,7 +87,7 @@ pyproject.toml            # api/remote/nmr/dev extras；console script `acp = ac
 - **公开 shim/历史 reader**: `acp.calculations.primitives`（→ `cccp.calculation.tasks`）、`acp.backends`（→ `cccp.backends`）、`src/acp/compat/legacy/` 只读 reader 均**保留**；调用者审计见 `tests/baseline/services-evidence/public_shim_inventory.md`。禁止以缩代码为由删除兼容面
 - **NMR**: 全套见 `src/acp/nmr/AGENTS.md`；工作流入口 `workflows/nmr.py`
 - **Frontend**: `frontend/ACP_Workbench_v2.html` — 经典工作台（能量/轨迹、向导、结构来源、job_editor）；`frontend/next/` 为 ACP Next 实验入口（`js/shell/*` + `js/modules/{molecule-viewer,task-explorer,task-config,exec-detail,agent-workspace,reaction-network}`），设计与收口见 `docs/reference/next-change/`
-- **权威设计文档**: `docs/reference/current/ACP_Job_File_Layout_Spec.md`（文件布局契约）、`docs/reference/current/ACP_Energy_Trajectory_Viewer_DevDoc.md`（帧契约/采样管线）、`docs/reference/current/ACP_PES_Manual_Review_DevDoc.md`（PES 人工选点 → BatchOptimize）、`docs/reference/current/ACP_Simple_Workflows_DevDoc.html`（simple 工作流）
+- **权威设计文档**: 入口与权威表见 `docs/README.md`（四类目录 = `reference/current` 现行契约 / `reference/next-change` 在役方案 / `reference/next-change/acp2-contracts` 机器契约（禁手改）/ `archive` 冻结归档）。常用：`docs/reference/current/ACP_Job_File_Layout_Spec.md`（文件布局契约）、`docs/reference/current/ACP_Energy_Trajectory_Viewer_DevDoc.md`（帧契约/采样管线）、`docs/reference/current/ACP_PES_Manual_Review_DevDoc.md`（PES 人工选点 → BatchOptimize）、`docs/reference/current/ACP_Simple_Workflows_DevDoc.html`（simple 工作流）；文档链接自检 `python scripts/check_docs_links.py`（守护 `tests/test_docs_links.py`）
 
 ## CONVENTIONS
 - **Docstrings**: cccp Google 风格（`Args:/Returns:`）；acp 紧凑单行/短块 — 随所在包

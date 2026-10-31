@@ -99,4 +99,4 @@ B 应用补丁到集成候选 → 冻结源码/构建输入
 | B | `3677e5b6674ef028e37f76000b1f0601cff2f1024f5c9dcca205426992309b15` |
 | C | `4d42b1a29eb3705660dd17f250bad9d504eb3cf0ad060044431d647f3e8600c9` |
 
-上轮记录：[R3](docs/reference/next-change/ACP_Parallel_Plans_Review_R3_20261018.md)。本轮保持其三项主要结论，进一步明确 T77/T78 的验收顺序与 C-T13 交接可消费状态。
+上轮记录：[R3](docs/archive/2026-10-31/history/ACP_Parallel_Plans_Review_R3_20261018.md)。本轮保持其三项主要结论，进一步明确 T77/T78 的验收顺序与 C-T13 交接可消费状态。

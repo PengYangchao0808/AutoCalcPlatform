@@ -1,12 +1,12 @@
 # ACP 三层模块边界、统一接口与调用规范
 
-v1.6 增补见[主方案第 36 节](../../ACP_Architecture_Adjustment_Plan_20261016.md#36-统一交互初始化acp-init-与组件装配)：复用现有 acp init，将部署档位/组件选择、配置预览与应用、doctor 验证纳入 IN-01—06；现有软件/节点向导继续兼容，完整部署装配待实施。
+v1.6 增补见[主方案第 36 节](../../../ACP_Architecture_Adjustment_Plan_20261016.md#36-统一交互初始化acp-init-与组件装配)：复用现有 acp init，将部署档位/组件选择、配置预览与应用、doctor 验证纳入 IN-01—06；现有软件/节点向导继续兼容，完整部署装配待实施。
 
-v1.5 战略增补见[完整方案第 30—35 节](../../ACP_Architecture_Adjustment_Plan_20261016.md#30-产品定位与-aiida-借鉴边界)和[产品战略与差异化](ACP_Product_Strategy_and_Differentiation_20261016.md)：本地完整科研闭环优先，Lab 分 Standalone/Server 配置，Hosted 按需后置；保持独立运行内核，借鉴 AiiDA，引入受控插件、项目迁移与 MCP。新增能力均为待实施目标，v1.4 的设计补全与质量门保留。
+v1.5 战略增补见[完整方案第 30—35 节](../../../ACP_Architecture_Adjustment_Plan_20261016.md#30-产品定位与-aiida-借鉴边界)和[产品战略与差异化](ACP_Product_Strategy_and_Differentiation_20261016.md)：本地完整科研闭环优先，Lab 分 Standalone/Server 配置，Hosted 按需后置；保持独立运行内核，借鉴 AiiDA，引入受控插件、项目迁移与 MCP。新增能力均为待实施目标，v1.4 的设计补全与质量门保留。
 
-架构设计 v1.4 已补齐预留恢复、租户存储映射、身份迁移和独立核时配额依赖；代码质量清理按[主方案第 29 节](../../ACP_Architecture_Adjustment_Plan_20261016.md#29-本轮代码质量与冗余清理交付门)及[源码审计台账](ACP_Architecture_Code_Quality_Audit_20261016.md)执行。当前为设计与静态审计结果，未实施运行代码清理。
+架构设计 v1.4 已补齐预留恢复、租户存储映射、身份迁移和独立核时配额依赖；代码质量清理按[主方案第 29 节](../../../ACP_Architecture_Adjustment_Plan_20261016.md#29-本轮代码质量与冗余清理交付门)及[源码审计台账](ACP_Architecture_Code_Quality_Audit_20261016.md)执行。当前为设计与静态审计结果，未实施运行代码清理。
 
-实施总入口：[《ACP 完整架构调整方案》](../../ACP_Architecture_Adjustment_Plan_20261016.md)。工作包、阶段依赖、验收与回滚统一按该方案维护；本文保留架构/模块解释，不再形成独立实施顺序。
+实施总入口：[《ACP 完整架构调整方案》](../../../ACP_Architecture_Adjustment_Plan_20261016.md)。工作包、阶段依赖、验收与回滚统一按该方案维护；本文保留架构/模块解释，不再形成独立实施顺序。
 
 日期：2026-10-16。状态：**目标模块规范，未实施代码迁移**。承接[三层架构主设计](ACP_Three_Tier_Architecture_20261016.md)，落实已确认的前端 ACV/3Dmol、后端 CCCP 科学大数据处理方向。
 

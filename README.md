@@ -805,7 +805,7 @@ pytest -m "not slow" -v
 | Web 服务 | http://127.0.0.1:8765（启动 `acp run serve` 后；WSL 用户优先使用 127.0.0.1 避免 IPv6 问题）|
 | 前端仪表盘 | `frontend/ACP_Workbench_v2.html`（v1 `ACP_Workbench.html` 为遗留只读）|
 | 开发文档 | `docs/`（CENSO 集成、MethodMeta、Simple Workflows） |
-| 三层架构设计 | `docs/reference/next-change/ACP_Three_Tier_Architecture_20261016.md`（[HTML 阐释版](docs/archive/2026-10-16/history/ACP_Three_Tier_Architecture_20261016.html)，设计阶段） |
+| 三层架构设计 | `docs/archive/2026-10-31/history/ACP_Three_Tier_Architecture_20261016.md`（[HTML 阐释版](docs/archive/2026-10-16/history/ACP_Three_Tier_Architecture_20261016.html)，设计阶段） |
 | 产品内核可视化手册 | [docs/archive/2026-10-16/presentations/ACP_Product_Kernel_Manual_20261016.html](docs/archive/2026-10-16/presentations/ACP_Product_Kernel_Manual_20261016.html)（v1.5，投资人/工程双读者） |
 
 ---

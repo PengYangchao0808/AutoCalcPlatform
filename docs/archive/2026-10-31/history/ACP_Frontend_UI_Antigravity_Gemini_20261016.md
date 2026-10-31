@@ -2,7 +2,7 @@
 
 日期：2026-10-16。状态：**不重设计界面；新增 HTML 维护性拆分任务由 Antigravity 执行。** 保留本文件名，作为此前任务书的范围修正入口。
 
-上位方案：[完整架构调整方案 v1.12 第 40 节](../../ACP_Architecture_Adjustment_Plan_20261016.md#40-antigravity-与-opencode-并行开发)，第 39 节仍规定 HTML 维护性目标。
+上位方案：[完整架构调整方案 v1.12 第 40 节](../../../ACP_Architecture_Adjustment_Plan_20261016.md#40-antigravity-与-opencode-并行开发)，第 39 节仍规定 HTML 维护性目标。
 
 - 本次实际派发：[ACP 主 HTML 拆分方案 — Antigravity](ACP_HTML_Decomposition_Antigravity_20261016.md)，末尾附可直接派发的提示词。
 - 同时开发模块：[OpenCode 前端架构任务书](ACP_Frontend_Architecture_OpenCode_20261016.md)。

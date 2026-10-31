@@ -1,8 +1,8 @@
 # ACP 前端架构并行开发任务书 — OpenCode
 
-日期：2026-10-16。状态：首批模块已对接并验证，后续部分按本文逐片实施。实际完成范围见[前端对接验收记录](../current/ACP_Frontend_Integration_20261016.md)。用途：OpenCode 与 Antigravity 的并行职责及后续交接参考。
+日期：2026-10-16。状态：首批模块已对接并验证，后续部分按本文逐片实施。实际完成范围见[前端对接验收记录](../../../reference/current/ACP_Frontend_Integration_20261016.md)。用途：OpenCode 与 Antigravity 的并行职责及后续交接参考。
 
-上位方案：[完整架构调整方案 v1.12 第 40 节](../../ACP_Architecture_Adjustment_Plan_20261016.md#40-antigravity-与-opencode-并行开发) 为当前并行写权和逐片接入权威；38.6—38.10 的独立运行/兼容门和第 39 节 HTML 拆分目标继续有效。配对任务：[Antigravity HTML 拆分](ACP_HTML_Decomposition_Antigravity_20261016.md)。本文只展开前端工作，不授权迁移 Services／CCCP，不构成另一套总计划。
+上位方案：[完整架构调整方案 v1.12 第 40 节](../../../ACP_Architecture_Adjustment_Plan_20261016.md#40-antigravity-与-opencode-并行开发) 为当前并行写权和逐片接入权威；38.6—38.10 的独立运行/兼容门和第 39 节 HTML 拆分目标继续有效。配对任务：[Antigravity HTML 拆分](ACP_HTML_Decomposition_Antigravity_20261016.md)。本文只展开前端工作，不授权迁移 Services／CCCP，不构成另一套总计划。
 
 ## 1. 交付目标
 
@@ -249,7 +249,7 @@ HTML、脚本、CSS 与启动装配组成一个前端交付资源集，记录引
 
 先读 AGENTS.md、tests/AGENTS.md，
 docs/ACP_Architecture_Adjustment_Plan_20261016.md 第 38.6—38.10、40 节，及
-docs/reference/next-change/ACP_Frontend_Architecture_OpenCode_20261016.md。
+docs/archive/2026-10-31/history/ACP_Frontend_Architecture_OpenCode_20261016.md。
 第 40 节是 v1.12 并行写权与逐片接入的权威，覆盖此前默认先 H 后 AR 的安排。
 
 Antigravity 独写主 HTML/CSS、旧页面 JS、workbench/compat/features/views、

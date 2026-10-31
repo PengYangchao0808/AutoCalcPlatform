@@ -8,7 +8,7 @@
 |---|---|---|
 | FE-01 | 删除 `molecule-view.js` 第二份逐字重复的 `submitDeleteProjectModal()`（保留 :554 首份） | `js/workbench/features/molecule-view.js` |
 | FE-02 | 删除 `compat/api.js` 被覆盖的 KB 制 `formatBytes()`（保留生效的 KiB 制，:253） | `js/workbench/compat/api.js` |
-| FE-03 | 孤儿生成器归档至迁移证据区 + 横幅与归档说明；交接文档两处更新 | `tests/baseline/refactor-evidence/{generate_energy_renderer.js,frontend-generator-archive.md}`；`docs/reference/next-change/ACP_Frontend_Integration_Handoff_OpenCode_20261016.md` |
+| FE-03 | 孤儿生成器归档至迁移证据区 + 横幅与归档说明；交接文档两处更新 | `tests/baseline/refactor-evidence/{generate_energy_renderer.js,frontend-generator-archive.md}`；`docs/archive/2026-10-31/history/ACP_Frontend_Integration_Handoff_OpenCode_20261016.md` |
 | FE-04 第一片 | 删除启动即移除的旧 S2 静态弹窗：HTML 288 行（1532→1244）、bootstrap 2 处调用、scan-s2.js 死链 39 符号（1240→338 行，`createViewer` 3→0）、features.css 两段 83 行（现用 pes/scan 面板块保留）；8 处测试改等效守护 + 新增 `test_no_standalone_s2scan_modal`、`test_s2scan_geometry_helpers_live_anchors` | `ACP_Workbench_v2.html`、`js/workbench/{bootstrap.js,features/scan-s2.js}`、`css/workbench/features.css`、两测试文件 |
 | FE-06 | `batchRoleStaticDefaults()` 收拢为共享工厂（每调用新对象），wizard/job_editor 双副本删除、job_editor IIFE 遮蔽死分支消除；HTML 于 job_editor 之前加载契约脚本；4 处测试 pin 等效更新（H3 13→14 脚本等） | `js/workbench/contracts/batch_role_defaults.js`（新）、`wizard.js`、`js/job_editor.js`、HTML、两测试文件 |
 | FE-07 | ① transport 错误契约 additive：`err.status`/`err.body` + `opts.fetchImpl` 注入 + `timeoutMs: 0` 显式禁用；② 来源选择器 `_apiV2/_apiV1` 迁移为 transport 纯委托（`_apiV1` 补 status/body）；③ `candidateApi()` 迁移（保持无超时、legacy message 逐 case 适配、204/非 JSON 2xx→`{}` 兜底） | `js/client/transport.js`、`js/structure_source_picker.js`、`js/workbench/features/wizard.js`、`js/module_tests/{transport,wizard_candidate_api,structure_source_picker}.test.js`（+11 node 用例） |

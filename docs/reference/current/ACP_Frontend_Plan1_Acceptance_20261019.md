@@ -2,7 +2,7 @@
 
 - 生成：并行计划一路 A（Frontend 收口）todo T34（`.omo/plans/acp-parallel-plan-1-frontend.md`，Closes GAP-6/GAP-7）。
 - 执行日期：**2026-10-19**（计划帧记日 2026-10-18）；branch `feat/frontend-plan1-closure`，冻结基线 `f410ac9d`，发布修订 `899c7c0f`，本文件提交 = commit Y（见 §2 末行）。
-- 上游输入：T6 基线地图（`docs/reference/current/ACP_Frontend_Baseline_Map_20261018.md`，接管表权威副本）、T29–T33 证据、Plan_1（`docs/reference/next-change/ACP_Parallel_Plan_1_Frontend_20261018.md`）、评审（`docs/reference/next-change/ACP_Parallel_Plans_Review_20261018.md` A5/A7/X3、P1-2/P1-4）。
+- 上游输入：T6 基线地图（`docs/reference/current/ACP_Frontend_Baseline_Map_20261018.md`，接管表权威副本）、T29–T33 证据、Plan_1（`docs/reference/next-change/ACP_Parallel_Plan_1_Frontend_20261018.md`）、评审（`docs/archive/2026-10-31/history/ACP_Parallel_Plans_Review_20261018.md` A5/A7/X3、P1-2/P1-4）。
 - 三态纪律：证据词汇只用 PASS / FAIL / NOT_VERIFIED；范围状态词汇 IN_SCOPE / DEFERRED / NOT_APPLICABLE；延期≠通过；已执行失败只能是 FAIL，缺依赖未执行才是 NOT_VERIFIED，两者不得互替（评审 A5）。
 - **总声明（§9 详述）：前端收口完成 ≠ 整端完成。** 本文件只关闭前端任务面（A00–A03/A05）的交付与接管表；A04/A06 未接入、A05 退出门保持 OPEN、真实科学/远程/生产全部 NOT_VERIFIED、终验波（F1–F4）待执行。
 

@@ -98,7 +98,7 @@ B 要在 P2–P5 各门重新取得用户 go-ahead；C 则写这些阶段已经�
 
 ### Q06：B08 的幂等事务还需要覆盖文件分配和提交启动窗口
 
-位置：[B08/B09](../../../.omo/plans/acp2-parallel-plan-b-runtime.md#L248)、[实际 submit](../../../src/acp/scheduler/manager.py#L902)。
+位置：[B08/B09](../../../.omo/plans/acp2-parallel-plan-b-runtime.md#L248)、[实际 submit](../../../../src/acp/scheduler/manager.py#L902)。
 
 当前 submit 在 `_allocate_work_dir` 后才 `store.create`，随后启动提交线程。把幂等行和 job 行放入一个事务是必要的，但不足以证明重放没有额外目录、预算预留或漏派发任务。`ReservationLedger`/quota 也有自己的连接和事务，不能因为数据库文件相同就假设操作天然原子。
 

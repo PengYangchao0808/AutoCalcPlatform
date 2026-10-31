@@ -1,8 +1,8 @@
 # ACP 主 HTML 拆分方案 — Antigravity
 
-日期：2026-10-16。状态：页面已拆分，首批模块已对接；下文原始盘点保留作追溯，不代表当前仍未实施。实际完成范围见[前端对接验收记录](../current/ACP_Frontend_Integration_20261016.md)。
+日期：2026-10-16。状态：页面已拆分，首批模块已对接；下文原始盘点保留作追溯，不代表当前仍未实施。实际完成范围见[前端对接验收记录](../../../reference/current/ACP_Frontend_Integration_20261016.md)。
 
-上位方案：[完整架构调整方案 v1.12 第 39 节](../../ACP_Architecture_Adjustment_Plan_20261016.md#39-主-html-维护性拆分antigravity-负责)。沿用第 38.6—38.10 节独立运行、兼容和回退规则；[第 40 节](../../ACP_Architecture_Adjustment_Plan_20261016.md#40-antigravity-与-opencode-并行开发) 为并行写权与逐片接入权威。执行者：Antigravity；[OpenCode](ACP_Frontend_Architecture_OpenCode_20261016.md) 同时实现 Client／Visualization／controller。本文件是派发附件，不另建迁移总路线。
+上位方案：[完整架构调整方案 v1.12 第 39 节](../../../ACP_Architecture_Adjustment_Plan_20261016.md#39-主-html-维护性拆分antigravity-负责)。沿用第 38.6—38.10 节独立运行、兼容和回退规则；[第 40 节](../../../ACP_Architecture_Adjustment_Plan_20261016.md#40-antigravity-与-opencode-并行开发) 为并行写权与逐片接入权威。执行者：Antigravity；[OpenCode](ACP_Frontend_Architecture_OpenCode_20261016.md) 同时实现 Client／Visualization／controller。本文件是派发附件，不另建迁移总路线。
 
 ## 1. 目标与边界
 
@@ -169,7 +169,7 @@ H1/H2 是风险较小的搬运检查点，不是全部完成。H3 要把主脚�
 
 先读 AGENTS.md、tests/AGENTS.md，以及
 docs/ACP_Architecture_Adjustment_Plan_20261016.md 第 38.6—38.10、39 节，
-和 docs/reference/next-change/ACP_HTML_Decomposition_Antigravity_20261016.md。
+和 docs/archive/2026-10-31/history/ACP_HTML_Decomposition_Antigravity_20261016.md。
 这是你负责的 HTML/CSS/JS 文件组织任务，不是界面美化或 Client/Visualization 语义重构。
 
 保留当前未提交修改，先冻结实际 F0/S0、页面/请求/依赖/测试基线和文件写权。

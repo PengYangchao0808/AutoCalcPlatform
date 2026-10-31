@@ -1,8 +1,8 @@
 # ACP 新版三层架构设计：前端绘图显示、中段传输与控制、后端计算与数据处理
 
-v1.5 战略增补见[完整方案第 30—35 节](../../ACP_Architecture_Adjustment_Plan_20261016.md#30-产品定位与-aiida-借鉴边界)和[产品战略与差异化](ACP_Product_Strategy_and_Differentiation_20261016.md)：本地完整科研闭环优先，Lab 分 Standalone/Server 配置，Hosted 按需后置；保持独立运行内核，借鉴 AiiDA，引入受控插件、项目迁移与 MCP。新增能力均为待实施目标，v1.4 的设计补全与质量门保留。
+v1.5 战略增补见[完整方案第 30—35 节](../../../ACP_Architecture_Adjustment_Plan_20261016.md#30-产品定位与-aiida-借鉴边界)和[产品战略与差异化](ACP_Product_Strategy_and_Differentiation_20261016.md)：本地完整科研闭环优先，Lab 分 Standalone/Server 配置，Hosted 按需后置；保持独立运行内核，借鉴 AiiDA，引入受控插件、项目迁移与 MCP。新增能力均为待实施目标，v1.4 的设计补全与质量门保留。
 
-实施总入口：[《ACP 完整架构调整方案》](../../ACP_Architecture_Adjustment_Plan_20261016.md)。工作包、阶段依赖、验收与回滚统一按该方案维护；本文保留架构/模块解释，不再形成独立实施顺序。
+实施总入口：[《ACP 完整架构调整方案》](../../../ACP_Architecture_Adjustment_Plan_20261016.md)。工作包、阶段依赖、验收与回滚统一按该方案维护；本文保留架构/模块解释，不再形成独立实施顺序。
 
 日期：2026-10-16。状态：**基于当前代码的合并目标设计，尚未实施迁移**。
 
@@ -33,11 +33,11 @@ v1.5 战略增补见[完整方案第 30—35 节](../../ACP_Architecture_Adjustm
 
 前期依据：
 
-- [产品架构优化方案](../../archive/2026-10-16/history/ACP_Product_Architecture_Optimization_Plan_20261015.md)：保留问题分析。
-- [三模块边界 ADR](../../archive/2026-10-16/history/ACP_Three_Module_Boundaries_ADR_20261015.md)：保留职责边界，以本文补充分布式部署。
-- [内部子层设计](../../archive/2026-10-16/history/ACP_ACR_CCCP_Submodule_Layering_20261015.md)：保留 ACP 四层、ACR 四层加 Ports、CCCP 五层加 C0。
-- [架构评审与执行方案](../../archive/2026-10-16/history/ACP_Architecture_Review_and_Execution_Plan_20261015.md)：保留实施排序、读路径与传输队列配套交付要求；其中性能推算不是本轮实测结果。
-- [三端四模块绘图方案](../../archive/2026-10-16/history/ACP_Three_Ends_Four_Modules_Architecture_20261015.md)：作为历史方案保留；其中后端 ACV、独立 render worker 和 Python 视图包目标由本版前端 ACV 替代。规范化科学处理仍按阶段迁移，不在设计讨论中直接改动 CCCP。
+- [产品架构优化方案](../../2026-10-16/history/ACP_Product_Architecture_Optimization_Plan_20261015.md)：保留问题分析。
+- [三模块边界 ADR](../../2026-10-16/history/ACP_Three_Module_Boundaries_ADR_20261015.md)：保留职责边界，以本文补充分布式部署。
+- [内部子层设计](../../2026-10-16/history/ACP_ACR_CCCP_Submodule_Layering_20261015.md)：保留 ACP 四层、ACR 四层加 Ports、CCCP 五层加 C0。
+- [架构评审与执行方案](../../2026-10-16/history/ACP_Architecture_Review_and_Execution_Plan_20261015.md)：保留实施排序、读路径与传输队列配套交付要求；其中性能推算不是本轮实测结果。
+- [三端四模块绘图方案](../../2026-10-16/history/ACP_Three_Ends_Four_Modules_Architecture_20261015.md)：作为历史方案保留；其中后端 ACV、独立 render worker 和 Python 视图包目标由本版前端 ACV 替代。规范化科学处理仍按阶段迁移，不在设计讨论中直接改动 CCCP。
 - [ACV 前端可行性分析](ACP_ACV_Frontend_Feasibility_20261016.md)：本轮确认其前端库方案，保留自动报告兼容边界。
 
 上述文档的目标结构发生歧义时，以本版合并设计为后续讨论入口；已有运行契约仍以代码、现行规范和对应权威文档为准。开始实际迁移时，须同步修订受影响的旧文档与护栏，而非同时保留冲突规则。

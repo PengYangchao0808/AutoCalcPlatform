@@ -48,7 +48,7 @@
 
 位置：[B08](../../../.omo/plans/acp2-parallel-plan-b-runtime.md#L250)、[B09](../../../.omo/plans/acp2-parallel-plan-b-runtime.md#L260)。优先级：高，在实施 B08 前确定。
 
-新版要求 `create_with_idempotency` 从领取幂等键起持有 `BEGIN IMMEDIATE`，经过资源预留、目录分配直到 job 入库。现有 [ReservationLedger](../../../src/acp_services/runtime/admission.py#L809) 会自行 `_connect()`，预留时自行执行 `BEGIN IMMEDIATE`；[JobStore](../../../src/acp_services/store/store.py#L150) 也独立管理连接。
+新版要求 `create_with_idempotency` 从领取幂等键起持有 `BEGIN IMMEDIATE`，经过资源预留、目录分配直到 job 入库。现有 [ReservationLedger](../../../../src/acp_services/runtime/admission.py#L809) 会自行 `_connect()`，预留时自行执行 `BEGIN IMMEDIATE`；[JobStore](../../../../src/acp_services/store/store.py#L150) 也独立管理连接。
 
 若两者共用一个 SQLite 文件，外层事务等待内层预留返回，而内层写连接等待外层释放锁，最后会超时失败。若用不同数据库，预留可以先提交，但不能再把未提交的幂等插入称为“第一个 durable step”。新增的四类崩溃验收是正确的，不能用一句“同一事务”代替连接与提交点设计。
 

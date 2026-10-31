@@ -12,9 +12,9 @@
 | [A 科学轨](../../../.omo/plans/acp2-plan-a-cccp-science.md) | 801 | `e2655422a8c547facdebc2350b4c63949b3c5084b4f301456510ebd90f6a8530` |
 | [B Runtime 轨](../../../.omo/plans/acp2-parallel-plan-b-runtime.md) | 548 | `c4cf98867dcd55f2659ec80b152afa16582248a25683fcaaf489b93618a7a043` |
 | [C RPH/Workbench 轨](../../../.omo/plans/acp2-plan-c-rph-workbench.md) | 682 | `2fc752cca50b27c9bea82dc3c4b24f53d16654da0ca0ef76add08acc5050a575` |
-| [主计划](../../ACP_2.0_Four_Component_Collaboration_Plan_20261020.md) | 292 | `e789936fd65c13752e70edabc4983bb608431f821ce34a45cbfb631f28c71986` |
-| [总索引](ACP_2.0_Parallel_Execution_Index_20261020.md) | 250 | `a5b2702022c34f00cadfc3ae60c24feec5b547e9073be6226639d8873f38f98e` |
-| [服务器验收手册](ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md) | 542 | `e26a0b2a680a7207d54db1a3f5b730af901f0af289b9149583b014cc1466bdf5` |
+| [主计划](../../../ACP_2.0_Four_Component_Collaboration_Plan_20261020.md) | 292 | `e789936fd65c13752e70edabc4983bb608431f821ce34a45cbfb631f28c71986` |
+| [总索引](../../../reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md) | 250 | `a5b2702022c34f00cadfc3ae60c24feec5b547e9073be6226639d8873f38f98e` |
+| [服务器验收手册](../../../reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md) | 542 | `e26a0b2a680a7207d54db1a3f5b730af901f0af289b9149583b014cc1466bdf5` |
 
 三份 `.omo` 计划和总索引均已更新；主计划与手册摘要仍与 R4 一致。工作区有其他开发修改，本轮只新增评审报告，不将当前未提交工作区等同于正式候选。
 
@@ -159,7 +159,7 @@ T-04 在 T-06 创建 Harness 之前执行；T-06 又经 T-05 依赖 T-04。因�
 
 ### R5-05：早期契约与范围的同步不应等到 B25b
 
-**位置**：[B 计划](../../../.omo/plans/acp2-parallel-plan-b-runtime.md)B25b 第 478 行、B26b 第 502 行；[主计划](../../ACP_2.0_Four_Component_Collaboration_Plan_20261020.md)第 168/208 行；[总索引](ACP_2.0_Parallel_Execution_Index_20261020.md)第 44—55 行。
+**位置**：[B 计划](../../../.omo/plans/acp2-parallel-plan-b-runtime.md)B25b 第 478 行、B26b 第 502 行；[主计划](../../../ACP_2.0_Four_Component_Collaboration_Plan_20261020.md)第 168/208 行；[总索引](../../../reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md)第 44—55 行。
 
 总索引已将硬编码 BASE_REV 改成必须由 B00 提供，修订正确。其他 R4 同步事项虽然已有明确 owner，却被放进 P5 的 B25b，包括 phase/readiness、角色环境、P4 顺序、H4/H6 必需行和 CDXML 范围。
 
@@ -173,7 +173,7 @@ A 当前明确说 CDXML 延期若影响主计划承诺需 owner 确认，这一�
 
 ### R5-06：打包计划需要吸收 10 月 22 日的新基线
 
-**位置**：[B 计划](../../../.omo/plans/acp2-parallel-plan-b-runtime.md)GAP-13 第 60 行、B25a 第 468—472 行；[现有打包说明](../../../packaging/README.md)；[本机修复报告](../../../reports/architecture_repair_20261022/REPORT.md)第 14、63—76、85 行。
+**位置**：[B 计划](../../../.omo/plans/acp2-parallel-plan-b-runtime.md)GAP-13 第 60 行、B25a 第 468—472 行；[现有打包说明](../../../../packaging/README.md)；[本机修复报告](../../../reports/architecture_repair_20261022/REPORT.md)第 14、63—76、85 行。
 
 B 仍把角色打包配置和 `scripts/build_release.py` 当成尚不存在的新增任务，并写“关闭 debug G4 OPEN”。当前工作区已经存在这三个角色配置和构建工具；修复报告也记录了本机三角色构建/安装与独立 worker xTB 分项证据。
 

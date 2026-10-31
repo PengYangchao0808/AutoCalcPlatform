@@ -12,9 +12,9 @@
 | [A 科学轨](../../../.omo/plans/acp2-plan-a-cccp-science.md) | 807 | `7473ab3d1756de45b8a3c41e92afe48e201bce891d45d6d247532acd5aefb0cc` |
 | [B Runtime 轨](../../../.omo/plans/acp2-parallel-plan-b-runtime.md) | 548 | `30cc367899a2607799a694e6ddef47cd6909cebc09028a36ba54e43d6b7a567f` |
 | [C RPH/Workbench 轨](../../../.omo/plans/acp2-plan-c-rph-workbench.md) | 682 | `2a7d1dacc92feeaf0779e422d5c1725cebdd0a3e0dce6030b04c1aa81dc991a6` |
-| [主计划](../../ACP_2.0_Four_Component_Collaboration_Plan_20261020.md) | 292 | `e789936fd65c13752e70edabc4983bb608431f821ce34a45cbfb631f28c71986` |
-| [总索引](ACP_2.0_Parallel_Execution_Index_20261020.md) | 250 | `a5b2702022c34f00cadfc3ae60c24feec5b547e9073be6226639d8873f38f98e` |
-| [服务器验收手册](ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md) | 542 | `e26a0b2a680a7207d54db1a3f5b730af901f0af289b9149583b014cc1466bdf5` |
+| [主计划](../../../ACP_2.0_Four_Component_Collaboration_Plan_20261020.md) | 292 | `e789936fd65c13752e70edabc4983bb608431f821ce34a45cbfb631f28c71986` |
+| [总索引](../../../reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md) | 250 | `a5b2702022c34f00cadfc3ae60c24feec5b547e9073be6226639d8873f38f98e` |
+| [服务器验收手册](../../../reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md) | 542 | `e26a0b2a680a7207d54db1a3f5b730af901f0af289b9149583b014cc1466bdf5` |
 
 三份 `.omo` 计划均较 R5 更新；主计划、总索引和手册本轮未改。新版 B00/B03 已明确承担 H1 前的规范性同步，因而本报告区分“同步责任与时间已修正”和“文档已经同步”两种状态，不把未来交付计成已完成。
 

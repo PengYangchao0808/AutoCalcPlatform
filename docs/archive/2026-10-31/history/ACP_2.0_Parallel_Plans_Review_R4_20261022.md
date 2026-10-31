@@ -12,12 +12,12 @@
 
 | 文件 | 行数 | SHA-256 |
 | --- | ---: | --- |
-| [主计划](../../ACP_2.0_Four_Component_Collaboration_Plan_20261020.md) | 292 | `e789936fd65c13752e70edabc4983bb608431f821ce34a45cbfb631f28c71986` |
+| [主计划](../../../ACP_2.0_Four_Component_Collaboration_Plan_20261020.md) | 292 | `e789936fd65c13752e70edabc4983bb608431f821ce34a45cbfb631f28c71986` |
 | [A 科学轨](../../../.omo/plans/acp2-plan-a-cccp-science.md) | 798 | `8dc780f23a8fa46828a6eb27b50261a16451024c65ed16dd5dc7db3a25dd3032` |
 | [B Runtime 轨](../../../.omo/plans/acp2-parallel-plan-b-runtime.md) | 548 | `33a3603e991fbbc4b7684df174f5fba8aa33e0a0a0a7ae1033912b5fe6e41b74` |
 | [C RPH/Workbench 轨](../../../.omo/plans/acp2-plan-c-rph-workbench.md) | 681 | `e6e3737283bc472565696839aa32cf91de43f5b44ae9eb32e3f6caf1ffa18584` |
-| [并行总索引](ACP_2.0_Parallel_Execution_Index_20261020.md) | 248 | `f803e36a597bab129d80431de7d413b029770f139117e5d8a385fd4d2e8e95a8` |
-| [服务器验收手册](ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md) | 542 | `e26a0b2a680a7207d54db1a3f5b730af901f0af289b9149583b014cc1466bdf5` |
+| [并行总索引](../../../reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md) | 248 | `f803e36a597bab129d80431de7d413b029770f139117e5d8a385fd4d2e8e95a8` |
+| [服务器验收手册](../../../reference/next-change/ACP_2.0_MCP_DSH_Server_Acceptance_Runbook_20261020.md) | 542 | `e26a0b2a680a7207d54db1a3f5b730af901f0af289b9149583b014cc1466bdf5` |
 
 与 R3 快照相比，三份执行计划均已修改；主计划、总索引、服务器验收手册的摘要完全相同。三轨仍为 51、33、46 个实施 todo，共 130 个；没有因为增加子交付而同步增加顶层 todo。
 
@@ -196,7 +196,7 @@ B03 已选择版本化 MCP 扩展，且明确“不在本计划添加受限 HTTP
 
 ### R4-08：主计划、索引和手册仍保留旧范围及环境约定
 
-**证据位置**：[主计划](../../ACP_2.0_Four_Component_Collaboration_Plan_20261020.md)第 168、208 行；[总索引](ACP_2.0_Parallel_Execution_Index_20261020.md)第 44—53、127—156 行；三份文件与 R3 相同的摘要见第 1 节。
+**证据位置**：[主计划](../../../ACP_2.0_Four_Component_Collaboration_Plan_20261020.md)第 168、208 行；[总索引](../../../reference/next-change/ACP_2.0_Parallel_Execution_Index_20261020.md)第 44—53、127—156 行；三份文件与 R3 相同的摘要见第 1 节。
 
 A/C 对 CDXML 的延期合理地消除了“无解析生产者却承诺可用”的问题，但主计划仍将 `ChemDraw/CDXML → ReactionSpec` 写成科研主链入口。当前没有同步说明这是远期目标还是本期 H4 的必选项。不能仅凭分轨文档中的 DEFERRED，宣称已经满足主计划整条链。
 
