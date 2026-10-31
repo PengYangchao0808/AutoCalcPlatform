@@ -1132,6 +1132,68 @@
           }
         },
         "description": "Bounded read-only task listing in the permission scope (U08)."
+      },
+      "acp_get_pes_review": {
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "enum": [
+              1
+            ],
+            "default": 1
+          },
+          "job_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "additionalProperties": false
+      },
+      "acp_publish_pes_review": {
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "enum": [
+              1
+            ],
+            "default": 1
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "authorization_id": {
+            "type": "string"
+          },
+          "source_binding": {
+            "type": "object"
+          },
+          "idempotency_key": {
+            "type": "string"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "authorization_id",
+          "candidates"
+        ],
+        "additionalProperties": false
       }
     },
     "constraints": {
