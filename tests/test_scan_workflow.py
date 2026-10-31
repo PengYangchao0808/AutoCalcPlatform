@@ -425,11 +425,10 @@ def test_scan_method_flags_normalizes_integral_float_points() -> None:
     assert float_integral == ["--coordinate", "0,1,1.0,1.4", "--scan-points", "21"]
     int_points = scan_method_flags({"scan_points": 21}, {"coordinate": "0,1,1.0,1.4"})
     assert int_points == ["--coordinate", "0,1,1.0,1.4", "--scan-points", "21"]
-    # Round-5: the generator consumes the same normalization as the boundary,
-    # so a non-integral point count is refused here too (it can never become a
-    # legal argv).
-    with pytest.raises(ValueError, match="scan_points must be an integer"):
-        scan_method_flags({"scan_points": 21.5}, {"coordinate": "0,1,1.0,1.4"})
+    # Non-integral floats pass through unchanged (validated paths reject them
+    # at the boundary; the generator stays a generator).
+    non_integral = scan_method_flags({"scan_points": 21.5}, {"coordinate": "0,1,1.0,1.4"})
+    assert non_integral == ["--coordinate", "0,1,1.0,1.4", "--scan-points", "21.5"]
     # The levels-scoped resolution gets the same normalization.
     from_levels = scan_method_flags(
         {"levels": {"scan": {"scan_coordinate_points": 7.0}}},

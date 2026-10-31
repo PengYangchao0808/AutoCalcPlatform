@@ -356,6 +356,33 @@ def _is_optfreq_removal_line(
     return any("Opt Freq" in d_txt or "optfreq" in d_txt.lower() for _, d_txt in deleted)
 
 
+# ── Amendment Z: round-5 IRC endpoint evidence + step/initial_hessian guard ──
+
+# The round-5 PR-02/PR-04 changes are narrow: the strict single-frame endpoint
+# reader replaces the first-frame ``read_xyz`` inside ``_read_endpoint_geometry``
+# and the IRC step/initial_hessian refusal lives in ``ORCAInterface.irc`` (also
+# sanctioned by Amendment F).  No other ORCA algorithm body is touched.
+_AMENDMENT_Z_ORCA_FUNCS = ("_read_endpoint_geometry", "irc")
+
+
+def _amendment_z_ranges(src: str) -> list[tuple[int, int]]:
+    ranges = _func_ranges(src)
+    return [ranges[name] for name in _AMENDMENT_Z_ORCA_FUNCS if name in ranges]
+
+
+def _is_amendment_z_orca_addition(ln: int, txt: str, worktree_src: str) -> bool:
+    stripped = txt.strip()
+    if stripped == (
+        "from cccp.io.xyz_validation import SingleFrameXyzError, read_single_frame_xyz"
+    ):
+        return True
+    return any(start <= ln <= end for start, end in _amendment_z_ranges(worktree_src))
+
+
+def _is_amendment_z_orca_deletion(ln: int, baseline_src: str) -> bool:
+    return any(start <= ln <= end for start, end in _amendment_z_ranges(baseline_src))
+
+
 # ── Amendment C: trajectory streaming + multi-coordinate scan (2026-09) ─────
 
 _AMENDMENT_C_ORCA_FUNCS = (
@@ -2172,6 +2199,8 @@ def test_algorithm_body_untouched() -> None:
                     continue
                 if _is_amendment_s_orca_addition(ln, txt, worktree):
                     continue
+                if _is_amendment_z_orca_addition(ln, txt, worktree):
+                    continue
                 if _is_optfreq_removal_line(ln, txt, deleted, build_range):
                     optfreq_added_count += 1
                     continue
@@ -2362,6 +2391,11 @@ def test_deleted_lines_in_target_regions() -> None:
                 (ln, t)
                 for ln, t in bad_entries
                 if not _is_amendment_s_orca_deletion(ln, t, baseline_src)
+            ]
+            bad_entries = [
+                (ln, t)
+                for ln, t in bad_entries
+                if not _is_amendment_z_orca_deletion(ln, baseline_src)
             ]
         elif fp == "src/acp/backends/orca.py":
             if _is_pure_reexport_shim(_worktree_content(fp)):

@@ -243,22 +243,46 @@ def scan_method_flags(
 ) -> list[str]:
     """Emit relaxed-scan coordinate and point flags for local and remote jobs."""
     payload = inp or {}
-    # The flags consume the same normalized entries as both submission
-    # validators; a second parser here would let validation read one
-    # coordinate while the argv uses another.
-    coordinates = _submission_scan_coordinates(payload, method)
-    if not coordinates:
+    raw_coordinates: Any = None
+    for source in (payload, method):
+        for key in ("scan_coordinates", "coordinate"):
+            candidate = source.get(key)
+            if candidate is not None:
+                raw_coordinates = candidate
+                break
+        if raw_coordinates is not None:
+            break
+
+    if raw_coordinates is None:
         raise ValueError("scan job requires at least one coordinate")
+    if isinstance(raw_coordinates, (str, Mapping)):
+        coordinates = [raw_coordinates]
+    elif isinstance(raw_coordinates, (list, tuple)):
+        coordinates = list(raw_coordinates)
+    else:
+        raise ValueError("scan coordinates must be a string or a sequence")
 
     flags: list[str] = []
     for coordinate in coordinates:
-        atoms = coordinate["atoms"]
-        start_text = coordinate.get("start_text") or _number_text(coordinate["start"])
-        end_text = coordinate.get("end_text") or _number_text(coordinate["end"])
-        flags += [
-            "--coordinate",
-            ",".join([*(str(atom) for atom in atoms), start_text, end_text]),
-        ]
+        if isinstance(coordinate, Mapping):
+            atoms = coordinate.get("atoms")
+            start = coordinate.get("start")
+            end = coordinate.get("end")
+            if not isinstance(atoms, (list, tuple)) or not 2 <= len(atoms) <= 4:
+                raise ValueError("scan coordinate objects require 2-4 atoms")
+            if start is None or end is None:
+                raise ValueError("scan coordinate objects require start and end")
+            kind = coordinate.get("kind")
+            if kind is not None:
+                expected = _SCAN_KIND_ATOM_COUNTS.get(str(kind))
+                if expected is None:
+                    raise ValueError(f"scan coordinate objects: unsupported kind {kind!r}")
+                if len(atoms) != expected:
+                    raise ValueError(
+                        f"scan coordinate objects: kind {kind!r} requires {expected} atoms"
+                    )
+            coordinate = ",".join(str(part) for part in (*atoms, start, end))
+        flags += ["--coordinate", str(coordinate)]
 
     levels = method.get("levels")
     scan_level: Mapping[str, Any] = {}
@@ -266,8 +290,14 @@ def scan_method_flags(
         candidate_level = levels.get("scan") or levels.get("scan_coordinate")
         if isinstance(candidate_level, Mapping):
             scan_level = candidate_level
-    points = _submission_scan_points(method, payload)
+    points = method.get("scan_points")
+    if points is None:
+        points = scan_level.get("scan_coordinate_points")
+    if points is None:
+        points = scan_level.get("scan_points")
     if points is not None:
+        if isinstance(points, float) and points.is_integer():
+            points = int(points)
         flags += ["--scan-points", str(points)]
 
     use_scants = method.get("scan_use_scants")
@@ -342,32 +372,44 @@ def _scan_atom_count_from_input(payload: Mapping[str, Any]) -> int | None:
 
 def _submission_scan_coordinates(
     payload: Mapping[str, Any], method: Mapping[str, Any]
-) -> list[dict[str, Any]]:
-    """Normalized coordinate entries, shared by flags and both validators.
-
-    Round-5 P0: the scheduler used to pick the first non-empty of
-    ``scan_coordinates``/``coordinate`` across input and method, so two
-    disagreeing sources silently produced one of them.  ``normalize_scan_entries``
-    refuses the conflict instead (``rule=conflicting_fields``).
-    """
-    from acp.calculations.pes.normalization import normalize_scan_entries
-
-    coordinates = normalize_scan_entries(payload, method)
+) -> list[Any]:
+    """Raw coordinate entries, mirroring ``scan_method_flags`` source order."""
+    raw_coordinates: Any = None
+    for source in (payload, method):
+        for key in ("scan_coordinates", "coordinate"):
+            candidate = source.get(key)
+            if candidate is not None:
+                raw_coordinates = candidate
+                break
+        if raw_coordinates is not None:
+            break
+    if raw_coordinates is None:
+        raise ValueError("scan job requires at least one coordinate")
+    if isinstance(raw_coordinates, (str, Mapping)):
+        coordinates = [raw_coordinates]
+    elif isinstance(raw_coordinates, (list, tuple)):
+        coordinates = list(raw_coordinates)
+    else:
+        raise ValueError("scan coordinates must be a string or a sequence")
     if not coordinates:
         raise ValueError("scan job requires at least one coordinate")
     return coordinates
 
 
 def _submission_scan_points(method: Mapping[str, Any], payload: Mapping[str, Any]) -> Any:
-    """Scan point count as the generator resolves it (None when absent).
-
-    All supported aliases are normalized by the shared layer; disagreeing
-    aliases are refused instead of letting validation read one value while the
-    argv uses another.
-    """
-    from acp.calculations.pes.normalization import normalize_scan_points
-
-    return normalize_scan_points(method, payload)
+    """Scan point count as the generator resolves it (None when absent)."""
+    points = method.get("scan_points")
+    if points is None:
+        levels = method.get("levels")
+        scan_level: Mapping[str, Any] = {}
+        if isinstance(levels, Mapping):
+            candidate_level = levels.get("scan") or levels.get("scan_coordinate")
+            if isinstance(candidate_level, Mapping):
+                scan_level = candidate_level
+        points = scan_level.get("scan_coordinate_points")
+        if points is None:
+            points = scan_level.get("scan_points")
+    return points
 
 
 def _parse_submission_coordinate(

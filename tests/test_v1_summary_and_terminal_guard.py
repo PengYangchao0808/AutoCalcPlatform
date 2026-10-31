@@ -132,6 +132,10 @@ def test_job_record_round_trips_full_live_status_metrics() -> None:
                 "detail": "Active scan frame",
             },
         ],
+        # round-5 PR-09: the observation metadata round-trips too
+        "observed_at": None,
+        "source": None,
+        "unknown_reason": None,
     }
     model = V1JobRecordModel(
         id="live-status-round-trip",

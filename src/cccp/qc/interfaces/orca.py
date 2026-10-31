@@ -2043,12 +2043,6 @@ class ORCAInterface(QCInterfaceBase):
             QCResult with optimization results
         """
         output_dir = Path(output_dir) if output_dir else Path.cwd()
-        for unsupported in ("step", "initial_hessian"):
-            if unsupported in kwargs:
-                raise ValueError(
-                    f"ORCA IRC does not support the legacy '{unsupported}' control "
-                    "(no validated mapping); remove it before running"
-                )
         ensure_dir(output_dir)
 
         input_file = output_dir / f"{output_name}.inp"
@@ -2153,12 +2147,6 @@ class ORCAInterface(QCInterfaceBase):
     ) -> QCResult:
         """Perform an ORCA optimization with a ``%geom Constraints`` block."""
         output_dir = Path(output_dir) if output_dir else Path.cwd()
-        for unsupported in ("step", "initial_hessian"):
-            if unsupported in kwargs:
-                raise ValueError(
-                    f"ORCA IRC does not support the legacy '{unsupported}' control "
-                    "(no validated mapping); remove it before running"
-                )
         ensure_dir(output_dir)
 
         input_file = output_dir / f"{output_name}.inp"
@@ -2789,12 +2777,6 @@ class ORCAInterface(QCInterfaceBase):
             QCResult with single-point energy
         """
         output_dir = Path(output_dir) if output_dir else Path.cwd()
-        for unsupported in ("step", "initial_hessian"):
-            if unsupported in kwargs:
-                raise ValueError(
-                    f"ORCA IRC does not support the legacy '{unsupported}' control "
-                    "(no validated mapping); remove it before running"
-                )
         ensure_dir(output_dir)
 
         input_file = output_dir / f"{output_name}.inp"
@@ -2904,12 +2886,6 @@ class ORCAInterface(QCInterfaceBase):
             QCResult with frequency results
         """
         output_dir = Path(output_dir) if output_dir else Path.cwd()
-        for unsupported in ("step", "initial_hessian"):
-            if unsupported in kwargs:
-                raise ValueError(
-                    f"ORCA IRC does not support the legacy '{unsupported}' control "
-                    "(no validated mapping); remove it before running"
-                )
         ensure_dir(output_dir)
 
         input_file = output_dir / f"{output_name}.inp"
@@ -3046,12 +3022,6 @@ class ORCAInterface(QCInterfaceBase):
             )
 
         output_dir = Path(output_dir) if output_dir else Path.cwd()
-        for unsupported in ("step", "initial_hessian"):
-            if unsupported in kwargs:
-                raise ValueError(
-                    f"ORCA IRC does not support the legacy '{unsupported}' control "
-                    "(no validated mapping); remove it before running"
-                )
         ensure_dir(output_dir)
 
         input_file = output_dir / f"{output_name}.inp"
@@ -3229,12 +3199,6 @@ class ORCAInterface(QCInterfaceBase):
             parsed shielding dict (0-based atom index → descriptor).
         """
         output_dir = Path(output_dir) if output_dir else Path.cwd()
-        for unsupported in ("step", "initial_hessian"):
-            if unsupported in kwargs:
-                raise ValueError(
-                    f"ORCA IRC does not support the legacy '{unsupported}' control "
-                    "(no validated mapping); remove it before running"
-                )
         ensure_dir(output_dir)
 
         input_file = output_dir / f"{output_name}.inp"
@@ -3338,12 +3302,6 @@ class ORCAInterface(QCInterfaceBase):
             imaginary frequencies.
         """
         output_dir = Path(output_dir) if output_dir else Path.cwd()
-        for unsupported in ("step", "initial_hessian"):
-            if unsupported in kwargs:
-                raise ValueError(
-                    f"ORCA IRC does not support the legacy '{unsupported}' control "
-                    "(no validated mapping); remove it before running"
-                )
         ensure_dir(output_dir)
 
         input_file = output_dir / f"{output_name}.inp"
