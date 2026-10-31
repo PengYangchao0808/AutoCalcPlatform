@@ -30,7 +30,7 @@
 | [ACP_Frontend_Target_Workbench_Plan_20261030.md](ACP_Frontend_Target_Workbench_Plan_20261030.md) | 目标形态方案（对齐样板图；Ketcher / DSH 面板） | 现行 |
 | [ACP_Frontend_UI01_Shell_Design_20261030.md](ACP_Frontend_UI01_Shell_Design_20261030.md) | UI-01 Shell 设计规格（`frontend/next/index.html`） | 在役；被 4 处前端代码引用 |
 | [ACP_Frontend_UI00_Module_Recipe_Contract_Draft_20261030.md](ACP_Frontend_UI00_Module_Recipe_Contract_Draft_20261030.md) | 模块/工作区配方契约草案（`schemaVersion: 0-draft`） | 在役（draft） |
-| [RPH_Agent_Three_Phase_Roadmap_20261027.md](RPH_Agent_Three_Phase_Roadmap_20261027.md) | RPH Agent 三阶段开发大纲 | 现行 |
+| [RPH_Agent_Three_Phase_Roadmap_20261027.md](RPH_Agent_Three_Phase_Roadmap_20261027.md) | RPH Agent 三阶段开发**初稿**（10-27，源码观察 HEAD `484764f6`，正文含本机绝对路径） | **已被取代**；现行版本是 [`docs/RPH_Agent_Three_Phase_Roadmap_20261027(1).md`](<../../RPH_Agent_Three_Phase_Roadmap_20261027(1).md>)（10-29 核查 + 10-30 补充）。初稿留待下一归档批次移出 |
 | [ACP_Frontend_UI00_DSH_Capability_Baseline_20261030.md](ACP_Frontend_UI00_DSH_Capability_Baseline_20261030.md) | UI-00 基线：DSH 能力核验与旧入口事实清单 | 记录 |
 | [ACP_Frontend_UI01_UI02_UI03A_Closure_20261030.md](ACP_Frontend_UI01_UI02_UI03A_Closure_20261030.md) | UI-00 → UI-03A 收口 | 记录；`frontend/js/modules/task-config/model.js` 引用 |
 | [ACP_Frontend_UI03_UI04_UI05_Closure_20261030.md](ACP_Frontend_UI03_UI04_UI05_Closure_20261030.md) | UI-03 / UI-04 / UI-05 收口 | 记录 |

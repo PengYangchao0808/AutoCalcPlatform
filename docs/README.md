@@ -39,10 +39,12 @@
 | [`reference/next-change/acp2-contracts/`](reference/next-change/acp2-contracts/manifest.json) | **机器契约包**：schema、manifest、摘要与验收样本 | **禁止手改**（按摘要校验，改动会使契约门失败） |
 | [`archive/<YYYY-MM-DD>/`](archive/) | **冻结归档**：已退出当前实施入口的批次，按批次记录迁移表 | **禁止改写正文**；仅可追加批注 |
 
-`docs/` 根下只保留两份跨批次总纲：
+`docs/` 根下只保留下列跨批次文件（其余文档一律进 `current/`、`next-change/` 或 `archive/`）：
 
 - [ACP_Architecture_Adjustment_Plan_20261016.md](ACP_Architecture_Adjustment_Plan_20261016.md)——2026-10 架构调整总方案（含 §45 Services 实施记录；被 `tests/test_services_doc_sync.py` 引用，**路径不可变**）。
 - [ACP_2.0_Four_Component_Collaboration_Plan_20261020.md](ACP_2.0_Four_Component_Collaboration_Plan_20261020.md)——ACP 2.0 四组合协作总纲。
+- [RPH_Agent_Three_Phase_Roadmap_20261027(1).md](<RPH_Agent_Three_Phase_Roadmap_20261027(1).md>)——RPH Agent 三阶段路线（初稿 10-27，现状核查 10-29，产品讨论补充 10-30）。
+  **文件名里的 `(1)` 不要改**：`reports/acp2_function_audit_20261028/evidence/baseline.json`、`rph/README.md` 等 10 处引用它，其中包含审计证据快照；改名会破坏证据可比性。该文件的旧 10-27 初稿仍在 `reference/next-change/`，见下节说明。
 
 ## 3. 文档头部约定
 

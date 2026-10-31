@@ -11,7 +11,6 @@
 | 文档 | 内容 | 状态 |
 |---|---|---|
 | [ACP_RPH_Status_20261028.md](ACP_RPH_Status_20261028.md) | ACP / RPH 当前实现、验证范围与剩余缺口（审查基线 `fd2087c7`） | 状态说明；与 `reports/acp2_function_audit_20261028/REPORT.md` 配套读，**不得**据此提升放行状态 |
-| [ACP_Execution_Integrity_Rebaseline_Notes.md](ACP_Execution_Integrity_Rebaseline_Notes.md) | 执行完整性四不变量的重基线说明 | 说明（不变量正文在根 `AGENTS.md`） |
 
 ## 架构、任务与执行契约
 
