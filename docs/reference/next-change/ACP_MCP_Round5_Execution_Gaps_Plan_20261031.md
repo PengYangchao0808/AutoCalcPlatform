@@ -1,5 +1,9 @@
 # ACP MCP 第 5 轮：执行层"最后一公里"缺口修复计划
 
+> **状态：已被取代。** 本文件是第 5 轮问题的初版草案；external 评审后由 astra 撰写的
+> 可执行计划 `ACP_MCP_Round5_Execution_Plan_20261031.md`（9 个 PR、逐 PR 改动清单与验收）
+> 作为唯一执行依据。本文保留为问题分析与评级记录。
+
 日期：2026-10-31。状态：**计划（已经 external 评审 astra，只读核实基线 main `eb04ba87`）**。
 来源：真实测试 agent 的 8 组使用吐槽 + 本机源码核实 + astra consult 评审（全文：`reports/acp2_mcp_guidance_20261030/astra_round5_review.md`）。
 上一轮计划：`ACP_MCP_Discovery_Bounded_Plan_20261030.md`（A/B/C 已合并上线）。
