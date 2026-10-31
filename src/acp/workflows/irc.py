@@ -189,6 +189,14 @@ def run_irc_workflow(
         "step": step,
         "endpoints": endpoint_paths,
         "endpoint_count": calculation.metadata.get("endpoint_count", 0),
+        # round-5 PR-04: per-direction evidence survives failures too
+        "filtered_endpoint_count": calculation.metadata.get("filtered_endpoint_count", 0),
+        "direction_diagnostics": calculation.metadata.get("direction_diagnostics") or {},
+        "last_observed_geometries": (
+            calculation.metadata.get("last_observed_geometries") or {}
+        ),
+        "converged": calculation.converged,
+        "complete": calculation.complete,
         "errors": list(calculation.errors),
         "ts_source": dict(source_provenance or {}),
     }
