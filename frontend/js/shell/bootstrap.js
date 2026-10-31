@@ -46,9 +46,11 @@ ACPShell.bootstrap = (function () {
     if (C.events) C.events.init({ baseUrl: API_BASE });
     if (C.taskView) C.taskView.init({ v1: api, v2: apiV2 });
     if (C.research) C.research.init({ v2: apiV2 });
+    if (C.researchCommands) C.researchCommands.init({ v1: api, v2: apiV2 });
     if (C.eventInvalidation) C.eventInvalidation.init({ v1: api, v2: apiV2 });
     if (C.jobDetail) C.jobDetail.init({ v1: api, v1Remote: apiRemote, onLegacyPin: function () {} });
     if (C.jobCommands) C.jobCommands.init({ v1: api, v2: apiV2 });
+    if (C.frameCandidates) C.frameCandidates.init({ v1: api });
     if (C.science) C.science.init({ v1: api, v2: apiV2 });
     if (C.wizardEndpoints) {
       // wizardEndpoints takes { v1, direct, baseUrl } — direct = full-URL
@@ -75,16 +77,23 @@ ACPShell.bootstrap = (function () {
     if (!fatal) return;
     if (main) main.hidden = true;
     fatal.hidden = false;
-    fatal.setAttribute("role", "alert");
+    // A-63: the fatal layer is a labelled alert dialog and takes focus, so a
+    // keyboard user lands on the recovery action instead of a silent page.
+    fatal.setAttribute("role", "alertdialog");
+    fatal.setAttribute("aria-labelledby", "acp-shell-fatal-title");
+    fatal.setAttribute("aria-describedby", "acp-shell-fatal-msg");
+    fatal.setAttribute("data-acp-dialog", "fatal");
     var existing = fatal.querySelector(".acp-shell-fatal-card");
     if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
     var card = document.createElement("div");
     card.setAttribute("class", "acp-shell-fatal-card");
     var title = document.createElement("p");
     title.setAttribute("class", "acp-state-title");
+    title.setAttribute("id", "acp-shell-fatal-title");
     title.textContent = ACPShell.i18n.t("shell.fatal.title");
     var msg = document.createElement("p");
     msg.setAttribute("class", "acp-state-msg mono");
+    msg.setAttribute("id", "acp-shell-fatal-msg");
     msg.textContent = String(message || "unknown error");
     var actions = document.createElement("div");
     actions.setAttribute("class", "acp-state-actions");
@@ -107,6 +116,9 @@ ACPShell.bootstrap = (function () {
     card.appendChild(msg);
     card.appendChild(actions);
     fatal.appendChild(card);
+    if (typeof retry.focus === "function") {
+      try { retry.focus(); } catch (error) { /* focus unavailable in this environment */ }
+    }
   }
 
   function bindLangToggle() {
@@ -141,6 +153,7 @@ ACPShell.bootstrap = (function () {
       registry: ACPShell.registry,
       i18n: ACPShell.i18n
     });
+    if (ACPShell.toolDrawer) ACPShell.toolDrawer.init();
     bindLangToggle();
     if (ACPShell.layoutEditor) ACPShell.layoutEditor.init();
     var recipeId = isDemo() ? "demo" : ACPShell.preferences ? ACPShell.preferences.active() : "research";

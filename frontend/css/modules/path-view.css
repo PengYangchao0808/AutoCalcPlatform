@@ -1,0 +1,366 @@
+/*
+ * ACP Next — path-view panel styles (A-50 · P17 path structure view).
+ * Scope: `.acp-pathview*` only; tokens come from workbench/base.css (:root) and
+ * shell/shell.css (`.acp-shell`). No global selector and no new token.
+ */
+
+.acp-pathview {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: auto;
+  background: var(--bg-base, #0b0f14);
+  color: var(--text-primary, #e5edf5);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ── header ─────────────────────────────────────────────────────────── */
+
+.acp-pathview-head {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid var(--border-default, #24303b);
+}
+
+.acp-pathview-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.acp-pathview-sub {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+}
+
+/* ── body / sections ────────────────────────────────────────────────── */
+
+.acp-pathview-body {
+  display: grid;
+  gap: 16px;
+  padding: 12px 14px 20px;
+}
+
+.acp-pathview-section {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-default, #24303b);
+}
+
+.acp-pathview-section:last-of-type {
+  border-bottom: 0;
+}
+
+.acp-pathview-heading {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary, #9fb0c3);
+  text-transform: uppercase;
+}
+
+.acp-pathview-hint {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+}
+
+/* ── source controls ───────────────────────────────────────────────── */
+
+.acp-pathview-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.acp-pathview-label {
+  display: grid;
+  gap: 4px;
+  min-width: 220px;
+  flex: 1 1 240px;
+  font-size: 11px;
+  color: var(--text-tertiary, #6b7b8a);
+}
+
+.acp-pathview-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #131a23);
+  color: var(--text-primary, #e5edf5);
+  font: inherit;
+  font-size: 12px;
+}
+
+.acp-pathview-input:focus {
+  outline: 1px solid var(--accent, #4ea1ff);
+  outline-offset: 0;
+}
+
+.acp-pathview-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--accent, #4ea1ff);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--accent, #4ea1ff);
+  color: var(--bg-base, #0b0f14);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.acp-pathview-btn:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.acp-pathview-btn.ghost {
+  border-color: var(--border-default, #24303b);
+  background: transparent;
+  color: var(--text-secondary, #9fb0c3);
+}
+
+.acp-pathview-btn.small {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.acp-pathview-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── summary grid ──────────────────────────────────────────────────── */
+
+.acp-pathview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 16px;
+}
+
+.acp-pathview-kv {
+  display: grid;
+  grid-template-columns: minmax(88px, max-content) minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.acp-pathview-k {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.acp-pathview-v {
+  margin: 0;
+  min-width: 0;
+  color: var(--text-primary, #e5edf5);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+/* ── structure / step tables ───────────────────────────────────────── */
+
+.acp-pathview-table {
+  display: grid;
+  gap: 4px;
+}
+
+.acp-pathview-row-item {
+  display: grid;
+  grid-template-columns: 70px minmax(140px, 1.4fr) 46px minmax(96px, 0.9fr) minmax(120px, 1.1fr) 96px;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #131a23);
+}
+
+.acp-pathview-row-item[data-focus="true"] {
+  border-color: var(--accent, #4ea1ff);
+}
+
+.acp-pathview-row-item--step {
+  grid-template-columns: minmax(120px, 1.2fr) minmax(88px, 0.8fr) minmax(88px, 0.8fr)
+    minmax(72px, 0.6fr) minmax(88px, 0.8fr) minmax(72px, 0.6fr);
+}
+
+.acp-pathview-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: var(--bg-muted, #1b2430);
+  color: var(--text-secondary, #9fb0c3);
+}
+
+.acp-pathview-badge--ts {
+  background: color-mix(in srgb, var(--amber, #e8b45a) 22%, transparent);
+  color: var(--amber, #e8b45a);
+}
+
+.acp-pathview-badge--reactant {
+  background: color-mix(in srgb, var(--green, #7ad97a) 22%, transparent);
+  color: var(--green, #7ad97a);
+}
+
+.acp-pathview-badge--product {
+  background: color-mix(in srgb, var(--accent, #4ea1ff) 22%, transparent);
+  color: var(--accent, #4ea1ff);
+}
+
+.acp-pathview-badge--intermediate {
+  background: color-mix(in srgb, #b48cff 22%, transparent);
+  color: #b48cff;
+}
+
+.acp-pathview-structure-label {
+  min-width: 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.acp-pathview-cell {
+  min-width: 0;
+  color: var(--text-secondary, #9fb0c3);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.acp-pathview-cell--source {
+  color: var(--text-tertiary, #6b7b8a);
+}
+
+/* ── provenance / selection / warnings ─────────────────────────────── */
+
+.acp-pathview-provenance {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.acp-pathview-selection {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px dashed var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text-secondary, #9fb0c3);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.acp-pathview-selection[data-acp-selection-state="sent"] {
+  border-color: var(--green, #7ad97a);
+}
+
+.acp-pathview-selection[data-acp-selection-state="unavailable"],
+.acp-pathview-selection[data-acp-selection-state="error"] {
+  border-color: var(--amber, #e8b45a);
+  color: var(--amber, #e8b45a);
+}
+
+.acp-pathview-note {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+}
+
+.acp-pathview-warnings {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.acp-pathview-warning-heading {
+  color: var(--amber, #e8b45a);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.acp-pathview-warning {
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+/* ── empty / overlay ───────────────────────────────────────────────── */
+
+.acp-pathview-empty-box {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px dashed var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+}
+
+.acp-pathview-empty {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+}
+
+.acp-pathview-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: color-mix(in srgb, var(--bg-base, #0b0f14) 82%, transparent);
+  backdrop-filter: blur(1px);
+  text-align: center;
+}
+
+.acp-pathview-overlay[hidden] {
+  display: none;
+}
+
+.acp-pathview-overlay-text {
+  margin: 0;
+  max-width: 520px;
+  color: var(--text-secondary, #9fb0c3);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+/* ── narrow layout (single column, inherited rule) ─────────────────── */
+
+@media (max-width: 720px) {
+  .acp-pathview-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .acp-pathview-row-item,
+  .acp-pathview-row-item--step {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .acp-pathview-row-item .acp-pathview-btn {
+    justify-self: start;
+  }
+}

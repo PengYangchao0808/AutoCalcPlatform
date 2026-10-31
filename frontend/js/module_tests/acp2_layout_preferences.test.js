@@ -36,6 +36,18 @@ module.exports.register = async function (h) {
     const b = setup({ getItem: () => JSON.stringify({ version: 999, workspaces: {} }) });
     assertEq(b.preferences.get("research"), b.preferences.defaults("research"));
   });
+  await test("layout preferences expose registered non-recipe modules as legal choices", function () {
+    const saved = {}, storage = { getItem: k => saved[k], setItem: (k, v) => { saved[k] = v; } };
+    const a = setup(storage);
+    a.registry = { has: (id) => id === "node-status" };
+    const value = a.preferences.defaults("molecular");
+    value.side = "node-status";
+    assert(a.preferences.save("molecular", value).persisted);
+    const recipe = a.recipes.get("molecular");
+    assertEq(recipe.panels.find((p) => p.slot === "side").moduleId, "node-status");
+    assertEq(recipe.panels.find((p) => p.slot === "side").instanceId, "node-status");
+  });
+
   await test("layout preferences re-derive execution defaults for a pre-UI-04 layout", function () {
     const saved = {};
     saved["acp-next-layout-v1"] = JSON.stringify({

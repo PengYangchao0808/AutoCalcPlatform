@@ -1,0 +1,403 @@
+/*
+ * ACP Next — pes-handoff panel styles (A-51 · PES/scan → BatchOptimize hand-off).
+ * Scope: `.acp-handoff*` only; tokens come from workbench/base.css (:root) and
+ * shell/shell.css (`.acp-shell`). No global selector and no new token.
+ */
+
+.acp-handoff {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: auto;
+  background: var(--bg-base, #0b0f14);
+  color: var(--text-primary, #e5edf5);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ── header ─────────────────────────────────────────────────────────── */
+
+.acp-handoff-head {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid var(--border-default, #24303b);
+}
+
+.acp-handoff-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.acp-handoff-sub {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+}
+
+/* ── body / sections ────────────────────────────────────────────────── */
+
+.acp-handoff-body {
+  display: grid;
+  gap: 16px;
+  padding: 12px 14px 20px;
+}
+
+.acp-handoff-section {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-default, #24303b);
+}
+
+.acp-handoff-section:last-of-type {
+  border-bottom: 0;
+}
+
+.acp-handoff-heading {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary, #9fb0c3);
+  text-transform: uppercase;
+}
+
+.acp-handoff-subheading {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary, #9fb0c3);
+}
+
+.acp-handoff-hint,
+.acp-handoff-note {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+/* ── controls ──────────────────────────────────────────────────────── */
+
+.acp-handoff-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.acp-handoff-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px 16px;
+}
+
+.acp-handoff-kv {
+  display: grid;
+  grid-template-columns: minmax(88px, max-content) minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.acp-handoff-k {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.acp-handoff-v {
+  margin: 0;
+  min-width: 0;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.acp-handoff-label {
+  display: grid;
+  gap: 4px;
+  min-width: 200px;
+  font-size: 11px;
+  color: var(--text-tertiary, #6b7b8a);
+}
+
+.acp-handoff-input,
+.acp-handoff-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #131a23);
+  color: var(--text-primary, #e5edf5);
+  font: inherit;
+  font-size: 12px;
+}
+
+.acp-handoff-input:focus,
+.acp-handoff-select:focus {
+  outline: 1px solid var(--accent, #4ea1ff);
+  outline-offset: 0;
+}
+
+.acp-handoff-profile {
+  display: grid;
+  gap: 4px;
+  max-width: 420px;
+}
+
+.acp-handoff-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #131a23);
+  color: var(--text-primary, #e5edf5);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.acp-handoff-btn[data-variant="primary"],
+.acp-handoff-btn.primary {
+  border-color: var(--accent, #4ea1ff);
+  background: var(--accent, #4ea1ff);
+  color: var(--bg-base, #0b0f14);
+}
+
+.acp-handoff-btn.danger {
+  border-color: var(--amber, #e8b45a);
+  background: color-mix(in srgb, var(--amber, #e8b45a) 18%, transparent);
+  color: var(--amber, #e8b45a);
+}
+
+.acp-handoff-btn.ghost {
+  background: transparent;
+  color: var(--text-secondary, #9fb0c3);
+}
+
+.acp-handoff-btn.small {
+  padding: 3px 7px;
+  font-size: 10px;
+}
+
+.acp-handoff-btn:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.acp-handoff-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.acp-handoff-selection,
+.acp-handoff-status {
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+}
+
+/* ── candidate / preview / receipt rows ────────────────────────────── */
+
+.acp-handoff-list {
+  display: grid;
+  gap: 4px;
+}
+
+.acp-handoff-candidate {
+  display: grid;
+  grid-template-columns: 22px 46px minmax(140px, 1.3fr) 44px minmax(120px, 1.1fr)
+    minmax(96px, 0.8fr) minmax(140px, 1.2fr);
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #131a23);
+}
+
+.acp-handoff-check {
+  margin: 0;
+}
+
+.acp-handoff-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--bg-muted, #1b2430);
+  color: var(--text-secondary, #9fb0c3);
+}
+
+.acp-handoff-badge--ts {
+  background: color-mix(in srgb, var(--amber, #e8b45a) 22%, transparent);
+  color: var(--amber, #e8b45a);
+}
+
+.acp-handoff-badge--intermediate {
+  background: color-mix(in srgb, #b48cff 22%, transparent);
+  color: #b48cff;
+}
+
+.acp-handoff-candidate-label {
+  min-width: 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.acp-handoff-cell {
+  min-width: 0;
+  color: var(--text-secondary, #9fb0c3);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.acp-handoff-cell--source {
+  color: var(--text-tertiary, #6b7b8a);
+}
+
+.acp-handoff-config {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px dashed var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+}
+
+.acp-handoff-preview-item {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+}
+
+.acp-handoff-preview-item[data-feasible="true"] {
+  border-color: var(--green, #7ad97a);
+}
+
+.acp-handoff-preview-item[data-feasible="false"] {
+  border-color: var(--red, #ff6b6b);
+}
+
+.acp-handoff-preview-head {
+  margin: 0;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.acp-handoff-error {
+  margin: 0;
+  color: var(--red, #ff6b6b);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.acp-handoff-confirm {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--amber, #e8b45a);
+  border-radius: var(--radius-sm, 6px);
+  background: color-mix(in srgb, var(--amber, #e8b45a) 8%, transparent);
+}
+
+.acp-handoff-receipt {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border: 1px solid var(--green, #7ad97a);
+  border-radius: var(--radius-sm, 6px);
+}
+
+.acp-handoff-receipt-text {
+  margin: 0;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+/* ── empty / warnings / overlay ────────────────────────────────────── */
+
+.acp-handoff-empty-box {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px dashed var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+}
+
+.acp-handoff-empty {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+}
+
+.acp-handoff-warnings {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.acp-handoff-warning {
+  color: var(--amber, #e8b45a);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.acp-handoff-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: color-mix(in srgb, var(--bg-base, #0b0f14) 82%, transparent);
+  backdrop-filter: blur(1px);
+  text-align: center;
+}
+
+.acp-handoff-overlay[hidden] {
+  display: none;
+}
+
+.acp-handoff-overlay-text {
+  margin: 0;
+  max-width: 520px;
+  color: var(--text-secondary, #9fb0c3);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+/* ── narrow layout ─────────────────────────────────────────────────── */
+
+@media (max-width: 720px) {
+  .acp-handoff-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .acp-handoff-candidate {
+    grid-template-columns: 22px 46px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .acp-handoff-receipt {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

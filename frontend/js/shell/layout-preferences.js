@@ -4,6 +4,59 @@ ACPShell.preferences = (function () {
   "use strict";
   var KEY = "acp-next-layout-v1", memory = {}, loaded = false, active = "research";
   var slots = ["main", "side", "bottom"];
+  // Modules that are registered but not in a default recipe are still legal
+  // layout choices (V7 assembly will pin defaults). The Shell registry is the
+  // authority: an absent module never becomes an option.
+  var EXTRA_MODULES = {
+    "node-status": {
+      instanceId: "node-status", moduleId: "node-status",
+      titleKey: "shell.module.node_status", loading: "list"
+    },
+    "approval-card": {
+      instanceId: "approval-card", moduleId: "approval-card",
+      titleKey: "shell.module.approval_card", loading: "card"
+    },
+    "capability-form": {
+      instanceId: "capability-form", moduleId: "capability-form",
+      titleKey: "shell.module.capability_form", loading: "card"
+    },
+    "s2-scan": {
+      instanceId: "s2-scan", moduleId: "s2-scan",
+      titleKey: "shell.module.s2_scan", loading: "card"
+    },
+    "task-wizard": {
+      instanceId: "task-wizard", moduleId: "task-wizard",
+      titleKey: "shell.module.task_wizard", loading: "card"
+    },
+    "nmr-report": {
+      instanceId: "nmr-report", moduleId: "nmr-report",
+      titleKey: "shell.module.nmr_report", loading: "card"
+    },
+    "tsmode-editor": {
+      instanceId: "tsmode-editor", moduleId: "tsmode-editor",
+      titleKey: "shell.module.tsmode_editor", loading: "card"
+    },
+    "mechanism-plan": {
+      instanceId: "mechanism-plan", moduleId: "mechanism-plan",
+      titleKey: "shell.module.mechanism_plan", loading: "card"
+    },
+    "job-edit": {
+      instanceId: "job-edit", moduleId: "job-edit",
+      titleKey: "shell.module.job_edit", loading: "card"
+    },
+    "research-record": {
+      instanceId: "research-record", moduleId: "research-record",
+      titleKey: "shell.module.research_record", loading: "card"
+    },
+    "path-view": {
+      instanceId: "path-view", moduleId: "path-view",
+      titleKey: "shell.module.path_view", loading: "card"
+    },
+    "pes-handoff": {
+      instanceId: "pes-handoff", moduleId: "pes-handoff",
+      titleKey: "shell.module.pes_handoff", loading: "card"
+    }
+  };
   function copy(value) { return JSON.parse(JSON.stringify(value)); }
   function defaults(id) {
     var recipe = ACPShell.recipes.RECIPES[id];
@@ -17,6 +70,12 @@ ACPShell.preferences = (function () {
     Object.keys(ACPShell.recipes.RECIPES).forEach(function (id) {
       ACPShell.recipes.RECIPES[id].panels.forEach(function (p) { if (!result[p.moduleId]) result[p.moduleId] = p; });
     });
+    var registry = window.ACPShell && window.ACPShell.registry;
+    if (registry && typeof registry.has === "function") {
+      Object.keys(EXTRA_MODULES).forEach(function (id) {
+        if (!result[id] && registry.has(id)) result[id] = EXTRA_MODULES[id];
+      });
+    }
     return result;
   }
   function validate(id, input) {

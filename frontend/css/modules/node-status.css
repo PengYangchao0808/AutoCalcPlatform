@@ -1,0 +1,447 @@
+/*
+ * ACP Next — node-status panel styles (A-30 / A-31).
+ * Scope: `.acp-nodes*` only; tokens come from workbench/base.css and
+ * shell/shell.css. The module owns no global selectors.
+ */
+
+.acp-nodes {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 100%;
+  box-sizing: border-box;
+  overflow: auto;
+  background: var(--bg-base, #0b0f14);
+  color: var(--text-primary, #e5edf5);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ── header ─────────────────────────────────────────────────────────── */
+
+.acp-nodes-head {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid var(--border-default, #24303b);
+}
+
+.acp-nodes-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.acp-nodes-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.acp-nodes-sub {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+}
+
+/* ── buttons ────────────────────────────────────────────────────────── */
+
+.acp-nodes-btn {
+  appearance: none;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: 5px;
+  background: var(--bg-elevated, #1a2332);
+  color: var(--text-secondary, #b0bec8);
+  font: inherit;
+  font-size: 11px;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.acp-nodes-btn:hover:not(:disabled) {
+  border-color: var(--accent, #4ea1ff);
+  color: var(--text-primary, #e5edf5);
+}
+
+.acp-nodes-btn:focus-visible {
+  outline: 2px solid var(--accent, #4ea1ff);
+  outline-offset: 1px;
+}
+
+.acp-nodes-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.acp-nodes-refresh[disabled] {
+  opacity: 0.7;
+}
+
+/* ── four-state line ────────────────────────────────────────────────── */
+
+.acp-nodes-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 14px;
+  color: var(--text-secondary, #b0bec8);
+  font-size: 11px;
+}
+
+.acp-nodes-state[hidden] {
+  display: none;
+}
+
+.acp-nodes-state-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ── sections ───────────────────────────────────────────────────────── */
+
+.acp-nodes-section {
+  display: grid;
+  gap: 6px;
+  padding: 10px 14px 14px;
+  border-bottom: 1px solid var(--border-subtle, #1e2832);
+}
+
+.acp-nodes-section:last-child {
+  border-bottom: 0;
+}
+
+.acp-nodes-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.acp-nodes-section-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-tertiary, #6b7b8a);
+}
+
+.acp-nodes-note {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.acp-nodes-note[hidden] {
+  display: none;
+}
+
+.acp-nodes-note[data-tone="bad"] {
+  color: var(--red);
+}
+
+/* ── rows ───────────────────────────────────────────────────────────── */
+
+.acp-nodes-list {
+  display: grid;
+  gap: 6px;
+}
+
+.acp-nodes-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle, #1e2832);
+  border-radius: 6px;
+  background: var(--bg-panel, #111821);
+}
+
+.acp-nodes-software,
+.acp-nodes-backend {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.acp-nodes-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.acp-nodes-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.acp-nodes-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.acp-nodes-host {
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.acp-nodes-mono {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.acp-nodes-muted {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.acp-nodes-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.acp-nodes-meta-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+}
+
+.acp-nodes-meta-label {
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 10px;
+}
+
+.acp-nodes-meta-value {
+  color: var(--text-secondary, #b0bec8);
+  overflow-wrap: anywhere;
+}
+
+/* ── status dot + badges ────────────────────────────────────────────── */
+
+.acp-nodes-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--text-tertiary, #6b7b8a);
+}
+
+.acp-nodes-dot.is-online {
+  background: var(--green);
+}
+
+.acp-nodes-dot.is-degraded {
+  background: var(--amber);
+}
+
+.acp-nodes-dot.is-offline {
+  background: var(--red);
+}
+
+.acp-nodes-badge {
+  padding: 1px 7px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--text-tertiary, #6b7b8a);
+  white-space: nowrap;
+}
+
+.acp-nodes-badge.is-online {
+  border-color: rgba(var(--green-rgb), 0.5);
+  background: rgba(var(--green-rgb), 0.12);
+  color: var(--green);
+}
+
+.acp-nodes-badge.is-degraded {
+  border-color: rgba(var(--amber-rgb), 0.5);
+  background: rgba(var(--amber-rgb), 0.12);
+  color: var(--amber);
+}
+
+.acp-nodes-badge.is-offline {
+  border-color: rgba(var(--red-rgb), 0.55);
+  background: rgba(var(--red-rgb), 0.1);
+  color: var(--red);
+}
+
+.acp-nodes-badge.is-unknown {
+  border-style: dashed;
+}
+
+.acp-nodes-badge.is-remote {
+  border-color: rgba(var(--accent-rgb), 0.45);
+  background: rgba(var(--accent-rgb), 0.1);
+  color: var(--accent);
+}
+
+/* ── node warning / error text ──────────────────────────────────────── */
+
+.acp-nodes-warn,
+.acp-nodes-ok {
+  margin: 0;
+  font-size: 11px;
+}
+
+.acp-nodes-warn {
+  color: var(--amber);
+}
+
+.acp-nodes-ok {
+  color: var(--green);
+}
+
+.acp-nodes-node-error {
+  margin: 0;
+  padding: 4px 8px;
+  border: 1px solid rgba(var(--red-rgb), 0.45);
+  border-radius: 5px;
+  background: rgba(var(--red-rgb), 0.08);
+  color: var(--red);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+/* ── details / preformatted tails ───────────────────────────────────── */
+
+.acp-nodes-details {
+  font-size: 11px;
+}
+
+.acp-nodes-details > summary {
+  cursor: pointer;
+  color: var(--text-tertiary, #6b7b8a);
+}
+
+.acp-nodes-details[hidden] {
+  display: none;
+}
+
+.acp-nodes-pre {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  max-height: 160px;
+  overflow: auto;
+  border: 1px solid var(--border-subtle, #1e2832);
+  border-radius: 5px;
+  background: var(--bg-canvas, #0e1419);
+  color: var(--text-secondary, #b0bec8);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 10.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.acp-nodes-sub-list {
+  display: grid;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.acp-nodes-sub-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.acp-nodes-sub-row[data-candidate-active="true"] {
+  color: var(--text-primary, #e5edf5);
+}
+
+/* ── per-node action status ─────────────────────────────────────────── */
+
+.acp-nodes-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: stretch;
+}
+
+.acp-nodes-node-action {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-secondary, #b0bec8);
+  overflow-wrap: anywhere;
+}
+
+.acp-nodes-node-action[hidden] {
+  display: none;
+}
+
+.acp-nodes-node-action.is-ok {
+  color: var(--green);
+}
+
+.acp-nodes-node-action.is-bad {
+  color: var(--red);
+}
+
+.acp-nodes-node-action.is-info {
+  color: var(--accent);
+}
+
+/* ── capability chips ───────────────────────────────────────────────── */
+
+.acp-nodes-caps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.acp-nodes-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 1px 7px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: 999px;
+  font-size: 10px;
+  color: var(--text-secondary, #b0bec8);
+}
+
+.acp-nodes-chip.is-on {
+  border-color: rgba(var(--green-rgb), 0.4);
+}
+
+.acp-nodes-chip.is-off {
+  border-style: dashed;
+  color: var(--text-tertiary, #6b7b8a);
+}
+
+.acp-nodes-chip-state {
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 9.5px;
+}
+
+/* ── narrow layout ──────────────────────────────────────────────────── */
+
+@media (max-width: 720px) {
+  .acp-nodes-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .acp-nodes-dot {
+    display: none;
+  }
+
+  .acp-nodes-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}

@@ -133,6 +133,119 @@ async function main() {
       }
     });
 
+    await test("Molecular workspace mounts energy-profile in a graceful state", async page => {
+      await page.goto(url, { waitUntil: "domcontentloaded" });
+      await waitForShell(page);
+      await page.keyboard.press("Alt+2");
+      await page.waitForFunction(() => document.getElementById("acp-shell").getAttribute("data-workspace") === "molecular");
+      const panel = page.locator("#acp-ws-molecular .acp-panel[data-module-id='energy-profile']");
+      await panel.waitFor({ state: "attached", timeout: 15000 });
+      await page.waitForFunction(() => {
+        const root = document.querySelector("#acp-ws-molecular .acp-mod-energy");
+        return root && ["empty", "ready", "error"].indexOf(root.getAttribute("data-acp-module-state")) >= 0;
+      }, null, { timeout: 15000 });
+      const probe = await page.evaluate(() => {
+        const root = document.querySelector("#acp-ws-molecular .acp-mod-energy");
+        return {
+          state: root ? root.getAttribute("data-acp-module-state") : null,
+          fixture: root ? root.getAttribute("data-acp-fixture") : null,
+          hasChart: !!(root && root.querySelector("[data-energy-chart]")),
+          hasRetry: !!(root && root.querySelector(".acp-mod-energy-retry:not([hidden])")),
+          hasEmpty: !!(root && root.querySelector(".acp-mod-energy-overlay:not([hidden])")),
+        };
+      });
+      assert(["empty", "ready", "error"].indexOf(probe.state) >= 0,
+        "energy-profile state must be a known graceful state, saw " + probe.state);
+      assert.notEqual(probe.fixture, "true", "fixture/demo mode must not be active on a live service");
+      if (probe.state === "ready") assert.equal(probe.hasChart, true, "ready state must contain the canonical chart");
+      if (probe.state === "error") assert.equal(probe.hasRetry, true, "error state must expose retry");
+      if (probe.state === "empty") assert.equal(probe.hasEmpty, true, "empty state must expose its overlay");
+    });
+
+    await test("fixture mode drives the viewer offline with a visible fixture badge", async page => {
+      await page.goto(url + "?view=fixture", { waitUntil: "domcontentloaded" });
+      await waitForShell(page);
+      await page.keyboard.press("Alt+2");
+      await page.waitForFunction(() => document.getElementById("acp-shell").getAttribute("data-workspace") === "molecular");
+      const panel = page.locator("#acp-ws-molecular .acp-panel[data-module-id='molecule-viewer']");
+      await panel.waitFor({ state: "attached", timeout: 15000 });
+      await page.waitForFunction(() => {
+        const root = document.querySelector("#acp-ws-molecular .acp-mod-viewer");
+        return root && root.getAttribute("data-acp-fixture") === "true";
+      }, null, { timeout: 15000 });
+      const probe = await page.evaluate(() => {
+        const root = document.querySelector("#acp-ws-molecular .acp-mod-viewer");
+        const badge = root && root.querySelector(".acp-mod-viewer-fixture");
+        return {
+          state: root ? root.getAttribute("data-acp-module-state") : null,
+          fixture: root ? root.getAttribute("data-acp-fixture") : null,
+          badgeVisible: !!(badge && !badge.hidden),
+          badgeText: badge ? (badge.textContent || "").trim() : "",
+        };
+      });
+      assert.equal(probe.fixture, "true", "fixture provenance must be visible on the module root");
+      assert.equal(probe.badgeVisible, true, "fixture badge must not be hidden");
+      assert(/fixture|演示/i.test(probe.badgeText), "fixture badge copy is explicit, saw " + JSON.stringify(probe.badgeText));
+      assert(["ready", "error"].indexOf(probe.state) >= 0,
+        "fixture load must settle in ready/error (headless WebGL may degrade), saw " + probe.state);
+
+      const energy = await page.evaluate(() => {
+        const root = document.querySelector("#acp-ws-molecular .acp-mod-energy");
+        return {
+          state: root ? root.getAttribute("data-acp-module-state") : null,
+          fixture: root ? root.getAttribute("data-acp-fixture") : null,
+          hasChart: !!(root && root.querySelector("[data-energy-chart]")),
+        };
+      });
+      assert.equal(energy.fixture, "true", "fixture provenance is visible on the energy panel");
+      assert.equal(energy.state, "ready", "fixture energy profile reaches ready");
+      assert.equal(energy.hasChart, true, "fixture energy profile uses the canonical SVG");
+    });
+
+    await test("fixture mode: lazy structure catalog renders grouped entries offline", async page => {
+      await page.goto(url + "?view=fixture", { waitUntil: "domcontentloaded" });
+      await waitForShell(page);
+      await page.keyboard.press("Alt+2");
+      await page.waitForFunction(() => document.getElementById("acp-shell").getAttribute("data-workspace") === "molecular");
+      await page.evaluate(() => {
+        ACPShell.context.setFocus({ taskRef: { jobId: "fixture-structure", attempt: 1 } }, "browser-test");
+      });
+      await page.waitForFunction(() => {
+        const button = document.querySelector("#acp-ws-molecular .acp-mod-viewer-catalog-toggle");
+        return button && !button.hidden;
+      }, null, { timeout: 15000 });
+      await page.locator("#acp-ws-molecular .acp-mod-viewer-catalog-toggle").click();
+      await page.waitForFunction(() => {
+        const catalog = document.querySelector("#acp-ws-molecular .acp-mod-viewer-catalog");
+        return catalog && !catalog.hidden &&
+          catalog.querySelectorAll(".acp-mod-viewer-catalog-entry").length === 3;
+      }, null, { timeout: 15000 });
+      const groups = await page.evaluate(() => {
+        const catalog = document.querySelector("#acp-ws-molecular .acp-mod-viewer-catalog");
+        return Array.from(catalog.querySelectorAll(".acp-mod-viewer-catalog-group"))
+          .map(node => (node.textContent || "").trim());
+      });
+      assert.deepEqual(groups, ["正式结果", "输入结构"], "fixture catalog keeps both groups");
+      await page.waitForFunction(() => {
+        const chip = document.querySelector(
+          "#acp-ws-molecular .acp-mod-energy[data-acp-module-state='ready'] [data-energy-candidate-jump='2']");
+        return !!chip;
+      }, null, { timeout: 15000 });
+      await page.locator("#acp-ws-molecular [data-energy-candidate-jump='2']").click();
+      await page.waitForFunction(() => {
+        const entry = document.querySelector(
+          "#acp-ws-molecular .acp-mod-viewer-catalog-entry[data-entry-id='fixture-ts']");
+        return entry && entry.classList.contains("is-selected");
+      }, null, { timeout: 15000 });
+      await page.locator("#acp-ws-molecular .acp-mod-viewer-catalog-entry[data-entry-id='fixture-opt']").click();
+      await page.waitForFunction(() => {
+        const root = document.querySelector("#acp-ws-molecular .acp-mod-viewer");
+        return root && ["ready", "error"].indexOf(root.getAttribute("data-acp-module-state")) >= 0;
+      }, null, { timeout: 15000 });
+      assert.equal(await page.getAttribute("#acp-ws-molecular .acp-mod-viewer", "data-acp-fixture"), "true",
+        "catalog selection stays on the fixture source");
+    });
+
     await test("Execution workspace mounts real task-explorer in a graceful state", async page => {
       await page.goto(url, { waitUntil: "domcontentloaded" });
       await waitForShell(page);

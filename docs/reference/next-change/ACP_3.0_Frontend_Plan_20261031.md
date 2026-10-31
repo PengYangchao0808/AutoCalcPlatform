@@ -158,17 +158,29 @@
   schema: "acp.view.v1",
   viewId: "job:20260823_001_Confsearch:energy",
   family: "energy" | "frames" | "vibration" | "structure" | "overlay"
-        | "spectrum" | "network" | "table" | "artifact" | "evidence",
+        | "spectrum" | "network" | "table" | "artifact" | "evidence" | "catalog",
   source: "live" | "fixture",          // fixture 必须在 UI 上有可见标识（沿用 UI-03A 约定）
   availability: "ready" | "empty" | "denied" | "error",
+  fixture: true | false,                 // 由 source 派生，原生字段不能伪造为 live
   provenance: { jobId?, attempt?, entryId?, digest?, generatedAt? },
   axes?: { x: {label, unit}, y: {label, unit} },
   series?: [{ id, label, points: [{x, y, frameIndex?}] }],
   frames?: [{ index, label, energy?, geometryRef }],
   annotations?: [{ id, label, kind, x, y, payload? }],
+  objects?: { [geometryRef]: { format, text } }, // family payload（当前 structure=XYZ）
+  groups?: [{ id, label, kind }],       // catalog 分组（A-32）
+  entries?: [{ id, groupId, label, role, status, energy?, relativeEnergyKcal?,
+               badges?, geometryRef?, frameIndex?, sourceKind? }], // catalog 条目
+  overlay?: { ok, entryA, entryB, mapping, rmsd, maxDisplacement, nMapped, reason }, // A-35
+  modes?: [{ modeIndex, frequencyCm1, imaginary, irIntensity, vectors }], // A-42
+  vibration?: { available, reason, atomCount, imaginaryCount, source, geometryProductId },
+  thermo?: { totalGibbsKcalMol, totalGibbsHartree, rank1Weight, tSMixKcalPerMol,
+             populationCoverage, temperatureK }, // A-44；无值不补 0
   warnings?: [{ code, message }]        // 缺字段/降级的显式说明，不静默
 }
 ```
+
+> `objects` 是 A-00 落地的 family payload 容器：结构帧只存 `geometryRef`，几何文本按引用放在 `objects`，避免把 `structure_viewer_v1` 原始字段泄漏到面板；后续帧/振动族可继续复用该容器。`catalog` / `groups` / `entries` 是 A-32 对结构目录的扩展；条目只携带目录事实，几何仍按 `geometryRef` 懒加载。`overlay` 是 A-35 的服务器映射/Kabsch 结果；`ok:false` 时 viewer 仍可显示叠合，但 `data-acp-overlay-measurements="blocked"`，测量入口必须禁用。`modes` / `vibration` 是 A-42 的振动数据；`available:false` 只显示 reason，绝不伪造 mode 行。`thermo` 是 A-44 的系综热化学摘要；缺失时只显示“无热化学数据”，禁止 zero-fill。
 
 **四条硬规则**
 
@@ -224,16 +236,66 @@ window.ACPView.source.create({ mode, baseUrl, fetch })
 - `view_model.js`（normalize + 四态 + warnings）、`view_source.js`（三模式，`v3` 抛未实现）、fixture 目录与 2 个样本族。
 - 把 `molecule-viewer` 改为经适配层取数（行为不变，回归全绿）。
 - **DoD**：`node frontend/js/module_tests/run_all.js acp2_module_viewer` 通过；新增 `acp2_view_model.test.js`（normalize/四态/warnings/fixture 标记）≥10 项；`?view=fixture` 能驱动 viewer。
+- **实施状态（2026-10-31）**：✅ **A-00 已落地** —— `view_model.js`（normalize / 四态 / warnings / 共享 XYZ 与 structureRef 解析）、`view_source.js`（live 的 structure+energy、fixture、v3 显式 `E_NOT_IMPLEMENTED`）、`fixtures/views/{structure,energy}.js`、viewer 经适配层取数并显示 fixture 徽标 / warnings；`acp2_view_model.test.js` **24 项**（含 A-32 catalog 契约）+ viewer fixture / catalog 用例，`node frontend/js/module_tests/run_all.js` 为 **1115 passed / 0 failed**。另在 `acp2_next_entry.browser.js` 增加 `?view=fixture` 浏览器场景；本机未执行浏览器套件，**未记为 PASS**。live 其余视图族、v3 与 A-01+ 未实现，仍按后续任务处理。
 
 ### V1 结构与能量（20 人日）
 - `energy-profile`：8 类视图共用；候选带/标注、双轴、能量单位、空数据与"不可用"视图（`unsupported`）。
 - `molecule-viewer` 扩：MOL/SDF 解析（纯函数自写，参照 README §3 白名单法）、多帧选择、overlay + RMSD。
 - **DoD**：能量曲线在 `scan / optimization / conformer / irc / neb` 五个真实任务上与原经典页**逐点一致**（同 job 对比截图或数值断言）；`acp2_energy_profile.test.js` ≥12 项；无任务时 `empty` 态不报错。
+- **实施状态（2026-10-31）**：
+  - ✅ **A-32 / A-33 已落地**：`molecule-viewer` 增加懒加载结构目录（`GET …/structure-viewer` → `catalog` 族 groups/entries），点击条目走 `GET …/entries/{entryId}/geometry`（`structure-entry` ref），几何仍由唯一 3D 栈渲染；fixture catalog 离线可用。
+  - ✅ **A-38 已落地**：新增 `energy-profile` 模块（`frontend/js/modules/energy-profile/`），经 `acp.view.v1` 的 `energy` 族取数，渲染复用**唯一** `energy_chart_renderer.js`（未写第二套曲线实现）；已挂到 Molecular 工作区 bottom；四态 / fixture 徽标 / warnings / retry 已实现。`acp2_energy_profile.test.js` **24 项**（含 A-39/A-40/A-41）。真实 `scan / optimization / conformer / irc / neb` 五类任务的逐点对比**尚未执行**（需可运行实例），因此 A-38 只算代码与契约层完成。
+  - ✅ **A-39 已落地（代码/契约层）**：候选带与 TS/INT 标注复用 renderer 的 `energyCandidateBandLayout`（未复制布局算法）；曲线点 / 候选带 chip / 标注点击会选中 frame 并调用 `commands.openStructure` 定位结构；`molecule-viewer` 目录按 `geometryRef` 高亮匹配条目；拖拽被显式锁定（只读）。真实浏览器点击联动**尚未执行**。
+  - ✅ **A-40 已落地（代码/契约层）**：新增 `ACPClient.frameCandidates`（list/save/remove）和 energy 面板候选条：TS/INT + 保存按钮，POST `/frame-candidate` 带 `expected_revision` / `frame_id` / `item_id`；409 会刷新候选列表并要求重试；fixture 与无客户端时保存显式禁用。没有任务提交入口。`acp2_frame_candidates_client.test.js` **4 项**。
+  - ✅ **A-41 已落地（代码/契约层）**：候选抽屉与候选清单同源（`graphState.frameCandidates`），列出 role / label / frame / candidate_id；点击行选中 frame 并联动详情；详情展示 candidate id、role、frame、name、saved_at、structure_path；重命名复用幂等 save 路径；删除走 `DELETE …/frame-candidate/{id}?expected_revision=`，409 刷新并要求重试；空列表显示“暂无候选”。
+  - `acp2_view_model.test.js` 共 **27 项**（含 6 项 catalog/entry 契约 + 1 项 overlay + 1 项 vibration + 1 项 thermo 契约）；`acp2_module_viewer.test.js` 新增 **4 项** catalog 场景；`acp2_next_entry.browser.js` 新增 catalog + energy-profile 浏览器场景（**本机未执行，未记为 PASS**）。
+  - **V1 的 A-32/A-33/A-38/A-39/A-40/A-41 已全部落地（代码/契约层）；V1 DoD 的真实五类任务逐点对比与浏览器联动仍未执行，因此 V1 尚不能宣称整体验收通过。**
 
 ### V2 帧、振动与结构编辑（26 人日）
 - `frames-player`：步进/播放/暂停/速度/循环、`generation` 守卫（切任务丢弃迟到结果）、`suspend/resume` 释放渲染。
 - `vibration-panel`：模式列表、箭头播放/停止、位移幅度、热化学摘要（有则显示，无则 warned）。
 - **DoD**：IRC 正/反向播放与经典页帧序一致；连续切换 3 个任务无 viewer 泄漏（沿用 `scene_lifecycle_matrix.test.js` 的计数断言）；`acp2_frames_player.test.js`、`acp2_vibration_panel.test.js` 各 ≥8 项。
+- **实施状态（2026-10-31）**：✅ **A-34 已落地（代码/契约层）** —— `molecule-viewer` 增加 5 个 legacy 样式预设（ball-stick / stick / spacefill / wireframe / publication）、相机 `getView/setView` 恢复、按 entry 的 `localStorage` 视图状态（style + 8 元 view，24 条上限）与“重置视角”；鼠标/滚轮操作后持久化，dispose/suspend 兜底。`acp2_module_viewer.test.js` 新增 1 项 remount 恢复用例。
+- ✅ **A-35 已落地（代码/契约层）**：目录条目提供“叠加”；`ACPView.source.loadOverlay` 请求 `GET …/structure-viewer/overlay` + B 几何；第二 model 用 legacy cyan 样式渲染，显示 RMSD / mapping 来源 / mapped 原子数；`max_displacement` 在 A 上高亮；`ok:false`（unproven）时 `data-acp-overlay-measurements="blocked"` 并显示“测量已禁用”。`acp2_module_viewer.test.js` 新增 overlay ready/blocked/clear 用例。
+- ✅ **A-36 已落地（代码/契约层）**：viewer 增加 IRC 正向/反向/停止；目录按需加载，帧取自 `irc_forward` / `irc_reverse` 分组并按 `frameIndex` 排序；复用 catalog `structure-entry` 几何取帧；播放时保留相机、每帧替换 model，250ms/帧（测试可注入 `ircFrameMs`）；任务切换 / suspend / dispose / 结构切换都会停止并清 timer。`acp2_module_viewer.test.js` 新增正/反向帧序用例。
+- ✅ **A-37 已落地（代码/契约层）**：viewer 设置 `data-acp-viewer-narrow` / `data-acp-viewer-layout="single"`（≤720px）；目录变底部 sheet，样式/IRC/叠合条变全宽单列；CSS 同时提供 `@media (max-width:720px)` fallback；窗口 resize 与模块 `resize()` 同步。`acp2_module_viewer.test.js` 新增窄/宽切换与 CSS 契约用例。
+- ✅ **A-42 已落地（代码/契约层）**：viewer 增加“振动”抽屉；`ACPView.source.loadVibrations` 接 `GET …/entries/{entryId}/vibrations`；`modes` 保留 `mode_index` / `frequency_cm1` / `imaginary` / `ir_intensity` / `vectors`；列表按“虚频最负优先、再升序”排序，默认选最负虚频；`available:false` 只显示 reason，不渲染假行。`acp2_view_model.test.js` +1、`acp2_module_viewer.test.js` +2。
+- ✅ **A-43 已落地（代码/契约层）**：`computeArrowEndpoints` / `computeDisplacedCoords` 逐原子生成箭头与位移；箭头经 scene `addArrow` 绘制、`removeAllShapes` 清理；播放用 `requestAnimationFrame` 重建位移 model，保留相机，`停止` 恢复 equilibrium 并重画箭头；stop / task switch / entry switch / dispose 都 cancel rAF，测试断言无迟到帧。
+- ✅ **A-44 已落地（代码/契约层）**：catalog 的 `ensemble_thermo` 经 `thermo` 字段进入 envelope（Gibbs / rank-1 weight / T·S_mix / coverage / temperature）；viewer 振动抽屉底部渲染热化学摘要；缺失时显示“无热化学数据”并写 `data-acp-thermo-state="empty"`，不补 0。
+- ✅ **A-17/A-18/A-19 已落地（代码/契约层）**：task-explorer 增加状态筛选 chip（契约 10 状态 + 服务端 drift 扩展）、状态徽标/计数、PAUSED 视为 active 非终态；pause/unpause/continue 与 rerun/cancel 经注入 `client.jobCommands`，busy/error/生成守卫；成功走既有 `list.refresh()` 单缓存，不建第二缓存。`acp2_module_task_explorer.test.js` 9→20。
+- ✅ **A-30/A-31 已落地（代码/契约层）**：新增 `node-status` 模块（`window.ACPNextModules["node-status"]`），节点列表/status/ping/bootstrap + 软件发现/后端状态；四态、失败文案、bootstrap 600s 预算；未探测的版本/路径显示“未知/未发现”，不猜测。`acp2_node_status.test.js` 15 项。
+- ✅ **A-57/A-58 已落地（代码/契约层）**：新增 `approval-card` 模块；服务端审批卡的预算/plan_digest/science 摘要，approve/reject/revoke 只发 `{expected_revision, reason?}`，不带审批人身份；409/401/403/404 刷新并重新复核，不重放决定；不写执行事实。`acp2_approval_card.test.js` 16 项。
+- ✅ **A-59 已落地（代码/契约层）**：新增 `capability-form` 模块，消费 `acp2.ui.form.v1` 文档与既有 `ui_subset.js` 契约，不建第二套 schema 校验；未知/未绑定字段显式拒绝；preflight stale、submit unconfirmed/error 映射可见；四态/generation/dispose。`acp2_capability_form_module.test.js` 初版 14 项（A-60 后 20 项）。
+- ✅ **A-13/A-14/A-15 已落地（代码/契约层）**：task-config 增加历史/本地/远程结构来源选择、帧列表与越界钳制、canonical `structureRef`（job-file / job-remote-file / inline-xyz / structure-entry）桥接；一次来源一次文本请求，不建第二 viewer。`acp2_module_task_config.test.js` 12→23。
+- ✅ **A-20/A-21 已落地（代码/契约层）**：task-explorer 增加单任务/批量清除的二次确认弹窗（只走 `jobCommands.purge` / `purge_cascade`）、clone/move/rename（rename 带 `expected_name_revision` 与 409 复核）；无 `DELETE`、无批处理伪 op。`acp2_module_task_explorer.test.js` 20→33。
+- ✅ **A-25/A-26 已落地（代码/契约层）**：exec-detail 增加同源阶段条（`stage_index/total/detail/progress`）与增量日志（`/logs` 行 offset、IRC `log-tail` byte offset、断线保留尾部、pause/resume/dispose 清 timer）；新增 README。`acp2_module_exec_detail.test.js` 5→16。
+- ✅ **A-45 已落地（代码/契约层）**：molecule-viewer 增加距离/角度/二面角测量（IUPAC 符号、`-180→180` 归一化）、scene 原子点选、抽屉列表/删除/清空、切换清理；纯函数经 `_internals` 测试。`acp2_module_viewer.test.js` 27→36。**A-46/A-47 未实现。**
+- ✅ **A-60 已落地（代码/契约层）**：capability-form 提交与错误映射（400/401/403/404/409/422/5xx/network），409 刷新 preflight + 清除 approval + 不重放；只有真实 job_id+attempt 才显示成功；busy/dispose/generation 守卫。`acp2_capability_form_module.test.js` 14→20。
+- ✅ **A-22/A-23 已落地（代码/契约层）**：task-explorer 增加项目 CRUD（删除前依赖提示；项目名/选择器刷新）与 per-job tag 编辑（走既有 `batchOp add_tags/remove_tags`，标签不写路径）。`acp2_module_task_explorer.test.js` 33→48。
+- ✅ **A-27/A-28 已落地（代码/契约层）**：exec-detail 增加本地/远程只读文件树、懒展开、256 KiB/400 行预览上限与二进制拒绝、artifact manifest/checksum/download；新增 README。`acp2_module_exec_detail.test.js` 16→27。
+- ✅ **A-46 已落地（代码/契约层）**：viewer 测量行支持目标值 + preview/apply/undo/redo/abandon 本地事务；距离只平移第二原子、角度绕顶点旋转第三原子、二面角绕 B→C 旋转第四原子；原始 currentFrame 不被修改，切换/dispose 清空。`acp2_module_viewer.test.js` 36→46。
+- ✅ **A-48 已落地（代码/契约层）**：新增 `s2-scan` 模块；复用既有 `/preflight` + `/jobs`（不调用已退役的 `/s2/structure-preview`）；`scan_use_scants` 默认 false，显式勾选才 true；范围/点数/原子/电荷多重度校验；默认 body 已对后端契约做 throwaway 验证。`acp2_s2_scan.test.js` 20 项。
+- ✅ **A-01/A-02 已落地（代码/契约层）**：新增 `task-wizard` 模块；目录驱动 workflow 步骤、方法/基组投影、SMILES/粘贴/文件输入与 resolve/embed，解析失败不前进。`acp2_task_wizard.test.js` 23 项。
+- ✅ **A-24 已落地（代码/契约层）**：task-explorer 增加回收站视图（`archived=only`）、恢复、永久删除二次确认、批量选择；走既有 batch-ops/purge cascade。**找到平台无 task-level trash 端点**：回收站只能覆盖 archived 软删除，purge 不可恢复（BE-GAP）。`acp2_module_task_explorer.test.js` 48→58。
+- ✅ **A-47 已落地（代码/契约层）**：molecule-viewer 已提交 A-46 编辑可保存为结构资产（名称/确认/busy/回执）；失败保留编辑事务；无提交路径不写后端。`acp2_module_viewer.test.js` 46→51。
+- ✅ **A-61 已落地（代码/契约层）**：新模块 zh/en 键补齐（252→**1783 keys/language**，A-61 新增 1520 键）+ 静态覆盖测试（16 个模块、1717 个模块自有键，zh+en 均存在、占位符一致、无重复、动态前缀显式展开、`applyI18n` 缺键行为不变）。`acp2_i18n_new_modules.test.js` 5 项。
+- ✅ **A-03/A-04/A-05 已落地（代码/契约层）**：task-wizard 增加电荷/自旋电子奇偶校验、资源与内存语法投影、方法校验与 `/preflight`（plan_digest/fingerprint/字段错误），编辑后 preflight 失效；未提交。`acp2_task_wizard.test.js` 23→36。
+- ✅ **A-16 已落地（代码/契约层）**：新增 `tsmode-editor`，按原生 mode index 选择、频率来源切换、预览校验与空/错状态；未伪造模式。`acp2_tsmode_editor.test.js` 21 项。
+- ✅ **A-52/A-53 已落地（代码/契约层）**：新增 `nmr-report`，DP4/DP5 服务端值、assignment 高亮、候选切换 generation 守卫、无谱图 empty；不本地计算。`acp2_nmr_report.test.js` 30 项。
+- ✅ **A-06/A-08 已落地（代码/契约层）**：task-wizard 提交冻结 A-05 计划（`POST /jobs` + `Idempotency-Key`，按 plan identity 复用/新计划换 key）、回执只认真实 job_id/attempt、只经 `commands.openTask` 导航；A-08 提交检查 dialog 列出 blockers/warnings，blocked 零请求。`acp2_task_wizard.test.js` 36→44。
+- ✅ **A-10/A-11/A-12 已落地（代码/契约层）**：新增 `job-edit`，edit-draft 回填、preview 变更/digest、execute attempt+1 + coverage 提示；四态/409/422/busy/dispose。`acp2_job_edit.test.js` 28 项。
+- ✅ **A-54/A-55/A-56 已落地（代码/契约层）**：新增 `research-record`，手工提问/记录、claim states、read-only evidence projection；不本地裁决/不建第二证据模型。`acp2_research_record.test.js` 29 项。
+- ⚠️ **A-49 按 ADR-009 退役收口（不是实现）**：`mechanism-plan` 模块、四态、29 项测试已落地，读取/展示/计划装配请求均可用；但后端 `POST /mechanism-studies/{id}/mechanism/plan` 硬编码 410，代码库无 plan 实现，无法产生真实 `plan_confirmed`。ADR-009 将 **plan 确认动作**标记为退役，保留只读面；未伪造成功。若后端恢复，撤销 ADR 并补真实确认验收。
+- **Track A 63/63 收口 = 62 个实现 + 1 个 ADR 退役**（A-49 不计“已实现”）。
+- ✅ **A-07 已落地（代码/契约层）**：task-wizard 的 workflow 面板改为服务端 catalog/schema 驱动，覆盖 15 个 active workflow（无硬编码/退役 id）；缺失 schema 显式阻断；A-05 preflight/A-06 submit 可达。`acp2_task_wizard.test.js` 44→55。
+- ✅ **A-50 已落地（代码/契约层）**：新增 `path-view`，读取路径驻点结构、按 server frame/step 展示并发出 canonical `structureRef` 给唯一 viewer；不复制测量/编辑。`acp2_path_view.test.js` 25 项。
+- ✅ **A-51 已落地（代码/契约层）**：新增 `pes-handoff`，PES/scan 候选按服务端 rank/energy 展示，显式确认后走既有 BatchOptimize 提交，回执/部分失败不伪成功。`acp2_pes_handoff.test.js` 35 项。
+- ✅ **A-62 已落地（代码/契约层）**：主题 token 单点化（base/shell 通道变量），16 个模块 CSS 去掉裸色值；≤720px 单列规则覆盖 shell 与模块；新增静态审计（token 解析、宽度、720 规则、硬编码颜色）。`acp2_theme_narrow.test.js` 6 项。
+- ✅ **A-09 已落地（代码/契约层）**：task-wizard 草稿自动保存（debounce）、恢复横幅/丢弃、409 revision 冲突、提交成功后删除草稿；删除失败非致命并可见。`acp2_task_wizard.test.js` 55→66。
+- ✅ **A-63 已落地（代码/契约层）**：Shell skip link、tabs `role=tab`/`aria-selected`、panel `region`/focus metadata、layout-editor dialog Tab trap + focus restore、Escape 退出、focus order tabs→panel titles→content；新增 `acp2_shell_a11y.test.js` 10 项。
+- **Track A 63/63 收口（62 实现 + A-49 ADR 退役）**（A-00…A-09、A-10…A-28、A-30/31、A-32…A-48、A-50…A-56、A-57…A-63）。V7 代码/装配/parity 已完成；真实浏览器后端/Playwright/科学闭环仍为 NOT_VERIFIED。
+- **并行批次专项测试**：task-explorer **58**、node-status **15**、approval-card **16**、capability-form **20**、exec-detail **27**、molecule-viewer **51**、task-config **23**、s2-scan **20**、task-wizard **66**、nmr-report **30**、tsmode-editor **21**、job-edit **29**、mechanism-plan **29**、research-record **31**、path-view **25**、pes-handoff **37**、theme-narrow **6**、shell-a11y **10**、tool-drawer **3**、tool-drawer-dom **3**、boot-registration **3**、parity **3**、i18n **5**、layout-preferences **5**；全量 `run_all.js` **1115 passed / 0 failed**。
+- **并行批次未验收面**：以上只完成模块注册 + 四态 + Node vm 专项测试；真实服务/权限、Playwright 浏览器套件、i18n 全键（EN）仍未执行。2026-10-31 用 headless Edge + CDP 做了 **1280px 静态 boot**、**skip-link/live-region/tab Arrow/布局 dialog Escape**、**真实工具抽屉点击**（12 tabs，task-wizard/job-edit 挂载；无后端 404 属预期）和 **390×844 移动 emulation**：`innerWidth=390`、`scrollWidth=390`、`data-acp-ready=true`，单列无横向溢出，0 uncaught；证据在 `reports/acp2_implementation/next_boot_20261031/`。Playwright 完整交互套件与真实后端数据仍 NOT_VERIFIED。A-48 的后端契约验证是 throwaway 进程，不等于真实 ORCA/HTTP 运行。A-61 的 **1783 keys/language** 已覆盖 16 个新模块（1717 模块自有键）；仅浏览器 EN 文案未逐项走查。`research-record` 的提交还依赖 shell 注入 `researchBinding`（当前 `layout-manager.hostApi()` 无 per-module deps 通道），缺失时只能走高级 JSON 绑定或拒绝提交；`mechanism-plan` 的 plan 确认后端返回 410。A-62 的静态审计未纳入后加的 `path-view.css`/`pes-handoff.css`，它们的颜色/720 规则需在 V7 前补审。
 
 ### V3 谱图（5 人日）
 - `nmr-panel`：先 `live(file)`（读现有文件端点）+ fixture；归属高亮、峰表、多候选切换。
@@ -268,7 +330,7 @@ window.ACPView.source.create({ mode, baseUrl, fetch })
 - 三工作区装配：Molecular = `molecule-viewer` + `energy-profile` + `vibration-panel` + 编辑；Execution = 队列/配置/详情/文件；Research = agent + 证据 + 审批 + 网络。
 - 统一选中态经 Shell 命令（`openStructure/openTask`），**不跨 iframe/DOM**。
 - i18n 全键（zh/en）、主题变量、键盘可达、窄屏抽屉、性能（1k 帧虚拟化、渲染降采样）。
-- **parity 门**：跑 §7 的 `acp2_parity.test.js`；**24 个功能面全部 ✅ 之前，经典页不得进入退役候选**。
+- **parity 门**：跑 §7 的 `acp2_parity.test.js`；**24 个功能面全部 ✅ 之前，经典页不得进入退役候选**。当前逐面证据见 [ACP_V7_Parity_Status_20261031.md](ACP_V7_Parity_Status_20261031.md)（**24/24 = 23 implemented + 1 ADR-009 retired**）。
 - **DoD**：三工作区切换 ≤1 帧白屏；`run_all.js` 全量 + 浏览器套件全绿；`pytest tests/test_acp_api_next_entry.py` 全绿；无新增 `$3Dmol` 直呼、无新增 `fetch` 越层（grep 门）。
 
 ### V8 宿主接入（**推迟**，等 §6 的 BE-GAP + §8-C4 决策）

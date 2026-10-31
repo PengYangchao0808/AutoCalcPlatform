@@ -1,0 +1,608 @@
+/*
+ * ACP Next — nmr-report (A-52 / A-53) styles.
+ *
+ * Scope: ONLY the nmr-report host DOM (`.acp-nmr*`).  Colors, radii and control
+ * heights come from css/workbench/base.css + css/shell/shell.css tokens; there
+ * is no hardcoded palette and no collision with the classic `nmr.*` page CSS
+ * (frontend/css/workbench/features.css) or shell/legacy class names.
+ */
+
+.acp-nmr {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: var(--bg-base, #0b0f14);
+  color: var(--text-primary, #e5edf5);
+  font-size: 12px;
+}
+
+/* Hidden must win over the display rules below (state toggling uses the
+ * `hidden` property, not class swaps). */
+.acp-nmr [hidden] {
+  display: none !important;
+}
+
+/* ── header ─────────────────────────────────────────────────────────── */
+
+.acp-nmr-head {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid var(--border-default, #24303b);
+}
+
+.acp-nmr-head-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.acp-nmr-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.acp-nmr-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-default, #24303b);
+  color: var(--text-secondary, #b0bec8);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.acp-nmr-badge--muted {
+  border-style: dashed;
+  color: var(--text-tertiary, #6b7b8a);
+}
+
+.acp-nmr-badge--warn {
+  border-color: rgba(var(--amber-rgb), 0.5);
+  background: rgba(var(--amber-rgb), 0.12);
+  color: var(--amber, #f2b84b);
+}
+
+.acp-nmr-refresh {
+  margin-left: auto;
+}
+
+.acp-nmr-sub {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+/* ── body / states ──────────────────────────────────────────────────── */
+
+.acp-nmr-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  padding: 10px 14px 14px;
+  overflow: hidden;
+}
+
+.acp-nmr-state {
+  margin: 0;
+  color: var(--text-secondary, #b0bec8);
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.acp-nmr[data-acp-module-state="error"] .acp-nmr-state {
+  color: var(--red);
+}
+
+.acp-nmr-empty-hint {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.acp-nmr-retry {
+  justify-self: start;
+  align-self: flex-start;
+}
+
+.acp-nmr-note {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.acp-nmr-note--warn {
+  color: var(--amber, #f2b84b);
+}
+
+.acp-nmr-note--notice {
+  padding: 6px 8px;
+  border: 1px solid rgba(var(--amber-rgb), 0.35);
+  border-radius: var(--radius-sm, 6px);
+  background: rgba(var(--amber-rgb), 0.08);
+  color: var(--text-secondary, #b0bec8);
+}
+
+/* ── ready / summary ────────────────────────────────────────────────── */
+
+.acp-nmr-ready {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.acp-nmr-summary {
+  display: grid;
+  gap: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle, #1e2832);
+}
+
+.acp-nmr-section-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary, #b0bec8);
+}
+
+.acp-nmr-meta {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  gap: 3px 12px;
+  margin: 0;
+  min-width: 0;
+}
+
+.acp-nmr-meta dt {
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+}
+
+.acp-nmr-meta dd {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.acp-nmr-mono {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 10.5px;
+}
+
+.acp-nmr-warnings {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 6px 8px 6px 22px;
+  border: 1px solid rgba(var(--amber-rgb), 0.3);
+  border-radius: var(--radius-sm, 6px);
+  background: rgba(var(--amber-rgb), 0.06);
+  color: var(--text-secondary, #b0bec8);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.acp-nmr-warning--more {
+  list-style: none;
+  color: var(--text-tertiary, #6b7b8a);
+}
+
+/* ── candidate selector ─────────────────────────────────────────────── */
+
+.acp-nmr-candidates {
+  display: flex;
+  gap: 8px;
+  min-height: 0;
+  padding-bottom: 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.acp-nmr-candidate {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  flex: 0 0 auto;
+  min-width: 132px;
+  padding: 7px 9px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #1a2332);
+  color: var(--text-primary, #e5edf5);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.acp-nmr-candidate:hover {
+  border-color: var(--accent, #4ea1ff);
+}
+
+.acp-nmr-candidate[data-selected="true"] {
+  border-color: var(--accent, #4ea1ff);
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.45);
+}
+
+.acp-nmr-candidate[data-winner="true"] {
+  border-color: rgba(var(--green-rgb), 0.55);
+}
+
+.acp-nmr-candidate-label {
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.acp-nmr-candidate-metric {
+  display: grid;
+  grid-template-columns: 26px 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 10px;
+}
+
+.acp-nmr-candidate-metric-label {
+  letter-spacing: 0.03em;
+}
+
+.acp-nmr-candidate-metric-value {
+  color: var(--text-primary, #e5edf5);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 10.5px;
+  text-align: right;
+}
+
+.acp-nmr-candidate-status {
+  justify-self: start;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border-default, #24303b);
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 9.5px;
+}
+
+.acp-nmr-candidate-status[data-status="valid"] {
+  border-color: rgba(var(--green-rgb), 0.45);
+  color: var(--green, #38c172);
+}
+
+.acp-nmr-candidate-status[data-status="invalid"],
+.acp-nmr-candidate-status[data-status="evidence_insufficient"] {
+  border-color: rgba(var(--red-rgb), 0.45);
+  color: var(--red);
+}
+
+.acp-nmr-winner-tag {
+  position: absolute;
+  top: -7px;
+  right: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(var(--green-rgb), 0.16);
+  color: var(--green, #38c172);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+
+.acp-nmr-bar {
+  position: relative;
+  display: block;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border-subtle, #1e2832);
+  overflow: hidden;
+}
+
+.acp-nmr-bar-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: var(--accent, #4ea1ff);
+}
+
+.acp-nmr-bar--dp5 .acp-nmr-bar-fill {
+  background: var(--green, #38c172);
+}
+
+.acp-nmr-bar-fill[data-empty="true"] {
+  background: transparent;
+}
+
+/* ── detail / tabs ──────────────────────────────────────────────────── */
+
+.acp-nmr-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.acp-nmr-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.acp-nmr-detail-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.acp-nmr-detail-meta {
+  color: var(--text-tertiary, #6b7b8a);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+.acp-nmr-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-subtle, #1e2832);
+}
+
+.acp-nmr-tab {
+  padding: 5px 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-tertiary, #6b7b8a);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.acp-nmr-tab:hover {
+  color: var(--text-primary, #e5edf5);
+}
+
+.acp-nmr-tab[data-active="true"] {
+  border-bottom-color: var(--accent, #4ea1ff);
+  color: var(--text-primary, #e5edf5);
+}
+
+.acp-nmr-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+}
+
+.acp-nmr-panel {
+  display: grid;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+/* ── tables ─────────────────────────────────────────────────────────── */
+
+.acp-nmr-table-wrap {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.acp-nmr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10.5px;
+}
+
+.acp-nmr-table th,
+.acp-nmr-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border-subtle, #1e2832);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.acp-nmr-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-base, #0b0f14);
+  color: var(--text-tertiary, #6b7b8a);
+  font-weight: 500;
+}
+
+.acp-nmr-table--compact th,
+.acp-nmr-table--compact td {
+  padding: 3px 5px;
+}
+
+.acp-nmr-num {
+  text-align: right;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.acp-nmr-mono {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.acp-nmr-residual--neg {
+  color: var(--red);
+}
+
+.acp-nmr-residual--pos {
+  color: var(--green, #38c172);
+}
+
+.acp-nmr-row {
+  cursor: pointer;
+}
+
+.acp-nmr-row:hover {
+  background: rgba(var(--accent-rgb), 0.08);
+}
+
+.acp-nmr-row[data-acp-nmr-highlight="active"],
+.acp-nmr-row[data-acp-nmr-highlight="active"]:hover {
+  background: rgba(var(--accent-rgb), 0.2);
+  box-shadow: inset 2px 0 0 var(--accent, #4ea1ff);
+}
+
+.acp-nmr-row[data-acp-nmr-highlight="related"],
+.acp-nmr-row[data-acp-nmr-highlight="related"]:hover {
+  background: rgba(var(--amber-rgb), 0.1);
+}
+
+.acp-nmr-row:focus-visible {
+  outline: 1px solid var(--accent, #4ea1ff);
+  outline-offset: -1px;
+}
+
+.acp-nmr-conflict {
+  color: var(--red);
+}
+
+.acp-nmr-claim-atoms {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  color: var(--text-secondary, #b0bec8);
+}
+
+/* ── highlight bar ──────────────────────────────────────────────────── */
+
+.acp-nmr-highlight-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+}
+
+.acp-nmr-highlight-summary {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 10.5px;
+  overflow-wrap: anywhere;
+}
+
+.acp-nmr-clear {
+  margin-left: auto;
+}
+
+/* ── metrics ────────────────────────────────────────────────────────── */
+
+.acp-nmr-metrics {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.acp-nmr-metric-section {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-subtle, #1e2832);
+}
+
+/* ── structure (read-only) ──────────────────────────────────────────── */
+
+.acp-nmr-structure {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.acp-nmr-structure-summary {
+  margin: 0;
+  color: var(--text-secondary, #b0bec8);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.acp-nmr-atom-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.acp-nmr-atom-chip {
+  padding: 2px 7px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: 999px;
+  background: var(--bg-elevated, #1a2332);
+  color: var(--text-secondary, #b0bec8);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.acp-nmr-atom-chip:hover {
+  border-color: var(--accent, #4ea1ff);
+}
+
+.acp-nmr-atom-chip[data-active="true"] {
+  border-color: var(--accent, #4ea1ff);
+  background: rgba(var(--accent-rgb), 0.2);
+  color: var(--text-primary, #e5edf5);
+}
+
+.acp-nmr-structure-load {
+  justify-self: start;
+}
+
+/* ── narrow screens ─────────────────────────────────────────────────── */
+
+@media (max-width: 720px) {
+  .acp-nmr {
+    font-size: 11.5px;
+  }
+
+  .acp-nmr-head {
+    padding: 10px 10px 8px;
+  }
+
+  .acp-nmr-body {
+    padding: 8px 10px 12px;
+  }
+
+  .acp-nmr-candidates {
+    flex-direction: column;
+    max-height: 176px;
+    overflow-y: auto;
+  }
+
+  .acp-nmr-candidate {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .acp-nmr-meta {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1px;
+  }
+
+  .acp-nmr-meta dd {
+    margin-bottom: 4px;
+  }
+
+  .acp-nmr-table th,
+  .acp-nmr-table td {
+    padding: 3px 4px;
+  }
+}

@@ -1,0 +1,398 @@
+/*
+ * ACP Next — s2-scan panel styles (A-48 · P16 S2 键长扫描).
+ * Scope: `.acp-s2scan*` only; tokens come from workbench/base.css (:root) and
+ * shell/shell.css (`.acp-shell`). This file defines no global selector and no
+ * new token.
+ */
+
+.acp-s2scan {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: auto;
+  background: var(--bg-base, #0b0f14);
+  color: var(--text-primary, #e5edf5);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ── header ─────────────────────────────────────────────────────────── */
+
+.acp-s2scan-head {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid var(--border-default, #24303b);
+}
+
+.acp-s2scan-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.acp-s2scan-sub {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+}
+
+/* ── body / sections ────────────────────────────────────────────────── */
+
+.acp-s2scan-body {
+  display: grid;
+  gap: 16px;
+  padding: 12px 14px 20px;
+}
+
+.acp-s2scan-section {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-default, #24303b);
+}
+
+.acp-s2scan-section:last-of-type {
+  border-bottom: 0;
+}
+
+.acp-s2scan-heading {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary, #9fb0c3);
+  text-transform: uppercase;
+}
+
+.acp-s2scan-subheading {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-tertiary, #6b7b8a);
+}
+
+/* ── source structure ───────────────────────────────────────────────── */
+
+.acp-s2scan-radios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+
+.acp-s2scan-radio,
+.acp-s2scan-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary, #9fb0c3);
+  cursor: pointer;
+}
+
+.acp-s2scan-radio input,
+.acp-s2scan-check input {
+  margin: 0;
+}
+
+.acp-s2scan-panel {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #131a23);
+}
+
+.acp-s2scan-text {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 96px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-base, #0b0f14);
+  color: var(--text-primary, #e5edf5);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.acp-s2scan-text:focus,
+.acp-s2scan-input:focus,
+.acp-s2scan-file:focus {
+  outline: 1px solid var(--accent, #4ea1ff);
+  outline-offset: 0;
+}
+
+.acp-s2scan-file {
+  color: var(--text-secondary, #9fb0c3);
+  font: inherit;
+  font-size: 11px;
+}
+
+.acp-s2scan-mono {
+  margin: 0;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  color: var(--text-secondary, #9fb0c3);
+  word-break: break-all;
+}
+
+/* ── scan fields ────────────────────────────────────────────────────── */
+
+.acp-s2scan-bond {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary, #9fb0c3);
+}
+
+.acp-s2scan-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.acp-s2scan-grid--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.acp-s2scan-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.acp-s2scan-label {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-tertiary, #6b7b8a);
+}
+
+.acp-s2scan-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #131a23);
+  color: var(--text-primary, #e5edf5);
+  font: inherit;
+  font-size: 12px;
+}
+
+.acp-s2scan-scants {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px dashed var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+}
+
+.acp-s2scan[data-acp-scants="on"] .acp-s2scan-scants {
+  border-color: var(--amber, #d9a441);
+}
+
+.acp-s2scan-badge {
+  justify-self: start;
+  padding: 1px 6px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: 999px;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 10px;
+}
+
+.acp-s2scan-badge.is-on {
+  border-color: var(--amber, #d9a441);
+  color: var(--amber, #d9a441);
+}
+
+/* ── review ─────────────────────────────────────────────────────────── */
+
+.acp-s2scan-summary {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #131a23);
+  color: var(--text-secondary, #9fb0c3);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow: auto;
+}
+
+.acp-s2scan-status {
+  margin: 0;
+  min-height: 18px;
+  color: var(--text-secondary, #9fb0c3);
+  font-size: 11px;
+}
+
+.acp-s2scan-errors,
+.acp-s2scan-advisories {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 2px;
+}
+
+.acp-s2scan-errors {
+  color: var(--red, #e55353);
+}
+
+.acp-s2scan-advisories {
+  color: var(--amber, #d9a441);
+}
+
+.acp-s2scan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ── buttons ────────────────────────────────────────────────────────── */
+
+.acp-s2scan-btn {
+  appearance: none;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: 5px;
+  background: var(--bg-elevated, #1a2332);
+  color: var(--text-secondary, #b0bec8);
+  font: inherit;
+  font-size: 11px;
+  padding: 5px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.acp-s2scan-btn:hover:not(:disabled) {
+  border-color: var(--accent, #4ea1ff);
+  color: var(--text-primary, #e5edf5);
+}
+
+.acp-s2scan-btn:focus-visible {
+  outline: 2px solid var(--accent, #4ea1ff);
+  outline-offset: 1px;
+}
+
+.acp-s2scan-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.acp-s2scan-btn--primary {
+  border-color: var(--accent, #4ea1ff);
+  background: var(--accent, #4ea1ff);
+  color: var(--bg-base);
+}
+
+.acp-s2scan-btn--primary:hover:not(:disabled) {
+  color: var(--bg-base);
+  filter: brightness(1.06);
+}
+
+/* ── receipt ────────────────────────────────────────────────────────── */
+
+.acp-s2scan-receipt {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #131a23);
+}
+
+.acp-s2scan-receipt[data-acp-receipt-state="error"] {
+  border-color: var(--red, #e55353);
+  color: var(--red, #e55353);
+}
+
+.acp-s2scan-receipt-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.acp-s2scan-receipt-body {
+  margin: 0;
+  font-size: 12px;
+}
+
+/* ── hints / notes ──────────────────────────────────────────────────── */
+
+.acp-s2scan-hint {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+}
+
+.acp-s2scan-note {
+  margin: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-default, #24303b);
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 10px;
+}
+
+.acp-s2scan-empty {
+  margin: 0;
+  padding: 0 14px 14px;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+}
+
+/* ── async overlay (loading / error) ────────────────────────────────── */
+
+.acp-s2scan-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 16px 16px;
+  box-sizing: border-box;
+  background: rgba(var(--bg-base-rgb), 0.82);
+}
+
+.acp-s2scan-box {
+  display: grid;
+  gap: 8px;
+  max-width: 360px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #131a23);
+  text-align: center;
+}
+
+.acp-s2scan-message {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-primary, #e5edf5);
+}
+
+.acp-s2scan-detail {
+  margin: 0;
+  color: var(--red, #e55353);
+  font-size: 11px;
+  word-break: break-word;
+}
+
+.acp-s2scan-box .acp-s2scan-btn {
+  justify-self: center;
+}
+
+/* ── narrow panel fallback (module receives a narrow host) ──────────── */
+
+@media (max-width: 720px) {
+  .acp-s2scan-grid,
+  .acp-s2scan-grid--two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

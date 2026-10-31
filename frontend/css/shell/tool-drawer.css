@@ -1,0 +1,149 @@
+/* V7 tool drawer: transient host for registered modules that are not pinned to
+   a core recipe. Scoped .acp-tools*; tokens from base.css/shell.css. */
+.acp-tools-btn {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.acp-tools-btn:hover,
+.acp-tools-btn[aria-expanded="true"] {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.acp-tools-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 80;
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  width: min(980px, 92vw);
+  border-left: 1px solid var(--border-default);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-panel);
+}
+
+.acp-tools-drawer[hidden] {
+  display: none;
+}
+
+.acp-tools-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 8px;
+  border-right: 1px solid var(--border-subtle);
+  overflow: auto;
+}
+
+.acp-tools-nav-title {
+  margin: 0 6px 8px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.acp-tools-tab {
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.acp-tools-tab:hover,
+.acp-tools-tab.is-active {
+  border-color: var(--border-subtle);
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+.acp-tools-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.acp-tools-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.acp-tools-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.acp-tools-close {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.acp-tools-close:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.acp-tools-host {
+  min-height: 0;
+  padding: 12px 14px;
+  overflow: auto;
+}
+
+.acp-tools-module {
+  min-height: 100%;
+}
+
+.acp-tools-error {
+  margin: 0;
+  color: var(--red);
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .acp-tools-drawer {
+    grid-template-columns: 1fr;
+    width: 100vw;
+  }
+
+  .acp-tools-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-right: 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .acp-tools-nav-title {
+    width: 100%;
+    margin-bottom: 2px;
+  }
+
+  .acp-tools-tab {
+    flex: 1 1 100px;
+  }
+}

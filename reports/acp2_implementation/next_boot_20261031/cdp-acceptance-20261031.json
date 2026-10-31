@@ -1,0 +1,73 @@
+{
+  "ready": "true",
+  "skip_href": "#acp-ws-research",
+  "skip_focus": "acp-ws-research",
+  "live": "研究",
+  "tabs_before": [
+    [
+      "acp-tab-research",
+      "true"
+    ],
+    [
+      "acp-tab-molecular",
+      "false"
+    ],
+    [
+      "acp-tab-execution",
+      "false"
+    ]
+  ],
+  "tab_after_arrow": {
+    "activeId": "acp-tab-molecular",
+    "selected": [
+      "acp-tab-molecular"
+    ],
+    "workspace": "molecular"
+  },
+  "layout_open": {
+    "exists": true,
+    "role": "dialog",
+    "modal": "true",
+    "open": true,
+    "focusInside": true
+  },
+  "layout_after_escape": {
+    "open": false,
+    "display": "none",
+    "focusId": "acp-tab-molecular"
+  },
+  "drawer": {
+    "hidden": false,
+    "expanded": "true",
+    "tabs": [
+      "task-wizard",
+      "job-edit",
+      "nmr-report",
+      "tsmode-editor",
+      "s2-scan",
+      "node-status",
+      "approval-card",
+      "capability-form",
+      "path-view",
+      "pes-handoff",
+      "mechanism-plan",
+      "research-record"
+    ],
+    "mounted": "task-wizard"
+  },
+  "drawer_switch": "job-edit",
+  "drawer_after_switch": "job-edit",
+  "uncaught": 0,
+  "fatal_console": [
+    "Failed to load resource: the server responded with a status of 404 (File not found)",
+    "Failed to load resource: the server responded with a status of 404 (File not found)",
+    "Failed to load resource: the server responded with a status of 404 (File not found)",
+    "Failed to load resource: the server responded with a status of 404 (File not found)",
+    "Failed to load resource: the server responded with a status of 404 (File not found)",
+    "Failed to load resource: the server responded with a status of 404 (File not found)",
+    "Failed to load resource: the server responded with a status of 404 (File not found)",
+    "Failed to load resource: the server responded with a status of 404 (File not found)",
+    "Failed to load resource: the server responded with a status of 404 (File not found)",
+    "Failed to load resource: the server responded with a status of 404 (File not found)"
+  ]
+}

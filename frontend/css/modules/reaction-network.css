@@ -4,11 +4,12 @@
  */
 
 .acp-net {
-  --net-reactant: #4ea1ff;
-  --net-product: #7fe0ad;
-  --net-ts: #f0c674;
-  --net-intermediate: #d7b8ff;
-  --net-unknown: #9fb0c3;
+  /* Role palette — aliases of the shell theme, never new colors. */
+  --net-reactant: var(--accent);
+  --net-product: var(--green);
+  --net-ts: var(--amber);
+  --net-intermediate: var(--shell-violet);
+  --net-unknown: var(--text-secondary);
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto auto;
   min-height: 100%;
@@ -42,7 +43,7 @@
 
 .acp-net-sub {
   margin: 0;
-  color: var(--text-muted, #74859a);
+  color: var(--text-tertiary, #74859a);
   font-size: 10px;
   font-family: "SFMono-Regular", Consolas, monospace;
   overflow-wrap: anywhere;
@@ -58,35 +59,35 @@
   display: block;
   min-width: 320px;
   max-height: 100%;
-  color: var(--text-muted, #74859a);
+  color: var(--text-tertiary, #74859a);
 }
 
 .acp-net-state {
   margin: 0;
   padding: 6px 14px;
-  color: var(--text-muted, #74859a);
+  color: var(--text-tertiary, #74859a);
   font-size: 11px;
   line-height: 1.55;
 }
 
 .acp-net-state-hint {
-  color: var(--text-muted, #74859a);
+  color: var(--text-tertiary, #74859a);
 }
 
 .acp-net-node .acp-net-shape {
-  fill: rgba(255, 255, 255, 0.035);
+  fill: rgba(var(--white-rgb), 0.035);
   stroke: var(--net-unknown);
   stroke-width: 1.2;
 }
 
 .acp-net-node.is-reactant .acp-net-shape { stroke: var(--net-reactant); }
 .acp-net-node.is-product .acp-net-shape { stroke: var(--net-product); }
-.acp-net-node.is-ts .acp-net-shape { stroke: var(--net-ts); fill: rgba(240, 198, 116, 0.1); }
+.acp-net-node.is-ts .acp-net-shape { stroke: var(--net-ts); fill: rgba(var(--amber-rgb), 0.1); }
 .acp-net-node.is-intermediate .acp-net-shape { stroke: var(--net-intermediate); }
 
 .acp-net-node.is-selected .acp-net-shape {
   stroke-width: 2.2;
-  fill: rgba(78, 161, 255, 0.18);
+  fill: rgba(var(--accent-rgb), 0.18);
 }
 
 .acp-net-node {
@@ -101,14 +102,14 @@
 }
 
 .acp-net-node-meta {
-  fill: var(--text-muted, #74859a);
+  fill: var(--text-tertiary, #74859a);
   font-size: 8.5px;
   pointer-events: none;
 }
 
 .acp-net-edge {
   cursor: pointer;
-  color: var(--text-muted, #74859a);
+  color: var(--text-tertiary, #74859a);
 }
 
 .acp-net-edge.is-selected {
@@ -128,7 +129,7 @@
   overflow: auto;
   padding: 8px 14px;
   border-top: 1px solid var(--border-default, #24303b);
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(var(--white-rgb), 0.02);
 }
 
 .acp-net-detail[hidden] {
@@ -149,7 +150,7 @@
 }
 
 .acp-net-detail-label {
-  color: var(--text-muted, #74859a);
+  color: var(--text-tertiary, #74859a);
 }
 
 .acp-net-detail-value {
@@ -160,10 +161,31 @@
 .acp-net-hint {
   margin: 0;
   padding: 4px 14px 8px;
-  color: var(--text-muted, #74859a);
+  color: var(--text-tertiary, #74859a);
   font-size: 10px;
 }
 
 .acp-net-hint[hidden] {
   display: none;
+}
+
+/* ── narrow panel (≤720px): stack the metadata rows, no scroll trap ──── */
+
+@media (max-width: 720px) {
+  .acp-net-head {
+    flex-wrap: wrap;
+  }
+
+  .acp-net-svg {
+    min-width: 0;
+  }
+
+  .acp-net-detail-row {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .acp-net-detail-value {
+    text-align: left;
+  }
 }

@@ -18,6 +18,18 @@
  *     submit is impossible before a preflight, an edit after preflight
  *     invalidates it, and a 400 preflight_stale clears it with a message;
  *  7. dispose removes every listener and late responses write nothing.
+ *
+ * A-13/A-14/A-15 additions (2026-10-31):
+ *  8. structure-source list: history (/structure-sources/recent), local task
+ *     artifacts (/jobs/{id}/structure-viewer catalog) and remote files
+ *     (/jobs/{id}/remote-files) render ready/empty/error with no fixture rows;
+ *  9. multi-frame selection derives every frame from the ONE text response of
+ *     the chosen source, clamps out-of-range indexes to the last frame, and
+ *     never issues a second geometry request;
+ * 10. the emitted structureRef uses exactly the molecule-viewer vocabulary
+ *     (job-file / job-remote-file / inline-xyz / structure-entry) through the
+ *     context/commands seam, survives task switches (generation guard) and
+ *     never POSTs /jobs from the source surface.
  */
 "use strict";
 
@@ -26,6 +38,7 @@ module.exports.register = async function (h) {
 
   const MODEL_PATH = "js/modules/task-config/model.js";
   const MODULE_PATH = "js/modules/task-config/module.js";
+  const VIEW_MODEL_PATH = "js/visualization/view_model.js";
 
   const flush = async (n = 10) => {
     for (let i = 0; i < n; i++) await Promise.resolve();
@@ -151,6 +164,103 @@ module.exports.register = async function (h) {
     warnings: [],
     errors: [],
   };
+
+  // ------------------------------------------------ A-13/A-14 source fixtures --
+  const MULTI_XYZ = [
+    "3", "frame 1", "C 0.0 0.0 0.0", "C 1.5 0.0 0.0", "O 2.2 1.2 0.0",
+    "3", "frame 2", "C 0.0 0.1 0.0", "C 1.6 0.0 0.0", "O 2.3 1.2 0.0",
+    "3", "frame 3", "C 0.0 0.2 0.0", "C 1.7 0.0 0.0", "O 2.4 1.2 0.0",
+  ].join("\n") + "\n";
+
+  function historySources() {
+    return [
+      {
+        source_id: "job_20261030_001_optimize:RESULT/optimized.xyz",
+        job_id: "20261030_001_optimize",
+        job_name: "ethanol optimize",
+        molecule_name: "ethanol",
+        workflow: "optimize",
+        project_id: "proj-a",
+        completed_at: "2026-10-30T10:00:00+00:00",
+        label: "Optimized structure",
+        path: "RESULT/optimized.xyz",
+        formula: "C2H6O",
+        atom_count: 9,
+        charge: 0,
+        multiplicity: 1,
+        remote: false,
+        needs_fetch: false,
+        job_status: "COMPLETED",
+        source_kind: "final",
+      },
+      {
+        source_id: "job_20261030_002_optimize:RESULT/remote.xyz",
+        job_id: "20261030_002_optimize",
+        job_name: "remote optimize",
+        molecule_name: "ethanol-remote",
+        workflow: "optimize",
+        project_id: "proj-a",
+        completed_at: "2026-10-30T09:00:00+00:00",
+        label: "Remote optimized",
+        path: "RESULT/remote.xyz",
+        formula: "C2H6O",
+        atom_count: 9,
+        charge: 0,
+        multiplicity: 1,
+        remote: true,
+        needs_fetch: false,
+        job_status: "COMPLETED",
+        source_kind: "final",
+      },
+    ];
+  }
+
+  function structureCatalog() {
+    return {
+      availability: "ready",
+      warnings: [],
+      groups: [{ id: "g-result", label: "正式产物", kind: "result" }],
+      entries: [
+        {
+          id: "entry-optimized",
+          group_id: "g-result",
+          label: "优化结构",
+          role: "minimum",
+          status: "completed",
+          geometry: {
+            endpoint: "/api/v1/jobs/20261030_001_optimize/structure-viewer/entries/entry-optimized/geometry",
+            format: "xyz",
+          },
+          energy: { value: -154.1, unit: "hartree", kind: "electronic" },
+          source: { kind: "formal_result", geometry_ref: "RESULT/optimized.xyz", frame_index: null },
+        },
+        {
+          id: "entry-no-geometry",
+          group_id: "g-result",
+          label: "缺少几何",
+          role: "",
+          status: "failed",
+          geometry: { endpoint: "", format: "xyz" },
+          energy: { value: -154.0, unit: "hartree", kind: "electronic" },
+          source: { kind: "formal_result", geometry_ref: "", frame_index: null },
+        },
+      ],
+    };
+  }
+
+  function remoteFiles() {
+    return {
+      job_id: "20261030_001_optimize",
+      node: "node-a",
+      remote_dir: "/remote/20261030_001_optimize",
+      files: [
+        { name: "traj.xyz", size: 4028, mtime: 1761800000, is_dir: false },
+        { name: "run.log", size: 120, mtime: 1761800000, is_dir: false },
+        { name: "WORK", size: 0, mtime: 1761800000, is_dir: true },
+      ],
+      truncated: false,
+    };
+  }
 
   // --------------------------------------------------------------- fake DOM --
   function makeDom() {
@@ -280,6 +390,39 @@ module.exports.register = async function (h) {
         error.status = 404;
         return Promise.reject(error);
       }
+      // A-13 structure sources (existing endpoints only; no invented paths).
+      if (path.indexOf("/api/v1/structure-sources/recent") === 0) {
+        return Promise.resolve({ sources: historySources() });
+      }
+      if (path.indexOf("/api/v1/structure-sources/") === 0) {
+        const sourceId = decodeURIComponent(path.slice("/api/v1/structure-sources/".length));
+        return Promise.resolve({
+          source_id: sourceId,
+          checksum: "sha256:" + "d".repeat(64),
+          structure: Object.assign({}, ASSET, {
+            name: "source.xyz",
+            xyz: MULTI_XYZ,
+            formula: "C2H6O",
+            atom_count: 3,
+          }),
+          job_id: "20261030_001_optimize",
+          path: "RESULT/optimized.xyz",
+          job_status: "COMPLETED",
+        });
+      }
+      if (path.indexOf("/structure-viewer/entries/") !== -1) {
+        if (path.indexOf("entry-no-geometry") !== -1) {
+          const missing = new Error("Entry entry-no-geometry has no geometry reference");
+          missing.status = 404;
+          return Promise.reject(missing);
+        }
+        return Promise.resolve(MULTI_XYZ);
+      }
+      if (path.indexOf("/structure-viewer") !== -1) return Promise.resolve(structureCatalog());
+      if (path.indexOf("/remote-files") !== -1 && path.indexOf("/preview") !== -1) {
+        return Promise.resolve({ content: MULTI_XYZ, format: "xyz", truncated: false });
+      }
+      if (/^\/api\/v1\/jobs\/[^/]+\/remote-files$/.test(path)) return Promise.resolve(remoteFiles());
       return Promise.resolve({});
     }
     return {
@@ -305,12 +448,27 @@ module.exports.register = async function (h) {
     };
   }
 
-  function makeCommands() {
+  function makeCommands(context) {
     const opened = [];
-    return { opened, openTask(ref) { opened.push(ref); return { ok: true }; } };
+    const structures = [];
+    return {
+      opened,
+      structures,
+      openTask(ref) { opened.push(ref); return { ok: true }; },
+      // Mirrors the shell command: writes the context focus AND would deliver
+      // to a mounted viewer. The fake only records + focuses.
+      openStructure(ref) {
+        structures.push(ref);
+        if (context && typeof context.setFocus === "function") {
+          context.setFocus({ structureRef: ref }, "task-config");
+        }
+        return { ok: true };
+      },
+    };
   }
 
-  function loadSandbox() {
+  function loadSandbox(options) {
+    const opts = options || {};
     const dom = makeDom();
     const storage = (() => {
       const map = new Map();
@@ -330,6 +488,7 @@ module.exports.register = async function (h) {
       clearTimeout: () => {},
     });
     loadScript(MODEL_PATH, sandbox);
+    if (opts.viewModel !== false) loadScript(VIEW_MODEL_PATH, sandbox);
     loadScript(MODULE_PATH, sandbox);
     return { sandbox, document: dom.document };
   }
@@ -460,7 +619,7 @@ module.exports.register = async function (h) {
     const host = dom.document.createElement("div");
     const client = makeClient();
     const context = makeContext("proj-a");
-    const commands = makeCommands();
+    const commands = makeCommands(context);
     const instance = sandbox.ACPNextModules["task-config"].factory({ doc: dom.document, request: client.request, context, commands });
     await instance.mount(host, { context, commands });
     await flush();
@@ -488,7 +647,7 @@ module.exports.register = async function (h) {
     const host = dom.document.createElement("div");
     const client = makeClient();
     const context = makeContext("proj-a");
-    const commands = makeCommands();
+    const commands = makeCommands(context);
     const instance = sandbox.ACPNextModules["task-config"].factory({ doc: dom.document, request: client.request, context, commands });
     await instance.mount(host, { context, commands });
     await flush();
@@ -543,8 +702,9 @@ module.exports.register = async function (h) {
     const host = dom.document.createElement("div");
     const client = makeClient();
     const context = makeContext("proj-a");
-    const instance = sandbox.ACPNextModules["task-config"].factory({ doc: dom.document, request: client.request, context, commands: makeCommands() });
-    await instance.mount(host, { context, commands: makeCommands() });
+    const commands = makeCommands(context);
+    const instance = sandbox.ACPNextModules["task-config"].factory({ doc: dom.document, request: client.request, context, commands });
+    await instance.mount(host, { context, commands });
     await flush();
 
     const textarea = find(host, "data-role", "structure-text");
@@ -589,8 +749,9 @@ module.exports.register = async function (h) {
       },
     });
     const context = makeContext("proj-a");
-    const instance = sandbox.ACPNextModules["task-config"].factory({ doc: dom.document, request: client.request, context, commands: makeCommands() });
-    await instance.mount(host, { context, commands: makeCommands() });
+    const commands = makeCommands(context);
+    const instance = sandbox.ACPNextModules["task-config"].factory({ doc: dom.document, request: client.request, context, commands });
+    await instance.mount(host, { context, commands });
     await flush();
     const textarea = find(host, "data-role", "structure-text");
     textarea.value = "CCO";
@@ -622,7 +783,7 @@ module.exports.register = async function (h) {
       },
     });
     const context = makeContext("proj-a");
-    const commands = makeCommands();
+    const commands = makeCommands(context);
     const instance = sandbox.ACPNextModules["task-config"].factory({ doc: dom.document, request: client.request, context, commands });
     await instance.mount(host, { context, commands });
     await flush();
@@ -641,5 +802,392 @@ module.exports.register = async function (h) {
     if (release) release();
     await flush();
     assertEq(find(host, "data-role", "receipt"), null, "no late DOM write");
+  });
+
+  // ------------------------------------- A-13/A-14/A-15 structure sources --
+  function allByAttr(root, attr) {
+    return walk(root).filter((n) => n.getAttribute && n.getAttribute(attr) !== null);
+  }
+
+  function sourceIds(host) {
+    return allByAttr(host, "data-source-id").map((n) => n.getAttribute("data-source-id"));
+  }
+
+  function sourceLabel(host, id) {
+    const button = find(host, "data-source-id", id);
+    return button ? button.children[0].textContent : null;
+  }
+
+  function sourcePanelState(host) {
+    const panel = find(host, "data-role", "source-panel");
+    return panel ? panel.getAttribute("data-acp-source-state") : null;
+  }
+
+  function openSourcePicker(host) {
+    const summary = find(host, "data-role", "source-summary");
+    assert(!!summary, "source summary rendered");
+    summary.fire("click");
+  }
+
+  function lastRef(context) {
+    const patches = context.focus.filter((p) => p.structureRef);
+    return patches.length ? patches[patches.length - 1].structureRef : null;
+  }
+
+  async function mountForSources(options) {
+    const opts = options || {};
+    const env = loadSandbox({ viewModel: opts.viewModel !== false });
+    const dom = makeDom();
+    const host = dom.document.createElement("div");
+    const client = opts.client || makeClient(opts.clientOptions);
+    const context = makeContext("proj-a");
+    const commands = makeCommands(context);
+    const instance = env.sandbox.ACPNextModules["task-config"].factory({
+      doc: dom.document, request: client.request, context, commands,
+    });
+    await instance.mount(host, { context, commands });
+    await flush();
+    if (opts.jobId) {
+      context.setFocus({ taskRef: { jobId: opts.jobId, attempt: 1 } }, "test");
+      await flush();
+    }
+    return { env, dom, host, client, context, commands, instance };
+  }
+
+  await test("sources: history list renders completed-task structures with per-source availability", async () => {
+    const t = await mountForSources();
+    openSourcePicker(t.host);
+    await flush();
+
+    assertEq(sourcePanelState(t.host), "ready");
+    const ids = sourceIds(t.host);
+    assertEq(ids, [
+      "history:job_20261030_001_optimize:RESULT/optimized.xyz",
+      "history:job_20261030_002_optimize:RESULT/remote.xyz",
+    ]);
+    const rows = allByAttr(t.host, "data-source-row");
+    assertEq(rows.map((row) => row.getAttribute("data-acp-source-state")), ["ready", "ready"]);
+    assertEq(sourceLabel(t.host, ids[0]), "Optimized structure");
+    const remoteButton = find(t.host, "data-source-id", ids[1]);
+    const chip = remoteButton.children.find((child) => child.getAttribute && child.getAttribute("data-acp-source-chip"));
+    assert(!!chip, "remote availability chip");
+    assertEq(chip.textContent, "远程");
+    assertEq(allByAttr(t.host, "data-acp-fixture").length, 0, "no fixture marker on source rows");
+    assertEq(t.client.calls.filter((call) => call.path === "/api/v1/jobs").length, 0, "no task submission");
+    t.instance.dispose();
+  });
+
+  await test("sources: history empty list is an explicit empty state (no fake rows)", async () => {
+    const client = makeClient({
+      handler(path) {
+        if (path.indexOf("/api/v1/structure-sources/recent") === 0) return Promise.resolve({ sources: [] });
+        return undefined;
+      },
+    });
+    const t = await mountForSources({ client });
+    openSourcePicker(t.host);
+    await flush();
+
+    assertEq(sourcePanelState(t.host), "empty");
+    assertEq(sourceIds(t.host).length, 0, "no fabricated rows");
+    const list = find(t.host, "data-role", "source-list");
+    assertEq(list.children.length, 1);
+    assertEq(list.children[0].className, "acp-cfg-source-empty");
+    assert(list.children[0].textContent.indexOf("没有可引用") !== -1, "empty hint shown");
+    t.instance.dispose();
+  });
+
+  await test("sources: history error is visible and retry reloads the group", async () => {
+    let attempts = 0;
+    const client = makeClient({
+      handler(path) {
+        if (path.indexOf("/api/v1/structure-sources/recent") === 0) {
+          attempts += 1;
+          if (attempts === 1) {
+            const failure = new Error("HTTP 500");
+            failure.status = 500;
+            failure.body = { detail: "backend down" };
+            return Promise.reject(failure);
+          }
+          return Promise.resolve({ sources: historySources() });
+        }
+        return undefined;
+      },
+    });
+    const t = await mountForSources({ client });
+    openSourcePicker(t.host);
+    await flush();
+
+    assertEq(sourcePanelState(t.host), "error");
+    const status = find(t.host, "data-role", "source-status");
+    assert(status.textContent.indexOf("backend down") !== -1, status.textContent);
+    const retry = find(t.host, "data-action", "source-retry");
+    assert(!!retry, "retry button rendered");
+    retry.fire("click");
+    await flush();
+    assertEq(attempts, 2);
+    assertEq(sourcePanelState(t.host), "ready");
+    assertEq(sourceIds(t.host).length, 2);
+    t.instance.dispose();
+  });
+
+  await test("sources: selecting history rows emits job-file / job-remote-file refs with frames from one text fetch", async () => {
+    const t = await mountForSources();
+    openSourcePicker(t.host);
+    await flush();
+
+    const localId = "history:job_20261030_001_optimize:RESULT/optimized.xyz";
+    find(t.host, "data-source-id", localId).fire("click");
+    await flush();
+
+    const preview = find(t.host, "data-role", "source-preview");
+    assertEq(preview.getAttribute("data-acp-frame-count"), "3");
+    assertEq(preview.getAttribute("data-acp-frame-index"), "0");
+    assertEq(preview.getAttribute("data-acp-source-kind"), "job-file");
+    assertEq(preview.getAttribute("data-acp-source-emitted"), "true");
+    assert(preview.textContent.indexOf("1/3") !== -1, preview.textContent);
+    assert(preview.textContent.indexOf("20261030_001_optimize") !== -1);
+    assert(preview.textContent.indexOf("RESULT/optimized.xyz") !== -1);
+
+    const ref = lastRef(t.context);
+    assertEq(ref.kind, "job-file");
+    assertEq(ref.jobId, "20261030_001_optimize");
+    assertEq(ref.path, "RESULT/optimized.xyz");
+    assertEq(ref.frameIndex, 0);
+    assertEq(t.commands.structures.length, 1);
+    assertEq(t.commands.structures[0].source, "task-config");
+    assertEq(t.client.calls.filter((call) =>
+      call.path.indexOf("/api/v1/structure-sources/") === 0 &&
+      call.path.indexOf("/recent") === -1).length, 1, "one source text fetch");
+
+    const remoteId = "history:job_20261030_002_optimize:RESULT/remote.xyz";
+    find(t.host, "data-source-id", remoteId).fire("click");
+    await flush();
+    const remoteRef = lastRef(t.context);
+    assertEq(remoteRef.kind, "job-remote-file");
+    assertEq(remoteRef.jobId, "20261030_002_optimize");
+    assertEq(remoteRef.frameIndex, 0);
+
+    // Source picking is read-only: no form/parse/submit side effects.
+    assertEq(find(t.host, "data-role", "structure-text").value, "");
+    assertEq(t.client.calls.filter((call) => call.path === "/api/v1/structures/parse").length, 0);
+    assertEq(t.client.calls.filter((call) => call.path === "/api/v1/jobs" && call.opts.method === "POST").length, 0);
+    t.instance.dispose();
+  });
+
+  await test("sources: local task artifacts come from the structure-viewer catalog and emit structure-entry refs", async () => {
+    const t = await mountForSources({ jobId: "20261030_001_optimize" });
+    openSourcePicker(t.host);
+    await flush();
+    find(t.host, "data-source-tab", "local").fire("click");
+    await flush();
+
+    assertEq(sourcePanelState(t.host), "ready");
+    assertEq(sourceIds(t.host), ["local:entry-optimized", "local:entry-no-geometry"]);
+    const missing = find(t.host, "data-source-id", "local:entry-no-geometry");
+    assertEq(missing.disabled, true, "entry without geometry is not selectable");
+    const missingRow = find(t.host, "data-source-row", "local:entry-no-geometry");
+    assertEq(missingRow.getAttribute("data-acp-source-state"), "error");
+    assert(missingRow.children.some((child) => child.className === "acp-cfg-source-error"), "per-source error text");
+
+    find(t.host, "data-source-id", "local:entry-optimized").fire("click");
+    await flush();
+    const preview = find(t.host, "data-role", "source-preview");
+    assertEq(preview.getAttribute("data-acp-source-kind"), "structure-entry");
+    assertEq(preview.getAttribute("data-acp-frame-count"), "3");
+    const ref = lastRef(t.context);
+    assertEq(ref, {
+      source: "task-config",
+      kind: "structure-entry",
+      jobId: "20261030_001_optimize",
+      entryId: "entry-optimized",
+      frameIndex: 0,
+    });
+    assertEq(t.client.calls.filter((call) => call.path === "/api/v1/jobs").length, 0);
+    t.instance.dispose();
+  });
+
+  await test("sources: remote structure sources list XYZ files and emit job-remote-file refs", async () => {
+    const t = await mountForSources({ jobId: "20261030_001_optimize" });
+    openSourcePicker(t.host);
+    await flush();
+    find(t.host, "data-source-tab", "remote").fire("click");
+    await flush();
+
+    assertEq(sourcePanelState(t.host), "ready");
+    assertEq(sourceIds(t.host), ["remote:traj.xyz"], "only the remote XYZ structure is listed");
+    const button = find(t.host, "data-source-id", "remote:traj.xyz");
+    assert(button.children.some((child) => child.className === "acp-cfg-source-meta" &&
+      child.textContent.indexOf("KB") !== -1), "size metadata");
+
+    button.fire("click");
+    await flush();
+    const preview = find(t.host, "data-role", "source-preview");
+    assertEq(preview.getAttribute("data-acp-source-kind"), "job-remote-file");
+    assertEq(preview.getAttribute("data-acp-frame-count"), "3");
+    const ref = lastRef(t.context);
+    assertEq(ref, {
+      source: "task-config",
+      kind: "job-remote-file",
+      jobId: "20261030_001_optimize",
+      path: "traj.xyz",
+      frameIndex: 0,
+    });
+    assertEq(t.client.calls.filter((call) =>
+      call.path.indexOf("/remote-files") !== -1 &&
+      call.path.indexOf("/preview") !== -1).length, 1, "one remote preview fetch");
+    t.instance.dispose();
+  });
+
+  await test("sources: frame selection clamps out-of-range to the last frame and never refetches geometry", async () => {
+    const t = await mountForSources({ jobId: "20261030_001_optimize" });
+    openSourcePicker(t.host);
+    await flush();
+    find(t.host, "data-source-tab", "remote").fire("click");
+    await flush();
+    find(t.host, "data-source-id", "remote:traj.xyz").fire("click");
+    await flush();
+
+    const preview = find(t.host, "data-role", "source-preview");
+    const select = find(t.host, "data-role", "frame-select");
+    const previewCalls = () => t.client.calls.filter((call) =>
+      call.path.indexOf("/remote-files") !== -1 && call.path.indexOf("/preview") !== -1).length;
+    const before = previewCalls();
+    assertEq(before, 1);
+
+    select.value = "99";
+    select.fire("change");
+    assertEq(preview.getAttribute("data-acp-frame-index"), "2", "clamped to last frame");
+    assertEq(preview.getAttribute("data-acp-frame-count"), "3");
+    assert(preview.textContent.indexOf("3/3") !== -1, preview.textContent);
+    assert(preview.textContent.indexOf("越界") !== -1, "clamp is stated, not silent");
+    assertEq(lastRef(t.context).frameIndex, 2);
+
+    select.value = "-5";
+    select.fire("change");
+    assertEq(preview.getAttribute("data-acp-frame-index"), "0", "negative clamps to first frame");
+    assertEq(lastRef(t.context).frameIndex, 0);
+
+    find(t.host, "data-action", "frame-next").fire("click");
+    assertEq(lastRef(t.context).frameIndex, 1);
+    find(t.host, "data-action", "frame-next").fire("click");
+    assertEq(lastRef(t.context).frameIndex, 2);
+    find(t.host, "data-action", "frame-next").fire("click");
+    assertEq(lastRef(t.context).frameIndex, 2, "clamped at the last frame");
+    find(t.host, "data-action", "frame-prev").fire("click");
+    assertEq(lastRef(t.context).frameIndex, 1);
+    assertEq(previewCalls(), before, "frame switching issues no second geometry request");
+
+    // Selection identity always names the frame AND the source ref.
+    assert(preview.getAttribute("data-acp-source-ref").indexOf("job-remote-file:20261030_001_optimize:traj.xyz#1") !== -1);
+    t.instance.dispose();
+  });
+
+  await test("sources: task switch drops a late local-source response (generation guard)", async () => {
+    let releaseStale;
+    const stale = structureCatalog();
+    stale.entries[0].label = "STALE A";
+    stale.entries[1].label = "STALE A 2";
+    const client = makeClient({
+      handler(path) {
+        if (path === "/api/v1/jobs/job-a/structure-viewer") {
+          return new Promise((resolve) => { releaseStale = () => resolve(stale); });
+        }
+        return undefined;
+      },
+    });
+    const t = await mountForSources({ jobId: "job-a", client });
+    openSourcePicker(t.host);
+    await flush();
+    find(t.host, "data-source-tab", "local").fire("click");
+    await flush();
+    assertEq(sourcePanelState(t.host), "loading");
+
+    t.context.setFocus({ taskRef: { jobId: "job-b", attempt: 1 } }, "test");
+    await flush();
+    assertEq(sourcePanelState(t.host), "ready");
+    if (releaseStale) releaseStale();
+    await flush();
+
+    const ids = sourceIds(t.host);
+    assert(ids.length > 0, "the new task's rows are painted");
+    assertEq(sourceLabel(t.host, ids[0]), "优化结构", "late task-A rows were dropped");
+    assert(ids.every((id) => id.indexOf("local:") === 0), "only structure-entry rows");
+    t.instance.dispose();
+  });
+
+  await test("sources: dispose drops an in-flight source selection (no late DOM write)", async () => {
+    let release;
+    const client = makeClient({
+      handler(path) {
+        if (path.indexOf("/api/v1/structure-sources/") === 0 && path.indexOf("/recent") === -1) {
+          return new Promise((resolve) => {
+            release = () => resolve({ structure: { xyz: MULTI_XYZ, formula: "C2H6O", atom_count: 3 } });
+          });
+        }
+        return undefined;
+      },
+    });
+    const t = await mountForSources({ client });
+    openSourcePicker(t.host);
+    await flush();
+    find(t.host, "data-source-id", "history:job_20261030_001_optimize:RESULT/optimized.xyz").fire("click");
+    await flush();
+
+    t.instance.dispose();
+    assertEq(t.host.children.length, 0, "host cleared");
+    if (release) release();
+    await flush();
+    assertEq(find(t.host, "data-role", "source-preview"), null, "no late DOM write");
+    assertEq(t.commands.structures.length, 0, "no late structureRef emission");
+  });
+
+  await test("sources: missing client fails the mount explicitly", async () => {
+    const env = loadSandbox();
+    const dom = makeDom();
+    const host = dom.document.createElement("div");
+    const instance = env.sandbox.ACPNextModules["task-config"].factory({ doc: dom.document });
+    let failure = null;
+    try {
+      await instance.mount(host);
+    } catch (error) {
+      failure = error;
+    }
+    assert(!!failure, "mount rejects without a transport client");
+    assert(String(failure.message).indexOf("ACPClient.transport missing") !== -1, String(failure.message));
+  });
+
+  await test("sources: missing view_model parser is a visible error, not a fabricated frame list", async () => {
+    const t = await mountForSources({ viewModel: false });
+    openSourcePicker(t.host);
+    await flush();
+    find(t.host, "data-source-id", "history:job_20261030_001_optimize:RESULT/optimized.xyz").fire("click");
+    await flush();
+
+    const preview = find(t.host, "data-role", "source-preview");
+    assertEq(preview.getAttribute("data-acp-source-state"), "error");
+    assert(preview.textContent.indexOf("view_model.js") !== -1, preview.textContent);
+    assertEq(find(t.host, "data-role", "frame-select").children.length, 0, "no fabricated frames");
+    assertEq(t.commands.structures.length, 0);
+    assertEq(t.context.focus.filter((patch) => patch.structureRef).length, 0);
+    t.instance.dispose();
+  });
+
+  await test("sources: parsed inline-xyz still uses the same structureRef bridge", async () => {
+    const t = await mountForSources();
+    const textarea = find(t.host, "data-role", "structure-text");
+    textarea.value = "CCO";
+    textarea.fire("input");
+    find(t.host, "data-action", "parse").fire("click");
+    await flush();
+
+    assertEq(t.commands.structures.length, 1);
+    const ref = t.commands.structures[0];
+    assertEq(ref.kind, "inline-xyz");
+    assertEq(ref.source, "task-config");
+    assert(ref.text.indexOf("C 0.0") !== -1, "inline geometry carried");
+    assertEq(lastRef(t.context).kind, "inline-xyz");
+    assertEq(t.client.calls.filter((call) => call.path === "/api/v1/jobs" && call.opts.method === "POST").length, 0);
+    t.instance.dispose();
   });
 };

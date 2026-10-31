@@ -8,14 +8,29 @@
      classic entry — the Shell must boot whether or not the library arrives. -->
 <script async id="viewer-library" src="/js/vendor/3Dmol-2.5.5.min.js"></script>
 <link rel="stylesheet" href="/css/workbench/base.css">
+<link rel="stylesheet" href="/css/workbench/energy.css">
 <link rel="stylesheet" href="/css/shell/shell.css">
+<link rel="stylesheet" href="/css/shell/tool-drawer.css">
 <link rel="stylesheet" href="/css/shell/agent.css">
 <link rel="stylesheet" href="/css/modules/molecule-viewer.css">
+<link rel="stylesheet" href="/css/modules/energy-profile.css">
 <link rel="stylesheet" href="/css/modules/task-explorer.css">
 <link rel="stylesheet" href="/css/modules/workspace-details.css">
 <link rel="stylesheet" href="/css/modules/task-config.css">
 <link rel="stylesheet" href="/css/modules/exec-detail.css">
 <link rel="stylesheet" href="/css/modules/reaction-network.css">
+<link rel="stylesheet" href="/css/modules/approval-card.css">
+<link rel="stylesheet" href="/css/modules/node-status.css">
+<link rel="stylesheet" href="/css/modules/capability-form.css">
+<link rel="stylesheet" href="/css/modules/s2-scan.css">
+<link rel="stylesheet" href="/css/modules/task-wizard.css">
+<link rel="stylesheet" href="/css/modules/nmr-report.css">
+<link rel="stylesheet" href="/css/modules/tsmode-editor.css">
+<link rel="stylesheet" href="/css/modules/mechanism-plan.css">
+<link rel="stylesheet" href="/css/modules/job-edit.css">
+<link rel="stylesheet" href="/css/modules/research-record.css">
+<link rel="stylesheet" href="/css/modules/path-view.css">
+<link rel="stylesheet" href="/css/modules/pes-handoff.css">
 </head>
 <body>
 <!-- file:// guard. Every asset below is an absolute URL (/css, /js), so an
@@ -93,7 +108,10 @@
      `id="acp-next-root"` + "ACP Next" on this entry. Keep both. -->
 <div id="acp-next-root">
 <div class="acp-shell" id="acp-shell" data-workspace="research" data-acp-ready="false">
-  <a class="acp-skip-link" href="#acp-ws-research" data-i18n="shell.a11y.skip">跳到工作区</a>
+  <!-- A-63 skip link: first focusable stop; layout-manager retargets the href
+       to the ACTIVE workspace landmark on every switch. -->
+  <a class="acp-skip-link" id="acp-skip-link" href="#acp-ws-research" data-i18n="shell.a11y.skip"
+     data-acp-focus-kind="skip" data-acp-skip-target="acp-ws-research">跳到工作区</a>
 
   <header class="acp-shell-topbar">
     <div class="acp-shell-brand">
@@ -104,21 +122,25 @@
       </div>
     </div>
 
-    <nav class="acp-shell-switch" role="tablist" aria-label="工作区" data-i18n-aria="shell.workspace.switch_label">
+    <nav class="acp-shell-switch" role="tablist" aria-label="工作区" aria-orientation="horizontal"
+         data-i18n-aria="shell.workspace.switch_label" data-acp-focus-kind="tablist">
       <button class="acp-shell-tab is-active" id="acp-tab-research" role="tab"
-              aria-selected="true" aria-controls="acp-ws-research" data-workspace-id="research"
+              aria-selected="true" aria-controls="acp-ws-research" aria-keyshortcuts="Alt+1"
+              data-workspace-id="research" data-acp-focus-kind="tab"
               tabindex="0" title="Alt+1/2/3 切换工作区" data-i18n-title="shell.workspace.shortcut_hint" type="button">
         <svg class="acp-shell-tab-icon" width="16" height="16" aria-hidden="true"><use href="#acp-i-research"/></svg>
         <span data-i18n="shell.workspace.research">研究</span>
       </button>
       <button class="acp-shell-tab" id="acp-tab-molecular" role="tab"
-              aria-selected="false" aria-controls="acp-ws-molecular" data-workspace-id="molecular"
+              aria-selected="false" aria-controls="acp-ws-molecular" aria-keyshortcuts="Alt+2"
+              data-workspace-id="molecular" data-acp-focus-kind="tab"
               tabindex="-1" title="Alt+1/2/3 切换工作区" data-i18n-title="shell.workspace.shortcut_hint" type="button">
         <svg class="acp-shell-tab-icon" width="16" height="16" aria-hidden="true"><use href="#acp-i-structure"/></svg>
         <span data-i18n="shell.workspace.molecular">分子</span>
       </button>
       <button class="acp-shell-tab" id="acp-tab-execution" role="tab"
-              aria-selected="false" aria-controls="acp-ws-execution" data-workspace-id="execution"
+              aria-selected="false" aria-controls="acp-ws-execution" aria-keyshortcuts="Alt+3"
+              data-workspace-id="execution" data-acp-focus-kind="tab"
               tabindex="-1" title="Alt+1/2/3 切换工作区" data-i18n-title="shell.workspace.shortcut_hint" type="button">
         <svg class="acp-shell-tab-icon" width="16" height="16" aria-hidden="true"><use href="#acp-i-task"/></svg>
         <span data-i18n="shell.workspace.execution">执行</span>
@@ -130,6 +152,8 @@
     </div>
 
     <div class="acp-shell-actions">
+      <button class="acp-tools-btn" id="acp-tools-btn" data-i18n="shell.tools.open"
+              type="button" aria-controls="acp-tools-drawer" aria-expanded="false">工具</button>
       <button class="acp-shell-lang" id="acp-layout-edit" data-i18n="layout.title" type="button">配置布局</button>
       <a class="acp-shell-link-classic" href="/">
         <span data-i18n="shell.link.classic">经典工作台</span>
@@ -140,28 +164,51 @@
     </div>
   </header>
 
-  <main class="acp-shell-main" id="acp-shell-main">
+  <!-- A-63: the workspace landmark is focusable (tabpanel tabindex=0) so the
+       skip link and panel-title walk have a real focus target. -->
+  <main class="acp-shell-main" id="acp-shell-main"
+        aria-label="工作区" data-i18n-aria="shell.workspace.switch_label"
+        data-acp-landmark="workspace-area">
     <section class="acp-workspace" id="acp-ws-research" role="tabpanel"
              aria-labelledby="acp-tab-research" tabindex="0"
-             data-workspace-id="research" data-has-side="true" data-has-bottom="true">
+             data-workspace-id="research" data-acp-landmark="workspace" data-has-side="true" data-has-bottom="true">
       <div class="acp-slot" data-slot="main"   id="acp-slot-research-main"></div>
       <div class="acp-slot" data-slot="side"   id="acp-slot-research-side"></div>
       <div class="acp-slot" data-slot="bottom" id="acp-slot-research-bottom"></div>
     </section>
     <section class="acp-workspace" id="acp-ws-molecular" role="tabpanel"
              aria-labelledby="acp-tab-molecular" tabindex="0" hidden
-             data-workspace-id="molecular" data-has-side="true" data-has-bottom="false">
+             data-workspace-id="molecular" data-acp-landmark="workspace" data-has-side="true" data-has-bottom="true">
       <div class="acp-slot" data-slot="main" id="acp-slot-molecular-main"></div>
       <div class="acp-slot" data-slot="side" id="acp-slot-molecular-side"></div>
+      <div class="acp-slot" data-slot="bottom" id="acp-slot-molecular-bottom"></div>
     </section>
     <section class="acp-workspace" id="acp-ws-execution" role="tabpanel"
              aria-labelledby="acp-tab-execution" tabindex="0" hidden
-             data-workspace-id="execution" data-has-side="true" data-has-bottom="true">
+             data-workspace-id="execution" data-acp-landmark="workspace" data-has-side="true" data-has-bottom="true">
       <div class="acp-slot" data-slot="main" id="acp-slot-execution-main"></div>
       <div class="acp-slot" data-slot="side" id="acp-slot-execution-side"></div>
       <div class="acp-slot" data-slot="bottom" id="acp-slot-execution-bottom"></div>
     </section>
   </main>
+
+  <!-- V7: default access to registered modules that are not pinned to a core
+       recipe. One module is mounted at a time and disposed on close/switch. -->
+  <aside class="acp-tools-drawer" id="acp-tools-drawer" hidden
+         aria-label="工具" data-i18n-aria="shell.tools.title" data-acp-tools="drawer">
+    <nav class="acp-tools-nav" role="tablist" aria-orientation="vertical"
+         data-acp-tools-tabs>
+      <p class="acp-tools-nav-title" data-i18n="shell.tools.title">工具</p>
+    </nav>
+    <div class="acp-tools-main">
+      <header class="acp-tools-head">
+        <h2 class="acp-tools-title" data-acp-tools-title data-i18n="shell.tools.title">工具</h2>
+        <button class="acp-tools-close" data-acp-tools-close type="button"
+                aria-label="关闭工具面板" data-i18n-aria="shell.tools.close">×</button>
+      </header>
+      <div class="acp-tools-host" data-acp-tools-host></div>
+    </div>
+  </aside>
 
   <!-- whole-page fatal layer (registry/bootstrap failure), design §2.2 -->
   <div class="acp-shell-fatal" id="acp-shell-fatal" hidden role="alert"></div>
@@ -182,9 +229,11 @@
 <script src="/js/client/event-invalidation.js"></script>
 <script src="/js/client/polling-strategy.js"></script>
 <script src="/js/client/job-commands.js"></script>
+<script src="/js/client/frame-candidates.js"></script>
 <script src="/js/client/wizard-endpoints.js"></script>
 <script src="/js/client/science-query.js"></script>
 <script src="/js/client/research-query.js"></script>
+<script src="/js/client/research-commands.js"></script>
 <script src="/js/client/system-endpoints.js"></script>
 <!-- shell core (load order matters: i18n → context → registry → loader → commands → layout → recipes → bootstrap) -->
 <script src="/js/shell/i18n.js"></script>
@@ -196,6 +245,7 @@
 <script src="/js/shell/recipes.js"></script>
 <script src="/js/shell/layout-preferences.js"></script>
 <script src="/js/shell/layout-editor.js"></script>
+<script src="/js/shell/tool-drawer.js"></script>
 <script src="/js/shell/bootstrap.js"></script>
 <!-- UI-02/UI-03A module runtime deps: shared geometry store + visualization
      stack (the only sanctioned $3Dmol station is mol3d_adapter) + the three
@@ -205,18 +255,44 @@
 <script src="/js/visualization/mol3d_adapter.js"></script>
 <script src="/js/visualization/framing.js"></script>
 <script src="/js/visualization/scene_instance.js"></script>
+<script src="/js/visualization/energy_chart_renderer.js"></script>
+<!-- A-00 view-model contract + source adapter + deterministic fixtures.
+     Panels consume acp.view.v1 only; fixtures are visibly badged. -->
+<script src="/js/visualization/view_model.js"></script>
+<script src="/js/visualization/view_source.js"></script>
+<script src="/js/visualization/fixtures/views/structure.js"></script>
+<script src="/js/visualization/fixtures/views/energy.js"></script>
+<script src="/js/visualization/fixtures/views/catalog.js"></script>
 <script src="/js/workbench/controllers/job_detail_controller.js"></script>
 <script src="/js/workbench/controllers/task_session_controller.js"></script>
 <script src="/js/workbench/controllers/task_list_controller.js"></script>
+<!-- A-59 capability-form subset contract (pure validator shared with the
+     classic feature); must load before the capability-form module. -->
+<script src="/js/workbench/contracts/ui_subset.js"></script>
 <!-- real modules (register into window.ACPNextModules; consumed by the shell
      registry during bootstrap.boot() below) -->
 <script src="/js/modules/molecule-viewer/module.js"></script>
+<script src="/js/modules/energy-profile/module.js"></script>
 <script src="/js/modules/task-explorer/module.js"></script>
 <script src="/js/modules/agent-workspace/module.js"></script>
 <script src="/js/modules/task-config/model.js"></script>
 <script src="/js/modules/task-config/module.js"></script>
 <script src="/js/modules/exec-detail/module.js"></script>
 <script src="/js/modules/reaction-network/module.js"></script>
+<script src="/js/modules/node-status/module.js"></script>
+<script src="/js/modules/approval-card/module.js"></script>
+<script src="/js/modules/capability-form/module.js"></script>
+<script src="/js/modules/s2-scan/module.js"></script>
+<script src="/js/modules/task-wizard/module.js"></script>
+<script src="/js/modules/nmr-report/module.js"></script>
+<script src="/js/modules/tsmode-editor/module.js"></script>
+<script src="/js/modules/mechanism-plan/module.js"></script>
+<script src="/js/modules/job-edit/module.js"></script>
+<script src="/js/modules/research-record/module.js"></script>
+<script src="/js/modules/path-view/module.js"></script>
+<script src="/js/modules/pes-handoff/module.js"></script>
+<!-- A-30/A-31, A-57/A-58 and A-59 register as optional layout-editor
+     modules; their default recipes wait for V7 assembly. -->
 <!-- demo mocks: registered into ACPNextModules, used by ?demo=1 + module tests only -->
 <script src="/js/shell/mock/mock-alpha.js"></script>
 <script src="/js/shell/mock/mock-beta.js"></script>

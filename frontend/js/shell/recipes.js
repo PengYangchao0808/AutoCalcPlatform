@@ -70,6 +70,14 @@ ACPShell.recipes = (function () {
           slot: "side",
           titleKey: "shell.module.task_config",
           loading: "list"
+        },
+        {
+          instanceId: "mol-energy",
+          moduleId: "energy-profile",
+          slot: "bottom",
+          titleKey: "shell.module.energy_profile",
+          loading: "canvas",
+          binding: "follow-focus"
         }
       ]
     },

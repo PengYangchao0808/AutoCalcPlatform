@@ -1,0 +1,389 @@
+/*
+ * ACP Next — job-edit panel styles (A-10 / A-11 / A-12 · P03 修改参数后重算).
+ * Scope: `.acp-jobedit*` only; tokens come from the workbench base stylesheet
+ * and the shell stylesheet. This file defines no global selector and no new
+ * token.
+ */
+
+.acp-jobedit {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: auto;
+  background: var(--bg-base, #0b0f14);
+  color: var(--text-primary, #e5edf5);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ── header ─────────────────────────────────────────────────────────── */
+
+.acp-jobedit-head {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid var(--border-default, #24303b);
+}
+
+.acp-jobedit-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.acp-jobedit-sub {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+}
+
+/* ── body / sections ────────────────────────────────────────────────── */
+
+.acp-jobedit-body {
+  display: grid;
+  gap: 16px;
+  padding: 12px 14px 20px;
+}
+
+.acp-jobedit-section {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-default, #24303b);
+}
+
+.acp-jobedit-section:last-of-type {
+  border-bottom: 0;
+}
+
+.acp-jobedit-heading {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary, #9fb0c3);
+  text-transform: uppercase;
+}
+
+.acp-jobedit-subheading {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-tertiary, #6b7b8a);
+}
+
+.acp-jobedit-hint {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+}
+
+.acp-jobedit-hint--warn {
+  color: var(--amber, #d9a441);
+}
+
+.acp-jobedit-status {
+  margin: 0;
+  min-height: 18px;
+  color: var(--text-secondary, #9fb0c3);
+  font-size: 11px;
+}
+
+.acp-jobedit-mono {
+  margin: 0;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  color: var(--text-secondary, #9fb0c3);
+  word-break: break-all;
+}
+
+.acp-jobedit-pre {
+  margin: 0;
+  padding: 8px 10px;
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #131a23);
+  color: var(--text-secondary, #9fb0c3);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* ── definition lists (read-only backfill) ─────────────────────────── */
+
+.acp-jobedit-dl {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.acp-jobedit-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 140px) minmax(0, 1fr);
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.acp-jobedit-term {
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+}
+
+.acp-jobedit-value {
+  margin: 0;
+  color: var(--text-primary, #e5edf5);
+  font-size: 11px;
+  word-break: break-all;
+}
+
+/* ── form fields ────────────────────────────────────────────────────── */
+
+.acp-jobedit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.acp-jobedit-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.acp-jobedit-label {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-tertiary, #6b7b8a);
+}
+
+.acp-jobedit-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #131a23);
+  color: var(--text-primary, #e5edf5);
+  font: inherit;
+  font-size: 12px;
+}
+
+.acp-jobedit-text {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 72px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-base, #0b0f14);
+  color: var(--text-primary, #e5edf5);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.acp-jobedit-input:focus,
+.acp-jobedit-text:focus {
+  outline: 1px solid var(--accent, #4ea1ff);
+  outline-offset: 0;
+}
+
+.acp-jobedit-radios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+
+.acp-jobedit-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary, #9fb0c3);
+  cursor: pointer;
+}
+
+.acp-jobedit-radio input {
+  margin: 0;
+}
+
+/* ── lists / diff ───────────────────────────────────────────────────── */
+
+.acp-jobedit-list,
+.acp-jobedit-errors,
+.acp-jobedit-diff {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 2px;
+}
+
+.acp-jobedit-list {
+  color: var(--text-secondary, #9fb0c3);
+}
+
+.acp-jobedit-list--warn {
+  color: var(--amber, #d9a441);
+}
+
+.acp-jobedit-errors {
+  color: var(--red, #e55353);
+}
+
+.acp-jobedit-diff {
+  color: var(--text-secondary, #9fb0c3);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+}
+
+/* ── buttons ────────────────────────────────────────────────────────── */
+
+.acp-jobedit-btn {
+  appearance: none;
+  justify-self: start;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: 5px;
+  background: var(--bg-elevated, #1a2332);
+  color: var(--text-secondary, #b0bec8);
+  font: inherit;
+  font-size: 11px;
+  padding: 5px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.acp-jobedit-btn:hover:not(:disabled) {
+  border-color: var(--accent, #4ea1ff);
+  color: var(--text-primary, #e5edf5);
+}
+
+.acp-jobedit-btn:focus-visible {
+  outline: 2px solid var(--accent, #4ea1ff);
+  outline-offset: 1px;
+}
+
+.acp-jobedit-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.acp-jobedit-btn--primary {
+  border-color: var(--accent, #4ea1ff);
+  background: var(--accent, #4ea1ff);
+  color: var(--bg-base);
+}
+
+.acp-jobedit-btn--primary:hover:not(:disabled) {
+  color: var(--bg-base);
+  filter: brightness(1.06);
+}
+
+/* ── receipt ────────────────────────────────────────────────────────── */
+
+.acp-jobedit-receipt {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #131a23);
+}
+
+.acp-jobedit-receipt[data-acp-receipt-state="error"] {
+  border-color: var(--red, #e55353);
+  color: var(--red, #e55353);
+}
+
+.acp-jobedit-receipt-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.acp-jobedit-receipt-body {
+  margin: 0;
+  font-size: 12px;
+}
+
+.acp-jobedit-receipt-line {
+  margin: 0;
+  color: var(--text-secondary, #9fb0c3);
+  font-size: 11px;
+}
+
+/* Stale draft / coverage warnings on the panel root are surfaced through the
+ * status + list copy; the receipt attempt line stays readable in both cases. */
+.acp-jobedit[data-acp-draft-stale="true"] .acp-jobedit-status,
+.acp-jobedit[data-acp-coverage="blocked"] .acp-jobedit-status {
+  color: var(--amber, #d9a441);
+}
+
+/* ── empty / notes ──────────────────────────────────────────────────── */
+
+.acp-jobedit-empty {
+  margin: 0;
+  padding: 0 14px 14px;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+}
+
+/* ── async overlay (loading / error) ────────────────────────────────── */
+
+.acp-jobedit-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 16px 16px;
+  box-sizing: border-box;
+  background: rgba(var(--bg-base-rgb), 0.82);
+}
+
+.acp-jobedit-box {
+  display: grid;
+  gap: 8px;
+  max-width: 380px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #131a23);
+  text-align: center;
+}
+
+.acp-jobedit-message {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-primary, #e5edf5);
+}
+
+.acp-jobedit-detail {
+  margin: 0;
+  color: var(--red, #e55353);
+  font-size: 11px;
+  word-break: break-word;
+}
+
+.acp-jobedit-box .acp-jobedit-btn {
+  justify-self: center;
+}
+
+/* ── narrow panel fallback (module receives a narrow host) ──────────── */
+
+@media (max-width: 720px) {
+  .acp-jobedit-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .acp-jobedit-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+}

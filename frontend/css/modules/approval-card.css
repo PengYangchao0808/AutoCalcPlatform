@@ -1,0 +1,314 @@
+/*
+ * ACP Next — approval-card (A-57 / P22) styles.
+ *
+ * Scope: ONLY the approval-card host DOM (`.acp-ac*`). Colors, radii and
+ * control heights come from css/workbench/base.css + css/shell/shell.css tokens;
+ * no hardcoded palette and no collision with shell/legacy class names.
+ */
+
+.acp-ac {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  overflow: auto;
+  background: var(--bg-base, #0b0f14);
+  color: var(--text-primary, #e5edf5);
+  font-size: 12px;
+}
+
+/* Hidden must win over the display rules below (state toggling uses the
+ * `hidden` property, not class swaps). */
+.acp-ac [hidden] {
+  display: none !important;
+}
+
+/* ── header ─────────────────────────────────────────────────────────── */
+
+.acp-ac-head {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid var(--border-default, #24303b);
+}
+
+.acp-ac-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.acp-ac-badge {
+  justify-self: start;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-default, #24303b);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.acp-ac-badge[data-status="pending"] {
+  border-color: rgba(var(--amber-rgb), 0.5);
+  background: rgba(var(--amber-rgb), 0.12);
+  color: var(--amber, #f2b84b);
+}
+
+.acp-ac-badge[data-status="approved"] {
+  border-color: rgba(var(--green-rgb), 0.5);
+  background: rgba(var(--green-rgb), 0.12);
+  color: var(--green, #38c172);
+}
+
+.acp-ac-badge[data-status="rejected"],
+.acp-ac-badge[data-status="revoked"] {
+  border-color: rgba(var(--red-rgb), 0.55);
+  background: rgba(var(--red-rgb), 0.12);
+  color: var(--red);
+}
+
+.acp-ac-badge[data-status="expired"],
+.acp-ac-badge[data-status="draft"],
+.acp-ac-badge[data-status="unknown"] {
+  color: var(--text-secondary, #b0bec8);
+}
+
+.acp-ac-sub {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+/* ── body / states ──────────────────────────────────────────────────── */
+
+.acp-ac-body {
+  display: grid;
+  gap: 12px;
+  padding: 12px 14px 18px;
+  align-content: start;
+}
+
+.acp-ac-state {
+  margin: 0;
+  color: var(--text-secondary, #b0bec8);
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.acp-ac[data-acp-module-state="error"] .acp-ac-state {
+  color: var(--red);
+}
+
+.acp-ac-note {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.acp-ac-retry {
+  justify-self: start;
+}
+
+/* ── card ───────────────────────────────────────────────────────────── */
+
+.acp-ac-card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.acp-ac-section {
+  display: grid;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle, #1e2832);
+}
+
+.acp-ac-section-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary, #b0bec8);
+}
+
+.acp-ac-grid {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0;
+  min-width: 0;
+}
+
+.acp-ac-grid dt {
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+}
+
+.acp-ac-grid dd {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.acp-ac-mono {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 10.5px;
+}
+
+/* ── reason / notice / actions ──────────────────────────────────────── */
+
+.acp-ac-reason-label {
+  display: block;
+  margin: 0;
+  color: var(--text-secondary, #b0bec8);
+  font-size: 11px;
+}
+
+.acp-ac-reason {
+  width: 100%;
+  box-sizing: border-box;
+  height: var(--toolbar-control-height, 30px);
+  padding: 0 8px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #1a2332);
+  color: var(--text-primary, #e5edf5);
+  font-size: 12px;
+}
+
+.acp-ac-reason:focus {
+  outline: none;
+  border-color: var(--accent, #4ea1ff);
+}
+
+.acp-ac-reason:disabled {
+  opacity: 0.55;
+}
+
+.acp-ac-notice {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.acp-ac-notice[data-kind="error"] {
+  border-color: rgba(var(--red-rgb), 0.45);
+  background: rgba(var(--red-rgb), 0.08);
+  color: var(--red);
+}
+
+.acp-ac-notice[data-kind="conflict"] {
+  border-color: rgba(var(--amber-rgb), 0.45);
+  background: rgba(var(--amber-rgb), 0.08);
+  color: var(--amber, #f2b84b);
+}
+
+.acp-ac-notice[data-kind="ok"] {
+  border-color: rgba(var(--green-rgb), 0.45);
+  background: rgba(var(--green-rgb), 0.08);
+  color: var(--green);
+}
+
+.acp-ac-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.acp-ac-actions .acp-btn {
+  flex: 1 1 auto;
+  min-width: 88px;
+}
+
+.acp-ac-actions .acp-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+  border-color: var(--border-default, #24303b);
+}
+
+.acp-ac-actions[data-busy="true"] .acp-btn {
+  opacity: 0.5;
+}
+
+.acp-ac-revoke {
+  color: var(--amber, #f2b84b);
+}
+
+/* ── pending list ───────────────────────────────────────────────────── */
+
+.acp-ac-pending {
+  display: grid;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle, #1e2832);
+}
+
+.acp-ac-pending-title {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+}
+
+.acp-ac-pending-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.acp-ac-pending-item {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 10.5px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.acp-ac-pending-item[data-active="true"] {
+  border-color: var(--accent, #4ea1ff);
+  color: var(--text-primary, #e5edf5);
+  background: var(--accent-soft, rgba(78, 161, 255, 0.14));
+}
+
+/* ── narrow panel (≤720px): single-column metadata, stacked actions ─── */
+
+@media (max-width: 720px) {
+  .acp-ac-head {
+    padding: 10px 10px 8px;
+  }
+
+  .acp-ac-body {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .acp-ac-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  .acp-ac-grid dt {
+    margin-top: 4px;
+  }
+
+  .acp-ac-actions .acp-btn {
+    flex: 1 1 120px;
+  }
+
+  .acp-ac-pending-list {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

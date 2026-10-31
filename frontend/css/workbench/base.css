@@ -9,20 +9,36 @@
   --text-secondary: #b0bec8;
   --text-tertiary: #6b7b8a;
   --accent: #4ea1ff;
-  --accent-soft: rgba(78, 161, 255, 0.14);
+  --accent-soft: rgba(var(--accent-rgb), 0.14);
   --green: #38c172;
   --amber: #f2b84b;
   --red: #e55353;
   --radius: 10px;
   --radius-sm: 6px;
   --transition: 0.15s ease;
-  --shadow-panel: 0 16px 48px rgba(0, 0, 0, 0.24);
+  --shadow-panel: 0 16px 48px rgba(var(--black-rgb), 0.24);
   /* Unified size tokens */
   --nav-control-height: 38px;
   --toolbar-control-height: 30px;
   --small-button-height: 30px;
   --primary-button-height: 34px;
   --status-chip-height: 22px;
+  /* RGB channels for alpha tints. Module stylesheets compose rgba() from
+     these channels instead of hardcoding a palette; the single source of the
+     base hue stays the token above. Defined once here — modules must not
+     redefine them. */
+  --accent-rgb: 78, 161, 255;
+  --green-rgb: 56, 193, 114;
+  --amber-rgb: 242, 184, 75;
+  --red-rgb: 229, 83, 83;
+  --bg-base-rgb: 11, 15, 20;
+  --bg-panel-rgb: 17, 24, 33;
+  --text-secondary-rgb: 176, 190, 200;
+  --white-rgb: 255, 255, 255;
+  --black-rgb: 0, 0, 0;
+  /* A-35: second overlay model keeps the legacy structure-viewer cyan; the
+     value lives here so molecule-viewer.css carries no literal. */
+  --viewer-overlay: #7fd4e6;
 }
 
 * { box-sizing: border-box; }
@@ -42,8 +58,8 @@ body {
 body {
   font-family: "IBM Plex Sans", "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
   background:
-    radial-gradient(circle at top left, rgba(78, 161, 255, 0.09), transparent 24%),
-    radial-gradient(circle at bottom right, rgba(56, 193, 114, 0.05), transparent 18%),
+    radial-gradient(circle at top left, rgba(var(--accent-rgb), 0.09), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(var(--green-rgb), 0.05), transparent 18%),
     var(--bg-base);
   color: var(--text-primary);
   min-height: 100vh;
