@@ -374,15 +374,16 @@ def test_options_translate_to_backend_keywords(tmp_path: Path) -> None:
             )
         ]
     )
-    options = IrcOptions(maxpoints=25, step=0.15, initial_hessian="calculate")
+    options = IrcOptions(maxpoints=25)
 
     result = _run(backend, options=options, target_dir=target_dir)
 
     kwargs = backend.calls[0]["kwargs"]
     assert kwargs["direction"] == "both"
     assert kwargs["max_iter"] == 25
-    assert kwargs["step"] == pytest.approx(0.15)
-    assert kwargs["initial_hessian"] == "calculate"
+    # round-5: step / initial_hessian are refused before kwargs assembly; the
+    # refusal is covered by test_cccp_irc_boundary_contract
+    assert "step" not in kwargs and "initial_hessian" not in kwargs
     assert result.status == "completed"
 
 

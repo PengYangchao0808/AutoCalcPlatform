@@ -206,11 +206,24 @@ _PES_INPUT_PROPERTIES: dict[str, Any] = {
             "artifact_path, source_job_id, structure_selector, charge, multiplicity."
         ),
     },
-    "coordinate": {**_COORDINATE_OBJECT, "description": "Primary scan coordinate (0-based atoms)."},
+    "coordinate": {
+        **_COORDINATE_OBJECT,
+        "description": (
+            "Primary scan coordinate (0-based atoms). When both coordinate and "
+            "coordinates are given they must normalize to the same complete "
+            "definition (atoms, unit, start/end, n_points, values), otherwise "
+            "the submission is refused with rule=conflicting_fields — the "
+            "platform never silently picks one."
+        ),
+    },
     "coordinates": {
         "type": "array",
         "items": _COORDINATE_OBJECT,
-        "description": "Synchronous coordinates (max 64); keeps topology, never flattened.",
+        "description": (
+            "Synchronous coordinates (max 64); keeps topology, never flattened. "
+            "coordinates-only submissions are allowed (primary = coordinates[0]); "
+            "with a coordinate present, coordinates[0] must equal it."
+        ),
     },
     "selection": {
         "type": "object",
@@ -226,6 +239,14 @@ _PES_INPUT_PROPERTIES: dict[str, Any] = {
     },
     "source_job_id": {"type": "string", "description": "Upstream job id (manifest path)."},
     "from_artifact": {"type": "string", "description": "Upstream artifact (manifest path)."},
+    "scan_request": {
+        "type": "object",
+        "description": (
+            "Prepared scan-request carrier (edit/replay). Consumed after "
+            "normalization; it must not contradict the expanded "
+            "coordinate/coordinates/protocol fields."
+        ),
+    },
     "from": {"type": "string", "description": "Resolved manifest path (post-resolution mirror)."},
     "coordinate_plan": {"type": "object", "description": "Manifest-path --plan JSON."},
     "product": {"type": "string"},
@@ -842,7 +863,13 @@ def describe_workflow(workflow: str) -> dict[str, Any]:
             "functional": {"type": "string"},
             "basis": {"type": "string"},
             "maxpoints": {"type": "integer", "minimum": 1},
-            "step": {"type": "number"},
+            "step": {
+                "type": "number",
+                "description": (
+                    "Rejected for new executions: no validated ORCA IRC step "
+                    "mapping exists. Omit it; maxpoints is the iteration cap."
+                ),
+            },
         }
     elif canonical == "tsmode":
         block = _basic_workflow_block(

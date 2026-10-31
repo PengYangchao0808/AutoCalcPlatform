@@ -143,22 +143,30 @@ def merge_edit_input(original: dict[str, Any], patch: dict[str, Any]) -> dict[st
 
 
 def _scan_coordinates(method: dict[str, Any], inp: dict[str, Any]) -> list[dict[str, Any]]:
-    flags = scan_method_flags(method, inp)
-    result = []
-    for index, flag in enumerate(flags):
-        if flag != "--coordinate":
-            continue
-        parts = flags[index + 1].split(",")
-        atoms = [int(part) for part in parts[:-2]]
-        result.append(
-            {
-                "kind": {2: "distance", 3: "angle", 4: "dihedral"}[len(atoms)],
-                "atoms": atoms,
-                "start": float(parts[-2]),
-                "end": float(parts[-1]),
-            }
-        )
-    return result
+    """Normalized coordinates for the edit projection (shared parser, no flags).
+
+    The projection must keep working while a stale level mirror disagrees with
+    an explicit method value (the edit form shows the effective selection); the
+    strict conflict refusal belongs to submission, not to hydration.
+    """
+    from acp.calculations.pes.normalization import (
+        CoordinateError as _CoordinateError,
+    )
+    from acp.calculations.pes.normalization import normalize_scan_entries
+
+    try:
+        entries = normalize_scan_entries(inp, method)
+    except _CoordinateError:
+        return []
+    return [
+        {
+            "kind": str(entry.get("kind") or "distance"),
+            "atoms": [int(atom) for atom in entry.get("atoms") or ()],
+            "start": float(entry.get("start") or 0.0),
+            "end": float(entry.get("end") or 0.0),
+        }
+        for entry in entries
+    ]
 
 
 def method_projection_for_edit(spec: JobSpec) -> dict[str, Any]:
@@ -197,9 +205,13 @@ def method_projection_for_edit(spec: JobSpec) -> dict[str, Any]:
         level = levels.setdefault("scan", {"engine": "orca"})
         try:
             coordinates = _scan_coordinates(method, inp)
+        except (ValueError, TypeError, KeyError):
+            coordinates = []
+        try:
+            # a stale mirror/point-count conflict must not blank the coordinates
             flags = scan_method_flags(method, inp)
         except (ValueError, TypeError, KeyError):
-            coordinates, flags = [], []
+            flags = []
         if coordinates:
             coordinate = coordinates[0]
             level.update(
@@ -210,7 +222,14 @@ def method_projection_for_edit(spec: JobSpec) -> dict[str, Any]:
                     "scan_coordinate_end": coordinate["end"],
                 }
             )
-        if "--scan-points" in flags:
+        # The projection shows the effective value: an explicit method.scan_points
+        # overrides the stale level mirror (the edit form must not re-apply it).
+        explicit_points = method.get("scan_points")
+        if explicit_points is None:
+            explicit_points = (levels.get("scan") or {}).get("scan_coordinate_points")
+        if explicit_points is not None:
+            level["scan_coordinate_points"] = int(explicit_points)
+        elif "--scan-points" in flags:
             level["scan_coordinate_points"] = int(flags[flags.index("--scan-points") + 1])
         level["scan_use_scants"] = "--scants" in flags
     elif spec.workflow == "irc":
@@ -366,6 +385,12 @@ def apply_edited_parameters(
             method["scan_points"] = changed["scan_coordinate_points"]
         if "scan_use_scants" in changed:
             method["scan_use_scants"] = changed["scan_use_scants"]
+        # A partial edit must not fail on (or re-apply) a stale level mirror:
+        # the explicit execution value wins and the mirror follows it.
+        explicit_points = method.get("scan_points")
+        level_mirror = (method.get("levels") or {}).get("scan")
+        if explicit_points is not None and isinstance(level_mirror, dict):
+            level_mirror["scan_coordinate_points"] = explicit_points
     elif wf == "irc":
         for field, value in changes("irc").items():
             if field in ("maxpoints", "step"):

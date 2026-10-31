@@ -537,19 +537,16 @@ def validate_scan_submission(
                 raise ValueError(f"{label}: unsupported scan coordinate kind {unreachable!r}")
         if math.isclose(start, end, abs_tol=1.0e-9):
             raise ValueError("start and end distances must differ")
-    points = _submission_scan_points(method_map, payload)
-    if points is None:
-        return
-    if isinstance(points, bool):
-        raise ValueError("scan_points must be an integer >= 2")
+    # The boundary validator is the strict consumer of the shared point-count
+    # normalization (round-5 PR-01): disagreeing aliases are refused here even
+    # though the argv generator stays permissive by design (plan todo 9).
+    from acp.calculations.pes.normalization import CoordinateError as _CoordinateError
+    from acp.calculations.pes.normalization import normalize_scan_points
+
     try:
-        parsed_points = int(points)
-    except (TypeError, ValueError) as error:
-        raise ValueError("scan_points must be an integer >= 2") from error
-    if isinstance(points, float) and not points.is_integer():
-        raise ValueError("scan_points must be an integer >= 2")
-    if parsed_points < 2:
-        raise ValueError("scan_points must be an integer >= 2")
+        normalize_scan_points(method_map, payload)
+    except _CoordinateError as error:
+        raise ValueError(str(error)) from error
 
 
 # ── xtbmd_censo_energy flag emission (E7: runner ⇄ script_gen parity) ────

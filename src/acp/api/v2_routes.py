@@ -1040,6 +1040,15 @@ def _submit_batch_item(
         return f"Unsupported workflow '{item.workflow}'. Supported: {list(PUBLIC_WORKFLOWS)}"
     try:
         validate_scan_submission(item.workflow, item.method, item.input)
+        if item.workflow == "PESsearch" and any(
+            key in (item.input or {})
+            for key in ("coordinate", "coordinates", "scan_request")
+        ):
+            # manifest-path PES items carry no scan coordinate; only the
+            # coordinate-bearing branch is normalized (round-5 PR-01)
+            from acp.calculations.pes.normalization import normalize_pes_coordinates
+
+            normalize_pes_coordinates(dict(item.input or {}), field_prefix="input")
     except ValueError as exc:
         logger.warning("batch item %s/%s rejected: %s", item.molecule_name, item.task_name, exc)
         return str(exc)

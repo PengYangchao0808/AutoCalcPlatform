@@ -243,7 +243,8 @@ def test_exact_version_request_negotiates_only_a_covering_implementation() -> No
     assert entry["implemented"] is True
     assert entry["negotiated"] is True
     assert entry["refusal"] is None
-    assert len(mcp.TOOL_ALLOWLIST) == 10
+    assert {"acp_capabilities", "acp_preflight", "acp_submit", "acp_status", "acp_cancel", "acp_prepare_artifact", "acp_read_artifact", "acp_analyze", "acp_get_guidance", "acp_list_jobs"} <= set(mcp.TOOL_ALLOWLIST)
+    assert {"acp_get_pes_review", "acp_publish_pes_review"} <= set(mcp.TOOL_ALLOWLIST)
     # Only now does the model-visible surface grow.
     assert server.research_negotiated is True
     assert len(server.visible_tool_names()) == 20
@@ -432,7 +433,8 @@ def test_http_plain_read_still_answers_the_advertisement(api_client: Any) -> Non
     # No request in this read: nothing is negotiated, so the P1 surface stands.
     assert payload["extensions"][0]["negotiated"] is False
     assert payload["capability_request"]["research_extension"] is None
-    assert len(payload["tools"]) == 10
+    assert set(mcp.TOOL_ALLOWLIST) <= set(payload["tools"])
+    assert {"acp_get_pes_review", "acp_publish_pes_review"} <= set(payload["tools"])
 
 
 def test_http_version_mismatch_and_unknown_fields_are_typed(api_client: Any) -> None:

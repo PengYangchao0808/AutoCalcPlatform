@@ -481,7 +481,7 @@ def run_pes_scan(
         # Preserve the complete curve; selection is exclusively manual.
         ts_recs, int_recs = [], []
         quality = ScanQuality(
-            scan_complete=len(frames) == req.coordinate.n_points,
+            scan_complete=len(frames) == req.scan_coordinates[0].n_points,
             sp_incomplete=profile.sp_incomplete,
             needs_review=True,
             notes=("manual_only: save exact frames explicitly",),

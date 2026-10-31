@@ -59,6 +59,9 @@ _EXPECTED_TOOL_FAMILIES = {
     # 2026-10-30 guidance batch (plan §5): additive read-only families.
     "guidance_discovery_read",
     "task_lookup",
+    # round-5 PR-07: selection read/publish families.
+    "selection_read",
+    "selection_publish",
 }
 
 
@@ -388,11 +391,17 @@ def test_handle_line_frames_json_and_reports_parse_error() -> None:
 # --------------------------------------------------------------------------- #
 
 
+def _selection_tools() -> set[str]:
+    return {mcp.McpTool.GET_PES_REVIEW, mcp.McpTool.PUBLISH_PES_REVIEW}
+
+
 def test_tools_list_is_the_frozen_allowlist() -> None:
     tools = _call(_server(), "tools/list")["result"]["tools"]
     names = {tool["name"] for tool in tools}
-    assert names == set(mcp.TOOL_ALLOWLIST)
-    assert names == set(mcp.McpTool.ALL)
+    # this server has no selection port, so the two PR-07 tools are not visible
+    expected = set(mcp.TOOL_ALLOWLIST) - _selection_tools()
+    assert names == expected
+    assert names == set(mcp.McpTool.ALL) - _selection_tools()
     for tool in tools:
         assert tool["description"]
         assert isinstance(tool["inputSchema"], dict)
@@ -401,7 +410,7 @@ def test_tools_list_is_the_frozen_allowlist() -> None:
 def test_tool_allowlist_covers_six_families() -> None:
     assert set(mcp.TOOL_FAMILIES) == set(mcp.TOOL_ALLOWLIST)
     assert set(mcp.TOOL_FAMILIES.values()) == _EXPECTED_TOOL_FAMILIES
-    assert len(_EXPECTED_TOOL_FAMILIES) == 8
+    assert len(_EXPECTED_TOOL_FAMILIES) == 10
 
 
 def test_unknown_tool_rejected_at_protocol_layer() -> None:
@@ -730,7 +739,7 @@ def test_capabilities_tool_reports_descriptor_and_tools() -> None:
     fakes = _Fakes()
     data = _call_tool(_server(fakes=fakes), mcp.McpTool.CAPABILITIES)["structuredContent"]["data"]
     assert data["protocol_version"] == mcp.MCP_PROTOCOL_VERSION
-    assert set(data["tools"]) == set(mcp.TOOL_ALLOWLIST)
+    assert set(data["tools"]) == set(mcp.TOOL_ALLOWLIST) - _selection_tools()
     assert fakes.capabilities.calls == 1
 
 
@@ -910,7 +919,7 @@ def test_protocol_level_client_session_record() -> None:
     listed = json.loads(
         server.handle_line(json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}))
     )
-    assert len(listed["result"]["tools"]) == len(mcp.TOOL_ALLOWLIST)
+    assert len(listed["result"]["tools"]) == len(mcp.TOOL_ALLOWLIST) - len(_selection_tools())
 
     submitted = json.loads(
         server.handle_line(

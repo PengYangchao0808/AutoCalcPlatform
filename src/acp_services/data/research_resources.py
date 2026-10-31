@@ -62,15 +62,23 @@ RESEARCH_RESOURCE_SCHEMA = "acp2.data.research-resource.v1"
 #: C's published document schema ids.
 PROPOSAL_SCHEMA = "acp2.experience.proposal.v1"
 RESEARCH_RECORD_SCHEMA = "acp2.experience.research-record.v1"
-SUPPORTED_RESEARCH_SCHEMAS: frozenset[str] = frozenset({PROPOSAL_SCHEMA, RESEARCH_RECORD_SCHEMA})
+#: Round-5 PR-06: bounded PES selection authorizations are opaque documents in
+#: the same CAS store (no second candidate/authorization database).
+SELECTION_AUTHORIZATION_SCHEMA = "acp2.selection.authorization.v1"
+SUPPORTED_RESEARCH_SCHEMAS: frozenset[str] = frozenset(
+    {PROPOSAL_SCHEMA, RESEARCH_RECORD_SCHEMA, SELECTION_AUTHORIZATION_SCHEMA}
+)
 
 _ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 _ID_PREFIX = "rr_"
 _RESOURCE_KEY_PREFIX = "rrk_"
-_RESEARCH_RESOURCE_KINDS: frozenset[str] = frozenset({"proposal", "record"})
+_RESEARCH_RESOURCE_KINDS: frozenset[str] = frozenset(
+    {"proposal", "record", "authorization"}
+)
 _SCHEMA_TO_KIND: dict[str, str] = {
     PROPOSAL_SCHEMA: "proposal",
     RESEARCH_RECORD_SCHEMA: "record",
+    SELECTION_AUTHORIZATION_SCHEMA: "authorization",
 }
 _DOCUMENT_ID_FIELD: dict[str, str] = {
     "proposal": "proposal_id",

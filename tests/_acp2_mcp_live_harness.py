@@ -63,6 +63,10 @@ EXPECTED_TOOLS = frozenset(
         "acp_get_guidance",
         "acp_list_jobs",
         "acp_analyze",
+        # round-5 PR-07: the selection read/publish tools are assembled by the
+        # Controller bootstrap, so the live allowlist carries them too.
+        "acp_get_pes_review",
+        "acp_publish_pes_review",
     }
 )
 SERVER_VERSION = "2025-06-18"

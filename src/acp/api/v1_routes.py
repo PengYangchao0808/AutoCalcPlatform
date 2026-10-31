@@ -1781,9 +1781,21 @@ def _prepare_bond_scan_input(
     selection = inp.get("selection")
     protocol = inp.get("protocol")
     if not isinstance(coordinate, dict) or not coordinate.get("atoms"):
-        raise HTTPException(
-            status_code=422, detail="bond_length_scan requires coordinate with atoms"
-        )
+        # coordinates-only submissions are allowed (round-5); the shared
+        # normalization already verified coordinate == coordinates[0] when both
+        # are present, so the primary is simply coordinates[0].
+        if (
+            isinstance(coordinates, list)
+            and coordinates
+            and isinstance(coordinates[0], dict)
+            and coordinates[0].get("atoms")
+        ):
+            coordinate = coordinates[0]
+        else:
+            raise HTTPException(
+                status_code=422,
+                detail="bond_length_scan requires coordinate (or coordinates) with atoms",
+            )
     if not isinstance(protocol, dict):
         scan_request = inp.get("scan_request")
         inherited = scan_request.get("protocol") if isinstance(scan_request, dict) else None
@@ -1854,6 +1866,56 @@ def _persist_method_warning_event(
         )
     except Exception:
         logger.debug("method_validation_warning event append failed", exc_info=True)
+
+
+def _validate_batch_cardinality(inp: dict[str, Any]) -> None:
+    """Refuse a multi-structure Batch submission before any side effect (PR-08).
+
+    The single_flat layout is one scheduler task per selected structure; the old
+    behaviour only surfaced the split after submit.  *actual* is the count after
+    source resolution (inline items or a manifest expansion), never the
+    pre-expansion request shape.
+    """
+    actual: int | None = None
+    items = inp.get("items")
+    if isinstance(items, list) and items:
+        actual = len(items)
+    else:
+        manifest = inp.get("from") or inp.get("manifest_path")
+        if isinstance(manifest, str) and manifest:
+            root = Path(manifest)
+            if root.name == "result_manifest.json" and root.parent.name == "RESULT":
+                root = root.parent.parent
+            try:
+                from acp.calculations.batch.loaders import load_items_from_result_manifest
+
+                actual = len(load_items_from_result_manifest(root))
+            except ValueError:
+                # loader refusals (unconfirmed selection / unsettled publication)
+                # keep their own actionable message; cardinality is not the issue
+                return
+    if actual is None or actual == 1:
+        return
+    raise HTTPException(
+        status_code=422,
+        detail={
+            "code": "input_invalid",
+            "message": (
+                "BatchOptimize accepts exactly one selected structure per scheduler "
+                "task (single_flat); split the request into one task per structure"
+            ),
+            "params": {
+                "field": "input.items",
+                "rule": "layout_limit",
+                "limit": 1,
+                "received": int(actual),
+                "hint": (
+                    "submit one BatchOptimize task per selected structure and keep "
+                    "the candidate source revision/role on each item"
+                ),
+            },
+        },
+    )
 
 
 def _resolve_batch_structures_input(
@@ -2637,12 +2699,32 @@ def _validate_scan_submission(workflow: str, method: dict[str, Any], inp: dict[s
     check for v1 and v2 (indices/finite range/points).  No-op for other
     workflows.
     """
-    if workflow != "scan":
+    if workflow not in ("scan", "PESsearch"):
         return
+    from acp.calculations.pes.normalization import (
+        CoordinateError,
+        normalize_pes_coordinates,
+    )
+
     try:
-        validate_scan_submission(workflow, method, inp)
+        if workflow == "PESsearch":
+            normalize_pes_coordinates(inp or {}, field_prefix="input")
+        else:
+            validate_scan_submission(workflow, method, inp)
+    except CoordinateError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "input_invalid",
+                "message": str(exc),
+                "params": exc.params,
+            },
+        ) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "input_invalid", "message": str(exc)},
+        ) from exc
 
 
 def _submit_idempotency_key(request: Request, req: V1JobCreateRequest) -> str | None:
@@ -2769,6 +2851,7 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
     elif req.workflow == "BatchOptimize":
         req.input, resolved_batch_snapshots = _resolve_batch_structures_input(req.input, request)
         batch_snapshots.extend(resolved_batch_snapshots)
+        _validate_batch_cardinality(req.input)
     elif req.workflow == "tsmode":
         req.input = _prepare_tsmode_input(req.input, manager)
         bundle_level = req.input.pop("_bundle_level", None)
@@ -3962,6 +4045,106 @@ def _stage_remote_review_backups(request: Request, job_id: str) -> None:
     )
 
 
+@router.get("/jobs/{job_id}/pes/review/status")
+def get_pes_review_status(job_id: str, request: Request) -> dict[str, Any]:
+    """Cache-only selection status (round-5 PR-07).
+
+    Never fetches the compute node, never prepares and never writes: a remote
+    job with nothing in the cache reports ``not_prepared`` plus the prepare
+    endpoint instead of a hidden fetch.  This is the read surface the MCP
+    ``acp_get_pes_review`` tool forwards to.
+    """
+    from acp.calculations.pes.publication import PUBLICATION_INTENT_RELATIVE_PATH
+    from acp.calculations.pes.review import load_pes_review, load_pes_review_backups
+
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    if str(record.spec.workflow or "") != "PESsearch":
+        raise HTTPException(status_code=400, detail=f"Not a PESsearch job: {job_id}")
+    remote = _is_remote_job(record)
+    if remote:
+        cache = _remote_structure_cache(request)
+        work_dir = Path(cache.job_root(record.id))
+    else:
+        work_dir = Path(record.work_dir)
+    payload: dict[str, Any] = {
+        "schema_version": "acp2.pes.selection-status.v1",
+        "job_id": job_id,
+        "workflow": "PESsearch",
+        "cache_only": True,
+        "remote": remote,
+        "capability": {
+            "autopublish": _selection_autopublish_enabled(),
+            "publish_endpoint": f"/api/v1/jobs/{job_id}/pes/review",
+            "prepare_endpoint": f"/api/v1/jobs/{job_id}/prepare",
+        },
+    }
+    review = load_pes_review(work_dir) if work_dir.is_dir() else None
+    intent = None
+    try:
+        store = getattr(request.app.state, "job_manager", None)
+        store = getattr(store, "store", None)
+        if store is not None and hasattr(store, "load_selection_publication"):
+            intent = store.load_selection_publication(job_id)
+    except Exception:  # a status read never fails on an optional receipt
+        intent = None
+    if review is None:
+        payload.update(
+            {
+                "status": "not_prepared" if remote else "pending",
+                "reason": (
+                    "selection artifacts are not in the local cache; prepare them"
+                    if remote
+                    else "no confirmed selection yet"
+                ),
+                "review": {},
+                "backups": [],
+                "publication": intent,
+            }
+        )
+        return payload
+    selected = review.get("selected") or []
+    payload.update(
+        {
+            "status": str(review.get("status") or "confirmed"),
+            "revision": int(review.get("revision") or 0),
+            "confirmed_at": review.get("confirmed_at"),
+            "selector": review.get("selector") or "manual",
+            "actor": review.get("actor"),
+            "authorization": review.get("authorization"),
+            "source": {
+                **(review.get("source") or {}),
+                "attempt": int(getattr(record, "attempt", 1) or 1),
+            },
+            "review": review,
+            "selected": [
+                {
+                    "candidate_id": row.get("candidate_id"),
+                    "role": row.get("role"),
+                    "frame_index": row.get("frame_index"),
+                    "structure_path": row.get("structure_path"),
+                    "selection_source": row.get("selection_source"),
+                }
+                for row in selected
+                if isinstance(row, dict)
+            ],
+            "backups": [
+                {
+                    "n": int(row.get("n") or 0),
+                    "confirmed_at": row.get("confirmed_at"),
+                    "selected_count": int(row.get("selected_count") or 0),
+                }
+                for row in load_pes_review_backups(work_dir)
+            ],
+            "publication": intent,
+            "publication_intent_path": f"RESULT/pes_search/{Path(PUBLICATION_INTENT_RELATIVE_PATH).name}",
+        }
+    )
+    return payload
+
+
 @router.get("/jobs/{job_id}/pes/review", response_model=PesReviewStateResponse)
 def get_pes_review(job_id: str, request: Request) -> PesReviewStateResponse:
     """Return the saved manual-review state plus backup rounds (``pending`` when never saved)."""
@@ -3983,6 +4166,225 @@ def get_pes_review(job_id: str, request: Request) -> PesReviewStateResponse:
     if review is None:
         return PesReviewStateResponse(job_id=job_id, status="pending", review={}, backups=backups)
     return PesReviewStateResponse(job_id=job_id, status="confirmed", review=review, backups=backups)
+
+
+def _selection_autopublish_enabled() -> bool:
+    """Whether the authorized-agent publication capability is enabled."""
+    import os
+
+    raw = str(os.environ.get("ACP_SELECTION_AUTOPUBLISH", "1")).strip().lower()
+    return raw not in {"0", "false", "off", "no"}
+
+
+def _server_source_digests(record: Any, candidates: list[dict[str, Any]]) -> tuple[str, str]:
+    """Profile/geometry digests computed from the task's own artifacts (PR-06)."""
+    import hashlib
+
+    from acp.calculations.pes.review import _resolve_frame_source
+
+    root = Path(str(getattr(record, "work_dir", "") or ""))
+    if not root.is_dir():
+        return "", ""
+    status_value = str(
+        getattr(getattr(record, "status", ""), "value", getattr(record, "status", ""))
+    ).upper()
+    try:
+        frame_source = _resolve_frame_source(root, task_status=status_value)
+    except Exception:  # an unreadable source is reported by the publish path
+        return "", ""
+    profile_digest = str(frame_source.data_sha256 or "")
+    geometry_parts: list[str] = []
+    for item in candidates:
+        try:
+            index = int(item.get("frame_index"))
+        except (TypeError, ValueError):
+            continue
+        frame = frame_source.frames_by_index.get(index)
+        if not isinstance(frame, Mapping):
+            continue
+        relative = str(frame.get(frame_source.geometry_key) or "")
+        if not relative:
+            continue
+        geometry_path = root / frame_source.geometry_base / relative
+        if geometry_path.is_file():
+            geometry_parts.append(hashlib.sha256(geometry_path.read_bytes()).hexdigest())
+    geometry_digest = (
+        hashlib.sha256("".join(sorted(geometry_parts)).encode()).hexdigest()
+        if geometry_parts
+        else ""
+    )
+    return profile_digest, geometry_digest
+
+
+def _authorize_agent_selection(
+    request: Request,
+    job_id: str,
+    req: Any,
+) -> Any:
+    """Validate and pre-consume one agent publication; returns the decision.
+
+    The actor/project come from the verified server identity (never the body).
+    """
+    import hashlib
+    import json as _json
+
+    from acp_services.contracts.selection import (
+        SelectionPublicationRequest,
+        SelectionSourceBinding,
+    )
+    from acp_services.runtime.selection_authorization import (
+        SelectionAuthorizationError,
+        SelectionAuthorizationService,
+    )
+
+    if not _selection_autopublish_enabled():
+        raise HTTPException(
+            status_code=403,
+            detail="authorized agent publication is disabled on this deployment",
+        )
+    if not req.authorization_id:
+        raise HTTPException(
+            status_code=422, detail="agent publication requires authorization_id"
+        )
+    store = getattr(request.app.state, "research_resources", None)
+    if store is None:
+        raise HTTPException(
+            status_code=503, detail="selection authorization store is not configured"
+        )
+    identity = _command_identity(request)
+    principal_id = str(getattr(identity, "principal_id", "") or "")
+    project_id = str(getattr(identity, "project_id", None) or "uncategorized")
+    record = _manager(request).get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"job {job_id} not found")
+    attempt = int(getattr(record, "attempt", 1) or 1)
+    spec = getattr(record, "spec", None)
+    method_block = getattr(spec, "method", None) or {}
+    method = str(method_block.get("method") or method_block.get("functional") or "")
+    resources = getattr(spec, "resources", None) or {}
+    nproc = int(resources.get("nproc") or 0)
+    source_binding = dict(req.source_binding or {})
+    candidates = tuple(item.model_dump(exclude_none=True) for item in req.candidates)
+    requested_profile = str(source_binding.get("profile_digest") or "")
+    requested_geometry = str(source_binding.get("geometry_digest") or "")
+    server_profile, server_geometry = _server_source_digests(record, list(candidates))
+    if requested_profile and server_profile and requested_profile != server_profile:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "stale_source",
+                "message": (
+                    "the selection source profile changed; re-read the task and "
+                    "re-publish against the current attempt"
+                ),
+                "params": {
+                    "field": "source_binding.profile_digest",
+                    "rule": "stale_source",
+                },
+            },
+        )
+    if requested_geometry and server_geometry and requested_geometry != server_geometry:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "stale_source",
+                "message": (
+                    "the selected frame geometry changed; re-read the task and "
+                    "re-publish against the current attempt"
+                ),
+                "params": {
+                    "field": "source_binding.geometry_digest",
+                    "rule": "stale_source",
+                },
+            },
+        )
+    selection_request = SelectionPublicationRequest(
+        authorization_id=str(req.authorization_id),
+        selector="agent",
+        actor_principal_id=principal_id,
+        project_id=project_id,
+        source=SelectionSourceBinding(
+            job_id=job_id,
+            attempt=attempt,
+            # the server-computed digests are authoritative; a client claim was
+            # only accepted after it matched (otherwise stale_source above)
+            profile_digest=server_profile or requested_profile,
+            geometry_digest=server_geometry or requested_geometry,
+        ),
+        workflow="PESsearch",
+        candidates=candidates,
+        method=method,
+        nproc=nproc,
+        idempotency_key=req.idempotency_key,
+        expected_revision=req.expected_revision,
+    )
+    action_digest = hashlib.sha256(
+        _json.dumps(
+            {
+                "job_id": job_id,
+                "attempt": attempt,
+                "expected_revision": req.expected_revision,
+                "candidates": candidates,
+                "note": req.note or "",
+                "authorization_id": str(req.authorization_id),
+            },
+            sort_keys=True,
+            default=str,
+        ).encode("utf-8")
+    ).hexdigest()
+    service = getattr(request.app.state, "selection_authorizations", None)
+    if service is None:
+        service = SelectionAuthorizationService(store)
+        request.app.state.selection_authorizations = service
+    try:
+        decision = service.validate(
+            selection_request,
+            latest_attempt=attempt,
+            action_digest=action_digest,
+        )
+        service.consume(selection_request, decision, action_digest=action_digest)
+    except SelectionAuthorizationError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": exc.code, "message": str(exc), "details": exc.details},
+        ) from exc
+    decision_payload = decision.to_dict()
+    decision_payload["action_digest"] = action_digest
+    decision_payload["actor"] = principal_id
+    return decision_payload
+
+
+def _publication_intent_store(request: Request, job_id: str) -> Any:
+    """The Services-backed publication intent store for the API path."""
+    from acp.calculations.pes.publication import StoreIntentStore
+
+    manager = getattr(request.app.state, "job_manager", None)
+    if manager is None or getattr(manager, "store", None) is None:
+        return None
+    return StoreIntentStore(manager.store, job_id)
+
+
+def _publication_http_error(exc: Exception) -> HTTPException:
+    """Map publication-group failures to typed HTTP errors (retry/recovery info)."""
+    from acp.calculations.pes.publication import (
+        PublicationConflictError,
+        PublicationInProgressError,
+        PublicationRecoveryError,
+    )
+
+    if isinstance(exc, PublicationRecoveryError):
+        return HTTPException(
+            status_code=409,
+            detail={
+                "code": "publication_recovering",
+                "message": str(exc),
+                "publication": exc.intent,
+                "completed_stages": list(exc.completed),
+            },
+        )
+    if isinstance(exc, (PublicationConflictError, PublicationInProgressError)):
+        return HTTPException(status_code=409, detail=str(exc))
+    return HTTPException(status_code=409, detail=str(exc))
 
 
 def _notify_structure_sources_updated(request: Request, job_id: str) -> None:
@@ -4028,6 +4430,7 @@ def restore_pes_review_endpoint(
         backup_rel=(f"RESULT/pes_search/{PES_REVIEW_BACKUP_TEMPLATE.format(n=int(req.backup))}"),
     )
 
+    from acp.calculations.pes.publication import PublicationConflictError, PublicationInProgressError, PublicationRecoveryError
     from acp.calculations.pes.review import PesReviewError, RevisionConflictError
     from acp.calculations.pes.review import restore_pes_review as restore_pes_review_state
 
@@ -4037,9 +4440,13 @@ def restore_pes_review_endpoint(
             int(req.backup),
             expected_revision=req.expected_revision,
             source_task_status=task_status,
+            idempotency_key=req.idempotency_key,
+            intent_store=_publication_intent_store(request, job_id),
         )
     except RevisionConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (PublicationConflictError, PublicationInProgressError, PublicationRecoveryError) as exc:
+        raise _publication_http_error(exc) from exc
     except PesReviewError as exc:
         message = str(exc)
         status_code = 404 if "not found" in message else 422
@@ -4047,7 +4454,26 @@ def restore_pes_review_endpoint(
 
     source_block = payload.get("source") or {}
     if remote_ctx is not None:
-        _remote_review_write_back(remote_ctx[0], remote_ctx[1], payload)
+        try:
+            _remote_review_write_back(remote_ctx[0], remote_ctx[1], payload)
+            write_back = "written"
+        except HTTPException as exc:
+            logger.warning("PES restore write-back failed for %s: %s", job_id, exc.detail)
+            publication = dict(payload.get("publication") or {})
+            publication["write_back"] = "failed"
+            publication["write_back_error"] = str(exc.detail)
+            payload["publication"] = publication
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "审阅写回计算节点失败（远端可能部分更新；发布意图可对账）: "
+                    f"{exc.detail}; publication={json.dumps(publication, ensure_ascii=False, default=str)}"
+                ),
+            ) from exc
+    if isinstance(payload.get("publication"), dict):
+        payload["publication"].setdefault(
+            "write_back", "written" if remote_ctx is not None else "local"
+        )
 
     _notify_structure_sources_updated(request, job_id)
 
@@ -4070,6 +4496,7 @@ def restore_pes_review_endpoint(
             )
             for row in payload.get("selected") or []
         ],
+        publication=payload.get("publication"),
     )
 
 
@@ -4087,9 +4514,31 @@ def save_pes_review_endpoint(
         frame_indexes={int(item.frame_index) for item in req.candidates},
     )
 
+    from acp.calculations.pes.publication import PublicationConflictError, PublicationInProgressError, PublicationRecoveryError
     from acp.calculations.pes.review import PesReviewError, RevisionConflictError
     from acp.calculations.pes.review import save_pes_review as persist_pes_review
 
+    selector = str(req.selector or "manual")
+    if selector not in {"manual", "manual_frame", "agent"}:
+        raise HTTPException(status_code=422, detail=f"unsupported selection selector {selector!r}")
+    if selector == "agent" and req.actor:
+        # the actor is server-owned; accepting a body value would be a
+        # misleading "forged but ignored" field (PR-06 criterion 2).
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "input_invalid",
+                "message": "actor is server-owned for agent publications; omit it",
+                "params": {"field": "actor", "rule": "server_identity_owned"},
+            },
+        )
+    agent_authorization: dict | None = None
+    agent_source_binding: dict | None = None
+    agent_actor: str | None = None
+    if selector == "agent":
+        agent_authorization = _authorize_agent_selection(request, job_id, req)
+        agent_source_binding = dict(req.source_binding or {})
+        agent_actor = str(agent_authorization.get("actor") or "")
     try:
         payload = persist_pes_review(
             work_dir,
@@ -4098,15 +4547,45 @@ def save_pes_review_endpoint(
             note=req.note or "",
             expected_revision=req.expected_revision,
             source_task_status=task_status,
+            idempotency_key=req.idempotency_key,
+            intent_store=_publication_intent_store(request, job_id),
+            selector=selector,
+            actor=agent_actor,
+            authorization=agent_authorization,
+            source_binding=agent_source_binding,
         )
     except RevisionConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (PublicationConflictError, PublicationInProgressError, PublicationRecoveryError) as exc:
+        raise _publication_http_error(exc) from exc
     except PesReviewError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     source_block = payload.get("source") or {}
     if remote_ctx is not None:
-        _remote_review_write_back(remote_ctx[0], remote_ctx[1], payload)
+        try:
+            _remote_review_write_back(remote_ctx[0], remote_ctx[1], payload)
+            write_back = "written"
+        except HTTPException as exc:
+            # The local publication is complete, but the remote copy is not:
+            # fail loudly AND expose the publication intent for reconciliation
+            # (the new selection must not be advertised as published remotely).
+            logger.warning("PES review write-back failed for %s: %s", job_id, exc.detail)
+            publication = dict(payload.get("publication") or {})
+            publication["write_back"] = "failed"
+            publication["write_back_error"] = str(exc.detail)
+            payload["publication"] = publication
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "审阅写回计算节点失败（远端可能部分更新；发布意图可对账）: "
+                    f"{exc.detail}; publication={json.dumps(publication, ensure_ascii=False, default=str)}"
+                ),
+            ) from exc
+    if isinstance(payload.get("publication"), dict):
+        payload["publication"].setdefault(
+            "write_back", "written" if remote_ctx is not None else "local"
+        )
 
     _notify_structure_sources_updated(request, job_id)
 
@@ -4164,6 +4643,7 @@ def save_pes_review_endpoint(
         frame_source=str(source_block.get("frame_source") or ""),
         candidates=selected_rows,
         initial_guess_status=guess_status,
+        publication=payload.get("publication"),
     )
 
 
@@ -9383,11 +9863,36 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
         *_scan_geometry_advisories(req.workflow, raw_input or {}, req.method or {}),
         *_source_advisories,
     ]
+    # Round-5 PR-03: one read-only analysis shared with submit/edit; the
+    # requested/effective/executed receipt never claims an execution fact.
+    submission_analysis: dict[str, Any] | None = None
+    try:
+        from acp.calculations.submission_validation import analysis_for
+
+        analysis = analysis_for(req.workflow, raw_input or {}, req.method or {})
+    except ValueError as exc:
+        params = (
+            exc.params
+            if hasattr(exc, "params") and isinstance(getattr(exc, "params"), dict)
+            else {"field": "input", "rule": "invalid_parameter"}
+        )
+        raise _command_error(422, "input_invalid", str(exc), params=params) from exc
+    if analysis is not None:
+        submission_analysis = analysis.to_dict()
+        submission_analysis["requested"] = {
+            "input": dict(raw_input or {}),
+            "method": dict(req.method or {}),
+        }
+        submission_analysis["executed"] = None
+        submission_analysis["unverified_checks"] = [
+            str(item.get("id")) for item in _source_advisories if item.get("id")
+        ]
     return {
         "schema_version": 1,
         "feasible": feasible,
         "reasons": reasons,
         "advisories": advisories,
+        "submission_analysis": submission_analysis,
         "plan_digest": digest,
         "plan_summary": {
             "workflow": req.workflow,
@@ -9499,6 +10004,61 @@ def _operation_response(
                 "relative_path": payload.get("relative_path") or None,
             }
     return response
+
+
+def _prepare_fast_path(
+    request: Request,
+    record: Any,
+    job_id: str,
+    *,
+    purpose: str,
+    artifact_id: str,
+    relative_path: str,
+    attempt: int,
+    expected_revision: int,
+) -> dict[str, Any] | None:
+    """Return a ready receipt for an already-prepared local artifact (PR-09).
+
+    Uses the existing cache-only Data reader (validation + prepared index), never
+    an ad-hoc ``exists()`` check; a remote or unprepared artifact falls through
+    to the durable operation path unchanged.
+    """
+    if purpose != "artifact":
+        return None
+    if _is_remote_job(record):
+        return None
+    status_value = str(getattr(getattr(record, "status", ""), "value", getattr(record, "status", "")))
+    if status_value not in {"completed", "failed", "cancelled"}:
+        # only a terminal attempt can have verified, already-published products
+        return None
+    try:
+        reader = _cache_only_resource_reader(request)
+        snapshot = reader.availability(
+            "artifact",
+            job_id=job_id,
+            workflow=str(record.spec.workflow or ""),
+            relative_path=relative_path,
+            expected_revision=expected_revision,
+            attempt=attempt,
+        )
+    except Exception:  # an unavailable reader is not a fast-path failure
+        return None
+    if not snapshot.is_readable():
+        return None
+    freshness = str(getattr(snapshot.freshness, "value", snapshot.freshness))
+    if freshness == "stale":
+        return None
+    return {
+        "schema_version": "acp2.prepare.v1",
+        "status": "ready",
+        "fast_path": True,
+        "job_id": job_id,
+        "attempt": attempt,
+        "artifact_id": artifact_id,
+        "availability": snapshot.to_dict(),
+        "read": f"/api/v1/jobs/{job_id}/prepared/artifact?artifact_id={artifact_id}",
+        "reused_prepared": True,
+    }
 
 
 @router.post("/jobs/{job_id}/prepare")
@@ -9624,6 +10184,18 @@ def prepare_artifact(
     else:
         resource_id = f"structure-input:{relative_path or 'input.xyz'}"
         resource_kind = ResourceKind.INPUT
+    fast_ready = _prepare_fast_path(
+        request,
+        record,
+        job_id,
+        purpose=purpose,
+        artifact_id=artifact_id,
+        relative_path=relative_path,
+        attempt=attempt,
+        expected_revision=int(normalized.get("expected_revision") or 0),
+    )
+    if fast_ready is not None:
+        return fast_ready
     identity = f"{job_id}\x1f{attempt}\x1f{resource_id}".encode()
     resource_digest = expected_digest or ("sha256:" + hashlib.sha256(identity).hexdigest())
     service = getattr(manager, "_prepare_operations", None)

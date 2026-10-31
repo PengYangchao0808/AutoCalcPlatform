@@ -36,6 +36,42 @@ def _default_manifest_publisher() -> ManifestPublisher:
     return _DEFAULT_PUBLISHER
 
 
+
+def _convergence_verdict(
+    directions: Sequence[str], diagnostics: JsonValue | None
+) -> bool | None:
+    """Whole-run convergence from the per-direction diagnostics (never the status)."""
+    entries = diagnostics if isinstance(diagnostics, dict) else {}
+    flags = [
+        str((entries.get(direction) or {}).get("convergence") or "unknown")
+        if isinstance(entries.get(direction), dict)
+        else "unknown"
+        for direction in directions
+    ]
+    if not flags:
+        return None
+    if all(flag == "converged" for flag in flags):
+        return True
+    if all(flag == "unknown" for flag in flags):
+        return None
+    return False
+
+
+def _completion_verdict(
+    directions: Sequence[str],
+    diagnostics: JsonValue | None,
+    status: str,
+) -> bool:
+    """Every requested direction discovered an endpoint and the task completed."""
+    if str(status) != "completed" or not directions:
+        return False
+    entries = diagnostics if isinstance(diagnostics, dict) else {}
+    return all(
+        isinstance(entries.get(direction), dict)
+        and (entries.get(direction) or {}).get("endpoint_discovery") == "found"
+        for direction in directions
+    )
+
 def run_irc_workflow(
     input_artifact: StructureArtifact,
     directions: Sequence[str] = ("forward", "reverse"),
@@ -45,7 +81,7 @@ def run_irc_workflow(
     method: str = "r2SCAN-3c",
     basis: str = "",
     maxpoints: int = 100,
-    step: float = 0.1,
+    step: float | None = None,
     input_role: StructureRole | str | None = None,
     charge: int = 0,
     multiplicity: int = 1,
@@ -57,8 +93,11 @@ def run_irc_workflow(
     """Run an independent IRC request from a transition-state artifact."""
     if maxpoints < 1:
         raise ValueError("IRC maxpoints must be at least 1")
-    if step <= 0:
-        raise ValueError("IRC step must be positive")
+    if step is not None:
+        raise ValueError(
+            "IRC step is not executable (no validated ORCA IRC step mapping); "
+            "omit it — maxpoints controls the iteration cap"
+        )
 
     raw_directions = tuple(str(direction).strip().lower() for direction in directions)
     if raw_directions == ("both",):
@@ -124,7 +163,6 @@ def run_irc_workflow(
             "result_dir": str(storage.result_dir()),
             "basis": basis,
             "max_iter": maxpoints,
-            "step": step,
             "charge": charge,
             "multiplicity": multiplicity,
         }
@@ -135,7 +173,6 @@ def run_irc_workflow(
         method=method,
         basis=basis,
         maxpoints=maxpoints,
-        step=step,
         charge=charge,
         multiplicity=multiplicity,
         config=config,
@@ -188,6 +225,20 @@ def run_irc_workflow(
         "step": step,
         "endpoints": endpoint_paths,
         "endpoint_count": calculation.metadata.get("endpoint_count", 0),
+        # round-5 PR-04: per-direction evidence survives failures too
+        "filtered_endpoint_count": calculation.metadata.get("filtered_endpoint_count", 0),
+        "direction_diagnostics": calculation.metadata.get("direction_diagnostics") or {},
+        "last_observed_geometries": (
+            calculation.metadata.get("last_observed_geometries") or {}
+        ),
+        "converged": _convergence_verdict(
+            irc_request.directions, calculation.metadata.get("direction_diagnostics")
+        ),
+        "complete": _completion_verdict(
+            irc_request.directions,
+            calculation.metadata.get("direction_diagnostics"),
+            calculation.status,
+        ),
         "errors": list(calculation.errors),
         "ts_source": dict(source_provenance or {}),
     }
@@ -234,7 +285,6 @@ def _irc_checkpoint_fingerprint(
     method: str,
     basis: str,
     maxpoints: int,
-    step: float,
     charge: int,
     multiplicity: int,
     config: Mapping[str, JsonValue] | None,
@@ -248,7 +298,6 @@ def _irc_checkpoint_fingerprint(
         "method": method,
         "basis": basis,
         "maxpoints": maxpoints,
-        "step": step,
         "charge": charge,
         "multiplicity": multiplicity,
         "config": dict(config or {}),

@@ -157,17 +157,33 @@ def test_cli_string_coordinate_is_not_interpreted_as_a_distance(client: TestClie
     assert response.json()["advisories"] == []
 
 
-def test_scan_request_envelope_is_outside_the_pes_contract(client: TestClient) -> None:
-    """input.scan_request is a runner fallback carrier, not a public PES shape.
-
-    The contract refuses it, so the advisory never has to interpret it (and the
-    refusal carries the allowed keys instead of a silent ignore).
-    """
+def test_scan_request_envelope_is_consumed_when_it_agrees(client: TestClient) -> None:
+    """An equivalent input.scan_request carrier is accepted (round-5 PR-03)."""
     payload = _pes_input(4.9, 1.55)
-    coordinate = payload.pop("coordinate")
+    coordinate = payload["coordinate"]
     payload["scan_request"] = {"coordinate": coordinate}
     response = client.post(
         "/api/v1/preflight", json={"workflow": "PESsearch", "input": payload}
     )
-    assert response.status_code == 422
-    assert response.json()["detail"]["params"]["rule"] == "unknown_field"
+    assert response.status_code == 200, response.text
+
+
+def test_scan_request_envelope_contradicting_the_fields_is_refused(
+    client: TestClient,
+) -> None:
+    """A carrier that contradicts the expanded coordinate is a typed refusal."""
+    payload = _pes_input(4.9, 1.55)
+    payload["scan_request"] = {
+        "coordinate": {
+            "kind": "distance",
+            "atoms": [0, 4],
+            "start": "4.90",
+            "end": "1.55",
+        }
+    }
+    response = client.post(
+        "/api/v1/preflight", json={"workflow": "PESsearch", "input": payload}
+    )
+    assert response.status_code == 422, response.text
+    params = response.json()["detail"]["params"]
+    assert params["rule"] == "conflicting_fields"

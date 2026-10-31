@@ -249,6 +249,10 @@ _BATCHOPTIMIZE = _workflow_entry(
         "7. 只对可比的物种/方法/能量定义/环境做比较；区分电子能与热化学校正，不重复加校正。\n"
         "8. 失败项先判断可修复原因，再在剩余范围与预算内补算；复用已完成阶段的身份校验机制。\n"
         "9. TS 研究若缺模式关联或 IRC/端点证据，继续适用验证或明确停在候选阶段。\n\n"
+        "提交约束（机器可读）：single_flat 布局下每个 scheduler task 恰好一个选中结构；"
+        "两个候选必须拆成两个 BatchOptimize 任务，各自保留候选来源 revision/role（from_artifact 引用上游 "
+        "RESULT/result_manifest.json 的已提交版本）。每个意图生成一次幂等键并重试复用；两个有意重复的计算"
+        "使用不同幂等键。task_id 与 job_id 是兼容别名，记录引用时保存带 attempt 的 TaskRef。\n\n"
         "输出：逐候选来源、角色、实际阶段、结构/结果引用、科学判定与缺项、失败恢复、下一验证任务或停止原因。"
     ),
     coverage="first_batch",
@@ -257,7 +261,7 @@ _BATCHOPTIMIZE = _workflow_entry(
         "topic.method_energy_comparability",
         "topic.partial_failure_recovery",
     ),
-    version="1.1.0",
+    version="1.2.0",
 )
 
 _PESSEARCH = _workflow_entry(
@@ -274,7 +278,9 @@ _PESSEARCH = _workflow_entry(
         "当前工作流：PESsearch。键长势能面扫描优先采用此入口。\n"
         "1. 核对用户给定或确认的反应假设、关键原子及结构映射；缺少关键位点则询问，不假称已运行自动位点识别。\n"
         "2. 读取当前可执行的扫描模式和请求契约；核对原子索引约定（0-based）、坐标类型/单位（合法 unit："
-        "distance 用 angstrom、angle/dihedral 用 degree；非法值当前要到执行层才失败，提交前自查）、范围/点数"
+        "distance 用 angstrom、angle/dihedral 用 degree；非法值当前要到执行层才失败，提交前自查）、范围/点数；"
+        "coordinate 与 coordinates 同时给出时必须完整一致（原子/单位/起止/点数/values），否则提交会被拒绝"
+        "（rule=conflicting_fields）——平台不会静默选用其一；仅给 coordinates 时主坐标为第一项。另有"
         "及多坐标关系；double_bond_scan 类选择要求扫描原子对为感知键（平台限制），因此从产物侧拉伸已成键对更稳妥；bond_stretch 允许任意两原子（平台不强制感知键），但从反应物侧压缩非键对时曲线中段更易发生分支切换。\n"
         "3. 绑定扫描方法与逐帧能量方法、电子态、资源和预算。大体系例外须记录理由，不自行按原子数拍阈值。\n"
         "4. 执行后先读曲线概况和全部点覆盖状态，再读候选区间的完整邻域点表及必要结构；区分扫描能与单点能，"

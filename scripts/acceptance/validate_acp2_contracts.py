@@ -431,11 +431,18 @@ def validate_p2_implementation_status(root: Path) -> None:
         "acp_read_artifact",
         "acp_analyze",
     }
-    expected_p1 = _FROZEN_P1 | {"acp_get_guidance", "acp_list_jobs"}
+    # Round-5 PR-07 adds the two selection tools to the advertised set; the
+    # expectation stays registry-derived (a removal still breaks it).
+    expected_p1 = _FROZEN_P1 | {
+        "acp_get_guidance",
+        "acp_list_jobs",
+        "acp_get_pes_review",
+        "acp_publish_pes_review",
+    }
     if set(advertised) != expected_p1:
         fail(
             "P2 p1_advertised must list the frozen P1 tools plus the additive "
-            "acp_get_guidance/acp_list_jobs; got "
+            "guidance/selection tools; got "
             f"{sorted(set(advertised) ^ expected_p1)}"
         )
     if len(promised) != 10:

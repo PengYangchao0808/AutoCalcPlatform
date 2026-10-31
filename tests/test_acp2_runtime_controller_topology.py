@@ -205,6 +205,8 @@ def test_client_read_only_surface(controller: LiveController) -> None:
         "acp_analyze",
         "acp_get_guidance",
         "acp_list_jobs",
+        "acp_get_pes_review",
+        "acp_publish_pes_review",
     }
 
     health = client.health()

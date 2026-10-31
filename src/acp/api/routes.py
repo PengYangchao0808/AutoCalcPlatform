@@ -275,6 +275,35 @@ def _capability_limits(request: Request) -> dict[str, Any]:
     when it is not assembled, say so instead of inventing a limit.
     """
     published = dict(_CONTROLLER_LIMITS)
+    manager = getattr(request.app.state, "job_manager", None)
+    registry = getattr(manager, "registry", None)
+    local = getattr(registry, "local", None)
+    local_max_jobs = getattr(local, "max_jobs", None)
+    if local_max_jobs is not None:
+        running = None
+        counter = getattr(manager, "count_local_running_jobs", None)
+        if callable(counter):
+            try:
+                running = int(counter())
+            except Exception:  # a discovery read never fails on a counter
+                running = None
+        published["local"] = {
+            "max_jobs": int(local_max_jobs),
+            "running_count": running,
+            "count_scope": (
+                "local STARTING/RUNNING jobs only; remote jobs hold node "
+                "reservations and never occupy a local slot"
+            ),
+            "source": "registry.local.max_jobs",
+        }
+    published["max_running"] = {
+        "status": "legacy_noop",
+        "effective_config": "registry.local.max_jobs",
+        "note": (
+            "the legacy max_running / ACP_MAX_RUNNING value does not cap local "
+            "concurrency; the effective limit is registry.local.max_jobs"
+        ),
+    }
     admission = getattr(request.app.state, "admission", None)
     limits = getattr(admission, "limits", None)
     if limits is None:
@@ -451,6 +480,21 @@ def _discovery_navigation() -> dict[str, Any]:
         "guidance": {
             "tool": "acp_get_guidance",
             "arguments": {"guide_id": "<id>"},
+        },
+        "selection_status": {
+            "tool": "acp_get_pes_review",
+            "arguments": {"job_id": "<PESsearch job id>"},
+            "note": "cache-only; an uncached remote selection returns not_prepared",
+        },
+        "selection_publish": {
+            "tool": "acp_publish_pes_review",
+            "arguments": {
+                "job_id": "<job id>",
+                "authorization_id": "<bounded authorization>",
+                "candidates": "[{frame_index, role}]",
+                "idempotency_key": "<stable retry key>",
+            },
+            "note": "requires a bounded authorization; the actor is server-verified",
         },
         "rule": "do not read platform source to guess payloads; follow fallbacks or report a gap",
     }

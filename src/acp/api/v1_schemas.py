@@ -256,6 +256,10 @@ class JobLiveStatus(BaseModel):
     stage_index: int | None = None
     stage_total: int | None = None
     metrics: list[JobLiveMetric] = Field(default_factory=list)
+    # Round-5 PR-09: the observation behind this view (time/source/unknown reason)
+    observed_at: str | None = None
+    source: str | None = None
+    unknown_reason: str | None = None
 
 
 class V1JobRecordModel(BaseModel):
@@ -1554,12 +1558,20 @@ class S2StructurePreviewResponse(BaseModel):
 
 class BondLengthScanJobInput(BaseModel):
     source: BondLengthScanSource
-    coordinate: dict[str, Any]
+    coordinate: dict[str, Any] | None = None
     coordinates: list[dict[str, Any]] | None = None
     selection: dict[str, Any] = Field(default_factory=dict)
     protocol: dict[str, Any] = Field(default_factory=dict)
     source_job_id: str | None = None
     from_artifact: str | None = None
+
+    @model_validator(mode="after")
+    def _require_a_coordinate_source(self) -> "BondLengthScanJobInput":
+        if self.coordinate is None and not self.coordinates:
+            raise ValueError(
+                "input requires coordinate or a non-empty coordinates list"
+            )
+        return self
 
 
 class S2FrameModel(BaseModel):
@@ -1693,6 +1705,16 @@ class PesReviewRequest(BaseModel):
     candidates: list[PesReviewCandidateItem] = Field(default_factory=list)
     note: str | None = None
     expected_revision: int | None = None  # 409 when it mismatches the stored revision
+    # Retried request identity: same key + same payload replays the original
+    # publication instead of creating a second revision.
+    idempotency_key: str | None = None
+    # Round-5 PR-06: explicit selection source. ``manual`` keeps the historical
+    # path; ``agent`` requires an authorization id and is validated server-side
+    # against the platform identity (the body can never supply the actor).
+    selector: str = "manual"
+    authorization_id: str | None = None
+    source_binding: dict | None = None
+    actor: str | None = None
 
 
 class PesReviewCandidate(BaseModel):
@@ -1736,6 +1758,9 @@ class PesReviewResponse(BaseModel):
     frame_source: str = ""
     candidates: list[PesReviewCandidate] = Field(default_factory=list)
     result_manifest: str = "RESULT/result_manifest.json"
+    # Publication group receipt (intent path/status/completed stages; write_back
+    # state for remote jobs). Absent on historical reads.
+    publication: dict | None = None
     initial_guess_status: InitialGuessStatus | None = None
 
 
@@ -1760,6 +1785,7 @@ class PesReviewRestoreRequest(BaseModel):
 
     backup: int
     expected_revision: int | None = None
+    idempotency_key: str | None = None
 
 
 class PesReviewRestoreResponse(BaseModel):
@@ -1771,6 +1797,7 @@ class PesReviewRestoreResponse(BaseModel):
     source_task_status: str = ""
     scan_complete: bool | None = None
     frame_source: str = ""
+    publication: dict | None = None
     candidates: list[PesReviewCandidate] = Field(default_factory=list)
 
 

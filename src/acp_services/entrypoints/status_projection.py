@@ -74,6 +74,28 @@ def _task_id(payload: Mapping[str, Any], fallback: str = "") -> str:
     return fallback
 
 
+def _storage_locator(row: Mapping[str, Any], attempt: int) -> dict[str, Any]:
+    """Project where the attempt's storage lives (relative identifiers only)."""
+    work_dir = row.get("work_dir")
+    directory = _directory_name(work_dir)
+    remote = bool(row.get("remote_job_id")) or str(row.get("execution_mode") or "") == "remote"
+    locator: dict[str, Any] = {
+        "schema_version": "acp2.storage-locator.v1",
+        "attempt": int(attempt),
+        "storage_type": "remote" if remote else "local",
+        "binding": "compute-node" if remote else "run-root",
+        "relative_path": directory or "",
+        "locatable": bool(directory),
+    }
+    if not directory:
+        locator["locatable"] = False
+        locator["unknown_reason"] = "no_work_dir"
+    elif remote:
+        # the remote path itself is never projected; only the relative identifier
+        locator["unknown_reason"] = "remote_not_cached_locally"
+    return locator
+
+
 def attempt_release_facts(work_dir: str | Path | None) -> dict[str, str]:
     """Read the attempt's release/plan/submission facts from its own files.
 
@@ -217,6 +239,10 @@ def project_task_status(
         # relative identifier (mol_<Workflow>__<n> or the submitted
         # molecule_name/task_name) and survives the redaction net.
         "directory_name": _directory_name(row.get("work_dir")),
+        # Round-5 PR-09: a storage locator the agent can act on without ever
+        # receiving a server-absolute path.  Remote/cache positions are named as
+        # such; an unlocatable attempt says why instead of guessing.
+        "storage_locator": _storage_locator(row, attempt),
     }
     for key in (
         "state_reason",

@@ -468,6 +468,9 @@ WORKFLOW_CONTRACTS: dict[str, WorkflowContract] = {
                 "coordinate_plan",
                 "product",
                 "ts_guess",
+                # prepared carrier (edit/replay); normalized and compared against
+                # the expanded coordinate/protocol fields
+                "scan_request",
             }
         ),
         required_input_any=(
@@ -654,6 +657,33 @@ def _levels_for_method(
     return contract.levels
 
 
+def _reject_irc_step(method: Mapping[str, Any]) -> None:
+    """IRC step is accepted by old payloads but has no executable consumer.
+
+    Round-5 P0: the contract advertised ``step`` and the CLI accepted it while the
+    ORCA IRC interface never consumed it (an "unused kwargs" warning), so an
+    agent could believe it controlled the IRC step size.  New executions refuse
+    it with a typed error; historical payloads stay readable.
+    """
+    if method.get("step") is not None:
+        raise SubmissionContractError(
+            "irc method.step is not executable (no validated ORCA IRC step "
+            "mapping); omit it — maxpoints controls the iteration cap",
+            field_name="method.step",
+            rule="unsupported_parameter",
+        )
+    levels = method.get("levels")
+    if isinstance(levels, Mapping):
+        irc_level = levels.get("irc")
+        if isinstance(irc_level, Mapping) and irc_level.get("step") is not None:
+            raise SubmissionContractError(
+                "irc method.levels.irc.step is not executable (no validated ORCA "
+                "IRC step mapping); omit it",
+                field_name="method.levels.irc.step",
+                rule="unsupported_parameter",
+            )
+
+
 def _validate_method(workflow: str, method: Mapping[str, Any], contract: WorkflowContract) -> None:
     unknown = sorted(str(key) for key in method if str(key) not in contract.method_keys)
     if unknown:
@@ -663,6 +693,8 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
             rule="unknown_field",
             allowed=tuple(sorted(contract.method_keys)),
         )
+    if workflow == "irc":
+        _reject_irc_step(method)
     # The schema/workflow consistency is independent of the levels container:
     # a wrong schema_id must be refused even when levels is omitted.
     schema_id = method.get("schema_id")
@@ -836,6 +868,29 @@ def _validate_input(
             )
 
 
+def _validate_pes_coordinates(input_mapping: Mapping[str, Any]) -> None:
+    """Shared PES coordinate normalization (round-5 P0).
+
+    Runs the same normalization the executor uses, so a submission carrying
+    both ``coordinate`` and a disagreeing ``coordinates[0]`` is refused at the
+    boundary instead of silently scanning one of them.
+    """
+    from acp.calculations.pes.normalization import (
+        CoordinateError,
+        normalize_pes_coordinates,
+    )
+
+    try:
+        normalize_pes_coordinates(input_mapping, field_prefix="input")
+    except CoordinateError as exc:
+        raise SubmissionContractError(
+            str(exc),
+            field_name=exc.field,
+            rule=exc.rule,
+            allowed=tuple(exc.params.get("allowed") or ()),
+        ) from exc
+
+
 def validate_workflow_submission(
     workflow: str,
     *,
@@ -864,3 +919,9 @@ def validate_workflow_submission(
     _validate_input(
         workflow, input_mapping, contract, require_sources=input is not None
     )
+    if workflow == "PESsearch" and any(
+        key in input_mapping for key in ("coordinate", "coordinates", "scan_request")
+    ):
+        # manifest-path submissions carry no scan coordinate at all; only the
+        # coordinate-bearing branch is normalized here
+        _validate_pes_coordinates(input_mapping)

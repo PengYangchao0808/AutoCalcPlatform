@@ -374,6 +374,28 @@ class _ControllerAnalysis:
             raise _tool_error("analyze", exc) from None
 
 
+class _ControllerSelection:
+    """PES selection read/publish forward (round-5 PR-07).
+
+    The read is the cache-only status route; the publish is the authorized
+    agent path.  The actor/authorization live server-side: this port only
+    forwards, so the MCP tool cannot widen them.
+    """
+
+    def __init__(self, client: ControllerClient) -> None:
+        self._client = client
+
+    def get_review_status(self, job_id: str, *, workspace_id: str) -> Any:
+        del workspace_id
+        return self._client.get_pes_review_status(job_id)
+
+    def publish_review(
+        self, job_id: str, request: Mapping[str, Any], *, workspace_id: str
+    ) -> Any:
+        del workspace_id
+        return self._client.publish_pes_review(job_id, dict(request))
+
+
 class _ControllerGuidance:
     """Read-only guidance forward (plan 2026-10-30 §5: 指南读取).
 
@@ -472,6 +494,7 @@ def build_mcp_runtime(
         artifacts=_ControllerArtifacts(client),
         analysis=_ControllerAnalysis(client),
         guidance=_ControllerGuidance(client),
+        selection=_ControllerSelection(client),
         # M2-01c: the ten research tools reach the Controller application service
         # through the one transport; the adapter holds no research store.
         research=ControllerResearchPort(client),

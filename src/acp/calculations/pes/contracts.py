@@ -14,6 +14,12 @@ import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
+from acp.calculations.pes.normalization import (
+    CoordinateError,
+    normalize_pes_coordinates,
+    parse_pes_coordinate,
+)
+
 if TYPE_CHECKING:
     from acp.calculations.levels import CalculationLevel
 
@@ -156,27 +162,23 @@ class ScanCoordinate:
     @classmethod
     def from_dict(cls, payload: dict[str, Any] | None) -> ScanCoordinate:
         payload = dict(payload or {})
-        raw_atoms = payload.get("atoms")
-        kind = str(payload.get("kind") or "distance")
-        expected_atoms = {"distance": 2, "angle": 3, "dihedral": 4}.get(kind)
-        if expected_atoms is None:
-            raise ValueError("coordinate.kind must be one of 'distance', 'angle', or 'dihedral'")
-        if not isinstance(raw_atoms, (list, tuple)) or len(raw_atoms) != expected_atoms:
-            raise ValueError(f"coordinate.kind='{kind}' requires {expected_atoms} atoms")
-        atoms: tuple[int, ...] = (int(raw_atoms[0]), int(raw_atoms[1]))
-        if expected_atoms > 2:
-            atoms = tuple(int(atom) for atom in raw_atoms)
-        start_raw = payload.get("start")
-        end_raw = payload.get("end")
-        n_points = _coerce_int(payload.get("n_points"), 16)
+        if not payload:
+            # Internal rebuild of a protocol carrier without a coordinate: the
+            # dataclass default is used (a *submission* never reaches here with
+            # an empty object — normalize_pes_coordinates refuses that).
+            return cls()
+        try:
+            normalized = parse_pes_coordinate(payload, field="coordinate")
+        except CoordinateError as exc:
+            raise ValueError(str(exc)) from exc
         return cls(
-            kind=kind,
-            atoms=atoms,
-            unit=str(payload.get("unit") or ("angstrom" if kind == "distance" else "degree")),
-            start=None if start_raw is None else float(start_raw),
-            end=None if end_raw is None else float(end_raw),
-            n_points=n_points,
-            values=tuple(float(v) for v in payload.get("values", ())),
+            kind=str(normalized["kind"]),
+            atoms=tuple(int(atom) for atom in normalized["atoms"]),
+            unit=str(normalized["unit"]),
+            start=normalized["start"],
+            end=normalized["end"],
+            n_points=int(normalized["n_points"]),
+            values=tuple(float(v) for v in normalized.get("values") or ()),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -471,24 +473,33 @@ class PesScanRequest:
     @classmethod
     def from_dict(cls, payload: dict[str, Any] | None) -> PesScanRequest:
         payload = dict(payload or {})
-        raw_coordinates = payload.get("coordinates")
-        if raw_coordinates is None:
-            coordinates: tuple[ScanCoordinate, ...] = ()
-        elif isinstance(raw_coordinates, (list, tuple)):
-            coordinates = tuple(
-                ScanCoordinate.from_dict(dict(item))
-                for item in raw_coordinates
-                if isinstance(item, dict)
+        if not payload:
+            return cls()
+        try:
+            normalized = normalize_pes_coordinates(payload, field_prefix="input")
+        except CoordinateError as exc:
+            raise ValueError(str(exc)) from exc
+        coordinates = tuple(
+            ScanCoordinate(
+                kind=str(item["kind"]),
+                atoms=tuple(int(atom) for atom in item["atoms"]),
+                unit=str(item["unit"]),
+                start=item["start"],
+                end=item["end"],
+                n_points=int(item["n_points"]),
+                values=tuple(float(v) for v in item.get("values") or ()),
             )
-            if len(coordinates) != len(raw_coordinates):
-                raise ValueError("coordinates entries must be objects")
-        else:
-            raise ValueError("coordinates must be a list of coordinate objects")
-        raw_coordinate = payload.get("coordinate")
-        if not raw_coordinate and coordinates:
-            coordinate = coordinates[0]
-        else:
-            coordinate = ScanCoordinate.from_dict(dict(raw_coordinate or {}))
+            for item in normalized["coordinates"]
+        )
+        coordinate = ScanCoordinate(
+            kind=str(normalized["coordinate"]["kind"]),
+            atoms=tuple(int(atom) for atom in normalized["coordinate"]["atoms"]),
+            unit=str(normalized["coordinate"]["unit"]),
+            start=normalized["coordinate"]["start"],
+            end=normalized["coordinate"]["end"],
+            n_points=int(normalized["coordinate"]["n_points"]),
+            values=tuple(float(v) for v in normalized["coordinate"].get("values") or ()),
+        )
         protocol_payload = dict(payload.get("protocol") or {})
         protocol_payload["coordinate"] = coordinate.to_dict()
         return cls(

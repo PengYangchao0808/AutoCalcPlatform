@@ -250,10 +250,15 @@ def run_irc(
 
         qc_result = to_qc_result(raw_result) if not isinstance(raw_result, QCResult) else raw_result
         success = bool(getattr(raw_result, "success", False)) or bool(qc_result.success)
-        endpoints = discover_endpoints(raw_result, target_dir, inputs)
-        completed = completed_directions(raw_result, endpoints, success)
+        endpoints_all = discover_endpoints(raw_result, target_dir, inputs)
+        completed = completed_directions(raw_result, endpoints_all, success)
+        # Round-5 PR-04: keep the pre-filter facts even when the formal endpoints
+        # are filtered out (iteration-limit / unverified runs).
+        direction_diagnostics = _direction_diagnostics(
+            raw_result, endpoints_all, completed, directions
+        )
         endpoints = {
-            direction: info for direction, info in endpoints.items() if direction in completed
+            direction: info for direction, info in endpoints_all.items() if direction in completed
         }
         errors: list[str] = []
         if not success:
@@ -289,6 +294,8 @@ def run_irc(
 
         metadata = qc_metadata_json(qc_result.metadata)
         base_metadata: dict[str, JsonValue] = {"directions": list(directions)}
+        base_metadata["direction_diagnostics"] = direction_diagnostics
+        base_metadata["filtered_endpoint_count"] = len(endpoints_all)
         base_metadata["endpoint_count"] = len(endpoints)
         for direction in ("forward", "reverse"):
             if direction in endpoints:
@@ -297,6 +304,9 @@ def run_irc(
             base_metadata["trajectory_path"] = "trajectories/irc_trajectory.json"
             base_metadata["trajectory_frame_count"] = len(trajectory.get("frames") or [])
             base_metadata["path_files"] = dict(trajectory.get("geometry_files") or {})
+            base_metadata["last_observed_geometries"] = _last_observed_geometries(
+                trajectory, directions
+            )
         metadata.update(base_metadata)
 
         if success:
@@ -322,11 +332,17 @@ def run_irc(
                 tuple(str(s) for s in qc_result.symbols) if qc_result.symbols else tuple(symbols)
             ),
             frequencies=tuple(float(f) for f in (qc_result.frequencies or ())),
-            converged=success,
+            converged=_overall_convergence(directions, completed, direction_diagnostics),
             provenance=_provenance(backend_label, request),
             payload=IrcPayload(
                 directions=_direction_entries(
-                    directions, endpoints, completed, trajectory, result_dir, backend_label
+                    directions,
+                    endpoints,
+                    completed,
+                    trajectory,
+                    result_dir,
+                    backend_label,
+                    diagnostics=direction_diagnostics,
                 )
             ),
             metadata=metadata,
@@ -453,6 +469,22 @@ def discover_endpoints(
                 continue
             if geometry is not None:
                 coords = np.asarray(geometry, dtype=float)
+                if coords.ndim != 2 or coords.shape[1] != 3:
+                    continue
+                expected_atoms = len(inputs.symbols or ())
+                if expected_atoms and coords.shape[0] != expected_atoms:
+                    logger.warning(
+                        "Refusing IRC %s final geometry: %d atoms vs %d expected",
+                        direction,
+                        coords.shape[0],
+                        expected_atoms,
+                    )
+                    continue
+                if not np.isfinite(coords).all():
+                    logger.warning(
+                        "Refusing IRC %s final geometry: non-finite coordinates", direction
+                    )
+                    continue
                 if coords.ndim == 2 and coords.shape[1] == 3:
                     from cccp.utils import file_io
 
@@ -496,6 +528,146 @@ def _read_endpoint_xyz(path: Path) -> tuple[NDArray[np.float64] | None, list[str
         return None, []
 
 
+_IRC_SECTION_HEADER = re.compile(r"(?:FORWARD|BACKWARD|REVERSE)\s+IRC", re.I)
+_IRC_CONVERGENCE_MARKERS = re.compile(
+    r"IRC.*CONVERGED|IRC.*CONVERGENCE REACHED|IRC.*CONVERGENCE ACHIEVED", re.I
+)
+_IRC_ITERATION_LIMIT = "MAXIMUM NUMBER OF ITERATIONS REACHED"
+
+
+def _direction_section(log: str, direction: str) -> str | None:
+    """The log section for one direction (headers: FORWARD/BACKWARD/REVERSE IRC)."""
+    headers = list(_IRC_SECTION_HEADER.finditer(log))
+    for index, header in enumerate(headers):
+        label = header.group(0).upper()
+        header_direction = "forward" if "FORWARD" in label else "reverse"
+        if header_direction != direction:
+            continue
+        end = headers[index + 1].start() if index + 1 < len(headers) else len(log)
+        return log[header.end() : end]
+    return None
+
+
+def _direction_convergence_evidence(
+    raw_result: object, direction: str, *, completed: set[str]
+) -> tuple[str, str | None]:
+    """Per-direction convergence: converged / not_converged / unknown + evidence."""
+    metadata = getattr(raw_result, "metadata", None) or {}
+    statuses = metadata.get("direction_status") or {}
+    if direction in statuses:
+        status = str(statuses[direction])
+        if status in {"completed", "converged"}:
+            return "converged", f"direction_status={status}"
+        return "not_converged", f"direction_status={status}"
+    log_path = getattr(raw_result, "log_file", None)
+    if log_path and Path(log_path).is_file():
+        log = Path(log_path).read_text(encoding="utf-8", errors="replace")
+        section = _direction_section(log, direction)
+        if section is None:
+            return "unknown", "no_directional_section"
+        if _IRC_ITERATION_LIMIT in section.upper():
+            return "not_converged", "iteration_limit"
+        if _IRC_CONVERGENCE_MARKERS.search(section):
+            return "converged", "log_convergence_marker"
+        return "unknown", "no_convergence_marker"
+    # ``completed`` may also come from the lenient "typed backend success with
+    # explicit endpoints" path; endpoint existence is not convergence evidence
+    # (round-5 PR-04), so an evidence-free direction stays unknown.
+    if direction in completed:
+        return "unknown", "no_directional_evidence"
+    return "unknown", None
+
+
+def _direction_diagnostics(
+    raw_result: object,
+    endpoints_all: Mapping[str, Mapping[str, Any]],
+    completed: set[str],
+    directions: Sequence[str],
+) -> dict[str, JsonValue]:
+    """Pre-filter per-direction facts (endpoint discovery + convergence evidence).
+
+    Kept even when the formal endpoints are filtered out (iteration-limit runs):
+    a failed task must still explain each direction instead of only reporting
+    "no endpoint geometries".
+    """
+    diagnostics: dict[str, JsonValue] = {}
+    for direction in directions:
+        found = direction in endpoints_all
+        convergence, evidence = _direction_convergence_evidence(
+            raw_result, direction, completed=completed
+        )
+        entry: dict[str, JsonValue] = {
+            "endpoint_discovery": "found" if found else "missing",
+            "convergence": convergence,
+        }
+        if evidence is not None:
+            entry["convergence_evidence"] = evidence
+        if found:
+            entry["endpoint_source"] = str(endpoints_all[direction]["path"])
+        diagnostics[direction] = entry
+    return diagnostics
+
+
+def _last_observed_geometries(
+    trajectory: Mapping[str, Any] | None, directions: Sequence[str]
+) -> dict[str, JsonValue]:
+    """Last trajectory frame per direction (never a formal endpoint)."""
+    if trajectory is None:
+        return {}
+    frames_by_direction: dict[str, list[dict[str, Any]]] = {}
+    for frame in trajectory.get("frames") or []:
+        if isinstance(frame, Mapping):
+            direction = str(frame.get("direction") or "")
+            if direction in ("forward", "reverse"):
+                frames_by_direction.setdefault(direction, []).append(dict(frame))
+    files = trajectory.get("geometry_files")
+    result: dict[str, JsonValue] = {}
+    for direction in directions:
+        frames = sorted(
+            frames_by_direction.get(direction) or [],
+            key=lambda frame: int(frame.get("index", 0)),
+        )
+        if not frames:
+            continue
+        last = frames[-1]
+        entry: dict[str, JsonValue] = {
+            "frame_index": int(last.get("index", 0)),
+            "note": "last observed trajectory frame; not a formal endpoint",
+        }
+        if isinstance(files, Mapping) and files.get(direction):
+            entry["path"] = str(files[direction])
+        energy = last.get("energy_hartree")
+        if isinstance(energy, (int, float)) and not isinstance(energy, bool):
+            entry["energy_hartree"] = float(energy)
+        result[direction] = entry
+    return result
+
+
+def _overall_convergence(
+    directions: Sequence[str],
+    completed: set[str],
+    diagnostics: Mapping[str, JsonValue],
+) -> bool | None:
+    """Whole-run convergence: True only when every requested direction converged.
+
+    Process success is not convergence (round-5 PR-04); a run with no usable
+    directional evidence reports ``None`` (unknown) instead of guessing.
+    """
+    if not directions:
+        return None
+    if set(directions) <= completed:
+        return True
+    statuses = [
+        str((diagnostics.get(direction) or {}).get("convergence") or "unknown")
+        if isinstance(diagnostics.get(direction), Mapping)
+        else "unknown"
+        for direction in directions
+    ]
+    if statuses and all(status == "unknown" for status in statuses):
+        return None
+    return False
+
+
 def _single_geometry(text: str) -> bool:
     """Validate exactly one complete XYZ frame (never a trajectory)."""
     lines = text.splitlines()
@@ -526,6 +698,8 @@ def _direction_entries(
     trajectory: Mapping[str, Any] | None,
     result_dir: Path,
     backend: str,
+    *,
+    diagnostics: Mapping[str, JsonValue] | None = None,
 ) -> tuple[IrcDirectionResult, ...]:
     """One entry per requested direction (original order, never renumbered).
 
@@ -545,9 +719,16 @@ def _direction_entries(
         if isinstance(raw_files, Mapping):
             geometry_files = {str(key): str(value) for key, value in raw_files.items()}
 
+    last_observed = _last_observed_geometries(trajectory, directions)
+    diagnostics_map = diagnostics or {}
     entries: list[IrcDirectionResult] = []
     for direction in directions:
         info = endpoints.get(direction)
+        diag = (
+            diagnostics_map.get(direction)
+            if isinstance(diagnostics_map.get(direction), Mapping)
+            else {}
+        )
         frames = sorted(
             frames_by_direction.get(direction) or [],
             key=lambda frame: int(frame.get("index", 0)),
@@ -580,6 +761,28 @@ def _direction_entries(
                 steps=steps,
                 success=info is not None,
                 trajectory_ref=trajectory_ref,
+                endpoint_discovery=str(diag.get("endpoint_discovery"))
+                if diag.get("endpoint_discovery")
+                else None,
+                convergence=str(diag.get("convergence")) if diag.get("convergence") else None,
+                convergence_evidence=(
+                    str(diag.get("convergence_evidence"))
+                    if diag.get("convergence_evidence")
+                    else None
+                ),
+                endpoint_source=(
+                    str(diag.get("endpoint_source")) if diag.get("endpoint_source") else None
+                ),
+                frame_identity=(
+                    f"{direction}:frame_{int(frames[-1].get('index', 0)):04d}"
+                    if frames
+                    else None
+                ),
+                last_observed_geometry=(
+                    dict(last_observed[direction])
+                    if isinstance(last_observed.get(direction), Mapping)
+                    else None
+                ),
             )
         )
     return tuple(entries)
@@ -610,9 +813,15 @@ def _irc_capability_kwargs(
     if options.maxpoints is not None:
         kwargs["max_iter"] = int(options.maxpoints)
     if options.step is not None:
-        kwargs["step"] = options.step
+        raise ValueError(
+            "IRC step is not executable (no validated ORCA IRC step mapping); "
+            "omit IrcOptions.step"
+        )
     if options.initial_hessian is not None:
-        kwargs["initial_hessian"] = options.initial_hessian
+        raise ValueError(
+            "ORCA IRC does not support initial_hessian (no validated mapping); "
+            "the Hessian handoff (hess_file) is the supported path"
+        )
     return kwargs
 
 

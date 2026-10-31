@@ -34,7 +34,7 @@
 
 | 文档 | 内容 | 状态 |
 |---|---|---|
-| [ACP_Simple_Workflows_DevDoc.txt](ACP_Simple_Workflows_DevDoc.txt) | simple 系列（singlepoint/optimize/frequency/optfreq/optfreqsp）开发文档 v6.0 | 契约；同文另有 [HTML 渲染版](ACP_Simple_Workflows_DevDoc.html) |
+| [ACP_Simple_Workflows_DevDoc.txt](ACP_Simple_Workflows_DevDoc.txt) | simple 系列（singlepoint/optimize/frequency/optfreq/optfreqsp）开发文档 v6.0 | 契约；HTML 渲染版当前未随仓库提交（见下方说明，待补后恢复链接） |
 | [ACP_NMR_DP4_DevDoc.md](ACP_NMR_DP4_DevDoc.md) | NMR + DP4/DP5 立体化学归属工作流 | 契约 |
 | [ACP_Electronic_State_CASSCF_Design.md](ACP_Electronic_State_CASSCF_Design.md) | 电子态、自旋极化单重态与 CASSCF/NEVPT2 | 契约 |
 | [ACP_PES_Manual_Review_DevDoc.md](ACP_PES_Manual_Review_DevDoc.md) | PES 人工选点 → BatchOptimize 的帧契约 | 契约 |
@@ -43,7 +43,7 @@
 | [ACP_RI_AuxBasis_Refactor_DevDoc.txt](ACP_RI_AuxBasis_Refactor_DevDoc.txt) | RI 加速与辅助基组配置重构 | 契约 |
 | [ACP_MethodMeta_Frontend_DevDoc.txt](ACP_MethodMeta_Frontend_DevDoc.txt) | `METHOD_META` 前端数据驱动重构 | 契约 |
 
-> `ACP_Simple_Workflows_DevDoc` 目前 **`.txt` 与 `.html` 两格式并存**（同源 v6.0）。`.html` 是 `AGENTS.md` 指向的渲染版，`.txt` 是纯文本版。修改时两侧同步；后续可择一收敛为单一来源（见 [2026-10-31 批次说明](../../archive/2026-10-31/README.md) 的遗留项）。
+> `ACP_Simple_Workflows_DevDoc` 当前仅有 **`.txt` 纯文本版**（v6.0）；HTML 渲染版未随仓库提交，`AGENTS.md` 的 `.html` 指向暂为待补项。修改以 `.txt` 为准，补回 HTML 后再恢复链接与同步要求。
 
 ## 结果读取与查看器
 
