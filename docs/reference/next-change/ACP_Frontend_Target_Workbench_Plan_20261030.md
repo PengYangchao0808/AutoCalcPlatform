@@ -363,3 +363,5 @@ execution: {
 - **D1 = 宿主拓扑 T1 + A2**：ACP 为壳；由 ACP 服务端托管 `dsh web`（即你说的「DSH 服务端」），`/dsh/*` 同源反代并注入 per-process token。需要你确认：**允许 ACP 在内存中持有 DSH launch token**（仅回环、不落日志、不进前端）；在 DSH 无 postMessage 的前提下，项目/任务上下文只经 MCP 工具与 URL 传递。
 - **D4 = 终端/文件先做 D-embed spike**：2–3 天验证 `acp-embed` 插件能否把 DSH 终端/文件面板单独嵌入 ACP 槽位，并让 DSH workspace root 指向 ACP 项目目录；通过则复用 DSH，失败则回退 ACP-native（L0→L1）。需要你确认批准这个 spike 与 workspace 映射方案。
 - **D1b（可选）**：是否保留 T2「DSH 为壳 + ACP 插件」作为后续独立评估？不阻塞本轮；若选它，ACP 的壳/品牌会被 DSH 替换。
+
+> 2026-10-31 后续：顶层拓扑（每用户 Linux 主机 + 每用户 DSH + 虚拟文件系统）已单独定稿于 [多用户拓扑方案](ACP_MultiUser_VirtualHost_DSH_Topology_20261031.md)；T1/T2 取舍以该文档为准（用户级 T2）。
