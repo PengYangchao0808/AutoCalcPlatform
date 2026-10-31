@@ -20,7 +20,7 @@
 |---|---|---|
 | [ACP_3.0_Architecture_20261031.md](ACP_3.0_Architecture_20261031.md) | 以用户虚拟工作站为中心的 RPH/DSH 一体化体系；后端/前端两计划的共同上位 | 现行 |
 | [ACP_3.0_Backend_Plan_20261031.md](ACP_3.0_Backend_Plan_20261031.md) | 后端实现计划（Control Plane / CCCP / RPH） | 现行 |
-| [ACP_3.0_Frontend_Plan_20261031.md](ACP_3.0_Frontend_Plan_20261031.md) | 前端兼容与实施计划（Workbench on DSH） | 现行 |
+| [ACP_3.0_Frontend_Plan_20261031.md](ACP_3.0_Frontend_Plan_20261031.md) | **v2 可视化先行**：`acp.view.v1` 视图模型 + 三模式适配层 + V0–V5 分期；后端缺口登记为 BE-GAP-01…12，DSH 宿主推迟到 V6 | **现行**（前端实施唯一入口） |
 | [ACP_MultiUser_VirtualHost_DSH_Topology_20261031.md](ACP_MultiUser_VirtualHost_DSH_Topology_20261031.md) | 一人一 Linux 虚机 + 一人一 DSH + 虚拟文件系统的代码级差距与文件清单 | 现行（附件） |
 
 ## 前端（2026-10-27…31）
