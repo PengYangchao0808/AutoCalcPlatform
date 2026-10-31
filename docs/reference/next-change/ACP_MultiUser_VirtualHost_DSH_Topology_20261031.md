@@ -2,6 +2,7 @@
 
 日期：2026-10-31
 性质：**目标架构与改造方案**，不是已实现记录。本文回答三个问题：RPH/DSH 在 ACP 中的拓扑位置、每用户虚拟主机与存储如何组织、现有模块要改什么。
+**位置**：ACP 3.0 的**拓扑细节附件**；总纲见 [ACP 3.0 架构与共享契约](ACP_3.0_Architecture_20261031.md)，后端/前端执行见 [后端计划](ACP_3.0_Backend_Plan_20261031.md) / [前端计划](ACP_3.0_Frontend_Plan_20261031.md)。
 上游：`ACP_Frontend_Target_Workbench_Plan_20261030.md`（前端目标形态）、`ACP_2.0_前端同步升级开发方案_20261029.md`、`ACP_Services_Identity_Support_Scope.md`（身份档位）。
 
 ---
