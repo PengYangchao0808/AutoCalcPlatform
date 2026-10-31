@@ -855,7 +855,13 @@ def describe_workflow(workflow: str) -> dict[str, Any]:
             "functional": {"type": "string"},
             "basis": {"type": "string"},
             "maxpoints": {"type": "integer", "minimum": 1},
-            "step": {"type": "number"},
+            "step": {
+                "type": "number",
+                "description": (
+                    "Rejected for new executions: no validated ORCA IRC step "
+                    "mapping exists. Omit it; maxpoints is the iteration cap."
+                ),
+            },
         }
     elif canonical == "tsmode":
         block = _basic_workflow_block(

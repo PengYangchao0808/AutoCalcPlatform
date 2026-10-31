@@ -1453,18 +1453,19 @@ class JobManager:
             or (irc_level.get("maxpoints") if isinstance(irc_level, dict) else None)
             or 100
         )
-        step = (
-            requested.get("step")
-            or (irc_level.get("step") if isinstance(irc_level, dict) else None)
-            or 0.1
-        )
+        if requested.get("step") is not None or (
+            isinstance(irc_level, dict) and irc_level.get("step") is not None
+        ):
+            raise ValueError(
+                "IRC step is not executable (no validated ORCA IRC step mapping); "
+                "remove method.step / levels.irc.step"
+            )
         try:
             maxpoints = int(maxpoints)
-            step = float(step)
         except (TypeError, ValueError, OverflowError) as exc:
-            raise ValueError("IRC maxpoints and step must be valid numbers") from exc
-        if maxpoints < 1 or not math.isfinite(step) or step <= 0:
-            raise ValueError("IRC maxpoints and step must be positive finite numbers")
+            raise ValueError("IRC maxpoints must be a valid number") from exc
+        if maxpoints < 1:
+            raise ValueError("IRC maxpoints must be a positive integer")
         directions = inp.get("directions") or ["forward", "reverse"]
         if (
             not isinstance(directions, (list, tuple))
@@ -1487,7 +1488,7 @@ class JobManager:
                 "charge": source.charge,
                 "multiplicity": source.multiplicity,
             },
-            method=source.method_payload(maxpoints=maxpoints, step=step),
+            method=source.method_payload(maxpoints=maxpoints),
             config_path=source_record.spec.config_path,
         )
 

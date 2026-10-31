@@ -453,6 +453,22 @@ def discover_endpoints(
                 continue
             if geometry is not None:
                 coords = np.asarray(geometry, dtype=float)
+                if coords.ndim != 2 or coords.shape[1] != 3:
+                    continue
+                expected_atoms = len(inputs.symbols or ())
+                if expected_atoms and coords.shape[0] != expected_atoms:
+                    logger.warning(
+                        "Refusing IRC %s final geometry: %d atoms vs %d expected",
+                        direction,
+                        coords.shape[0],
+                        expected_atoms,
+                    )
+                    continue
+                if not np.isfinite(coords).all():
+                    logger.warning(
+                        "Refusing IRC %s final geometry: non-finite coordinates", direction
+                    )
+                    continue
                 if coords.ndim == 2 and coords.shape[1] == 3:
                     from cccp.utils import file_io
 
@@ -610,9 +626,15 @@ def _irc_capability_kwargs(
     if options.maxpoints is not None:
         kwargs["max_iter"] = int(options.maxpoints)
     if options.step is not None:
-        kwargs["step"] = options.step
+        raise ValueError(
+            "IRC step is not executable (no validated ORCA IRC step mapping); "
+            "omit IrcOptions.step"
+        )
     if options.initial_hessian is not None:
-        kwargs["initial_hessian"] = options.initial_hessian
+        raise ValueError(
+            "ORCA IRC does not support initial_hessian (no validated mapping); "
+            "the Hessian handoff (hess_file) is the supported path"
+        )
     return kwargs
 
 

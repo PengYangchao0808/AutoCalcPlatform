@@ -2489,9 +2489,11 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                 "summary": "IRC at the verified source TS calculation level",
                 "levels": {
                     "irc": {
+                        # No step: ORCA IRC has no validated step mapping; the
+                        # profile must not fabricate a control the executor
+                        # refuses (round-5).
                         "engine": "orca",
                         "maxpoints": 100,
-                        "step": 0.1,
                     }
                 },
             }

@@ -61,9 +61,9 @@ def test_irc_inherits_ts_level_not_int_or_single_point(tmp_path: Path) -> None:
     spec = manager._verified_irc_spec(JobSpec(
         workflow="irc",
         input={"source_job_id": record.id, "source_product_id": "batch_item_001"},
-        method={"maxpoints": 55, "step": 0.05},
+        method={"maxpoints": 55},
     ))
-    assert spec.method == {"method": "B97-3c", "basis": "def2-mTZVPP", "maxpoints": 55, "step": 0.05}
+    assert spec.method == {"method": "B97-3c", "basis": "def2-mTZVPP", "maxpoints": 55}
     assert spec.input["ts_source"]["geometry_sha256"] == resolved.geometry_sha256
     assert spec.input["charge"] == 0
 
@@ -224,10 +224,10 @@ def test_manager_builds_irc_spec_from_flat_tsmode_level(tmp_path: Path) -> None:
     spec = manager._verified_irc_spec(JobSpec(
         workflow="irc",
         input={"source_job_id": record.id, "source_product_id": "tsmode_optimized"},
-        method={"maxpoints": 55, "step": 0.05},
+        method={"maxpoints": 55},
     ))
     assert spec.method == {
-        "method": "PBE0", "basis": "def2-TZVP", "maxpoints": 55, "step": 0.05,
+        "method": "PBE0", "basis": "def2-TZVP", "maxpoints": 55,
     }
     assert spec.input["charge"] == 0
     assert spec.input["multiplicity"] == 1

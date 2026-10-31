@@ -45,7 +45,7 @@ def run_irc_workflow(
     method: str = "r2SCAN-3c",
     basis: str = "",
     maxpoints: int = 100,
-    step: float = 0.1,
+    step: float | None = None,
     input_role: StructureRole | str | None = None,
     charge: int = 0,
     multiplicity: int = 1,
@@ -57,8 +57,11 @@ def run_irc_workflow(
     """Run an independent IRC request from a transition-state artifact."""
     if maxpoints < 1:
         raise ValueError("IRC maxpoints must be at least 1")
-    if step <= 0:
-        raise ValueError("IRC step must be positive")
+    if step is not None:
+        raise ValueError(
+            "IRC step is not executable (no validated ORCA IRC step mapping); "
+            "omit it — maxpoints controls the iteration cap"
+        )
 
     raw_directions = tuple(str(direction).strip().lower() for direction in directions)
     if raw_directions == ("both",):
@@ -124,7 +127,6 @@ def run_irc_workflow(
             "result_dir": str(storage.result_dir()),
             "basis": basis,
             "max_iter": maxpoints,
-            "step": step,
             "charge": charge,
             "multiplicity": multiplicity,
         }
@@ -135,7 +137,6 @@ def run_irc_workflow(
         method=method,
         basis=basis,
         maxpoints=maxpoints,
-        step=step,
         charge=charge,
         multiplicity=multiplicity,
         config=config,
@@ -234,7 +235,6 @@ def _irc_checkpoint_fingerprint(
     method: str,
     basis: str,
     maxpoints: int,
-    step: float,
     charge: int,
     multiplicity: int,
     config: Mapping[str, JsonValue] | None,
@@ -248,7 +248,6 @@ def _irc_checkpoint_fingerprint(
         "method": method,
         "basis": basis,
         "maxpoints": maxpoints,
-        "step": step,
         "charge": charge,
         "multiplicity": multiplicity,
         "config": dict(config or {}),

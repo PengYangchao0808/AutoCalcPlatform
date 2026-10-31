@@ -1697,9 +1697,11 @@ class JobRunner:
             maxpoints = method.get("maxpoints") or irc_level.get("maxpoints")
             if maxpoints is not None:
                 cmd += ["--maxpoints", str(maxpoints)]
-            irc_step = method.get("step") or irc_level.get("step")
-            if irc_step is not None:
-                cmd += ["--step", str(irc_step)]
+            if method.get("step") is not None or irc_level.get("step") is not None:
+                raise ValueError(
+                    "IRC step is not executable (no validated ORCA IRC step "
+                    "mapping); remove method.step / levels.irc.step"
+                )
         elif wf == "xtb_optimize":
             cmd += ["--input", str(source), "--output", cli_work_dir]
             if spec.name:

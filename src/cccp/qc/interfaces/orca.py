@@ -1228,11 +1228,19 @@ def _read_endpoint_geometry(
     endpoint_file: Path,
     expected_symbols: list[str],
 ) -> NDArray[np.float64] | None:
-    """Read an IRC endpoint XYZ and validate its atom ordering."""
+    """Read an IRC endpoint XYZ and validate it is exactly one finite frame.
+
+    Round-5 PR-02: the generic ``read_xyz`` reads the first frame of any file,
+    so a trajectory or a concatenated file could be reduced to its first frame
+    and then published as a formal endpoint.  Endpoint evidence requires the
+    strict single-frame reader; anything else is refused (never repaired).
+    """
+    from cccp.io.xyz_validation import SingleFrameXyzError, read_single_frame_xyz
+
     try:
-        coordinates, parsed_symbols = read_xyz(endpoint_file)
-    except OSError as e:
-        logger.warning("Failed to read IRC endpoint %s: %s", endpoint_file, e)
+        coordinates, parsed_symbols = read_single_frame_xyz(endpoint_file)
+    except (OSError, SingleFrameXyzError) as e:
+        logger.warning("Refusing IRC endpoint %s: %s", endpoint_file, e)
         return None
 
     if len(parsed_symbols) != len(expected_symbols):
@@ -2035,6 +2043,12 @@ class ORCAInterface(QCInterfaceBase):
             QCResult with optimization results
         """
         output_dir = Path(output_dir) if output_dir else Path.cwd()
+        for unsupported in ("step", "initial_hessian"):
+            if unsupported in kwargs:
+                raise ValueError(
+                    f"ORCA IRC does not support the legacy '{unsupported}' control "
+                    "(no validated mapping); remove it before running"
+                )
         ensure_dir(output_dir)
 
         input_file = output_dir / f"{output_name}.inp"
@@ -2139,6 +2153,12 @@ class ORCAInterface(QCInterfaceBase):
     ) -> QCResult:
         """Perform an ORCA optimization with a ``%geom Constraints`` block."""
         output_dir = Path(output_dir) if output_dir else Path.cwd()
+        for unsupported in ("step", "initial_hessian"):
+            if unsupported in kwargs:
+                raise ValueError(
+                    f"ORCA IRC does not support the legacy '{unsupported}' control "
+                    "(no validated mapping); remove it before running"
+                )
         ensure_dir(output_dir)
 
         input_file = output_dir / f"{output_name}.inp"
@@ -2769,6 +2789,12 @@ class ORCAInterface(QCInterfaceBase):
             QCResult with single-point energy
         """
         output_dir = Path(output_dir) if output_dir else Path.cwd()
+        for unsupported in ("step", "initial_hessian"):
+            if unsupported in kwargs:
+                raise ValueError(
+                    f"ORCA IRC does not support the legacy '{unsupported}' control "
+                    "(no validated mapping); remove it before running"
+                )
         ensure_dir(output_dir)
 
         input_file = output_dir / f"{output_name}.inp"
@@ -2878,6 +2904,12 @@ class ORCAInterface(QCInterfaceBase):
             QCResult with frequency results
         """
         output_dir = Path(output_dir) if output_dir else Path.cwd()
+        for unsupported in ("step", "initial_hessian"):
+            if unsupported in kwargs:
+                raise ValueError(
+                    f"ORCA IRC does not support the legacy '{unsupported}' control "
+                    "(no validated mapping); remove it before running"
+                )
         ensure_dir(output_dir)
 
         input_file = output_dir / f"{output_name}.inp"
@@ -3014,6 +3046,12 @@ class ORCAInterface(QCInterfaceBase):
             )
 
         output_dir = Path(output_dir) if output_dir else Path.cwd()
+        for unsupported in ("step", "initial_hessian"):
+            if unsupported in kwargs:
+                raise ValueError(
+                    f"ORCA IRC does not support the legacy '{unsupported}' control "
+                    "(no validated mapping); remove it before running"
+                )
         ensure_dir(output_dir)
 
         input_file = output_dir / f"{output_name}.inp"
@@ -3191,6 +3229,12 @@ class ORCAInterface(QCInterfaceBase):
             parsed shielding dict (0-based atom index → descriptor).
         """
         output_dir = Path(output_dir) if output_dir else Path.cwd()
+        for unsupported in ("step", "initial_hessian"):
+            if unsupported in kwargs:
+                raise ValueError(
+                    f"ORCA IRC does not support the legacy '{unsupported}' control "
+                    "(no validated mapping); remove it before running"
+                )
         ensure_dir(output_dir)
 
         input_file = output_dir / f"{output_name}.inp"
@@ -3294,6 +3338,12 @@ class ORCAInterface(QCInterfaceBase):
             imaginary frequencies.
         """
         output_dir = Path(output_dir) if output_dir else Path.cwd()
+        for unsupported in ("step", "initial_hessian"):
+            if unsupported in kwargs:
+                raise ValueError(
+                    f"ORCA IRC does not support the legacy '{unsupported}' control "
+                    "(no validated mapping); remove it before running"
+                )
         ensure_dir(output_dir)
 
         input_file = output_dir / f"{output_name}.inp"
@@ -3492,6 +3542,12 @@ class ORCAInterface(QCInterfaceBase):
             :class:`IrcResult` with endpoint paths and step counts.
         """
         output_dir = Path(output_dir) if output_dir else Path.cwd()
+        for unsupported in ("step", "initial_hessian"):
+            if unsupported in kwargs:
+                raise ValueError(
+                    f"ORCA IRC does not support the legacy '{unsupported}' control "
+                    "(no validated mapping); remove it before running"
+                )
         ensure_dir(output_dir)
 
         input_file = output_dir / f"{output_name}.inp"
