@@ -52,6 +52,17 @@ from acp.calculations.pes.outputs import (
 from acp.storage.manifest import ProductKind, ResultManifest
 
 PES_REVIEW_RELATIVE_PATH = "RESULT/pes_search/pes_review.json"
+from acp.calculations.pes.publication import (
+    PUBLICATION_INTENT_RELATIVE_PATH,
+    PublicationConflictError,
+    PublicationInProgressError,
+    PublicationRecoveryError,
+    acquire_publication_lock,
+    publication_digest,
+    release_publication_lock,
+    run_publication,
+)
+
 PES_REVIEW_SCHEMA = "pes_review_v1"
 PES_REVIEW_BACKUP_TEMPLATE = "pes_review_backup_{n:03d}.json"
 PES_REVIEW_PRODUCT_PREFIX = "pes_candidate_"
@@ -466,8 +477,9 @@ def save_pes_review(
     now: datetime | None = None,
     restored_from: int | None = None,
     source_task_status: str = "COMPLETED",
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
-    """Validate and persist a manual PES review (all-or-nothing).
+    """Validate and persist a manual PES review as one recoverable publication.
 
     Frame lookup accepts the final ``pes_profile.json`` (successful scans) or
     the live partial frames (interrupted scans of FAILED/CANCELLED tasks);
@@ -503,58 +515,132 @@ def save_pes_review(
     task_status = re.sub(r"[^A-Za-z0-9_]", "_", str(source_task_status or "UNKNOWN")).upper()
     source = _resolve_frame_source(root, task_status=task_status)
 
-    existing = load_pes_review(root)
-    current_revision = int(existing.get("revision", 0)) if existing else 0
-    if expected_revision is not None and int(expected_revision) != current_revision:
-        raise RevisionConflictError(
-            f"review revision conflict: stored={current_revision}, expected={expected_revision}"
+    lock_handle = acquire_publication_lock(root)
+    try:
+        existing = load_pes_review(root)
+        current_revision = int(existing.get("revision", 0)) if existing else 0
+        if expected_revision is not None and int(expected_revision) != current_revision:
+            raise RevisionConflictError(
+                f"review revision conflict: stored={current_revision}, expected={expected_revision}"
+            )
+
+        validated = _validate_candidates(root, source, candidates)
+
+        # A source rerun between validation and commit must fail closed
+        # (plan §9.3 invariant 9: re-verify the frame source under the lock,
+        # after validation read it and before anything is written).
+        latest_source = _resolve_frame_source(root, task_status=task_status)
+        if latest_source.data_sha256 != source.data_sha256:
+            raise PesReviewError(
+                "frame source changed while publishing; re-read the task and retry"
+            )
+
+        result_dir = root / "RESULT"
+        structures_dir = result_dir / "structures"
+        entries = [
+            {
+                "candidate_id": candidate.candidate_id,
+                "role": candidate.role,
+                "name": candidate.name,
+                "structure_path": f"structures/{candidate.candidate_id}.xyz",
+            }
+            for candidate in validated
+        ]
+        confirmed_at = (now or datetime.now().astimezone()).isoformat(timespec="seconds")
+        selected = [
+            {
+                "candidate_id": entry["candidate_id"],
+                "frame_index": candidate.frame_index,
+                "role": candidate.role,
+                "name": candidate.name,
+                "selection_source": "manual",
+                "structure_path": entry["structure_path"],
+                "frame_converged": candidate.frame_converged,
+            }
+            for entry, candidate in zip(entries, validated)
+        ]
+        payload: dict[str, Any] = {
+            "schema_version": PES_REVIEW_SCHEMA,
+            "job_id": job_id,
+            "status": "confirmed",
+            "confirmed_at": confirmed_at,
+            "revision": current_revision + 1,
+            "attempt": current_revision + 1,
+            "profile_sha256": source.data_sha256 if source.kind == "final_profile" else "",
+            "source": {
+                "task_status": source.task_status,
+                "frame_source": source.kind,
+                "scan_complete": source.scan_complete,
+                "data_source": source.data_source,
+                "data_sha256": source.data_sha256,
+            },
+            "note": str(note or ""),
+            "selected": selected,
+        }
+        if restored_from is not None:
+            payload["restored_from"] = int(restored_from)
+
+        digest = publication_digest(
+            job_id=job_id,
+            candidates=candidates,
+            note=str(note or ""),
+            restored_from=restored_from,
+            expected_revision=expected_revision,
+            source_digest=source.data_sha256,
+            source_task_status=source.task_status,
+            frame_source=source.kind,
         )
 
-    validated = _validate_candidates(root, source, candidates)
+        def backup_step() -> None:
+            if existing and current_revision >= 1:
+                _rotate_backup(root, existing, current_revision)
 
-    result_dir = root / "RESULT"
-    structures_dir = result_dir / "structures"
-    if existing and current_revision >= 1:
-        _rotate_backup(root, existing, current_revision)
-    entries = _materialise_structures(structures_dir, validated)
-    manifest_path = _update_result_manifest(result_dir, job_id, source, validated, entries)
+        def structures_step() -> None:
+            _materialise_structures(structures_dir, validated)
 
-    confirmed_at = (now or datetime.now().astimezone()).isoformat(timespec="seconds")
-    selected = [
-        {
-            "candidate_id": entry["candidate_id"],
-            "frame_index": candidate.frame_index,
-            "role": candidate.role,
-            "name": candidate.name,
-            "selection_source": "manual",
-            "structure_path": entry["structure_path"],
-            "frame_converged": candidate.frame_converged,
+        def manifest_step() -> None:
+            _update_result_manifest(result_dir, job_id, source, validated, entries)
+
+        def review_step() -> dict[str, Any]:
+            _write_json_atomic(root / PES_REVIEW_RELATIVE_PATH, payload)
+            return payload
+
+        _, replayed, intent = run_publication(
+            root,
+            job_id=job_id,
+            key=idempotency_key,
+            digest=digest,
+            expected_revision=expected_revision,
+            current_revision=current_revision,
+            stages=(
+                ("backup", backup_step),
+                ("structures", structures_step),
+                ("manifest", manifest_step),
+                ("review", review_step),
+            ),
+        )
+        publication_block = {
+            "intent_path": PUBLICATION_INTENT_RELATIVE_PATH,
+            "status": intent.get("status"),
+            "completed_stages": list(intent.get("completed_stages") or []),
+            "replayed": replayed,
         }
-        for entry, candidate in zip(entries, validated)
-    ]
-    payload: dict[str, Any] = {
-        "schema_version": PES_REVIEW_SCHEMA,
-        "job_id": job_id,
-        "status": "confirmed",
-        "confirmed_at": confirmed_at,
-        "revision": current_revision + 1,
-        "attempt": current_revision + 1,
-        "profile_sha256": source.data_sha256 if source.kind == "final_profile" else "",
-        "source": {
-            "task_status": source.task_status,
-            "frame_source": source.kind,
-            "scan_complete": source.scan_complete,
-            "data_source": source.data_source,
-            "data_sha256": source.data_sha256,
-        },
-        "note": str(note or ""),
-        "selected": selected,
-    }
-    if restored_from is not None:
-        payload["restored_from"] = int(restored_from)
-    _write_json_atomic(root / PES_REVIEW_RELATIVE_PATH, payload)
-    payload["result_manifest_path"] = str(manifest_path)
-    return payload
+        if replayed:
+            stored = load_pes_review(root)
+            if stored is None:
+                raise PublicationRecoveryError(
+                    "publication was recorded as published but the review file is missing",
+                    intent=intent,
+                    completed=list(intent.get("completed_stages") or []),
+                )
+            stored["result_manifest_path"] = str(result_dir / "result_manifest.json")
+            stored["publication"] = publication_block
+            return stored
+        payload["result_manifest_path"] = str(result_dir / "result_manifest.json")
+        payload["publication"] = publication_block
+        return payload
+    finally:
+        release_publication_lock(lock_handle)
 
 
 def _rotate_backup(root: Path, existing: dict[str, Any], revision: int) -> Path:
@@ -604,6 +690,7 @@ def restore_pes_review(
     expected_revision: int | None = None,
     now: datetime | None = None,
     source_task_status: str = "COMPLETED",
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     """Re-activate backup *backup_n* as the current review (rotation-aware).
 
@@ -646,6 +733,7 @@ def restore_pes_review(
         now=now,
         restored_from=int(backup_n),
         source_task_status=source_task_status,
+        idempotency_key=idempotency_key,
     )
     payload["restored_from"] = int(backup_n)
     return payload

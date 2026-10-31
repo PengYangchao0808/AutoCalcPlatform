@@ -1701,6 +1701,9 @@ class PesReviewRequest(BaseModel):
     candidates: list[PesReviewCandidateItem] = Field(default_factory=list)
     note: str | None = None
     expected_revision: int | None = None  # 409 when it mismatches the stored revision
+    # Retried request identity: same key + same payload replays the original
+    # publication instead of creating a second revision.
+    idempotency_key: str | None = None
 
 
 class PesReviewCandidate(BaseModel):
@@ -1744,6 +1747,9 @@ class PesReviewResponse(BaseModel):
     frame_source: str = ""
     candidates: list[PesReviewCandidate] = Field(default_factory=list)
     result_manifest: str = "RESULT/result_manifest.json"
+    # Publication group receipt (intent path/status/completed stages; write_back
+    # state for remote jobs). Absent on historical reads.
+    publication: dict | None = None
     initial_guess_status: InitialGuessStatus | None = None
 
 
@@ -1768,6 +1774,7 @@ class PesReviewRestoreRequest(BaseModel):
 
     backup: int
     expected_revision: int | None = None
+    idempotency_key: str | None = None
 
 
 class PesReviewRestoreResponse(BaseModel):
@@ -1779,6 +1786,7 @@ class PesReviewRestoreResponse(BaseModel):
     source_task_status: str = ""
     scan_complete: bool | None = None
     frame_source: str = ""
+    publication: dict | None = None
     candidates: list[PesReviewCandidate] = Field(default_factory=list)
 
 

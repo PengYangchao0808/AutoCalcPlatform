@@ -4017,6 +4017,29 @@ def get_pes_review(job_id: str, request: Request) -> PesReviewStateResponse:
     return PesReviewStateResponse(job_id=job_id, status="confirmed", review=review, backups=backups)
 
 
+def _publication_http_error(exc: Exception) -> HTTPException:
+    """Map publication-group failures to typed HTTP errors (retry/recovery info)."""
+    from acp.calculations.pes.publication import (
+        PublicationConflictError,
+        PublicationInProgressError,
+        PublicationRecoveryError,
+    )
+
+    if isinstance(exc, PublicationRecoveryError):
+        return HTTPException(
+            status_code=409,
+            detail={
+                "code": "publication_recovering",
+                "message": str(exc),
+                "publication": exc.intent,
+                "completed_stages": list(exc.completed),
+            },
+        )
+    if isinstance(exc, (PublicationConflictError, PublicationInProgressError)):
+        return HTTPException(status_code=409, detail=str(exc))
+    return HTTPException(status_code=409, detail=str(exc))
+
+
 def _notify_structure_sources_updated(request: Request, job_id: str) -> None:
     """Notify structure source indexer of updated candidates/manifest for job."""
     from datetime import datetime, timezone
@@ -4060,6 +4083,7 @@ def restore_pes_review_endpoint(
         backup_rel=(f"RESULT/pes_search/{PES_REVIEW_BACKUP_TEMPLATE.format(n=int(req.backup))}"),
     )
 
+    from acp.calculations.pes.publication import PublicationConflictError, PublicationInProgressError, PublicationRecoveryError
     from acp.calculations.pes.review import PesReviewError, RevisionConflictError
     from acp.calculations.pes.review import restore_pes_review as restore_pes_review_state
 
@@ -4069,9 +4093,12 @@ def restore_pes_review_endpoint(
             int(req.backup),
             expected_revision=req.expected_revision,
             source_task_status=task_status,
+            idempotency_key=req.idempotency_key,
         )
     except RevisionConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (PublicationConflictError, PublicationInProgressError, PublicationRecoveryError) as exc:
+        raise _publication_http_error(exc) from exc
     except PesReviewError as exc:
         message = str(exc)
         status_code = 404 if "not found" in message else 422
@@ -4079,7 +4106,26 @@ def restore_pes_review_endpoint(
 
     source_block = payload.get("source") or {}
     if remote_ctx is not None:
-        _remote_review_write_back(remote_ctx[0], remote_ctx[1], payload)
+        try:
+            _remote_review_write_back(remote_ctx[0], remote_ctx[1], payload)
+            write_back = "written"
+        except HTTPException as exc:
+            logger.warning("PES restore write-back failed for %s: %s", job_id, exc.detail)
+            publication = dict(payload.get("publication") or {})
+            publication["write_back"] = "failed"
+            publication["write_back_error"] = str(exc.detail)
+            payload["publication"] = publication
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "审阅写回计算节点失败（远端可能部分更新；发布意图可对账）: "
+                    f"{exc.detail}; publication={json.dumps(publication, ensure_ascii=False, default=str)}"
+                ),
+            ) from exc
+    if isinstance(payload.get("publication"), dict):
+        payload["publication"].setdefault(
+            "write_back", "written" if remote_ctx is not None else "local"
+        )
 
     _notify_structure_sources_updated(request, job_id)
 
@@ -4102,6 +4148,7 @@ def restore_pes_review_endpoint(
             )
             for row in payload.get("selected") or []
         ],
+        publication=payload.get("publication"),
     )
 
 
@@ -4119,6 +4166,7 @@ def save_pes_review_endpoint(
         frame_indexes={int(item.frame_index) for item in req.candidates},
     )
 
+    from acp.calculations.pes.publication import PublicationConflictError, PublicationInProgressError, PublicationRecoveryError
     from acp.calculations.pes.review import PesReviewError, RevisionConflictError
     from acp.calculations.pes.review import save_pes_review as persist_pes_review
 
@@ -4130,15 +4178,40 @@ def save_pes_review_endpoint(
             note=req.note or "",
             expected_revision=req.expected_revision,
             source_task_status=task_status,
+            idempotency_key=req.idempotency_key,
         )
     except RevisionConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (PublicationConflictError, PublicationInProgressError, PublicationRecoveryError) as exc:
+        raise _publication_http_error(exc) from exc
     except PesReviewError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     source_block = payload.get("source") or {}
     if remote_ctx is not None:
-        _remote_review_write_back(remote_ctx[0], remote_ctx[1], payload)
+        try:
+            _remote_review_write_back(remote_ctx[0], remote_ctx[1], payload)
+            write_back = "written"
+        except HTTPException as exc:
+            # The local publication is complete, but the remote copy is not:
+            # fail loudly AND expose the publication intent for reconciliation
+            # (the new selection must not be advertised as published remotely).
+            logger.warning("PES review write-back failed for %s: %s", job_id, exc.detail)
+            publication = dict(payload.get("publication") or {})
+            publication["write_back"] = "failed"
+            publication["write_back_error"] = str(exc.detail)
+            payload["publication"] = publication
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "审阅写回计算节点失败（远端可能部分更新；发布意图可对账）: "
+                    f"{exc.detail}; publication={json.dumps(publication, ensure_ascii=False, default=str)}"
+                ),
+            ) from exc
+    if isinstance(payload.get("publication"), dict):
+        payload["publication"].setdefault(
+            "write_back", "written" if remote_ctx is not None else "local"
+        )
 
     _notify_structure_sources_updated(request, job_id)
 
@@ -4196,6 +4269,7 @@ def save_pes_review_endpoint(
         frame_source=str(source_block.get("frame_source") or ""),
         candidates=selected_rows,
         initial_guess_status=guess_status,
+        publication=payload.get("publication"),
     )
 
 
