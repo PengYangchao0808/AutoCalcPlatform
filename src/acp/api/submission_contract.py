@@ -836,6 +836,29 @@ def _validate_input(
             )
 
 
+def _validate_pes_coordinates(input_mapping: Mapping[str, Any]) -> None:
+    """Shared PES coordinate normalization (round-5 P0).
+
+    Runs the same normalization the executor uses, so a submission carrying
+    both ``coordinate`` and a disagreeing ``coordinates[0]`` is refused at the
+    boundary instead of silently scanning one of them.
+    """
+    from acp.calculations.pes.normalization import (
+        CoordinateError,
+        normalize_pes_coordinates,
+    )
+
+    try:
+        normalize_pes_coordinates(input_mapping, field_prefix="input")
+    except CoordinateError as exc:
+        raise SubmissionContractError(
+            str(exc),
+            field_name=exc.field,
+            rule=exc.rule,
+            allowed=tuple(exc.params.get("allowed") or ()),
+        ) from exc
+
+
 def validate_workflow_submission(
     workflow: str,
     *,
@@ -864,3 +887,9 @@ def validate_workflow_submission(
     _validate_input(
         workflow, input_mapping, contract, require_sources=input is not None
     )
+    if workflow == "PESsearch" and any(
+        key in input_mapping for key in ("coordinate", "coordinates", "scan_request")
+    ):
+        # manifest-path submissions carry no scan coordinate at all; only the
+        # coordinate-bearing branch is normalized here
+        _validate_pes_coordinates(input_mapping)

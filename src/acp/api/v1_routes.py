@@ -1781,9 +1781,21 @@ def _prepare_bond_scan_input(
     selection = inp.get("selection")
     protocol = inp.get("protocol")
     if not isinstance(coordinate, dict) or not coordinate.get("atoms"):
-        raise HTTPException(
-            status_code=422, detail="bond_length_scan requires coordinate with atoms"
-        )
+        # coordinates-only submissions are allowed (round-5); the shared
+        # normalization already verified coordinate == coordinates[0] when both
+        # are present, so the primary is simply coordinates[0].
+        if (
+            isinstance(coordinates, list)
+            and coordinates
+            and isinstance(coordinates[0], dict)
+            and coordinates[0].get("atoms")
+        ):
+            coordinate = coordinates[0]
+        else:
+            raise HTTPException(
+                status_code=422,
+                detail="bond_length_scan requires coordinate (or coordinates) with atoms",
+            )
     if not isinstance(protocol, dict):
         scan_request = inp.get("scan_request")
         inherited = scan_request.get("protocol") if isinstance(scan_request, dict) else None
@@ -2637,12 +2649,32 @@ def _validate_scan_submission(workflow: str, method: dict[str, Any], inp: dict[s
     check for v1 and v2 (indices/finite range/points).  No-op for other
     workflows.
     """
-    if workflow != "scan":
+    if workflow not in ("scan", "PESsearch"):
         return
+    from acp.calculations.pes.normalization import (
+        CoordinateError,
+        normalize_pes_coordinates,
+    )
+
     try:
-        validate_scan_submission(workflow, method, inp)
+        if workflow == "PESsearch":
+            normalize_pes_coordinates(inp or {}, field_prefix="input")
+        else:
+            validate_scan_submission(workflow, method, inp)
+    except CoordinateError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "input_invalid",
+                "message": str(exc),
+                "params": exc.params,
+            },
+        ) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "input_invalid", "message": str(exc)},
+        ) from exc
 
 
 def _submit_idempotency_key(request: Request, req: V1JobCreateRequest) -> str | None:

@@ -1554,12 +1554,20 @@ class S2StructurePreviewResponse(BaseModel):
 
 class BondLengthScanJobInput(BaseModel):
     source: BondLengthScanSource
-    coordinate: dict[str, Any]
+    coordinate: dict[str, Any] | None = None
     coordinates: list[dict[str, Any]] | None = None
     selection: dict[str, Any] = Field(default_factory=dict)
     protocol: dict[str, Any] = Field(default_factory=dict)
     source_job_id: str | None = None
     from_artifact: str | None = None
+
+    @model_validator(mode="after")
+    def _require_a_coordinate_source(self) -> "BondLengthScanJobInput":
+        if self.coordinate is None and not self.coordinates:
+            raise ValueError(
+                "input requires coordinate or a non-empty coordinates list"
+            )
+        return self
 
 
 class S2FrameModel(BaseModel):

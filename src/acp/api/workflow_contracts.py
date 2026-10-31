@@ -206,11 +206,24 @@ _PES_INPUT_PROPERTIES: dict[str, Any] = {
             "artifact_path, source_job_id, structure_selector, charge, multiplicity."
         ),
     },
-    "coordinate": {**_COORDINATE_OBJECT, "description": "Primary scan coordinate (0-based atoms)."},
+    "coordinate": {
+        **_COORDINATE_OBJECT,
+        "description": (
+            "Primary scan coordinate (0-based atoms). When both coordinate and "
+            "coordinates are given they must normalize to the same complete "
+            "definition (atoms, unit, start/end, n_points, values), otherwise "
+            "the submission is refused with rule=conflicting_fields — the "
+            "platform never silently picks one."
+        ),
+    },
     "coordinates": {
         "type": "array",
         "items": _COORDINATE_OBJECT,
-        "description": "Synchronous coordinates (max 64); keeps topology, never flattened.",
+        "description": (
+            "Synchronous coordinates (max 64); keeps topology, never flattened. "
+            "coordinates-only submissions are allowed (primary = coordinates[0]); "
+            "with a coordinate present, coordinates[0] must equal it."
+        ),
     },
     "selection": {
         "type": "object",
