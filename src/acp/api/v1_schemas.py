@@ -1704,6 +1704,13 @@ class PesReviewRequest(BaseModel):
     # Retried request identity: same key + same payload replays the original
     # publication instead of creating a second revision.
     idempotency_key: str | None = None
+    # Round-5 PR-06: explicit selection source. ``manual`` keeps the historical
+    # path; ``agent`` requires an authorization id and is validated server-side
+    # against the platform identity (the body can never supply the actor).
+    selector: str = "manual"
+    authorization_id: str | None = None
+    source_binding: dict | None = None
+    actor: str | None = None
 
 
 class PesReviewCandidate(BaseModel):

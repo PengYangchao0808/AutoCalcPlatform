@@ -100,8 +100,13 @@ class SelectionAuthorizationService:
         *,
         action: str = "publish_pes_selection",
         latest_attempt: int | None = None,
+        action_digest: str | None = None,
     ) -> SelectionDecision:
-        """Check every scope bound to *action*; raise a typed refusal."""
+        """Check every scope bound to *action*; raise a typed refusal.
+
+        ``action_digest`` marks a retried action: when that digest is already in
+        the actions log the quota check is skipped (a replay never re-charges).
+        """
         document = self._read(
             request.authorization_id,
             principal_id=request.actor_principal_id,
@@ -171,8 +176,8 @@ class SelectionAuthorizationService:
         roles = request.roles()
         if authorization.roles and any(role not in authorization.roles for role in roles):
             refuse("candidate role is outside this authorization", "role_not_allowed")
-        if authorization.methods:
-            method = request.method or ""
+        if authorization.methods and request.method:
+            method = request.method
             if not any(method.startswith(prefix) for prefix in authorization.methods):
                 refuse("method is outside this authorization", "method_not_allowed")
         if authorization.nproc_max and request.nproc > authorization.nproc_max:
@@ -182,7 +187,14 @@ class SelectionAuthorizationService:
                 nproc=request.nproc,
                 nproc_max=authorization.nproc_max,
             )
-        if action == "publish_pes_selection":
+        replay = False
+        if action_digest:
+            replay = any(
+                str(entry.get("action") or "") == action
+                and str(entry.get("digest") or "") == action_digest
+                for entry in authorization.actions_log
+            )
+        if action == "publish_pes_selection" and not replay:
             amount = len(request.candidates)
             remaining = authorization.limits.remaining(action)
             if amount > remaining:

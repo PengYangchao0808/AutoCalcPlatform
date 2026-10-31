@@ -4017,6 +4017,117 @@ def get_pes_review(job_id: str, request: Request) -> PesReviewStateResponse:
     return PesReviewStateResponse(job_id=job_id, status="confirmed", review=review, backups=backups)
 
 
+def _selection_autopublish_enabled() -> bool:
+    """Whether the authorized-agent publication capability is enabled."""
+    import os
+
+    raw = str(os.environ.get("ACP_SELECTION_AUTOPUBLISH", "1")).strip().lower()
+    return raw not in {"0", "false", "off", "no"}
+
+
+def _authorize_agent_selection(
+    request: Request,
+    job_id: str,
+    req: Any,
+) -> Any:
+    """Validate and pre-consume one agent publication; returns the decision.
+
+    The actor/project come from the verified server identity (never the body).
+    """
+    import hashlib
+    import json as _json
+
+    from acp_services.contracts.selection import (
+        SelectionPublicationRequest,
+        SelectionSourceBinding,
+    )
+    from acp_services.runtime.selection_authorization import (
+        SelectionAuthorizationError,
+        SelectionAuthorizationService,
+    )
+
+    if not _selection_autopublish_enabled():
+        raise HTTPException(
+            status_code=403,
+            detail="authorized agent publication is disabled on this deployment",
+        )
+    if not req.authorization_id:
+        raise HTTPException(
+            status_code=422, detail="agent publication requires authorization_id"
+        )
+    store = getattr(request.app.state, "research_resources", None)
+    if store is None:
+        raise HTTPException(
+            status_code=503, detail="selection authorization store is not configured"
+        )
+    identity = _command_identity(request)
+    principal_id = str(getattr(identity, "principal_id", "") or "")
+    project_id = str(getattr(identity, "project_id", None) or "uncategorized")
+    record = _manager(request).get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"job {job_id} not found")
+    attempt = int(getattr(record, "attempt", 1) or 1)
+    spec = getattr(record, "spec", None)
+    method_block = getattr(spec, "method", None) or {}
+    method = str(method_block.get("method") or method_block.get("functional") or "")
+    resources = getattr(spec, "resources", None) or {}
+    nproc = int(resources.get("nproc") or 0)
+    source_binding = dict(req.source_binding or {})
+    candidates = tuple(item.model_dump(exclude_none=True) for item in req.candidates)
+    selection_request = SelectionPublicationRequest(
+        authorization_id=str(req.authorization_id),
+        selector="agent",
+        actor_principal_id=principal_id,
+        project_id=project_id,
+        source=SelectionSourceBinding(
+            job_id=job_id,
+            attempt=attempt,
+            profile_digest=str(source_binding.get("profile_digest") or ""),
+            geometry_digest=str(source_binding.get("geometry_digest") or ""),
+        ),
+        workflow="PESsearch",
+        candidates=candidates,
+        method=method,
+        nproc=nproc,
+        idempotency_key=req.idempotency_key,
+        expected_revision=req.expected_revision,
+    )
+    action_digest = hashlib.sha256(
+        _json.dumps(
+            {
+                "job_id": job_id,
+                "attempt": attempt,
+                "expected_revision": req.expected_revision,
+                "candidates": candidates,
+                "note": req.note or "",
+                "authorization_id": str(req.authorization_id),
+            },
+            sort_keys=True,
+            default=str,
+        ).encode("utf-8")
+    ).hexdigest()
+    service = getattr(request.app.state, "selection_authorizations", None)
+    if service is None:
+        service = SelectionAuthorizationService(store)
+        request.app.state.selection_authorizations = service
+    try:
+        decision = service.validate(
+            selection_request,
+            latest_attempt=attempt,
+            action_digest=action_digest,
+        )
+        service.consume(selection_request, decision, action_digest=action_digest)
+    except SelectionAuthorizationError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": exc.code, "message": str(exc), "details": exc.details},
+        ) from exc
+    decision_payload = decision.to_dict()
+    decision_payload["action_digest"] = action_digest
+    decision_payload["actor"] = principal_id
+    return decision_payload
+
+
 def _publication_intent_store(request: Request, job_id: str) -> Any:
     """The Services-backed publication intent store for the API path."""
     from acp.calculations.pes.publication import StoreIntentStore
@@ -4181,6 +4292,16 @@ def save_pes_review_endpoint(
     from acp.calculations.pes.review import PesReviewError, RevisionConflictError
     from acp.calculations.pes.review import save_pes_review as persist_pes_review
 
+    selector = str(req.selector or "manual")
+    if selector not in {"manual", "manual_frame", "agent"}:
+        raise HTTPException(status_code=422, detail=f"unsupported selection selector {selector!r}")
+    agent_authorization: dict | None = None
+    agent_source_binding: dict | None = None
+    agent_actor: str | None = None
+    if selector == "agent":
+        agent_authorization = _authorize_agent_selection(request, job_id, req)
+        agent_source_binding = dict(req.source_binding or {})
+        agent_actor = str(agent_authorization.get("actor") or "")
     try:
         payload = persist_pes_review(
             work_dir,
@@ -4191,6 +4312,10 @@ def save_pes_review_endpoint(
             source_task_status=task_status,
             idempotency_key=req.idempotency_key,
             intent_store=_publication_intent_store(request, job_id),
+            selector=selector,
+            actor=agent_actor,
+            authorization=agent_authorization,
+            source_binding=agent_source_binding,
         )
     except RevisionConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

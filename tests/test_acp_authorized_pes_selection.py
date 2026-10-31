@@ -303,3 +303,168 @@ def test_manual_selection_keeps_its_historical_semantics(pes_task: Path) -> None
     assert len(items) == 1
     assert items[0].source_type != "pes_publication"
     assert "auth=" not in items[0].source_ref
+
+
+# --------------------------------------------------------------------------- #
+# API: the server identity authorizes; the body can never supply the actor
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture()
+def api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from tests.test_acp_api_v1 import make_client
+
+    with make_client(tmp_path, monkeypatch, max_running=1) as test_client:
+        yield test_client
+
+
+def _api_job(api_client, tmp_path: Path) -> str:
+    from tests.test_acp_api_pes_review import _make_pes_task, _register_job
+
+    work_dir = _make_pes_task(tmp_path / "api_tree")
+    return _register_job(api_client, tmp_path, work_dir)
+
+
+def _api_authorization(api_client, *, max_candidates: int = 4) -> None:
+    from acp_services.contracts.access import LOCAL_PRINCIPAL_ID
+    from acp_services.contracts.selection import SelectionAuthorization, SelectionLimits
+
+    store = api_client.app.state.research_resources
+    service = SelectionAuthorizationService(store)
+    service.create(
+        SelectionAuthorization(
+            authorization_id="auth-api",
+            owner_principal_id=LOCAL_PRINCIPAL_ID,
+            owner_project_id="uncategorized",
+            policy_revision="policy-1",
+            valid_until=(datetime.now(timezone.utc) + timedelta(days=1)).isoformat(
+                timespec="seconds"
+            ),
+            actions=("publish_pes_selection", "batch_consume"),
+            source_job_id="20260903_001_PESsearch",
+            allowed_attempts=(1,),
+            workflow="PESsearch",
+            roles=("TS", "INT"),
+            methods=("GFM", "GFN2-xTB", "r2SCAN-3c", "B97-3c"),
+            nproc_max=8,
+            limits=SelectionLimits(max_candidates=max_candidates, max_batch_jobs=1),
+        ),
+        is_admin=True,
+        principal_id=LOCAL_PRINCIPAL_ID,
+        project_id="uncategorized",
+    )
+
+
+def test_api_agent_publication_is_validated_and_recorded(api_client, tmp_path: Path) -> None:
+    from acp.calculations.pes.review import load_pes_review
+
+    job_id = _api_job(api_client, tmp_path)
+    _api_authorization(api_client)
+    response = api_client.post(
+        f"/api/v1/jobs/{job_id}/pes/review",
+        json={
+            "candidates": [
+                {"frame_index": 1, "role": "TS"},
+                {"frame_index": 2, "role": "INT"},
+            ],
+            "selector": "agent",
+            "authorization_id": "auth-api",
+            "source_binding": {"job_id": job_id, "attempt": 1, "profile_digest": "p1"},
+            "actor": "forged-agent",  # the body's actor is ignored
+            "idempotency_key": "api-pub-1",
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["publication"]["status"] == "published"
+    work_dir = api_client.app.state.job_manager.get(job_id).work_dir
+    review = load_pes_review(work_dir)
+    assert review["selector"] == "agent"
+    assert review["actor"] != "forged-agent"
+    assert review["authorization"]["authorization_id"] == "auth-api"
+
+
+def test_api_agent_publication_without_authorization_is_refused(api_client, tmp_path: Path) -> None:
+    job_id = _api_job(api_client, tmp_path)
+    response = api_client.post(
+        f"/api/v1/jobs/{job_id}/pes/review",
+        json={
+            "candidates": [{"frame_index": 1, "role": "TS"}],
+            "selector": "agent",
+            "authorization_id": "auth-missing",
+        },
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "authorization_not_found"
+
+
+def test_batch_spec_pins_the_consumed_revision(
+    pes_task: Path, store: ResearchResourceStore, authorization: SelectionAuthorization
+) -> None:
+    """A later selection revision never changes an already-built Batch input."""
+    from acp.calculations.batch.loaders import load_items_from_result_manifest
+    from acp.calculations.pes.review import save_pes_review
+
+    service = _service(store, authorization)
+    request = _request()
+    decision = service.validate(request, action_digest="batch-1")
+    service.consume(request, decision, action_digest="batch-1")
+    save_pes_review(
+        pes_task,
+        job_id="job_001",
+        candidates=list(request.candidates),
+        selector="agent",
+        actor=request.actor_principal_id,
+        authorization=decision.to_dict(),
+        source_binding=request.source.to_dict(),
+        idempotency_key="batch-1",
+        now=FIXED_NOW,
+    )
+    items = load_items_from_result_manifest(pes_task)
+    snapshot = [item.to_dict() for item in items]
+    pinned_ref = str(snapshot[0]["source_ref"])
+    assert "revision=" in pinned_ref and "auth=auth-1@" in pinned_ref
+
+    # a second publication (new revision) must not rewrite the frozen snapshot
+    save_pes_review(
+        pes_task,
+        job_id="job_001",
+        candidates=[{"frame_index": 2, "role": "TS"}],
+        selector="agent",
+        actor=request.actor_principal_id,
+        authorization=decision.to_dict(),
+        source_binding=request.source.to_dict(),
+        now=FIXED_NOW,
+    )
+    assert [item.to_dict() for item in items] == snapshot
+    assert load_items_from_result_manifest(pes_task)[0].source_ref != pinned_ref
+
+
+def test_agent_publication_switch_off_keeps_manual_path(
+    api_client, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from acp.calculations.pes.review import save_pes_review
+
+    job_id = _api_job(api_client, tmp_path)
+    _api_authorization(api_client)
+    monkeypatch.setenv("ACP_SELECTION_AUTOPUBLISH", "0")
+    response = api_client.post(
+        f"/api/v1/jobs/{job_id}/pes/review",
+        json={
+            "candidates": [{"frame_index": 1, "role": "TS"}],
+            "selector": "agent",
+            "authorization_id": "auth-api",
+        },
+    )
+    assert response.status_code == 403
+    assert "disabled" in response.json()["detail"]
+
+    manual = api_client.post(
+        f"/api/v1/jobs/{job_id}/pes/review",
+        json={"candidates": [{"frame_index": 1, "role": "TS"}]},
+    )
+    assert manual.status_code == 200
+    work_dir = api_client.app.state.job_manager.get(job_id).work_dir
+    from acp.calculations.pes.review import load_pes_review
+
+    assert load_pes_review(work_dir)["revision"] == 1
