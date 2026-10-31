@@ -21,12 +21,33 @@
 | PR-08 | Batch 基数/推荐/容量 | manifest 展开后单结构门（layout_limit + limit/received/hint）；空推荐 = disabled/manual_only_policy（含 PR-06 后说明）；有效容量 = `registry.local.max_jobs`，`max_running` 标 legacy_noop |
 | PR-09 | 状态/prepare 体验 | `storage_locator`（相对标识、远端/缓存不冒充本地、unknown_reason）；live_status 带 observed_at/source/unknown_reason；prepare 本地快速路径（已就绪产物直接 ready，缓存 reader 判定） |
 
-## 验收证据（占位，验收后回填）
+## 验收证据
 
-- 定向验收套件（各 PR 的新测试 + 受影响面）
-- `scripts/acceptance/validate_acp2_contracts.py` / `validate_acp2_gap_coverage.py` VALID
-- 全仓非 slow 套件（CI 同款）结果
-- 独立子 agent 验收报告（只读评审 + 对照计划验收条目）
+- 独立子 agent 只读验收（对照计划逐条）：首轮 **FAIL**（3 个 P0 红灯 + P1/P2），修复后复跑：
+  - `tests/test_irc.py` + `test_acp_guidance_pack.py` + `test_acp_round5_artifact_status.py` + `test_acp2_runtime_mcp_process.py` + `test_qc_interfaces_orca.py`：**122 passed / 1 skipped**
+  - 真实 MCP SDK contract lane（`-m contract tests/test_acp2_mcp_sdk_contract.py`）：**8 passed**（Node/DSH live client）
+  - 最终验收批次（33 文件：各 PR 新测试 + 受影响面）：**733 passed / 1 skipped**
+  - `scripts/acceptance/validate_acp2_contracts.py` → VALID；`validate_acp2_gap_coverage.py` → VALID（39/32/26/8/3，5 gaps open，完整发布仍 NOT_VERIFIED）
+  - 契约/参数守护：`validate_acp2_contracts.py` VALID；`test_acp_parameter_effects` 四工作流全登记
+- 全仓非 slow 套件（CI 同款 `pytest -m "not slow and not contract"`）：本地运行中，CI 矩阵（3.10/3.11/3.12）为最终权威；任何失败在合并前修复。
+
+## 独立验收发现与修复（提交 `349d3401` + 后续）
+
+| 发现 | 级别 | 修复 |
+|---|---|---|
+| `workflows/irc.py` 读不存在的 `CalculationResult.converged/complete` → 独立 IRC 工作流报告崩溃（3 个 test_irc 失败） | P0 | 从 `direction_diagnostics` 推导整轮 converged/complete；`test_irc.py` 回归通过 |
+| 真实 SDK live harness `EXPECTED_TOOLS` 仍 10 个 → `mcp-conformance` 门红 | P0 | harness 同步 12 个工具；SDK contract lane 8 passed |
+| 指南 BatchOptimize 版本 pin 1.1.0 vs 1.2.0 → 默认 CI 矩阵红 | P0 | pin 更新为 1.2.0（保留 v1.1.0 要点断言） |
+| 选择来源的 profile/geometry digest 仅来自客户端（PR-06 第 4 条） | P1 | 服务端从任务工件计算摘要（`_server_source_digests`）；客户端声明不一致 → 403 `stale_source`；授权/发布绑定服务端值；新增 stale 用例 |
+| live_status 有 metrics 无 stage 时无 unknown reason（PR-09 第 3 条） | P1 | `stage_unknown` 稳定原因 + 用例 |
+| `scan_request` carrier 测试被放宽为 `in (200, 422)` | P1 | 恢复两个确定性用例（等价 carrier 200；冲突 422 `conflicting_fields`，carrier 冲突改为 typed CoordinateError） |
+| `step/initial_hessian` 守卫被无界替换复制到 8 个 ORCA 方法，且把 `optimize` 的 initial_hessian 转发变为不可达 | P1 | 仅 `irc()` 保留守卫；`optimize` 转发恢复（ORCA 套件 47 passed） |
+| `loaders.py` 未导入 `Any`（F821）；agent 发布 body `actor` 被静默忽略；状态投影缺 `source.attempt`；工具总数固定断言 | P2 | 导入修复；body actor 显式 422 `server_identity_owned`；投影加 attempt；握手/能力测试改子集断言 |
+
+## 独立验收标注的覆盖缺口（诚实保留）
+
+- PR-01 条目 4/5/7（prepare/预算/派发 spy、执行输入探针、历史/rerun）；PR-02 条目 9（旧回执读取）；PR-03 条目 2/3（不可变性、冷远端 preflight）；PR-04 条目 6/7（关联失败交科学验证、失败诊断找回）；PR-05 条目 4/6/9/10（4 个故障点只覆盖 2 个、远端上传边界、restore 事务、发布能力关闭）；PR-06 条目 5/9（approval 复用、旧 attempt/冻结历史恢复）；PR-07 条目 8（真实 SDK 全选择链，本次只同步工具集）/9（初猜状态）；PR-08 条目 1(部分)/2/4/8/9/10（单 item 多帧、manifest 单结构正例、两拆分示例 preflight、远端容量、TaskRef 示例、幂等服务端用例）；PR-09 条目 5/6/7/8/9（真实 reader 快速路径、负例矩阵、竞争、回退、QUEUED+ABSENT 语义）。
+- 这些条目在计划验收表中为 NOT_VERIFIED，不以“已实现”表述；后续可用同一子 agent 复验。
 
 ## 已知 NOT_VERIFIED（诚实标注）
 
