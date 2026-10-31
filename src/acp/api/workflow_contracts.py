@@ -239,6 +239,14 @@ _PES_INPUT_PROPERTIES: dict[str, Any] = {
     },
     "source_job_id": {"type": "string", "description": "Upstream job id (manifest path)."},
     "from_artifact": {"type": "string", "description": "Upstream artifact (manifest path)."},
+    "scan_request": {
+        "type": "object",
+        "description": (
+            "Prepared scan-request carrier (edit/replay). Consumed after "
+            "normalization; it must not contradict the expanded "
+            "coordinate/coordinates/protocol fields."
+        ),
+    },
     "from": {"type": "string", "description": "Resolved manifest path (post-resolution mirror)."},
     "coordinate_plan": {"type": "object", "description": "Manifest-path --plan JSON."},
     "product": {"type": "string"},

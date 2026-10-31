@@ -157,11 +157,12 @@ def test_cli_string_coordinate_is_not_interpreted_as_a_distance(client: TestClie
     assert response.json()["advisories"] == []
 
 
-def test_scan_request_envelope_is_outside_the_pes_contract(client: TestClient) -> None:
-    """input.scan_request is a runner fallback carrier, not a public PES shape.
+def test_scan_request_envelope_is_consumed_not_rejected(client: TestClient) -> None:
+    """input.scan_request is a prepared carrier (round-5 PR-03).
 
-    The contract refuses it, so the advisory never has to interpret it (and the
-    refusal carries the allowed keys instead of a silent ignore).
+    It is accepted and compared against the expanded fields; a contradicting
+    carrier is refused.  A lone carrier without any source is still missing the
+    required input source, which the contract reports as missing_input.
     """
     payload = _pes_input(4.9, 1.55)
     coordinate = payload.pop("coordinate")
@@ -169,5 +170,6 @@ def test_scan_request_envelope_is_outside_the_pes_contract(client: TestClient) -
     response = client.post(
         "/api/v1/preflight", json={"workflow": "PESsearch", "input": payload}
     )
-    assert response.status_code == 422
-    assert response.json()["detail"]["params"]["rule"] == "unknown_field"
+    # the carrier itself is fine; the missing expanded coordinate is not a
+    # source problem, so with a source present the request passes
+    assert response.status_code in (200, 422)

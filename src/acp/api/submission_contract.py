@@ -468,6 +468,9 @@ WORKFLOW_CONTRACTS: dict[str, WorkflowContract] = {
                 "coordinate_plan",
                 "product",
                 "ts_guess",
+                # prepared carrier (edit/replay); normalized and compared against
+                # the expanded coordinate/protocol fields
+                "scan_request",
             }
         ),
         required_input_any=(

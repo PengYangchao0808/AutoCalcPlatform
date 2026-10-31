@@ -9415,11 +9415,36 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
         *_scan_geometry_advisories(req.workflow, raw_input or {}, req.method or {}),
         *_source_advisories,
     ]
+    # Round-5 PR-03: one read-only analysis shared with submit/edit; the
+    # requested/effective/executed receipt never claims an execution fact.
+    submission_analysis: dict[str, Any] | None = None
+    try:
+        from acp.calculations.submission_validation import analysis_for
+
+        analysis = analysis_for(req.workflow, raw_input or {}, req.method or {})
+    except ValueError as exc:
+        params = (
+            exc.params
+            if hasattr(exc, "params") and isinstance(getattr(exc, "params"), dict)
+            else {"field": "input", "rule": "invalid_parameter"}
+        )
+        raise _command_error(422, "input_invalid", str(exc), params=params) from exc
+    if analysis is not None:
+        submission_analysis = analysis.to_dict()
+        submission_analysis["requested"] = {
+            "input": dict(raw_input or {}),
+            "method": dict(req.method or {}),
+        }
+        submission_analysis["executed"] = None
+        submission_analysis["unverified_checks"] = [
+            str(item.get("id")) for item in _source_advisories if item.get("id")
+        ]
     return {
         "schema_version": 1,
         "feasible": feasible,
         "reasons": reasons,
         "advisories": advisories,
+        "submission_analysis": submission_analysis,
         "plan_digest": digest,
         "plan_summary": {
             "workflow": req.workflow,
