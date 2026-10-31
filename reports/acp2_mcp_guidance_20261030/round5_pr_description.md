@@ -54,6 +54,19 @@
 - 本地 `test_acp2_*` 非 slow 全量：除 `test_fixture_wheel_offline_toolchains[build]`（本机 venv 缺 `build` 模块的环境依赖）外全绿；该测试在 CI 的 `[dev]` 环境另验。
 - CI 的 `mcp-conformance` 首轮红是已知 flaky `test_signal_shutdown_is_clean[2]`（子进程 300 s 超时，非本轮代码），structural 子集本地 36 passed；重跑/新提交后复验。
 
+## CI 全矩阵回归修复（本地 acp2 子集看不到的部分）
+
+CI 的 `pytest -m "not slow and not contract"` 全仓矩阵又暴露了 8 个真实回归，均已按行为修复而非放宽断言：
+
+- **scan flags generator**：`runtime_contract_repros` 明确记录「generator 宽松、边界严格」是设计（plan todo 9），而 PR-01 曾把 generator 也严格化 → 恢复 `scan_method_flags` 的生成器语义（严格拒绝保留在 `validate_scan_submission` 边界），坐标一致性由边界保证。
+- **F4 scope audit**：PR-02 的 `step/initial_hessian` 守卫曾被无界替换复制到 7 个非 IRC 方法（首次修复只重建了 block 未真正删除）；现在只剩 `irc()` 一处（`optimize` 的 initial_hessian 转发恢复），并为 `_read_endpoint_geometry` 的严格读取范围登记 Amendment Z。
+- **CCCP 序列化误伤**：`IrcDirectionResult` 的新字段曾被误插到 `OptimizePayload`/`MdSamplingPayload`/`ScanFrame`（F821 类错误），已收敛回单一类；`irc.json` goldens 与 manifest hash 随之重生成。
+- **scan edit**：投影展示显式点数（覆盖 stale level 镜像）、坐标与 flags 独立解析、partial edit 同步镜像而不是报冲突。
+- **工具清单副本**：`test_services_mcp`、`test_v1_summary` 的工具集合/live-status 往返按新契约更新（无 selection 端口的 fake server 断言基础集合）。
+- **文档**：移除未提交的 `ACP_Simple_Workflows_DevDoc.html` 链接（.txt 为权威），并记录 IRC `--step` 拒绝语义。
+
+本地复核：scan/repro 177 passed、services_mcp/live-status 66 passed、docs 21 passed、F4 37 passed；全仓非 slow 套件与 CI 矩阵在本提交上重跑。
+
 ## 独立验收标注的覆盖缺口（诚实保留）
 
 - PR-01 条目 4/5/7（prepare/预算/派发 spy、执行输入探针、历史/rerun）；PR-02 条目 9（旧回执读取）；PR-03 条目 2/3（不可变性、冷远端 preflight）；PR-04 条目 6/7（关联失败交科学验证、失败诊断找回）；PR-05 条目 4/6/9/10（4 个故障点只覆盖 2 个、远端上传边界、restore 事务、发布能力关闭）；PR-06 条目 5/9（approval 复用、旧 attempt/冻结历史恢复）；PR-07 条目 8（真实 SDK 全选择链，本次只同步工具集）/9（初猜状态）；PR-08 条目 1(部分)/2/4/8/9/10（单 item 多帧、manifest 单结构正例、两拆分示例 preflight、远端容量、TaskRef 示例、幂等服务端用例）；PR-09 条目 5/6/7/8/9（真实 reader 快速路径、负例矩阵、竞争、回退、QUEUED+ABSENT 语义）。
