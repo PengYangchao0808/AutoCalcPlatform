@@ -8,6 +8,19 @@
     ],
     "errors": [],
     "metadata": {
+      "direction_diagnostics": {
+        "forward": {
+          "convergence": "converged",
+          "convergence_evidence": "direction_status=completed",
+          "endpoint_discovery": "found",
+          "endpoint_source": "<TMP>/irc_work/end_f.xyz"
+        },
+        "reverse": {
+          "convergence": "not_converged",
+          "convergence_evidence": "direction_status=max_iterations",
+          "endpoint_discovery": "missing"
+        }
+      },
       "direction_status": {
         "forward": "completed",
         "reverse": "max_iterations"
@@ -20,6 +33,7 @@
       "endpoints": {
         "forward": "<TMP>/irc_work/end_f.xyz"
       },
+      "filtered_endpoint_count": 1,
       "forward_endpoint": "<TMP>/irc_work/end_f.xyz"
     },
     "status": "completed"
@@ -45,13 +59,21 @@
       "IRC forward direction failed to converge"
     ],
     "metadata": {
+      "direction_diagnostics": {
+        "forward": {
+          "convergence": "not_converged",
+          "convergence_evidence": "direction_status=failed",
+          "endpoint_discovery": "missing"
+        }
+      },
       "direction_status": {
         "forward": "failed"
       },
       "directions": [
         "forward"
       ],
-      "endpoint_count": 0
+      "endpoint_count": 0,
+      "filtered_endpoint_count": 0
     },
     "status": "failed"
   }
