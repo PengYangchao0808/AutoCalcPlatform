@@ -190,7 +190,7 @@ def test_wire_syntax_guidance_present_v1_1_0() -> None:
     prompt-side gap (reports/acp2_mcp_guidance_20261030).
     """
     batch = read_guide("workflow.BatchOptimize")
-    assert batch["version"] == "1.1.0"
+    assert batch["version"] == "1.2.0"  # single_flat/idempotency guidance (PR-08)
     steps = batch["sections"]["steps"]
     assert 'role:"ts"' in steps
     assert "默认按 INT" in steps

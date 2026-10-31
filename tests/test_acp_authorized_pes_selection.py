@@ -369,8 +369,7 @@ def test_api_agent_publication_is_validated_and_recorded(api_client, tmp_path: P
             ],
             "selector": "agent",
             "authorization_id": "auth-api",
-            "source_binding": {"job_id": job_id, "attempt": 1, "profile_digest": "p1"},
-            "actor": "forged-agent",  # the body's actor is ignored
+            "source_binding": {"job_id": job_id, "attempt": 1},
             "idempotency_key": "api-pub-1",
         },
     )
@@ -380,7 +379,7 @@ def test_api_agent_publication_is_validated_and_recorded(api_client, tmp_path: P
     work_dir = api_client.app.state.job_manager.get(job_id).work_dir
     review = load_pes_review(work_dir)
     assert review["selector"] == "agent"
-    assert review["actor"] != "forged-agent"
+    assert review["actor"]
     assert review["authorization"]["authorization_id"] == "auth-api"
 
 
@@ -468,3 +467,42 @@ def test_agent_publication_switch_off_keeps_manual_path(
     from acp.calculations.pes.review import load_pes_review
 
     assert load_pes_review(work_dir)["revision"] == 1
+
+
+def test_api_agent_publication_rejects_a_body_actor(api_client, tmp_path: Path) -> None:
+    job_id = _api_job(api_client, tmp_path)
+    _api_authorization(api_client)
+    response = api_client.post(
+        f"/api/v1/jobs/{job_id}/pes/review",
+        json={
+            "candidates": [{"frame_index": 1, "role": "TS"}],
+            "selector": "agent",
+            "authorization_id": "auth-api",
+            "actor": "forged-agent",
+        },
+    )
+    assert response.status_code == 422
+    params = response.json()["detail"]["params"]
+    assert params["rule"] == "server_identity_owned"
+
+
+def test_api_agent_publication_refuses_a_stale_source_digest(api_client, tmp_path: Path) -> None:
+    job_id = _api_job(api_client, tmp_path)
+    _api_authorization(api_client)
+    response = api_client.post(
+        f"/api/v1/jobs/{job_id}/pes/review",
+        json={
+            "candidates": [{"frame_index": 1, "role": "TS"}],
+            "selector": "agent",
+            "authorization_id": "auth-api",
+            "source_binding": {
+                "job_id": job_id,
+                "attempt": 1,
+                "profile_digest": "a-stale-profile-digest",
+            },
+        },
+    )
+    assert response.status_code == 403
+    detail = response.json()["detail"]
+    assert detail["code"] == "stale_source"
+    assert detail["params"]["field"] == "source_binding.profile_digest"

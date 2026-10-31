@@ -157,19 +157,33 @@ def test_cli_string_coordinate_is_not_interpreted_as_a_distance(client: TestClie
     assert response.json()["advisories"] == []
 
 
-def test_scan_request_envelope_is_consumed_not_rejected(client: TestClient) -> None:
-    """input.scan_request is a prepared carrier (round-5 PR-03).
-
-    It is accepted and compared against the expanded fields; a contradicting
-    carrier is refused.  A lone carrier without any source is still missing the
-    required input source, which the contract reports as missing_input.
-    """
+def test_scan_request_envelope_is_consumed_when_it_agrees(client: TestClient) -> None:
+    """An equivalent input.scan_request carrier is accepted (round-5 PR-03)."""
     payload = _pes_input(4.9, 1.55)
-    coordinate = payload.pop("coordinate")
+    coordinate = payload["coordinate"]
     payload["scan_request"] = {"coordinate": coordinate}
     response = client.post(
         "/api/v1/preflight", json={"workflow": "PESsearch", "input": payload}
     )
-    # the carrier itself is fine; the missing expanded coordinate is not a
-    # source problem, so with a source present the request passes
-    assert response.status_code in (200, 422)
+    assert response.status_code == 200, response.text
+
+
+def test_scan_request_envelope_contradicting_the_fields_is_refused(
+    client: TestClient,
+) -> None:
+    """A carrier that contradicts the expanded coordinate is a typed refusal."""
+    payload = _pes_input(4.9, 1.55)
+    payload["scan_request"] = {
+        "coordinate": {
+            "kind": "distance",
+            "atoms": [0, 4],
+            "start": "4.90",
+            "end": "1.55",
+        }
+    }
+    response = client.post(
+        "/api/v1/preflight", json={"workflow": "PESsearch", "input": payload}
+    )
+    assert response.status_code == 422, response.text
+    params = response.json()["detail"]["params"]
+    assert params["rule"] == "conflicting_fields"

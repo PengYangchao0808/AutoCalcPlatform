@@ -140,7 +140,13 @@ def build_live_status(state_data: Mapping[str, Any]) -> JobLiveStatus | None:
         metrics=metrics,
         observed_at=observed_at,
         source=source,
-        unknown_reason=None if metrics else "metrics_unavailable",
+        unknown_reason=(
+            "stage_unknown"
+            if stage_display is None and metrics
+            else "metrics_unavailable"
+            if not metrics
+            else None
+        ),
     )
 
 

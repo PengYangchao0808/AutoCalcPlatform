@@ -106,8 +106,10 @@ def _check_scan_request_carrier(
             {"coordinate": expanded_coordinate}, field_prefix="input"
         )["coordinate"]
         if carrier != expanded:
-            raise ValueError(
-                "input.scan_request.coordinate conflicts with input.coordinate"
+            raise CoordinateError(
+                "input.scan_request.coordinate conflicts with input.coordinate",
+                field="input.scan_request.coordinate",
+                rule="conflicting_fields",
             )
     carrier_coordinates = scan_request.get("coordinates")
     expanded_coordinates = input_data.get("coordinates")
@@ -119,8 +121,10 @@ def _check_scan_request_carrier(
             {"coordinates": expanded_coordinates}, field_prefix="input"
         )["coordinates"]
         if carrier_list != expanded_list:
-            raise ValueError(
-                "input.scan_request.coordinates conflicts with input.coordinates"
+            raise CoordinateError(
+                "input.scan_request.coordinates conflicts with input.coordinates",
+                field="input.scan_request.coordinates",
+                rule="conflicting_fields",
             )
     carrier_protocol = scan_request.get("protocol")
     expanded_protocol = input_data.get("protocol")
@@ -129,7 +133,11 @@ def _check_scan_request_carrier(
         and expanded_protocol is not None
         and dict(carrier_protocol) != dict(expanded_protocol)
     ):
-        raise ValueError("input.scan_request.protocol conflicts with input.protocol")
+        raise CoordinateError(
+            "input.scan_request.protocol conflicts with input.protocol",
+            field="input.scan_request.protocol",
+            rule="conflicting_fields",
+        )
 
 
 def _scan_execution_mode(coordinates: list[Mapping[str, Any]]) -> str:

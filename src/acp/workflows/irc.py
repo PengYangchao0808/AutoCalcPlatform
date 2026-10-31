@@ -36,6 +36,42 @@ def _default_manifest_publisher() -> ManifestPublisher:
     return _DEFAULT_PUBLISHER
 
 
+
+def _convergence_verdict(
+    directions: Sequence[str], diagnostics: JsonValue | None
+) -> bool | None:
+    """Whole-run convergence from the per-direction diagnostics (never the status)."""
+    entries = diagnostics if isinstance(diagnostics, dict) else {}
+    flags = [
+        str((entries.get(direction) or {}).get("convergence") or "unknown")
+        if isinstance(entries.get(direction), dict)
+        else "unknown"
+        for direction in directions
+    ]
+    if not flags:
+        return None
+    if all(flag == "converged" for flag in flags):
+        return True
+    if all(flag == "unknown" for flag in flags):
+        return None
+    return False
+
+
+def _completion_verdict(
+    directions: Sequence[str],
+    diagnostics: JsonValue | None,
+    status: str,
+) -> bool:
+    """Every requested direction discovered an endpoint and the task completed."""
+    if str(status) != "completed" or not directions:
+        return False
+    entries = diagnostics if isinstance(diagnostics, dict) else {}
+    return all(
+        isinstance(entries.get(direction), dict)
+        and (entries.get(direction) or {}).get("endpoint_discovery") == "found"
+        for direction in directions
+    )
+
 def run_irc_workflow(
     input_artifact: StructureArtifact,
     directions: Sequence[str] = ("forward", "reverse"),
@@ -195,8 +231,14 @@ def run_irc_workflow(
         "last_observed_geometries": (
             calculation.metadata.get("last_observed_geometries") or {}
         ),
-        "converged": calculation.converged,
-        "complete": calculation.complete,
+        "converged": _convergence_verdict(
+            irc_request.directions, calculation.metadata.get("direction_diagnostics")
+        ),
+        "complete": _completion_verdict(
+            irc_request.directions,
+            calculation.metadata.get("direction_diagnostics"),
+            calculation.status,
+        ),
         "errors": list(calculation.errors),
         "ts_source": dict(source_provenance or {}),
     }

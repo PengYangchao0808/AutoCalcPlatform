@@ -4114,7 +4114,10 @@ def get_pes_review_status(job_id: str, request: Request) -> dict[str, Any]:
             "selector": review.get("selector") or "manual",
             "actor": review.get("actor"),
             "authorization": review.get("authorization"),
-            "source": review.get("source") or {},
+            "source": {
+                **(review.get("source") or {}),
+                "attempt": int(getattr(record, "attempt", 1) or 1),
+            },
             "review": review,
             "selected": [
                 {
@@ -4173,6 +4176,46 @@ def _selection_autopublish_enabled() -> bool:
     return raw not in {"0", "false", "off", "no"}
 
 
+def _server_source_digests(record: Any, candidates: list[dict[str, Any]]) -> tuple[str, str]:
+    """Profile/geometry digests computed from the task's own artifacts (PR-06)."""
+    import hashlib
+
+    from acp.calculations.pes.review import _resolve_frame_source
+
+    root = Path(str(getattr(record, "work_dir", "") or ""))
+    if not root.is_dir():
+        return "", ""
+    status_value = str(
+        getattr(getattr(record, "status", ""), "value", getattr(record, "status", ""))
+    ).upper()
+    try:
+        frame_source = _resolve_frame_source(root, task_status=status_value)
+    except Exception:  # an unreadable source is reported by the publish path
+        return "", ""
+    profile_digest = str(frame_source.data_sha256 or "")
+    geometry_parts: list[str] = []
+    for item in candidates:
+        try:
+            index = int(item.get("frame_index"))
+        except (TypeError, ValueError):
+            continue
+        frame = frame_source.frames_by_index.get(index)
+        if not isinstance(frame, Mapping):
+            continue
+        relative = str(frame.get(frame_source.geometry_key) or "")
+        if not relative:
+            continue
+        geometry_path = root / frame_source.geometry_base / relative
+        if geometry_path.is_file():
+            geometry_parts.append(hashlib.sha256(geometry_path.read_bytes()).hexdigest())
+    geometry_digest = (
+        hashlib.sha256("".join(sorted(geometry_parts)).encode()).hexdigest()
+        if geometry_parts
+        else ""
+    )
+    return profile_digest, geometry_digest
+
+
 def _authorize_agent_selection(
     request: Request,
     job_id: str,
@@ -4222,6 +4265,39 @@ def _authorize_agent_selection(
     nproc = int(resources.get("nproc") or 0)
     source_binding = dict(req.source_binding or {})
     candidates = tuple(item.model_dump(exclude_none=True) for item in req.candidates)
+    requested_profile = str(source_binding.get("profile_digest") or "")
+    requested_geometry = str(source_binding.get("geometry_digest") or "")
+    server_profile, server_geometry = _server_source_digests(record, list(candidates))
+    if requested_profile and server_profile and requested_profile != server_profile:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "stale_source",
+                "message": (
+                    "the selection source profile changed; re-read the task and "
+                    "re-publish against the current attempt"
+                ),
+                "params": {
+                    "field": "source_binding.profile_digest",
+                    "rule": "stale_source",
+                },
+            },
+        )
+    if requested_geometry and server_geometry and requested_geometry != server_geometry:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "stale_source",
+                "message": (
+                    "the selected frame geometry changed; re-read the task and "
+                    "re-publish against the current attempt"
+                ),
+                "params": {
+                    "field": "source_binding.geometry_digest",
+                    "rule": "stale_source",
+                },
+            },
+        )
     selection_request = SelectionPublicationRequest(
         authorization_id=str(req.authorization_id),
         selector="agent",
@@ -4230,8 +4306,10 @@ def _authorize_agent_selection(
         source=SelectionSourceBinding(
             job_id=job_id,
             attempt=attempt,
-            profile_digest=str(source_binding.get("profile_digest") or ""),
-            geometry_digest=str(source_binding.get("geometry_digest") or ""),
+            # the server-computed digests are authoritative; a client claim was
+            # only accepted after it matched (otherwise stale_source above)
+            profile_digest=server_profile or requested_profile,
+            geometry_digest=server_geometry or requested_geometry,
         ),
         workflow="PESsearch",
         candidates=candidates,
@@ -4443,6 +4521,17 @@ def save_pes_review_endpoint(
     selector = str(req.selector or "manual")
     if selector not in {"manual", "manual_frame", "agent"}:
         raise HTTPException(status_code=422, detail=f"unsupported selection selector {selector!r}")
+    if selector == "agent" and req.actor:
+        # the actor is server-owned; accepting a body value would be a
+        # misleading "forged but ignored" field (PR-06 criterion 2).
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "input_invalid",
+                "message": "actor is server-owned for agent publications; omit it",
+                "params": {"field": "actor", "rule": "server_identity_owned"},
+            },
+        )
     agent_authorization: dict | None = None
     agent_source_binding: dict | None = None
     agent_actor: str | None = None
