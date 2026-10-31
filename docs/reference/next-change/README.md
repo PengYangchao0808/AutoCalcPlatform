@@ -20,7 +20,7 @@
 |---|---|---|
 | [ACP_3.0_Architecture_20261031.md](ACP_3.0_Architecture_20261031.md) | 以用户虚拟工作站为中心的 RPH/DSH 一体化体系；后端/前端两计划的共同上位 | 现行 |
 | [ACP_3.0_Backend_Plan_20261031.md](ACP_3.0_Backend_Plan_20261031.md) | 后端实现计划（Control Plane / CCCP / RPH） | 现行 |
-| [ACP_3.0_Frontend_Plan_20261031.md](ACP_3.0_Frontend_Plan_20261031.md) | **v2 可视化先行 + 全功能对等**：`acp.view.v1` 视图模型 + 三模式适配层；**24 个功能面 parity 矩阵**（老 UI 1 673 标签为清单，零功能丢失）；V0–V7 分期，后端缺口 BE-GAP-01…12，DSH 宿主推迟到 V8 | **现行**（前端实施唯一入口） |
+| [ACP_3.0_Frontend_Plan_20261031.md](ACP_3.0_Frontend_Plan_20261031.md) | **v2 可视化先行 + 全功能对等**：`acp.view.v1` + 三模式适配层；24 个功能面 parity 矩阵；**两条任务线（Track A 移植 63 项 / Track B 新模块 13 项）**；V0–V7 分期，后端缺口 BE-GAP-01…12，DSH 宿主推迟到 V8 | **现行**（前端实施唯一入口） |
 | [ACP_MultiUser_VirtualHost_DSH_Topology_20261031.md](ACP_MultiUser_VirtualHost_DSH_Topology_20261031.md) | 一人一 Linux 虚机 + 一人一 DSH + 虚拟文件系统的代码级差距与文件清单 | 现行（附件） |
 
 ## 前端（2026-10-27…31）

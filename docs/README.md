@@ -21,7 +21,7 @@
 | 改计算任务核心 / 新增任务类型 | 根 `AGENTS.md`（四层架构、ANTI #17） | [ACP_CCCP_Task_API_DevDoc](reference/current/ACP_CCCP_Task_API_DevDoc.md) |
 | 改工作流、调度、Job 生命周期 | `src/acp/AGENTS.md`、`src/acp/scheduler/AGENTS.md` | [ACP_Job_File_Layout_Spec](reference/current/ACP_Job_File_Layout_Spec.md) |
 | 改平台服务层（store/data/runtime） | `src/acp_services/AGENTS.md` | [ACP_Services_Closure_20261019](reference/current/ACP_Services_Closure_20261019.md) |
-| 做前端可视化 / 迁移老 UI 功能 | [ACP 3.0 前端计划 v2（可视化先行 + 全功能对等）](reference/next-change/ACP_3.0_Frontend_Plan_20261031.md)§2.4 | [能量/轨迹查看器 DevDoc](reference/current/ACP_Energy_Trajectory_Viewer_DevDoc.md)、[结构查看器 DevDoc](reference/current/ACP_Structure_Viewer_DevDoc.md) |
+| 做前端可视化 / 迁移老 UI 功能 | [ACP 3.0 前端计划 v2（功能对等 + 两条任务线）](reference/next-change/ACP_3.0_Frontend_Plan_20261031.md)§2.4 / §5 | [能量/轨迹查看器 DevDoc](reference/current/ACP_Energy_Trajectory_Viewer_DevDoc.md)、[结构查看器 DevDoc](reference/current/ACP_Structure_Viewer_DevDoc.md) |
 | 改 API / 前端接口 | `src/acp/api/AGENTS.md` | [任务文件布局](reference/current/ACP_Job_File_Layout_Spec.md)、[前端目标形态方案](reference/next-change/ACP_Frontend_Target_Workbench_Plan_20261030.md) |
 | 改结构输入 / 结果复用 / 查看器 | [ACP_Structure_Sources_DevDoc](reference/current/ACP_Structure_Sources_DevDoc.md) | [ACP_Structure_Viewer_DevDoc](reference/current/ACP_Structure_Viewer_DevDoc.md)、[能量与轨迹查看器](reference/current/ACP_Energy_Trajectory_Viewer_DevDoc.md) |
 | 改 NMR / DP4 | `src/acp/nmr/AGENTS.md` | [ACP_NMR_DP4_DevDoc](reference/current/ACP_NMR_DP4_DevDoc.md) |
