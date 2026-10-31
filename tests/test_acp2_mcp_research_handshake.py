@@ -243,7 +243,7 @@ def test_exact_version_request_negotiates_only_a_covering_implementation() -> No
     assert entry["implemented"] is True
     assert entry["negotiated"] is True
     assert entry["refusal"] is None
-    assert len(mcp.TOOL_ALLOWLIST) == 10
+    assert len(mcp.TOOL_ALLOWLIST) == 12  # + acp_get_pes_review/acp_publish_pes_review (PR-07)
     # Only now does the model-visible surface grow.
     assert server.research_negotiated is True
     assert len(server.visible_tool_names()) == 20
@@ -432,7 +432,7 @@ def test_http_plain_read_still_answers_the_advertisement(api_client: Any) -> Non
     # No request in this read: nothing is negotiated, so the P1 surface stands.
     assert payload["extensions"][0]["negotiated"] is False
     assert payload["capability_request"]["research_extension"] is None
-    assert len(payload["tools"]) == 10
+    assert len(payload["tools"]) == 12  # + the two PR-07 selection tools
 
 
 def test_http_version_mismatch_and_unknown_fields_are_typed(api_client: Any) -> None:

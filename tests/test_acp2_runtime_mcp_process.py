@@ -32,6 +32,9 @@ EXPECTED_TOOLS = {
     "acp_capabilities",
     "acp_preflight",
     "acp_submit",
+    # round-5 PR-07: selection read/publish (assembled in the Controller path)
+    "acp_get_pes_review",
+    "acp_publish_pes_review",
     "acp_status",
     "acp_cancel",
     "acp_prepare_artifact",

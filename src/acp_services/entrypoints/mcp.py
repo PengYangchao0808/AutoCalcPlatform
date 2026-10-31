@@ -379,6 +379,9 @@ class McpTool(str):
     ANALYZE = "acp_analyze"
     GUIDANCE = "acp_get_guidance"
     LIST_JOBS = "acp_list_jobs"
+    #: Round-5 PR-07 selection tools: cache-only status and authorized publish.
+    GET_PES_REVIEW = "acp_get_pes_review"
+    PUBLISH_PES_REVIEW = "acp_publish_pes_review"
 
     ALL = frozenset(
         {
@@ -392,6 +395,8 @@ class McpTool(str):
             ANALYZE,
             GUIDANCE,
             LIST_JOBS,
+            GET_PES_REVIEW,
+            PUBLISH_PES_REVIEW,
         }
     )
 
@@ -408,6 +413,8 @@ TOOL_FAMILIES: dict[str, str] = {
     McpTool.ANALYZE: "explicit_analysis",
     McpTool.GUIDANCE: "guidance_discovery_read",
     McpTool.LIST_JOBS: "task_lookup",
+    McpTool.GET_PES_REVIEW: "selection_read",
+    McpTool.PUBLISH_PES_REVIEW: "selection_publish",
 }
 
 #: Access action each tool requires; enforced against the resolved scope.
@@ -422,7 +429,15 @@ TOOL_REQUIRED_ACTION: dict[str, str] = {
     McpTool.ANALYZE: AccessAction.WRITE,
     McpTool.GUIDANCE: AccessAction.READ,
     McpTool.LIST_JOBS: AccessAction.READ,
+    McpTool.GET_PES_REVIEW: AccessAction.READ,
+    McpTool.PUBLISH_PES_REVIEW: AccessAction.WRITE,
 }
+
+#: Selection tools are visible only when the selection port is assembled.
+_SELECTION_TOOL_NAMES: tuple[str, ...] = (
+    McpTool.GET_PES_REVIEW,
+    McpTool.PUBLISH_PES_REVIEW,
+)
 
 #: The frozen allowlist — the only tool names ``tools/list`` advertises and
 #: ``tools/call`` accepts.
@@ -1229,6 +1244,58 @@ _LIST_JOBS_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 
+_GET_PES_REVIEW_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "description": (
+        "Cache-only selection status for a PESsearch task: current revision, "
+        "selector/actor/authorization, source task/attempt, selected summaries, "
+        "backup summaries and the persistent publication receipt. Never fetches "
+        "the compute node; an uncached remote selection returns not_prepared "
+        "with the prepare endpoint."
+    ),
+    "properties": {
+        "schema_version": {"type": "integer", "enum": [1], "default": 1},
+        "job_id": {"type": "string", "description": "PESsearch task id."},
+    },
+    "required": ["job_id"],
+    "additionalProperties": False,
+}
+
+_PUBLISH_PES_REVIEW_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "description": (
+        "Publish a PES selection inside a bounded authorization (agent path). "
+        "Requires the authorization id, the candidates and a source binding; the "
+        "server supplies the actor/principal from the verified identity. Send a "
+        "stable idempotency_key so a lost response replays the same revision."
+    ),
+    "properties": {
+        "schema_version": {"type": "integer", "enum": [1], "default": 1},
+        "job_id": {"type": "string"},
+        "candidates": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "frame_index": {"type": "integer", "minimum": 0},
+                    "role": {"type": "string", "enum": ["TS", "INT"]},
+                    "candidate_id": {"type": "string"},
+                    "name": {"type": "string"},
+                },
+                "required": ["frame_index", "role"],
+                "additionalProperties": False,
+            },
+        },
+        "authorization_id": {"type": "string"},
+        "source_binding": {"type": "object"},
+        "idempotency_key": {"type": "string"},
+        "expected_revision": {"type": "integer", "minimum": 0},
+        "note": {"type": "string"},
+    },
+    "required": ["job_id", "authorization_id", "candidates"],
+    "additionalProperties": False,
+}
+
 _ARGUMENT_SCHEMAS: dict[str, dict[str, Any]] = {
     McpTool.PREFLIGHT: _PREFLIGHT_SCHEMA,
     McpTool.SUBMIT: _SUBMIT_SCHEMA,
@@ -1238,6 +1305,8 @@ _ARGUMENT_SCHEMAS: dict[str, dict[str, Any]] = {
     McpTool.ANALYZE: _ANALYZE_SCHEMA,
     McpTool.GUIDANCE: _GUIDANCE_SCHEMA,
     McpTool.LIST_JOBS: _LIST_JOBS_SCHEMA,
+    McpTool.GET_PES_REVIEW: _GET_PES_REVIEW_SCHEMA,
+    McpTool.PUBLISH_PES_REVIEW: _PUBLISH_PES_REVIEW_SCHEMA,
 }
 
 
@@ -1568,6 +1637,23 @@ def _tool_specs() -> tuple[dict[str, Any], ...]:
             ),
             _LIST_JOBS_SCHEMA,
         ),
+        _tool_spec(
+            McpTool.GET_PES_REVIEW,
+            (
+                "Cache-only PES selection status (revision/source/authorization/"
+                "publication receipt); never fetches the compute node."
+            ),
+            _GET_PES_REVIEW_SCHEMA,
+        ),
+        _tool_spec(
+            McpTool.PUBLISH_PES_REVIEW,
+            (
+                "Publish a PES selection inside a bounded authorization; the actor "
+                "comes from the verified identity and a lost response replays with "
+                "the same idempotency key."
+            ),
+            _PUBLISH_PES_REVIEW_SCHEMA,
+        ),
         *_research_tool_specs(),
         *(
             _tool_spec(name, "Versioned research consumer operation.", CONSUMPTION_SCHEMAS[name])
@@ -1823,6 +1909,27 @@ class GuidancePort(Protocol):
 
 
 @runtime_checkable
+class SelectionPort(Protocol):
+    """PES selection read/publish (round-5 PR-07).
+
+    The read is cache-only and never fetches the compute node; the publish is
+    the authorized agent path (the Controller validates the identity/authorization
+    and the publication group).  Absent port = tool not visible and a direct call
+    is an ``unsupported_capability`` refusal.
+    """
+
+    def get_review_status(self, job_id: str, *, workspace_id: str) -> Any:
+        """Cache-only selection status (revision/source/publication receipt)."""
+        ...
+
+    def publish_review(
+        self, job_id: str, request: Mapping[str, Any], *, workspace_id: str
+    ) -> Any:
+        """Publish a selection inside a bounded authorization."""
+        ...
+
+
+@runtime_checkable
 class ResearchPort(Protocol):
     """The ten P2 research operations (M2-01c), one method per operation.
 
@@ -1892,6 +1999,9 @@ class McpBackends:
     guidance: GuidancePort | None = None
     research: ResearchPort | None = None
     consumption: ConsumptionPort | None = None
+    #: Round-5 PR-07: selection read/publish port; absent means the two tools are
+    #: not visible and a direct call is refused as unsupported_capability.
+    selection: SelectionPort | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -2519,6 +2629,8 @@ class McpServer:
             McpTool.ANALYZE: self._tool_analyze,
             McpTool.GUIDANCE: self._tool_guidance,
             McpTool.LIST_JOBS: self._tool_list_jobs,
+            McpTool.GET_PES_REVIEW: self._tool_get_pes_review,
+            McpTool.PUBLISH_PES_REVIEW: self._tool_publish_pes_review,
         }
         for tool_name in RESEARCH_TOOL_NAMES:
             self._tool_dispatch[tool_name] = self._research_handler(tool_name)
@@ -2542,6 +2654,63 @@ class McpServer:
 
         return handle
 
+    def _tool_get_pes_review(
+        self, arguments: Mapping[str, Any], context: WorkspaceContext
+    ) -> mo.MachineResult:
+        port = self._backends.selection
+        if port is None:
+            raise McpToolError(
+                mo.ErrorCode.UNSUPPORTED_CAPABILITY,
+                "selection tools are not assembled on this Controller",
+                params={"code": "selection_unavailable"},
+            )
+        job_id = str(arguments.get("job_id") or "")
+        data = port.get_review_status(job_id, workspace_id=context.workspace_id)
+        payload = dict(data) if isinstance(data, Mapping) else {"result": data}
+        return mo.MachineResult(
+            operation=McpTool.GET_PES_REVIEW,
+            status="ok",
+            data=payload,
+            operation_identity=context.workspace_id,
+        )
+
+    def _tool_publish_pes_review(
+        self, arguments: Mapping[str, Any], context: WorkspaceContext
+    ) -> mo.MachineResult:
+        port = self._backends.selection
+        if port is None:
+            raise McpToolError(
+                mo.ErrorCode.UNSUPPORTED_CAPABILITY,
+                "selection tools are not assembled on this Controller",
+                params={"code": "selection_unavailable"},
+            )
+        job_id = str(arguments.get("job_id") or "")
+        request = {
+            key: arguments[key]
+            for key in (
+                "candidates",
+                "authorization_id",
+                "source_binding",
+                "idempotency_key",
+                "expected_revision",
+                "note",
+            )
+            if key in arguments
+        }
+        data = port.publish_review(job_id, request, workspace_id=context.workspace_id)
+        payload = dict(data) if isinstance(data, Mapping) else {"result": data}
+        revision = payload.get("revision")
+        payload.setdefault(
+            "selection_ref",
+            f"pes-selection:{job_id}:r{revision}" if revision is not None else f"pes-selection:{job_id}",
+        )
+        return mo.MachineResult(
+            operation=McpTool.PUBLISH_PES_REVIEW,
+            status="ok",
+            data=payload,
+            operation_identity=context.workspace_id,
+        )
+
     def _research_handler(self, tool_name: str) -> _ToolHandler:
         """Bind one dispatch entry to a research tool name (no client input)."""
 
@@ -2559,7 +2728,12 @@ class McpServer:
 
     def visible_tool_names(self) -> tuple[str, ...]:
         """The tools ``tools/list`` advertises right now (P1 + negotiated P2)."""
-        names = sorted(TOOL_ALLOWLIST)
+        selection_available = self._backends.selection is not None
+        names = [
+            name
+            for name in sorted(TOOL_ALLOWLIST)
+            if selection_available or name not in _SELECTION_TOOL_NAMES
+        ]
         if self._research_negotiated:
             names.extend(sorted(RESEARCH_TOOL_SET))
             if self._backends.consumption is not None:

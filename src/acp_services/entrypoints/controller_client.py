@@ -424,6 +424,24 @@ class ControllerClient:
         self._api_key = str(api_key).strip() if api_key else None
 
     # -- transport ---------------------------------------------------------
+    def get_pes_review_status(self, job_id: str) -> Any:
+        """Cache-only PES selection status (round-5 PR-07 read tool)."""
+        from urllib.parse import quote
+
+        return self._request_json(
+            "GET", f"/api/v1/jobs/{quote(str(job_id), safe='')}/pes/review/status"
+        )
+
+    def publish_pes_review(self, job_id: str, request: Mapping[str, Any]) -> Any:
+        """Publish a PES selection (authorized agent path, PR-06)."""
+        from urllib.parse import quote
+
+        return self._request_json(
+            "POST",
+            f"/api/v1/jobs/{quote(str(job_id), safe='')}/pes/review",
+            dict(request),
+        )
+
     def _request_json(
         self,
         method: str,

@@ -116,3 +116,60 @@ def test_status_rejects_non_pes_workflows(client: TestClient, tmp_path: Path) ->
     manager.store.create(record)
     response = client.get("/api/v1/jobs/20261031_001_frequency/pes/review/status")
     assert response.status_code == 400
+
+
+# --------------------------------------------------------------------------- #
+# tool registration / visibility / forwarding
+# --------------------------------------------------------------------------- #
+
+
+def test_selection_tools_are_registered_and_assembled_only_with_the_port() -> None:
+    from acp_services.entrypoints import mcp
+
+    assert mcp.McpTool.GET_PES_REVIEW in mcp.TOOL_ALLOWLIST
+    assert mcp.McpTool.PUBLISH_PES_REVIEW in mcp.TOOL_ALLOWLIST
+    assert mcp.McpTool.PUBLISH_PES_REVIEW in mcp._ARGUMENT_SCHEMAS
+    assert mcp.McpTool.GET_PES_REVIEW in mcp._ARGUMENT_SCHEMAS
+    # the port is optional: absence means not visible (checked via the server)
+    import dataclasses
+
+    fields = {field.name for field in dataclasses.fields(mcp.McpBackends)}
+    assert "selection" in fields
+
+
+def test_controller_selection_port_forwards_and_keeps_errors() -> None:
+    from acp.services_mcp_bootstrap import _ControllerSelection
+
+    class _Client:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str, dict | None]] = []
+
+        def get_pes_review_status(self, job_id: str) -> dict:
+            self.calls.append(("get", job_id, None))
+            return {"job_id": job_id, "status": "confirmed", "revision": 3}
+
+        def publish_pes_review(self, job_id: str, request: dict) -> dict:
+            self.calls.append(("publish", job_id, request))
+            return {"job_id": job_id, "revision": 4, "publication": {"status": "published"}}
+
+    client = _Client()
+    port = _ControllerSelection(client)
+    status = port.get_review_status("job-1", workspace_id="ws")
+    assert status["revision"] == 3
+    published = port.publish_review(
+        "job-1",
+        {"authorization_id": "auth-1", "candidates": [{"frame_index": 1, "role": "TS"}]},
+        workspace_id="ws",
+    )
+    assert published["publication"]["status"] == "published"
+    assert [call[0] for call in client.calls] == ["get", "publish"]
+
+
+def test_publish_tool_requires_the_authorization_arguments() -> None:
+    from acp_services.entrypoints import mcp
+
+    schema = mcp._ARGUMENT_SCHEMAS[mcp.McpTool.PUBLISH_PES_REVIEW]
+    assert set(schema["required"]) == {"job_id", "authorization_id", "candidates"}
+    assert schema["additionalProperties"] is False
+    get_schema = mcp._ARGUMENT_SCHEMAS[mcp.McpTool.GET_PES_REVIEW]
+    assert set(get_schema["required"]) == {"job_id"}

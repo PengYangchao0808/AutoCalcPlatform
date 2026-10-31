@@ -452,6 +452,21 @@ def _discovery_navigation() -> dict[str, Any]:
             "tool": "acp_get_guidance",
             "arguments": {"guide_id": "<id>"},
         },
+        "selection_status": {
+            "tool": "acp_get_pes_review",
+            "arguments": {"job_id": "<PESsearch job id>"},
+            "note": "cache-only; an uncached remote selection returns not_prepared",
+        },
+        "selection_publish": {
+            "tool": "acp_publish_pes_review",
+            "arguments": {
+                "job_id": "<job id>",
+                "authorization_id": "<bounded authorization>",
+                "candidates": "[{frame_index, role}]",
+                "idempotency_key": "<stable retry key>",
+            },
+            "note": "requires a bounded authorization; the actor is server-verified",
+        },
         "rule": "do not read platform source to guess payloads; follow fallbacks or report a gap",
     }
 
