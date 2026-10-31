@@ -516,3 +516,29 @@ def test_real_command_smoke(tmp_path: Path) -> None:
     payload = json.loads(proc.stdout)
     assert payload["dry_run"] is True
     assert payload["data"]["executed"] is False
+
+
+def test_cli_text_logging_stays_off_stdout() -> None:
+    """`acp task query --json` output must be json.load-able (round-6 #8).
+
+    The text logging handler moved to stderr; machine envelopes keep stdout.
+    """
+    import logging
+    import sys
+
+    from acp import cli
+
+    root = logging.getLogger()
+    saved = list(root.handlers)
+    root.handlers.clear()
+    try:
+        cli.setup_logging("INFO", structured=False)
+        assert root.handlers, "setup_logging must install a handler"
+        streams = [getattr(handler, "stream", None) for handler in root.handlers]
+        assert sys.stdout not in streams
+        assert sys.stderr in streams
+    finally:
+        for handler in list(root.handlers):
+            root.removeHandler(handler)
+        for handler in saved:
+            root.addHandler(handler)

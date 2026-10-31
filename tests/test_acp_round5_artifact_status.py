@@ -141,9 +141,10 @@ class _Reader:
         return self.snapshot
 
 
-def test_prepare_fast_path_returns_ready_for_a_prepared_local_artifact(
+def test_prepare_fast_path_returns_a_readable_five_tuple(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Round-6 #5: a ready receipt must carry the artifact_ref read needs."""
     from acp.api import v1_routes
 
     record = type(
@@ -154,14 +155,62 @@ def test_prepare_fast_path_returns_ready_for_a_prepared_local_artifact(
     monkeypatch.setattr(v1_routes, "_is_remote_job", lambda _record: False)
     reader = _Reader(_Snapshot(readable=True))
     monkeypatch.setattr(v1_routes, "_cache_only_resource_reader", lambda _request: reader)
+    monkeypatch.setattr(v1_routes, "_manager", lambda _request: object())
+    ref = (
+        {"task_id": "job-1", "attempt": 1, "artifact_id": "freq", "generation": 2,
+         "digest": "sha256:" + "a" * 64},
+        {"kind": "operation", "id": "op_1"},
+    )
+    monkeypatch.setattr(v1_routes, "_fast_path_artifact_ref", lambda *args: ref)
     receipt = v1_routes._prepare_fast_path(
         None, record, "job-1", purpose="artifact", artifact_id="freq", relative_path="", attempt=1, expected_revision=0
     )
     assert receipt is not None
     assert receipt["status"] == "ready"
     assert receipt["fast_path"] is True
+    assert receipt["artifact_ref"]["digest"].startswith("sha256:")
+    assert receipt["operation_ref"]["id"] == "op_1"
     assert receipt["read"].startswith("/api/v1/jobs/job-1/prepared/artifact")
     assert reader.calls and reader.calls[0]["kind"] == "artifact"
+
+
+def test_prepare_fast_path_falls_through_without_an_authoritative_ref(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No resolvable manager / no published ref must not yield an unreadable ready."""
+    from acp.api import v1_routes
+
+    record = type(
+        "Record",
+        (),
+        {"spec": type("Spec", (), {"workflow": "frequency"})(), "attempt": 1, "status": "completed"},
+    )()
+    monkeypatch.setattr(v1_routes, "_is_remote_job", lambda _record: False)
+    monkeypatch.setattr(
+        v1_routes, "_cache_only_resource_reader", lambda _request: _Reader(_Snapshot(readable=True))
+    )
+
+    def _missing_manager(_request):
+        raise RuntimeError("no manager")
+
+    monkeypatch.setattr(v1_routes, "_manager", _missing_manager)
+    assert (
+        v1_routes._prepare_fast_path(
+            None, record, "job-1", purpose="artifact", artifact_id="freq",
+            relative_path="", attempt=1, expected_revision=0,
+        )
+        is None
+    )
+
+    monkeypatch.setattr(v1_routes, "_manager", lambda _request: object())
+    monkeypatch.setattr(v1_routes, "_fast_path_artifact_ref", lambda *args: None)
+    assert (
+        v1_routes._prepare_fast_path(
+            None, record, "job-1", purpose="artifact", artifact_id="freq",
+            relative_path="", attempt=1, expected_revision=0,
+        )
+        is None
+    )
 
 
 def test_prepare_fast_path_falls_through_for_unprepared_or_remote(

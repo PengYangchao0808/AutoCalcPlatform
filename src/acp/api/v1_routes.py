@@ -126,6 +126,7 @@ from acp.api.v1_schemas import (
     PesReviewBackupSummary,
     PesReviewCandidate,
     PesReviewRequest,
+    SelectionAuthorizationCreateRequest,
     PesReviewResponse,
     PesReviewRestoreRequest,
     PesReviewRestoreResponse,
@@ -1882,19 +1883,76 @@ def _validate_batch_cardinality(inp: dict[str, Any]) -> None:
         actual = len(items)
     else:
         manifest = inp.get("from") or inp.get("manifest_path")
+        if not (isinstance(manifest, str) and manifest):
+            # The Batch field policy names the manifest source ``from_artifact``.
+            # Only an absolute path is resolved here; a relative path is resolved
+            # against the source job's work dir by the loader later, so this
+            # static check must not guess it (round-6 audit).
+            artifact = inp.get("from_artifact")
+            if isinstance(artifact, str) and artifact:
+                candidate = Path(artifact)
+                if candidate.is_absolute() and candidate.name == "result_manifest.json":
+                    manifest = str(candidate)
+        if not (isinstance(manifest, str) and manifest):
+            items_file = inp.get("items_file")
+            if isinstance(items_file, str) and items_file:
+                try:
+                    document = json.loads(Path(items_file).read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    document = None
+                entries = (
+                    document.get("items") or document.get("entries")
+                    if isinstance(document, dict)
+                    else None
+                )
+                if isinstance(entries, list):
+                    actual = len(entries)
         if isinstance(manifest, str) and manifest:
-            root = Path(manifest)
-            if root.name == "result_manifest.json" and root.parent.name == "RESULT":
-                root = root.parent.parent
+            manifest_path = Path(manifest)
+            if (
+                manifest_path.name == "result_manifest.json"
+                and manifest_path.parent.name == "RESULT"
+            ):
+                if not manifest_path.is_file():
+                    raise HTTPException(
+                        status_code=422,
+                        detail={
+                            "code": "input_invalid",
+                            "message": f"batch source manifest does not exist: {manifest}",
+                            "params": {
+                                "field": "input.from_artifact",
+                                "rule": "source_not_ready",
+                            },
+                        },
+                    )
+                root = manifest_path.parent.parent
+            else:
+                root = manifest_path
             try:
                 from acp.calculations.batch.loaders import load_items_from_result_manifest
 
                 actual = len(load_items_from_result_manifest(root))
-            except ValueError:
-                # loader refusals (unconfirmed selection / unsettled publication)
-                # keep their own actionable message; cardinality is not the issue
-                return
+            except (ValueError, OSError) as exc:
+                # An unresolved source (unconfirmed selection / unsettled
+                # publication) is a static refusal: preflight must not pass a
+                # manifest whose item count it cannot even resolve.
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "input_invalid",
+                        "message": str(exc),
+                        "params": {
+                            "field": "input.from_artifact",
+                            "rule": "source_not_ready",
+                        },
+                    },
+                ) from exc
     if actual is None or actual == 1:
+        return
+    if actual == 0:
+        # An empty inline/items_file list is not a split; from_job or the
+        # normal resolution path decides the structure.  Only a confirmed
+        # multi-structure request is refused here.
         return
     raise HTTPException(
         status_code=422,
@@ -4500,6 +4558,105 @@ def restore_pes_review_endpoint(
     )
 
 
+@router.post("/selection-authorizations", status_code=201)
+def create_selection_authorization(
+    req: SelectionAuthorizationCreateRequest, request: Request
+) -> Any:
+    """Admin-only: mint one bounded authorization an agent may publish with.
+
+    Round-6 P0: ``SelectionAuthorizationService.create`` had no production
+    caller, so strict agent validation would have made every MCP publication a
+    permanent 403.  The owner and id are server-owned; an agent can never mint
+    its own authorization (no self-grant), it only consumes a bounded one.
+    """
+    import uuid
+
+    from acp_services.contracts.selection import SelectionAuthorization, SelectionLimits
+    from acp_services.runtime.selection_authorization import (
+        SelectionAuthorizationError,
+        SelectionAuthorizationService,
+    )
+
+    identity = _command_identity(request)
+    is_operator = str(getattr(identity, "subject_kind", "")) == "operator"
+    if not is_operator:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "access_denied",
+                "message": "only the local operator may create a selection authorization",
+                "params": {"field": "authorization", "rule": "admin_required"},
+            },
+        )
+    store = getattr(request.app.state, "research_resources", None)
+    if store is None:
+        raise HTTPException(
+            status_code=503,
+            detail="selection authorization store is not configured",
+        )
+    principal_id = str(getattr(identity, "principal_id", "") or "")
+    project_id = str(getattr(identity, "project_id", None) or "uncategorized")
+    try:
+        limits = SelectionLimits(**{key: int(value) for key, value in req.limits.items()})
+    except TypeError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "input_invalid",
+                "message": f"unsupported selection limit field: {exc}",
+                "params": {"field": "limits", "rule": "unknown_field"},
+            },
+        ) from exc
+    if limits.max_candidates < 1:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "input_invalid",
+                "message": "a selection authorization needs limits.max_candidates >= 1",
+                "params": {
+                    "field": "limits.max_candidates",
+                    "rule": "positive_required",
+                },
+            },
+        )
+    authorization = SelectionAuthorization(
+        authorization_id=f"auth-{uuid.uuid4().hex}",
+        owner_principal_id=principal_id,
+        owner_project_id=project_id,
+        policy_revision=req.policy_revision,
+        valid_until=req.valid_until,
+        actions=tuple(req.actions),
+        source_job_id=req.source_job_id,
+        allowed_attempts=tuple(req.allowed_attempts),
+        workflow=req.workflow,
+        roles=tuple(req.roles),
+        methods=tuple(req.methods),
+        nproc_max=req.nproc_max,
+        limits=limits,
+    )
+    try:
+        document = SelectionAuthorizationService(store).create(
+            authorization,
+            is_admin=True,
+            principal_id=principal_id,
+            project_id=project_id,
+        )
+    except SelectionAuthorizationError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": exc.code,
+                "message": str(exc),
+                "params": dict(getattr(exc, "details", {}) or {}),
+            },
+        ) from exc
+    return {
+        "authorization_id": document.get("authorization_id")
+        or authorization.authorization_id,
+        "authorization": document,
+    }
+
+
 @router.post("/jobs/{job_id}/pes/review", response_model=PesReviewResponse)
 def save_pes_review_endpoint(
     job_id: str,
@@ -4521,6 +4678,23 @@ def save_pes_review_endpoint(
     selector = str(req.selector or "manual")
     if selector not in {"manual", "manual_frame", "agent"}:
         raise HTTPException(status_code=422, detail=f"unsupported selection selector {selector!r}")
+    if req.authorization_id and selector != "agent":
+        # A supplied authorization must never be silently ignored by the manual
+        # path (the round-5 safety gate looked present but did nothing).
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "input_invalid",
+                "message": (
+                    "authorization_id only applies to selector=agent; send "
+                    "selector=agent for an authorized publication or omit it"
+                ),
+                "params": {
+                    "field": "authorization_id",
+                    "rule": "inconsistent_selector",
+                },
+            },
+        )
     if selector == "agent" and req.actor:
         # the actor is server-owned; accepting a body value would be a
         # misleading "forged but ignored" field (PR-06 criterion 2).
@@ -9777,6 +9951,10 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
     try:
         _validate_simple_method_cli(req.workflow, req.method)
         _validate_scan_submission(req.workflow, req.method, req.input)
+        if req.workflow == "BatchOptimize":
+            # the single_flat cardinality gate belongs to preflight too: a
+            # two-structure manifest must fail here, not after a submit.
+            _validate_batch_cardinality(dict(raw_input or {}))
     except HTTPException as exc:
         detail = exc.detail if isinstance(exc.detail, dict) else {"message": str(exc.detail)}
         raise _command_error(
@@ -10006,6 +10184,45 @@ def _operation_response(
     return response
 
 
+def _fast_path_artifact_ref(
+    manager: Any, job_id: str, artifact_id: str, attempt: int
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    """Project an already-published prepare operation onto a readable ref.
+
+    Round-6 P1: the fast path returned ``ready`` without a five-tuple, so a
+    second ``prepare`` could never feed ``read``.  Digest/generation come from
+    the authoritative prepare row + artifact store, never computed here.
+    """
+    from acp_services.data.artifacts import ArtifactStore, operation_to_artifact_ref
+    from acp_services.data.operations import PrepareState
+
+    service = getattr(manager, "_prepare_operations", None)
+    if service is None:
+        return None
+    existing = service.find(
+        job_id=job_id,
+        resource_id=artifact_id,
+        attempt=attempt,
+        permission_scope="local-single",
+    )
+    if existing is None or existing.state is not PrepareState.SUCCEEDED:
+        return None
+    store = ArtifactStore(manager.run_root / "artifact-store")
+    published = store.lookup(
+        job_id=job_id,
+        attempt=existing.attempt,
+        resource_id=artifact_id,
+        generation=existing.resource_generation,
+        digest="sha256:" + str(existing.sha256 or ""),
+    )
+    if published is None:
+        return None
+    artifact = operation_to_artifact_ref(existing)
+    if artifact is None:
+        return None
+    return artifact.to_dict(), {"kind": "operation", "id": existing.operation_id}
+
+
 def _prepare_fast_path(
     request: Request,
     record: Any,
@@ -10048,7 +10265,7 @@ def _prepare_fast_path(
     freshness = str(getattr(snapshot.freshness, "value", snapshot.freshness))
     if freshness == "stale":
         return None
-    return {
+    receipt: dict[str, Any] = {
         "schema_version": "acp2.prepare.v1",
         "status": "ready",
         "fast_path": True,
@@ -10059,6 +10276,18 @@ def _prepare_fast_path(
         "read": f"/api/v1/jobs/{job_id}/prepared/artifact?artifact_id={artifact_id}",
         "reused_prepared": True,
     }
+    try:
+        manager = _manager(request)
+    except (AttributeError, KeyError, RuntimeError):
+        # No resolvable manager: never hand out a ready receipt without a
+        # readable five-tuple; let the durable prepare path rebuild it.
+        return None
+    ref = _fast_path_artifact_ref(manager, job_id, artifact_id, attempt)
+    if ref is None:
+        # readable but no authoritative published ref: rebuild via prepare.
+        return None
+    receipt["artifact_ref"], receipt["operation_ref"] = ref
+    return receipt
 
 
 @router.post("/jobs/{job_id}/prepare")

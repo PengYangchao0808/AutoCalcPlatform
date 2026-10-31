@@ -81,7 +81,7 @@ from cccp.calculation.requests import (
     TaskRequest,
     validate_request,
 )
-from cccp.calculation.results import IrcDirectionResult, IrcPayload, TaskResult
+from cccp.calculation.results import ErrorKind, IrcDirectionResult, IrcPayload, TaskResult
 from cccp.calculation.selection import precheck_runtime, select_semantic
 
 logger = logging.getLogger(__name__)
@@ -281,9 +281,42 @@ def run_irc(
                 stages.complete_active()
         if success:
             stages.start("validating")
+        not_converged_failure = False
         if success and not endpoints:
             success = False
+            not_converged_failure = True
             message = "IRC produced no endpoint geometries"
+            # Report what the walk actually captured instead of a bare failure:
+            # 80 points may be on disk while the endpoint reader recognizes none.
+            snapshot = recorder.refresh(force=True) or {}
+            frames = snapshot.get("frames") if isinstance(snapshot, dict) else None
+            frame_count = len(frames) if isinstance(frames, list) else 0
+            directions_seen = (
+                sorted(
+                    {
+                        str(frame.get("direction"))
+                        for frame in frames
+                        if isinstance(frame, dict) and frame.get("direction")
+                    }
+                )
+                if isinstance(frames, list)
+                else []
+            )
+            if frame_count:
+                where = (
+                    " for " + ", ".join(directions_seen) if directions_seen else ""
+                )
+                message += (
+                    f" ({frame_count} trajectory frame(s) captured{where}; the last "
+                    "observed geometry is kept as diagnostic evidence, not a formal "
+                    "endpoint. Inspect the run log for the endpoint file format, or "
+                    "rerun with a Hessian handoff.)"
+                )
+            else:
+                message += (
+                    " (no trajectory frames were captured either; inspect the ORCA "
+                    "output for the in-progress path files.)"
+                )
             errors.append(message)
             stages.fail_active(message, clear=True)
 
@@ -319,7 +352,13 @@ def run_irc(
             error_kind=(
                 None
                 if success
-                else classify_failure(error_message=errors[0] if errors else "irc failed")
+                else (
+                    ErrorKind.NOT_CONVERGED
+                    if not_converged_failure
+                    else classify_failure(
+                        error_message=errors[0] if errors else "irc failed"
+                    )
+                )
             ),
             errors=tuple(errors),
             energy_hartree=qc_result.energy,

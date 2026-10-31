@@ -71,7 +71,9 @@ def setup_logging(level: str = "INFO", *, structured: bool | None = None) -> Non
     logging.basicConfig(
         level=numeric_level,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)],
+        # Machine-readable command output owns stdout; logs belong on stderr so
+        # `acp task query --json | jq` / json.load never sees log lines.
+        handlers=[logging.StreamHandler(sys.stderr)],
     )
 
 

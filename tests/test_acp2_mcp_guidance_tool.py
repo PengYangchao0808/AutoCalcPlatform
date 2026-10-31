@@ -41,6 +41,8 @@ class _FakeGuidance:
 
     def guidance(self, request: dict[str, Any], *, workspace_id: str) -> dict[str, Any]:
         self.requests.append(dict(request))
+        if not str(request.get("guide_id") or "").strip():
+            return {"format": "acp2.guidance.v1", "guides": []}
         if str(request.get("guide_id")) == "workflow.unknown":
             raise mcp.McpToolError(
                 mo.ErrorCode.RESOURCE_UNAVAILABLE,
@@ -125,7 +127,8 @@ def _call_capabilities_negotiate(server: mcp.McpServer) -> None:
 def test_declared_argument_table_is_closed() -> None:
     spec = {s["name"]: s for s in mcp._tool_specs()}[mcp.McpTool.GUIDANCE]
     assert spec["inputSchema"]["additionalProperties"] is False
-    assert spec["inputSchema"]["required"] == ["guide_id"]
+    # round-6: no id means "return the discovery index", so guide_id is optional
+    assert "required" not in spec["inputSchema"] or "guide_id" not in spec["inputSchema"]["required"]
     port = _FakeGuidance()
     server = _server(port)
     result = _call(server, {"guide_id": "workflow.PESsearch", "surprise": 1})
@@ -137,11 +140,13 @@ def test_declared_argument_table_is_closed() -> None:
     assert port.requests == []
 
 
-def test_missing_guide_id_is_a_typed_input_error() -> None:
+def test_missing_guide_id_returns_the_discovery_index() -> None:
     port = _FakeGuidance()
     result = _call(_server(port), {})
-    assert result["isError"] is True
-    assert result["structuredContent"]["error"]["params"]["rule"] == "missing_required_field"
+    assert result["isError"] is False
+    data = result["structuredContent"]["data"]
+    assert data["format"] == "acp2.guidance.v1"
+    assert port.requests == [{}]
 
 
 def test_wired_port_returns_versioned_payload() -> None:
@@ -208,6 +213,9 @@ def test_bootstrap_adapter_binds_one_controller_command() -> None:
             self.calls.append((args, kwargs))
             return {"guide_id": args[0], "ok": True}
 
+        def guidance_index(self) -> dict[str, Any]:
+            return {"format": "acp2.guidance.v1", "guides": []}
+
     client = _Client()
     port = _ControllerGuidance(client)  # type: ignore[arg-type]
     out = port.guidance(
@@ -234,6 +242,7 @@ def test_bootstrap_adapter_binds_one_controller_command() -> None:
         failing.guidance({"guide_id": "workflow.nope"}, workspace_id="ws")
     assert excinfo.value.code == "resource_not_ready"
 
-    with pytest.raises(mcp.McpToolError) as excinfo:
-        _ControllerGuidance(client).guidance({"guide_id": ""}, workspace_id="ws")
-    assert "guide_id" in str(excinfo.value)
+    assert _ControllerGuidance(client).guidance({"guide_id": ""}, workspace_id="ws") == {
+        "format": "acp2.guidance.v1",
+        "guides": [],
+    }

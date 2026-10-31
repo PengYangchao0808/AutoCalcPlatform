@@ -164,12 +164,24 @@ def build_capacity_projection(manager: Any, *, admission: Any = None) -> dict[st
         concurrency["admission_max_tasks"] = max_tasks
     else:
         unknown.append("concurrency.admission_max_tasks")
-    max_running = getattr(manager, "max_running", None)
-    if isinstance(max_running, int) and max_running > 0:
-        concurrency["max_running"] = max_running
-        concurrency["slots_free"] = max(0, max_running - running)
+    # Round-6: slots must reflect the limit admission actually enforces
+    # (registry.local.max_jobs), not the legacy max_running knob that no longer
+    # caps local concurrency (round-5 PR-08 published it as legacy_noop).
+    registry = getattr(manager, "registry", None)
+    local = getattr(registry, "local", None)
+    effective_slots = getattr(local, "max_jobs", None)
+    if isinstance(effective_slots, int) and effective_slots > 0:
+        concurrency["max_running"] = effective_slots
+        concurrency["max_running_source"] = "registry.local.max_jobs"
+        concurrency["slots_free"] = max(0, effective_slots - running)
     else:
-        unknown.append("concurrency.max_running")
+        legacy_slots = getattr(manager, "max_running", None)
+        if isinstance(legacy_slots, int) and legacy_slots > 0:
+            concurrency["max_running"] = legacy_slots
+            concurrency["max_running_source"] = "manager.max_running"
+            concurrency["slots_free"] = max(0, legacy_slots - running)
+        else:
+            unknown.append("concurrency.max_running")
 
     return {
         "schema": _SCHEMA,
