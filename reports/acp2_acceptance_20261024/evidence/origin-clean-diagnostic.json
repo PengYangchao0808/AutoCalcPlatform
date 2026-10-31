@@ -1,0 +1,14 @@
+{
+  "user_config_public_origin_present": true,
+  "explicit_reset": "ACP_PUBLIC_ORIGIN empty",
+  "rows": [
+    {
+      "origin": "http://testserver",
+      "status": 201
+    },
+    {
+      "origin": "http://127.0.0.1:8765",
+      "status": 201
+    }
+  ]
+}

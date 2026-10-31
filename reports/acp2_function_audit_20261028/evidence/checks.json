@@ -1,0 +1,133 @@
+[
+  {
+    "name": "frontend_modules",
+    "command": [
+      "node",
+      "frontend/js/module_tests/run_all.js"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 8.65,
+    "log": "frontend_modules.log"
+  },
+  {
+    "name": "rph_test",
+    "command": [
+      "pnpm",
+      "--dir",
+      "rph",
+      "test"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 3.84,
+    "log": "rph_test.log"
+  },
+  {
+    "name": "rph_check",
+    "command": [
+      "pnpm",
+      "--dir",
+      "rph",
+      "check"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 2.26,
+    "log": "rph_check.log"
+  },
+  {
+    "name": "cccp_isolation",
+    "command": [
+      "python3.11",
+      "scripts/verify_cccp_isolation.py"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 1.49,
+    "log": "cccp_isolation.log"
+  },
+  {
+    "name": "grep_gates",
+    "command": [
+      "python3.11",
+      "scripts/check_grep_gates.py"
+    ],
+    "exit_code": 2,
+    "elapsed_seconds": 0.17,
+    "log": "grep_gates.log"
+  },
+  {
+    "name": "contracts",
+    "command": [
+      "python3.11",
+      "scripts/acceptance/validate_acp2_contracts.py"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.17,
+    "log": "contracts.log"
+  },
+  {
+    "name": "coverage",
+    "command": [
+      "python3.11",
+      "scripts/acceptance/validate_acp2_gap_coverage.py"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 0.27,
+    "log": "coverage.log"
+  },
+  {
+    "name": "ruff_check",
+    "command": [
+      "python3.11",
+      "-m",
+      "ruff",
+      "check",
+      "src",
+      "tests",
+      "--output-format=json"
+    ],
+    "exit_code": 1,
+    "elapsed_seconds": 1.33,
+    "log": "ruff_check.log"
+  },
+  {
+    "name": "ruff_format",
+    "command": [
+      "python3.11",
+      "-m",
+      "ruff",
+      "format",
+      "--check",
+      "src",
+      "tests"
+    ],
+    "exit_code": 1,
+    "elapsed_seconds": 1.64,
+    "log": "ruff_format.log"
+  },
+  {
+    "name": "compile",
+    "command": [
+      "python3.11",
+      "-m",
+      "compileall",
+      "-q",
+      "src",
+      "tests"
+    ],
+    "exit_code": 0,
+    "elapsed_seconds": 4.21,
+    "log": "compile.log"
+  },
+  {
+    "name": "bom_walk",
+    "command": [
+      "python3.11",
+      "scripts/release/walk_bom.py",
+      "--verify",
+      "--json-out",
+      "/ACPServer/AutoCalcPlatform/reports/acp2_function_audit_20261028/evidence/bom-walk.json"
+    ],
+    "exit_code": 1,
+    "elapsed_seconds": 0.17,
+    "log": "bom_walk.log"
+  }
+]

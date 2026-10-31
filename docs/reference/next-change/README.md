@@ -37,6 +37,17 @@
 | [ACP_Frontend_Review_Layout_Remediation_20261030.md](ACP_Frontend_Review_Layout_Remediation_20261030.md) | 新前端复核与布局修正 | 记录 |
 | [ACP_Frontend_差距与修正_20261030.md](ACP_Frontend_差距与修正_20261030.md) | 新旧界面差距与本轮修正 | 记录 |
 
+## MCP / Agent（2026-10-29—30）
+
+| 文档 | 内容 | 状态 |
+|---|---|---|
+| [ACP_MCP_Agent_Guidance_PES_Batch_Plan_20261030.md](ACP_MCP_Agent_Guidance_PES_Batch_Plan_20261030.md) | 统一实施计划：MCP 易用性 U01—U09、科研指导、15 个 active 工作流说明与自动编排 prompt | **现行**；计划中的工具/指南内容包尚未实现 |
+| [ACP_MCP_Discovery_Bounded_Plan_20261030.md](ACP_MCP_Discovery_Bounded_Plan_20261030.md) | 有界发现与科学提示（第 4 轮实施计划） | 现行 |
+| [ACP_MCP_Guidance_P0_Baseline_20261030.md](ACP_MCP_Guidance_P0_Baseline_20261030.md) | 指南与自动科研链 P0 基线与首批切片交付 | 记录 |
+| [ACP_MCP_UX_Remediation_Plan_20261029.md](ACP_MCP_UX_Remediation_Plan_20261029.md) | MCP 可用性修复计划（10-29） | 记录 |
+
+> 计划中标注"尚未实现"的能力，不得因文档列名就调用或宣称可用；权威仍是 `mcp.py::visible_tool_names` 与 `research_consumption.py::CONSUMPTION_TOOL_NAMES`。
+
 ## ACP 2.0 计划与发布（2026-10-20…23）
 
 | 文档 | 内容 | 状态 |
@@ -88,5 +99,6 @@
 
 | 路径 | 内容 | 状态 |
 |---|---|---|
+| [`adr/`](adr/ADR-003-taskref-evidence-decision.md) | 架构决策记录：[ADR-003](adr/ADR-003-taskref-evidence-decision.md) TaskRef 归一 + digest-bound 证据投影、[ADR-006](adr/ADR-006-mcp-negotiation.md) MCP 握手协商、[ADR-008](adr/ADR-008-limited-diels-alder-criteria.md) 限定 DA 科学判据 | 在役（决策记录，改实现前先读） |
 | [`acp2-contracts/`](acp2-contracts/manifest.json) | ACP 2.0 机器契约包：`science/`、`runtime/`、`experience/` 的 schema、manifest、摘要、验收样本 | **机器**；`scripts/acceptance/validate_acp2_contracts.py` 校验，禁止手改 |
 | [`examples/`](examples/acp_mcp_stdio_probe.py) | 被 `scripts/acceptance/*` 调用的探针脚本 | **机器**；路径被验收脚本引用 |

@@ -1,0 +1,16 @@
+{
+  "result": "FAIL",
+  "reason": "worker output_dir absent wrote scientific artifacts to launch CWD",
+  "escaped": [
+    {
+      "path": "/ACPServer/AutoCalcPlatform/xtbopt.xyz",
+      "exists_before_cleanup": true,
+      "sha256": "dce26935329dde6e5443f01464524c18830fb39c6b94290f57ffe3068044584a"
+    },
+    {
+      "path": "/ACPServer/AutoCalcPlatform/xtb.log",
+      "exists_before_cleanup": true,
+      "sha256": "72b279153627e1dd85e04110555de074b48bfcae55c16e084096fec8989365ec"
+    }
+  ]
+}

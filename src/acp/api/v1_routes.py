@@ -77,6 +77,10 @@ from acp.api.schemas import (
     StatusResponse,
     WorkflowsResponse,
 )
+from acp.api.submission_contract import (
+    SubmissionContractError,
+    validate_workflow_submission,
+)
 from acp.api.v1_schemas import (
     ArtifactListResponse,
     ArtifactModel,
@@ -261,6 +265,7 @@ from acp.scheduler.remote.fetcher import (
     RemoteResultFetcher as _RemoteResultFetcher,
 )
 from acp.scheduler.remote.node_manager import NodeManager
+from acp.scheduler.resources import validate_resource_request
 from acp.scheduler.runner import find_workflow_state
 from acp.scheduler.stage_tasks import StageTask, StageTaskStore
 from acp.scheduler.store import JobStore
@@ -455,6 +460,33 @@ def _server_identity(request: Request) -> Any:
     return identity
 
 
+def _command_identity(request: Request, *, project_id: str | None = None) -> Any:
+    """Return the verified :class:`CommandIdentity` of this request (M0-04).
+
+    The authenticated HTTP path projects the credential-resolved principal
+    (B15).  The default ``local-single`` deployment has no per-request identity
+    and projects the Controller's own operator identity instead — that is the
+    only legitimate use of ``LOCAL_PRINCIPAL_ID``.  A request body/header can
+    never supply the principal.
+    """
+    from acp_services.workspace.command_identity import CommandIdentity, EntryClass
+
+    resolved = getattr(request.state, "request_identity", None)
+    if resolved is not None:
+        return CommandIdentity.from_verified_http(
+            resolved, project_id=project_id, entry_class=EntryClass.HTTP
+        )
+    # No verified credential: the command runs as the Controller process, so
+    # the entry class is CONTROLLER — the same label the model gateway and the
+    # research saga use. A transport label ("http") here forked the derived
+    # ResearchIdentity from every other local path for the same request.
+    return CommandIdentity.from_server(
+        _server_identity(request),
+        project_id=project_id,
+        entry_class=EntryClass.CONTROLLER,
+    )
+
+
 def _require_submit_access(request: Request, project_hint: str | None) -> str | None:
     """Authorize a submit before normalization; return the effective project."""
     decision = _server_identity(request).resolve_submit_project(project_hint)
@@ -472,6 +504,121 @@ def _require_submit_access(request: Request, project_hint: str | None) -> str | 
             },
         )
     return decision.project_id
+
+
+#: Simple ORCA workflows whose legacy method mirrors are normalized below.
+_SIMPLE_LEGACY_WORKFLOWS = frozenset({"singlepoint", "optimize", "frequency"})
+
+
+def _normalize_legacy_simple_method(req: Any) -> None:
+    """Normalize the legacy simple-workflow payload before any digest.
+
+    Old clients (and the MCP submit fixtures) send a flat
+    ``method = {method, charge, multiplicity}`` block plus a top-level
+    ``input.xyz_text``.  The runner consumes ``levels``, ``input.charge``/
+    ``multiplicity`` and ``input.source``; a contract that merely *accepts* the
+    legacy keys would execute defaults and silently ignore the request.  The
+    conversion here is an equivalent mapping (direct method name -> the level's
+    ``functional``; charge/multiplicity -> the input envelope; xyz_text ->
+    source), applied before the plan digest so a preflight fingerprint and the
+    submit see the same plan.
+    """
+    workflow = str(getattr(req, "workflow", "") or "")
+    if workflow not in _SIMPLE_LEGACY_WORKFLOWS:
+        return
+    method = getattr(req, "method", None)
+    inp = getattr(req, "input", None)
+    if not isinstance(method, dict) or not isinstance(inp, dict):
+        # malformed containers are the contract's business, not this conversion
+        return
+    # NOTE: the input block is never rewritten here for structure (that would
+    # change the plan digest a preflight fingerprint was computed on);
+    # xyz_text is instead read by the scheduler's shared materializer.
+    for key in ("charge", "multiplicity"):
+        if key not in method:
+            continue
+        value = method.pop(key)
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise _command_error(
+                422,
+                "input_invalid",
+                f"method.{key} must be an integer",
+                params={"field": f"method.{key}", "rule": "invalid_type"},
+            )
+        if key in inp and inp[key] != value:
+            raise _command_error(
+                422,
+                "input_invalid",
+                f"method.{key} conflicts with input.{key}",
+                params={"field": f"method.{key}", "rule": f"conflicting_{key}"},
+            )
+        inp[key] = value
+    direct = method.pop("method", None)
+    if direct is not None:
+        if not isinstance(direct, str) or not direct.strip():
+            raise _command_error(
+                422,
+                "input_invalid",
+                "method.method must be a non-empty string",
+                params={"field": "method.method", "rule": "invalid_type"},
+            )
+        levels = method.get("levels")
+        if levels is None:
+            levels = {}
+        if not isinstance(levels, dict):
+            raise _command_error(
+                422,
+                "input_invalid",
+                "method.levels must be an object",
+                params={"field": "method.levels", "rule": "invalid_type"},
+            )
+        from acp.catalog import METHOD_SCHEMAS, get_workflow_by_id
+
+        workflow_row = get_workflow_by_id(workflow) or {}
+        schema = METHOD_SCHEMAS.get(str(workflow_row.get("method_schema_id") or "")) or {}
+        level_ids = [
+            str(level.get("level_id"))
+            for level in schema.get("method_levels", [])
+            if level.get("level_id")
+        ]
+        target = level_ids[0] if level_ids else None
+        if target is None:
+            raise _command_error(
+                422,
+                "input_invalid",
+                f"{workflow} has no level id to receive method.method",
+                params={"field": "method.method", "rule": "unsupported_combination"},
+            )
+        if target is not None:
+            level = levels.get(target)
+            if level is None:
+                level = {}
+            if not isinstance(level, dict):
+                raise _command_error(
+                    422,
+                    "input_invalid",
+                    f"method.levels.{target} must be an object",
+                    params={"field": f"method.levels.{target}", "rule": "invalid_type"},
+                )
+            existing = level.get("functional")
+            if existing is not None and str(existing) != direct.strip():
+                # two consumers would pick different methods; refuse the ambiguity
+                raise _command_error(
+                    422,
+                    "input_invalid",
+                    "method.method conflicts with levels."
+                    f"{target}.functional ({direct.strip()!r} vs {existing!r})",
+                    params={
+                        "field": "method.method",
+                        "rule": "conflicting_method",
+                        "level": target,
+                    },
+                )
+            level["functional"] = direct.strip()
+            levels[target] = level
+        method["levels"] = levels
+    req.method = method
+    req.input = inp
 
 
 def _require_job_scope_access(
@@ -2352,18 +2499,13 @@ def _canonicalize_batch_keywords(method: dict[str, Any]) -> None:
 def _target_validation_detail(exc: Exception) -> dict[str, Any]:
     """Serialize a submission-time target error into the 400 body (D12).
 
-    Carries the machine-readable ``code`` plus ``missing_software`` /
-    ``missing_tags`` so clients (and the frontend i18n layer) can map errors
-    without parsing free-form English.
+    Delegates to :func:`acp.scheduler.nodes.target_error_detail` so the D12 shape
+    has exactly one implementation (M0-06); the application envelope used by the
+    submit entry is :func:`acp.scheduler.nodes.target_error_envelope`.
     """
-    return {
-        "code": getattr(exc, "code", None) or "execution_target_error",
-        "message": str(exc),
-        "missing_software": list(getattr(exc, "missing_software", ()) or ()),
-        "missing_tags": list(getattr(exc, "missing_tags", ()) or ()),
-        "local_missing_software": list(getattr(exc, "local_missing_software", ()) or ()),
-        "remote_nodes_configured": getattr(exc, "remote_nodes_configured", None),
-    }
+    from acp.scheduler.nodes import target_error_detail
+
+    return target_error_detail(exc)
 
 
 def _source_job_id_from_input(inp: dict[str, Any]) -> str:
@@ -2531,13 +2673,47 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         )
     from acp_services.entrypoints.application_params import (
         ApplicationParamError,
+        canonical_submit_request,
         normalize_submit,
     )
 
+    # M0-06/G23: one exhaustive field policy decides what this request may carry.
+    # An undeclared field or a client-chosen server path is a 422 ``input_invalid``
+    # before any resolution/snapshot/dispatch side effect, and the canonical form
+    # is the same object MCP and the CLI build (so the request digest and the
+    # effective JobSpec cannot drift per entry).
+    _normalize_legacy_simple_method(req)
+    raw_input = req.input
+    request_payload = req.model_dump(exclude_none=True)
+    if raw_input is None:
+        # An omitted input block keeps the legacy create-now-fail-later shape;
+        # the field policy still sees an (empty) object, not a missing field.
+        request_payload["input"] = {}
     try:
-        normalized_submit = normalize_submit(req.model_dump(exclude_none=True))
+        canonical_submit_request(request_payload, entry="http")
+        normalized_submit = normalize_submit(request_payload)
     except ApplicationParamError as exc:
-        raise _command_error(400, exc.code, exc.message, params=dict(exc.params)) from exc
+        # A field-policy violation is 422 (the frozen extra=forbid answer); every
+        # other shape violation keeps the long-standing 400 (budget/type/required).
+        raise _command_error(
+            _field_policy_status(exc), exc.code, exc.message, params=dict(exc.params)
+        ) from exc
+    # Semantic contract (P1): unknown method keys / illegal enums / missing
+    # input are refused here, before classification, approval or dispatch.
+    req.input = req.input or {}
+    try:
+        validate_workflow_submission(
+            req.workflow, input=raw_input, method=req.method, resources=req.resources
+        )
+    except SubmissionContractError as exc:
+        raise _command_error(422, "input_invalid", str(exc), params=exc.params()) from exc
+    try:
+        validate_resource_request(req.resources or {})
+    except ValueError as exc:
+        raise _command_error(
+            422, "input_invalid", str(exc), params={"field": "resources",
+            "rule": "invalid_resource"}
+        ) from exc
     fingerprint = normalized_submit.get("preflight_fingerprint")
     if fingerprint:
         from acp_services.runtime.canonical_digest import CanonicalDigestError
@@ -2558,12 +2734,26 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
                 "preflight fingerprint does not match the submitted plan",
                 params={"field": "preflight_fingerprint", "expected": current},
             )
-    if _is_research_launch(req):
+    # M1-04b: ONE submit classification decides research vs legacy, approval
+    # requirement and the recorded submit class.  An agent-scoped credential can
+    # never downgrade (omit-all/budget-only/no-proposal are denials), and a legacy
+    # local-single/manual submit is explicitly allowed *and recorded*.
+    classification = _classify_submit(request, req, defer_approval=True)
+    if not classification.allowed:
+        raise _deny_submit(classification)
+    if classification.research:
         req.project_id = _research_project(manager, req.project_id)
+    logger.info(
+        "submit classified submit_class=%s profile=%s research=%s approval_required=%s",
+        classification.submit_class,
+        classification.profile.name,
+        classification.research,
+        classification.approval_required,
+    )
     # B16: an approval bound to the frozen plan_digest is checked BEFORE any
     # resolution/snapshot/dispatch side effect.  A pending/expired/revoked/
     # changed-plan/other-principal approval never reaches the manager.
-    approval = _enforce_approval(request, req)
+    approval = _enforce_approval(request, req, classification)
     req.method = _expand_method_electronic_state(req.method)
     _validate_simple_method_cli(req.workflow, req.method)
     _validate_scan_submission(req.workflow, req.method, req.input)
@@ -2595,59 +2785,78 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
     )
     task_name = req.task_name or req.workflow
     molecule_name = _resolve_job_molecule_name(req.molecule_name, req.input, manager)
+    # M0-06: the effective JobSpec takes every decision field from the canonical
+    # request (blank optional strings collapse to the single absent value), so the
+    # CLI's equivalent spec is byte-identical instead of differing on "" vs None.
+    # The canonical form is recomputed from the *effective* request (post project
+    # resolution / stage inheritance), which is also the digest material — the
+    # same rule the pre-M0-06 entry hashed.
+    canonical = canonical_submit_request(req.model_dump(exclude_none=True), entry="http")
     spec = JobSpec(
         workflow=req.workflow,
-        name=req.name,
+        name=canonical["name"],
         input=req.input,
         method=req.method,
         resources=req.resources,
-        output_dir=req.output_dir,
-        config_path=req.config_path,
-        tags=req.tags,
-        node_tags=req.node_tags,
+        tags=list(canonical["tags"]),
+        node_tags=list(canonical["node_tags"]),
         project_id=req.project_id,
-        execution_mode=req.execution_mode,
-        target_node=req.target_node,
+        execution_mode=req.execution_mode or None,
+        target_node=req.target_node or None,
         molecule_name=molecule_name,
         task_name=task_name,
-        remark=req.remark,
+        remark=canonical["remark"],
     )
     try:
         validate_execution_request(spec)
-    except ExecutionTargetError as exc:
-        # Same D12 dict shape as the continue endpoint; the conflict check
-        # in nodes.py carries no code, so stamp the stable one here.
-        detail = _target_validation_detail(exc)
-        detail["code"] = getattr(exc, "code", None) or "execution_mode_conflict"
-        raise HTTPException(status_code=400, detail=detail) from exc
-    try:
         validate_submission_target(spec, registry=manager.registry)
     except (ExecutionTargetError, NoCapableNodeError) as exc:
-        raise HTTPException(status_code=400, detail=_target_validation_detail(exc)) from exc
+        # M0-06: one application envelope for every entry — a stable
+        # ``input_invalid`` code plus ``params.field``/``params.rule`` carrying the
+        # fine-grained scheduler decision.  An unknown remote node is therefore the
+        # same rejection at HTTP, MCP and the CLI.
+        from acp.scheduler.nodes import target_error_envelope
+
+        envelope = target_error_envelope(exc)
+        raise _command_error(
+            422,
+            str(envelope["code"]),
+            str(envelope["message"]),
+            params=dict(envelope["params"]),
+            retryable=False,
+        ) from exc
     idempotency_key = _submit_idempotency_key(request, req)
+    scope_project = str(req.project_id or manager.default_project_id)
+    identity = _command_identity(request, project_id=scope_project)
     idempotency_context = None
     if idempotency_key:
-        from acp_services.contracts.access import LOCAL_PRINCIPAL_ID
         from acp_services.runtime.idempotency import (
             ACTION_SUBMIT,
             IdempotencyContext,
-            resolve_scope_id,
         )
 
-        scope_project = req.project_id or manager.default_project_id
         idempotency_context = IdempotencyContext(
             key=idempotency_key,
-            scope_id=resolve_scope_id(LOCAL_PRINCIPAL_ID, str(scope_project)),
+            scope_id=identity.idempotency_scope(project_id=scope_project),
             action=ACTION_SUBMIT,
-            request_payload=req.model_dump(exclude_none=True),
+            # The digest material is the canonical effective request (M0-06); the
+            # row records its frozen rule version and the payload so a pre-M0-06
+            # row is verified against its own field table instead of being called
+            # tampered.
+            request_payload=canonical,
+            principal_id=identity.principal_id,
+            key_id=identity.key_id,
         )
     budget_claim = _budget_claim_from_approval(approval)
     try:
         if idempotency_context is None:
-            record = _commands(request).submit(spec, budget=budget_claim)
+            record = _commands(request).submit(spec, budget=budget_claim, identity=identity)
         else:
             record = _commands(request).submit(
-                spec, idempotency=idempotency_context, budget=budget_claim
+                spec,
+                idempotency=idempotency_context,
+                budget=budget_claim,
+                identity=identity,
             )
     except (AdmissionRefusedError, IdempotencyReservationDeniedError) as exc:
         raise _admission_http_error(exc.decision) from exc
@@ -2740,6 +2949,7 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         plan_digest=req.plan_digest,
         proposal_digest=req.proposal_digest,
         approval_ref=approval_ref,
+        submit_class=classification.submit_class,
         result="accepted",
         idempotency_key=idempotency_key,
         idempotent_replay=bool(getattr(record, "_idempotent_replay", False)),
@@ -3522,6 +3732,42 @@ def save_job_s2_review(
 
 _PES_REVIEW_PARTIAL_STATUSES = frozenset({"FAILED", "CANCELLED"})
 
+#: Per-role obligations a published candidate still needs (C2, round-4 plan).
+#: Structured and role-scoped: an INT candidate must not receive TS-only
+#: requirements.  Status starts at ``not_evaluated`` — the review projection has
+#: not evaluated any of these yet, so it must not claim the evidence is missing.
+_INITIAL_GUESS_OBLIGATIONS: dict[str, list[dict[str, str]]] = {
+    "ts": [
+        {
+            "id": "opt_freq_verdict",
+            "status": "not_evaluated",
+            "guide": "workflow.BatchOptimize",
+        },
+        {
+            "id": "single_imaginary_mode",
+            "status": "not_evaluated",
+            "guide": "topic.stationary_point_verification",
+        },
+        {
+            "id": "irc_connectivity",
+            "status": "not_evaluated",
+            "guide": "task.verify_reaction_path",
+        },
+    ],
+    "int": [
+        {
+            "id": "opt_freq_verdict",
+            "status": "not_evaluated",
+            "guide": "workflow.BatchOptimize",
+        },
+        {
+            "id": "frequency_minimum",
+            "status": "not_evaluated",
+            "guide": "topic.stationary_point_verification",
+        },
+    ],
+}
+
 
 def _pes_review_work_dir(request: Request, job_id: str, *, for_write: bool) -> tuple[Path, str]:
     """Resolve (task dir, task status) of a PESsearch job for manual review.
@@ -3864,6 +4110,48 @@ def save_pes_review_endpoint(
 
     _notify_structure_sources_updated(request, job_id)
 
+    selected_rows = [
+        PesReviewCandidate(
+            candidate_id=str(row.get("candidate_id") or ""),
+            role=str(row.get("role") or ""),
+            frame_index=int(row.get("frame_index") or 0),
+            name=str(row.get("name") or ""),
+            structure_path=str(row.get("structure_path") or ""),
+        )
+        for row in payload.get("selected") or []
+    ]
+    from acp.api.v1_schemas import InitialGuessStatus
+
+    source_record = _manager(request).get(job_id)
+    attempt = getattr(source_record, "attempt", None) if source_record is not None else None
+    guess_status = InitialGuessStatus(
+        source={
+            "job_id": job_id,
+            "task_status": str(source_block.get("task_status") or ""),
+            "frame_source": str(source_block.get("frame_source") or ""),
+            "attempt": "" if attempt is None else str(attempt),
+            "review_revision": str(payload.get("revision") or 0),
+        },
+        candidates=selected_rows,
+        verification=[
+            {
+                "candidate_id": row.candidate_id,
+                "role": row.role,
+                "obligations": [
+                    dict(obligation)
+                    for obligation in _INITIAL_GUESS_OBLIGATIONS.get(
+                        row.role.strip().lower(), _INITIAL_GUESS_OBLIGATIONS["int"]
+                    )
+                ],
+            }
+            for row in selected_rows
+        ],
+        next_step={
+            "tool": "acp_capabilities",
+            "arguments": {"workflow": "BatchOptimize"},
+            "reason": "continue with the BatchOptimize opt_freq step for each candidate",
+        },
+    )
     return PesReviewResponse(
         job_id=job_id,
         status=str(payload.get("status") or "confirmed"),
@@ -3874,16 +4162,8 @@ def save_pes_review_endpoint(
         source_task_status=str(source_block.get("task_status") or ""),
         scan_complete=source_block.get("scan_complete"),
         frame_source=str(source_block.get("frame_source") or ""),
-        candidates=[
-            PesReviewCandidate(
-                candidate_id=str(row.get("candidate_id") or ""),
-                role=str(row.get("role") or ""),
-                frame_index=int(row.get("frame_index") or 0),
-                name=str(row.get("name") or ""),
-                structure_path=str(row.get("structure_path") or ""),
-            )
-            for row in payload.get("selected") or []
-        ],
+        candidates=selected_rows,
+        initial_guess_status=guess_status,
     )
 
 
@@ -4951,6 +5231,37 @@ def get_sampling_frame(
     )
 
 
+def _descriptor_read_root(
+    request: Request, record: JobRecord
+) -> tuple[Path, str | None]:
+    """Cache-only descriptor root: a status poll never fetches remote bytes."""
+    if not _is_remote_job(record):
+        return Path(record.work_dir), None
+    cache = _remote_structure_cache(request)
+    return cache.job_root(record.id), "remote_cache_only"
+
+
+def _with_artifact_descriptors(
+    model: V1JobRecordModel,
+    read_root: Path | None,
+    attempt: int,
+    unknown_reason: str | None = None,
+) -> V1JobRecordModel:
+    """Attach the bounded manifest projection from the controlled read root."""
+    from acp.api.artifact_descriptors import describe_job_artifacts
+
+    descriptors, truncated = describe_job_artifacts(read_root, attempt=attempt)
+    if not descriptors and not truncated and unknown_reason is None:
+        return model
+    return model.model_copy(
+        update={
+            "artifacts": descriptors,
+            "artifacts_truncated": truncated,
+            "artifacts_unknown_reason": unknown_reason,
+        }
+    )
+
+
 @router.get("/jobs/{job_id}", response_model=V1JobRecordModel)
 def get_job(job_id: str, request: Request) -> V1JobRecordModel:
     manager = _manager(request)
@@ -4958,10 +5269,12 @@ def get_job(job_id: str, request: Request) -> V1JobRecordModel:
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     model = _record_to_v1_model(record, include_release_facts=True)
+    model = _enrich_job_snapshot(record, model, include_event=False)
     task_row = manager.tasks.get(job_id)
     if task_row is not None:
         model = _enrich_v1_with_names(model, resolve_task_names(task_row))
-    return model
+    read_root, unknown_reason = _descriptor_read_root(request, record)
+    return _with_artifact_descriptors(model, read_root, record.attempt, unknown_reason)
 
 
 @router.get("/jobs/{job_id}/summary", response_model=V1JobRecordModel)
@@ -4975,7 +5288,8 @@ def get_job_summary(job_id: str, request: Request) -> V1JobRecordModel:
     task_row = manager.tasks.get(job_id)
     if task_row is not None:
         model = _enrich_v1_with_names(model, resolve_task_names(task_row))
-    return model
+    read_root, unknown_reason = _descriptor_read_root(request, record)
+    return _with_artifact_descriptors(model, read_root, record.attempt, unknown_reason)
 
 
 # ---------------------------------------------------------------------- #
@@ -8005,6 +8319,67 @@ def get_job_availability(
     return snapshot.to_dict()
 
 
+def _artifact_error(exc: Any) -> HTTPException:
+    """Map one Data artifact refusal onto the frozen command error.
+
+    One mapping for every route that resolves prepared artifacts (the prepared
+    read and the explicit analysis), so ``attempt_mismatch``/``digest_mismatch``/
+    ``generation_stale``/``not_prepared``/``path_traversal`` mean the same thing
+    at every entry (M2-02).
+    """
+    from acp_services.data.artifacts import (
+        ArtifactAttemptMismatchError,
+        ArtifactDigestMismatchError,
+        ArtifactGenerationMismatchError,
+        ArtifactNotPreparedError,
+        ArtifactPathRefusedError,
+    )
+
+    if isinstance(exc, ArtifactPathRefusedError):
+        return _command_error(
+            400,
+            "input_invalid",
+            str(exc),
+            params={"rule": "path_traversal", **exc.params},
+        )
+    if isinstance(exc, ArtifactGenerationMismatchError):
+        return _command_error(
+            409,
+            "revision_conflict",
+            str(exc),
+            params={"rule": "generation_stale", **exc.params},
+        )
+    if isinstance(exc, ArtifactDigestMismatchError):
+        return _command_error(
+            409,
+            "revision_conflict",
+            str(exc),
+            params={"rule": "digest_mismatch", **exc.params},
+        )
+    if isinstance(exc, ArtifactAttemptMismatchError):
+        return _command_error(
+            409,
+            "revision_conflict",
+            str(exc),
+            params={"rule": "attempt_mismatch", **exc.params},
+        )
+    if isinstance(exc, ArtifactNotPreparedError):
+        reason = str(exc.params.get("reason") or "not_prepared")
+        return _command_error(
+            409,
+            "resource_not_ready",
+            f"not_prepared: {reason}",
+            params={"reason": reason, **exc.params},
+            retryable=True,
+        )
+    return _command_error(
+        int(getattr(exc, "http_status", 500)),
+        "resource_not_ready" if int(getattr(exc, "http_status", 500)) == 409 else "input_invalid",
+        str(exc),
+        params=dict(getattr(exc, "params", {}) or {}),
+    )
+
+
 def _serve_prepared_artifact(
     request: Request,
     record: Any,
@@ -8023,17 +8398,11 @@ def _serve_prepared_artifact(
     a ``not_prepared`` message, a stale generation / corrupt digest / cross-
     attempt read is ``revision_conflict`` with an explicit rule, and a
     traversing id is ``input_invalid``.  No branch enqueues, fetches or parses.
+    A requested ``max_bytes`` above the frozen read bound is refused instead of
+    served (``input_invalid``/``max_read_bytes_exceeded``).
     """
-    from acp_services.data.artifacts import (
-        ArtifactAttemptMismatchError,
-        ArtifactDigestMismatchError,
-        ArtifactError,
-        ArtifactGenerationMismatchError,
-        ArtifactNotPreparedError,
-        ArtifactPathRefusedError,
-        ArtifactStore,
-        resolve_artifact_read,
-    )
+    from acp_services.data.artifacts import ArtifactError, ArtifactStore, resolve_artifact_read
+    from acp_services.entrypoints.application_params import MAX_READ_BYTES
 
     if encoding not in {"identity", "base64"}:
         raise _command_error(
@@ -8048,6 +8417,18 @@ def _serve_prepared_artifact(
             "input_invalid",
             "an artifact read requires artifact_ref.digest",
             params={"field": "digest", "rule": "required"},
+        )
+    if int(max_bytes) > MAX_READ_BYTES:
+        raise _command_error(
+            400,
+            "input_invalid",
+            f"max_bytes exceeds the frozen read bound ({MAX_READ_BYTES} bytes)",
+            params={
+                "field": "max_bytes",
+                "rule": "max_read_bytes_exceeded",
+                "limit": MAX_READ_BYTES,
+                "requested": int(max_bytes),
+            },
         )
     _require_entry_access(
         request,
@@ -8095,50 +8476,8 @@ def _serve_prepared_artifact(
             max_bytes=int(max_bytes),
             encoding=encoding,
         )
-    except ArtifactPathRefusedError as exc:
-        raise _command_error(
-            400,
-            "input_invalid",
-            str(exc),
-            params={"rule": "path_traversal", **exc.params},
-        ) from exc
-    except ArtifactGenerationMismatchError as exc:
-        raise _command_error(
-            409,
-            "revision_conflict",
-            str(exc),
-            params={"rule": "generation_stale", **exc.params},
-        ) from exc
-    except ArtifactDigestMismatchError as exc:
-        raise _command_error(
-            409,
-            "revision_conflict",
-            str(exc),
-            params={"rule": "digest_mismatch", **exc.params},
-        ) from exc
-    except ArtifactAttemptMismatchError as exc:
-        raise _command_error(
-            409,
-            "revision_conflict",
-            str(exc),
-            params={"rule": "attempt_mismatch", **exc.params},
-        ) from exc
-    except ArtifactNotPreparedError as exc:
-        reason = str(exc.params.get("reason") or "not_prepared")
-        raise _command_error(
-            409,
-            "resource_not_ready",
-            f"not_prepared: {reason}",
-            params={"reason": reason, **exc.params},
-            retryable=True,
-        ) from exc
     except ArtifactError as exc:
-        raise _command_error(
-            exc.http_status,
-            "resource_not_ready" if exc.http_status == 409 else "input_invalid",
-            str(exc),
-            params=dict(exc.params),
-        ) from exc
+        raise _artifact_error(exc) from exc
     return JSONResponse(content=read.to_dict())
 
 
@@ -8280,6 +8619,20 @@ def _command_error(
     return HTTPException(status_code=status_code, detail=detail)
 
 
+#: Field-policy rules that answer ``422`` (the frozen v1 ``extra=forbid`` result).
+_FIELD_POLICY_RULES = frozenset({"unknown_field", "unsupported_server_path"})
+
+
+def _field_policy_status(exc: Any) -> int:
+    """Map an :class:`ApplicationParamError` onto its HTTP status.
+
+    ``422`` for the two frozen field-policy rules, ``400`` for every other request
+    shape violation (unchanged pre-M0-06 behaviour).
+    """
+    rule = str((getattr(exc, "params", {}) or {}).get("rule") or "")
+    return 422 if rule in _FIELD_POLICY_RULES else 400
+
+
 def _plan_digest(payload: Mapping[str, Any]) -> str:
     """Server-computed canonical digest of the frozen scientific plan.
 
@@ -8320,11 +8673,162 @@ def _approval_service(request: Request) -> Any:
     return cached
 
 
-def _enforce_approval(request: Request, req: Any) -> Any:
+def _submit_probe(req: Any) -> Any:
+    """The M1-04b probe over every research-signalling submit field.
+
+    One probe replaces the two field sets that used to disagree
+    (``_is_research_launch`` vs ``_enforce_approval``): a request carrying only
+    ``budget`` is research-signalling for *both* the project-scope branch and
+    the approval branch.
+    """
+    from acp_services.runtime.submit_policy import SubmitProbe
+
+    payload = {
+        "workflow": getattr(req, "workflow", ""),
+        "proposal_ref": getattr(req, "proposal_ref", None),
+        "proposal_digest": getattr(req, "proposal_digest", None),
+        "plan_digest": getattr(req, "plan_digest", None),
+        "budget": getattr(req, "budget", None),
+    }
+    return SubmitProbe.from_payload(payload)
+
+
+def _classify_submit(
+    request: Request,
+    req: Any,
+    *,
+    approval: Any = None,
+    science_digest: str = "",
+    defer_approval: bool = False,
+) -> Any:
+    """The single submit decision (M1-04b) for this request identity."""
+    from acp_services.runtime.submit_policy import classify_submit
+
+    identity = _command_identity(request, project_id=req.project_id)
+    return classify_submit(
+        _submit_probe(req),
+        identity,
+        approval=approval,
+        science_digest=str(science_digest or ""),
+        approval_science_digest=str(getattr(approval, "science_digest", "") or ""),
+        defer_approval=defer_approval,
+    )
+
+
+def _deny_submit(classification: Any) -> HTTPException:
+    """Render one submit denial in the frozen application error shape."""
+    detail = classification.detail()
+    return _command_error(
+        classification.http_status,
+        str(detail["code"]),
+        str(detail["message"]),
+        params=dict(detail["params"]),
+    )
+
+
+def _proposal_science_digest(request: Request, req: Any) -> str:
+    """Compute the C ``plan_definition_digest`` of the referenced proposal.
+
+    The Proposal is the scientific authority; it is read from the Data boundary
+    and projected with B16's single canonicalization.  A missing/unreadable
+    proposal returns ``""`` (unverifiable) — it is never treated as "matches".
+    """
+    from acp_services.runtime.canonical_digest import (
+        CanonicalDigestError,
+        proposal_plan_definition_digest,
+    )
+
+    proposal_ref = str(getattr(req, "proposal_ref", "") or "")
+    if not proposal_ref:
+        return ""
+    store = getattr(request.app.state, "research_resources", None)
+    if store is None:
+        return ""
+    from acp_services.data.research_resources import (
+        ResearchResourceError,
+        research_resource_key,
+    )
+
+    # The proposal lives in the resolved project; an absent payload claim uses
+    # the same default the approval binding uses (never a client-chosen scope).
+    project = str(getattr(req, "project_id", "") or _manager(request).default_project_id or "")
+    principal = str(_server_identity(request).principal.principal_id)
+    try:
+        record = store.read(
+            research_resource_key(project, "proposal", proposal_ref),
+            principal_id=principal,
+            project_id=project,
+        )
+    except (ResearchResourceError, KeyError, ValueError):
+        return ""
+    document = getattr(record, "document", None)
+    if not isinstance(document, Mapping):
+        return ""
+    # G10 / M1-04a: a research launch never binds a science block whose critical
+    # values are missing.  The single typed validator decides; a missing
+    # charge/multiplicity is a clarification (never an implicit 0/1).
+    science = document.get("science")
+    if isinstance(science, Mapping):
+        _require_typed_science(science)
+    if not {"recipe_digest", "science", "budget"} <= set(document):
+        return ""
+    try:
+        return proposal_plan_definition_digest(document).digest
+    except CanonicalDigestError:
+        return ""
+
+
+def _require_typed_science(science: Mapping[str, Any]) -> None:
+    """Validate a stored Proposal's science block (clarification, not 0/1)."""
+    from acp_services.runtime.science_inputs import normalize_science_inputs
+
+    payload: dict[str, Any] = {
+        key: science[key]
+        for key in ("method", "mapping", "charge", "multiplicity")
+        if key in science
+    }
+    initial_inputs = science.get("initial_inputs")
+    if isinstance(initial_inputs, list):
+        payload["structure_provenance"] = [
+            {
+                "input_id": str(item.get("input_id") or ""),
+                "sha256": str(item.get("sha256") or ""),
+                "format": str(item.get("format") or ""),
+                "role": str(item.get("role") or "minimum"),
+            }
+            for item in initial_inputs
+            if isinstance(item, Mapping)
+        ]
+    verdict = normalize_science_inputs(payload)
+    if verdict.values is not None:
+        return
+    if verdict.clarifications:
+        raise _command_error(
+            400,
+            "input_invalid",
+            "the proposal science is missing critical value(s): "
+            + ", ".join(item.field_name for item in verdict.clarifications),
+            params={
+                "rule": "clarification_required",
+                "fields": [item.field_name for item in verdict.clarifications],
+            },
+        )
+    first = verdict.issues[0]
+    raise _command_error(
+        400,
+        "input_invalid",
+        first.message,
+        params={"rule": first.rule, "field": first.field_name},
+    )
+
+
+def _enforce_approval(request: Request, req: Any, classification: Any = None) -> Any:
     """Check the frozen plan + approval binding before any submit side effect.
 
-    Returns the authorizing :class:`Approval` (or ``None`` for a non-research
-    launch).  Raises an HTTP error with the frozen approval/plan error shape.
+    M1-04b: the classification is the single decision point; this function only
+    performs the digest/approval/scientific-binding work after the class is
+    known.  Returns the authorizing :class:`Approval` (or ``None`` for a legacy
+    submit) and raises the frozen approval/plan error shape.
     """
     from acp_services.runtime.approvals import ApprovalError
     from acp_services.runtime.canonical_digest import (
@@ -8335,23 +8839,11 @@ def _enforce_approval(request: Request, req: Any) -> Any:
         plan_digest as canonical_plan_digest,
     )
 
-    proposal_bound = bool(req.proposal_ref or req.proposal_digest or req.plan_digest)
-    if not proposal_bound:
+    decision = classification or _classify_submit(request, req)
+    if not decision.research:
         return None
-    if not req.plan_digest:
-        raise _command_error(
-            400,
-            "input_invalid",
-            "a research launch requires plan_digest",
-            params={"field": "plan_digest", "rule": "plan_digest_required"},
-        )
-    if not req.proposal_ref:
-        raise _command_error(
-            403,
-            "access_denied",
-            "a research launch requires a proposal reference with a server approval",
-            params={"rule": "approval_required"},
-        )
+    if not decision.allowed:
+        raise _deny_submit(decision)
     try:
         definition = frozen_plan_definition(
             workflow=str(req.workflow),
@@ -8378,7 +8870,7 @@ def _enforce_approval(request: Request, req: Any) -> Any:
     approval_project = req.project_id or manager.default_project_id
     principal = str(_server_identity(request).principal.principal_id)
     try:
-        return _approval_service(request).authorize_submission(
+        approval = _approval_service(request).authorize_submission(
             plan_digest=req.plan_digest,
             proposal_ref=str(req.proposal_ref),
             project_id=str(approval_project or ""),
@@ -8388,6 +8880,16 @@ def _enforce_approval(request: Request, req: Any) -> Any:
         )
     except ApprovalError as exc:
         raise HTTPException(status_code=exc.http_status, detail=exc.detail()) from exc
+    # D06 (M1-04a): the approval binds the scientific digest *and* the execution
+    # digest.  Only read/project the proposal when the approval actually carries a
+    # science digest, so a legacy execution-only approval keeps its behaviour.
+    science_digest = ""
+    if getattr(approval, "science_digest", ""):
+        science_digest = _proposal_science_digest(request, req)
+    final = _classify_submit(request, req, approval=approval, science_digest=science_digest)
+    if not final.allowed:
+        raise _deny_submit(final)
+    return approval
 
 
 def _budget_claim_from_approval(approval: Any) -> dict[str, Any] | None:
@@ -8396,20 +8898,40 @@ def _budget_claim_from_approval(approval: Any) -> dict[str, Any] | None:
     The client's ``budget`` payload is only compared with the approval digest by
     B16; the effective limits come from the persisted approval, never from the
     request.  The budget id is project+proposal (independent of ``run_id``).
+
+    M2-03c: the approved budget is normalized through the one mapping
+    (:mod:`acp_services.runtime.budget_projection`), so a non-empty unknown shape
+    or an unsupported launch unit is a typed 400/422 here — never a 500 inside
+    the ledger and never "no limits".  The resolved deadline projection travels
+    with the claim so the dispatcher has one value for all three surfaces.
     """
     if approval is None:
         return None
     approved_budget = getattr(approval, "budget", None)
     if not approved_budget:
         return None
+    from acp_services.runtime.budget_projection import (
+        BudgetRequestError,
+        budget_request_from_approval,
+    )
     from acp_services.runtime.research_budget import budget_id_for
 
+    try:
+        request = budget_request_from_approval(approved_budget)
+    except BudgetRequestError as exc:
+        raise _command_error(
+            exc.http_status,
+            "input_invalid",
+            exc.message,
+            params=dict(exc.params),
+        ) from exc
     return {
         "budget_id": budget_id_for(str(approval.project_id), str(approval.proposal_ref)),
         "budget": dict(approved_budget),
         "approved_budget": dict(approved_budget),
         "approval_ref": str(approval.approval_id),
         "project_id": str(approval.project_id),
+        "execution_limits": request.resources.to_dict(),
     }
 
 
@@ -8433,13 +8955,305 @@ def _research_project(manager: JobManager, project_id: str | None) -> str | None
     return project_id
 
 
-def _is_research_launch(req: Any) -> bool:
-    return bool(
-        getattr(req, "proposal_ref", None)
-        or getattr(req, "budget", None)
-        or getattr(req, "proposal_digest", None)
-        or getattr(req, "plan_digest", None)
-    )
+#: C1 (round-4 plan): a geometry-fact advisory, never a scientific criterion.
+#: The thresholds are versioned, uncalibrated policy parameters (astra review).
+_SCAN_ADVISORY_POLICY = {
+    "id": "scan_single_coordinate_geometry",
+    "version": "1",
+    "calibrated": False,
+    "note": "heuristic prompt policy parameter, not a scientific criterion",
+}
+
+
+def _coerce_scan_coordinates(
+    payload: Mapping[str, Any], method: Mapping[str, Any]
+) -> list[tuple[str, float, float]]:
+    """Read only *explicitly normalized* coordinate facts (dict form).
+
+    The CLI string form (``"a,b,start,end"``) is interpreted by the scheduling
+    consumer, not here: re-parsing it would create a second interpretation of
+    the same payload (a 3-atom entry is an angle, not a distance).  Only the
+    structured dict form — which carries its own ``kind`` — is a trustworthy
+    fact for an advisory.
+    """
+    candidates: list[Any] = []
+    for source in (payload, method):
+        for key in ("scan_coordinates", "coordinates", "coordinate"):
+            candidate = source.get(key)
+            if candidate is not None:
+                candidates.append(candidate)
+    # the nested PES envelope is also a real entry (input.scan_request.coordinate)
+    scan_request = payload.get("scan_request")
+    if isinstance(scan_request, Mapping):
+        nested = scan_request.get("coordinate")
+        if nested is not None:
+            candidates.append(nested)
+    parsed: list[tuple[str, float, float]] = []
+    for raw in candidates:
+        items = raw if isinstance(raw, (list, tuple)) else [raw]
+        for item in items:
+            if not isinstance(item, Mapping):
+                # never interpret the string form here
+                continue
+            kind = str(item.get("kind") or "").strip().lower()
+            start, end = item.get("start"), item.get("end")
+            if not kind:
+                continue
+            try:
+                parsed.append((kind, float(start), float(end)))
+            except (TypeError, ValueError):
+                continue
+    return parsed
+
+
+def _scan_geometry_advisories(
+    workflow: str, payload: Mapping[str, Any], method: Mapping[str, Any]
+) -> list[dict[str, Any]]:
+    """Geometry-fact advisories for relaxed scans (PESsearch / scan).
+
+    Trigger (all): a bond-length scan, exactly one distance coordinate, and a
+    start-to-end span of at least 2.5 A.  The text states the geometry and a
+    conditional consequence; it never asserts the chemistry, never blocks, and
+    carries the uncalibrated policy id so a false positive is attributable.
+    """
+    if workflow not in ("PESsearch", "scan"):
+        return []
+    coordinates = _coerce_scan_coordinates(payload, method)
+    if len(coordinates) != 1:
+        return []
+    kind, start, end = coordinates[0]
+    if kind not in ("distance", "bond_stretch"):
+        return []
+    if abs(end - start) < 2.5:
+        return []
+    return [
+        {
+            "id": "scan_single_coordinate_geometry",
+            "severity": "info",
+            "policy": dict(_SCAN_ADVISORY_POLICY),
+            "message": (
+                f"this plan drives one distance coordinate only ({start:.2f} -> {end:.2f} A). "
+                "The scan does not guarantee coverage of every relevant structural change of "
+                "the target reaction; the curve maximum is an initial guess only. If the "
+                "reaction hypothesis involves several bonds changing, inspect how they "
+                "evolve along the path and read the multi-coordinate guidance "
+                "(task.find_transition_state)."
+            ),
+            "references": [
+                {
+                    "tool": "acp_get_guidance",
+                    "arguments": {"guide_id": "task.find_transition_state"},
+                },
+                {"tool": "acp_get_guidance", "arguments": {"guide_id": "workflow.PESsearch"}},
+            ],
+        }
+    ]
+
+
+def _preflight_source_facts(
+    request: Request, workflow: str, payload: Mapping[str, Any]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Read-only source feasibility for tsmode/irc (preflight, zero side effects).
+
+    Returns ``(reasons, advisories)``.  Reasons mark a *deterministically*
+    infeasible local source; advisories mark states that cannot be verified
+    without touching remote material (``needs_prepare``/``not_verified``) and
+    must never be reported as unconditionally feasible.  The checks mirror the
+    submit-time selection: the *selected* entry/TS product, not just "any entry
+    in the job".
+    """
+    reasons: list[dict[str, Any]] = []
+    advisories: list[dict[str, Any]] = []
+    if workflow not in ("tsmode", "irc"):
+        return reasons, advisories
+    source_job_id = payload.get("source_job_id")
+    ref = payload.get("source_ref")
+    if (not isinstance(source_job_id, str) or not source_job_id) and isinstance(ref, Mapping):
+        source_id = str(ref.get("source_id") or "")
+        prefix, separator, relative = source_id.partition(":")
+        if separator and prefix.startswith("job_") and relative.startswith("RESULT/"):
+            source_job_id = prefix.removeprefix("job_")
+    if not isinstance(source_job_id, str) or not source_job_id:
+        return reasons, advisories
+    # Reuse the shared job-scope authorization: a job from another project must
+    # look exactly like an unknown job (existence never leaks across projects).
+    try:
+        record = _require_job_scope_access(request, source_job_id, require_exists=True)
+    except HTTPException:
+        reasons.append(
+            {
+                "code": "source_job_not_found",
+                "message": f"source job {source_job_id!r} does not exist",
+                "field": "source_job_id",
+                "rule": "source_job_unavailable",
+                "params": {"source_job_id": source_job_id},
+            }
+        )
+        return reasons, advisories
+    if record is None:
+        return reasons, advisories
+    # A remote or not-yet-prepared source cannot be verified here: it is a
+    # submit/prepare decision and must be reported as such, never as feasible.
+    if _is_remote_job(record) or not getattr(record, "work_dir", None):
+        advisories.append(
+            {
+                "id": "source_not_verified",
+                "severity": "info",
+                "message": (
+                    f"source job {source_job_id!r} is remote or not materialized on this "
+                    "host; the submit/prepare step will decide"
+                ),
+                "policy": {"id": "source_not_verified", "version": "1", "calibrated": True},
+            }
+        )
+        return reasons, advisories
+    from pathlib import Path
+
+    work_path = Path(record.work_dir)
+    if workflow == "tsmode":
+        try:
+            sources = _discover_frequency_sources(work_path, source_job_id)
+        except (OSError, ValueError, TypeError):
+            advisories.append(
+                {
+                    "id": "source_not_verified",
+                    "severity": "info",
+                    "message": f"frequency sources of {source_job_id!r} could not be read here",
+                    "policy": {"id": "source_not_verified", "version": "1", "calibrated": True},
+                }
+            )
+            return reasons, advisories
+        if not sources:
+            reasons.append(
+                {
+                    "code": "frequency_source_incomplete",
+                    "message": (
+                        f"source job {source_job_id!r} has no discoverable frequency source "
+                        "(need an ORCA frequency output and its Hessian)"
+                    ),
+                    "field": "source_job_id",
+                    "rule": "frequency_source_unavailable",
+                    "params": {"source_job_id": source_job_id},
+                }
+            )
+            return reasons, advisories
+        entry_id = payload.get("entry_id")
+        available = [source.entry_id for source in sources]
+        if isinstance(entry_id, str) and entry_id:
+            matched = next((source for source in sources if source.entry_id == entry_id), None)
+            if matched is None:
+                reasons.append(
+                    {
+                        "code": "frequency_source_incomplete",
+                        "message": (
+                            f"frequency entry {entry_id!r} not found in {source_job_id!r}; "
+                            f"available: {available}"
+                        ),
+                        "field": "entry_id",
+                        "rule": "frequency_entry_unavailable",
+                        "params": {"entry_id": entry_id, "available": available},
+                    }
+                )
+                return reasons, advisories
+            if not matched.hessian_available:
+                reasons.append(
+                    {
+                        "code": "frequency_source_incomplete",
+                        "message": (
+                            f"frequency entry {entry_id!r} has no Hessian; tsmode needs it "
+                            "to map the mode"
+                        ),
+                        "field": "entry_id",
+                        "rule": "frequency_hessian_missing",
+                        "params": {"entry_id": entry_id},
+                    }
+                )
+            return reasons, advisories
+        if len(sources) == 1:
+            if not sources[0].hessian_available:
+                reasons.append(
+                    {
+                        "code": "frequency_source_incomplete",
+                        "message": (
+                            f"the only frequency source in {source_job_id!r} has no Hessian"
+                        ),
+                        "field": "source_job_id",
+                        "rule": "frequency_hessian_missing",
+                        "params": {"source_job_id": source_job_id},
+                    }
+                )
+            return reasons, advisories
+        reasons.append(
+            {
+                "code": "frequency_source_incomplete",
+                "message": (
+                    f"source job {source_job_id!r} has several frequency entries; pass "
+                    f"entry_id (available: {available})"
+                ),
+                "field": "entry_id",
+                "rule": "frequency_entry_required",
+                "params": {"available": available},
+            }
+        )
+        return reasons, advisories
+    # irc: only the local manifest is judged (no remote fetch during preflight)
+    from acp.calculations.irc.source import load_ts_result_manifest
+
+    try:
+        manifest = load_ts_result_manifest(record, None)
+    except (OSError, ValueError, TypeError):
+        advisories.append(
+            {
+                "id": "source_not_verified",
+                "severity": "info",
+                "message": f"TS result manifest of {source_job_id!r} could not be read here",
+                "policy": {"id": "source_not_verified", "version": "1", "calibrated": True},
+            }
+        )
+        return reasons, advisories
+    if manifest is None:
+        reasons.append(
+            {
+                "code": "ts_source_unavailable",
+                "message": f"source job {source_job_id!r} has no local TS result manifest",
+                "field": "source_job_id",
+                "rule": "ts_source_unavailable",
+                "params": {"source_job_id": source_job_id},
+            }
+        )
+        return reasons, advisories
+    product_id = payload.get("source_product_id")
+    relative: str | None = None
+    if isinstance(ref, Mapping):
+        source_id = str(ref.get("source_id") or "")
+        _, separator, path = source_id.partition(":")
+        if separator and path.startswith("RESULT/"):
+            relative = path.removeprefix("RESULT/")
+    if isinstance(product_id, str) and product_id:
+        product = next((item for item in manifest.products if item.id == product_id), None)
+        if product is None:
+            reasons.append(
+                {
+                    "code": "ts_source_unavailable",
+                    "message": f"source product {product_id!r} is not registered as a TS product",
+                    "field": "source_product_id",
+                    "rule": "ts_product_not_registered",
+                    "params": {"source_product_id": product_id},
+                }
+            )
+    elif relative is not None:
+        product = next((item for item in manifest.products if item.path == relative), None)
+        if product is None:
+            reasons.append(
+                {
+                    "code": "ts_source_unavailable",
+                    "message": f"source reference {relative!r} is not a registered TS product",
+                    "field": "source_ref",
+                    "rule": "ts_product_not_registered",
+                    "params": {"relative_path": relative},
+                }
+            )
+    return reasons, advisories
 
 
 def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str, Any]:
@@ -8448,10 +9262,17 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
     Entry access is authorized by the thin :func:`preflight_request` wrapper;
     everything after that check lives here unchanged so the B1-3 science
     preflight can reuse the single implementation.
+
+    M0-06: the same exhaustive field policy and the same execution-target checks
+    as :func:`create_job` run here first, so a typo'd field or an unknown remote
+    node is reported identically before and after a submit.  The response key set
+    stays frozen (B1-3); an infeasible target is projected into ``reasons`` with
+    the application ``input_invalid`` code plus the fine-grained rule.
     """
     from acp_services.entrypoints.application_params import (
         ApplicationParamError,
         normalize_preflight,
+        validate_request_fields,
     )
 
     if req.workflow not in ALL_WORKFLOWS:
@@ -8461,11 +9282,18 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
             f"Unsupported workflow '{req.workflow}'",
             params={"field": "workflow", "allowed": list(PUBLIC_WORKFLOWS)},
         )
+    _normalize_legacy_simple_method(req)
+    raw_input = req.input
     payload = req.model_dump(exclude_none=True)
+    if raw_input is None:
+        payload["input"] = {}
     try:
+        validate_request_fields(payload, request_kind="preflight", entry="http")
         normalize_preflight(payload)
     except ApplicationParamError as exc:
-        raise _command_error(400, exc.code, exc.message, params=dict(exc.params)) from exc
+        raise _command_error(
+            _field_policy_status(exc), exc.code, exc.message, params=dict(exc.params)
+        ) from exc
     try:
         _validate_simple_method_cli(req.workflow, req.method)
         _validate_scan_submission(req.workflow, req.method, req.input)
@@ -8477,6 +9305,20 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
             str(detail.get("message") or exc.detail),
             params=dict(detail.get("params") or {}),
         ) from exc
+    # Same semantic contract as create_job, before any snapshot/estimate work.
+    req.input = req.input or {}
+    try:
+        validate_workflow_submission(
+            req.workflow, input=raw_input, method=req.method, resources=req.resources
+        )
+    except SubmissionContractError as exc:
+        raise _command_error(422, "input_invalid", str(exc), params=exc.params()) from exc
+    try:
+        validate_resource_request(req.resources or {})
+    except ValueError as exc:
+        raise _command_error(
+            422, "input_invalid", str(exc), params={"field": "resources", "rule": "invalid_resource"}
+        ) from exc
     manager = _manager(request)
     project_id = _research_project(manager, req.project_id)
     spec = JobSpec(
@@ -8485,15 +9327,44 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
         method=req.method,
         resources=req.resources,
         project_id=project_id,
+        execution_mode=req.execution_mode,
+        target_node=req.target_node or None,
+        node_tags=list(req.node_tags),
     )
     reasons: list[dict[str, Any]] = []
     feasible = True
+    # B2 (round-4 plan): source-feasibility checks for step workflows, using only
+    # locally-verifiable facts.  Remote material stays a submit/prepare decision —
+    # the prepare chain is the legitimate path, so a cold remote source is never
+    # reported infeasible; it is surfaced as a not-verified advisory instead.
+    _source_reasons, _source_advisories = _preflight_source_facts(
+        request, req.workflow, raw_input or {}
+    )
+    for source_reason in _source_reasons:
+        feasible = False
+        reasons.append(source_reason)
     try:
         validate_execution_request(spec)
-    except ExecutionTargetError as exc:
+        # Only a target the client actually chose is validated here: an auto job's
+        # capability resolution stays a submit-time decision (it depends on probe
+        # state, not on the request), while a pinned node / explicit remote is the
+        # same permanent check the submit entry applies.
+        if req.target_node or req.execution_mode == "remote":
+            validate_submission_target(spec, registry=manager.registry)
+    except (ExecutionTargetError, NoCapableNodeError) as exc:
+        from acp.scheduler.nodes import target_error_envelope
+
         feasible = False
+        envelope = target_error_envelope(exc)
+        params = dict(envelope["params"])
         reasons.append(
-            {"code": getattr(exc, "code", None) or "execution_mode_conflict", "message": str(exc)}
+            {
+                "code": envelope["code"],
+                "message": envelope["message"],
+                "field": params.get("field"),
+                "rule": params.get("rule"),
+                "params": params,
+            }
         )
     digest = None
     if feasible:
@@ -8508,10 +9379,15 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
                 str(exc),
                 params={"field": "plan", **exc.params()},
             ) from exc
+    advisories = [
+        *_scan_geometry_advisories(req.workflow, raw_input or {}, req.method or {}),
+        *_source_advisories,
+    ]
     return {
         "schema_version": 1,
         "feasible": feasible,
         "reasons": reasons,
+        "advisories": advisories,
         "plan_digest": digest,
         "plan_summary": {
             "workflow": req.workflow,
@@ -8805,6 +9681,11 @@ def prepare_artifact(
         artifact_payload["expected_size_bytes"] = int(normalized["expected_size_bytes"])
     if evidence_report is not None:
         artifact_payload["evidence_report"] = dict(evidence_report)
+    # M0-05: the prepare key is versioned by the server-derived identity.  The
+    # principal/project are resolved here (never from the request body); the
+    # transport permission scope stays the deployment attribute.
+    prepare_project = str(record.project_id or record.spec.project_id or "")
+    prepare_principal = _command_identity(request, project_id=prepare_project or None).principal_id
     prepare_request = PrepareRequest(
         job_id=job_id,
         attempt=attempt,
@@ -8815,6 +9696,8 @@ def prepare_artifact(
         resource_generation=generation,
         payload=artifact_payload,
         client_idempotency_key=str(normalized.get("idempotency_key") or ""),
+        principal_id=prepare_principal,
+        project_id=prepare_project,
     )
     try:
         operation = service.enqueue(prepare_request)
@@ -8895,15 +9778,27 @@ def analyze_job(
     req: V1AnalyzeRequest,
     request: Request,
 ) -> dict[str, Any]:
-    """Registry-gated explicit analysis; unsupported until A registers it."""
+    """Registry-gated explicit analysis over prepared artifacts (M2-02).
+
+    The capability registry is the **application-level** one injected by the
+    composition root (``app.state.analysis_registry``) — never the module-level
+    default.  Only ``state=executable`` runs: an unregistered id and a
+    registered-but-not-executable id (``vibration.compute``, which is a compute
+    task) are distinct typed refusals, and neither starts anything.
+
+    A ``vibration.analyze`` handler reads only prepared artifacts of *this* task:
+    each ``input_refs`` entry must be the full ArtifactRef tuple whose
+    ``task_id`` equals the route's job id, and the handler re-verifies the
+    prepare operation + published body digest before parsing.  Nothing here
+    creates a task or calls a submit path.
+    """
+    from acp.api import science_catalog
+    from acp_services.data.artifacts import ArtifactError
     from acp_services.entrypoints.application_params import (
         ApplicationParamError,
         normalize_analyze,
     )
-    from acp_services.runtime.analysis_capabilities import (
-        ANALYSIS_CAPABILITY_IDS,
-        DEFAULT_ANALYSIS_REGISTRY,
-    )
+    from acp_services.runtime.analysis_capabilities import ANALYSIS_CAPABILITY_IDS
 
     manager = _manager(request)
     _require_entry_access(
@@ -8918,24 +9813,55 @@ def analyze_job(
         normalized = normalize_analyze(payload)
     except ApplicationParamError as exc:
         raise _command_error(400, exc.code, exc.message, params=dict(exc.params)) from exc
-    if req.analysis_id not in ANALYSIS_CAPABILITY_IDS:
+    registry = science_catalog.analysis_registry(request.app.state)
+    # M2-05: the frozen table is the built-in surface; an enabled third-party
+    # capability is registered by the same composition root into the injected
+    # registry.  An id in neither place is the frozen ``unsupported_capability``
+    # refusal, with the full allowed set (built-in ids, then the registered ids).
+    if req.analysis_id not in ANALYSIS_CAPABILITY_IDS and (
+        registry is None or registry.get(req.analysis_id) is None
+    ):
+        allowed = [*ANALYSIS_CAPABILITY_IDS, *(registry.ids() if registry is not None else ())]
         raise _command_error(
             422,
             "unsupported_capability",
             f"unknown analysis capability {req.analysis_id!r}",
-            params={"field": "analysis_id", "allowed": list(ANALYSIS_CAPABILITY_IDS)},
+            params={"field": "analysis_id", "allowed": allowed},
         )
-    capability = DEFAULT_ANALYSIS_REGISTRY.get(req.analysis_id)
+    if registry is None:
+        raise _command_error(
+            503,
+            "backend_unavailable",
+            "the application analysis registry is not initialized",
+            params={"rule": "analysis_registry_unavailable"},
+            retryable=True,
+        )
+    capability = registry.get(req.analysis_id)
     if capability is None or capability.handler is None:
+        # M1-01b freezes two distinct refusals: an id that was never registered is
+        # ``not_registered``; a declared capability without a handler is
+        # ``not_executable``.  Both are 422 unsupported_capability and start
+        # nothing; only state=executable may run.
+        registered = capability is not None
+        rule = (
+            "analysis_capability_not_registered"
+            if not registered
+            else "analysis_capability_not_executable"
+        )
         raise _command_error(
             422,
             "unsupported_capability",
-            f"analysis capability {req.analysis_id!r} is not registered",
+            (
+                f"analysis capability {req.analysis_id!r} is not registered"
+                if not registered
+                else f"analysis capability {req.analysis_id!r} is not executable"
+            ),
             params={
                 "analysis_id": req.analysis_id,
-                "registered": capability is not None,
-                "owner": "A",
-                "rule": "analysis_capability_not_registered",
+                "registered": registered,
+                "state": (capability.state if capability is not None else "unavailable"),
+                "owner": capability.owner if capability is not None else "A",
+                "rule": rule,
             },
         )
     record = manager.get(job_id)
@@ -8947,6 +9873,27 @@ def analyze_job(
             params={"job_id": job_id},
             retryable=True,
         )
+    # The analysis reads prepared artifacts of the route's task only.  A ref to a
+    # different task is an input error, not a cross-task read that "works".
+    foreign = [
+        index
+        for index, ref in enumerate(normalized["input_refs"])
+        if str(ref.get("task_id")) != str(job_id)
+    ]
+    if foreign:
+        raise _command_error(
+            400,
+            "input_invalid",
+            "input_refs must reference artifacts of the route's task",
+            params={
+                "field": f"input_refs[{foreign[0]}].task_id",
+                "rule": "task_id_mismatch",
+                "expected": job_id,
+            },
+        )
+    from acp.services_analysis_bootstrap import AnalysisInputError
+    from acp.services_science_plugins_bootstrap import PluginAnalysisInputError
+
     try:
         result = capability.handler(normalized)
     except NotImplementedError as exc:
@@ -8956,14 +9903,30 @@ def analyze_job(
             f"analysis capability {req.analysis_id!r} is not implemented",
             params={"analysis_id": req.analysis_id, "owner": "B12"},
         ) from exc
+    except ArtifactError as exc:
+        raise _artifact_error(exc) from exc
+    except (AnalysisInputError, PluginAnalysisInputError) as exc:
+        raise _command_error(
+            exc.http_status,
+            "resource_not_ready" if exc.http_status == 409 else "input_invalid",
+            str(exc),
+            params=dict(exc.params),
+        ) from exc
+    product = result.get("product") if isinstance(result, Mapping) else None
+    evidence_refs = list(result.get("inputs") or ()) if isinstance(result, Mapping) else []
     return {
         "schema_version": 1,
         "analysis_id": req.analysis_id,
-        "started": req.analysis_id == "vibration.compute",
+        # A read-only analysis starts nothing; only vibration.compute starts one
+        # frequency task, and that path is a task submit, never this route.
+        "started": False,
         "task_ref": None,
         "operation_ref": None,
-        "result": dict(result),
-        "evidence_refs": [],
+        "result": dict(result) if isinstance(result, Mapping) else {"result": result},
+        "evidence_refs": evidence_refs,
+        "product_digest": (
+            str(product.get("digest") or "") if isinstance(product, Mapping) else ""
+        ),
     }
 
 

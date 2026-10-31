@@ -19,7 +19,7 @@
   "envelope_version": 1,
   "fencing_token": "4e3d2627d1cec5b9fa1f4c7d1b1cc9bc",
   "job_id": "20261023_224052_001_b26a-fix4-sp2",
-  "owner": "local:redacted-host:1696389:1",
+  "owner": "local:workstation:1696389:1",
   "plan_digest": "v2:b5912067c05e25d2bfd49c63fd01b584",
   "plan_identity": "v2:686f5c2fc0c8240fd0473fbf705102d8",
   "protocol": "local",

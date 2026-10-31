@@ -1,4 +1,4 @@
-$ <repo>/reports/acp2_implementation/bb45a46/B/B25/venvs/cccp/bin/python -c 
+$ /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/cccp/bin/python -c 
 import hashlib, importlib.util, json, os, sys
 from importlib import metadata
 role = sys.argv[1]
@@ -43,7 +43,7 @@ print(json.dumps(facts))
  cccp 0.3.0
 exit=0
 --- stdout ---
-{"role": "cccp", "python": "<repo>/reports/acp2_implementation/bb45a46/B/B25/venvs/cccp/bin/python", "cwd": "<repo>/reports/acp2_implementation/bb45a46/B/B25", "modules": {"cccp": "<repo>/reports/acp2_implementation/bb45a46/B/B25/venvs/cccp/lib64/python3.11/site-packages/cccp/__init__.py"}, "version": "0.3.0", "forbidden": {"acp": true, "acp_services": true, "fastapi": true}, "site_packages": true, "version_ok": true, "forbidden_absent": true}
+{"role": "cccp", "python": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/cccp/bin/python", "cwd": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25", "modules": {"cccp": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/cccp/lib64/python3.11/site-packages/cccp/__init__.py"}, "version": "0.3.0", "forbidden": {"acp": true, "acp_services": true, "fastapi": true}, "site_packages": true, "version_ok": true, "forbidden_absent": true}
 
 --- stderr ---
 

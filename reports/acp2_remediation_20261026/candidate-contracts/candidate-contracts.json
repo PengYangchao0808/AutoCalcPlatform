@@ -1,0 +1,314 @@
+{
+  "candidate_tree": {
+    "dirty_paths": 28,
+    "head": "2551c0397531d732daa6a778bf50beba3dc44c42",
+    "tree": "2551c0397531d732daa6a778bf50beba3dc44c42"
+  },
+  "claims": {
+    "real_approval": true,
+    "real_browser": false,
+    "real_controller": true,
+    "real_evidence_projection": true,
+    "real_frontend_contracts": true,
+    "real_mcp_stdio": true,
+    "real_model": false,
+    "real_research_store": true,
+    "real_science": false
+  },
+  "contract_digests": {
+    "docs/reference/next-change/acp2-contracts/experience/proposal.schema.json": "sha256:4f4363ee791f32ce31358fd791ad26f89f0364df1b1dad0a3dcbb0a7ea50fbcd",
+    "docs/reference/next-change/acp2-contracts/experience/research-record.schema.json": "sha256:75f8ef207feced0bb39f37fafdcf8963ba3747cbb8c2c019550eed5f56100752",
+    "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json": "sha256:4902a8c8b0825dcf1b9b2ab5a4e0c01412189d1a6b083698e612cf32d2bf5746",
+    "docs/reference/next-change/acp2-contracts/runtime/research-session.v1.md": "sha256:80b23340bd92c41dd0c918de274b93473ead20fcce149354a433000a40fc5c21",
+    "docs/reference/next-change/acp2-contracts/science/evidence.schema.json": "sha256:74b1aa4d638f5ee0027be06817c2c00bf6d79cdb14a96514ff097783b911cc10"
+  },
+  "db_migrations": {
+    "jobs_schema_version": 25,
+    "research_resource_table": "present"
+  },
+  "error_paths": [
+    {
+      "expected": "revision_conflict",
+      "name": "negative.stale_revision",
+      "ok": true,
+      "rule": "revision_conflict",
+      "status": 409
+    },
+    {
+      "expected": "research_identity_mismatch",
+      "name": "negative.wrong_identity",
+      "ok": true,
+      "rule": "research_identity_mismatch",
+      "status": 403
+    },
+    {
+      "expected": "projection_digest_mismatch",
+      "name": "negative.fake_evidence",
+      "ok": true,
+      "rule": "projection_digest_mismatch",
+      "status": 409
+    },
+    {
+      "expected": "evidence_not_complete",
+      "name": "negative.accept_on_partial_evidence",
+      "ok": true,
+      "rule": "evidence_not_complete",
+      "status": 400
+    },
+    {
+      "expected": "plan_digest_mismatch",
+      "name": "negative.injection_plan_digest",
+      "ok": true,
+      "rule": "plan_digest_mismatch",
+      "status": 400
+    },
+    {
+      "expected": "approver_identity_from_payload",
+      "name": "negative.approver_identity_from_payload",
+      "ok": true,
+      "rule": "approver_identity_from_payload",
+      "status": 403
+    },
+    {
+      "expected": "approval_revoked",
+      "name": "negative.revoked_approval",
+      "ok": true,
+      "rule": "approval_revoked",
+      "status": 403
+    }
+  ],
+  "evidence_kind": "fixture",
+  "generated_at": "2026-10-27T00:51:42Z",
+  "not_claimed": [
+    "real science / QC / LSF execution",
+    "real model or DSH agent run",
+    "real browser or Chromium session",
+    "P2 research MCP tools (the extension is advertised but not implemented)",
+    "M2/M3 full checkpoint scope"
+  ],
+  "real_call_trace": {
+    "actual_calls": [
+      {
+        "duration_ms": 266.99,
+        "method": "GET",
+        "path": "/api/status",
+        "status": 200
+      },
+      {
+        "duration_ms": 12.52,
+        "method": "POST",
+        "path": "/api/v1/projects",
+        "status": 201
+      },
+      {
+        "duration_ms": 16.64,
+        "method": "POST",
+        "path": "/api/v2/research/proposals",
+        "status": 201
+      },
+      {
+        "duration_ms": 5.56,
+        "method": "GET",
+        "path": "/api/v2/research/proposals/prop-m1-06-001?project_id=ca5fafd3-a566-424a-b5de-2b01c95e312d",
+        "status": 200
+      },
+      {
+        "duration_ms": 6.11,
+        "method": "GET",
+        "path": "/api/v2/research/approvals/ap_218d62f1a777443eb0a3fbe3b86392ef",
+        "status": 200
+      },
+      {
+        "duration_ms": 10.04,
+        "method": "POST",
+        "path": "/api/v2/research/approvals/ap_218d62f1a777443eb0a3fbe3b86392ef/approve",
+        "status": 200
+      },
+      {
+        "duration_ms": 5.16,
+        "method": "GET",
+        "path": "/api/v1/jobs/20261027_085136_001_fake",
+        "status": 200
+      },
+      {
+        "duration_ms": 7.4,
+        "method": "GET",
+        "path": "/api/v1/jobs/20261027_085136_001_fake/files",
+        "status": 200
+      },
+      {
+        "duration_ms": 13.79,
+        "method": "GET",
+        "path": "/api/v1/jobs?limit=200",
+        "status": 200
+      },
+      {
+        "duration_ms": 17.87,
+        "method": "POST",
+        "path": "/api/v2/research/proposals/prop-m1-06-001/cas",
+        "status": 409
+      },
+      {
+        "duration_ms": 10.71,
+        "method": "GET",
+        "path": "/api/v1/jobs?limit=200",
+        "status": 200
+      },
+      {
+        "duration_ms": 10.69,
+        "method": "GET",
+        "path": "/api/v1/jobs?limit=200",
+        "status": 200
+      },
+      {
+        "duration_ms": 9.37,
+        "method": "POST",
+        "path": "/api/v2/research/records",
+        "status": 403
+      },
+      {
+        "duration_ms": 13.43,
+        "method": "GET",
+        "path": "/api/v1/jobs?limit=200",
+        "status": 200
+      },
+      {
+        "duration_ms": 10.81,
+        "method": "GET",
+        "path": "/api/v1/jobs?limit=200",
+        "status": 200
+      },
+      {
+        "duration_ms": 7.7,
+        "method": "POST",
+        "path": "/api/v2/research/records",
+        "status": 409
+      },
+      {
+        "duration_ms": 10.9,
+        "method": "GET",
+        "path": "/api/v1/jobs?limit=200",
+        "status": 200
+      },
+      {
+        "duration_ms": 12.8,
+        "method": "GET",
+        "path": "/api/v1/jobs?limit=200",
+        "status": 200
+      },
+      {
+        "duration_ms": 7.55,
+        "method": "POST",
+        "path": "/api/v2/research/records",
+        "status": 400
+      },
+      {
+        "duration_ms": 11.12,
+        "method": "GET",
+        "path": "/api/v1/jobs?limit=200",
+        "status": 200
+      },
+      {
+        "duration_ms": 14.48,
+        "method": "POST",
+        "path": "/api/v2/research/records",
+        "status": 201
+      },
+      {
+        "duration_ms": 7.02,
+        "method": "GET",
+        "path": "/api/v2/research/records/res-dd750138f09691f961016dbd?project_id=ca5fafd3-a566-424a-b5de-2b01c95e312d",
+        "status": 200
+      },
+      {
+        "duration_ms": 18.83,
+        "method": "GET",
+        "path": "/api/v2/research/records/res-dd750138f09691f961016dbd/evidence?project_id=ca5fafd3-a566-424a-b5de-2b01c95e312d&session_seed=m1-06-slice&round=0",
+        "status": 200
+      },
+      {
+        "duration_ms": 11.46,
+        "method": "GET",
+        "path": "/api/v2/research/records/res-dd750138f09691f961016dbd/evidence?project_id=ca5fafd3-a566-424a-b5de-2b01c95e312d&session_seed=m1-06-slice&round=0",
+        "status": 200
+      },
+      {
+        "duration_ms": 11.08,
+        "method": "GET",
+        "path": "/api/v1/jobs?limit=200",
+        "status": 200
+      },
+      {
+        "duration_ms": 9.27,
+        "method": "POST",
+        "path": "/api/v1/jobs",
+        "status": 400
+      },
+      {
+        "duration_ms": 11.03,
+        "method": "GET",
+        "path": "/api/v1/jobs?limit=200",
+        "status": 200
+      },
+      {
+        "duration_ms": 10.92,
+        "method": "GET",
+        "path": "/api/v1/jobs?limit=200",
+        "status": 200
+      },
+      {
+        "duration_ms": 7.56,
+        "method": "POST",
+        "path": "/api/v2/research/approvals",
+        "status": 403
+      },
+      {
+        "duration_ms": 12.2,
+        "method": "GET",
+        "path": "/api/v1/jobs?limit=200",
+        "status": 200
+      },
+      {
+        "duration_ms": 6.57,
+        "method": "GET",
+        "path": "/api/v2/research/approvals/ap_218d62f1a777443eb0a3fbe3b86392ef",
+        "status": 200
+      },
+      {
+        "duration_ms": 11.55,
+        "method": "POST",
+        "path": "/api/v2/research/approvals/ap_218d62f1a777443eb0a3fbe3b86392ef/revoke",
+        "status": 200
+      },
+      {
+        "duration_ms": 11.24,
+        "method": "GET",
+        "path": "/api/v1/jobs?limit=200",
+        "status": 200
+      },
+      {
+        "duration_ms": 12.76,
+        "method": "POST",
+        "path": "/api/v1/jobs",
+        "status": 403
+      },
+      {
+        "duration_ms": 11.41,
+        "method": "GET",
+        "path": "/api/v1/jobs?limit=200",
+        "status": 200
+      },
+      {
+        "duration_ms": 11.7,
+        "method": "GET",
+        "path": "/api/v1/jobs?limit=200",
+        "status": 200
+      }
+    ],
+    "controller_log": "controller.log",
+    "mcp_trace": "mcp-runner/mcp-trace.jsonl",
+    "orchestration_trace": "trace.jsonl"
+  },
+  "schema": "acp2.m1-06.candidate-contracts.v1",
+  "stub_boundaries": "stub-boundaries.json"
+}

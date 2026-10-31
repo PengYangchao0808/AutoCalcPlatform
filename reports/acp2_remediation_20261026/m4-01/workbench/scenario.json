@@ -1,0 +1,29 @@
+{
+  "repo_root": "/ACPServer/acp2-remediation-integration",
+  "base_url": "http://127.0.0.1:35115",
+  "project_id": "934f5edb-53e8-4d1b-8717-41b089e5198e",
+  "foreign_project_id": "project-not-visible-to-this-workbench",
+  "session_seed": "m4-01-session",
+  "proposal_id": "prop-m4-01-rounds",
+  "proposal_revision": 2,
+  "research_id": "res-2e3811a850b801a3369be874",
+  "round": 1,
+  "approval_ref": "ap_7e076f8da7d5466f927f1fb184ac2a01",
+  "approval_state": "approved",
+  "approval_revision": 2,
+  "plan_digest": "sha256:fa868afe03f7355383c2b3de399978d9d49b12b381d6d961081a427ca50145cb",
+  "science_digest": "sha256:5444684f852645353007615c8cccdd77ad594a2061577b79ea520c20d2f25e49",
+  "budget": {
+    "unit": "task_count",
+    "count": 3,
+    "timeout_s": 120
+  },
+  "now": "2026-10-27T00:00:00.000Z",
+  "modules": [
+    "frontend/js/client/resource-store.js",
+    "frontend/js/client/research-query.js",
+    "frontend/js/workbench/contracts/experience_contract.js",
+    "frontend/js/workbench/features/research-evidence-view.js",
+    "frontend/js/workbench/features/research-approval.js"
+  ]
+}

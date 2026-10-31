@@ -30,7 +30,6 @@ import re
 import shutil
 import subprocess
 import sys
-import time
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -55,6 +54,8 @@ PYTEST_COUNT_RE = re.compile(r"(\d+)\s+passed")
 P1_TOOLS = frozenset(
     {
         "acp_capabilities",
+        "acp_get_guidance",
+    "acp_list_jobs",
         "acp_preflight",
         "acp_submit",
         "acp_status",
@@ -173,6 +174,43 @@ def _write_json(out: Path, name: str, document: Any) -> str:
 
 def _add_artifact(context: Any, name: str) -> None:
     context.artifacts.append({"path": name})
+
+
+OBSERVATIONS_SCHEMA = "acp2.experience.observations.v1"
+
+
+def publish_observations(
+    context: Any,
+    observed: dict[str, str],
+    *,
+    model_calls: int,
+    model_evidence: str,
+    denial_evidence: str | None = None,
+    denial_kind: str | None = None,
+    offline_fixture_content: bool = False,
+) -> dict[str, Any]:
+    """Publish the row's real observations under ``experience.observations``.
+
+    The present/absent *declaration* per scenario is frozen in B's validator
+    (``EXPERIENCE_REQUIRED_OBSERVATIONS``); this helper only records what the
+    row actually saw.  It never promotes fixture content to live: a live PASS
+    whose observations are missing or disagree with the declaration is rejected
+    by ``validate_receipt``.
+    """
+
+    payload: dict[str, Any] = {
+        "schema": OBSERVATIONS_SCHEMA,
+        "observed": dict(observed),
+        "model_calls": int(model_calls),
+        "model_evidence": model_evidence,
+        "offline_fixture_content": bool(offline_fixture_content),
+    }
+    if denial_evidence is not None:
+        payload["denial_evidence"] = denial_evidence
+    if denial_kind is not None:
+        payload["denial_kind"] = denial_kind
+    context.extensions["experience.observations"] = payload
+    return payload
 
 
 def _env(name: str) -> str | None:
@@ -387,7 +425,9 @@ def scenario_baseline(context: Any) -> int:
         json.dumps(import_paths, sort_keys=True) if import_paths else imported.stderr.strip(),
     )
 
-    c_tree = _run(["git", "-C", str(source), "rev-parse", f"{C_BASELINE_COMMIT}^{{tree}}"], timeout=timeout)
+    c_tree = _run(
+        ["git", "-C", str(source), "rev-parse", f"{C_BASELINE_COMMIT}^{{tree}}"], timeout=timeout
+    )
     project = _project_root()
     b_tree = (
         _run(
@@ -546,11 +586,11 @@ def _secret_property_violations(node: Any, path: str = "$") -> list[str]:
     return found
 
 
-def _validate(engine: ModuleType, schema: dict[str, Any], schema_path: Path, document: Any) -> list[str]:
+def _validate(
+    engine: ModuleType, schema: dict[str, Any], schema_path: Path, document: Any
+) -> list[str]:
     try:
-        return list(
-            engine._validate_schema(document, schema, "$", schema, schema_path.parent)
-        )
+        return list(engine._validate_schema(document, schema, "$", schema, schema_path.parent))
     except Exception as exc:  # noqa: BLE001 - engine boundary, reported as a failure
         return [f"engine_error:{type(exc).__name__}:{exc}"]
 
@@ -559,7 +599,9 @@ def _allowed_tools() -> set[str] | None:
     project = _project_root()
     if project is None:
         return None
-    path = project / "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json"
+    path = (
+        project / "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json"
+    )
     if not path.is_file():
         return None
     document = _load_json(path)
@@ -588,7 +630,6 @@ def scenario_contracts(context: Any) -> int:
         return _not_verified(context, "missing_prerequisite:b_p2_research_operations")
 
     out = _out_dir(context)
-    timeout = max(5.0, float(context.timeout))
     documents = sorted(path for path in contracts.rglob("*.json") if path.is_file())
     parsed: dict[Path, Any] = {}
     parse_errors: list[str] = []
@@ -611,7 +652,14 @@ def scenario_contracts(context: Any) -> int:
             refs_checked += 1
             try:
                 _resolve_ref(path, ref)
-            except (KeyError, IndexError, ValueError, FileNotFoundError, OSError, json.JSONDecodeError) as exc:
+            except (
+                KeyError,
+                IndexError,
+                ValueError,
+                FileNotFoundError,
+                OSError,
+                json.JSONDecodeError,
+            ) as exc:
                 ref_errors.append(f"{path.relative_to(contracts)}:{ref}:{exc}")
     _assertion(
         context,
@@ -748,12 +796,12 @@ def scenario_contracts(context: Any) -> int:
     # 1. missing candidate_id (T-02 required field)
     manifest_required = set(manifest_schema.get("required") or [])
     probe_errors = (
-        _validate(engine, manifest_schema, manifest_path, {}) if manifest_schema else ["schema_missing"]
+        _validate(engine, manifest_schema, manifest_path, {})
+        if manifest_schema
+        else ["schema_missing"]
     )
     candidate_rejections = [
-        item
-        for item in probe_errors
-        if "candidate_id" in item or item == "schema_missing"
+        item for item in probe_errors if "candidate_id" in item or item == "schema_missing"
     ]
     if "candidate_id" not in manifest_required:
         candidate_rejections.append("required_set_missing_candidate_id")
@@ -768,7 +816,9 @@ def scenario_contracts(context: Any) -> int:
 
     # 3. unknown availability (view-model enum)
     try:
-        wrong_view = _copy(_load_json(contracts / "fixtures/wrong-project.valid.json"))["view_model"]
+        wrong_view = _copy(_load_json(contracts / "fixtures/wrong-project.valid.json"))[
+            "view_model"
+        ]
         wrong_view["artifacts"][0]["availability"] = "unknown"
         availability_errors = _validate(engine, view_schema, view_path, wrong_view)
     except (OSError, json.JSONDecodeError, KeyError, IndexError) as exc:
@@ -797,10 +847,11 @@ def scenario_contracts(context: Any) -> int:
     try:
         wrong_project = _load_json(contracts / "fixtures/wrong-project.json")
         view_model = wrong_project["view_model"]
+        expected_project = view_model.get("project_id")
         cross_errors = [
-            f"task_refs[{index}].project_id={ref.get('project_id')!r} != {view_model.get('project_id')!r}"
+            f"task_refs[{index}].project_id={ref.get('project_id')!r} != {expected_project!r}"
             for index, ref in enumerate(wrong_project.get("task_refs", []))
-            if ref.get("project_id") != view_model.get("project_id")
+            if ref.get("project_id") != expected_project
         ]
     except (OSError, json.JSONDecodeError, KeyError, AttributeError) as exc:
         cross_errors = [f"fixture_error:{exc}"]
@@ -819,9 +870,7 @@ def scenario_contracts(context: Any) -> int:
         illegal = _load_json(contracts / "fixtures/illegal-request.json")
         arguments = illegal.get("arguments") or {}
         approver_errors = [
-            f"payload_identity:{key}"
-            for key in ("approver", "role", "tenant")
-            if key in arguments
+            f"payload_identity:{key}" for key in ("approver", "role", "tenant") if key in arguments
         ]
     except (OSError, json.JSONDecodeError) as exc:
         approver_errors = [f"fixture_error:{exc}"]
@@ -844,7 +893,12 @@ def scenario_contracts(context: Any) -> int:
     # Positive counterparts: every valid fixture must still be accepted.
     for name, schema_name, schema_path, fixture in (
         ("proposal", "proposal.schema.json", proposal_path, "fixtures/proposal.valid.json"),
-        ("research_record", "research-record.schema.json", record_path, "fixtures/research-record.valid.json"),
+        (
+            "research_record",
+            "research-record.schema.json",
+            record_path,
+            "fixtures/research-record.valid.json",
+        ),
     ):
         try:
             document = _load_json(contracts / fixture)

@@ -20,6 +20,11 @@ function setupEventListeners() {
 
   document.getElementById("project-select").addEventListener("change", async function(event) {
     selectedProjectId = event.target.value;
+    // M5-03 F6: a user-selected project is the explicit trigger for the
+    // science panel's capability discovery (no synthetic demo project).
+    if (window.ACPScienceQuestion && typeof window.ACPScienceQuestion.setProject === "function") {
+      window.ACPScienceQuestion.setProject(selectedProjectId);
+    }
     if (event.target.selectedIndex >= 0 && event.target.options[event.target.selectedIndex]) {
       event.target.title = event.target.options[event.target.selectedIndex].textContent || "";
     }

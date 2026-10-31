@@ -1,0 +1,244 @@
+{
+  "auditor": {
+    "console": [
+      {
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "type": "error"
+      },
+      {
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "type": "error"
+      },
+      {
+        "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+        "type": "error"
+      }
+    ],
+    "console_error_count": 3,
+    "label": "auditor-chromium-readonly",
+    "page_errors": [],
+    "requests_failed": [],
+    "response_statuses": [
+      200,
+      403,
+      404
+    ],
+    "responses": [
+      {
+        "method": "GET",
+        "status": 404,
+        "url": ":40845/api/v2/science/capabilities?project_id=demo-project"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "url": ":40845/api/v2/research/approvals?limit=50"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "url": ":40845/api/v1/workflow-catalog"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "url": ":40845/api/v1/status"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "url": ":40845/api/v1/maintenance/disk-usage"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "url": ":40845/api/v1/projects"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "url": ":40845/api/v2/task-view?group_by=molecule&sort=created_desc&group_limit=200&max_total=200&offset=0&include_facets=true"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "url": ":40845/api/v1/method-catalog"
+      },
+      {
+        "method": "GET",
+        "status": 404,
+        "url": ":40845/api/v2/research/approvals/ap_5345587eb1be4054b95dc02fd77abbe9?project_id=bc01b027-2c81-4074-9be5-840ff5d674a7"
+      },
+      {
+        "method": "POST",
+        "status": 403,
+        "url": ":40845/api/v2/research/approvals/ap_7b1296c3eee04af181629be97da2cf8d/approve"
+      }
+    ]
+  },
+  "operator": {
+    "console": [
+      {
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "type": "error"
+      },
+      {
+        "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+        "type": "error"
+      }
+    ],
+    "console_error_count": 2,
+    "label": "operator-chromium",
+    "page_errors": [],
+    "requests_failed": [],
+    "response_statuses": [
+      200,
+      403,
+      404
+    ],
+    "responses": [
+      {
+        "method": "GET",
+        "status": 404,
+        "url": ":40845/api/v2/science/capabilities?project_id=demo-project"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "url": ":40845/api/v2/research/approvals?limit=50"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "url": ":40845/api/v1/workflow-catalog"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "url": ":40845/api/v1/status"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "url": ":40845/api/v1/maintenance/disk-usage"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "url": ":40845/api/v1/projects"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "url": ":40845/api/v2/task-view?group_by=molecule&sort=created_desc&group_limit=200&max_total=200&offset=0&include_facets=true"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "url": ":40845/api/v1/method-catalog"
+      },
+      {
+        "method": "POST",
+        "status": 403,
+        "url": ":40845/api/v2/research/approvals/ap_5345587eb1be4054b95dc02fd77abbe9/approve"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "url": ":40845/api/v2/research/approvals/ap_5345587eb1be4054b95dc02fd77abbe9?project_id=bc01b027-2c81-4074-9be5-840ff5d674a7"
+      }
+    ]
+  },
+  "reviewer": {
+    "console": [
+      {
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "type": "error"
+      },
+      {
+        "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "type": "error"
+      }
+    ],
+    "console_error_count": 2,
+    "label": "reviewer-edge",
+    "page_errors": [],
+    "requests_failed": [],
+    "response_statuses": [
+      200,
+      404
+    ],
+    "responses": [
+      {
+        "method": "GET",
+        "status": 404,
+        "url": ":40845/api/v2/science/capabilities?project_id=demo-project"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "url": ":40845/api/v2/research/approvals?limit=50"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "url": ":40845/api/v1/workflow-catalog"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "url": ":40845/api/v1/projects"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "url": ":40845/api/v1/status"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "url": ":40845/api/v1/maintenance/disk-usage"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "url": ":40845/api/v2/task-view?group_by=molecule&sort=created_desc&group_limit=200&max_total=200&offset=0&include_facets=true"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "url": ":40845/api/v1/method-catalog"
+      },
+      {
+        "method": "POST",
+        "status": 200,
+        "url": ":40845/api/v2/research/approvals/ap_5345587eb1be4054b95dc02fd77abbe9/approve"
+      },
+      {
+        "method": "POST",
+        "status": 200,
+        "url": ":40845/api/v2/research/approvals/ap_1db5633db5c043c9b3492099126103c4/approve"
+      },
+      {
+        "method": "POST",
+        "status": 200,
+        "url": ":40845/api/v2/research/approvals/ap_ea9c14ebb44a42ce8867bdd13e0e80c6/reject"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "url": ":40845/api/v2/research/approvals/ap_1db5633db5c043c9b3492099126103c4?project_id=bc01b027-2c81-4074-9be5-840ff5d674a7"
+      },
+      {
+        "method": "POST",
+        "status": 200,
+        "url": ":40845/api/v2/research/approvals/ap_1db5633db5c043c9b3492099126103c4/revoke"
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "url": ":40845/api/v2/research/approvals/ap_1db5633db5c043c9b3492099126103c4?project_id=bc01b027-2c81-4074-9be5-840ff5d674a7"
+      }
+    ]
+  }
+}

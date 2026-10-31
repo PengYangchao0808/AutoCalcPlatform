@@ -18,9 +18,19 @@
  * synthesises a frame.
  *
  * Usage: node acp2_mcp_live_client.mjs --launch <mcp-launch.json> --out <dir>
+ *        [--scenario default|incompatible-client]
  *
- * Exit codes: 0 handshake + schema snapshot succeeded; 1 handshake failed;
- * 2 prerequisite (launch / DSH client / SDK) missing.
+ * `--scenario default` uses exactly the plugin's production constructor options
+ * (`{ capabilities: {}, versionNegotiation: { mode: 'auto' } }`) and expects a
+ * successful handshake. `--scenario incompatible-client` additionally pins the
+ * client's own `supportedProtocolVersions` to a single version the server does
+ * not speak: the server still answers its own version (M0-08), so the *client*
+ * must refuse on its own — recorded as `status: "refused"` with exit 0. Any
+ * other outcome is an error.
+ *
+ * Exit codes: 0 handshake succeeded (or refused as expected by the scenario);
+ * 1 unexpected handshake outcome; 2 prerequisite (launch / DSH client / SDK)
+ * missing.
  */
 
 import { createRequire } from "node:module";
@@ -31,12 +41,18 @@ import { pathToFileURL } from "node:url";
 const EXIT_OK = 0;
 const EXIT_FAIL = 1;
 const EXIT_PREREQ = 2;
+const SCENARIOS = new Set(["default", "incompatible-client"]);
+const INCOMPATIBLE_CLIENT_VERSIONS = ["2025-11-25"];
+// M0-09 handshake identity (authority: p2-research-operations.v1.json; the
+// frozen bridge declares the same pair, so a drift fails this script too).
+const RESEARCH_EXTENSION_ID = "acp.research.v1";
+const RESEARCH_EXTENSION_VERSION = "1.0.0";
 
 function parseArgs(argv) {
-  const args = { launch: null, out: null };
+  const args = { launch: null, out: null, scenario: "default" };
   for (let index = 0; index < argv.length; index += 1) {
     const key = argv[index];
-    if (key === "--launch" || key === "--out") {
+    if (key === "--launch" || key === "--out" || key === "--scenario") {
       const value = argv[index + 1];
       if (value === undefined || value.startsWith("--")) {
         throw new Error(`${key} requires a value`);
@@ -49,6 +65,9 @@ function parseArgs(argv) {
   }
   if (args.launch === null || args.out === null) {
     throw new Error("--launch and --out are required");
+  }
+  if (!SCENARIOS.has(args.scenario)) {
+    throw new Error(`unknown scenario ${args.scenario}`);
   }
   return args;
 }
@@ -74,6 +93,7 @@ async function main() {
     schema: "acp2.c.mcp-live.official-client.v1",
     status: "error",
     phase: "start",
+    scenario: args.scenario,
     package_versions: {},
     launch_path: args.launch,
     wire: [],
@@ -172,6 +192,9 @@ async function main() {
     client_info: { name: "dsh-mcp-client", version: "0.0.1" },
     capabilities: {},
     versionNegotiation: { mode: "auto" },
+    ...(args.scenario === "incompatible-client"
+      ? { supportedProtocolVersions: [...INCOMPATIBLE_CLIENT_VERSIONS] }
+      : {}),
   };
   result.sdk_defaults = {
     latest_protocol_version: sdk.LATEST_PROTOCOL_VERSION,
@@ -193,7 +216,13 @@ async function main() {
     const transport = instrument(transportModule.createTransport(config));
     client = new sdk.Client(
       { name: "dsh-mcp-client", version: "0.0.1" },
-      { capabilities: {}, versionNegotiation: { mode: "auto" } },
+      args.scenario === "incompatible-client"
+        ? {
+            capabilities: {},
+            versionNegotiation: { mode: "auto" },
+            supportedProtocolVersions: [...INCOMPATIBLE_CLIENT_VERSIONS],
+          }
+        : { capabilities: {}, versionNegotiation: { mode: "auto" } },
     );
     const watchdog = new Promise((_, reject) => {
       timer = setTimeout(
@@ -202,6 +231,19 @@ async function main() {
       );
     });
     await Promise.race([client.connect(transport), watchdog]);
+    if (args.scenario === "incompatible-client") {
+      // This scenario exists to observe the client refusing an unsupported
+      // version; a successful connect is the wrong outcome.
+      result.status = "error";
+      result.error = {
+        name: "UnexpectedConnect",
+        message:
+          "the incompatible-client scenario connected although the server version is not supported",
+      };
+      await client.close();
+      writeResult(EXIT_FAIL);
+      return;
+    }
     result.phase = "tools/list";
     const listed = await Promise.race([client.listTools(), watchdog]);
     result.server = {
@@ -241,9 +283,77 @@ async function main() {
         status: capabilities.structuredContent?.status ?? null,
         operation: capabilities.structuredContent?.operation ?? null,
         tools: capabilities.structuredContent?.data?.tools ?? null,
+        extensions: capabilities.structuredContent?.data?.extensions ?? null,
       };
     } catch (error) {
       result.capabilities_call = {
+        error: { name: String(error?.name ?? "Error"), message: String(error?.message ?? error) },
+      };
+    }
+    // M0-09: the application-level research-extension handshake. The frozen
+    // client sends capabilities:{} at initialize, so the request travels in the
+    // P1 discovery tool (never in initialize) and the answer is extensions[].
+    result.phase = "research_handshake";
+    try {
+      const handshake = await Promise.race([
+        client.callTool({
+          name: "acp_capabilities",
+          arguments: {
+            research_extension: {
+              id: RESEARCH_EXTENSION_ID,
+              version: RESEARCH_EXTENSION_VERSION,
+            },
+            client: { name: "dsh-mcp-client", version: "0.0.1" },
+          },
+        }),
+        watchdog,
+      ]);
+      result.research_handshake = {
+        tool: "acp_capabilities",
+        isError: handshake.isError ?? false,
+        status: handshake.structuredContent?.status ?? null,
+        extensions: handshake.structuredContent?.data?.extensions ?? null,
+        error_code: handshake.structuredContent?.error?.code ?? null,
+        error_params: handshake.structuredContent?.error?.params ?? null,
+        content_text_is_json: (() => {
+          const block = (handshake.content ?? []).find((item) => item?.type === "text");
+          if (typeof block?.text !== "string") return null;
+          try {
+            JSON.parse(block.text);
+            return true;
+          } catch {
+            return false;
+          }
+        })(),
+      };
+    } catch (error) {
+      result.research_handshake = {
+        tool: "acp_capabilities",
+        error: { name: String(error?.name ?? "Error"), message: String(error?.message ?? error) },
+      };
+    }
+    // P2: workflow-scoped contract selector. The negotiated research state is
+    // expected to survive this call, so the tools list is re-read afterwards.
+    result.phase = "workflow_selector";
+    try {
+      const selector = await Promise.race([
+        client.callTool({ name: "acp_capabilities", arguments: { workflow: "Confsearch" } }),
+        watchdog,
+      ]);
+      const contract = selector.structuredContent?.data?.workflow_contract ?? null;
+      result.workflow_selector = {
+        isError: selector.isError ?? false,
+        workflow: contract?.workflow ?? null,
+        coverage: contract?.coverage ?? null,
+        status_vocabulary: Boolean(contract?.status_vocabulary),
+        research_tools_visible: selector.structuredContent?.data?.research_tools?.visible ?? null,
+      };
+      const relisted = await Promise.race([client.listTools(), watchdog]);
+      result.workflow_selector.listed_after_selector = (relisted.tools ?? []).map(
+        (tool) => tool.name,
+      );
+    } catch (error) {
+      result.workflow_selector = {
         error: { name: String(error?.name ?? "Error"), message: String(error?.message ?? error) },
       };
     }
@@ -252,7 +362,6 @@ async function main() {
     await client.close();
     writeResult(EXIT_OK);
   } catch (error) {
-    result.status = "error";
     const attempted = wire.find(
       (frame) => frame.direction === "send" && frame.message?.method === "initialize",
     );
@@ -269,6 +378,22 @@ async function main() {
         /* the handshake already failed; closing must not mask it */
       }
     }
+    if (args.scenario === "incompatible-client" && attempted !== undefined) {
+      // The server answered its own version; refusing it is the client's call.
+      const answered = wire.find(
+        (frame) =>
+          frame.direction === "receive" &&
+          frame.message?.id === attempted.message.id &&
+          frame.message?.result,
+      );
+      result.status = "refused";
+      result.phase = "done";
+      result.negotiated_protocol = answered?.message?.result?.protocolVersion ?? null;
+      result.tool_list_attempted = false;
+      writeResult(EXIT_OK);
+      return;
+    }
+    result.status = "error";
     writeResult(EXIT_FAIL);
   } finally {
     if (timer !== undefined) clearTimeout(timer);

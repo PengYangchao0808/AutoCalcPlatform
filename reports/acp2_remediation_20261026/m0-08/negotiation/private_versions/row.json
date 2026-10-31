@@ -1,0 +1,27 @@
+{
+  "declared": [
+    "1999-01-01"
+  ],
+  "error": null,
+  "guidance": {
+    "client_decides_compatibility": true,
+    "client_declared_versions": [
+      "1999-01-01"
+    ],
+    "id": "acp.negotiation.v1",
+    "negotiation": "server_advertises_supported_version",
+    "requested_version": "1999-01-01",
+    "server_preferred_version": "2025-06-18",
+    "supported_versions": [
+      "2025-06-18"
+    ],
+    "version": "1.0.0"
+  },
+  "negotiated": "2025-06-18",
+  "requested": "1999-01-01",
+  "result_shape_problems": [],
+  "row": "private_versions",
+  "status": "PASS",
+  "tool_count": 8,
+  "tools_call_frames": 0
+}

@@ -1,0 +1,127 @@
+{
+  "schema": "acp2.acceptance.v1",
+  "task": "T-05 / C02",
+  "run_id": "20261022T130612Z-c02",
+  "cwd": "/ACPServer/acp2-development/C",
+  "toolchain": {
+    "node": "v22.19.0",
+    "pnpm": "11.28.5",
+    "typescript": "5.7.3",
+    "package_manager": "pnpm@11.28.5"
+  },
+  "candidate": {
+    "c_worktree": "/ACPServer/acp2-development/C",
+    "baseline_commit": "e79473d28bdd3432e13e1f6931d34f1e75574142",
+    "materialized_commit": "450f2cb8fe1f5b16264b3fe878a021e77f02eba9",
+    "tree": "f83f80759b1d5e92efbd0a1bc3232a4d026b4a3a"
+  },
+  "commands": [
+    {
+      "argv": [
+        "pnpm",
+        "--dir",
+        "rph",
+        "install"
+      ],
+      "exit": 0
+    },
+    {
+      "argv": [
+        "pnpm",
+        "--dir",
+        "rph",
+        "install",
+        "--frozen-lockfile"
+      ],
+      "exit": 0
+    },
+    {
+      "argv": [
+        "pnpm",
+        "--dir",
+        "rph",
+        "build"
+      ],
+      "exit": 0
+    },
+    {
+      "argv": [
+        "pnpm",
+        "--dir",
+        "rph",
+        "test"
+      ],
+      "exit": 0
+    },
+    {
+      "argv": [
+        "pnpm",
+        "--dir",
+        "rph",
+        "check"
+      ],
+      "exit": 0
+    },
+    {
+      "argv": [
+        "node",
+        "rph/scripts/check-boundaries.mjs"
+      ],
+      "exit": 0
+    },
+    {
+      "argv": [
+        "pnpm",
+        "--dir",
+        "rph",
+        "package"
+      ],
+      "exit": 0
+    },
+    {
+      "argv": [
+        "test",
+        "!",
+        "-f",
+        "package.json"
+      ],
+      "exit": 0
+    }
+  ],
+  "negative_commands": [
+    {
+      "id": "child_process_import",
+      "argv": [
+        "node",
+        "rph/scripts/check-boundaries.mjs"
+      ],
+      "exit": 1,
+      "restored_exit": 0
+    },
+    {
+      "id": "empty_test_set",
+      "argv": [
+        "pnpm",
+        "--dir",
+        "rph",
+        "test"
+      ],
+      "exit": 1,
+      "restored_exit": 0
+    },
+    {
+      "id": "wrong_import_direction",
+      "argv": [
+        "node",
+        "rph/scripts/check-boundaries.mjs"
+      ],
+      "exit": 1,
+      "restored_exit": 0
+    }
+  ],
+  "environment": {
+    "source": "/ACPServer/acp2-development/data/acceptance-env-c.sh",
+    "node_home": "/ACPServer/acp2-tools/node-v22.19.0-linux-x64",
+    "evidence_root": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46"
+  }
+}

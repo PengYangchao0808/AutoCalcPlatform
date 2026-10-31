@@ -1,0 +1,16 @@
+# negative evidence-root cases
+## NEG1 old provisional evidence root
+c_accept: ACP2_EVIDENCE (/ACPServer/acp2-development/evidence) != resolved baseline-lock evidence_root (/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46); declared='reports/acp2_implementation/bb45a46' project_root='/ACPServer/AutoCalcPlatform'
+rc=2
+## NEG2 lock without evidence_root
+c_accept: baseline-lock /tmp/acp2-t47-neg/no-evidence-root.json has no evidence_root
+rc=2
+## NEG3 relative lock + wrong project root
+c_accept: ACP2_EVIDENCE (/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46) != resolved baseline-lock evidence_root (/tmp/wrong-project-root/reports/acp2_implementation/bb45a46); declared='reports/acp2_implementation/bb45a46' project_root='/tmp/wrong-project-root'
+rc=2
+## NEG4 wrong evidence_roots.C
+c_accept: baseline-lock evidence_roots.C (/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/not-C) != resolved evidence root + /C (/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C)
+rc=2
+## NEG5 absolute lock sanity (resolves, harness missing)
+c_accept: NOT_VERIFIED(harness_not_delivered): /ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py absent (and C harness absent)
+rc=2

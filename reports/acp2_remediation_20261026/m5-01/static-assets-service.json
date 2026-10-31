@@ -1,0 +1,95 @@
+{
+  "generated_at": "2026-10-28T02:36:04Z",
+  "manifest": "/ACPServer/acp2-artifacts/remediation/m5-01/static-assets/static-assets.manifest.json",
+  "manifest_sha256": "2988b492542be16857b3e22d5cf79ad9a76f8bc9a7ee59ac6a5bc3271bc3470c",
+  "schema": "acp2.m5-01.static-assets-service.v1",
+  "workbench": {
+    "asset": {
+      "cache_control": "no-cache",
+      "matches_bytes": true,
+      "path": "js/candidate_details.js",
+      "status": 200
+    },
+    "capabilities": {
+      "keys": [
+        "admission",
+        "admission_enforcement",
+        "analysis_capabilities",
+        "backends",
+        "capability_descriptors",
+        "capability_request",
+        "execution_limits",
+        "extensions",
+        "identity",
+        "identity_mode",
+        "identity_profiles",
+        "limits",
+        "model_token_enforcement",
+        "multi_tenant_security",
+        "protocol_version",
+        "remote_identity_providers",
+        "research_tools",
+        "schema_version",
+        "stdio_identity_binding",
+        "task_kinds",
+        "tools",
+        "workflows"
+      ],
+      "protocol_version": "2025-06-18",
+      "status": 200,
+      "tools": [
+        "acp_analyze",
+        "acp_cancel",
+        "acp_capabilities",
+        "acp_preflight",
+        "acp_prepare_artifact",
+        "acp_read_artifact",
+        "acp_status",
+        "acp_submit"
+      ],
+      "workflows": 15
+    },
+    "digest": {
+      "digest": "1d5c28c721119515b4bf600c0689b6fe80cc406fa665a39f3c9a74607997aab9",
+      "files": 121,
+      "matches_bom": true,
+      "release_id": "acp2-experience-0.3.0",
+      "tamper_exit": 1,
+      "tamper_rejected": true,
+      "verified": true
+    },
+    "head_asset": {
+      "status": 200
+    },
+    "index": {
+      "checkout_absent": true,
+      "frontend_dir": "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/roles/lib64/python3.11/site-packages/acp_web_assets",
+      "matches_packaged_html": true,
+      "served_from_venv": true,
+      "status": 200
+    },
+    "post_to_static": {
+      "status": 405
+    },
+    "research_read_unknown": {
+      "status": 403
+    },
+    "science_capabilities": {
+      "keys": [
+        "capabilities",
+        "protocol_version",
+        "tools"
+      ],
+      "status": 200
+    },
+    "traversal_encoded": {
+      "status": 404
+    },
+    "traversal_literal": {
+      "status": 404
+    },
+    "unknown_asset": {
+      "status": 404
+    }
+  }
+}

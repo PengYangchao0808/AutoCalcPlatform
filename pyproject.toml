@@ -63,6 +63,8 @@ dev = [
     "ruff>=0.4.0",
     "mypy>=1.8.0",
     "pre-commit>=3.6.0",
+    # test_acp2_science_plugin_production exercises `python -m build` offline.
+    "build>=1.2",
     "httpx>=0.27",
     # tomllib is stdlib on 3.11+; 3.10 acceptance/tests need the backport.
     "tomli>=2.0; python_version < '3.11'",
@@ -110,9 +112,20 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+# `--strict-markers` is default-on so a mistyped/undeclared marker fails at
+# collection instead of silently deselecting a gate. Adding a marker means
+# registering it below (guarded by tests/test_ci_workflow_contract.py).
+addopts = "--strict-markers"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests (require external binaries)",
+    # Cross-stack contract suites (exported contracts, real MCP SDK handshake,
+    # Bridge↔normalizer, HTTP↔frontend). They need RPH dist + Node, so the
+    # py3.10/3.11/3.12 matrix excludes them and the dedicated CI
+    # `mcp-conformance` lane owns the `-m contract` selection.
+    "contract: cross-stack contract tests; excluded from the matrix, run by mcp-conformance",
+    "nightly: reserved for the nightly lane; never selected by PR runs",
+    "pre_release: reserved for release-candidate runs only",
     "requires_gaussian: marks tests that need Gaussian 16 installed",
     "requires_orca: marks tests that need ORCA installed",
     "requires_crest: marks tests that need CREST installed",

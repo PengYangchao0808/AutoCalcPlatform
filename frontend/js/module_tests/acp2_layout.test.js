@@ -214,19 +214,24 @@ module.exports.register = async function (h) {
     assert(/saveLayoutState\(\)/.test(source), "state is persisted");
   });
 
-  await test("research panels no longer clip content behind an unmarked inner scroll", () => {
+  await test("research panels contain overflow and queue cannot shrink behind them", () => {
     const css = fs.readFileSync(
       path.join(FRONTEND, "css", "workbench", "features.css"), "utf8");
     ["science-question-panel", "scientific-evidence-panel", "research-approval-panel"]
       .forEach((cls) => {
         const rule = new RegExp("\\." + cls + "\\s*\\{[^}]*\\}", "s").exec(css);
         assert(rule, "panel rule exists for " + cls);
-        assert(rule[0].indexOf("52vh") === -1, cls + " is not capped at 52vh");
         const body = new RegExp("\\." + cls + " \\.panel-body\\s*\\{[^}]*\\}", "s").exec(css);
         assert(body, "panel body rule exists for " + cls);
         assert(body[0].indexOf("overflow: visible") !== -1,
-          cls + " body does not hide content in an inner scroller");
+          cls + " body scrolls as part of the panel");
       });
+    const queueCss = fs.readFileSync(
+      path.join(FRONTEND, "css", "workbench", "queue-detail.css"), "utf8");
+    assert(/\.right-col > \.queue-panel\s*\{[^}]*flex:\s*0 0 auto/s.test(queueCss),
+      "queue retains space when research content grows");
+    assert(/\.right-col > \.panel-section\s*\{[^}]*max-height:[^}]*overflow:\s*auto/s.test(queueCss),
+      "research panels have a bounded, reachable scroll area");
     const row = /\.ra-row\s*\{[^}]*\}/s.exec(css);
     assert(row && row[0].indexOf("flex-wrap: wrap") !== -1, "ra-row wraps label/value");
     assert(/\.ra-row dt[^}]*word-break:\s*keep-all/s.test(css), "labels keep CJK words intact");

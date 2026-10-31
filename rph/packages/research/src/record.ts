@@ -11,17 +11,9 @@
  */
 
 import type { ResearchRecordRef } from "./index.js";
+import { RESEARCH_DECISIONS, type ResearchDecision } from "./evidence.js";
 
 export const RESEARCH_RECORD_SCHEMA = "acp2.experience.research-record.v1";
-export const RESEARCH_DECISIONS = [
-  "accept",
-  "revise",
-  "reject",
-  "defer",
-  "escalate",
-] as const;
-
-export type ResearchDecision = (typeof RESEARCH_DECISIONS)[number];
 
 export interface StepIdentityRef {
   readonly step_index: number;
@@ -31,7 +23,12 @@ export interface StepIdentityRef {
   readonly materialized_parameters_digest: string;
 }
 
-export interface TaskRef {
+/**
+ * The frozen ResearchRecord task reference: flat and **without** a release
+ * digest. It is not a `TaskRef` (see `./evidence.ts`): a record reference only
+ * becomes one when the verified release digest is supplied explicitly.
+ */
+export interface RecordTaskRef {
   readonly project_id: string;
   readonly job_id: string;
   readonly attempt: number;
@@ -65,7 +62,7 @@ export interface ResearchRecord {
   readonly decision: ResearchDecision;
   readonly plan_definition_digest: string;
   readonly step_identity_refs: readonly StepIdentityRef[];
-  readonly task_refs: readonly TaskRef[];
+  readonly task_refs: readonly RecordTaskRef[];
   readonly evidence_refs: readonly EvidenceRef[];
   readonly missing_validation: readonly MissingValidation[];
   readonly human_edits: readonly HumanEdit[];
@@ -246,7 +243,7 @@ function validateTaskRef(
   issues: ValidationIssue[],
 ): void {
   if (!isRecord(value)) {
-    issue(issues, path, "type", "must be a TaskRef object, not a string");
+    issue(issues, path, "type", "must be a RecordTaskRef object, not a string");
     return;
   }
   for (const key of extraKeys(value, TASK_REF_FIELDS)) {
@@ -440,7 +437,7 @@ export function validateResearchRecord(value: unknown): ValidationIssue[] {
 
   const taskRefs = value["task_refs"];
   if (!Array.isArray(taskRefs)) {
-    issue(issues, "$.task_refs", "type", "must be an array of TaskRef objects");
+    issue(issues, "$.task_refs", "type", "must be an array of RecordTaskRef objects");
   } else {
     taskRefs.forEach((item, index) =>
       validateTaskRef(item, `$.task_refs[${index}]`, projectText, issues),

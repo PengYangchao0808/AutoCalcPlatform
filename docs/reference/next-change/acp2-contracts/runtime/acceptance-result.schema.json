@@ -1,9 +1,549 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "artifact": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "size_bytes",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "assertion": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "NOT_VERIFIED"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "status"
+      ],
+      "type": "object"
+    },
+    "candidate": {
+      "additionalProperties": false,
+      "properties": {
+        "client_revision": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "harness_revision": {
+          "$ref": "#/$defs/nullableString"
+        },
+        "server_revision": {
+          "$ref": "#/$defs/nullableString"
+        }
+      },
+      "required": [
+        "server_revision",
+        "client_revision",
+        "harness_revision"
+      ],
+      "type": "object"
+    },
+    "extensions": {
+      "additionalProperties": true,
+      "description": "Namespaced extension object. Keys must carry a namespace (for example b.sample, da.required_child_phases, science.run_key, experience.operation_class). Un-namespaced keys are rejected; validation-layer or platform constraints never live in free-form top-level fields.",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_-]*(?:\\.[a-z][a-z0-9_-]*)+$"
+      },
+      "type": "object"
+    },
+    "nullableString": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "phase": {
+      "anyOf": [
+        {
+          "enum": [
+            "main",
+            "approval",
+            "budget",
+            "da-preflight",
+            "da-submit",
+            "da-evidence",
+            "fixture",
+            "live",
+            "aggregate"
+          ]
+        },
+        {
+          "pattern": "^(?:science|experience|integration|da|infra|multitenant):[a-z0-9][a-z0-9-]*$",
+          "type": "string"
+        }
+      ]
+    },
+    "platform": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt": {
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "job_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "manifest_generation": {
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "negotiated_protocol": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "operation_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "release_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "submission_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "subResult": {
+      "additionalProperties": false,
+      "properties": {
+        "owner": {
+          "enum": [
+            "B",
+            "A",
+            "C",
+            "integration"
+          ]
+        },
+        "phase": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "receipt": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "result": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "NOT_VERIFIED"
+          ]
+        },
+        "run_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scenario": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "phase",
+        "receipt",
+        "result"
+      ],
+      "type": "object"
+    },
+    "timestamp": {
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?Z$",
+      "type": "string"
+    }
+  },
   "$id": "acp2.acceptance.v1",
-  "title": "ACP 2.0 acceptance receipt (three-track)",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "phase": {
+            "enum": [
+              "fixture"
+            ]
+          }
+        },
+        "required": [
+          "phase"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence_kind": {
+            "const": "fixture"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "phase": {
+            "enum": [
+              "live"
+            ]
+          }
+        },
+        "required": [
+          "phase"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence_kind": {
+            "const": "live"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "phase": {
+            "pattern": "(^|:)fixture$"
+          }
+        },
+        "required": [
+          "phase"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence_kind": {
+            "const": "fixture"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "phase": {
+            "pattern": "(^|:)live$"
+          }
+        },
+        "required": [
+          "phase"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence_kind": {
+            "const": "live"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "phase": {
+            "const": "aggregate"
+          }
+        },
+        "required": [
+          "phase"
+        ]
+      },
+      "then": {
+        "properties": {
+          "evidence_kind": {
+            "const": "aggregate"
+          }
+        }
+      }
+    }
+  ],
   "description": "The single receipt contract shared by the A (science), B (runtime/platform) and C (experience/RPH) acceptance harnesses. Schema validity is necessary but not sufficient: the B01 validator also enforces the evidence-kind/operation-class platform-reference matrix, scenario/phase registry membership, alias normalization, artifact digests and cross-file reference resolution. See acceptance-harness.v1.md.",
-  "type": "object",
+  "properties": {
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/artifact"
+      },
+      "type": "array"
+    },
+    "assertions": {
+      "items": {
+        "$ref": "#/$defs/assertion"
+      },
+      "type": "array"
+    },
+    "attempt": {
+      "minimum": 1,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "candidate": {
+      "$ref": "#/$defs/candidate"
+    },
+    "candidate_revision": {
+      "description": "Full source candidate identity; 40-hex Git SHA or sha256:<64-hex> source overlay.",
+      "pattern": "^(?:[0-9a-f]{40}|sha256:[0-9a-f]{64})$",
+      "type": "string"
+    },
+    "claim_status": {
+      "description": "Scientific claim status, kept separate from the scenario result. A scenario PASS never implies a supported claim; a negative-honesty PASS leaves the claim inconclusive/refuted.",
+      "enum": [
+        "supported",
+        "refuted",
+        "inconclusive",
+        "not_evaluated"
+      ]
+    },
+    "command": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 256,
+      "type": "array"
+    },
+    "contract_version": {
+      "description": "Semantic contract version. The B01 validator executes only major version 1; an unknown major version is rejected with unsupported_contract_version_major and never executed.",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "type": "string"
+    },
+    "cwd": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "delivery_status": {
+      "enum": [
+        "planned",
+        "blocked"
+      ]
+    },
+    "evidence_kind": {
+      "enum": [
+        "fixture",
+        "live",
+        "aggregate"
+      ]
+    },
+    "exit_code": {
+      "maximum": 255,
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "extensions": {
+      "$ref": "#/$defs/extensions"
+    },
+    "finished_at": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "h4_gate": {
+      "description": "H4 gate status, kept separate from both the scenario result and the scientific claim. Only real positive TS/IRC/comparable-energy rows plus the separate B20a-search row may close it.",
+      "enum": [
+        "open",
+        "closed"
+      ]
+    },
+    "historical": {
+      "description": "Receipt records run-time facts; current-tree digest drift is expected.",
+      "type": "boolean"
+    },
+    "historical_note": {
+      "description": "Why current-tree comparison is intentionally skipped.",
+      "type": "string"
+    },
+    "job_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "manifest_generation": {
+      "minimum": 1,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "negotiated_protocol": {
+      "description": "Protocol version negotiated by a discovery probe, for example 2025-06-18 for MCP stdio.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "operation_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "owner": {
+      "enum": [
+        "B",
+        "A",
+        "C",
+        "integration"
+      ]
+    },
+    "phase": {
+      "$ref": "#/$defs/phase"
+    },
+    "platform": {
+      "$ref": "#/$defs/platform",
+      "description": "Ingest-only alias. Normalized to top-level platform references; a conflicting duplicate is rejected."
+    },
+    "prerequisites": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "readiness": {
+      "description": "Optional readiness carried by contract/dependency projections. The ingest-only alias deployed normalizes to integration_ready.",
+      "enum": [
+        "contract_ready",
+        "implementation_ready",
+        "integration_ready",
+        "verified"
+      ]
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "receipt": {
+      "description": "A-owned compatibility field. New receipts may place it under extensions as science.receipt.",
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "release_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "result": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "NOT_VERIFIED"
+      ]
+    },
+    "run_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$",
+      "type": "string"
+    },
+    "run_key": {
+      "description": "A-owned compatibility field. New receipts may place it under extensions as science.run_key.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "scenario": {
+      "description": "Canonical scenario identity. B owns the 15 immutable unprefixed IDs. A uses science:* and C uses experience:*; C's runtime:* prefix is a display alias normalized to experience:*.",
+      "maxLength": 128,
+      "minLength": 3,
+      "pattern": "^[a-z0-9][a-z0-9-]*(?::[a-z0-9][a-z0-9-]*)?$",
+      "type": "string"
+    },
+    "schema": {
+      "const": "acp2.acceptance.v1"
+    },
+    "schema_dialect": {
+      "const": "https://json-schema.org/draft/2020-12/schema"
+    },
+    "scope": {
+      "enum": [
+        "IN_SCOPE",
+        "DEFERRED",
+        "NOT_APPLICABLE"
+      ]
+    },
+    "started_at": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "sub_results": {
+      "description": "Aggregate child references. A parent aggregate lists every required child phase and never replaces a missing/failed child with its own PASS.",
+      "items": {
+        "$ref": "#/$defs/subResult"
+      },
+      "type": "array"
+    },
+    "submission_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "usage": {
+      "type": [
+        "object",
+        "null"
+      ]
+    }
+  },
   "required": [
     "schema",
     "schema_dialect",
@@ -33,404 +573,6 @@
     "negotiated_protocol",
     "extensions"
   ],
-  "properties": {
-    "schema": {
-      "const": "acp2.acceptance.v1"
-    },
-    "schema_dialect": {
-      "const": "https://json-schema.org/draft/2020-12/schema"
-    },
-    "contract_version": {
-      "type": "string",
-      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
-      "description": "Semantic contract version. The B01 validator executes only major version 1; an unknown major version is rejected with unsupported_contract_version_major and never executed."
-    },
-    "owner": {
-      "enum": ["B", "A", "C", "integration"]
-    },
-    "scenario": {
-      "type": "string",
-      "minLength": 3,
-      "maxLength": 128,
-      "pattern": "^[a-z0-9][a-z0-9-]*(?::[a-z0-9][a-z0-9-]*)?$",
-      "description": "Canonical scenario identity. B owns the 15 immutable unprefixed IDs. A uses science:* and C uses experience:*; C's runtime:* prefix is a display alias normalized to experience:*."
-    },
-    "phase": {
-      "$ref": "#/$defs/phase"
-    },
-    "run_id": {
-      "type": "string",
-      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$"
-    },
-    "candidate_revision": {
-      "type": "string",
-      "pattern": "^(?:[0-9a-f]{40}|sha256:[0-9a-f]{64})$",
-      "description": "Full source candidate identity; 40-hex Git SHA or sha256:<64-hex> source overlay."
-    },
-    "candidate": {
-      "$ref": "#/$defs/candidate"
-    },
-    "command": {
-      "type": "array",
-      "maxItems": 256,
-      "items": {
-        "type": "string",
-        "minLength": 1
-      }
-    },
-    "cwd": {
-      "type": "string",
-      "minLength": 1
-    },
-    "started_at": {
-      "$ref": "#/$defs/timestamp"
-    },
-    "finished_at": {
-      "$ref": "#/$defs/timestamp"
-    },
-    "result": {
-      "enum": ["PASS", "FAIL", "NOT_VERIFIED"]
-    },
-    "scope": {
-      "enum": ["IN_SCOPE", "DEFERRED", "NOT_APPLICABLE"]
-    },
-    "reason": {
-      "type": ["string", "null"]
-    },
-    "exit_code": {
-      "type": ["integer", "null"],
-      "minimum": 0,
-      "maximum": 255
-    },
-    "assertions": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/assertion"
-      }
-    },
-    "artifacts": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/artifact"
-      }
-    },
-    "job_id": {
-      "type": ["string", "null"]
-    },
-    "operation_id": {
-      "type": ["string", "null"]
-    },
-    "attempt": {
-      "type": ["integer", "null"],
-      "minimum": 1
-    },
-    "release_id": {
-      "type": ["string", "null"]
-    },
-    "submission_id": {
-      "type": ["string", "null"]
-    },
-    "manifest_generation": {
-      "type": ["integer", "null"],
-      "minimum": 1
-    },
-    "negotiated_protocol": {
-      "type": ["string", "null"],
-      "description": "Protocol version negotiated by a discovery probe, for example 2025-06-18 for MCP stdio."
-    },
-    "usage": {
-      "type": ["object", "null"]
-    },
-    "evidence_kind": {
-      "enum": ["fixture", "live", "aggregate"]
-    },
-    "readiness": {
-      "enum": [
-        "contract_ready",
-        "implementation_ready",
-        "integration_ready",
-        "verified"
-      ],
-      "description": "Optional readiness carried by contract/dependency projections. The ingest-only alias deployed normalizes to integration_ready."
-    },
-    "delivery_status": {
-      "enum": ["planned", "blocked"]
-    },
-    "prerequisites": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      }
-    },
-    "sub_results": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/subResult"
-      },
-      "description": "Aggregate child references. A parent aggregate lists every required child phase and never replaces a missing/failed child with its own PASS."
-    },
-    "run_key": {
-      "type": ["string", "null"],
-      "description": "A-owned compatibility field. New receipts may place it under extensions as science.run_key."
-    },
-    "receipt": {
-      "type": ["object", "null"],
-      "description": "A-owned compatibility field. New receipts may place it under extensions as science.receipt."
-    },
-    "platform": {
-      "$ref": "#/$defs/platform",
-      "description": "Ingest-only alias. Normalized to top-level platform references; a conflicting duplicate is rejected."
-    },
-    "claim_status": {
-      "enum": [
-        "supported",
-        "refuted",
-        "inconclusive",
-        "not_evaluated"
-      ],
-      "description": "Scientific claim status, kept separate from the scenario result. A scenario PASS never implies a supported claim; a negative-honesty PASS leaves the claim inconclusive/refuted."
-    },
-    "h4_gate": {
-      "enum": ["open", "closed"],
-      "description": "H4 gate status, kept separate from both the scenario result and the scientific claim. Only real positive TS/IRC/comparable-energy rows plus the separate B20a-search row may close it."
-    },
-    "extensions": {
-      "$ref": "#/$defs/extensions"
-    }
-  },
-  "additionalProperties": false,
-  "allOf": [
-    {
-      "if": {
-        "required": ["phase"],
-        "properties": {
-          "phase": {
-            "enum": ["fixture"]
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "evidence_kind": {
-            "const": "fixture"
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "required": ["phase"],
-        "properties": {
-          "phase": {
-            "enum": ["live"]
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "evidence_kind": {
-            "const": "live"
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "required": ["phase"],
-        "properties": {
-          "phase": {
-            "pattern": "(^|:)fixture$"
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "evidence_kind": {
-            "const": "fixture"
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "required": ["phase"],
-        "properties": {
-          "phase": {
-            "pattern": "(^|:)live$"
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "evidence_kind": {
-            "const": "live"
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "required": ["phase"],
-        "properties": {
-          "phase": {
-            "const": "aggregate"
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "evidence_kind": {
-            "const": "aggregate"
-          }
-        }
-      }
-    }
-  ],
-  "$defs": {
-    "timestamp": {
-      "type": "string",
-      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?Z$"
-    },
-    "nullableString": {
-      "type": ["string", "null"]
-    },
-    "candidate": {
-      "type": "object",
-      "required": ["server_revision", "client_revision", "harness_revision"],
-      "properties": {
-        "server_revision": {
-          "$ref": "#/$defs/nullableString"
-        },
-        "client_revision": {
-          "$ref": "#/$defs/nullableString"
-        },
-        "harness_revision": {
-          "$ref": "#/$defs/nullableString"
-        }
-      },
-      "additionalProperties": false
-    },
-    "artifact": {
-      "type": "object",
-      "required": ["path", "size_bytes", "sha256"],
-      "properties": {
-        "path": {
-          "type": "string",
-          "minLength": 1
-        },
-        "size_bytes": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "sha256": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{64}$"
-        }
-      },
-      "additionalProperties": false
-    },
-    "assertion": {
-      "type": "object",
-      "required": ["name", "status"],
-      "properties": {
-        "name": {
-          "type": "string",
-          "minLength": 1
-        },
-        "status": {
-          "enum": ["PASS", "FAIL", "NOT_VERIFIED"]
-        },
-        "detail": {
-          "type": ["string", "null"]
-        }
-      },
-      "additionalProperties": false
-    },
-    "subResult": {
-      "type": "object",
-      "required": ["phase", "receipt", "result"],
-      "properties": {
-        "scenario": {
-          "type": ["string", "null"]
-        },
-        "owner": {
-          "enum": ["B", "A", "C", "integration"]
-        },
-        "phase": {
-          "type": "string",
-          "minLength": 1
-        },
-        "receipt": {
-          "type": "string",
-          "minLength": 1
-        },
-        "result": {
-          "enum": ["PASS", "FAIL", "NOT_VERIFIED"]
-        },
-        "run_id": {
-          "type": ["string", "null"]
-        }
-      },
-      "additionalProperties": false
-    },
-    "platform": {
-      "type": "object",
-      "properties": {
-        "job_id": {
-          "type": ["string", "null"]
-        },
-        "operation_id": {
-          "type": ["string", "null"]
-        },
-        "attempt": {
-          "type": ["integer", "null"],
-          "minimum": 1
-        },
-        "release_id": {
-          "type": ["string", "null"]
-        },
-        "submission_id": {
-          "type": ["string", "null"]
-        },
-        "manifest_generation": {
-          "type": ["integer", "null"],
-          "minimum": 1
-        },
-        "negotiated_protocol": {
-          "type": ["string", "null"]
-        }
-      },
-      "additionalProperties": false
-    },
-    "extensions": {
-      "type": "object",
-      "propertyNames": {
-        "pattern": "^[a-z][a-z0-9_-]*(?:\\.[a-z][a-z0-9_-]*)+$"
-      },
-      "additionalProperties": true,
-      "description": "Namespaced extension object. Keys must carry a namespace (for example b.sample, da.required_child_phases, science.run_key, experience.operation_class). Un-namespaced keys are rejected; validation-layer or platform constraints never live in free-form top-level fields."
-    },
-    "phase": {
-      "anyOf": [
-        {
-          "enum": [
-            "main",
-            "approval",
-            "budget",
-            "da-preflight",
-            "da-submit",
-            "da-evidence",
-            "fixture",
-            "live",
-            "aggregate"
-          ]
-        },
-        {
-          "type": "string",
-          "pattern": "^(?:science|experience|integration|da|infra|multitenant):[a-z0-9][a-z0-9-]*$"
-        }
-      ]
-    }
-  }
+  "title": "ACP 2.0 acceptance receipt (three-track)",
+  "type": "object"
 }

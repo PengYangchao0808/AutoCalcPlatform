@@ -1,0 +1,237 @@
+{
+  "schema": "acp2.m4-01.full-chain.mcp.v1",
+  "status": "ok",
+  "mode": "create",
+  "model_adapter": "model-gateway",
+  "evidence_kind": "live",
+  "protocol_version": "2025-06-18",
+  "tools": [
+    "acp_analyze",
+    "acp_cancel",
+    "acp_capabilities",
+    "acp_preflight",
+    "acp_prepare_artifact",
+    "acp_read_artifact",
+    "acp_research_approval_decide_v1",
+    "acp_research_approval_query_v1",
+    "acp_research_approval_request_v1",
+    "acp_research_approval_revoke_v1",
+    "acp_research_proposal_create_v1",
+    "acp_research_proposal_read_v1",
+    "acp_research_proposal_update_cas_v1",
+    "acp_research_resume_v1",
+    "acp_research_snapshot_v1",
+    "acp_research_wait_v1",
+    "acp_status",
+    "acp_submit"
+  ],
+  "proposal": {
+    "proposal_id": "prop-m4-01-rounds",
+    "revision": 1,
+    "round": 0,
+    "digests": {
+      "canonical_digest_version": "1.0.0",
+      "science_digest": "sha256:5444684f852645353007615c8cccdd77ad594a2061577b79ea520c20d2f25e49",
+      "plan_digest": "sha256:982125c6d24106652327445819b1b53f65161c49ed3e7e2df1476ad442e4b673",
+      "proposal_digest": "sha256:0237935d0c0cd4caabd4d9a5ec9f467cb2e2b6355fb9a0cfbb8741857c3dae9e"
+    },
+    "approval_ref": "ap_9431e98e945f44278452ae3c298ad459",
+    "research": {
+      "principal_id": "principal_local",
+      "project_id": "eac04e7b-fa5a-4074-a379-1174087d0707",
+      "research_id": "res-dcf760e391c82720be6d4bbd",
+      "session_id": "ses-8266e6f1d20009b433a8e9c4",
+      "round": 0
+    }
+  },
+  "approval": {
+    "approval_ref": "ap_9431e98e945f44278452ae3c298ad459",
+    "state": "approved",
+    "revision": 2,
+    "binding_status": "full"
+  },
+  "wait": {
+    "first_timed_out": false,
+    "first_events": 1,
+    "cursor_present": true,
+    "cursor_redacted": false,
+    "cursor_roundtrip": true,
+    "replay_timed_out": true,
+    "replay_error": null
+  },
+  "snapshot": {
+    "snapshot_revision": "sha256:7cf981ecf0c9263169ce478e61779f68d2b20ac9c256e37ad4106602b7d12eb3",
+    "refs": [
+      {
+        "ref": "ap_9431e98e945f44278452ae3c298ad459",
+        "state": "approved"
+      },
+      {
+        "ref": "prop-m4-01-rounds",
+        "state": "stored"
+      }
+    ],
+    "approval_state": "approved"
+  },
+  "task_ref": {
+    "task_id": "20261027_211510_001_fake",
+    "job_id": "20261027_211510_001_fake",
+    "attempt": 1
+  },
+  "task_ref_normalized": {
+    "project_id": "eac04e7b-fa5a-4074-a379-1174087d0707",
+    "task_id": "20261027_211510_001_fake",
+    "job_id": "20261027_211510_001_fake",
+    "attempt": 1,
+    "release": {
+      "release_id": "910ca9d3aff95737",
+      "release_digest": "sha256:adf3bbe51cb52ae473d29ef792aa9f9a6a10b91ed9ab8ff3d7e02de5ace3e057"
+    }
+  },
+  "task_ref_source": "status+declared_release",
+  "prepare": {
+    "passes": [
+      {
+        "pass": 0,
+        "availability": "readable",
+        "operation_reference": "op_defd1969681b4b7fa0509e3fcf281305",
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+        "read": {
+          "is_error": false,
+          "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+          "body_bytes": 400,
+          "body_sha256": "e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+          "error": null
+        }
+      },
+      {
+        "pass": 1,
+        "availability": "readable",
+        "operation_reference": "op_defd1969681b4b7fa0509e3fcf281305",
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+        "read": {
+          "is_error": false,
+          "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+          "body_bytes": 400,
+          "body_sha256": "e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+          "error": null
+        }
+      }
+    ],
+    "same_operation": true,
+    "same_digest": true,
+    "same_body": true
+  },
+  "read": {
+    "is_error": false,
+    "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+    "body_bytes": 400,
+    "body_sha256": "e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+    "error": null
+  },
+  "supervisor": {
+    "status": "stopped",
+    "stop_reason": "no_evidence",
+    "rounds_completed": 0,
+    "submits": 1,
+    "submit_port_calls": 1,
+    "task_refs": [
+      {
+        "job_id": "20261027_211510_001_fake",
+        "attempt": 1,
+        "release_id": "910ca9d3aff95737",
+        "release_digest": "sha256:adf3bbe51cb52ae473d29ef792aa9f9a6a10b91ed9ab8ff3d7e02de5ace3e057",
+        "project_id": "eac04e7b-fa5a-4074-a379-1174087d0707"
+      }
+    ],
+    "model_invocations": 4,
+    "wait_invocations": 1,
+    "phases": [
+      "understand@0",
+      "hypothesize@0",
+      "critique@0",
+      "plan@0",
+      "approve@0",
+      "wait@0",
+      "stop@0"
+    ],
+    "decision": null,
+    "reports": 0
+  },
+  "errors": [],
+  "findings": [],
+  "closed_findings": [
+    {
+      "id": "F7-session-tools-list-order",
+      "status": "closed",
+      "found_by": "M4-01 (reports/acp2_remediation_20261026/m4-01/summary.json)",
+      "closed_by": "M4-02: openMcpSession performs the acp_capabilities negotiation before tools/list (platform-session.ts), so a product-mode session sees the negotiated surface",
+      "detail": "a real product-mode session observes the negotiated 8+10 tool surface on a server that hides the ten P2 tools until negotiation",
+      "evidence": {
+        "session_mode": "product",
+        "handshake_status": "negotiated",
+        "tools_observed": 18,
+        "research_tools_visible": 10
+      }
+    },
+    {
+      "id": "F8-wait-cursor-redacted",
+      "status": "closed",
+      "found_by": "M4-01 (reports/acp2_remediation_20261026/m4-01/summary.json)",
+      "closed_by": "M4-02: machine_output.PASSTHROUGH_FIELD_VALUES carries a server-issued opaque wait cursor through the envelope verbatim",
+      "detail": "the cursor issued by `research.wait` survives the machine envelope and a replayed bounded wait reports timed_out without inventing an event",
+      "evidence": {
+        "cursor_chars": 212,
+        "replay_timed_out": true,
+        "replay_events": 0
+      }
+    }
+  ],
+  "trace_path": "/ACPServer/acp2-remediation-integration/reports/acp2_remediation_20261026/m4-02/model/mcp-round0/mcp-trace.jsonl",
+  "model_calls": [
+    {
+      "phase": "plan",
+      "round": 0,
+      "attempt": 1,
+      "evidence_in_prompt": false,
+      "http_status": 200,
+      "duration_ms": 2334,
+      "receipt_id": "modelrcpt|eac04e7b-fa5a-4074-a379-1174087d0707|res-21b31bc8376ff00357667d9d|ses-f132170eaf25ba84d87f6519|0|1|sha256:02fbb7d8b4edb5509acd8ceb3d3df0acda8d7afa564b342f407f2c12705f3b2c",
+      "usage": {
+        "input_tokens": 1055,
+        "output_tokens": 454,
+        "total_tokens": 1509,
+        "source": "provider-reported",
+        "complete": true,
+        "estimate": false
+      },
+      "identity": {
+        "principal_id": "principal_local",
+        "project_id": "eac04e7b-fa5a-4074-a379-1174087d0707",
+        "research_id": "res-21b31bc8376ff00357667d9d",
+        "session_id": "ses-f132170eaf25ba84d87f6519"
+      },
+      "budget": {
+        "budget_id": "rb_3a755d808024281c18d7e6c7",
+        "model_requests": 1,
+        "receipts": 1,
+        "reserved": 0,
+        "settled": 1,
+        "released": 0,
+        "remaining": 19,
+        "limit": 20,
+        "round": 0,
+        "is_planned_identity": true
+      },
+      "refusal": null,
+      "output_chars": 1288,
+      "output_sha256": "582f2e5b7eaa11e68c7deac6e12b77cbbb8c165d392f5db11e04bc13eab90ff0",
+      "output_head": "{\"plan_id\":\"plan-eac04e7b-fa5a-4074-a379-1174087d0707-r0\",\"project_id\":\"eac04e7b-fa5a-4074-a379-1174087d0707\",\"round\":0,\"hypothesis\":\"Round 0: M4-01 round 0: does the stub evidence support the hypothesis?\",\"recipe_digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"pla",
+      "output_tail": "0,\"task_refs\":1,\"recipe_steps\":1,\"qc_invocations\":1,\"wall_seconds\":60,\"queue_seconds\":60},\"notes\":[\"m4-02 live plan\"],\"schema\":\"acp2.skill.planner.output.v1\",\"skill\":\"planner\",\"skill_version\":\"1.1.0\"}"
+    }
+  ],
+  "evidence_feedback": {
+    "provided": false,
+    "report_id": null
+  }
+}

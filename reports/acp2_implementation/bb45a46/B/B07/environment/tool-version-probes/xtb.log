@@ -1,5 +1,5 @@
-argv: /home/<user>/xtb-dist/bin/xtb --version
-cwd: <repo>
+argv: /home/xieningke/xtb-dist/bin/xtb --version
+cwd: /ACPServer/AutoCalcPlatform
       -----------------------------------------------------------      
      |                   =====================                   |     
      |                           x T B                           |     

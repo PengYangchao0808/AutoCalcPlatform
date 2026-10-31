@@ -1,0 +1,558 @@
+$ node scripts/run-tests.mjs
+running 6 compiled test file(s)
+TAP version 13
+# Subtest: p1 operations map to exactly one official mcp tool
+ok 1 - p1 operations map to exactly one official mcp tool
+  ---
+  duration_ms: 2.445807
+  type: 'test'
+  ...
+# Subtest: da phase dispatch is explicit and never defaults
+ok 2 - da phase dispatch is explicit and never defaults
+  ---
+  duration_ms: 1.164108
+  type: 'test'
+  ...
+# Subtest: p2 operations all map to tools in the committed 18-tool allowlist
+ok 3 - p2 operations all map to tools in the committed 18-tool allowlist
+  ---
+  duration_ms: 0.863603
+  type: 'test'
+  ...
+# Subtest: p2 operation is refused when acp.research.v1 is not negotiated
+ok 4 - p2 operation is refused when acp.research.v1 is not negotiated
+  ---
+  duration_ms: 2.1743
+  type: 'test'
+  ...
+# Subtest: p2 negotiation rejects a mismatched extension version
+ok 5 - p2 negotiation rejects a mismatched extension version
+  ---
+  duration_ms: 0.376863
+  type: 'test'
+  ...
+# Subtest: tool isError is never promoted to success
+ok 6 - tool isError is never promoted to success
+  ---
+  duration_ms: 2.961431
+  type: 'test'
+  ...
+# Subtest: a projection reporting ok for isError=true is rejected
+ok 7 - a projection reporting ok for isError=true is rejected
+  ---
+  duration_ms: 0.844837
+  type: 'test'
+  ...
+# Subtest: structuredContent passes through unchanged and the request is not mutated
+ok 8 - structuredContent passes through unchanged and the request is not mutated
+  ---
+  duration_ms: 1.493402
+  type: 'test'
+  ...
+# Subtest: long task returns only the platform reference
+ok 9 - long task returns only the platform reference
+  ---
+  duration_ms: 1.068542
+  type: 'test'
+  ...
+# Subtest: artifact result exposes reference and digest only
+ok 10 - artifact result exposes reference and digest only
+  ---
+  duration_ms: 5.265939
+  type: 'test'
+  ...
+# Subtest: read without prepare returns structured not_prepared and never calls the tool
+ok 11 - read without prepare returns structured not_prepared and never calls the tool
+  ---
+  duration_ms: 0.688376
+  type: 'test'
+  ...
+# Subtest: prepare registers the artifact and read forwards the artifact identity
+ok 12 - prepare registers the artifact and read forwards the artifact identity
+  ---
+  duration_ms: 0.678296
+  type: 'test'
+  ...
+# Subtest: raw mcp__acp__ tool names are rejected
+ok 13 - raw mcp__acp__ tool names are rejected
+  ---
+  duration_ms: 0.51885
+  type: 'test'
+  ...
+# Subtest: repeated idempotent submit yields the same reference
+ok 14 - repeated idempotent submit yields the same reference
+  ---
+  duration_ms: 0.663176
+  type: 'test'
+  ...
+# Subtest: submit with a mutated method under one idempotency key is a conflict
+ok 15 - submit with a mutated method under one idempotency key is a conflict
+  ---
+  duration_ms: 0.816948
+  type: 'test'
+  ...
+# Subtest: project and attempt ownership are forwarded and never inferred
+ok 16 - project and attempt ownership are forwarded and never inferred
+  ---
+  duration_ms: 0.56044
+  type: 'test'
+  ...
+# Subtest: p2 payload identity is refused
+ok 17 - p2 payload identity is refused
+  ---
+  duration_ms: 0.715097
+  type: 'test'
+  ...
+# Subtest: approval decision must match the mapped operation
+ok 18 - approval decision must match the mapped operation
+  ---
+  duration_ms: 0.502461
+  type: 'test'
+  ...
+# Subtest: wait bounds are enforced
+ok 19 - wait bounds are enforced
+  ---
+  duration_ms: 0.398544
+  type: 'test'
+  ...
+# Subtest: p2 execution keeps isError and projects the reference
+ok 20 - p2 execution keeps isError and projects the reference
+  ---
+  duration_ms: 0.446743
+  type: 'test'
+  ...
+# Subtest: projection never invents a reference
+ok 21 - projection never invents a reference
+  ---
+  duration_ms: 0.268141
+  type: 'test'
+  ...
+# Subtest: per-operation required-field matrix accepts positives and rejects every missing field
+ok 22 - per-operation required-field matrix accepts positives and rejects every missing field
+  ---
+  duration_ms: 2.478503
+  type: 'test'
+  ...
+# Subtest: model-visible prefix stripping is exactly once and raw prefixes are rejected
+ok 23 - model-visible prefix stripping is exactly once and raw prefixes are rejected
+  ---
+  duration_ms: 0.476929
+  type: 'test'
+  ...
+# Subtest: read before prepare returns the exact not_prepared envelope without preparing
+ok 24 - read before prepare returns the exact not_prepared envelope without preparing
+  ---
+  duration_ms: 0.428889
+  type: 'test'
+  ...
+# Subtest: oversized artifacts project only a digest and reference
+ok 25 - oversized artifacts project only a digest and reference
+  ---
+  duration_ms: 8.704197
+  type: 'test'
+  ...
+# Subtest: credential-bearing and absolute-path results are refused
+ok 26 - credential-bearing and absolute-path results are refused
+  ---
+  duration_ms: 1.01485
+  type: 'test'
+  ...
+# Subtest: isError and structuredContent pass through byte-for-byte
+ok 27 - isError and structuredContent pass through byte-for-byte
+  ---
+  duration_ms: 0.546838
+  type: 'test'
+  ...
+# Subtest: a different idempotency key creates a new reference
+ok 28 - a different idempotency key creates a new reference
+  ---
+  duration_ms: 0.407661
+  type: 'test'
+  ...
+# Subtest: cross-project and cross-attempt reads are refused
+ok 29 - cross-project and cross-attempt reads are refused
+  ---
+  duration_ms: 0.870519
+  type: 'test'
+  ...
+# Subtest: interpreter: versioned input/output schema accepts a valid request
+ok 30 - interpreter: versioned input/output schema accepts a valid request
+  ---
+  duration_ms: 3.859774
+  type: 'test'
+  ...
+# Subtest: synthesizer: advice is schema-checked and its evidence must be a real report
+ok 31 - synthesizer: advice is schema-checked and its evidence must be a real report
+  ---
+  duration_ms: 0.868403
+  type: 'test'
+  ...
+# Subtest: reviewer: severity enum and verdict are explicit
+ok 32 - reviewer: severity enum and verdict are explicit
+  ---
+  duration_ms: 0.782375
+  type: 'test'
+  ...
+# Subtest: planner: output is a complete plan with a digest, science and budget
+ok 33 - planner: output is a complete plan with a digest, science and budget
+  ---
+  duration_ms: 1.083431
+  type: 'test'
+  ...
+# Subtest: supervisor: happy path runs every phase once and stops on an accepted report
+ok 34 - supervisor: happy path runs every phase once and stops on an accepted report
+  ---
+  duration_ms: 3.711585
+  type: 'test'
+  ...
+# Subtest: supervisor: no-evidence report goes to Stop and never submits again
+ok 35 - supervisor: no-evidence report goes to Stop and never submits again
+  ---
+  duration_ms: 1.077764
+  type: 'test'
+  ...
+# Subtest: supervisor: a duplicate terminal event cannot start another round
+ok 36 - supervisor: a duplicate terminal event cannot start another round
+  ---
+  duration_ms: 1.330631
+  type: 'test'
+  ...
+# Subtest: supervisor: round cap stops before the next submit
+ok 37 - supervisor: round cap stops before the next submit
+  ---
+  duration_ms: 2.468641
+  type: 'test'
+  ...
+# Subtest: supervisor: preflight failure blocks submit
+ok 38 - supervisor: preflight failure blocks submit
+  ---
+  duration_ms: 1.199968
+  type: 'test'
+  ...
+# Subtest: supervisor: admission failure blocks submit
+ok 39 - supervisor: admission failure blocks submit
+  ---
+  duration_ms: 1.235199
+  type: 'test'
+  ...
+# Subtest: supervisor: model advice cannot override a refuted report
+ok 40 - supervisor: model advice cannot override a refuted report
+  ---
+  duration_ms: 1.229049
+  type: 'test'
+  ...
+# Subtest: supervisor: model advice cannot override an inconclusive report
+ok 41 - supervisor: model advice cannot override an inconclusive report
+  ---
+  duration_ms: 1.123168
+  type: 'test'
+  ...
+# Subtest: supervisor: Wait does not call any skill/model
+ok 42 - supervisor: Wait does not call any skill/model
+  ---
+  duration_ms: 0.997548
+  type: 'test'
+  ...
+# Subtest: supervisor: budget cap stops before a second submit
+ok 43 - supervisor: budget cap stops before a second submit
+  ---
+  duration_ms: 0.879988
+  type: 'test'
+  ...
+# Subtest: supervisor: an invalid report never becomes a verdict
+ok 44 - supervisor: an invalid report never becomes a verdict
+  ---
+  duration_ms: 0.799111
+  type: 'test'
+  ...
+# Subtest: memory: same-project retrieval hits authorized records
+ok 45 - memory: same-project retrieval hits authorized records
+  ---
+  duration_ms: 4.585307
+  type: 'test'
+  ...
+# Subtest: memory: cross-project query returns zero hits and a denied audit entry
+ok 46 - memory: cross-project query returns zero hits and a denied audit entry
+  ---
+  duration_ms: 0.970628
+  type: 'test'
+  ...
+# Subtest: memory: revision filter excludes stale revisions
+ok 47 - memory: revision filter excludes stale revisions
+  ---
+  duration_ms: 1.031603
+  type: 'test'
+  ...
+# Subtest: memory: audit entry keeps actor, revision, before and after
+ok 48 - memory: audit entry keeps actor, revision, before and after
+  ---
+  duration_ms: 1.977884
+  type: 'test'
+  ...
+# Subtest: memory: a model assumption cannot become evidence
+ok 49 - memory: a model assumption cannot become evidence
+  ---
+  duration_ms: 3.056858
+  type: 'test'
+  ...
+# Subtest: memory: prompt and chain-of-thought archives are rejected
+ok 50 - memory: prompt and chain-of-thought archives are rejected
+  ---
+  duration_ms: 0.980405
+  type: 'test'
+  ...
+# Subtest: memory: anonymous or write-only principals cannot read memory
+ok 51 - memory: anonymous or write-only principals cannot read memory
+  ---
+  duration_ms: 0.949176
+  type: 'test'
+  ...
+# Subtest: memory: entries from another project never leak into a project query
+ok 52 - memory: entries from another project never leak into a project query
+  ---
+  duration_ms: 1.393827
+  type: 'test'
+  ...
+# Subtest: record: creates a ResearchRecord through the P2 mapping and reads it back
+ok 53 - record: creates a ResearchRecord through the P2 mapping and reads it back
+  ---
+  duration_ms: 5.141211
+  type: 'test'
+  ...
+# Subtest: record: same round idempotency key does not create a second record
+ok 54 - record: same round idempotency key does not create a second record
+  ---
+  duration_ms: 1.308804
+  type: 'test'
+  ...
+# Subtest: record: duplicate round with a different body returns duplicate_round
+ok 55 - record: duplicate round with a different body returns duplicate_round
+  ---
+  duration_ms: 0.861219
+  type: 'test'
+  ...
+# Subtest: record: concurrent rounds cannot overwrite; one gets revision_conflict
+ok 56 - record: concurrent rounds cannot overwrite; one gets revision_conflict
+  ---
+  duration_ms: 1.460423
+  type: 'test'
+  ...
+# Subtest: record: stale revision overwrite is rejected with stale_reference
+ok 57 - record: stale revision overwrite is rejected with stale_reference
+  ---
+  duration_ms: 1.641387
+  type: 'test'
+  ...
+# Subtest: record: wrong project write is rejected with project_mismatch
+ok 58 - record: wrong project write is rejected with project_mismatch
+  ---
+  duration_ms: 0.608075
+  type: 'test'
+  ...
+# Subtest: record: task_ref from another project is rejected with project_mismatch
+ok 59 - record: task_ref from another project is rejected with project_mismatch
+  ---
+  duration_ms: 0.501918
+  type: 'test'
+  ...
+# Subtest: proposal: create and read round-trip keeps revision and digest
+ok 60 - proposal: create and read round-trip keeps revision and digest
+  ---
+  duration_ms: 4.493342
+  type: 'test'
+  ...
+# Subtest: proposal: plan digest ignores approval_ref, approval_status and display_name
+ok 61 - proposal: plan digest ignores approval_ref, approval_status and display_name
+  ---
+  duration_ms: 1.102869
+  type: 'test'
+  ...
+# Subtest: proposal: plan digest changes on method or mapping
+ok 62 - proposal: plan digest changes on method or mapping
+  ---
+  duration_ms: 1.181028
+  type: 'test'
+  ...
+# Subtest: proposal: plan digest changes on initial input bytes or budget
+ok 63 - proposal: plan digest changes on initial input bytes or budget
+  ---
+  duration_ms: 0.805062
+  type: 'test'
+  ...
+# Subtest: proposal: approval binding rejects a different project, budget or scope
+ok 64 - proposal: approval binding rejects a different project, budget or scope
+  ---
+  duration_ms: 1.29376
+  type: 'test'
+  ...
+# Subtest: record: event idempotency key prevents a duplicate CAS write
+ok 65 - record: event idempotency key prevents a duplicate CAS write
+  ---
+  duration_ms: 0.75252
+  type: 'test'
+  ...
+# Subtest: record: every call uses only the T-09 P2 allowlisted tools
+ok 66 - record: every call uses only the T-09 P2 allowlisted tools
+  ---
+  duration_ms: 0.860496
+  type: 'test'
+  ...
+# Subtest: record: chat/session fields cannot be record authority
+ok 67 - record: chat/session fields cannot be record authority
+  ---
+  duration_ms: 0.387965
+  type: 'test'
+  ...
+# Subtest: proposal: task state-machine fields are rejected
+ok 68 - proposal: task state-machine fields are rejected
+  ---
+  duration_ms: 1.037565
+  type: 'test'
+  ...
+# Subtest: research keys are namespaced, revision-bound and pure
+ok 69 - research keys are namespaced, revision-bound and pure
+  ---
+  duration_ms: 2.050015
+  type: 'test'
+  ...
+# Subtest: research memory keys keep record and proposal kinds distinct
+ok 70 - research memory keys keep record and proposal kinds distinct
+  ---
+  duration_ms: 0.422235
+  type: 'test'
+  ...
+# Subtest: bridge operation list is exhaustive and stable
+ok 71 - bridge operation list is exhaustive and stable
+  ---
+  duration_ms: 1.100814
+  type: 'test'
+  ...
+# Subtest: per-operation required-field matrix is exact
+ok 72 - per-operation required-field matrix is exact
+  ---
+  duration_ms: 0.447832
+  type: 'test'
+  ...
+# Subtest: discovery needs neither task nor generation
+ok 73 - discovery needs neither task nor generation
+  ---
+  duration_ms: 0.414931
+  type: 'test'
+  ...
+# Subtest: validate and submit require project/input/idempotency but never generation
+ok 74 - validate and submit require project/input/idempotency but never generation
+  ---
+  duration_ms: 1.331789
+  type: 'test'
+  ...
+# Subtest: status/prepare/read matrix matches the frozen semantics
+ok 75 - status/prepare/read matrix matches the frozen semantics
+  ---
+  duration_ms: 0.413035
+  type: 'test'
+  ...
+# Subtest: raw tool names reject the model-visible prefix
+ok 76 - raw tool names reject the model-visible prefix
+  ---
+  duration_ms: 0.887943
+  type: 'test'
+  ...
+# Subtest: dsh bundle names only public plugin interfaces
+ok 77 - dsh bundle names only public plugin interfaces
+  ---
+  duration_ms: 0.753655
+  type: 'test'
+  ...
+# Subtest: dsh profile payload has no private DSH source paths
+ok 78 - dsh profile payload has no private DSH source paths
+  ---
+  duration_ms: 0.675558
+  type: 'test'
+  ...
+# Subtest: cli parser is pure and side-effect free
+ok 79 - cli parser is pure and side-effect free
+  ---
+  duration_ms: 0.528432
+  type: 'test'
+  ...
+# Subtest: cli parser rejects unknown arguments and missing profile values
+ok 80 - cli parser rejects unknown arguments and missing profile values
+  ---
+  duration_ms: 0.462298
+  type: 'test'
+  ...
+# Subtest: workspace manifests keep internal dependencies on workspace:*
+ok 81 - workspace manifests keep internal dependencies on workspace:*
+  ---
+  duration_ms: 2.202287
+  type: 'test'
+  ...
+# Subtest: install surface pins the workspace toolchain
+ok 82 - install surface pins the workspace toolchain
+  ---
+  duration_ms: 0.34129
+  type: 'test'
+  ...
+# Subtest: packed tarball names match the workspace versions
+ok 83 - packed tarball names match the workspace versions
+  ---
+  duration_ms: 0.543326
+  type: 'test'
+  ...
+# Subtest: install manifest maps every private package to a local tarball
+ok 84 - install manifest maps every private package to a local tarball
+  ---
+  duration_ms: 1.72405
+  type: 'test'
+  ...
+# Subtest: registry-shaped specs and unknown packages are rejected
+ok 85 - registry-shaped specs and unknown packages are rejected
+  ---
+  duration_ms: 1.213613
+  type: 'test'
+  ...
+# Subtest: install workspace overrides cover all transitive @rph packages
+ok 86 - install workspace overrides cover all transitive @rph packages
+  ---
+  duration_ms: 2.313898
+  type: 'test'
+  ...
+# Subtest: lockfile guard accepts file:-only resolutions
+ok 87 - lockfile guard accepts file:-only resolutions
+  ---
+  duration_ms: 0.608572
+  type: 'test'
+  ...
+# Subtest: lockfile guard rejects registry and semver resolutions
+ok 88 - lockfile guard rejects registry and semver resolutions
+  ---
+  duration_ms: 0.75983
+  type: 'test'
+  ...
+# Subtest: package index records name/version/size/sha256 for every tarball
+ok 89 - package index records name/version/size/sha256 for every tarball
+  ---
+  duration_ms: 0.95047
+  type: 'test'
+  ...
+# Subtest: package.mjs wires the install surface into packaging
+ok 90 - package.mjs wires the install surface into packaging
+  ---
+  duration_ms: 0.749622
+  type: 'test'
+  ...
+# Subtest: checksums cover every shipped file and detect tampering
+ok 91 - checksums cover every shipped file and detect tampering
+  ---
+  duration_ms: 4.173609
+  type: 'test'
+  ...
+1..91
+# tests 91
+# suites 0
+# pass 91
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 162.753526

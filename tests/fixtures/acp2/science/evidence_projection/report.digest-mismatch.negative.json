@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "report_id": "report-m1-03-digest-mismatch",
+  "subject": {
+    "subject_id": "task-m1-03-static",
+    "subject_kind": "calculation_result",
+    "description": "NEGATIVE fixture: the declared source digest does not match the bytes."
+  },
+  "execution": {
+    "terminal_state": "completed",
+    "argv": ["m1-03-static", "frequency"],
+    "exit_code": 0
+  },
+  "claims": [
+    {
+      "claim_id": "c-true-minimum",
+      "statement": "The optimized geometry is a true minimum (no imaginary frequencies).",
+      "status": "supported",
+      "scope": {
+        "subject": "stationary_point_kind",
+        "applicability": "conformer_specific",
+        "conditions": "conformer A, gas phase"
+      },
+      "source_refs": [
+        {
+          "artifact_path": "artifacts/freq.out",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "role": "native_output",
+          "units": "cm-1"
+        }
+      ],
+      "missing_checks": [],
+      "validator": {
+        "kind": "deterministic",
+        "validator_id": "check.imaginary_mode_count",
+        "validator_version": "1.0.0"
+      }
+    }
+  ],
+  "limitations": []
+}

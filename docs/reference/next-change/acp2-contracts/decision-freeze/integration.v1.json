@@ -1,0 +1,1136 @@
+{
+  "approval_protocol": {
+    "aggregated_by": "INT",
+    "note": "Signoff is recorded per decision under signoff[]; an unsigned decision keeps its status and M1-01 must not consume it as frozen.",
+    "signoff_pending": [
+      "B (protocol/runtime owner) — D-INT-01/02/03/04, is the extension version and carrier owner",
+      "C-RPH (real DSH client/experience) — D-INT-01/02/03/05, owns the frozen client evidence",
+      "REL — D-INT-06/07, owns the release/hygiene statement"
+    ]
+  },
+  "branch": "acp2/integration-remediation",
+  "closes": [
+    "G02",
+    "G04",
+    "G20"
+  ],
+  "consumer_contract": {
+    "M1-01": {
+      "decision_ids": [
+        "D-INT-01",
+        "D-INT-02",
+        "D-INT-03",
+        "D-INT-04"
+      ],
+      "machine_readable_fields": [
+        "status",
+        "wire_version",
+        "rollback",
+        "wire_refs",
+        "vectors"
+      ],
+      "note": "M1-01 reads this file only. The four ids above are the whole extension/negotiation input; identity/field decisions are read from identity.v1.json and are disjoint by id, so M1-01 never faces a two-way choice between the two lists.",
+      "source": "docs/reference/next-change/acp2-contracts/decision-freeze/integration.v1.json"
+    },
+    "M1-02": {
+      "decision_ids": [
+        "D-IDENT-04",
+        "D-IDENT-05",
+        "D-IDENT-07",
+        "D-IDENT-08"
+      ],
+      "machine_readable_fields": [
+        "status",
+        "wire_version",
+        "migration_version",
+        "rollback"
+      ],
+      "note": "Research/session identity and key encoding come from the identity freeze only.",
+      "source": "docs/reference/next-change/acp2-contracts/decision-freeze/identity.v1.json"
+    },
+    "M1-04": {
+      "decision_ids": [
+        "D-IDENT-04",
+        "D-IDENT-05",
+        "D-IDENT-08"
+      ],
+      "machine_readable_fields": [
+        "status",
+        "wire_version",
+        "migration_version",
+        "rollback"
+      ],
+      "note": "Planning reservation, model receipt and request digest come from the identity freeze only.",
+      "source": "docs/reference/next-change/acp2-contracts/decision-freeze/identity.v1.json"
+    }
+  },
+  "contract_version": "1.0.0",
+  "decisions": [
+    {
+      "compatible_clients": [],
+      "decision": "The research extension identity is acp.research.v1@1.0.0 and has exactly one authority: p2-research-operations.v1.json::client_path.negotiation (extension_id + extension_version). application-api.v1.json::mcp_extensions['acp.research.v1'] is a projection that must equal it (version, negotiated_in, negotiation_tool, negotiation_request_field, initialize_claim, implemented, negotiated_default). The only executable spelling of the id/version pair on the acp side is src/acp/mcp_extension.py (RESEARCH_EXTENSION_ID / RESEARCH_EXTENSION_VERSION -> ExtensionSpec), injected by acp.services_mcp_bootstrap and acp.api.routes into acp_services.entrypoints.mcp.negotiate_research_extension(spec=...). acp_services defines no extension id/version constant: it receives the spec parametrically and assembles its own acp.negotiation.v1 id from chr(97) because the Services isolation gate forbids acp.* wire literals. RPH mirrors the pair in rph/packages/bridge/src/index.ts::BRIDGE_EXTENSION_ID/BRIDGE_EXTENSION_VERSION. A version bump edits the P2 authority, this projection, src/acp/mcp_extension.py and the bridge constant in one change, with a new negative sample.",
+      "id": "D-INT-01",
+      "impact": {
+        "documents": [
+          "docs/reference/next-change/adr/ADR-006-mcp-negotiation.md",
+          "reports/acp2_remediation_20261026/m0-09/summary.json"
+        ],
+        "entries": [
+          "contract:p2-research-operations.v1.json::client_path.negotiation",
+          "mcp:acp_capabilities result extensions[].version",
+          "api:GET/POST /api/capabilities extensions[].version",
+          "rph:BRIDGE_EXTENSION_ID/BRIDGE_EXTENSION_VERSION"
+        ],
+        "files": [
+          "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
+          "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+          "src/acp/mcp_extension.py",
+          "src/acp/services_mcp_bootstrap.py",
+          "src/acp/api/routes.py",
+          "src/acp_services/entrypoints/mcp.py",
+          "rph/packages/bridge/src/index.ts"
+        ]
+      },
+      "migration_version": null,
+      "notes": "The application contract_version is deliberately NOT frozen here: it is an independent additive axis owned by the application contract, and ADR-006 §6.2's '1.1.0' sentence is historical (recorded as O-INT-01).",
+      "owner": "B",
+      "rationale": "M0-09 fixed the carrier but left the version question open for M1-01, and the pair already existed in four places with two historical values (the B06 drift wrote 1.1.0 where the extension is 1.0.0). Freezing one authority now prevents a partial bump from re-introducing a 'which version is real' choice inside M1-01.",
+      "rollback": "No storage and no consumer schema changes: rollback is to revert the contract field, the constant in src/acp/mcp_extension.py and the bridge constant together, which restores the previous advertisement for every client in the same request. A partial revert is forbidden because it serves an id/version pair the other surfaces do not declare; a client that cached the old advertisement is answered by the same acp_capabilities refusal path (unsupported_capability), never by a silent downgrade.",
+      "signoff": [
+        "B",
+        "C-RPH",
+        "INT"
+      ],
+      "status": "frozen",
+      "title": "acp.research.v1@1.0.0 is the single extension version authority; acp/mcp_extension.py is its only executable spelling",
+      "vectors": [
+        {
+          "asserts": "the code constant, the P2 authority and the application projection carry one id/version",
+          "test": "tests/test_acp2_mcp_research_handshake.py::test_extension_identity_has_one_authority"
+        },
+        {
+          "asserts": "the projection and the RPH bridge derive from the P2 negotiation block",
+          "test": "tests/test_acp2_runtime_contracts.py::test_extension_version_authority_is_the_p2_contract"
+        },
+        {
+          "asserts": "the freeze names that authority and every live surface still agrees",
+          "test": "tests/test_acp2_decision_freeze_integration.py::test_extension_version_authority_is_single"
+        }
+      ],
+      "wire_refs": [
+        {
+          "equals": "acp.research.v1",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
+          "pointer": "/client_path/negotiation/extension_id",
+          "why": "the authority declares the extension id"
+        },
+        {
+          "equals": "1.0.0",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
+          "pointer": "/client_path/negotiation/extension_version",
+          "why": "the authority declares the only supported version"
+        },
+        {
+          "equals": "1.0.0",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+          "pointer": "/mcp_extensions/acp.research.v1/version",
+          "why": "the projection carries the same version"
+        },
+        {
+          "equals": "acp_capabilities",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+          "pointer": "/mcp_extensions/acp.research.v1/negotiation_tool",
+          "why": "the projection points at the P2 carrier"
+        },
+        {
+          "contains": "RESEARCH_EXTENSION_ID = \"acp.research.v1\"",
+          "path": "src/acp/mcp_extension.py",
+          "why": "the only executable id spelling"
+        },
+        {
+          "contains": "RESEARCH_EXTENSION_VERSION = \"1.0.0\"",
+          "path": "src/acp/mcp_extension.py",
+          "why": "the only executable version spelling"
+        },
+        {
+          "contains": "RESEARCH_EXTENSION_SPEC = ExtensionSpec(",
+          "path": "src/acp/mcp_extension.py",
+          "why": "the spec is built from the constants"
+        },
+        {
+          "contains": "from acp.mcp_extension import RESEARCH_EXTENSION_SPEC",
+          "path": "src/acp/services_mcp_bootstrap.py",
+          "why": "the composition root injects the spec"
+        },
+        {
+          "contains": "from acp.mcp_extension import RESEARCH_EXTENSION_SPEC",
+          "path": "src/acp/api/routes.py",
+          "why": "the HTTP discovery surface injects the same spec"
+        },
+        {
+          "absent": "RESEARCH_EXTENSION_VERSION =",
+          "path": "src/acp_services/entrypoints/mcp.py",
+          "why": "acp_services must not define its own extension version constant"
+        },
+        {
+          "absent": "RESEARCH_EXTENSION_ID =",
+          "path": "src/acp_services/entrypoints/mcp.py",
+          "why": "acp_services must not define its own extension id constant"
+        },
+        {
+          "contains": "BRIDGE_EXTENSION_ID = \"acp.research.v1\"",
+          "path": "rph/packages/bridge/src/index.ts",
+          "why": "the frozen client mirror"
+        },
+        {
+          "contains": "BRIDGE_EXTENSION_VERSION = \"1.0.0\"",
+          "path": "rph/packages/bridge/src/index.ts",
+          "why": "the frozen client mirror version"
+        }
+      ],
+      "wire_version": "acp.research.v1@1.0.0"
+    },
+    {
+      "compatible_clients": [],
+      "decision": "The extension handshake carrier is tools/call:acp_capabilities with request field research_extension{id,version}; the frozen values are request_carrier=tools/call, request_tool=acp_capabilities, request_field=research_extension and initialize_claim=none. initialize may only point at the carrier through capabilities.extensions['acp.negotiation.v1'].extension_handshake: it must not advertise acp.research.v1 and must not carry any 'negotiated' assertion, in the top-level result or inside capabilities. The only surface where advertised / implemented / negotiated appear is the acp_capabilities result extensions[], where negotiated_by is always tools/call:acp_capabilities, implemented is derived from the registered allowlist covering RESEARCH_TOOL_NAMES (the ten P2 tools), and negotiated=true requires implemented=true AND a requested version equal to the authority version. Refusals are typed in-band: unsupported_capability with params.rule in {extension_not_advertised, extension_version_mismatch, extension_not_implemented, extension_not_negotiated}, and a project-scope mismatch answers access_denied + params.rule=project_scope_mismatch while still returning extensions[]. Advertising is never delivery.",
+      "id": "D-INT-02",
+      "impact": {
+        "documents": [
+          "docs/reference/next-change/adr/ADR-006-mcp-negotiation.md",
+          "reports/acp2_remediation_20261026/m0-09/summary.json"
+        ],
+        "entries": [
+          "mcp:initialize (must stay claim-free)",
+          "mcp:acp_capabilities research_extension{id,version}",
+          "api:GET/POST /api/capabilities research_extension",
+          "rph:negotiateResearch -> PlatformClient.callTool('acp_capabilities', ...)"
+        ],
+        "files": [
+          "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
+          "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+          "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.schema.json",
+          "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.template.json",
+          "src/acp_services/entrypoints/mcp.py",
+          "src/acp/mcp_extension.py",
+          "tests/test_acp2_mcp_research_handshake.py"
+        ]
+      },
+      "migration_version": null,
+      "negotiation_freeze": {
+        "carrier": "tools/call:acp_capabilities",
+        "forbidden": [
+          "acp.research.v1 or any negotiated assertion in initialize",
+          "top-level extensions block in the initialize result",
+          "negotiated=true while implemented=false",
+          "a second carrier or a second client protocol for the extension"
+        ],
+        "implemented_source": "registered allowlist covers RESEARCH_TOOL_NAMES",
+        "initialize_claim": "none",
+        "initialize_may_only_point_at_the_carrier": true,
+        "negotiated_requires": [
+          "implemented"
+        ],
+        "negotiated_surface": "acp_capabilities result extensions[].negotiated",
+        "refusal_rules": [
+          "extension_not_advertised",
+          "extension_version_mismatch",
+          "extension_not_implemented",
+          "extension_not_negotiated"
+        ],
+        "request_field": "research_extension"
+      },
+      "notes": "acp.negotiation.v1 stays an informational extension id owned by B; it is guidance about where the handshake lives, never a capability promise.",
+      "owner": "B",
+      "rationale": "The frozen DSH client hard-codes capabilities:{} and drops a top-level initialize extensions block, so an initialize-based claim is unobservable (M0-08/M0-09). Without a frozen carrier and a frozen negotiated rule, M1-01 could move the claim back into initialize or promote advertising to delivery.",
+      "rollback": "Wire-only: reverting means restoring the previous contract block and the previous server build in one deploy; there is no stored negotiation state to migrate. Clients that cached a tools/call advertisement re-read it on the next acp_capabilities call, and clients that never call it see no research surface at all (unknown_tool), which is the same failure mode as before the extension existed.",
+      "signoff": [
+        "B",
+        "C-RPH",
+        "INT"
+      ],
+      "status": "frozen",
+      "title": "The research extension negotiates in tools/call acp_capabilities; initialize never declares a negotiated state",
+      "vectors": [
+        {
+          "asserts": "initialize carries no extension and points at tools/call acp_capabilities",
+          "test": "tests/test_acp2_mcp_research_handshake.py::test_carrier_is_the_p1_discovery_tool_not_initialize"
+        },
+        {
+          "asserts": "the advertisement is present while implemented/negotiated stay false",
+          "test": "tests/test_acp2_mcp_research_handshake.py::test_capabilities_always_advertises_the_extension_without_claiming_it"
+        },
+        {
+          "asserts": "negotiated=true is reachable only for a covering implementation set",
+          "test": "tests/test_acp2_mcp_research_handshake.py::test_a_covering_implementation_set_is_the_only_way_to_negotiate"
+        },
+        {
+          "asserts": "the unmodified frozen client reads the same carrier and refusal (contract lane)",
+          "test": "tests/test_acp2_mcp_sdk_contract.py::test_real_sdk_capabilities_call_returns_the_research_handshake"
+        },
+        {
+          "asserts": "the client never self-promotes an advertisement to negotiation",
+          "test": "rph/test/mcp-handshake.test.ts::an advertised-but-not-negotiated extension cannot unlock P2"
+        }
+      ],
+      "wire_refs": [
+        {
+          "equals": "tools/call",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
+          "pointer": "/client_path/negotiation/request_carrier",
+          "why": "carrier is the P1 discovery tool"
+        },
+        {
+          "equals": "acp_capabilities",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
+          "pointer": "/client_path/negotiation/request_tool",
+          "why": "the carrier tool is acp_capabilities"
+        },
+        {
+          "equals": "research_extension",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
+          "pointer": "/client_path/negotiation/request_field",
+          "why": "the request field is research_extension"
+        },
+        {
+          "equals": "none",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
+          "pointer": "/client_path/negotiation/initialize_claim",
+          "why": "initialize claims nothing"
+        },
+        {
+          "equals": false,
+          "path": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
+          "pointer": "/client_path/negotiation/negotiated_default",
+          "why": "an unimplemented promise set never reports negotiated"
+        },
+        {
+          "equals": true,
+          "path": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
+          "pointer": "/client_path/negotiation/implemented",
+          "why": "M2-01c registers the ten promised tools, so the derived implemented flag is true; the negotiated claim still requires a requesting session"
+        },
+        {
+          "equals": "unsupported_capability",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
+          "pointer": "/client_path/negotiation/refusal/code",
+          "why": "the refusal vocabulary is contract-owned"
+        },
+        {
+          "equals": "project_scope_mismatch",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
+          "pointer": "/client_path/negotiation/access_refusal/params/rule",
+          "why": "the access refusal keeps its authorization class"
+        },
+        {
+          "equals": "tools/call",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+          "pointer": "/mcp_extensions/acp.research.v1/negotiated_in",
+          "why": "the projection repeats the carrier"
+        },
+        {
+          "equals": "research_extension",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+          "pointer": "/mcp_extensions/acp.research.v1/negotiation_request_field",
+          "why": "the projection repeats the request field"
+        },
+        {
+          "equals": "none",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+          "pointer": "/mcp_extensions/acp.research.v1/initialize_claim",
+          "why": "the projection repeats initialize_claim"
+        },
+        {
+          "contains": "EXTENSION_HANDSHAKE_CARRIER = \"tools/call:\" + McpTool.CAPABILITIES",
+          "path": "src/acp_services/entrypoints/mcp.py",
+          "why": "the server builds the carrier from the tool enum, not a free string"
+        },
+        {
+          "equals": false,
+          "path": "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.schema.json",
+          "pointer": "/properties/initialize/properties/extensions/properties/acp.research.v1/properties/negotiated/const",
+          "why": "the launch descriptor never forces a negotiated state"
+        },
+        {
+          "equals": false,
+          "path": "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.template.json",
+          "pointer": "/instance/initialize/extensions/acp.research.v1/negotiated",
+          "why": "the template value is false too"
+        }
+      ],
+      "wire_version": "acp.research.v1@1.0.0"
+    },
+    {
+      "branch_decision": {
+        "bom_entry_added": false,
+        "dsh_source_modified": false,
+        "fork_or_patch": false,
+        "m0_09_outcome": "path_selected",
+        "m0_09_path": "application_level_handshake_tools_call",
+        "m0_13_status": "NOT_APPLICABLE",
+        "reopen_conditions": [
+          {
+            "id": "REOPEN-UPSTREAM-CAPABILITY",
+            "required": "new ADR decision + scope_change; M0-13 becomes a mandatory M1-01 predecessor with commit/patch/lock digest and a maintainable upgrade path",
+            "trigger": "the pinned upstream DSH client or an official adapter exposes a capability option (or transport hook) that can carry the extension in initialize"
+          },
+          {
+            "id": "REOPEN-RESEARCH-ABANDONED",
+            "required": "scope_change; M1-01 freezes only the eight P1 tools, research is DEFERRED, M3 research line does not start, complete ACP2 stays NOT_VERIFIED",
+            "trigger": "the research product path is dropped for this release train"
+          }
+        ],
+        "selected": "external_change_not_required"
+      },
+      "compatible_clients": [],
+      "decision": "M0-09 selected path_selected / application_level_handshake_tools_call, therefore no upstream DSH client capability option, official adapter change, fork, patch, lock bump or BOM entry is required: M0-13 is NOT_APPLICABLE with reason external_change_not_required and is not a predecessor of M1-01. The branch is reopened only by an explicit decision: (a) the upstream client (or an official adapter) begins offering a capability option that can carry acp.research.v1 in initialize — then a new ADR plus a scope_change decision reopens M0-13 and makes it a mandatory M1-01 predecessor; (b) the research product path is abandoned — then scope_change applies, M1-01 freezes only the eight P1 tools, the research extension stays DEFERRED, the M3 agent research line does not start, and complete ACP2 stays NOT_VERIFIED. Neither branch may be entered silently inside M1-01, and no private untransferable patch may be used to freeze M1.",
+      "id": "D-INT-03",
+      "impact": {
+        "documents": [
+          "docs/reference/next-change/adr/ADR-006-mcp-negotiation.md",
+          "reports/acp2_remediation_20261026/m0-09/summary.json"
+        ],
+        "entries": [
+          "decision:M0-09 path_selected",
+          "scope:M0-13 conditional task",
+          "release:no BOM / lock / fork entry for the DSH client"
+        ],
+        "files": [
+          "reports/acp2_remediation_20261026/m0-09/summary.json",
+          "docs/reference/next-change/acp2-contracts/release/scope.json",
+          "docs/reference/next-change/adr/ADR-006-mcp-negotiation.md"
+        ]
+      },
+      "migration_version": null,
+      "notes": "M0-13 stays in the plan as a conditional task; this decision only fixes that the default branch is NOT_APPLICABLE and what would reopen it.",
+      "owner": "INT",
+      "rationale": "The plan requires an explicit branch. Recording NOT_APPLICABLE without the conditions that would overturn it lets a later implementer change the carrier or abandon research without a scope decision, which is exactly the 'choose during implementation' failure M0-12 exists to prevent.",
+      "rollback": "Not applicable while the branch stays external_change_not_required: nothing is installed. If the branch is reopened, the rollback is the recorded scope_change path (M0-13 as a required predecessor, or research DEFERRED with the eight-tool baseline), never an in-place edit of this decision.",
+      "signoff": [
+        "INT",
+        "B",
+        "C-RPH"
+      ],
+      "status": "frozen",
+      "title": "Branch decision external_change_not_required: M0-13 is NOT_APPLICABLE with named reopen conditions",
+      "vectors": [
+        {
+          "asserts": "the summary and release scope say NOT_APPLICABLE and both reopen conditions exist",
+          "test": "tests/test_acp2_decision_freeze_integration.py::test_m0_13_not_applicable_is_recorded_with_reopen_conditions"
+        },
+        {
+          "asserts": "the recorded carrier/path match the M0-09 summary the branch decision derives from",
+          "test": "tests/test_acp2_decision_freeze_integration.py::test_branch_decision_is_consistent_with_the_m0_09_provenance"
+        }
+      ],
+      "wire_refs": [
+        {
+          "equals": "path_selected",
+          "path": "reports/acp2_remediation_20261026/m0-09/summary.json",
+          "pointer": "/decision/outcome",
+          "why": "the recorded outcome is the selected path"
+        },
+        {
+          "equals": "application_level_handshake_tools_call",
+          "path": "reports/acp2_remediation_20261026/m0-09/summary.json",
+          "pointer": "/decision/path",
+          "why": "the selected path is the application-level handshake"
+        },
+        {
+          "equals": "NOT_APPLICABLE",
+          "path": "reports/acp2_remediation_20261026/m0-09/summary.json",
+          "pointer": "/decision/m0_13/status",
+          "why": "M0-13 is recorded NOT_APPLICABLE"
+        },
+        {
+          "equals": "external_change_not_required",
+          "path": "reports/acp2_remediation_20261026/m0-09/summary.json",
+          "pointer": "/decision/m0_13/reason",
+          "why": "the reason is external_change_not_required"
+        },
+        {
+          "equals": "M0-13",
+          "path": "docs/reference/next-change/acp2-contracts/release/scope.json",
+          "pointer": "/conditional_tasks/id=M0-13/id",
+          "why": "the release scope carries the same conditional task"
+        },
+        {
+          "equals": "NOT_APPLICABLE",
+          "path": "docs/reference/next-change/acp2-contracts/release/scope.json",
+          "pointer": "/conditional_tasks/id=M0-13/scope",
+          "why": "the release scope records NOT_APPLICABLE, not a silent omission"
+        }
+      ],
+      "wire_version": null
+    },
+    {
+      "compatible_clients": [],
+      "contract_mutation": {
+        "authority": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json::client_path.negotiation",
+        "descriptor": [
+          "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.schema.json",
+          "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.template.json"
+        ],
+        "forbidden": [
+          "projection-only edit",
+          "negotiation claim in initialize",
+          "second client protocol",
+          "descriptor negotiated other than false"
+        ],
+        "machine_gate": "scripts/acceptance/validate_acp2_contracts.py",
+        "projection": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json::mcp_extensions[acp.research.v1]",
+        "required_steps": [
+          "amend ADR-006 before the contract edit",
+          "edit authority, projection, descriptor and code constants in one change",
+          "add or update runtime/samples/application-api capability samples",
+          "recompute file sha256 and manifest contract_digest",
+          "keep the eight P1 tool names and input schemas unchanged"
+        ]
+      },
+      "decision": "The negotiation surface has exactly three contract files in authority order: (1) p2-research-operations.v1.json::client_path.negotiation is the authority for id/version/carrier/request field/initialize_claim/refusal rules; (2) application-api.v1.json::mcp_extensions['acp.research.v1'] is a projection that must equal it; (3) mcp-launch.schema.json + mcp-launch.template.json carry descriptor metadata only, where initialize.extensions['acp.research.v1'].negotiated is const false and never a negotiated claim. Any mutation must, in one change: (a) amend ADR-006 with a new or amended D-decision first; (b) update all three files plus the code constants (D-INT-01) and the RPH mirror; (c) add or update a positive/negative sample under runtime/samples/application-api/; (d) recompute the file sha256, the manifest contract entry digest and contract_digest with validate_acp2_contracts.py; (e) leave the eight P1 tool names and input schemas unchanged. Forbidden: editing the projection without the authority, moving negotiation back into initialize, adding a second client protocol (restricted HTTP path), or publishing a descriptor with negotiated other than false.",
+      "id": "D-INT-04",
+      "impact": {
+        "documents": [
+          "docs/reference/next-change/adr/ADR-006-mcp-negotiation.md"
+        ],
+        "entries": [
+          "contract:p2-research-operations.v1.json::client_path.negotiation",
+          "contract:application-api.v1.json::mcp_extensions['acp.research.v1']",
+          "contract:mcp-launch.schema.json / mcp-launch.template.json::initialize",
+          "gate:scripts/acceptance/validate_acp2_contracts.py (digest + manifest)"
+        ],
+        "files": [
+          "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
+          "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+          "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.schema.json",
+          "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.template.json",
+          "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/capabilities-research-extension-version-mismatch.negative.json",
+          "scripts/acceptance/validate_acp2_contracts.py",
+          "tests/test_acp2_runtime_contracts.py"
+        ]
+      },
+      "migration_version": null,
+      "notes": "The samples directory is part of the mutation: a carrier change without a new negative sample leaves the refusal rules untested.",
+      "owner": "B",
+      "rationale": "M0-08/M0-09 had to repair a projection that drifted from its authority (1.1.0) and a launch descriptor that claimed negotiated=true. The plan makes contract mutation an explicit, reviewable path, so M1-01 must not be able to edit one surface and leave the others inconsistent.",
+      "rollback": "Contract files are versioned bytes: rollback is a revert commit plus a digest recompute (file sha256, manifest entry, contract_digest) in the same change, and no runtime state depends on the edit. A revert must keep the three surfaces consistent; reverting only the authority leaves a projection that names a nonexistent carrier, which validate_acp2_contracts.py and the M0-12 validator both reject.",
+      "signoff": [
+        "B",
+        "INT"
+      ],
+      "status": "frozen",
+      "title": "Contract mutation ownership: P2 authority -> application-api projection -> launch descriptor, one change set with ADR, sample and digest",
+      "vectors": [
+        {
+          "asserts": "the projection fields are the additive research surface M1-01 must keep",
+          "test": "tests/test_acp2_runtime_contracts.py::test_application_api_v1_1_research_fields_are_additive"
+        },
+        {
+          "asserts": "the launch descriptor pins protocol, tools and the non-negotiated extension block",
+          "test": "tests/test_acp2_runtime_contracts.py::test_mcp_launch_schema_freezes_protocol_and_tools"
+        },
+        {
+          "asserts": "the freeze names all three surfaces and the gate that recomputes their digests",
+          "test": "tests/test_acp2_decision_freeze_integration.py::test_contract_mutation_ownership_names_every_surface"
+        }
+      ],
+      "wire_refs": [
+        {
+          "equals": "acp2.runtime.p2-research-operations.v1",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
+          "pointer": "/schema",
+          "why": "the P2 contract declares its own schema"
+        },
+        {
+          "contains": "never change names or schemas",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json",
+          "pointer": "/client_path/p1_contract_preserved",
+          "why": "the P1 tool surface is frozen"
+        },
+        {
+          "equals": "tests/test_acp2_runtime_contracts.py",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+          "pointer": "/machine_checked_by",
+          "why": "the application contract declares its machine checker"
+        },
+        {
+          "contains": "M0-09 (ADR-006 D7)",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/application-api.v1.json",
+          "pointer": "/mcp_extensions/acp.research.v1/note",
+          "why": "the projection explains the M0-09 carrier move"
+        },
+        {
+          "equals": false,
+          "path": "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.schema.json",
+          "pointer": "/properties/initialize/properties/extensions/properties/acp.research.v1/properties/negotiated/const",
+          "why": "the descriptor forbids a negotiated claim"
+        },
+        {
+          "exists": true,
+          "path": "docs/reference/next-change/acp2-contracts/runtime/samples/application-api/capabilities-research-extension-version-mismatch.negative.json",
+          "why": "the version-mismatch sample is the negative evidence set"
+        },
+        {
+          "contains": "DELIVERED_IDS_BY_STAGE",
+          "path": "scripts/acceptance/validate_acp2_contracts.py",
+          "why": "the digest/manifest gate exists"
+        }
+      ],
+      "wire_version": "p2-research-operations.v1@1.0.0 / application-api.v1 mcp_extensions projection"
+    },
+    {
+      "ci_scope": {
+        "conformance_failure_modes": [
+          "EMPTY_CONTRACT_SELECTION",
+          "PARTIAL_CONTRACT_SKIP",
+          "DSH_AVAILABLE_BUT_SKIPPED",
+          "CONTRACT_FAILURES",
+          "DSH_DECLARED_BUT_UNRESOLVED"
+        ],
+        "conformance_structural_subset": [
+          "tests/test_acp2_runtime_mcp_process.py",
+          "tests/test_acp2_runtime_mcp_backends.py"
+        ],
+        "contract_marker_owner": "mcp-conformance",
+        "contract_marker_owner_count": 1,
+        "dsh_source": {
+          "env_var": "ACP2_DSH_SOURCE",
+          "undeclared_result": "NOT_VERIFIED",
+          "vendored": false
+        },
+        "frontend_gate": {
+          "job": "frontend-module-tests",
+          "non_empty_guard": true,
+          "runner": "frontend/js/module_tests/run_all.js"
+        },
+        "lint_gates": "commented_out_until_hygiene_stream",
+        "matrix": [
+          "3.10",
+          "3.11",
+          "3.12"
+        ],
+        "matrix_excludes_markers": [
+          "slow",
+          "contract"
+        ],
+        "rph_gate": {
+          "artifact_surface": "rph/dist-packages/*",
+          "condition": "rph/pnpm-lock.yaml present",
+          "job": "rph",
+          "packages_before_upload": true
+        },
+        "wall_clock": {
+          "jobs_with_wall_clock": [
+            "test",
+            "frontend-module-tests",
+            "rph",
+            "mcp-conformance"
+          ],
+          "jobs_without": [
+            {
+              "job": "rph-detect",
+              "why": "boolean dependency detector only; recorded as O-INT-05"
+            }
+          ],
+          "max_minutes_before_split": 20,
+          "recorded": true
+        }
+      },
+      "compatible_clients": [],
+      "decision": "The required CI surface is: (1) the py3.10/3.11/3.12 matrix runs compileall plus pytest tests/ -m 'not slow and not contract' and never satisfies the contract gate; (2) exactly one lane owns the contract marker — mcp-conformance (Python 3.11 + Node 22.19.0 + pnpm 11.28.5) — and it runs a non-empty non-contract structural subset first, then test_acp2_mcp_sdk_contract.py -m contract with JUnit skip accounting where an empty selection, a partial skip or an available-but-skipped run all fail; (3) the frozen DSH tree is never vendored: it is declared only through the repository variable ACP2_DSH_SOURCE, an unset variable reports NOT_VERIFIED with exact counts, and a declared-but-unresolvable tree fails DSH_DECLARED_BUT_UNRESOLVED; (4) frontend-module-tests is a mandatory job with a non-empty *.test.js guard and run_all.js exit 1/2 semantics; (5) the rph job runs only when rph/pnpm-lock.yaml exists, runs install --frozen-lockfile, build, test, check, package, and uploads the offline install surface rph/dist-packages/* with if-no-files-found: error; (6) every job records wall-clock and a leg over 20 minutes must be split, never skipped; (7) the ruff lint/format steps stay commented until the independent hygiene stream lands (D-INT-06/D-INT-07) and are never cited as a gap gate.",
+      "id": "D-INT-05",
+      "impact": {
+        "documents": [
+          "tests/test_ci_workflow_contract.py"
+        ],
+        "entries": [
+          "ci:test (py3.10/3.11/3.12 matrix)",
+          "ci:frontend-module-tests",
+          "ci:rph-detect + rph",
+          "ci:mcp-conformance"
+        ],
+        "files": [
+          ".github/workflows/ci.yml",
+          "tests/test_ci_workflow_contract.py",
+          "pyproject.toml",
+          "docs/reference/next-change/acp2-contracts/release/scope.json"
+        ]
+      },
+      "migration_version": null,
+      "notes": "This decision freezes scope, not job names as brands: a renamed job must keep the same ownership, failure modes and non-vacuous properties.",
+      "owner": "INT",
+      "rationale": "M0-02a/b fixed four structural CI breakpoints (matrix/contract marker collision, frontend vacuum, RPH artifact before package, conformance placeholder) and M0-02b made the conformance lane a real gate. Freezing the scope prevents M1 from 'closing' G20 with a lane that skips, an empty selection or a vendored tool tree, and prevents the lint gate from being used as a substitute.",
+      "rollback": "CI is executable YAML, so rollback is a revert commit of .github/workflows/ci.yml plus tests/test_ci_workflow_contract.py in the same change; the contract gate must never be rolled back to a report-only step or to the ordinary matrix, because that would re-open the G20 vacuous-pass path. A rollback that keeps the lane but drops the skip accounting is forbidden.",
+      "signoff": [
+        "INT",
+        "B",
+        "C-RPH"
+      ],
+      "status": "frozen",
+      "title": "CI required scope: contract marker owned by mcp-conformance, DSH declared not vendored, frontend and RPH gates mandatory",
+      "vectors": [
+        {
+          "asserts": "the ordinary matrix can never satisfy the contract gate",
+          "test": "tests/test_ci_workflow_contract.py::test_python_matrix_excludes_contract_marker"
+        },
+        {
+          "asserts": "empty, partial and available-but-skipped runs all fail",
+          "test": "tests/test_ci_workflow_contract.py::test_conformance_contract_gate_cannot_pass_by_skipping"
+        },
+        {
+          "asserts": "the DSH tree is an explicit declared input, never a vendored path",
+          "test": "tests/test_ci_workflow_contract.py::test_conformance_resolves_the_frozen_dsh_tree_explicitly"
+        },
+        {
+          "asserts": "the frontend module job cannot pass with zero tests",
+          "test": "tests/test_ci_workflow_contract.py::test_frontend_module_job_is_mandatory_and_non_empty"
+        },
+        {
+          "asserts": "the RPH artifact is produced before upload",
+          "test": "tests/test_ci_workflow_contract.py::test_rph_job_packages_before_uploading_artifacts"
+        },
+        {
+          "asserts": "every frozen CI claim resolves against the live workflow text",
+          "test": "tests/test_acp2_decision_freeze_integration.py::test_ci_required_scope_matches_the_workflow"
+        }
+      ],
+      "wire_refs": [
+        {
+          "contains": "pytest tests/ -m \"not slow and not contract\" -q",
+          "path": ".github/workflows/ci.yml",
+          "why": "the ordinary matrix excludes the contract marker"
+        },
+        {
+          "contains": "-m contract -q -rs",
+          "path": ".github/workflows/ci.yml",
+          "why": "the conformance lane runs the marked suite with skip reporting"
+        },
+        {
+          "contains": "EMPTY_CONTRACT_SELECTION",
+          "path": ".github/workflows/ci.yml",
+          "why": "an empty contract selection fails loudly"
+        },
+        {
+          "contains": "PARTIAL_CONTRACT_SKIP",
+          "path": ".github/workflows/ci.yml",
+          "why": "a partial skip fails"
+        },
+        {
+          "contains": "vars.ACP2_DSH_SOURCE",
+          "path": ".github/workflows/ci.yml",
+          "why": "the DSH tree is declared through a repository variable"
+        },
+        {
+          "contains": "DSH_DECLARED_BUT_UNRESOLVED",
+          "path": ".github/workflows/ci.yml",
+          "why": "a declared but unusable tree fails by name"
+        },
+        {
+          "contains": "frontend/js/module_tests contains no *.test.js files",
+          "path": ".github/workflows/ci.yml",
+          "why": "the frontend module suite has a non-empty guard"
+        },
+        {
+          "contains": "pnpm package",
+          "path": ".github/workflows/ci.yml",
+          "why": "the RPH job packages before uploading"
+        },
+        {
+          "contains": "rph/dist-packages/*",
+          "path": ".github/workflows/ci.yml",
+          "why": "the RPH artifact is the offline install surface"
+        },
+        {
+          "contains": "if [ -f rph/pnpm-lock.yaml ]; then",
+          "path": ".github/workflows/ci.yml",
+          "why": "the RPH job is gated on the committed lockfile"
+        },
+        {
+          "contains": "ACP2_JOB_WALL_CLOCK_SECONDS",
+          "path": ".github/workflows/ci.yml",
+          "why": "each job records wall-clock"
+        },
+        {
+          "contains": "# - name: Lint with ruff",
+          "path": ".github/workflows/ci.yml",
+          "why": "the ruff lint gate is still commented out (hygiene stream, not required)"
+        },
+        {
+          "contains": "# - name: Check formatting with ruff",
+          "path": ".github/workflows/ci.yml",
+          "why": "the ruff format gate is still commented out too"
+        }
+      ],
+      "wire_version": null
+    },
+    {
+      "compatible_clients": [],
+      "decision": "Ruff 0.15.22 is the reviewed version, but the ratchet is a separate hygiene flow. The baseline is regenerated only in a dedicated lint-cleanup or Ruff-upgrade PR; feature and remediation PRs never reset it; the baseline may only shrink; format checks are scoped to the touched files and must be empty-selection safe. `ruff check` / `ruff format` never become a required gate for closing G01-G26 or any M0/M1 exit, and no gap may be closed or kept open on the basis of a ruff count. Historical counts (ci.yml's ~678 errors / 63 files, the independent review's 1,065 diagnostics / 130 files, 182 unformatted files) are trend-only and are not comparable to each other or usable as a baseline. The release scope records the same exclusion as SCOPE-OUT-07.",
+      "hygiene_decision": {
+        "baseline_may_only_shrink": true,
+        "baseline_regeneration": "only in a dedicated lint-cleanup or Ruff-upgrade PR, on the integration baseline commit, with command/version/config-digest/count receipt",
+        "excluded_from_required_chain": true,
+        "format_scope": "touched files only; an empty selection is not a failure",
+        "history_counts_are_trend_only": [
+          "ci.yml header ~678 errors / 63 files",
+          "independent review 1,065 diagnostics / 130 files",
+          "182 files not ruff-format clean"
+        ],
+        "independent_stream": "hygiene",
+        "never_a_closing_condition": true,
+        "pin_source": "docs/reference/next-change/acp2-contracts/runtime/lint-baseline.json",
+        "pinned_version": "0.15.22",
+        "required_chain": "G01-G26",
+        "tool": "ruff"
+      },
+      "id": "D-INT-06",
+      "impact": {
+        "documents": [
+          "reports/acp2_delivery_gap_audit_20261026/EXECUTION_PLAN.md#M0-02"
+        ],
+        "entries": [
+          "hygiene:ruff ratchet (independent)",
+          "release:scope SCOPE-OUT-07",
+          "ci:commented lint/format steps"
+        ],
+        "files": [
+          "docs/reference/next-change/acp2-contracts/runtime/lint-baseline.json",
+          "docs/reference/next-change/acp2-contracts/release/scope.json",
+          ".github/workflows/ci.yml",
+          "pyproject.toml",
+          ".pre-commit-config.yaml"
+        ]
+      },
+      "migration_version": null,
+      "notes": "D-INT-07 records the mechanics (pin unification, baseline regeneration, ratchet script) that are still pending; this decision freezes only the exclusion.",
+      "owner": "INT",
+      "rationale": "The plan deliberately split hygiene out so that a legacy lint backlog cannot be used either as a blocker or as evidence of progress. Without freezing the exclusion, M0-02c's pending ratchet could be cited as a closing condition for G20 or as a reason to hold M1.",
+      "rollback": "Policy only, no wire or storage surface. Rollback would require a new plan amendment that makes lint a required gate; until then a feature PR may not re-enable the lint steps, regenerate the baseline or cite ruff counts as evidence. If lint is ever promoted, it needs its own decision and its own reproducible baseline receipt.",
+      "signoff": [
+        "INT",
+        "REL"
+      ],
+      "status": "frozen",
+      "title": "Ruff is an independent hygiene stream and is never a G01-G26 required closing condition",
+      "vectors": [
+        {
+          "asserts": "the decision, the release scope and the workflow all keep ruff out of the chain",
+          "test": "tests/test_acp2_decision_freeze_integration.py::test_ruff_hygiene_is_excluded_from_the_required_chain"
+        }
+      ],
+      "wire_refs": [
+        {
+          "equals": "0.15.22",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/lint-baseline.json",
+          "pointer": "/ruff_version",
+          "why": "the reviewed ruff version is recorded once"
+        },
+        {
+          "equals": "acp2.lint-baseline.v1",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/lint-baseline.json",
+          "pointer": "/schema",
+          "why": "the baseline is a lint-baseline contract"
+        },
+        {
+          "equals": false,
+          "path": "docs/reference/next-change/acp2-contracts/release/scope.json",
+          "pointer": "/capabilities/id=SCOPE-OUT-07/required",
+          "why": "the release scope excludes a default lint cleanup"
+        },
+        {
+          "contains": "不进入 G01–G26",
+          "path": "docs/reference/next-change/acp2-contracts/release/scope.json",
+          "pointer": "/capabilities/id=SCOPE-OUT-07/reason",
+          "why": "and states the exclusion reason"
+        },
+        {
+          "contains": "# - name: Lint with ruff",
+          "path": ".github/workflows/ci.yml",
+          "why": "today the lint gate is not required (commented out)"
+        }
+      ],
+      "wire_version": null
+    },
+    {
+      "blocking": false,
+      "compatible_clients": [],
+      "consumer_task": "M0-02c",
+      "decision": "When M0-02c lands: the dev dependency and pre-commit rev are unified to 0.15.22; tests/baseline/ruff-baseline-0.15.22.json is generated on the integration baseline commit by exactly that version, with a receipt recording command, version, config digest and counts; scripts/check_ruff_ratchet.py enforces zero new diagnostics on new files and touched ranges while acp_services/** stays at zero, and format checks only touched files with an empty-selection-safe default. The baseline may only shrink and feature PRs never regenerate it. Even when delivered, the ratchet does not enter the G01-G26 required chain (D-INT-06) and cannot be used as evidence for or against a gap.",
+      "frozen_forward_convention": true,
+      "hygiene_implementation": {
+        "enters_required_chain_after_landing": false,
+        "missing_artifacts": [
+          "tests/baseline/ruff-baseline-0.15.22.json",
+          "scripts/check_ruff_ratchet.py"
+        ],
+        "observed_pins": {
+          "lint_baseline": "0.15.22",
+          "pre_commit_rev": "v0.4.0",
+          "pyproject_dev_extra": "ruff>=0.4.0"
+        },
+        "status": "not_implemented",
+        "when_landed": [
+          "pin dev/pre-commit to 0.15.22",
+          "regenerate the baseline on the baseline commit with a receipt",
+          "ratchet: zero new diagnostics on new/touched ranges, acp_services/** at zero",
+          "flip this decision to frozen in the same change"
+        ]
+      },
+      "id": "D-INT-07",
+      "impact": {
+        "documents": [
+          "reports/acp2_delivery_gap_audit_20261026/EXECUTION_PLAN.md#M0-02"
+        ],
+        "entries": [
+          "hygiene:ruff pin unification",
+          "hygiene:ruff baseline regeneration",
+          "hygiene:ruff ratchet script"
+        ],
+        "files": [
+          "docs/reference/next-change/acp2-contracts/runtime/lint-baseline.json",
+          "pyproject.toml",
+          ".pre-commit-config.yaml"
+        ]
+      },
+      "migration_version": null,
+      "notes": "Consumer is M0-02c, not an M1 task: the plan keeps hygiene off the M1 critical path, and D-INT-06 forbids using it as a closing condition.",
+      "owner": "INT",
+      "pending_reason": "M0-02c is not implemented in this checkout: tests/baseline/ruff-baseline-0.15.22.json and scripts/check_ruff_ratchet.py do not exist, pyproject's dev extra still allows ruff>=0.4.0 and .pre-commit-config.yaml still pins v0.4.0; only runtime/lint-baseline.json records 0.15.22. Writing frozen would claim a ratchet that no job runs.",
+      "rationale": "The plan fixes 0.15.22 as the reviewed version but explicitly keeps the ratchet out of the closing chain. Recording the mechanics as a forward convention keeps M0-12 honest (nothing is running yet) without letting the missing ratchet become an M1 blocker.",
+      "rollback": "Nothing is installed yet, so rollback is 'do not implement'. Once the ratchet lands, rollback means deleting the ratchet job and keeping the regenerated baseline as an inert artifact; it must never mean loosening the baseline in a feature PR.",
+      "signoff": [
+        "INT",
+        "REL"
+      ],
+      "status": "pending_implementation",
+      "title": "Ruff 0.15.22 pin, regenerated baseline and ratchet script are pending (M0-02c) and still never gate a G item when they land",
+      "vectors": [
+        {
+          "asserts": "the missing artifacts are really missing; when they appear the decision must flip",
+          "test": "tests/test_acp2_decision_freeze_integration.py::test_ruff_implementation_is_recorded_as_pending_with_an_honest_absence"
+        }
+      ],
+      "wire_refs": [
+        {
+          "equals": "0.15.22",
+          "path": "docs/reference/next-change/acp2-contracts/runtime/lint-baseline.json",
+          "pointer": "/ruff_version",
+          "why": "the only place the version is pinned today"
+        },
+        {
+          "contains": "ruff>=0.4.0",
+          "path": "pyproject.toml",
+          "why": "the dev extra still allows any ruff >= 0.4.0"
+        },
+        {
+          "contains": "rev: v0.4.0",
+          "path": ".pre-commit-config.yaml",
+          "why": "pre-commit still pins the old rev"
+        }
+      ],
+      "wire_version": null
+    },
+    {
+      "blocking": false,
+      "compatible_clients": [],
+      "consumer_task": "orchestrator (manifest registration after M0-12 merge)",
+      "decision": "Both freeze documents are delivered contracts of the ACP 2.0 contract set: decision-freeze/identity.v1.json (id decision-freeze-identity) and decision-freeze/integration.v1.json (id decision-freeze-integration). Each manifest entry is {id, path, status: delivered, owner: INT, delivered_by: M0-12, sha256: sha256 of the file bytes at registration time}. The digest is never embedded in the freeze itself (self-reference) and identity.v1.json's digest is always recomputed from the committed bytes, so the other lane's D-IDENT-10 flip cannot leave a stale digest behind. Registration also recomputes contract_digest and the manifest self digest and bumps the manifest contract_version. Two validator deltas are mandatory because scripts/acceptance/validate_acp2_contracts.py currently accepts owner in {A,B,C} and DELIVERED_IDS_BY_STAGE has no M0-12 stage: (1) add 'M0-12' -> {decision-freeze-identity, decision-freeze-integration} to DELIVERED_IDS_BY_STAGE; (2) accept INT in the contracts[].owner enum (the recorded choice; the alternative mapping to owner B with an INT signoff is rejected because it would hide the aggregating owner). M0-12 does not edit the manifest: the orchestrator executes the registration after the merge.",
+      "frozen_forward_convention": true,
+      "id": "D-INT-08",
+      "impact": {
+        "documents": [
+          "docs/reference/next-change/acp2-contracts/manifest.json"
+        ],
+        "entries": [
+          "manifest:contracts[decision-freeze-identity]",
+          "manifest:contracts[decision-freeze-integration]",
+          "manifest:contract_digest + contracts[manifest].sha256"
+        ],
+        "files": [
+          "docs/reference/next-change/acp2-contracts/manifest.json",
+          "scripts/acceptance/validate_acp2_contracts.py",
+          "docs/reference/next-change/acp2-contracts/decision-freeze/identity.v1.json",
+          "docs/reference/next-change/acp2-contracts/decision-freeze/integration.v1.json"
+        ]
+      },
+      "migration_version": null,
+      "notes": "Flip executed=true only together with the manifest edit; the validator keeps the flag and the live manifest consistent in both directions.",
+      "owner": "INT",
+      "pending_reason": "Manifest single-writer rule: this task records the registration decision and the entry shape only. docs/reference/next-change/acp2-contracts/manifest.json is not modified by M0-12, so neither freeze is registered yet; executing also needs the two validator deltas above plus a manifest contract_version bump and digest recompute.",
+      "rationale": "The contract set is the H0 index for every downstream task, and the identity freeze deliberately left registration to M0-12. Recording the exact entry shape and the two validator deltas makes the registration a mechanical edit instead of a new decision, and keeps the digest rule out of the file itself.",
+      "registration": {
+        "digest_rule": "sha256 of the registered file bytes, recomputed by the registrant; never embedded in the freeze document itself",
+        "entries": [
+          {
+            "delivered_by": "M0-12",
+            "digest_rule": "sha256 of the file bytes at registration time",
+            "id": "decision-freeze-identity",
+            "owner": "INT",
+            "path": "docs/reference/next-change/acp2-contracts/decision-freeze/identity.v1.json",
+            "status": "delivered"
+          },
+          {
+            "delivered_by": "M0-12",
+            "digest_rule": "sha256 of the file bytes at registration time",
+            "id": "decision-freeze-integration",
+            "owner": "INT",
+            "path": "docs/reference/next-change/acp2-contracts/decision-freeze/integration.v1.json",
+            "status": "delivered"
+          }
+        ],
+        "executed": true,
+        "executor": "orchestrator (manifest single-writer; M0-12 never edits the manifest)",
+        "manifest_changes": [
+          "append the two contract entries above",
+          "bump manifest contract_version",
+          "recompute contract_digest",
+          "recompute contracts[manifest].sha256 (self digest)"
+        ],
+        "must_not": [
+          "embed a digest of either freeze inside the freeze",
+          "register only one of the two freezes",
+          "let a feature PR write the manifest"
+        ],
+        "target": "docs/reference/next-change/acp2-contracts/manifest.json",
+        "validator_deltas": [
+          "scripts/acceptance/validate_acp2_contracts.py: add 'M0-12' -> {decision-freeze-identity, decision-freeze-integration} to DELIVERED_IDS_BY_STAGE",
+          "scripts/acceptance/validate_acp2_contracts.py: extend the contracts[].owner enum {A,B,C} to accept INT"
+        ]
+      },
+      "rollback": "Registration is additive metadata: rollback removes both contract entries and recomputes contract_digest plus the manifest self digest, and must revert the manifest contract_version bump with it. The freeze files themselves stay in git; unregistering them does not delete evidence.",
+      "signoff": [
+        "INT"
+      ],
+      "status": "pending_implementation",
+      "title": "decision-freeze registration: both freezes are delivered contracts with file sha256, owner INT, stage M0-12",
+      "vectors": [
+        {
+          "asserts": "the expected manifest entry shape is complete and matches the live state",
+          "test": "tests/test_acp2_decision_freeze_integration.py::test_registration_decision_is_mechanically_executable"
+        }
+      ],
+      "wire_refs": [
+        {
+          "exists": true,
+          "path": "docs/reference/next-change/acp2-contracts/manifest.json",
+          "why": "the registration target exists"
+        },
+        {
+          "contains": "DELIVERED_IDS_BY_STAGE",
+          "path": "scripts/acceptance/validate_acp2_contracts.py",
+          "why": "the stage allowlist is the delta target"
+        },
+        {
+          "exists": true,
+          "path": "docs/reference/next-change/acp2-contracts/decision-freeze/identity.v1.json",
+          "why": "the identity freeze exists"
+        },
+        {
+          "exists": true,
+          "path": "docs/reference/next-change/acp2-contracts/decision-freeze/integration.v1.json",
+          "why": "this freeze exists"
+        }
+      ],
+      "wire_version": null
+    }
+  ],
+  "frozen_at": "2026-10-27",
+  "head": "e82cd8a",
+  "observations": [
+    {
+      "disposition": "out_of_scope_noted",
+      "id": "O-INT-01",
+      "note": "The extension version is unaffected (D-INT-01). Refreshing the ADR sentence is an M1-01 documentation edit, not a freeze conflict.",
+      "observed": "§6.2 says the application contract_version 'stays 1.1.0', but the application contract has been bumped independently since (M0-06 and later additive changes); only mcp_extensions[].version is the extension authority 1.0.0.",
+      "owner_task": "M1-01",
+      "subject": "ADR-006 §6.2 application contract_version sentence"
+    },
+    {
+      "disposition": "out_of_scope_noted",
+      "id": "O-INT-02",
+      "note": "The descriptor is launch metadata, not the handshake: negotiated is const false and the field is documented as never forcing a state. Removing it is an application-contract change, not required by this freeze.",
+      "observed": "mcp-launch.schema.json/.template.json keep initialize.extensions['acp.research.v1'] with negotiated const false.",
+      "owner_task": "M1-01",
+      "subject": "mcp-launch descriptor still mentions acp.research.v1 in initialize"
+    },
+    {
+      "disposition": "folded_into_pending_implementation",
+      "id": "O-INT-03",
+      "note": "See D-INT-07. D-INT-06 already fixes the exclusion independently of the pin.",
+      "observed": "runtime/lint-baseline.json records 0.15.22 while pyproject allows ruff>=0.4.0 and pre-commit pins v0.4.0; the ratchet script and baseline file do not exist.",
+      "owner_task": "M0-02c",
+      "subject": "ruff pin is recorded but not enforced"
+    },
+    {
+      "disposition": "out_of_scope_noted",
+      "id": "O-INT-04",
+      "note": "The isolation scanner looks at constants, so this is not a second authority. M1-01 moves the id to entrypoints/wire_identifiers.py and removes the chr(97) assembly.",
+      "observed": "src/acp_services/entrypoints/mcp.py documents 'acp.research.v1' in an ExtensionSpec docstring and assembles acp.negotiation.v1 from chr(97); it defines no extension id/version constant.",
+      "owner_task": "M1-01",
+      "subject": "acp_services still spells the research extension id in a docstring"
+    },
+    {
+      "disposition": "out_of_scope_noted",
+      "id": "O-INT-05",
+      "note": "The detector performs no checkout-independent work, so leaving it untimed does not weaken the split-never-skip rule; D-INT-05 records it explicitly instead of claiming every job is timed.",
+      "observed": "the rph-detect job only emits a boolean output and has no start/wall-clock step, while test/frontend-module-tests/rph/mcp-conformance all record one.",
+      "owner_task": "M0-02a",
+      "subject": "rph-detect has no wall-clock step"
+    }
+  ],
+  "owner": "INT",
+  "pending_rule": "An undecided item is never frozen and a pending item never enters an M1 task as an open choice: a pending_* decision carries pending_reason, consumer_task and frozen_forward_convention, and M1-01 may consume it only as the recorded forward convention, never as 'decide later'.",
+  "pending_summary": [
+    {
+      "blocking": false,
+      "consumer_task": "M0-02c",
+      "id": "D-INT-07",
+      "reason": "M0-02c is not implemented: no ruff-baseline-0.15.22.json, no check_ruff_ratchet.py, dev extra allows ruff>=0.4.0 and pre-commit pins v0.4.0.",
+      "status": "pending_implementation"
+    },
+    {
+      "blocking": false,
+      "consumer_task": "orchestrator (manifest registration after M0-12 merge)",
+      "id": "D-INT-08",
+      "reason": "Manifest single-writer: M0-12 records the entry shape and validator deltas, the orchestrator performs the registration.",
+      "status": "pending_implementation"
+    }
+  ],
+  "prerequisites": [
+    {
+      "commit": "e59ce7f",
+      "subject": "M0-02b conformance lane wired to the real contract gate (M0-02a = c8bdc2a)",
+      "task": "M0-02"
+    },
+    {
+      "commit": "77e4c74",
+      "subject": "standard MCP handshake + ADR-006 (delivered in the same commit as M0-09)",
+      "task": "M0-08"
+    },
+    {
+      "commit": "77e4c74",
+      "subject": "research extension negotiated in tools/call acp_capabilities",
+      "task": "M0-09"
+    },
+    {
+      "commit": "e82cd8a",
+      "subject": "identity/field/migration freeze with a mechanical consumer inventory",
+      "task": "M0-11"
+    }
+  ],
+  "schema": "acp2.decision-freeze.integration.v1",
+  "scope_notes": [
+    "This file freezes integration decisions only. Identity, field policy, request digests and namespaces stay in decision-freeze/identity.v1.json; the two lists are disjoint by decision id so no M1 task faces a two-way choice.",
+    "Nothing here changes runtime behaviour or any contract file: M0-12 is a freeze. The contract mutation path is D-INT-04, executed by M1-01 under a new ADR amendment.",
+    "The manifest is intentionally untouched (D-INT-08): registration is recorded as a pending, mechanically executable step for the orchestrator.",
+    "The external_change_required/scope_change branches are recorded with reopen conditions (D-INT-03). M0-13 remains NOT_APPLICABLE until one of them fires."
+  ],
+  "status_vocabulary": {
+    "frozen": "decided and observable in this checkout: every claim resolves against a live contract field, workflow line or test named in vectors[]; no owner may change it without a new ADR or contract change.",
+    "pending_conflict": "two live surfaces disagree and choosing one changes a contract; the conflicting evidence is recorded verbatim and resolved by the named consumer task, never silently.",
+    "pending_implementation": "decided as a forward convention with no producer yet: the decision text is binding, but the named consumer task must land before it may be called frozen."
+  },
+  "task": "M0-12",
+  "title": "Extension negotiation, contract mutation and CI decisions (G02/G04/G20)",
+  "validator": "scripts/acceptance/validate_acp2_decision_freeze.py",
+  "validator_tests": "tests/test_acp2_decision_freeze_integration.py"
+}

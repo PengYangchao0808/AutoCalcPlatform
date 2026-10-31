@@ -52,6 +52,37 @@ def _get_json(url: str) -> dict[str, Any]:
         return json.loads(response.read().decode("utf-8"))
 
 
+_TERMINAL_STATUSES = frozenset({"completed", "failed", "cancelled"})
+
+
+def _wait_for_terminal_job(
+    controller: "LiveController", task_id: str, timeout: float = 60.0
+) -> dict[str, Any]:
+    """Wait (bounded) for the async fake workflow to reach a stable state.
+
+    ``JobManager.submit`` returns after persisting the QUEUED row and starts
+    execution on a background thread, so the Controller status endpoint and a
+    direct local-store read can legitimately straddle a queued->starting or
+    starting->terminal transition.  Query parity is a property of one task
+    snapshot, not of two reads taken across a lifecycle transition; wait for
+    the terminal snapshot before comparing the two query surfaces.
+    """
+
+    deadline = time.monotonic() + timeout
+    last_status: str | None = None
+    while time.monotonic() < deadline:
+        job = _get_json(controller.url + f"/api/v1/jobs/{task_id}")
+        status = job.get("status")
+        last_status = status if isinstance(status, str) else None
+        if last_status in _TERMINAL_STATUSES:
+            return job
+        time.sleep(0.05)
+    raise AssertionError(
+        f"job {task_id} did not reach a terminal state within {timeout}s "
+        f"(last status: {last_status!r})"
+    )
+
+
 def _wait_ready(url: str, proc: subprocess.Popen[str], timeout: float = 45.0) -> None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -172,6 +203,8 @@ def test_client_read_only_surface(controller: LiveController) -> None:
         "acp_prepare_artifact",
         "acp_read_artifact",
         "acp_analyze",
+        "acp_get_guidance",
+        "acp_list_jobs",
     }
 
     health = client.health()
@@ -214,7 +247,7 @@ def test_task_query_controller_matches_controller_and_local_store(
     controller: LiveController,
 ) -> None:
     task_id = _submit_fake(controller, "b04a-query-parity")
-    controller_job = _get_json(controller.url + f"/api/v1/jobs/{task_id}")
+    controller_job = _wait_for_terminal_job(controller, task_id)
 
     remote = _run_cli(controller, "task", "query", "--controller", controller.url, "--job", task_id)
     assert remote.returncode == 0, remote.stderr

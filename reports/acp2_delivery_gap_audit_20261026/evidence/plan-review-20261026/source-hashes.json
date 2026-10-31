@@ -1,0 +1,23 @@
+{
+  ".github/workflows/ci.yml": "97643ccdd1e1807ff8677e8c485ed25699a1d4226d114f463d4902a2b017e4a7",
+  "rph/packages/dsh-bundle/skills/supervisor.ts": "6e16316c06517e591cb3829c105d1c98b3c41954fd21746e908c5b683e2e0954",
+  "src/acp/api/v2_science.py": "4277f4850ec00acc7cac5184cb85e17ea48cc29396a49b3bf745e3511fb25338",
+  "src/acp/scheduler/remote/script_gen.py": "33d8d4b4353a04f002124a7f0ab6a22d37e96bfb89cf018a2f81faf9154382c1",
+  "src/acp_services/data/research_resources.py": "4f5923219699fd02c1485a489d3bb15b91beba14401a93a5f0a123cc30996148",
+  "src/acp_services/runtime/attempt_freeze.py": "1f71df42ef2cd854b99121a8d8f6e3c0a5572e7275efb5a141f18ec6c3746c74",
+  "src/acp_services/runtime/canonical_digest.py": "0f56d19d7e30339df2bfc12935f48b43048197d95ec13cfbad56095b8cd619f2",
+  "src/acp_services/runtime/local_admission.py": "5df26af67db0c01bbf28a9334701c1b9bffb7fe3d3b86d517a648bba6ebaf531",
+  "src/acp_services/runtime/metering_decoupling.py": "8659d429ac81d53111751cbdf9c15281a86e582bf7b6e841df036b0874043fcd",
+  "src/acp_services/runtime/outbox.py": "698de002723ad45c2f3a57e3ff14036c554c8a67e3567e69e7bcf8183b2b44c9",
+  "src/acp_services/runtime/receipts.py": "a9947cca2fd0e26465fa43d16f2ca198c165084f06d29d2aaee7d2e76af6460d",
+  "src/acp_services/runtime/research_budget.py": "309f5ae31e96bab354d78dda1da59eb50136addb61670132375774137a275acf",
+  "src/acp_services/runtime/step_dag.py": "f18e713baa87b7a200dbdf5a2b6ce2dd63d0cfb2ee4147c9596c0a34b12ee29a",
+  "src/acp_services/runtime/worker.py": "0cb5ea48327b7b842884a1d63762ed48ab0d253ab0ef968fe324f3321685fa37",
+  "src/acp_services/store/store.py": "791ac5e7c3aa69cd8d04daa7eea76e623f53f0e49003c26271951c014f605e06",
+  "src/acp_services/worker_bootstrap.py": "07aec84de34fb34def5fdcc41f031e03c006739cea0a2f4e19f2f2dcfd13818f",
+  "src/acp_services/workspace/http_identity.py": "9dc52231ffdb01bc8e9525a81a15ca65656fa355bb35c298f549847f0b23587d",
+  "src/cccp/calculation/recipes/compile.py": "439fac0c98dd5111307bbc9025b0b969008dc5de23c04edf1feace517def4254",
+  "src/cccp/calculation/tasks/optimize.py": "9c44f6c4d74fa3bb713d0c3e8a80188b76d63a8d4e4287d061be416b66089721",
+  "src/cccp/plugin/host.py": "c41d1a2f1a4aeae92f10a4637714e7cf7610ada7b2c9bb63f4afb7adef51068b",
+  "/ACPServer/acp2-tools/deepseek-harness/packages/mcp/mcp-client/src/connection.ts": "06dc1b3a1297b8b23f6ac5c44f3ba6740716c76db71c28cfb8f14d6c0340030e"
+}

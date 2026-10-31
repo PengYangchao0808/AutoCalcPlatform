@@ -1,8 +1,8 @@
 candidate_sha=77ac1de1af6a5db6b57f4f904a859305ff73042c
 candidate_tree=9809bea68e7132ae9ab5c0285b2c41373966f443
 started_at=2026-10-23T10:21:37+08:00
-env_ACP2_PROJECT_ROOT=<acp2-dev>/integration
-env_PYTHONPATH=<acp2-dev>/integration/src
+env_ACP2_PROJECT_ROOT=/ACPServer/acp2-development/integration
+env_PYTHONPATH=/ACPServer/acp2-development/integration/src
 ........................................................................ [  0%]
 ........................................................................ [  1%]
 ...................................................................F.... [  2%]
@@ -179,10 +179,10 @@ s.s.s.s.s.sssss..ss.ssssssssss...ss..................ssss...ssss........ [ 70%]
 =================================== FAILURES ===================================
 ___________________ test_clean_live_environment_is_accepted ____________________
 
-harness = <module 'acp2_experience_under_test' from '<acp2-dev>/integration/scripts/acceptance/acp2_experience.py'>
-scenarios = <module 'acp2_experience_scenarios_under_test' from '<acp2-dev>/integration/scripts/acceptance/acp2_experience_scenarios.py'>
-runtime_env = PosixPath('<acp2-dev>/integration/scripts/acceptance/acp2_runtime.py')
-tmp_path = PosixPath('/tmp/pytest-of-<user>/pytest-5477/test_clean_live_environment_is0')
+harness = <module 'acp2_experience_under_test' from '/ACPServer/acp2-development/integration/scripts/acceptance/acp2_experience.py'>
+scenarios = <module 'acp2_experience_scenarios_under_test' from '/ACPServer/acp2-development/integration/scripts/acceptance/acp2_experience_scenarios.py'>
+runtime_env = PosixPath('/ACPServer/acp2-development/integration/scripts/acceptance/acp2_runtime.py')
+tmp_path = PosixPath('/tmp/pytest-of-xieningke/pytest-5477/test_clean_live_environment_is0')
 monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f280cd16f10>
 
     def test_clean_live_environment_is_accepted(harness, scenarios, runtime_env, tmp_path, monkeypatch):
@@ -201,10 +201,10 @@ E       assert 1 == 0
 
 tests/test_acp2_experience_harness.py:329: AssertionError
 ----------------------------- Captured stdout call -----------------------------
-FAIL: /tmp/pytest-of-<user>/pytest-5477/test_clean_live_environment_is0/mcp-live/clean-live-20260101T000000Z-test/main/live
+FAIL: /tmp/pytest-of-xieningke/pytest-5477/test_clean_live_environment_is0/mcp-live/clean-live-20260101T000000Z-test/main/live
 _________________ test_crash_after_reservation_before_job_row __________________
 
-tmp_path = PosixPath('/tmp/pytest-of-<user>/pytest-5477/test_crash_after_reservation_b0')
+tmp_path = PosixPath('/tmp/pytest-of-xieningke/pytest-5477/test_crash_after_reservation_b0')
 
     def test_crash_after_reservation_before_job_row(tmp_path: Path) -> None:
         run_root = tmp_path / "run-root"
@@ -240,7 +240,7 @@ E             + claimed)
 
 tests/test_acp2_runtime_persistent_idempotency.py:320: AssertionError
 ------------------------------ Captured log call -------------------------------
-WARNING  acp.scheduler.manager:manager.py:664 Stealing stale manager lock /tmp/pytest-of-<user>/pytest-5477/test_crash_after_reservation_b0/run-root/.manager.lock (recorded owner pid=942554)
+WARNING  acp.scheduler.manager:manager.py:664 Stealing stale manager lock /tmp/pytest-of-xieningke/pytest-5477/test_crash_after_reservation_b0/run-root/.manager.lock (recorded owner pid=942554)
 _________________ test_add_model_result_restricted_methods_pin _________________
 
     def test_add_model_result_restricted_methods_pin() -> None:
@@ -270,34 +270,34 @@ E         Use -v to get more diff
 
 tests/test_frontend_sync_viewer_framing.py:152: AssertionError
 =============================== warnings summary ===============================
-../../../home/<user>/.local/lib/python3.11/site-packages/fastapi/testclient.py:1
-  /home/<user>/.local/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+../../../home/xieningke/.local/lib/python3.11/site-packages/fastapi/testclient.py:1
+  /home/xieningke/.local/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
     from starlette.testclient import TestClient as TestClient  # noqa
 
-../../../home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py:53
-  /home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py:53: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+../../../home/xieningke/.local/lib/python3.11/site-packages/starlette/testclient.py:53
+  /home/xieningke/.local/lib/python3.11/site-packages/starlette/testclient.py:53: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
     _PortalFactoryType = Callable[[], AbstractContextManager[anyio.abc.BlockingPortal]]
 
 tests/test_acp_api_v2_lineage.py::test_corrupt_in_downstream_like_path
-  /home/<user>/.local/lib/python3.11/site-packages/_pytest/threadexception.py:58: PytestUnhandledThreadExceptionWarning: Exception in thread acp-submit-20261023_103139_002_ethanol_pes
+  /home/xieningke/.local/lib/python3.11/site-packages/_pytest/threadexception.py:58: PytestUnhandledThreadExceptionWarning: Exception in thread acp-submit-20261023_103139_002_ethanol_pes
   
   Traceback (most recent call last):
-    File "<acp2-dev>/integration/src/acp/scheduler/manager.py", line 3723, in _execute_submission_impl
+    File "/ACPServer/acp2-development/integration/src/acp/scheduler/manager.py", line 3723, in _execute_submission_impl
       submitted = self._submit_job(job_id)
                   ^^^^^^^^^^^^^^^^^^^^^^^^
-    File "<acp2-dev>/integration/src/acp/scheduler/manager.py", line 4810, in _submit_job
+    File "/ACPServer/acp2-development/integration/src/acp/scheduler/manager.py", line 4810, in _submit_job
       if not self._batch_slot_available(record):
              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    File "<acp2-dev>/integration/src/acp/scheduler/manager.py", line 3852, in _batch_slot_available
+    File "/ACPServer/acp2-development/integration/src/acp/scheduler/manager.py", line 3852, in _batch_slot_available
       records = self.store.list(limit=10000)
                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    File "<acp2-dev>/integration/src/acp_services/store/store.py", line 727, in list
+    File "/ACPServer/acp2-development/integration/src/acp_services/store/store.py", line 727, in list
       return [_row_to_record(r) for r in rows]
              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    File "<acp2-dev>/integration/src/acp_services/store/store.py", line 727, in <listcomp>
+    File "/ACPServer/acp2-development/integration/src/acp_services/store/store.py", line 727, in <listcomp>
       return [_row_to_record(r) for r in rows]
               ^^^^^^^^^^^^^^^^^
-    File "<acp2-dev>/integration/src/acp_services/store/store.py", line 1632, in _row_to_record
+    File "/ACPServer/acp2-development/integration/src/acp_services/store/store.py", line 1632, in _row_to_record
       spec_raw = json.loads(row["spec_json"])
                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     File "/usr/lib64/python3.11/json/__init__.py", line 346, in loads
@@ -318,15 +318,15 @@ tests/test_acp_api_v2_lineage.py::test_corrupt_in_downstream_like_path
       self.run()
     File "/usr/lib64/python3.11/threading.py", line 982, in run
       self._target(*self._args, **self._kwargs)
-    File "<acp2-dev>/integration/src/acp/scheduler/manager.py", line 3692, in _execute_submission
+    File "/ACPServer/acp2-development/integration/src/acp/scheduler/manager.py", line 3692, in _execute_submission
       self._execute_submission_impl(job_id)
-    File "<acp2-dev>/integration/src/acp/scheduler/manager.py", line 3798, in _execute_submission_impl
+    File "/ACPServer/acp2-development/integration/src/acp/scheduler/manager.py", line 3798, in _execute_submission_impl
       record = self.store.get(job_id)
                ^^^^^^^^^^^^^^^^^^^^^^
-    File "<acp2-dev>/integration/src/acp_services/store/store.py", line 641, in get
+    File "/ACPServer/acp2-development/integration/src/acp_services/store/store.py", line 641, in get
       return _row_to_record(row) if row else None
              ^^^^^^^^^^^^^^^^^^^
-    File "<acp2-dev>/integration/src/acp_services/store/store.py", line 1632, in _row_to_record
+    File "/ACPServer/acp2-development/integration/src/acp_services/store/store.py", line 1632, in _row_to_record
       spec_raw = json.loads(row["spec_json"])
                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     File "/usr/lib64/python3.11/json/__init__.py", line 346, in loads
@@ -345,22 +345,22 @@ tests/test_acp_api_v2_lineage.py::test_corrupt_in_downstream_like_path
     warnings.warn(pytest.PytestUnhandledThreadExceptionWarning(msg))
 
 tests/test_acp_api_v2_lineage.py::test_self_corrupt_returns_empty
-  /home/<user>/.local/lib/python3.11/site-packages/_pytest/threadexception.py:58: PytestUnhandledThreadExceptionWarning: Exception in thread acp-submit-20261023_103151_001_ethanol_pes
+  /home/xieningke/.local/lib/python3.11/site-packages/_pytest/threadexception.py:58: PytestUnhandledThreadExceptionWarning: Exception in thread acp-submit-20261023_103151_001_ethanol_pes
   
   Traceback (most recent call last):
     File "/usr/lib64/python3.11/threading.py", line 1045, in _bootstrap_inner
       self.run()
     File "/usr/lib64/python3.11/threading.py", line 982, in run
       self._target(*self._args, **self._kwargs)
-    File "<acp2-dev>/integration/src/acp/scheduler/manager.py", line 3692, in _execute_submission
+    File "/ACPServer/acp2-development/integration/src/acp/scheduler/manager.py", line 3692, in _execute_submission
       self._execute_submission_impl(job_id)
-    File "<acp2-dev>/integration/src/acp/scheduler/manager.py", line 3798, in _execute_submission_impl
+    File "/ACPServer/acp2-development/integration/src/acp/scheduler/manager.py", line 3798, in _execute_submission_impl
       record = self.store.get(job_id)
                ^^^^^^^^^^^^^^^^^^^^^^
-    File "<acp2-dev>/integration/src/acp_services/store/store.py", line 641, in get
+    File "/ACPServer/acp2-development/integration/src/acp_services/store/store.py", line 641, in get
       return _row_to_record(row) if row else None
              ^^^^^^^^^^^^^^^^^^^
-    File "<acp2-dev>/integration/src/acp_services/store/store.py", line 1632, in _row_to_record
+    File "/ACPServer/acp2-development/integration/src/acp_services/store/store.py", line 1632, in _row_to_record
       spec_raw = json.loads(row["spec_json"])
                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     File "/usr/lib64/python3.11/json/__init__.py", line 346, in loads
@@ -378,22 +378,22 @@ tests/test_acp_api_v2_lineage.py::test_self_corrupt_returns_empty
     warnings.warn(pytest.PytestUnhandledThreadExceptionWarning(msg))
 
 tests/test_acp_api_v2_lineage.py::test_corrupt_spec_json_skipped
-  /home/<user>/.local/lib/python3.11/site-packages/_pytest/threadexception.py:58: PytestUnhandledThreadExceptionWarning: Exception in thread acp-submit-20261023_103201_002_ethanol_pes
+  /home/xieningke/.local/lib/python3.11/site-packages/_pytest/threadexception.py:58: PytestUnhandledThreadExceptionWarning: Exception in thread acp-submit-20261023_103201_002_ethanol_pes
   
   Traceback (most recent call last):
     File "/usr/lib64/python3.11/threading.py", line 1045, in _bootstrap_inner
       self.run()
     File "/usr/lib64/python3.11/threading.py", line 982, in run
       self._target(*self._args, **self._kwargs)
-    File "<acp2-dev>/integration/src/acp/scheduler/manager.py", line 3692, in _execute_submission
+    File "/ACPServer/acp2-development/integration/src/acp/scheduler/manager.py", line 3692, in _execute_submission
       self._execute_submission_impl(job_id)
-    File "<acp2-dev>/integration/src/acp/scheduler/manager.py", line 3798, in _execute_submission_impl
+    File "/ACPServer/acp2-development/integration/src/acp/scheduler/manager.py", line 3798, in _execute_submission_impl
       record = self.store.get(job_id)
                ^^^^^^^^^^^^^^^^^^^^^^
-    File "<acp2-dev>/integration/src/acp_services/store/store.py", line 641, in get
+    File "/ACPServer/acp2-development/integration/src/acp_services/store/store.py", line 641, in get
       return _row_to_record(row) if row else None
              ^^^^^^^^^^^^^^^^^^^
-    File "<acp2-dev>/integration/src/acp_services/store/store.py", line 1632, in _row_to_record
+    File "/ACPServer/acp2-development/integration/src/acp_services/store/store.py", line 1632, in _row_to_record
       spec_raw = json.loads(row["spec_json"])
                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     File "/usr/lib64/python3.11/json/__init__.py", line 346, in loads
@@ -415,7 +415,7 @@ tests/test_local_cleanup.py::test_api_cleanup_dry_run
 tests/test_local_cleanup.py::test_api_cleanup_keeps_non_terminal_dirs
 tests/test_local_cleanup.py::test_api_cleanup_scope_work_dirs
 tests/test_local_cleanup.py::test_api_cleanup_bad_scope
-  <acp2-dev>/integration/tests/test_local_cleanup.py:990: DeprecationWarning: 
+  /ACPServer/acp2-development/integration/tests/test_local_cleanup.py:990: DeprecationWarning: 
           on_event is deprecated, use lifespan event handlers instead.
   
           Read more about it in the
@@ -424,7 +424,7 @@ tests/test_local_cleanup.py::test_api_cleanup_bad_scope
     @app.on_event("startup")
 
 tests/test_local_cleanup.py: 12 warnings
-  /home/<user>/.local/lib/python3.11/site-packages/fastapi/applications.py:4681: DeprecationWarning: 
+  /home/xieningke/.local/lib/python3.11/site-packages/fastapi/applications.py:4681: DeprecationWarning: 
           on_event is deprecated, use lifespan event handlers instead.
   
           Read more about it in the
@@ -437,7 +437,7 @@ tests/test_local_cleanup.py::test_api_cleanup_dry_run
 tests/test_local_cleanup.py::test_api_cleanup_keeps_non_terminal_dirs
 tests/test_local_cleanup.py::test_api_cleanup_scope_work_dirs
 tests/test_local_cleanup.py::test_api_cleanup_bad_scope
-  <acp2-dev>/integration/tests/test_local_cleanup.py:996: DeprecationWarning: 
+  /ACPServer/acp2-development/integration/tests/test_local_cleanup.py:996: DeprecationWarning: 
           on_event is deprecated, use lifespan event handlers instead.
   
           Read more about it in the
@@ -446,7 +446,7 @@ tests/test_local_cleanup.py::test_api_cleanup_bad_scope
     @app.on_event("shutdown")
 
 tests/test_local_cleanup.py::test_api_cleanup_disabled_returns_503
-  <acp2-dev>/integration/tests/test_local_cleanup.py:1082: DeprecationWarning: 
+  /ACPServer/acp2-development/integration/tests/test_local_cleanup.py:1082: DeprecationWarning: 
           on_event is deprecated, use lifespan event handlers instead.
   
           Read more about it in the
@@ -455,7 +455,7 @@ tests/test_local_cleanup.py::test_api_cleanup_disabled_returns_503
     @app.on_event("startup")
 
 tests/test_local_cleanup.py::test_api_cleanup_disabled_returns_503
-  <acp2-dev>/integration/tests/test_local_cleanup.py:1088: DeprecationWarning: 
+  /ACPServer/acp2-development/integration/tests/test_local_cleanup.py:1088: DeprecationWarning: 
           on_event is deprecated, use lifespan event handlers instead.
   
           Read more about it in the

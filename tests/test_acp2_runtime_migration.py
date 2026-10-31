@@ -26,7 +26,9 @@ def _fixture(tmp_path: Path, *, workspace: Path | None = None) -> Path:
         "fixture_id": "fx-migration-test",
         "source_fixtures": str(SOURCE_FIXTURES),
         "workspace_root": str(workspace or tmp_path / "workspace"),
-        "target_schema_version": 23,
+        # HEAD schema version: 026 applied jobs-DB migrations
+        # (migration 027 — M2-03a approval science projection — is newest).
+        "target_schema_version": 26,
         "legacy_schema_version": 21,
         "corrupt_artifact": "historical_manifest/RESULT_v2/corrupt_manifest.json",
     }

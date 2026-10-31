@@ -1,0 +1,215 @@
+{
+  "extension": {
+    "id": "acp.research.v1",
+    "version": "1.0.0"
+  },
+  "p1": [
+    "acp_capabilities",
+    "acp_preflight",
+    "acp_submit",
+    "acp_status",
+    "acp_cancel",
+    "acp_prepare_artifact",
+    "acp_read_artifact",
+    "acp_analyze"
+  ],
+  "p2": [
+    {
+      "controllerClientMethod": "create_proposal",
+      "errorCodes": [
+        "authorization",
+        "invalid-parameter",
+        "conflict",
+        "not-prepared",
+        "retryable"
+      ],
+      "longTask": false,
+      "namespacedId": "acp.research.proposal_create",
+      "operation": "proposal.create",
+      "row": "P2-R1",
+      "tool": "acp_research_proposal_create_v1",
+      "toolVersion": "1.0.0",
+      "wiringTask": "T-25"
+    },
+    {
+      "controllerClientMethod": "read_proposal",
+      "errorCodes": [
+        "authorization",
+        "invalid-parameter",
+        "conflict",
+        "not-prepared",
+        "retryable"
+      ],
+      "longTask": false,
+      "namespacedId": "acp.research.proposal_read",
+      "operation": "proposal.read",
+      "row": "P2-R1",
+      "tool": "acp_research_proposal_read_v1",
+      "toolVersion": "1.0.0",
+      "wiringTask": "T-25"
+    },
+    {
+      "controllerClientMethod": "update_proposal_cas",
+      "errorCodes": [
+        "authorization",
+        "invalid-parameter",
+        "conflict",
+        "not-prepared",
+        "retryable"
+      ],
+      "longTask": false,
+      "namespacedId": "acp.research.proposal_update_cas",
+      "operation": "proposal.update_cas",
+      "row": "P2-R1",
+      "tool": "acp_research_proposal_update_cas_v1",
+      "toolVersion": "1.0.0",
+      "wiringTask": "T-25"
+    },
+    {
+      "controllerClientMethod": "request_approval",
+      "errorCodes": [
+        "authorization",
+        "invalid-parameter",
+        "conflict",
+        "retryable"
+      ],
+      "longTask": false,
+      "namespacedId": "acp.research.approval_request",
+      "operation": "approval.request",
+      "row": "P2-R2",
+      "tool": "acp_research_approval_request_v1",
+      "toolVersion": "1.0.0",
+      "wiringTask": "T-27"
+    },
+    {
+      "controllerClientMethod": "query_approval",
+      "errorCodes": [
+        "authorization",
+        "invalid-parameter",
+        "conflict",
+        "retryable"
+      ],
+      "longTask": false,
+      "namespacedId": "acp.research.approval_query",
+      "operation": "approval.query",
+      "row": "P2-R2",
+      "tool": "acp_research_approval_query_v1",
+      "toolVersion": "1.0.0",
+      "wiringTask": "T-27"
+    },
+    {
+      "controllerClientMethod": "decide_approval",
+      "errorCodes": [
+        "authorization",
+        "invalid-parameter",
+        "conflict",
+        "retryable"
+      ],
+      "longTask": false,
+      "namespacedId": "acp.research.approval_decide",
+      "operation": "approval.approve",
+      "row": "P2-R3",
+      "tool": "acp_research_approval_decide_v1",
+      "toolVersion": "1.0.0",
+      "wiringTask": "T-28"
+    },
+    {
+      "controllerClientMethod": "decide_approval",
+      "errorCodes": [
+        "authorization",
+        "invalid-parameter",
+        "conflict",
+        "retryable"
+      ],
+      "longTask": false,
+      "namespacedId": "acp.research.approval_decide",
+      "operation": "approval.reject",
+      "row": "P2-R3",
+      "tool": "acp_research_approval_decide_v1",
+      "toolVersion": "1.0.0",
+      "wiringTask": "T-28"
+    },
+    {
+      "controllerClientMethod": "revoke_approval",
+      "errorCodes": [
+        "authorization",
+        "invalid-parameter",
+        "conflict",
+        "retryable"
+      ],
+      "longTask": false,
+      "namespacedId": "acp.research.approval_revoke",
+      "operation": "approval.revoke",
+      "row": "P2-R3",
+      "tool": "acp_research_approval_revoke_v1",
+      "toolVersion": "1.0.0",
+      "wiringTask": "T-28"
+    },
+    {
+      "controllerClientMethod": "wait_research",
+      "errorCodes": [
+        "authorization",
+        "invalid-parameter",
+        "not-prepared",
+        "retryable"
+      ],
+      "longTask": true,
+      "namespacedId": "acp.research.wait",
+      "operation": "research.wait",
+      "row": "P2-R4",
+      "tool": "acp_research_wait_v1",
+      "toolVersion": "1.0.0",
+      "wiringTask": "T-32"
+    },
+    {
+      "controllerClientMethod": "wait_research",
+      "errorCodes": [
+        "authorization",
+        "invalid-parameter",
+        "not-prepared",
+        "retryable"
+      ],
+      "longTask": false,
+      "namespacedId": "acp.research.wait",
+      "operation": "research.events",
+      "row": "P2-R4",
+      "tool": "acp_research_wait_v1",
+      "toolVersion": "1.0.0",
+      "wiringTask": "T-32"
+    },
+    {
+      "controllerClientMethod": "snapshot_research",
+      "errorCodes": [
+        "authorization",
+        "invalid-parameter",
+        "not-prepared",
+        "retryable"
+      ],
+      "longTask": false,
+      "namespacedId": "acp.research.snapshot",
+      "operation": "research.snapshot",
+      "row": "P2-R4",
+      "tool": "acp_research_snapshot_v1",
+      "toolVersion": "1.0.0",
+      "wiringTask": "T-32"
+    },
+    {
+      "controllerClientMethod": "resume_research",
+      "errorCodes": [
+        "authorization",
+        "invalid-parameter",
+        "conflict",
+        "retryable",
+        "not-prepared"
+      ],
+      "longTask": false,
+      "namespacedId": "acp.research.resume",
+      "operation": "research.resume",
+      "row": "P2-R5",
+      "tool": "acp_research_resume_v1",
+      "toolVersion": "1.0.0",
+      "wiringTask": "T-32"
+    }
+  ],
+  "schema": "rph.bridge-contract.v1"
+}

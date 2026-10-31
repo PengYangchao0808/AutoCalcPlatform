@@ -1,0 +1,11 @@
+{
+  "complete_marker": true,
+  "duration_s": 11.4,
+  "files": 606,
+  "publish_retries": 6,
+  "release_dir": "/ACPServer/acp2-runs/remediation/m4-03/remote_code/releases/2d1ab37a0f988933",
+  "release_id": "2d1ab37a0f988933",
+  "sample_path": "config/defaults.yaml",
+  "sample_present": true,
+  "source": "remote"
+}

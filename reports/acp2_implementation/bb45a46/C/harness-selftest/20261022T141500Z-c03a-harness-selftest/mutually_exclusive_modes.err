@@ -1,0 +1,7 @@
+usage: acp2_experience.py [-h]
+                          [--scenario SCENARIO | --verify-receipt PATH | --check-doc-placeholders PATH]
+                          [--out OUT] [--timeout TIMEOUT]
+                          [--manifest MANIFEST] [--phase PHASE]
+                          [--mode {fixture,live}] [--subcase SUBCASE]
+                          [--dry-run]
+usage error: argument --verify-receipt: not allowed with argument --scenario

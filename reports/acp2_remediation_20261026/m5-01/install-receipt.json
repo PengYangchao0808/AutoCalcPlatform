@@ -1,0 +1,614 @@
+{
+  "bom": "/ACPServer/acp2-remediation-integration/docs/reference/next-change/acp2-contracts/release/bom.current.json",
+  "bom_sha256": "ee23e7b0c26a9351dda8727d31f48ca520930f8368fcb61cb405e5c5c3b62e18",
+  "generated_at": "2026-10-28T02:36:04Z",
+  "imports": {
+    "roles": {
+      "acp": "0.3.0",
+      "acp_services": "0.3.0",
+      "cccp": "0.3.0",
+      "paths": {
+        "acp": "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/roles/lib64/python3.11/site-packages/acp/__init__.py",
+        "acp_services": "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/roles/lib64/python3.11/site-packages/acp_services/__init__.py",
+        "cccp": "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/roles/lib64/python3.11/site-packages/cccp/__init__.py"
+      },
+      "repo_on_sys_path": false,
+      "resolved_inside_venv": true,
+      "sys_path": [
+        "/usr/lib64/python311.zip",
+        "/usr/lib64/python3.11",
+        "/usr/lib64/python3.11/lib-dynload",
+        "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/roles/lib64/python3.11/site-packages",
+        "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/roles/lib/python3.11/site-packages"
+      ],
+      "web_assets": "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/roles/lib64/python3.11/site-packages/acp_web_assets/__init__.py"
+    },
+    "root": {
+      "acp": "0.3.0",
+      "acp_services": "0.3.0",
+      "cccp": "0.3.0",
+      "paths": {
+        "acp": "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/root/lib64/python3.11/site-packages/acp/__init__.py",
+        "acp_services": "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/root/lib64/python3.11/site-packages/acp_services/__init__.py",
+        "cccp": "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/root/lib64/python3.11/site-packages/cccp/__init__.py"
+      },
+      "repo_on_sys_path": false,
+      "resolved_inside_venv": true,
+      "sys_path": [
+        "/usr/lib64/python311.zip",
+        "/usr/lib64/python3.11",
+        "/usr/lib64/python3.11/lib-dynload",
+        "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/root/lib64/python3.11/site-packages",
+        "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/root/lib/python3.11/site-packages"
+      ],
+      "web_assets": null
+    }
+  },
+  "matrix": {
+    "mixed": {
+      "reason": "release contract forbids mixing distributions: ['root'] already installed, refusing the 'roles' set",
+      "shared_paths_byte_identical": true,
+      "status": "REFUSED"
+    },
+    "roles_only": {
+      "distributions": [
+        "cccp",
+        "acp-worker",
+        "acp-web"
+      ],
+      "status": "PASS"
+    },
+    "root_only": {
+      "distributions": [
+        "acp"
+      ],
+      "status": "PASS"
+    },
+    "web_research_surface": {
+      "research_read_refusal": 403,
+      "science_capabilities": 200,
+      "status": "PASS"
+    }
+  },
+  "mcp": {
+    "controller": "http://127.0.0.1:59209",
+    "pre_initialize_code": "not_initialized",
+    "pre_initialize_error": "MCP session is not initialized",
+    "protocol_version": "2025-06-18",
+    "server": {
+      "name": "acp-services-mcp",
+      "version": "0.1.0"
+    },
+    "tools": [
+      "acp_analyze",
+      "acp_cancel",
+      "acp_capabilities",
+      "acp_preflight",
+      "acp_prepare_artifact",
+      "acp_read_artifact",
+      "acp_status",
+      "acp_submit"
+    ]
+  },
+  "plugin": {
+    "entry_points": [
+      "acp2_external_validator"
+    ],
+    "install_argv": [
+      "--no-deps",
+      "--no-index",
+      "/ACPServer/acp2-artifacts/remediation/m5-01/plugins/acp2_external_science_validator-1.0.0-py3-none-any.whl"
+    ],
+    "name": "acp2-external-science-validator",
+    "version": "1.0.0",
+    "wheel": "acp2_external_science_validator-1.0.0-py3-none-any.whl",
+    "wheel_sha256": "77f48f8e7b5327e9fb339a46004573a1af08160c6c348242dfb6c0d6dfceb39b"
+  },
+  "python": "3.11.13",
+  "result": "PASS",
+  "rph": {
+    "bin": "/ACPServer/acp2-runs/remediation/m5-01-install/rph-install/node_modules/.bin/rph",
+    "bin_version": "rph 0.0.0",
+    "doctor_checks": 9,
+    "doctor_mode": "static",
+    "doctor_schema": "acp2.rph.doctor.v1",
+    "doctor_status": "ok",
+    "installed_at": "/ACPServer/acp2-runs/remediation/m5-01-install/rph-install",
+    "packages_present": {
+      "bridge": true,
+      "cli": true,
+      "dsh-bundle": true,
+      "research": true
+    },
+    "pnpm_install_exit": 0,
+    "surface": "/ACPServer/acp2-artifacts/remediation/m5-01/rph/install-surface",
+    "verify_exit": 0,
+    "verify_stdout_tail": [
+      "  @rph/bridge -> /ACPServer/acp2-runs/remediation/m5-01-install/rph-install/node_modules/.pnpm/@rph+bridge@file+rph-bridge-0.0.0.tgz/node_modules/@rph/bridge/dist/index.js",
+      "  @rph/dsh-bundle -> /ACPServer/acp2-runs/remediation/m5-01-install/rph-install/node_modules/.pnpm/@rph+dsh-bundle@file+rph-dsh-bundle-0.0.0.tgz/node_modules/@rph/dsh-bundle/dist/src/index.js",
+      "  @rph/cli -> /ACPServer/acp2-runs/remediation/m5-01-install/rph-install/node_modules/.pnpm/@rph+cli@file+rph-cli-0.0.0.tgz/node_modules/@rph/cli/dist/index.js",
+      "  bin: rph 0.0.0 (from an unrelated cwd)",
+      "  doctor: schema acp2.rph.doctor.v1, 9 checks"
+    ]
+  },
+  "schema": "acp2.m5-01.install-receipt.v1",
+  "seconds": 89.0,
+  "steps": [
+    {
+      "detail": {
+        "artifacts": 27,
+        "bom": true,
+        "bytes": 237660838
+      },
+      "name": "store.digests",
+      "status": "PASS"
+    },
+    {
+      "detail": {
+        "acp": "0.3.0",
+        "acp_services": "0.3.0",
+        "cccp": "0.3.0",
+        "paths": {
+          "acp": "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/root/lib64/python3.11/site-packages/acp/__init__.py",
+          "acp_services": "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/root/lib64/python3.11/site-packages/acp_services/__init__.py",
+          "cccp": "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/root/lib64/python3.11/site-packages/cccp/__init__.py"
+        },
+        "repo_on_sys_path": false,
+        "resolved_inside_venv": true,
+        "sys_path": [
+          "/usr/lib64/python311.zip",
+          "/usr/lib64/python3.11",
+          "/usr/lib64/python3.11/lib-dynload",
+          "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/root/lib64/python3.11/site-packages",
+          "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/root/lib/python3.11/site-packages"
+        ],
+        "web_assets": null
+      },
+      "name": "root.imports",
+      "status": "PASS"
+    },
+    {
+      "detail": [
+        "acp"
+      ],
+      "name": "root.distribution_set",
+      "status": "PASS"
+    },
+    {
+      "detail": {
+        "answers": "/ACPServer/acp2-runs/remediation/m5-01-install/home/answers-root.yaml",
+        "config_written": true,
+        "doctor_exit": 1,
+        "doctor_fail_rows": [
+          "software:censo",
+          "software:isostat",
+          "software:molclus"
+        ],
+        "doctor_mode": "local",
+        "doctor_pass_rows": [
+          "software:orca",
+          "software:xtb",
+          "software:crest",
+          "software:shermo",
+          "run_root",
+          "store",
+          "config"
+        ],
+        "doctor_stdout_tail": [
+          "  FAIL\uff083\uff09\uff1a",
+          "    - software:censo \u2014 \u5df2\u914d\u7f6e\u8def\u5f84\u4e0d\u53ef\u7528\uff1acenso\uff08\u62d2\u7edd PATH \u56de\u843d\uff1aNone\uff09",
+          "    - software:isostat \u2014 \u5df2\u914d\u7f6e\u8def\u5f84\u4e0d\u53ef\u7528\uff1aisostat\uff08\u62d2\u7edd PATH \u56de\u843d\uff1aNone\uff09",
+          "    - software:molclus \u2014 \u5df2\u914d\u7f6e\u8def\u5f84\u4e0d\u53ef\u7528\uff1amolclus\uff08\u62d2\u7edd PATH \u56de\u843d\uff1aNone\uff09",
+          "  NOT_VERIFIED\uff080\uff09\uff1a",
+          "    - \uff08\u65e0\uff09",
+          "",
+          "Local doctor finished: 3 failure(s) found"
+        ],
+        "help_has_subcommands": true,
+        "init_exit": 0,
+        "optional_science_not_registered": [
+          "software:censo",
+          "software:isostat",
+          "software:molclus"
+        ],
+        "unexpected_failures": []
+      },
+      "name": "root.cli",
+      "status": "PASS"
+    },
+    {
+      "detail": {
+        "controller": "http://127.0.0.1:59209",
+        "pre_initialize_code": "not_initialized",
+        "pre_initialize_error": "MCP session is not initialized",
+        "protocol_version": "2025-06-18",
+        "server": {
+          "name": "acp-services-mcp",
+          "version": "0.1.0"
+        },
+        "tools": [
+          "acp_analyze",
+          "acp_cancel",
+          "acp_capabilities",
+          "acp_preflight",
+          "acp_prepare_artifact",
+          "acp_read_artifact",
+          "acp_status",
+          "acp_submit"
+        ]
+      },
+      "name": "root.mcp_handshake",
+      "status": "PASS"
+    },
+    {
+      "detail": {
+        "acp": "0.3.0",
+        "acp_services": "0.3.0",
+        "cccp": "0.3.0",
+        "paths": {
+          "acp": "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/roles/lib64/python3.11/site-packages/acp/__init__.py",
+          "acp_services": "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/roles/lib64/python3.11/site-packages/acp_services/__init__.py",
+          "cccp": "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/roles/lib64/python3.11/site-packages/cccp/__init__.py"
+        },
+        "repo_on_sys_path": false,
+        "resolved_inside_venv": true,
+        "sys_path": [
+          "/usr/lib64/python311.zip",
+          "/usr/lib64/python3.11",
+          "/usr/lib64/python3.11/lib-dynload",
+          "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/roles/lib64/python3.11/site-packages",
+          "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/roles/lib/python3.11/site-packages"
+        ],
+        "web_assets": "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/roles/lib64/python3.11/site-packages/acp_web_assets/__init__.py"
+      },
+      "name": "roles.imports",
+      "status": "PASS"
+    },
+    {
+      "detail": [
+        "acp-web",
+        "acp-worker",
+        "cccp"
+      ],
+      "name": "roles.distribution_set",
+      "status": "PASS"
+    },
+    {
+      "detail": {
+        "answers": "/ACPServer/acp2-runs/remediation/m5-01-install/home/answers-roles.yaml",
+        "config_written": true,
+        "doctor_exit": 1,
+        "doctor_fail_rows": [
+          "software:censo",
+          "software:isostat",
+          "software:molclus"
+        ],
+        "doctor_mode": "local",
+        "doctor_pass_rows": [
+          "software:orca",
+          "software:xtb",
+          "software:crest",
+          "software:shermo",
+          "run_root",
+          "store",
+          "config"
+        ],
+        "doctor_stdout_tail": [
+          "  FAIL\uff083\uff09\uff1a",
+          "    - software:censo \u2014 \u5df2\u914d\u7f6e\u8def\u5f84\u4e0d\u53ef\u7528\uff1acenso\uff08\u62d2\u7edd PATH \u56de\u843d\uff1aNone\uff09",
+          "    - software:isostat \u2014 \u5df2\u914d\u7f6e\u8def\u5f84\u4e0d\u53ef\u7528\uff1aisostat\uff08\u62d2\u7edd PATH \u56de\u843d\uff1aNone\uff09",
+          "    - software:molclus \u2014 \u5df2\u914d\u7f6e\u8def\u5f84\u4e0d\u53ef\u7528\uff1amolclus\uff08\u62d2\u7edd PATH \u56de\u843d\uff1aNone\uff09",
+          "  NOT_VERIFIED\uff080\uff09\uff1a",
+          "    - \uff08\u65e0\uff09",
+          "",
+          "Local doctor finished: 3 failure(s) found"
+        ],
+        "help_has_subcommands": true,
+        "init_exit": 0,
+        "optional_science_not_registered": [
+          "software:censo",
+          "software:isostat",
+          "software:molclus"
+        ],
+        "unexpected_failures": []
+      },
+      "name": "roles.cli",
+      "status": "PASS"
+    },
+    {
+      "detail": {
+        "protocol_version": "2025-06-18",
+        "tools": [
+          "acp_analyze",
+          "acp_cancel",
+          "acp_capabilities",
+          "acp_preflight",
+          "acp_prepare_artifact",
+          "acp_read_artifact",
+          "acp_status",
+          "acp_submit"
+        ]
+      },
+      "name": "roles.mcp_handshake",
+      "status": "PASS"
+    },
+    {
+      "detail": {
+        "asset": {
+          "cache_control": "no-cache",
+          "matches_bytes": true,
+          "path": "js/candidate_details.js",
+          "status": 200
+        },
+        "index": {
+          "checkout_absent": true,
+          "frontend_dir": "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/roles/lib64/python3.11/site-packages/acp_web_assets",
+          "matches_packaged_html": true,
+          "served_from_venv": true,
+          "status": 200
+        }
+      },
+      "name": "web.workbench.static",
+      "status": "PASS"
+    },
+    {
+      "detail": {
+        "capabilities": {
+          "keys": [
+            "admission",
+            "admission_enforcement",
+            "analysis_capabilities",
+            "backends",
+            "capability_descriptors",
+            "capability_request",
+            "execution_limits",
+            "extensions",
+            "identity",
+            "identity_mode",
+            "identity_profiles",
+            "limits",
+            "model_token_enforcement",
+            "multi_tenant_security",
+            "protocol_version",
+            "remote_identity_providers",
+            "research_tools",
+            "schema_version",
+            "stdio_identity_binding",
+            "task_kinds",
+            "tools",
+            "workflows"
+          ],
+          "protocol_version": "2025-06-18",
+          "status": 200,
+          "tools": [
+            "acp_analyze",
+            "acp_cancel",
+            "acp_capabilities",
+            "acp_preflight",
+            "acp_prepare_artifact",
+            "acp_read_artifact",
+            "acp_status",
+            "acp_submit"
+          ],
+          "workflows": 15
+        },
+        "research_unknown": {
+          "status": 403
+        },
+        "science": {
+          "keys": [
+            "capabilities",
+            "protocol_version",
+            "tools"
+          ],
+          "status": 200
+        }
+      },
+      "name": "web.workbench.capabilities",
+      "status": "PASS"
+    },
+    {
+      "detail": {
+        "head": {
+          "status": 200
+        },
+        "post": {
+          "status": 405
+        },
+        "traversal_encoded": {
+          "status": 404
+        },
+        "traversal_literal": {
+          "status": 404
+        },
+        "unknown": {
+          "status": 404
+        }
+      },
+      "name": "web.workbench.read_only_mounts",
+      "status": "PASS"
+    },
+    {
+      "detail": {
+        "digest": "1d5c28c721119515b4bf600c0689b6fe80cc406fa665a39f3c9a74607997aab9",
+        "files": 121,
+        "matches_bom": true,
+        "release_id": "acp2-experience-0.3.0",
+        "tamper_exit": 1,
+        "tamper_rejected": true,
+        "verified": true
+      },
+      "name": "web.workbench.digest_startup",
+      "status": "PASS"
+    },
+    {
+      "detail": {
+        "mixed": {
+          "reason": "release contract forbids mixing distributions: ['root'] already installed, refusing the 'roles' set",
+          "shared_paths_byte_identical": true,
+          "status": "REFUSED"
+        },
+        "roles_only": {
+          "distributions": [
+            "cccp",
+            "acp-worker",
+            "acp-web"
+          ],
+          "status": "PASS"
+        },
+        "root_only": {
+          "distributions": [
+            "acp"
+          ],
+          "status": "PASS"
+        },
+        "web_research_surface": {
+          "research_read_refusal": 403,
+          "science_capabilities": 200,
+          "status": "PASS"
+        }
+      },
+      "name": "install.matrix",
+      "status": "PASS"
+    },
+    {
+      "detail": {
+        "bin": "/ACPServer/acp2-runs/remediation/m5-01-install/rph-install/node_modules/.bin/rph",
+        "bin_version": "rph 0.0.0",
+        "doctor_checks": 9,
+        "doctor_mode": "static",
+        "doctor_schema": "acp2.rph.doctor.v1",
+        "doctor_status": "ok",
+        "installed_at": "/ACPServer/acp2-runs/remediation/m5-01-install/rph-install",
+        "packages_present": {
+          "bridge": true,
+          "cli": true,
+          "dsh-bundle": true,
+          "research": true
+        },
+        "pnpm_install_exit": 0,
+        "surface": "/ACPServer/acp2-artifacts/remediation/m5-01/rph/install-surface",
+        "verify_exit": 0,
+        "verify_stdout_tail": [
+          "  @rph/bridge -> /ACPServer/acp2-runs/remediation/m5-01-install/rph-install/node_modules/.pnpm/@rph+bridge@file+rph-bridge-0.0.0.tgz/node_modules/@rph/bridge/dist/index.js",
+          "  @rph/dsh-bundle -> /ACPServer/acp2-runs/remediation/m5-01-install/rph-install/node_modules/.pnpm/@rph+dsh-bundle@file+rph-dsh-bundle-0.0.0.tgz/node_modules/@rph/dsh-bundle/dist/src/index.js",
+          "  @rph/cli -> /ACPServer/acp2-runs/remediation/m5-01-install/rph-install/node_modules/.pnpm/@rph+cli@file+rph-cli-0.0.0.tgz/node_modules/@rph/cli/dist/index.js",
+          "  bin: rph 0.0.0 (from an unrelated cwd)",
+          "  doctor: schema acp2.rph.doctor.v1, 9 checks"
+        ]
+      },
+      "name": "rph.offline_install",
+      "status": "PASS"
+    },
+    {
+      "detail": {
+        "entry_points": [
+          "acp2_external_validator"
+        ],
+        "install_argv": [
+          "--no-deps",
+          "--no-index",
+          "/ACPServer/acp2-artifacts/remediation/m5-01/plugins/acp2_external_science_validator-1.0.0-py3-none-any.whl"
+        ],
+        "name": "acp2-external-science-validator",
+        "version": "1.0.0",
+        "wheel": "acp2_external_science_validator-1.0.0-py3-none-any.whl",
+        "wheel_sha256": "77f48f8e7b5327e9fb339a46004573a1af08160c6c348242dfb6c0d6dfceb39b"
+      },
+      "name": "plugin.wheel_install",
+      "status": "PASS"
+    }
+  ],
+  "store": "/ACPServer/acp2-artifacts/remediation/m5-01",
+  "task_id": "M5-01",
+  "work": "/ACPServer/acp2-runs/remediation/m5-01-install",
+  "workbench": {
+    "asset": {
+      "cache_control": "no-cache",
+      "matches_bytes": true,
+      "path": "js/candidate_details.js",
+      "status": 200
+    },
+    "capabilities": {
+      "keys": [
+        "admission",
+        "admission_enforcement",
+        "analysis_capabilities",
+        "backends",
+        "capability_descriptors",
+        "capability_request",
+        "execution_limits",
+        "extensions",
+        "identity",
+        "identity_mode",
+        "identity_profiles",
+        "limits",
+        "model_token_enforcement",
+        "multi_tenant_security",
+        "protocol_version",
+        "remote_identity_providers",
+        "research_tools",
+        "schema_version",
+        "stdio_identity_binding",
+        "task_kinds",
+        "tools",
+        "workflows"
+      ],
+      "protocol_version": "2025-06-18",
+      "status": 200,
+      "tools": [
+        "acp_analyze",
+        "acp_cancel",
+        "acp_capabilities",
+        "acp_preflight",
+        "acp_prepare_artifact",
+        "acp_read_artifact",
+        "acp_status",
+        "acp_submit"
+      ],
+      "workflows": 15
+    },
+    "digest": {
+      "digest": "1d5c28c721119515b4bf600c0689b6fe80cc406fa665a39f3c9a74607997aab9",
+      "files": 121,
+      "matches_bom": true,
+      "release_id": "acp2-experience-0.3.0",
+      "tamper_exit": 1,
+      "tamper_rejected": true,
+      "verified": true
+    },
+    "head_asset": {
+      "status": 200
+    },
+    "index": {
+      "checkout_absent": true,
+      "frontend_dir": "/ACPServer/acp2-runs/remediation/m5-01-install/venvs/roles/lib64/python3.11/site-packages/acp_web_assets",
+      "matches_packaged_html": true,
+      "served_from_venv": true,
+      "status": 200
+    },
+    "post_to_static": {
+      "status": 405
+    },
+    "research_read_unknown": {
+      "status": 403
+    },
+    "science_capabilities": {
+      "keys": [
+        "capabilities",
+        "protocol_version",
+        "tools"
+      ],
+      "status": 200
+    },
+    "traversal_encoded": {
+      "status": 404
+    },
+    "traversal_literal": {
+      "status": 404
+    },
+    "unknown_asset": {
+      "status": 404
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "checked_local_links": 142,
+  "missing": [
+    {
+      "source": "README.md",
+      "target": "docs/archive/2026-10-16/history/ACP_Three_Tier_Architecture_20261016.html"
+    },
+    {
+      "source": "README.md",
+      "target": "docs/archive/2026-10-16/presentations/ACP_Product_Kernel_Manual_20261016.html"
+    }
+  ],
+  "note": "File existence checked; fragment anchors reviewed separately."
+}

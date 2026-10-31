@@ -142,7 +142,7 @@ def _shot(page: Page, name: str) -> Path:
 
 
 @pytest.fixture(scope="session")
-def server_url() -> Generator[str, None, None]:
+def server_url(isolated_browser_deployment: None) -> Generator[str, None, None]:
     """Yield the workbench base URL.
 
     When ``ACP_T25_BASE_URL`` is set (e.g. an ``acp run serve`` instance),

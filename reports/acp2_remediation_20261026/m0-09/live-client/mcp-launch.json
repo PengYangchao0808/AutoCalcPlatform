@@ -1,0 +1,35 @@
+{
+  "launch_version": 1,
+  "server": {
+    "name": "acp",
+    "entrypoint": "acp_services.entrypoints.mcp"
+  },
+  "transport": "stdio",
+  "protocol_version": "2025-06-18",
+  "command": "/usr/bin/python3.11",
+  "args": [
+    "-m",
+    "acp",
+    "mcp",
+    "serve",
+    "--transport",
+    "stdio",
+    "--controller",
+    "http://127.0.0.1:34209",
+    "--log-level",
+    "INFO"
+  ],
+  "cwd": "/ACPServer/acp2-remediation-integration/src",
+  "env": {
+    "ACP_RUN_ROOT": "/tmp/opencode/m0-09-run-root",
+    "ACP_CONTROLLER_URL": "http://127.0.0.1:34209",
+    "ACP2_MCP_LOG_LEVEL": "INFO",
+    "PYTHONPATH": "/ACPServer/acp2-remediation-integration/src"
+  },
+  "controller": {
+    "transport": "loopback-http",
+    "loopback_only": true,
+    "start_controller": false,
+    "shared_db": false
+  }
+}

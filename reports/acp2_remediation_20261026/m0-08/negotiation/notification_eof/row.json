@@ -1,0 +1,10 @@
+{
+  "exit_code": 0,
+  "fabricated_frames_after_notification": 0,
+  "negotiated": "2025-06-18",
+  "requested": "2025-06-18",
+  "row": "notification_eof",
+  "status": "PASS",
+  "submitted_job": null,
+  "tools_call_frames": 0
+}

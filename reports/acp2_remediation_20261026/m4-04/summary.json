@@ -1,0 +1,233 @@
+{
+  "claim_status": "inconclusive",
+  "criteria": [
+    {
+      "applied_rules": [],
+      "claim_status": "not_evaluated",
+      "criterion_id": "DA-C01-ts-single-imaginary-mode",
+      "scenario_result": "FAIL"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "not_evaluated",
+      "criterion_id": "DA-C02-ts-mode-mapping",
+      "scenario_result": "FAIL"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "not_evaluated",
+      "criterion_id": "DA-C03-frequency-evidence",
+      "scenario_result": "FAIL"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "not_evaluated",
+      "criterion_id": "DA-C04-irc-bidirectional",
+      "scenario_result": "FAIL"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "inconclusive",
+      "criterion_id": "DA-C05-endpoint-association",
+      "scenario_result": "FAIL"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "inconclusive",
+      "criterion_id": "DA-C06-energy-comparability",
+      "scenario_result": "FAIL"
+    },
+    {
+      "applied_rules": [],
+      "claim_status": "supported",
+      "criterion_id": "DA-C07-reactant-stoichiometry",
+      "scenario_result": "FAIL"
+    }
+  ],
+  "degradation": {
+    "all_passed": true,
+    "scenarios": [
+      {
+        "passed": true,
+        "scenario": "single-irc-direction"
+      },
+      {
+        "passed": true,
+        "scenario": "missing-frequency"
+      },
+      {
+        "passed": true,
+        "scenario": "endpoint-mismatch"
+      },
+      {
+        "passed": true,
+        "scenario": "forged-supported-record"
+      }
+    ]
+  },
+  "evidence_chain": {
+    "attribution_verified": true,
+    "decisions_agree": false,
+    "platform_decision": "revise",
+    "report_digest": "sha256:82864b88da2722bf5f4b44f3aa6f683d4ebaa34416e178923366be1f531eed25",
+    "rph_decision": "escalate",
+    "workbench_available": true
+  },
+  "generated_at": "2026-10-27T15:31:36Z",
+  "git_revision": "02cb71e97eee477d638741bd4c43494d42f9c2db",
+  "h4": {
+    "closed": false,
+    "state": "open"
+  },
+  "limitations": [
+    "one declared candidate path, one conformer per endpoint: a declared boundary",
+    "a known candidate carried through the chain is never a search result",
+    "no experimental rate, no global minimum, no general method accuracy claim",
+    "the bounded-recipe DAG cannot host the frozen nine-step recipe today: the nine steps ran as nine attempts sharing one release, so the evidence closure is per step and not yet one-TaskRef/nine-step",
+    "the bounded-DAG attempt writes per-step evidence, not a task-level task_result_digest: the platform projection is therefore bound to the single-task worker attempt (recorded separately)",
+    "Shermo is not installed on this host: the Gibbs activation barrier is not claimed (the electronic barrier is)"
+  ],
+  "notes": [],
+  "out": "/ACPServer/acp2-remediation-integration/reports/acp2_remediation_20261026/m4-04",
+  "overall_claim_status": "inconclusive",
+  "public_entry": {
+    "compiled": false,
+    "compiler_error": {
+      "code": "unsupported_step_kind",
+      "detail": "unsupported_step_kind: endpoint_prep: pure-analysis/non-dispatchable steps are not dispatchable bounded DAG steps",
+      "type": "StepDagError"
+    },
+    "open_steps": [
+      "endpoint_prep",
+      "candidate_path",
+      "energy_thermochemistry"
+    ]
+  },
+  "questions": [
+    {
+      "claim_status": "inconclusive",
+      "question_id": "question.diels_alder.path_connectivity.v1"
+    },
+    {
+      "claim_status": "inconclusive",
+      "question_id": "question.diels_alder.activation_energy.v1"
+    }
+  ],
+  "reasons": [],
+  "release": {
+    "built": true,
+    "manifest_path": "",
+    "release_digest": "813583bdcaae20ef900a99180f433b34a7dfa730fb47c1efea5c9435919a061b",
+    "release_id": "2d1ab37a0f988933"
+  },
+  "run_root": "/ACPServer/acp2-runs/remediation/m4-04-final",
+  "scenario_result": "FAIL",
+  "schema": "acp2.m4-04.limited-diels-alder.v1",
+  "software": {
+    "orca": {
+      "executable": "/home/xieningke/orca611/orca",
+      "is_expected": true,
+      "name": "orca",
+      "source": "scan",
+      "version": "Program Version 6.1.1  -  RELEASE   -"
+    },
+    "xtb": {
+      "executable": "/home/xieningke/xtb-dist/bin/xtb",
+      "is_expected": true,
+      "name": "xtb",
+      "source": "env:CONFSEARCH_XTB_PATH",
+      "version": "* xtb version 6.7.1 (edcfbbe) compiled by 'albert@albert-system' on 2024-07-22"
+    }
+  },
+  "software_findings": [
+    {
+      "candidate": "/usr/bin/orca",
+      "name": "orca",
+      "probe": "",
+      "source": "env:CONFSEARCH_ORCA_PATH",
+      "state": "rejected_not_orca"
+    },
+    {
+      "candidate": "/home/xieningke/orca504/orca",
+      "name": "orca",
+      "probe": "",
+      "source": "scan",
+      "state": "rejected_not_orca"
+    }
+  ],
+  "started_at": "2026-10-27T15:31:35Z",
+  "steps": [
+    {
+      "duration_seconds": 2543.09,
+      "entry": "legacy_task_core",
+      "error": null,
+      "status": "completed",
+      "step_id": "endpoint_prep",
+      "task_ref": "20261027_940_endpoint_prep_butadiene + 20261027_940_endpoint_prep_ethene + 20261027_940_endpoint_prep_cyclohexene"
+    },
+    {
+      "duration_seconds": 9.64,
+      "entry": "legacy_task_core",
+      "error": "xTB path trajectory (xtbpath.txt/xtbpath.xyz) not found",
+      "status": "failed",
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "duration_seconds": null,
+      "entry": null,
+      "error": "the candidate path search produced no TS-guess frame with the frozen atom order",
+      "status": "skipped",
+      "step_id": "candidate_frequency",
+      "task_ref": null
+    },
+    {
+      "duration_seconds": null,
+      "entry": null,
+      "error": "no TS-guess structure exists for the optimization",
+      "status": "skipped",
+      "step_id": "ts_optimize",
+      "task_ref": null
+    },
+    {
+      "duration_seconds": null,
+      "entry": null,
+      "error": "no optimized TS geometry exists for the frequency step",
+      "status": "skipped",
+      "step_id": "ts_frequency",
+      "task_ref": null
+    },
+    {
+      "duration_seconds": null,
+      "entry": null,
+      "error": "no optimized TS geometry exists for the IRC step",
+      "status": "skipped",
+      "step_id": "irc",
+      "task_ref": null
+    },
+    {
+      "duration_seconds": null,
+      "entry": null,
+      "error": "the IRC forward direction produced no final structure",
+      "status": "skipped",
+      "step_id": "endpoint_reactants",
+      "task_ref": null
+    },
+    {
+      "duration_seconds": null,
+      "entry": null,
+      "error": "the IRC reverse direction produced no final structure",
+      "status": "skipped",
+      "step_id": "endpoint_product",
+      "task_ref": null
+    },
+    {
+      "duration_seconds": 0.0,
+      "entry": "deterministic_analysis",
+      "error": "at least one required participant energy is missing",
+      "status": "partial",
+      "step_id": "energy_thermochemistry",
+      "task_ref": "20261027_942_energy_thermochemistry"
+    }
+  ]
+}

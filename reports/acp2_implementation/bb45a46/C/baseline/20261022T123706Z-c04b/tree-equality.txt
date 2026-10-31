@@ -1,0 +1,6 @@
+# tree equality commands and output
+$ git -C /ACPServer/acp2-development/C rev-parse 75a8f08^{tree}
+1a1b4b23c554acaf2818db1dcee336b69494a887
+$ git -C /ACPServer/acp2-development/B rev-parse a0185b15^{tree}
+1a1b4b23c554acaf2818db1dcee336b69494a887
+TREE_EQUALITY=PASS

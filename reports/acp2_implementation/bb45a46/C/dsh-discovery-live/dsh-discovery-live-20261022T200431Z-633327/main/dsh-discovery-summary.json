@@ -1,0 +1,228 @@
+{
+  "closes_h2": false,
+  "controller": {
+    "reachable": false,
+    "url": "http://127.0.0.1:18765"
+  },
+  "f1": {
+    "c_live_confirmation": "NOT_VERIFIED(controller_unavailable)",
+    "descriptor_sha256": "ca807cc4b8014af265fac64c9b84ca3c4050df9bfbab3b5dc408ce068b548046",
+    "finding": "F1 descriptor tools[].inputSchema differs from a live tools/list shape",
+    "live_snapshot_kind": "b_recorded_not_c_owned",
+    "mismatched_tools": [
+      "acp_analyze",
+      "acp_cancel",
+      "acp_capabilities",
+      "acp_preflight",
+      "acp_prepare_artifact",
+      "acp_read_artifact",
+      "acp_status",
+      "acp_submit"
+    ],
+    "must_reconcile_before": "H2",
+    "owner": "B",
+    "schema": "acp2.c.dsh-discovery.f1.v1",
+    "status": "OPEN",
+    "t11_matches": false,
+    "t11_source": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/mcp-live/mcp-live-20261022T183515Z-569902/main/schema-drift.json",
+    "t11_source_sha256": "11cfc845e118572eb4948ebd9d0a26a3455a0cd23d3b4be72e593fab2f5e1d58"
+  },
+  "failures": [],
+  "negatives": {
+    "bad_command": {
+      "entry_failed": true,
+      "mcp_tools": []
+    },
+    "incompatible_protocol": {
+      "entry_failed": true,
+      "initialize_versions": [
+        "2025-11-25"
+      ],
+      "mcp_tools": []
+    }
+  },
+  "not_verified": [
+    {
+      "detail": "controller_unavailable",
+      "name": "registration.official_plugin"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "registration.eight_p1_tools"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "registration.source_plugin"
+    }
+  ],
+  "overlay_identity": {
+    "b05_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B05/mcp-launch.json",
+    "b05_sha256": "ca807cc4b8014af265fac64c9b84ca3c4050df9bfbab3b5dc408ce068b548046",
+    "profiles": {
+      "headless": {
+        "actual": {
+          "args": [
+            "-m",
+            "acp",
+            "mcp",
+            "serve",
+            "--transport",
+            "stdio",
+            "--controller",
+            "http://127.0.0.1:18765",
+            "--log-level",
+            "INFO"
+          ],
+          "command": "/ACPServer/acp2-development/venvs/b/bin/python",
+          "cwd": "/ACPServer/AutoCalcPlatform/src",
+          "env": {
+            "ACP2_MCP_LOG_LEVEL": "INFO",
+            "ACP2_TOOLS": "/ACPServer/acp2-development/venvs",
+            "ACP_CONFIG": "/ACPServer/acp2-development/data/b/controller-config/cccp.yaml",
+            "ACP_CONTROLLER_URL": "http://127.0.0.1:18765",
+            "ACP_RUN_ROOT": "/ACPServer/acp2-development/data/b/run-root",
+            "PATH": "/ACPServer/acp2-development/venvs/b/bin:/usr/sbin:/usr/local/bin:/usr/bin:/bin"
+          }
+        },
+        "insert_id": "acp-mcp-acceptance",
+        "launch_matches_b05": true,
+        "path": "/ACPServer/acp2-development/C/rph/packages/dsh-bundle/profiles/headless.cordis.yml",
+        "plugin": "@deepseek-ai/dsh-mcp-client",
+        "sha256": "2d8141461bcec91d772f9d3a8daae5c59c17948e9ec0e667877659007ecc4513"
+      },
+      "web": {
+        "actual": {
+          "args": [
+            "-m",
+            "acp",
+            "mcp",
+            "serve",
+            "--transport",
+            "stdio",
+            "--controller",
+            "http://127.0.0.1:18765",
+            "--log-level",
+            "INFO"
+          ],
+          "command": "/ACPServer/acp2-development/venvs/b/bin/python",
+          "cwd": "/ACPServer/AutoCalcPlatform/src",
+          "env": {
+            "ACP2_MCP_LOG_LEVEL": "INFO",
+            "ACP2_TOOLS": "/ACPServer/acp2-development/venvs",
+            "ACP_CONFIG": "/ACPServer/acp2-development/data/b/controller-config/cccp.yaml",
+            "ACP_CONTROLLER_URL": "http://127.0.0.1:18765",
+            "ACP_RUN_ROOT": "/ACPServer/acp2-development/data/b/run-root",
+            "PATH": "/ACPServer/acp2-development/venvs/b/bin:/usr/sbin:/usr/local/bin:/usr/bin:/bin"
+          }
+        },
+        "insert_id": "acp-mcp-acceptance",
+        "launch_matches_b05": true,
+        "path": "/ACPServer/acp2-development/C/rph/packages/dsh-bundle/profiles/web.cordis.yml",
+        "plugin": "@deepseek-ai/dsh-mcp-client",
+        "sha256": "ca9294b0c50b60425306375b1f69376aec756fd42de52295ed5b5b2b5f7449a4"
+      }
+    },
+    "schema": "acp2.c.dsh-discovery.overlay-identity.v1"
+  },
+  "profiles": [
+    "web",
+    "headless"
+  ],
+  "registration": {
+    "allowlist": [
+      "acp_analyze",
+      "acp_cancel",
+      "acp_capabilities",
+      "acp_preflight",
+      "acp_prepare_artifact",
+      "acp_read_artifact",
+      "acp_status",
+      "acp_submit"
+    ],
+    "controller_reachable": false,
+    "entries": {
+      "headless": {
+        "disabled": false,
+        "failed": true,
+        "fiber_state": 3,
+        "id": "acp-mcp-acceptance",
+        "name": "@deepseek-ai/dsh-mcp-client",
+        "pending": false
+      },
+      "web": {
+        "disabled": false,
+        "failed": true,
+        "fiber_state": 3,
+        "id": "acp-mcp-acceptance",
+        "name": "@deepseek-ai/dsh-mcp-client",
+        "pending": false
+      }
+    },
+    "entry_id": "acp-mcp-acceptance",
+    "headless_mcp_tools": [],
+    "model_prefix": "mcp__acp__",
+    "p2_extensions": [],
+    "p2_status": "NOT_VERIFIED(b03_handoff)",
+    "plugin": "@deepseek-ai/dsh-mcp-client",
+    "schema": "acp2.c.dsh-discovery.registration.v1",
+    "web_mcp_tools": []
+  },
+  "schema": "acp2.c.dsh-discovery.summary.v1",
+  "snapshots": {
+    "headless": {
+      "acp_entry": {
+        "disabled": false,
+        "failed": true,
+        "fiber_state": 3,
+        "id": "acp-mcp-acceptance",
+        "name": "@deepseek-ai/dsh-mcp-client",
+        "pending": false
+      },
+      "mcp_tools": [],
+      "model_visible_scope": "global",
+      "model_visible_tools": [
+        "create_goal",
+        "edit",
+        "exit_plan_mode",
+        "get_goal",
+        "glob",
+        "grep",
+        "interrupt_agent",
+        "list_agents",
+        "read",
+        "read_image",
+        "send_message",
+        "skill",
+        "subagent",
+        "subagent_fork",
+        "todo_write",
+        "update_goal",
+        "web_fetch",
+        "web_search",
+        "workflow",
+        "working_directory",
+        "write"
+      ],
+      "real_registration": true,
+      "tool_count": 21
+    },
+    "web": {
+      "acp_entry": {
+        "disabled": false,
+        "failed": true,
+        "fiber_state": 3,
+        "id": "acp-mcp-acceptance",
+        "name": "@deepseek-ai/dsh-mcp-client",
+        "pending": false
+      },
+      "mcp_tools": [],
+      "model_visible_scope": "agent-preset",
+      "model_visible_tools": [
+        "todo_write",
+        "working_directory"
+      ],
+      "real_registration": true,
+      "tool_count": 2
+    }
+  }
+}

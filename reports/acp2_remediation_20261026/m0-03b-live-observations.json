@@ -1,0 +1,375 @@
+{
+  "baseline": {
+    "branch": "acp2/integration-remediation",
+    "head": "c46370639fae48f8dab286b4f3baa63affc26af2",
+    "plan": "reports/acp2_delivery_gap_audit_20261026/EXECUTION_PLAN.md#M0-03"
+  },
+  "changes": {
+    "authority": "B validator scripts/acceptance/acp2_runtime.py owns EXPERIENCE_REQUIRED_OBSERVATIONS and experience.observations",
+    "c_harness": [
+      "acp2_experience.py: live identity without a declared observation contract exits NOT_VERIFIED; publishes experience.declared_observations",
+      "acp2_experience_scenarios.py: publish_observations helper",
+      "acp2_experience_scenario_research_loop_live.py: static live-port probe replaces hardcoded delivery booleans; NOT_VERIFIED(implementation_missing) with executable grep probes; offline proof relabelled content_kind=offline_diagnostic",
+      "acp2_experience_scenario_approval_budget_live.py: removed the 'no platform transport means PASS' assertion; feature no-fetch stays a layering rule; added approval.injected_adapter_wiring_present",
+      "acp2_experience_scenario_{mcp_live,model_live,dsh_discovery_live,evidence_browser_live}.py: publish real observations on live PASS paths"
+    ],
+    "sample_corpus": [
+      "positive/c-dsh-local-singlepoint-live.json declares observations and uses the real C scenario id",
+      "5 new negative samples: missing observations, nested offline_fixture, model present without calls, observation mismatch, undeclared scenario"
+    ],
+    "tests": [
+      "tests/test_acp2_experience_observations.py (26 tests)",
+      "tests/test_acp2_runtime_acceptance_harness.py: corpus counts 30/30",
+      "tests/test_acp2_experience_harness.py: in-repo validator wins over a stale sibling checkout",
+      "tests/test_acp2_runtime_h7_index.py: frozen candidate harness digest pinned as history"
+    ]
+  },
+  "date": "2026-10-26",
+  "limitations": [
+    "live rows remain NOT_VERIFIED until the missing Controller/budget/runner ports exist; a port probe never yields PASS",
+    "approval-budget-live keeps a live observation declaration for the row B16/B17 will unlock while staying fixture-only today"
+  ],
+  "not_run": [
+    "real DSH/model/QC/LSF/Chromium/browser live rows (no environment authorization; never invoked)"
+  ],
+  "pre_existing_unrelated_failures": [
+    "tests/test_acp2_runtime_h4_closeout.py::test_closeout_input_set_excludes_its_own_digest and ::test_final_reference_digest_and_index_chain fail because the frozen evidence records absolute paths under /ACPServer/AutoCalcPlatform while this tree lives at /ACPServer/acp2-remediation-integration (path relocation, not a digest change)"
+  ],
+  "required_observations": {
+    "approval-budget-live": {
+      "artifact": "absent",
+      "browser": "absent",
+      "controller": "present",
+      "denial": "present",
+      "lsf": "absent",
+      "model": "absent",
+      "qc": "absent",
+      "transport": "present"
+    },
+    "clean-install-live": {
+      "artifact": "absent",
+      "browser": "absent",
+      "controller": "absent",
+      "denial": "absent",
+      "lsf": "absent",
+      "model": "absent",
+      "qc": "absent",
+      "transport": "absent"
+    },
+    "client-recovery-live": {
+      "artifact": "absent",
+      "browser": "absent",
+      "controller": "present",
+      "denial": "absent",
+      "lsf": "absent",
+      "model": "absent",
+      "qc": "absent",
+      "transport": "present"
+    },
+    "client-release": {
+      "artifact": "absent",
+      "browser": "absent",
+      "controller": "absent",
+      "denial": "absent",
+      "lsf": "absent",
+      "model": "absent",
+      "qc": "absent",
+      "transport": "absent"
+    },
+    "cross-domain-live": {
+      "artifact": "present",
+      "browser": "absent",
+      "controller": "present",
+      "denial": "absent",
+      "lsf": "absent",
+      "model": "present",
+      "qc": "present",
+      "transport": "present"
+    },
+    "da-research-live": {
+      "artifact": "present",
+      "browser": "absent",
+      "controller": "present",
+      "denial": "absent",
+      "lsf": "absent",
+      "model": "present",
+      "qc": "present",
+      "transport": "present"
+    },
+    "dsh-discovery-live": {
+      "artifact": "absent",
+      "browser": "absent",
+      "controller": "present",
+      "denial": "absent",
+      "lsf": "absent",
+      "model": "absent",
+      "qc": "absent",
+      "transport": "present"
+    },
+    "dsh-local-singlepoint-live": {
+      "artifact": "present",
+      "browser": "absent",
+      "controller": "present",
+      "denial": "absent",
+      "lsf": "absent",
+      "model": "present",
+      "qc": "present",
+      "transport": "present"
+    },
+    "dsh-lsf-singlepoint-live": {
+      "artifact": "present",
+      "browser": "absent",
+      "controller": "present",
+      "denial": "absent",
+      "lsf": "present",
+      "model": "present",
+      "qc": "present",
+      "transport": "present"
+    },
+    "dsh-optfreq-live": {
+      "artifact": "present",
+      "browser": "absent",
+      "controller": "present",
+      "denial": "absent",
+      "lsf": "absent",
+      "model": "present",
+      "qc": "present",
+      "transport": "present"
+    },
+    "evidence-browser-live": {
+      "artifact": "present",
+      "browser": "present",
+      "controller": "absent",
+      "denial": "absent",
+      "lsf": "absent",
+      "model": "absent",
+      "qc": "absent",
+      "transport": "present"
+    },
+    "experience-release-closeout": {
+      "artifact": "absent",
+      "browser": "absent",
+      "controller": "absent",
+      "denial": "absent",
+      "lsf": "absent",
+      "model": "absent",
+      "qc": "absent",
+      "transport": "absent"
+    },
+    "experience-upgrade-live": {
+      "artifact": "absent",
+      "browser": "present",
+      "controller": "present",
+      "denial": "absent",
+      "lsf": "absent",
+      "model": "absent",
+      "qc": "absent",
+      "transport": "present"
+    },
+    "fault-boundaries-live": {
+      "artifact": "absent",
+      "browser": "absent",
+      "controller": "present",
+      "denial": "present",
+      "lsf": "absent",
+      "model": "absent",
+      "qc": "absent",
+      "transport": "present"
+    },
+    "mcp-live": {
+      "artifact": "absent",
+      "browser": "absent",
+      "controller": "present",
+      "denial": "absent",
+      "lsf": "absent",
+      "model": "absent",
+      "qc": "absent",
+      "transport": "present"
+    },
+    "model-live": {
+      "artifact": "absent",
+      "browser": "absent",
+      "controller": "absent",
+      "denial": "absent",
+      "lsf": "absent",
+      "model": "present",
+      "qc": "absent",
+      "transport": "present"
+    },
+    "multi-project-live": {
+      "artifact": "absent",
+      "browser": "absent",
+      "controller": "present",
+      "denial": "absent",
+      "lsf": "absent",
+      "model": "absent",
+      "qc": "absent",
+      "transport": "present"
+    },
+    "operator-runbook-live": {
+      "artifact": "present",
+      "browser": "absent",
+      "controller": "present",
+      "denial": "absent",
+      "lsf": "absent",
+      "model": "absent",
+      "qc": "absent",
+      "transport": "present"
+    },
+    "p2-closeout": {
+      "artifact": "absent",
+      "browser": "absent",
+      "controller": "absent",
+      "denial": "absent",
+      "lsf": "absent",
+      "model": "absent",
+      "qc": "absent",
+      "transport": "absent"
+    },
+    "plugin-discovery-live": {
+      "artifact": "absent",
+      "browser": "absent",
+      "controller": "absent",
+      "denial": "absent",
+      "lsf": "absent",
+      "model": "absent",
+      "qc": "absent",
+      "transport": "present"
+    },
+    "plugin-upgrade-live": {
+      "artifact": "present",
+      "browser": "absent",
+      "controller": "present",
+      "denial": "absent",
+      "lsf": "absent",
+      "model": "absent",
+      "qc": "absent",
+      "transport": "present"
+    },
+    "research-loop-live": {
+      "artifact": "absent",
+      "browser": "absent",
+      "controller": "present",
+      "denial": "absent",
+      "lsf": "absent",
+      "model": "present",
+      "qc": "absent",
+      "transport": "present"
+    },
+    "research-resume-live": {
+      "artifact": "absent",
+      "browser": "absent",
+      "controller": "present",
+      "denial": "absent",
+      "lsf": "absent",
+      "model": "present",
+      "qc": "absent",
+      "transport": "present"
+    },
+    "same-task-browser-live": {
+      "artifact": "present",
+      "browser": "present",
+      "controller": "present",
+      "denial": "absent",
+      "lsf": "absent",
+      "model": "present",
+      "qc": "present",
+      "transport": "present"
+    },
+    "schema-form-live": {
+      "artifact": "absent",
+      "browser": "present",
+      "controller": "present",
+      "denial": "absent",
+      "lsf": "absent",
+      "model": "absent",
+      "qc": "absent",
+      "transport": "present"
+    }
+  },
+  "scenario_rows": {
+    "all 36 scenarios --dry-run": "exit 0, NOT_VERIFIED receipts only; none claims PASS",
+    "approval-budget-live/approval": "fixture PASS (Node approval-card suite + injected adapter wiring); live approval/budget rows remain NOT_VERIFIED(b16_handoff)",
+    "research-loop-live/control": "NOT_VERIFIED(implementation_missing:controller_research_round_write,budget_reservation_write,live_loop_runner); no live PASS claimed"
+  },
+  "schema": "acp2.remediation.m0-03b.evidence.v1",
+  "task": "M0-03b — C experience/live harness evidence labels (R10)",
+  "validation": [
+    {
+      "command": "python3.11 scripts/acceptance/acp2_runtime.py --validate-samples",
+      "exit_code": 0,
+      "stderr_tail": [],
+      "stdout_tail": [
+        "REJECT  negative/live-undeclared-observations.json  experience_observations_undeclared:not-a-live-scenario",
+        "SUMMARY: 30/30 sample expectations matched"
+      ]
+    },
+    {
+      "command": "python3.11 scripts/acceptance/validate_acp2_contracts.py",
+      "exit_code": 0,
+      "stderr_tail": [],
+      "stdout_tail": [
+        "VALID: /ACPServer/acp2-remediation-integration/docs/reference/next-change/acp2-contracts/manifest.json"
+      ]
+    },
+    {
+      "command": "python3.11 scripts/acceptance/acp2_runtime.py --help",
+      "exit_code": 0,
+      "stderr_tail": [],
+      "stdout_tail": [
+        "Exit codes: 0 PASS/tool check, 1 FAIL, 2 NOT_VERIFIED, 3 usage error.",
+        "--help/--dry-run/--check-only are tool checks, never a scenario PASS."
+      ]
+    },
+    {
+      "command": "python3.11 scripts/acceptance/acp2_experience.py --help",
+      "exit_code": 0,
+      "stderr_tail": [],
+      "stdout_tail": [
+        "",
+        "Exit codes: 0 PASS/tool check, 1 FAIL, 2 NOT_VERIFIED/not executed, 3 usage error. --help/--dry-run/--verify-receipt/--check-doc-placeholders are tool checks, never a scenario PASS."
+      ]
+    },
+    {
+      "command": "PYTHONPATH=src python3.11 -m pytest tests/test_acp2_runtime_acceptance_harness.py tests/test_acp2_experience_harness.py tests/test_acp2_experience_research_loop.py tests/test_acp2_experience_observations.py tests/test_acp2_experience_budget_proxy.py tests/test_acp2_runtime_contracts.py tests/test_acp2_runtime_h7_index.py -q",
+      "exit_code": 0,
+      "stderr_tail": [],
+      "stdout_tail": [
+        "156 passed in 6.9s"
+      ]
+    },
+    {
+      "command": "ACP2_C_SOURCE=$PWD ACP2_PROJECT_ROOT=$PWD python3.11 scripts/acceptance/acp2_experience.py --scenario research-loop-live --out /tmp/opencode/m003b-ro4/research-loop-live/run-rl-0004/main/live/control --timeout 60 --subcase control",
+      "exit_code": 2,
+      "note": "exit 2 with a validated live/NOT_VERIFIED receipt; rerunning the same leaf is exit 3 by the append-only rule, so each row uses a new run_id",
+      "stderr_tail": [
+        "NOT_VERIFIED(implementation_missing): the missing ports are listed in the receipt's experience.live_ports"
+      ],
+      "stdout_tail": [
+        "NOT_VERIFIED: /tmp/opencode/m003b-ro4/research-loop-live/run-rl-0004/main/live/control"
+      ]
+    },
+    {
+      "command": "python3.11 scripts/acceptance/acp2_experience.py --check-doc-placeholders docs/reference/next-change/acp2-contracts/experience/harness-contract.md",
+      "exit_code": 0,
+      "stderr_tail": [],
+      "stdout_tail": [
+        "CLEAN: docs/reference/next-change/acp2-contracts/experience/harness-contract.md"
+      ]
+    },
+    {
+      "command": "python3.11 -m ruff check <M0-03 changed Python files> && python3.11 -m ruff format --check <M0-03 changed Python files>",
+      "exit_code": 0,
+      "note": "Orchestrator verification after formatting; 156 targeted pytest tests rerun and passed."
+    }
+  ],
+  "validator_rules": [
+    "live PASS: observations required and every declared present/absent direction must match",
+    "live scenario without a declaration: experience_observations_undeclared",
+    "model=present: >=1 real call and a gateway/usage fact",
+    "model=absent: exactly 0 calls and a real untriggered/denial fact",
+    "denial=present: denial fact; budget denial carries no job_id/attempt/operation_id",
+    "outer live: no nested evidence_kind fixture/offline_fixture and offline_fixture_content=false",
+    "fixture row: no observation may be present"
+  ]
+}

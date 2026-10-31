@@ -1,0 +1,35 @@
+{
+  "deadline_minus_started_s": 90,
+  "elapsed_since_start_s": 121.9,
+  "job_id": "20261028_012117_006_m403-paused",
+  "lsf_job_id": "106",
+  "paused_lsf_stat": "USUSP",
+  "receipt": {
+    "admitted_at": "2026-10-27T17:21:17.447454Z",
+    "attempt": 1,
+    "clock": "wall",
+    "deadline_at": "2026-10-27T17:23:18.629463Z",
+    "decision": "wall-deadline-expired",
+    "job_id": "20261028_012117_006_m403-paused",
+    "native": {
+      "bjobs_l_after": "\nJob <106>, Job Name <acp_sub_2727c78568e7150a>, User <xieningke>, Project <defa\n                     ult>, Status <EXIT>, Queue <normal>, Command <#!/bin/bash;\n                     #BSUB -J acp_sub_2727c78568e7150a;#BSUB -q normal;#BSUB -n\n                     4;#BSUB -M 8808038;#BSUB -W 00:02;#BSUB -o /ACPServer/acp2\n                     -runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261\n                     028T011416/c1ccc2ccccc2c1_optimize__02/stdout>\nWed Oct 28 01:21:40: Submitted from host <workstation>, CWD </ACPServer/acp2-ru\n                     ns/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028\n                     T011416/c1ccc2ccccc2c1_optimize__02>, Output File </ACPSer\n                     ver/acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matr\n                     ix_20261028T011416/c1ccc2ccccc2c1_optimize__02/stdout.log>\n                     , Error File </ACPServer/acp2-runs/remediation/m4-03/remot\n                     e_jobs/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2c1_opt\n                     imize__02/stderr.log>, 4 Processors Requested;\n\n RUNLIMIT                \n 2.0 min of workstation  \n\n MEMLIMIT\n 8808038 K\nWed Oct 28 01:21:42: Started on 4 Hosts/Processors <workstation> <workstation> \n                     <workstation> <workstation>, Execution Home </home/xiening\n                     ke>, Execution CWD </ACPServer/acp2-runs/remediation/m4-03\n                     /remote_jobs/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2\n                     c1_optimize__02>;\nWed Oct 28 01:23:47: Exited with exit code 130. The CPU time used is 74.1 secon\n                     ds.\n\n SCHEDULING PARAMETERS:\n           r15s   r1m  r15m   ut      pg    io   ls    it    tmp    swp    mem\n loadSched   -     -     -     -       -     -    -     -     -      -      -  \n loadStop    -     -     -     -       -     -    -     -     -      -      -  \n\n",
+      "bjobs_l_before": "\nJob <106>, Job Name <acp_sub_2727c78568e7150a>, User <xieningke>, Project <defa\n                     ult>, Status <RUN>, Queue <normal>, Command <#!/bin/bash;#\n                     BSUB -J acp_sub_2727c78568e7150a;#BSUB -q normal;#BSUB -n \n                     4;#BSUB -M 8808038;#BSUB -W 00:02;#BSUB -o /ACPServer/acp2\n                     -runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261\n                     028T011416/c1ccc2ccccc2c1_optimize__02/stdout>\nWed Oct 28 01:21:40: Submitted from host <workstation>, CWD </ACPServer/acp2-ru\n                     ns/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028\n                     T011416/c1ccc2ccccc2c1_optimize__02>, Output File </ACPSer\n                     ver/acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matr\n                     ix_20261028T011416/c1ccc2ccccc2c1_optimize__02/stdout.log>\n                     , Error File </ACPServer/acp2-runs/remediation/m4-03/remot\n                     e_jobs/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2c1_opt\n                     imize__02/stderr.log>, 4 Processors Requested;\n\n RUNLIMIT                \n 2.0 min of workstation  \n\n MEMLIMIT\n 8808038 K\nWed Oct 28 01:21:42: Started on 4 Hosts/Processors <workstation> <workstation> \n                     <workstation> <workstation>, Execution Home </home/xiening\n                     ke>, Execution CWD </ACPServer/acp2-runs/remediation/m4-03\n                     /remote_jobs/M4-03_LSF_matrix_20261028T011416/c1ccc2ccccc2\n                     c1_optimize__02>;\n\n SCHEDULING PARAMETERS:\n           r15s   r1m  r15m   ut      pg    io   ls    it    tmp    swp    mem\n loadSched   -     -     -     -       -     -    -     -     -      -      -  \n loadStop    -     -     -     -       -     -    -     -     -      -      -  \n\n",
+      "bkill_delivered": true,
+      "confirmed_stopped": true,
+      "lsf_job_id": "106",
+      "node": "lsf-local",
+      "phase": "terminated",
+      "surface": "lsf"
+    },
+    "observed_at": "2026-10-27T17:23:49.908568Z",
+    "queue_seconds": null,
+    "schema": "acp2.runtime.deadline-receipt.v1",
+    "started_at": "2026-10-27T17:21:48.629463Z",
+    "surface": "lsf",
+    "terminal_status": "failed",
+    "verified": true,
+    "wall_seconds": 90
+  },
+  "status": "failed",
+  "wall_seconds": 90
+}

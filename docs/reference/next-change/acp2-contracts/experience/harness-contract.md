@@ -158,6 +158,57 @@ machine comparison (`four-tuples.json`) produced from the frozen run.
 `evidence-browser-live` with `--mode live` is the terminal whole-scenario
 result. It must not be followed by `--phase aggregate` (exit `3`).
 
+### Required observations (live evidence)
+
+`evidence_kind=live` is not derived from the phase alone. Every C live
+scenario has a frozen present/absent contract in B's validator
+(`EXPERIENCE_REQUIRED_OBSERVATIONS` in `acp2_runtime.py`) covering
+`transport`, `controller`, `model`, `qc`, `lsf`, `browser`, `artifact` and
+`denial`. The harness fails closed (exit `2`,
+`experience_observations_undeclared` plus the scenario key) when a live scenario has no
+declared contract, and publishes two extension keys:
+
+- `experience.declared_observations`: the frozen declaration the row ran
+  under. B rejects a receipt whose copy drifts from the registry
+  (`experience_observations_declaration_drift`).
+- `experience.observations`: `schema` (`acp2.experience.observations.v1`),
+  `observed` (name to `present`/`absent`), `model_calls`, `model_evidence`,
+  optional `denial_evidence`/`denial_kind`, and `offline_fixture_content`.
+
+Validator rules on a C receipt:
+
+| Row | Rule |
+| --- | --- |
+| live `PASS` | observations are required and every declared direction must match (`experience_observations_missing`, `experience_observation_mismatch` plus the observation name) |
+| live scenario not declared | contract error (`experience_observations_undeclared` plus the scenario key) |
+| `model=present` | at least one real call plus a gateway/usage fact (`live_model_present_without_calls`, `live_model_present_without_evidence`) |
+| `model=absent` | exactly zero calls plus a real untriggered/denial fact (`live_model_absent_with_calls`, `live_model_absent_without_fact`) |
+| `denial=present` | a denial fact; a budget denial must carry no `job_id`/`attempt`/`operation_id` (`live_budget_denial_task_ref` plus the offending field) |
+| outer `live` | no nested `evidence_kind` of `fixture`/`offline_fixture`, and `offline_fixture_content` must be false (`live_nested_evidence_kind` with the nested kind and path, `live_inner_offline_fixture`) |
+| `fixture` | no observation may be `present` (`fixture_observation_present` plus the observation name) |
+
+Zero model calls therefore no longer disqualifies a live row by itself: a
+scenario whose declared `model` direction is `absent`, with a real refusal or
+untriggered fact and (for budget denials) no TaskRef, is a valid live negative.
+The offline Supervisor proof of `research-loop-live` is a diagnostic artifact
+labelled `content_kind=offline_diagnostic`; it is never the row's evidence and
+never turns the live row into a claim.
+
+`research-loop-live --subcase control` probes the callable ports a live
+Supervisor loop needs (Supervisor skill, Controller research read/write,
+approval write, budget reservation, model gateway, live loop runner) and
+reports `NOT_VERIFIED(implementation_missing)` with the missing port names and
+an executable `grep` probe for each. It does not hardcode delivery booleans;
+the row leaves `NOT_VERIFIED` only when every declared port exists and the live
+invocation is wired.
+
+`approval-budget-live` additionally proves that the injected
+`ACPClient.research` adapter exists and is wired into the approval card
+(`approval.injected_adapter_wiring_present`). "The card owns no transport" is a
+layering rule, never a PASS criterion by itself: a module with no adapter at
+all is a FAIL, not a clean fixture row.
+
+
 ## 5. Parent aggregation and evidence
 
 `--phase aggregate` reads immutable child receipts from the same `run_id` under
@@ -211,6 +262,10 @@ writes flat dotted keys, not a nested `experience` object:
 | `experience.test_revision` | C revision used for the harness/scenario test code |
 | `experience.harness_contract_revision` | SHA-256 of the B validator actually imported |
 | `experience.run_id` | run identity (also a public receipt field) |
+| `experience.declared_observations` | frozen present/absent contract this live row ran under |
+| `experience.observations` | what the row actually observed (`observed`, `model_calls`, `model_evidence`, optional denial facts) |
+| `experience.live_ports` | live port probe result (`ports`, `missing_ports`, `executable_probes`) |
+| `experience.diagnostic` | labelled diagnostic content (`content_kind=offline_diagnostic`), never live evidence |
 | `experience.manifest` | redacted C manifest-extension document, when supplied |
 
 C-owned candidate fields are set after B's writer produces the base document:

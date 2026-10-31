@@ -56,6 +56,7 @@ from acp2_experience_scenarios import (
     _truncate,
     _write_json,
     _write_text,
+    publish_observations,
     register,
 )
 
@@ -1174,6 +1175,27 @@ def scenario_dsh_discovery_live(context: Any) -> int:
             "experience.dsh_discovery.f1_status": f1.get("status"),
             "experience.dsh_discovery.not_verified_rows": [item["name"] for item in not_verified],
         }
+    )
+
+    publish_observations(
+        context,
+        {
+            "transport": "present" if accepted_any else "absent",
+            "controller": (
+                "present" if controller_before.get("reachable") else "absent"
+            ),
+            "model": "absent",
+            "qc": "absent",
+            "lsf": "absent",
+            "browser": "absent",
+            "artifact": "absent",
+            "denial": "absent",
+        },
+        model_calls=0,
+        model_evidence=(
+            "DSH discovery row: MCP registration and tool discovery only; no "
+            "model client is invoked (0 calls)"
+        ),
     )
 
     if failures:

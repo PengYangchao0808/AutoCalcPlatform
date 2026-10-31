@@ -1,0 +1,2 @@
+PASS stale-reference.valid.json (digest and round current)
+REJECTED stale-reference: stale reference: record plan_definition_digest sha256:9999999999999999999999999999999999999999999999999999999999999999 != proposal sha256:32bd96dd1c8d2eb962a419590ff91ebf695adef1c587c147185f522be5422d9b

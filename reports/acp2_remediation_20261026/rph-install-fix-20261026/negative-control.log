@@ -1,0 +1,6 @@
+# negative control: original probe shape (bare tarballs, no install surface)
+Progress: resolved 0, reused 1, downloaded 0, added 0
+[ERR_PNPM_NO_OFFLINE_META] Failed to resolve @rph/research@0.0.0 in package mirror /tmp/opencode/rph-negative-control-final-home/.cache/pnpm/v12/metadata/https%3A+registry.npmjs.org/@rph/research.jsonl
+
+This error happened while installing the dependencies of @rph/bridge@0.0.0
+NEGATIVE_EXIT=1

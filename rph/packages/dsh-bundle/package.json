@@ -14,12 +14,15 @@
   },
   "files": [
     "dist",
-    "profiles"
+    "profiles",
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "build": "tsc -b"
   },
   "dependencies": {
     "@rph/bridge": "workspace:*"
-  }
+  },
+  "license": "MIT"
 }

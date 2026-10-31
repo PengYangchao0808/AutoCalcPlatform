@@ -66,6 +66,7 @@ __all__ = [
     "ArtifactAuthorization",
     "ArtifactError",
     "ArtifactNotPreparedError",
+    "ArtifactBodyRefusedError",
     "ArtifactDigestMismatchError",
     "ArtifactGenerationMismatchError",
     "ArtifactAttemptMismatchError",
@@ -119,6 +120,13 @@ class ArtifactNotPreparedError(ArtifactError):
 
     code = "not_prepared"
     http_status = 409
+
+
+class ArtifactBodyRefusedError(ArtifactError):
+    """The body cannot be content-checked (binary) or contains a redacted pattern."""
+
+    code = "artifact_body_refused"
+    http_status = 422
 
 
 class ArtifactDigestMismatchError(ArtifactError):
@@ -870,13 +878,17 @@ class ArtifactRead:
         import base64
 
         body_text: str | None
+        encoding = self.encoding
         if self.encoding == "base64":
             body_text = base64.b64encode(self.body).decode("ascii")
         else:
             try:
                 body_text = self.body.decode("utf-8")
             except UnicodeDecodeError:
+                # The bytes are not UTF-8 (or a truncation split a character):
+                # report what the body actually is instead of mislabelling it.
                 body_text = base64.b64encode(self.body).decode("ascii")
+                encoding = "base64"
         return {
             "schema": self.ref.schema,
             "version": self.ref.version,
@@ -886,13 +898,36 @@ class ArtifactRead:
             "digest": self.ref.digest,
             "generation": self.ref.generation,
             "availability": self.ref.availability.value,
-            "encoding": self.encoding,
+            "encoding": encoding,
             "body": body_text,
             "body_ref": None,
             "truncated": bool(self.truncated),
             "source_schema": self.ref.source_schema,
             "source_refs": [dict(item) for item in self.ref.source_refs],
         }
+
+
+def _assert_body_content_safe(body: bytes) -> None:
+    """One content policy on the **whole** body before any truncation.
+
+    A truncated slice can hide a path/secret that straddles the boundary, so
+    the policy must run here, not only in the MCP verifier.  Binary bodies
+    cannot be checked this round and are refused (residual: binary allowlist).
+    """
+    try:
+        text = body.decode("utf-8")
+    except UnicodeDecodeError:
+        raise ArtifactBodyRefusedError(
+            "artifact body is not UTF-8; content cannot be verified",
+            params={"field": "body", "rule": "artifact_body_unverifiable"},
+        ) from None
+    from acp_services.entrypoints.machine_output import redact
+
+    if redact(text) != text:
+        raise ArtifactBodyRefusedError(
+            "artifact body contains a redacted pattern",
+            params={"field": "body", "rule": "artifact_body_redacted"},
+        )
 
 
 def resolve_artifact_read(
@@ -1029,6 +1064,7 @@ def resolve_artifact_read(
             },
         )
     body = store.read(stored)
+    _assert_body_content_safe(body)
     ref = replace(
         stored,
         operation_id=record.operation_id,
@@ -1038,7 +1074,7 @@ def resolve_artifact_read(
         source_schema=str(payload.get("source_schema") or stored.source_schema),
     )
     total = len(body)
-    limit = max(0, int(max_bytes))
+    limit = _align_read_limit(body, max(0, int(max_bytes)), encoding=str(encoding))
     truncated = limit < total
     return ArtifactRead(
         ref=ref,
@@ -1046,6 +1082,21 @@ def resolve_artifact_read(
         encoding="base64" if str(encoding) == "base64" else "identity",
         truncated=truncated,
     )
+
+
+def _align_read_limit(body: bytes, limit: int, *, encoding: str) -> int:
+    """Align a read bound to the body's transport shape.
+
+    A base64 body is ASCII blocks of four: an unaligned slice fails the MCP
+    decode, so the bound drops to a whole block.  An identity body is UTF-8: a
+    slice through a multibyte character is refused by the content check, so the
+    bound drops to the last full character (codex P2, 2026-10-30).
+    """
+    if limit >= len(body):
+        return limit
+    if encoding == "base64":
+        return limit - (limit % 4)
+    return len(body[:limit].decode("utf-8", errors="ignore").encode("utf-8"))
 
 
 def operation_to_artifact_ref(

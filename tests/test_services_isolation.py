@@ -97,7 +97,7 @@ def test_same_uid_directory_only_config_fails_isolation_check() -> None:
             _envelope(),
             principal_id="alice",
             workdir="/srv/acp/alice",
-            code_release="<acp-root>/releases/r1",
+            code_release="/opt/acp/releases/r1",
             require_isolation=True,
         )
 
@@ -190,7 +190,7 @@ def test_local_identity_measured_when_mapped() -> None:
         _envelope(),
         principal_id="alice",
         workdir="/srv/acp/alice",
-        code_release="<acp-root>/releases/r1",
+        code_release="/opt/acp/releases/r1",
         require_isolation=True,
     )
     assert binding.uid == 6101 and binding.gid == 6101
@@ -304,12 +304,12 @@ def test_minimal_mounts_reject_broad_and_secret_sources() -> None:
 
     with pytest.raises(iso.IsolationError):
         iso.assert_minimal_mounts(
-            [iso.MountSpec(source="<acp-root>/code", target="/x", mode="rw", role="code_release")]
+            [iso.MountSpec(source="/opt/acp/code", target="/x", mode="rw", role="code_release")]
         )
 
     good = iso.minimal_mount_policy(
         workdir="/srv/acp/alice/jobs/j1",
-        code_release="<acp-root>/releases/r1",
+        code_release="/opt/acp/releases/r1",
         data_bindings=("/srv/acp/shared/input.xyz",),
     )
     iso.assert_minimal_mounts(good)
@@ -373,7 +373,7 @@ def test_lsf_binding_uses_persistent_mapping_not_client_choice() -> None:
         principal_id="alice",
         lsf_job_id="777",
         workdir="/srv/acp/alice/jobs/j1",
-        code_release="<acp-root>/releases/r1",
+        code_release="/opt/acp/releases/r1",
     )
     assert binding.execution_account == "acp_alice"
     assert binding.stop_scope.permits_command(("bkill", "777")) is True

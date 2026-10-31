@@ -1,0 +1,34 @@
+{
+  "authority": "acp2-m406b.acceptance",
+  "complete": true,
+  "content_digest": "sha256:9beae8887f057b52b06b2f589cb97e0ef522e4784bf62a11f37bf64e011e0b00",
+  "exit_code": 0,
+  "job_status": "completed",
+  "missing_required_facts": [],
+  "normal_reuse": false,
+  "partial_result": false,
+  "publish": true,
+  "publish_policy": "normal",
+  "qualification": "complete",
+  "receipt_state": "completed",
+  "required_facts": [
+    "atom_mapping_digest",
+    "model_assets_available",
+    "nmr_status",
+    "paired_peak_count",
+    "xtb_energy_hartree"
+  ],
+  "result": {
+    "atom_mapping_digest": "0cdc26aef9b049f9416b4565f513298c3dcb1876f74450f171554dca1079e899",
+    "model_assets_available": true,
+    "nmr_status": "supported",
+    "paired_peak_count": 5,
+    "xtb_energy_hartree": -11.391867273602
+  },
+  "result_digest": "sha256:6c016d604051623960c59f5c68eddce2343f1d495d6eba2ad05f0597fd2bc78d",
+  "schema": "acp_task_result_v1",
+  "status": "completed",
+  "task": "nmr_shielding",
+  "truth_table_row": "a",
+  "written_at": "2026-10-28T00:55:49.883175Z"
+}

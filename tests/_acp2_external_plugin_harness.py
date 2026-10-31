@@ -58,6 +58,7 @@ def build_fixture_wheel(
     env = dict(os.environ)
     env["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
     env["PIP_NO_INPUT"] = "1"
+    env["PIP_NO_INDEX"] = "1"
     if _has_module("build"):
         argv = [
             sys.executable,

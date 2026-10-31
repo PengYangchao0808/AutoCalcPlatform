@@ -137,14 +137,14 @@ typed 错误。以上均为实测（见 §5/§6）。
 
 ## 5. 示例值（真实 SDK 生成 — 命令 + 原始输出）
 
-生成环境：`/usr/bin/python3.11`（3.11.13），repo root `<repo>`，
+生成环境：`/usr/bin/python3.11`（3.11.13），repo root `/ACPServer/AutoCalcPlatform`，
 `PYTHONPATH=src`。**全部样例值固化于** `tests/baseline/cccp-evidence/handoffs/samples/version_digest_samples.json`
 （tracked；由下述命令生成，非手写）。
 
 生成命令（可复跑；输出即样例 JSON 文件内容）：
 
 ```bash
-cd <repo>
+cd /ACPServer/AutoCalcPlatform
 PYTHONPATH=src /usr/bin/python3.11 - <<'PY'
 import json, sys
 from cccp.plugin.example_xyz import example_metadata, EXAMPLE_CAPABILITY_NAME

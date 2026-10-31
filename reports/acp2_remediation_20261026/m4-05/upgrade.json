@@ -1,0 +1,619 @@
+{
+  "artifact_ref": {
+    "artifact_id": "native_record",
+    "attempt": 1,
+    "digest": "sha256:bad10efd7d24addc0e4338cc48a254d53ee48b9556c1adc14ad23266abe9d64c",
+    "generation": 1,
+    "operation": {
+      "artifact_ref": {
+        "attempt": 1,
+        "authorization": {
+          "action": "read",
+          "allowed": true,
+          "authorization_version": 0,
+          "principal_id": "principal_local",
+          "project_id": "uncategorized",
+          "scope": "local-single"
+        },
+        "availability": "ready",
+        "digest": "sha256:bad10efd7d24addc0e4338cc48a254d53ee48b9556c1adc14ad23266abe9d64c",
+        "generation": 1,
+        "job_id": "20261028_090000_103_m405upgradev2",
+        "media_type": "text/plain",
+        "operation_id": "op_d48542a15ea346b2a9ea6766a8badc06",
+        "relative_path": "RESULT/native.json",
+        "resource_id": "native_record",
+        "schema": "acp2.artifact-ref.v1",
+        "size_bytes": 283,
+        "source_refs": [],
+        "source_schema": "",
+        "version": 1
+      },
+      "attempt": 1,
+      "availability": "ready",
+      "basis_revision": 1,
+      "bytes": 283,
+      "digest": "sha256:bad10efd7d24addc0e4338cc48a254d53ee48b9556c1adc14ad23266abe9d64c",
+      "error": null,
+      "expected_revision": 1,
+      "freshness": "current",
+      "generation": 1,
+      "idempotency_key": "prep_25986298f8774603f51a0b799afa3284",
+      "idempotent_replay": false,
+      "job_id": "20261028_090000_103_m405upgradev2",
+      "observed_at": "2026-10-28T00:05:40Z",
+      "operation_id": "op_d48542a15ea346b2a9ea6766a8badc06",
+      "operation_ref": {
+        "id": "op_d48542a15ea346b2a9ea6766a8badc06",
+        "kind": "operation"
+      },
+      "purpose": "artifact",
+      "resource": {
+        "attempt": 1,
+        "authorization": {
+          "action": "read",
+          "allowed": true,
+          "authorization_version": 0,
+          "principal_id": "principal_local",
+          "project_id": "uncategorized",
+          "scope": "local-single"
+        },
+        "availability": "ready",
+        "digest": "sha256:bad10efd7d24addc0e4338cc48a254d53ee48b9556c1adc14ad23266abe9d64c",
+        "generation": 1,
+        "job_id": "20261028_090000_103_m405upgradev2",
+        "media_type": "text/plain",
+        "operation_id": "op_d48542a15ea346b2a9ea6766a8badc06",
+        "relative_path": "RESULT/native.json",
+        "resource_id": "native_record",
+        "schema": "acp2.artifact-ref.v1",
+        "size_bytes": 283,
+        "source_refs": [],
+        "source_schema": "",
+        "version": 1
+      },
+      "resource_id": "native_record",
+      "resource_kind": "artifact",
+      "schema": "acp2.artifact-ref.v1",
+      "schema_version": 1,
+      "sha256": "bad10efd7d24addc0e4338cc48a254d53ee48b9556c1adc14ad23266abe9d64c",
+      "size_bytes": 283,
+      "source_refs": [],
+      "source_schema": "",
+      "state": "ready",
+      "updated_at": "2026-10-28T00:05:40Z",
+      "version": 1
+    },
+    "request": {
+      "artifact_ref": {
+        "attempt": 1,
+        "authorization": {
+          "action": "write",
+          "allowed": true,
+          "authorization_version": 0,
+          "principal_id": "principal_local",
+          "project_id": "uncategorized",
+          "scope": "local-single"
+        },
+        "availability": "absent",
+        "digest": "",
+        "generation": 1,
+        "job_id": "20261028_090000_103_m405upgradev2",
+        "media_type": "text/plain",
+        "operation_id": "op_d48542a15ea346b2a9ea6766a8badc06",
+        "relative_path": "RESULT/native.json",
+        "resource_id": "native_record",
+        "schema": "acp2.artifact-ref.v1",
+        "size_bytes": 0,
+        "source_refs": [],
+        "source_schema": "",
+        "version": 1
+      },
+      "attempt": 1,
+      "availability": "absent",
+      "basis_revision": 1,
+      "bytes": null,
+      "digest": "",
+      "error": null,
+      "expected_revision": 1,
+      "freshness": "unknown",
+      "generation": 1,
+      "idempotency_key": "prep_25986298f8774603f51a0b799afa3284",
+      "idempotent_replay": false,
+      "job_id": "20261028_090000_103_m405upgradev2",
+      "observed_at": "2026-10-28T00:05:40Z",
+      "operation_id": "op_d48542a15ea346b2a9ea6766a8badc06",
+      "operation_ref": {
+        "id": "op_d48542a15ea346b2a9ea6766a8badc06",
+        "kind": "operation"
+      },
+      "purpose": "artifact",
+      "resource": {
+        "attempt": 1,
+        "authorization": {
+          "action": "write",
+          "allowed": true,
+          "authorization_version": 0,
+          "principal_id": "principal_local",
+          "project_id": "uncategorized",
+          "scope": "local-single"
+        },
+        "availability": "absent",
+        "digest": "",
+        "generation": 1,
+        "job_id": "20261028_090000_103_m405upgradev2",
+        "media_type": "text/plain",
+        "operation_id": "op_d48542a15ea346b2a9ea6766a8badc06",
+        "relative_path": "RESULT/native.json",
+        "resource_id": "native_record",
+        "schema": "acp2.artifact-ref.v1",
+        "size_bytes": 0,
+        "source_refs": [],
+        "source_schema": "",
+        "version": 1
+      },
+      "resource_id": "native_record",
+      "resource_kind": "artifact",
+      "schema": "acp2.artifact-ref.v1",
+      "schema_version": 1,
+      "sha256": null,
+      "size_bytes": 0,
+      "source_refs": [],
+      "source_schema": "",
+      "state": "pending",
+      "updated_at": "2026-10-28T00:05:40Z",
+      "version": 1
+    },
+    "task_id": "20261028_090000_103_m405upgradev2"
+  },
+  "checks": {
+    "both_versions_in_ledger": true,
+    "digest_changed": true,
+    "new_computed_digest": true,
+    "no_plugin_import": true,
+    "v1_snapshot_distribution": true,
+    "v1_snapshot_matches_v1_product": true,
+    "v1_snapshot_readable": true,
+    "v2_pin": true,
+    "v2_ref": true,
+    "v2_snapshot_digest": true,
+    "v2_snapshot_readable": true
+  },
+  "discovery_external_entry": {
+    "capability_id": "acp2_external_native_singlepoint",
+    "capability_source": "science_plugin",
+    "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+    "distribution_digest": {
+      "algorithm": "acp2.plugin.distribution-digest.v1",
+      "declared": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+      "digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+      "file_count": 5,
+      "matches_declared": true
+    },
+    "enablement": {
+      "enabled": true,
+      "enabled_at": "2026-10-28T00:05:31Z",
+      "enabled_by": "controller"
+    },
+    "execution_semantics": {
+      "delegates_to_task_kind": null,
+      "kind": "pure_analysis",
+      "network_access": false,
+      "starts_subprocess": false
+    },
+    "implementation_id": "acp2_fixture.validator.native_singlepoint",
+    "input_schema": {
+      "ref": "acp2.science.prepared-artifact.v1",
+      "schema_version": 1
+    },
+    "output_schema": {
+      "ref": "acp2.science.external.native_singlepoint",
+      "schema_version": 1
+    },
+    "plugin": {
+      "distribution": "acp2-external-science-validator",
+      "entry_point_group": 1,
+      "license": "MIT",
+      "name": "acp2_external.native_singlepoint",
+      "trust_level": "untrusted",
+      "version": "1.0.0"
+    },
+    "provenance": {
+      "descriptor_digest_algorithm": "acp2.plugin.descriptor-digest.v1",
+      "distribution_digest": {
+        "algorithm": "acp2.plugin.distribution-digest.v1",
+        "declared": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+        "digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+        "file_count": 5,
+        "matches_declared": true
+      },
+      "fixture_evidence": [
+        {
+          "description": "Fixed water native single-point record and expected TaskResult fields; the platform owner verifies the fixture, this manifest only carries the claim.",
+          "digest": "sha256:fc06f818967f121a98b1bf7a3db30b2f43629a5633b742919ecb0b7a52fada98",
+          "fixture_id": "acp2-external-native-singlepoint",
+          "verified": true
+        }
+      ],
+      "recipe_refs": [],
+      "validator_refs": [
+        {
+          "required": true,
+          "validator_id": "check.acp2_native_singlepoint_schema",
+          "validator_version": "1.0.0"
+        }
+      ]
+    },
+    "schema": "acp2.plugin.capability-descriptor.v1",
+    "schema_version": 1
+  },
+  "discovery_upgrade_entry": {
+    "capability_id": "acp2_upgrade_native_singlepoint",
+    "capability_source": "science_plugin",
+    "descriptor_digest": "sha256:dff39eb1f9bdabe04e4f4aa36712c3e6b132da21fe8453fc981f77df78140087",
+    "distribution_digest": {
+      "algorithm": "acp2.plugin.distribution-digest.v1",
+      "declared": "sha256:7a9564cb1841d0da4e45fcfbf454786db2f23a7223466f050bb55fe8f158d04c",
+      "digest": "sha256:7a9564cb1841d0da4e45fcfbf454786db2f23a7223466f050bb55fe8f158d04c",
+      "file_count": 5,
+      "matches_declared": true
+    },
+    "enablement": {
+      "enabled": true,
+      "enabled_at": "2026-10-28T00:05:37Z",
+      "enabled_by": "controller"
+    },
+    "execution_semantics": {
+      "delegates_to_task_kind": null,
+      "kind": "pure_analysis",
+      "network_access": false,
+      "starts_subprocess": false
+    },
+    "implementation_id": "acp2_upgrade.validator.native_singlepoint",
+    "input_schema": {
+      "ref": "acp2.science.prepared-artifact.v1",
+      "schema_version": 1
+    },
+    "output_schema": {
+      "ref": "acp2.science.external.upgrade_singlepoint",
+      "schema_version": 2
+    },
+    "plugin": {
+      "distribution": "acp2-upgrade-science-validator",
+      "entry_point_group": 1,
+      "license": "MIT",
+      "name": "acp2_upgrade.native_singlepoint",
+      "trust_level": "untrusted",
+      "version": "2.0.0"
+    },
+    "provenance": {
+      "descriptor_digest_algorithm": "acp2.plugin.descriptor-digest.v1",
+      "distribution_digest": {
+        "algorithm": "acp2.plugin.distribution-digest.v1",
+        "declared": "sha256:7a9564cb1841d0da4e45fcfbf454786db2f23a7223466f050bb55fe8f158d04c",
+        "digest": "sha256:7a9564cb1841d0da4e45fcfbf454786db2f23a7223466f050bb55fe8f158d04c",
+        "file_count": 5,
+        "matches_declared": true
+      },
+      "fixture_evidence": [
+        {
+          "description": "Constructed v2 fixed native JSON record and expected TaskResult fields; the platform owner verifies the fixture, this manifest only carries the claim.",
+          "digest": "sha256:2eeab568c6cd6ef78a3499b81063351b77988c62bc8fffc61cb0fafe7eccdb0e",
+          "fixture_id": "acp2-upgrade-native-singlepoint",
+          "verified": true
+        }
+      ],
+      "recipe_refs": [
+        {
+          "digest": null,
+          "recipe_id": "acp2.upgrade.recipe",
+          "schema_version": 2
+        }
+      ],
+      "validator_refs": [
+        {
+          "required": true,
+          "validator_id": "check.acp2_upgrade_schema",
+          "validator_version": "2.0.0"
+        }
+      ]
+    },
+    "schema": "acp2.plugin.capability-descriptor.v1",
+    "schema_version": 1
+  },
+  "history_v1": {
+    "enablements": [
+      {
+        "capability_id": "acp2_external_native_singlepoint",
+        "computed_distribution_digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+        "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+        "disabled_at": null,
+        "disabled_by": null,
+        "distribution_digest": {
+          "algorithm": "acp2.plugin.distribution-digest.v1",
+          "declared": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+          "digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+          "file_count": 5,
+          "matches_declared": true
+        },
+        "enabled": true,
+        "enabled_at": "2026-10-28T00:05:31Z",
+        "enabled_by": "controller",
+        "installed": true,
+        "plugin_name": "acp2_external.native_singlepoint",
+        "version": "1.0.0"
+      },
+      {
+        "capability_id": "acp2_upgrade_native_singlepoint",
+        "computed_distribution_digest": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+        "descriptor_digest": "sha256:4297fd794d57e3d16ec6980ab9803ffbf1010d9c89cd070637ab1ba0462314df",
+        "disabled_at": null,
+        "disabled_by": null,
+        "distribution_digest": {
+          "algorithm": "acp2.plugin.distribution-digest.v1",
+          "declared": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+          "digest": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+          "file_count": 5,
+          "matches_declared": true
+        },
+        "enabled": true,
+        "enabled_at": "2026-10-28T00:05:32Z",
+        "enabled_by": "controller",
+        "installed": true,
+        "plugin_name": "acp2_upgrade.native_singlepoint",
+        "version": "1.0.0"
+      },
+      {
+        "capability_id": "acp2_upgrade_native_singlepoint",
+        "computed_distribution_digest": "sha256:7a9564cb1841d0da4e45fcfbf454786db2f23a7223466f050bb55fe8f158d04c",
+        "descriptor_digest": "sha256:dff39eb1f9bdabe04e4f4aa36712c3e6b132da21fe8453fc981f77df78140087",
+        "disabled_at": null,
+        "disabled_by": null,
+        "distribution_digest": {
+          "algorithm": "acp2.plugin.distribution-digest.v1",
+          "declared": "sha256:7a9564cb1841d0da4e45fcfbf454786db2f23a7223466f050bb55fe8f158d04c",
+          "digest": "sha256:7a9564cb1841d0da4e45fcfbf454786db2f23a7223466f050bb55fe8f158d04c",
+          "file_count": 5,
+          "matches_declared": true
+        },
+        "enabled": true,
+        "enabled_at": "2026-10-28T00:05:37Z",
+        "enabled_by": "controller",
+        "installed": true,
+        "plugin_name": "acp2_upgrade.native_singlepoint",
+        "version": "2.0.0"
+      }
+    ],
+    "executable": [
+      "acp2_external_native_singlepoint",
+      "acp2_upgrade_native_singlepoint"
+    ],
+    "installed": [
+      {
+        "capability_id": "acp2_external_native_singlepoint",
+        "computed_distribution_digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+        "matches_declared": true,
+        "version": "1.0.0"
+      },
+      {
+        "capability_id": "acp2_upgrade_native_singlepoint",
+        "computed_distribution_digest": "sha256:7a9564cb1841d0da4e45fcfbf454786db2f23a7223466f050bb55fe8f158d04c",
+        "matches_declared": true,
+        "version": "2.0.0"
+      }
+    ],
+    "ledger_generation": 3,
+    "mode": "history",
+    "module_imported": [],
+    "ok": true,
+    "plugin": "acp2_upgrade.native_singlepoint",
+    "product": {
+      "capability_ref": "acp2_upgrade_native_singlepoint@1.0.0",
+      "computed_distribution_digest": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+      "descriptor_digest": "sha256:4297fd794d57e3d16ec6980ab9803ffbf1010d9c89cd070637ab1ba0462314df",
+      "form_digest": "sha256:358d1846ba4919558e91a98fd7f82cb96f949e424f62490313a2a82eb5801e00",
+      "path": "/ACPServer/acp2-remediation-integration/reports/acp2_remediation_20261026/m4-05/product-upgrade-v1.json",
+      "product_digest": "sha256:c96ee7ecae2c7f9b57d77e12b9783996d88d2853afe2052a1e9b32bfcf711bbd",
+      "product_digest_stable": true,
+      "snapshot_descriptor_matches_product": true,
+      "snapshot_distribution_matches_product": true
+    },
+    "refusals": [
+      {
+        "capability_id": "acp2_upgrade_native_singlepoint",
+        "reason": "plugin_not_installed",
+        "version": "1.0.0"
+      }
+    ],
+    "run_root": "/ACPServer/acp2-runs/remediation/m4-05/run-root",
+    "snapshot": {
+      "capability_id": "acp2_upgrade_native_singlepoint",
+      "descriptor_digest": "sha256:4297fd794d57e3d16ec6980ab9803ffbf1010d9c89cd070637ab1ba0462314df",
+      "distribution_digest": {
+        "algorithm": "acp2.plugin.distribution-digest.v1",
+        "declared": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+        "digest": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+        "file_count": 5,
+        "matches_declared": true
+      },
+      "output_schema": {
+        "ref": "acp2.science.external.upgrade_singlepoint",
+        "schema_version": 1
+      },
+      "plugin": {
+        "distribution": "acp2-upgrade-science-validator",
+        "entry_point_group": 1,
+        "license": "MIT",
+        "name": "acp2_upgrade.native_singlepoint",
+        "trust_level": "untrusted",
+        "version": "1.0.0"
+      },
+      "read_only": true,
+      "schema": "acp2.plugin.capability-descriptor.v1"
+    },
+    "version": "1.0.0"
+  },
+  "history_v2": {
+    "enablements": [
+      {
+        "capability_id": "acp2_external_native_singlepoint",
+        "computed_distribution_digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+        "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+        "disabled_at": null,
+        "disabled_by": null,
+        "distribution_digest": {
+          "algorithm": "acp2.plugin.distribution-digest.v1",
+          "declared": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+          "digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+          "file_count": 5,
+          "matches_declared": true
+        },
+        "enabled": true,
+        "enabled_at": "2026-10-28T00:05:31Z",
+        "enabled_by": "controller",
+        "installed": true,
+        "plugin_name": "acp2_external.native_singlepoint",
+        "version": "1.0.0"
+      },
+      {
+        "capability_id": "acp2_upgrade_native_singlepoint",
+        "computed_distribution_digest": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+        "descriptor_digest": "sha256:4297fd794d57e3d16ec6980ab9803ffbf1010d9c89cd070637ab1ba0462314df",
+        "disabled_at": null,
+        "disabled_by": null,
+        "distribution_digest": {
+          "algorithm": "acp2.plugin.distribution-digest.v1",
+          "declared": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+          "digest": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+          "file_count": 5,
+          "matches_declared": true
+        },
+        "enabled": true,
+        "enabled_at": "2026-10-28T00:05:32Z",
+        "enabled_by": "controller",
+        "installed": true,
+        "plugin_name": "acp2_upgrade.native_singlepoint",
+        "version": "1.0.0"
+      },
+      {
+        "capability_id": "acp2_upgrade_native_singlepoint",
+        "computed_distribution_digest": "sha256:7a9564cb1841d0da4e45fcfbf454786db2f23a7223466f050bb55fe8f158d04c",
+        "descriptor_digest": "sha256:dff39eb1f9bdabe04e4f4aa36712c3e6b132da21fe8453fc981f77df78140087",
+        "disabled_at": null,
+        "disabled_by": null,
+        "distribution_digest": {
+          "algorithm": "acp2.plugin.distribution-digest.v1",
+          "declared": "sha256:7a9564cb1841d0da4e45fcfbf454786db2f23a7223466f050bb55fe8f158d04c",
+          "digest": "sha256:7a9564cb1841d0da4e45fcfbf454786db2f23a7223466f050bb55fe8f158d04c",
+          "file_count": 5,
+          "matches_declared": true
+        },
+        "enabled": true,
+        "enabled_at": "2026-10-28T00:05:37Z",
+        "enabled_by": "controller",
+        "installed": true,
+        "plugin_name": "acp2_upgrade.native_singlepoint",
+        "version": "2.0.0"
+      }
+    ],
+    "executable": [
+      "acp2_external_native_singlepoint",
+      "acp2_upgrade_native_singlepoint"
+    ],
+    "installed": [
+      {
+        "capability_id": "acp2_external_native_singlepoint",
+        "computed_distribution_digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+        "matches_declared": true,
+        "version": "1.0.0"
+      },
+      {
+        "capability_id": "acp2_upgrade_native_singlepoint",
+        "computed_distribution_digest": "sha256:7a9564cb1841d0da4e45fcfbf454786db2f23a7223466f050bb55fe8f158d04c",
+        "matches_declared": true,
+        "version": "2.0.0"
+      }
+    ],
+    "ledger_generation": 3,
+    "mode": "history",
+    "module_imported": [],
+    "ok": true,
+    "plugin": "acp2_upgrade.native_singlepoint",
+    "refusals": [
+      {
+        "capability_id": "acp2_upgrade_native_singlepoint",
+        "reason": "plugin_not_installed",
+        "version": "1.0.0"
+      }
+    ],
+    "run_root": "/ACPServer/acp2-runs/remediation/m4-05/run-root",
+    "snapshot": {
+      "capability_id": "acp2_upgrade_native_singlepoint",
+      "descriptor_digest": "sha256:dff39eb1f9bdabe04e4f4aa36712c3e6b132da21fe8453fc981f77df78140087",
+      "distribution_digest": {
+        "algorithm": "acp2.plugin.distribution-digest.v1",
+        "declared": "sha256:7a9564cb1841d0da4e45fcfbf454786db2f23a7223466f050bb55fe8f158d04c",
+        "digest": "sha256:7a9564cb1841d0da4e45fcfbf454786db2f23a7223466f050bb55fe8f158d04c",
+        "file_count": 5,
+        "matches_declared": true
+      },
+      "output_schema": {
+        "ref": "acp2.science.external.upgrade_singlepoint",
+        "schema_version": 2
+      },
+      "plugin": {
+        "distribution": "acp2-upgrade-science-validator",
+        "entry_point_group": 1,
+        "license": "MIT",
+        "name": "acp2_upgrade.native_singlepoint",
+        "trust_level": "untrusted",
+        "version": "2.0.0"
+      },
+      "read_only": true,
+      "schema": "acp2.plugin.capability-descriptor.v1"
+    },
+    "version": "2.0.0"
+  },
+  "job": {
+    "artifact_sha256": "sha256:bad10efd7d24addc0e4338cc48a254d53ee48b9556c1adc14ad23266abe9d64c",
+    "artifact_source": "/ACPServer/acp2-runs/remediation/m4-05/run-root/uncategorized/20261028_090000_103_m405upgradev2-1/RESULT/native.json",
+    "attempt": 1,
+    "bytes": 283,
+    "job_id": "20261028_090000_103_m405upgradev2",
+    "project_id": "uncategorized",
+    "relative_path": "RESULT/native.json",
+    "stub_boundary": "upstream_science_qc_replaced_by_fixed_native_record",
+    "work_dir": "/ACPServer/acp2-runs/remediation/m4-05/run-root/uncategorized/20261028_090000_103_m405upgradev2-1"
+  },
+  "new_computed_distribution_digest": "sha256:7a9564cb1841d0da4e45fcfbf454786db2f23a7223466f050bb55fe8f158d04c",
+  "old_computed_distribution_digest": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+  "product_digest": "sha256:6bd2cd918c80d77728910fe4b210424be2cedf4f0a61cc8969859f692e3df46e",
+  "product_files": {
+    "upgrade_v2": "product-upgrade-v2.json"
+  },
+  "provenance": {
+    "capability_id": "acp2_upgrade_native_singlepoint",
+    "capability_ref": "acp2_upgrade_native_singlepoint@2.0.0",
+    "capability_version": "2.0.0",
+    "computed_distribution_digest": "sha256:7a9564cb1841d0da4e45fcfbf454786db2f23a7223466f050bb55fe8f158d04c",
+    "descriptor_digest": "sha256:dff39eb1f9bdabe04e4f4aa36712c3e6b132da21fe8453fc981f77df78140087",
+    "descriptor_schema": "acp2.plugin.capability-descriptor.v1",
+    "distribution_digest": {
+      "algorithm": "acp2.plugin.distribution-digest.v1",
+      "declared": "sha256:7a9564cb1841d0da4e45fcfbf454786db2f23a7223466f050bb55fe8f158d04c",
+      "digest": "sha256:7a9564cb1841d0da4e45fcfbf454786db2f23a7223466f050bb55fe8f158d04c",
+      "file_count": 5,
+      "matches_declared": true
+    },
+    "enabled_at": "2026-10-28T00:05:37Z",
+    "enabled_by": "controller",
+    "executed_in": "controller",
+    "form_digest": "sha256:f27bef30b23e2d9b19e903480c71713b998c71552ad633e376e4d1b44ea60e53",
+    "input_digests": [
+      "sha256:bad10efd7d24addc0e4338cc48a254d53ee48b9556c1adc14ad23266abe9d64c"
+    ],
+    "plugin_name": "acp2_upgrade.native_singlepoint",
+    "starts_subprocess": false,
+    "starts_task": false
+  }
+}

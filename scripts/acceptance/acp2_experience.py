@@ -26,6 +26,14 @@ PASS.  ``--dry-run`` only validates inputs, writes a ``NOT_VERIFIED`` receipt
 and exits ``0``.  A known scenario without an implementation exits ``2`` when
 it is not a dry run.  An unknown scenario exits ``3``.
 
+``evidence_kind=live`` is not derived from the phase alone (M0-03/R10).  Every
+C live scenario carries a frozen present/absent observation contract owned by
+B's validator (``EXPERIENCE_REQUIRED_OBSERVATIONS``); the harness refuses to run
+a live row whose scenario has no declared contract and publishes the frozen
+declaration plus its own ``experience.observations`` payload.  A live PASS with
+missing, mismatched or undeclared observations is rejected by the validator, so
+an offline fixture can never enter a live row.
+
 The module is stdlib-only and does not import the product, a model client, DSH
 or a platform controller at import time.  ``--help`` therefore has no
 connection, model or DSH side effect.
@@ -173,15 +181,16 @@ COMMON_PHASES = (
 # process is started for those rows.  The C workbench owns this classification
 # (B does not know which C content is fixture), so it lives here next to the
 # phase normalizer.
-FIXTURE_ONLY_SCENARIOS = frozenset(("approval-budget-live",))
+# M4-02 removed ``approval-budget-live`` from this set: the row now runs a real
+# Controller with two independent browser identities, real approval decisions
+# and a real budget refusal, so a live run is exactly what it must be.
+FIXTURE_ONLY_SCENARIOS: frozenset[str] = frozenset()
 
 # Scenario-level phase aliases.  The CLI keeps accepting B01's common phase
 # (``--phase approval`` is T-27's required invocation) while the receipt is
 # written with the honest public phase.  The requested phase stays available to
 # the scenario body through ``ResolvedIdentity.requested_phase``.
-PHASE_ALIASES: dict[str, dict[str, str]] = {
-    "approval-budget-live": {"approval": "experience:fixture"},
-}
+PHASE_ALIASES: dict[str, dict[str, str]] = {}
 
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$")
 REVISION_RE = re.compile(r"^(?:[0-9a-f]{40}|sha256:[0-9a-f]{64})$")
@@ -569,6 +578,41 @@ def _merge(cli_value: str | None, inferred: str | None, label: str) -> str | Non
     return cli_value or inferred
 
 
+def required_observations_for(runtime: ModuleType, scenario_key: str) -> dict[str, str] | None:
+    """Return B's frozen present/absent contract for one C live scenario."""
+
+    resolver = getattr(runtime, "required_observations", None)
+    if callable(resolver):
+        declared = resolver(scenario_key)
+        if isinstance(declared, dict):
+            return declared
+    registry = getattr(runtime, "EXPERIENCE_REQUIRED_OBSERVATIONS", None)
+    if isinstance(registry, dict):
+        declared = registry.get(scenario_key)
+        if isinstance(declared, dict):
+            return dict(declared)
+    return None
+
+
+def _observation_contract_error(identity: ResolvedIdentity, runtime: ModuleType) -> str | None:
+    """Fail closed when a live row has no declared required observations.
+
+    ``evidence_kind=live`` is no longer derived from the phase alone: the row
+    must be a live-registered scenario *and* carry a frozen present/absent
+    observation contract.  An undeclared live scenario is a contract error, not
+    a default accept.
+    """
+
+    if identity.evidence_kind != "live":
+        return None
+    registry = getattr(runtime, "EXPERIENCE_REQUIRED_OBSERVATIONS", None)
+    if not isinstance(registry, dict) or not registry:
+        return "experience_observations_registry_missing"
+    if required_observations_for(runtime, identity.scenario_key) is None:
+        return f"experience_observations_undeclared:{identity.scenario_key}"
+    return None
+
+
 def _resolve_identity(
     args: argparse.Namespace,
 ) -> tuple[ResolvedIdentity | None, str | None]:
@@ -796,6 +840,10 @@ def _experience_extensions(
     }
     if manifest is not None:
         extensions["experience.manifest"] = redact(manifest)
+    if identity.evidence_kind == "live":
+        declared = required_observations_for(runtime, identity.scenario_key)
+        if declared is not None:
+            extensions["experience.declared_observations"] = declared
     return extensions
 
 
@@ -872,6 +920,8 @@ def _dry_run_actions(
         f"run_id={run_id} out={out_dir}",
         f"manifest={manifest_path if manifest_path is not None else 'none'}",
         "validate argv, frozen scenario enum, phase/mode/subcase whitelist and append-only out",
+        "fail closed when a live scenario has no declared required observations",
+        "publish experience.declared_observations and experience.observations for live rows",
         "no Controller is started, no model call is made, no DSH/QC process is launched",
         f"scenario body registered={has_impl} (T-07 adds the P0 bodies)",
         "write one acp2.acceptance.v1 receipt with result=NOT_VERIFIED through B's write_result",
@@ -1201,6 +1251,11 @@ def run_scenario(args: argparse.Namespace) -> int:
 
     runtime = load_runtime()
     if runtime is None:
+        return EXIT_NOT_VERIFIED
+
+    observation_error = _observation_contract_error(identity, runtime)
+    if observation_error is not None:
+        print(f"NOT_VERIFIED: {observation_error}", file=sys.stderr)
         return EXIT_NOT_VERIFIED
 
     manifest: dict[str, Any] | None = None

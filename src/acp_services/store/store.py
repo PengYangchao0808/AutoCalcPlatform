@@ -15,7 +15,7 @@ import logging
 import sqlite3
 import threading
 import uuid
-from collections.abc import Callable, Collection, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -24,13 +24,22 @@ from typing import Any
 from acp_services.contracts.events import EventScope, OwnerType
 from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
 from acp_services.runtime.idempotency import (
+    IDENTITY_VERSION,
+    MIGRATION_STATE_NATIVE,
+    MIGRATION_STATE_PENDING,
+    MIGRATION_STATE_VERIFIED,
+    REQUEST_DIGEST_VERSION,
+    SCOPE_ORIGIN_UNSPECIFIED,
+    SCOPE_ORIGIN_VERIFIED,
     ClaimState,
     IdempotencyClaim,
     IdempotencyConflictError,
     IdempotencyLeaseError,
     IdempotencyOutcome,
     OutcomeKind,
+    split_scope_id,
     task_ref_for,
+    verify_request_digest,
 )
 from acp_services.runtime.outbox import OutboxEventSpec, OutboxRecord
 from acp_services.store.migrations import migrate
@@ -1084,6 +1093,11 @@ class JobStore:
         *,
         lease_seconds: float = 60.0,
         now: str | None = None,
+        principal_id: str | None = None,
+        project_id: str | None = None,
+        identity_version: str = IDENTITY_VERSION,
+        request_digest_version: str = REQUEST_DIGEST_VERSION,
+        request_payload: Mapping[str, Any] | None = None,
     ) -> IdempotencyOutcome:
         """Claim one ``(scope, action, key)`` or report the durable outcome.
 
@@ -1093,6 +1107,26 @@ class JobStore:
         second reservation); an expired/released claim is taken over with an
         epoch CAS that replaces ``owner_token``.  A committed claim replays
         its stored TaskRef; a digest/scope mismatch is a conflict.
+
+        ``principal_id``/``project_id`` attribution (M0-04): they are the
+        verified identity behind ``scope_id`` and are persisted on the row for
+        reconciliation.  When omitted they are split from the scope id, so a
+        caller that only knows the scope id still records a truthful
+        attribution.
+
+        ``request_payload`` (M0-06) is the full effective request the digest was
+        computed from.  It is only read when the stored row was written under a
+        different digest rule: the row is then verified against **its own frozen
+        field table** (:func:`acp_services.runtime.idempotency.
+        verify_request_digest`).  Equal digest bytes always mean the same request
+        (the version only names the materialisation); a differing digest that
+        cannot be re-derived under the row's rule is a typed *reconcile* conflict
+        — never "tampered", and never a silent second task.
+
+        Legacy rows (``identity_version = "1"``, written before M0-04) are
+        never adopted silently: an unattributable row is a typed ``conflict``
+        (reconcile, do not resubmit with a new key), while a verifiable row
+        replays/takes over under the normal same-scope rules.
         """
         scope = str(scope_id or "").strip()
         act = str(action or "").strip()
@@ -1100,8 +1134,14 @@ class JobStore:
         digest = str(request_digest or "").strip()
         if not scope or not act or not idem_key or not digest:
             raise ValueError("scope_id, action, key and request_digest are required")
+        scope_principal, scope_project = split_scope_id(scope)
+        row_principal = str(principal_id or "").strip() or scope_principal
+        row_project = str(project_id or "").strip() or scope_project
+        ver = str(identity_version or IDENTITY_VERSION)
+        digest_ver = str(request_digest_version or REQUEST_DIGEST_VERSION)
         now_iso = now or _utc_now_iso()
         expires = _lease_expiry(now_iso, lease_seconds)
+        origin = SCOPE_ORIGIN_VERIFIED if row_principal else SCOPE_ORIGIN_UNSPECIFIED
 
         with self._lock, self._connect() as conn:
             try:
@@ -1132,8 +1172,11 @@ class JobStore:
                                claim_id, scope_id, action, idempotency_key,
                                request_digest, state, owner_token, lease_epoch,
                                lease_expires_at, task_id, operation_id,
-                               created_at, updated_at)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)""",
+                               created_at, updated_at, principal_id, project_id,
+                               identity_version, request_digest_version,
+                               scope_origin, migration_state)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL,
+                                   ?, ?, ?, ?, ?, ?, ?, ?)""",
                         (
                             claim_id,
                             scope,
@@ -1146,6 +1189,12 @@ class JobStore:
                             expires,
                             now_iso,
                             now_iso,
+                            row_principal,
+                            row_project,
+                            ver,
+                            digest_ver,
+                            origin,
+                            MIGRATION_STATE_NATIVE,
                         ),
                     )
                     fresh = conn.execute(
@@ -1159,12 +1208,54 @@ class JobStore:
                     )
 
                 claim = _row_to_idempotency_claim(row)
-                if claim.request_digest != digest:
+                # M0-06: a stored row written under another digest rule is not a
+                # conflict by itself.  Equal digest bytes prove the same request;
+                # a differing digest is re-derived under the row's frozen field
+                # table.  Only an unverifiable difference is a reconcile conflict.
+                same_request = claim.request_digest == digest
+                if not same_request and claim.request_digest_version != digest_ver:
+                    same_request = verify_request_digest(
+                        claim.request_digest,
+                        claim.request_digest_version,
+                        request_payload,
+                    )
+                if claim.request_digest_version != digest_ver and not same_request:
                     conn.execute("ROLLBACK")
                     return IdempotencyOutcome(
                         OutcomeKind.CONFLICT.value,
                         claim=claim,
-                        detail="idempotency key reused with a different request payload",
+                        detail=(
+                            "idempotency claim was recorded under request digest version "
+                            f"{claim.request_digest_version!r} and cannot be re-derived from "
+                            "this request; reconcile instead of resubmitting"
+                        ),
+                    )
+                if claim.is_legacy and claim.migration_state not in {
+                    MIGRATION_STATE_VERIFIED,
+                    MIGRATION_STATE_PENDING,
+                }:
+                    conn.execute("ROLLBACK")
+                    return IdempotencyOutcome(
+                        OutcomeKind.CONFLICT.value,
+                        claim=claim,
+                        detail=(
+                            "legacy idempotency claim cannot be attributed to a verified "
+                            "principal; reconcile instead of resubmitting"
+                        ),
+                    )
+                if not same_request:
+                    conn.execute("ROLLBACK")
+                    detail = "idempotency key reused with a different request payload"
+                    if claim.request_digest_version != digest_ver:
+                        detail = (
+                            f"idempotency key was claimed under request digest version "
+                            f"{claim.request_digest_version!r} with a different request "
+                            "payload; reconcile instead of resubmitting"
+                        )
+                    return IdempotencyOutcome(
+                        OutcomeKind.CONFLICT.value,
+                        claim=claim,
+                        detail=detail,
                     )
                 if claim.state == ClaimState.COMMITTED.value:
                     task_ref = _task_ref_from_connection(conn, claim.task_id)
@@ -1535,6 +1626,11 @@ def _claim_without_owner(claim: IdempotencyClaim) -> IdempotencyClaim:
 
 
 def _row_to_idempotency_claim(row: sqlite3.Row) -> IdempotencyClaim:
+    keys = row.keys()
+
+    def _optional(name: str, default: Any) -> Any:
+        return row[name] if name in keys and row[name] is not None else default
+
     return IdempotencyClaim(
         claim_id=row["claim_id"],
         scope_id=row["scope_id"],
@@ -1549,6 +1645,12 @@ def _row_to_idempotency_claim(row: sqlite3.Row) -> IdempotencyClaim:
         operation_id=row["operation_id"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        principal_id=_optional("principal_id", None),
+        project_id=_optional("project_id", None),
+        identity_version=str(_optional("identity_version", IDENTITY_VERSION)),
+        request_digest_version=str(_optional("request_digest_version", REQUEST_DIGEST_VERSION)),
+        scope_origin=str(_optional("scope_origin", SCOPE_ORIGIN_UNSPECIFIED)),
+        migration_state=str(_optional("migration_state", MIGRATION_STATE_NATIVE)),
     )
 
 

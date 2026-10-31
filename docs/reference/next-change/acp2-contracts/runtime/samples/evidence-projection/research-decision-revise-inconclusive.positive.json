@@ -1,0 +1,113 @@
+{
+  "sample_id": "research-decision-revise-inconclusive.positive",
+  "contract": "ADR-003-taskref-evidence-decision.md",
+  "kind": "positive",
+  "payload": {
+    "evidence_view": {
+      "schema": "acp2.runtime.evidence-projection.v1",
+      "contract_version": "1.0.0",
+      "research": {
+        "principal_id": "principal-alice",
+        "project_id": "proj-m1-03",
+        "research_id": "res-m1-03",
+        "session_id": "ses-m1-03",
+        "round": 0
+      },
+      "task_ref": {
+        "project_id": "proj-m1-03",
+        "task_id": "job-m1-03-static",
+        "job_id": "job-m1-03-static",
+        "attempt": 1,
+        "release": {
+          "release_id": "release-m1-03",
+          "release_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      },
+      "report": {
+        "report_id": "report-m1-03-static",
+        "digest": "sha256:c8e449277e4ca8473b032a2a8eb0b3f9899c028bc0dd670cee9d8773da4aa3be",
+        "schema_version": 1,
+        "subject_id": "task-m1-03-static"
+      },
+      "execution_terminal_state": "completed",
+      "qualification": "complete",
+      "evidence_status": "complete",
+      "claims": [
+        {
+          "claim_id": "c-true-minimum",
+          "status": "supported",
+          "validator_id": "check.imaginary_mode_count",
+          "validator_version": "1.0.0",
+          "source_ref_count": 1,
+          "blocking_missing_checks": []
+        },
+        {
+          "claim_id": "c-ts-connects-product",
+          "status": "inconclusive",
+          "validator_id": "",
+          "validator_version": "",
+          "source_ref_count": 0,
+          "blocking_missing_checks": []
+        }
+      ],
+      "overall_claim_status": "inconclusive",
+      "blocking_missing_checks": [],
+      "evidence_refs": [
+        {
+          "evidence_id": "art-cec0e00d21f0d39a",
+          "kind": "native_output",
+          "sha256": "sha256:cec0e00d21f0d39aaccc2ad75ba6f6141f1f37030137709648d2858930cf1cfe",
+          "relative_path": "artifacts/freq.out"
+        }
+      ],
+      "limitations": [
+        "STATIC fixture only; no real QC execution."
+      ],
+      "provenance_digest": "sha256:69d6c252c9e2b169bfb7188837e021809523a26da7ad273c1c55fac2e02ebba2",
+      "normal_reuse": true,
+      "projection_digest": "sha256:6982870f4874524aae3893babad3406f3745deb97c8db2f26ed71e7d10bde189"
+    },
+    "decision": "revise",
+    "decision_record": {
+      "schema": "acp2.runtime.research-decision.v1",
+      "project_id": "proj-m1-03",
+      "research_id": "res-m1-03",
+      "round": 0,
+      "decision": "revise",
+      "task_ref": {
+        "schema": "acp2.runtime.task-ref.v1",
+        "project_id": "proj-m1-03",
+        "task_id": "job-m1-03-static",
+        "job_id": "job-m1-03-static",
+        "attempt": 1,
+        "release": {
+          "release_id": "release-m1-03",
+          "release_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      },
+      "evidence": {
+        "status": "complete",
+        "overall_claim_status": "inconclusive",
+        "blocking_missing_checks": []
+      },
+      "evidence_refs": [
+        {
+          "evidence_id": "art-cec0e00d21f0d39a",
+          "kind": "native_output",
+          "sha256": "sha256:cec0e00d21f0d39aaccc2ad75ba6f6141f1f37030137709648d2858930cf1cfe",
+          "relative_path": "artifacts/freq.out"
+        }
+      ],
+      "rationale_codes": [
+        "execution_completed",
+        "evidence_complete",
+        "claim_inconclusive",
+        "digest_bound_evidence"
+      ],
+      "projection_digest": "sha256:6982870f4874524aae3893babad3406f3745deb97c8db2f26ed71e7d10bde189"
+    }
+  },
+  "expected": {
+    "valid": true
+  }
+}

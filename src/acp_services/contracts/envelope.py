@@ -253,6 +253,9 @@ _RECEIPT_FIELDS: Final[frozenset[str]] = frozenset(
         "step_identities",
         "data_bindings",
         "evidence_digests",
+        # M2-04b additive execution chain (per-step execution identities).
+        "step_execution_chain",
+        "chain_digest",
     }
 )
 
@@ -1031,6 +1034,12 @@ class ExecutionReceipt:
     step_identities: tuple[str, ...] = ()
     data_bindings: tuple[StorageBinding, ...] = ()
     evidence_digests: Mapping[str, str] = field(default_factory=dict)
+    #: M2-04b additive: the per-step **execution** identities that actually ran,
+    #: in topological order.  ``step_identities`` keeps its wire name and now
+    #: explicitly means the frozen *definition* identities; the Controller
+    #: verifies both sets and one never substitutes for the other.
+    step_execution_chain: tuple[Mapping[str, Any], ...] = ()
+    chain_digest: str = ""
     _migrated: bool = field(default=False, init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
@@ -1051,6 +1060,11 @@ class ExecutionReceipt:
         object.__setattr__(
             self, "evidence_digests", _as_str_map(self.evidence_digests, name="evidence_digests")
         )
+        chain = tuple(
+            dict(entry) for entry in self.step_execution_chain if isinstance(entry, Mapping)
+        )
+        object.__setattr__(self, "step_execution_chain", chain)
+        object.__setattr__(self, "chain_digest", _as_str(self.chain_digest, name="chain_digest"))
         if self.attempt < 1:
             raise EnvelopeSerializationError("attempt must be >= 1")
         if self.state not in RECEIPT_STATES:
@@ -1096,6 +1110,8 @@ class ExecutionReceipt:
             "step_identities": list(self.step_identities),
             "data_bindings": [binding.to_dict() for binding in self.data_bindings],
             "evidence_digests": dict(self.evidence_digests),
+            "step_execution_chain": [dict(entry) for entry in self.step_execution_chain],
+            "chain_digest": self.chain_digest,
         }
 
     @classmethod
@@ -1152,6 +1168,12 @@ class ExecutionReceipt:
             step_identities=_as_str_tuple(data.get("step_identities"), name="step_identities"),
             data_bindings=bindings,
             evidence_digests=_as_str_map(data.get("evidence_digests"), name="evidence_digests"),
+            step_execution_chain=tuple(
+                dict(entry)
+                for entry in (data.get("step_execution_chain") or ())
+                if isinstance(entry, Mapping)
+            ),
+            chain_digest=_as_str(data.get("chain_digest"), name="chain_digest"),
         )
         object.__setattr__(receipt, "_migrated", migrated)
         return receipt

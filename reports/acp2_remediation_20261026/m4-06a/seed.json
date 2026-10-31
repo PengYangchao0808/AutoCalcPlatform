@@ -1,0 +1,182 @@
+{
+  "action": "seed",
+  "admission_db": "/tmp/opencode/acp2-m4-06a-work/run_root/acp_admission.db",
+  "approval": {
+    "approval_id": "ap_fc7156d02e18400fb1a38e0051be355e",
+    "plan_digest": "sha256:8aaaf724314f3874b09d99559735c7c1edf550f2b2b273e70a283a9b245527b7",
+    "proposal_ref": "legacy-proposal-approved",
+    "revision": 2,
+    "state": "approved"
+  },
+  "capability": {
+    "attempt": 1,
+    "capability_id": "legacy.energy",
+    "contract": "/tmp/opencode/acp2-m4-06a-work/run_root/capability-contract",
+    "descriptor_digest": "sha256:b9bf989fc63e2b23fd52db1f5010b62b5956fa2ff3a41e362b360e77fb5dd7be",
+    "freeze_at": "2026-10-27T11:42:05Z",
+    "root": "/tmp/opencode/acp2-m4-06a-work/run_root/capabilities",
+    "snapshot_dir": "/tmp/opencode/acp2-m4-06a-work/run_root/capability-state/tasks/legacy-capability-task/attempt-1",
+    "snapshot_files": {
+      "descriptor.json": "b9bf989fc63e2b23fd52db1f5010b62b5956fa2ff3a41e362b360e77fb5dd7be",
+      "snapshot.json": "55a0e435c08e03ad6be98666befafd54d620b0ba80ea998f52a1394cea71a297",
+      "task-binding.json": "61908a9febe7c7ef74c65d891a162d63db34aa4828019be2ab25985f82a8f41d",
+      "view-model.json": "d5104c2ab176f390874967e93df0c5bd9a6116e7812eb14e6065acad2fe834e9"
+    },
+    "state_root": "/tmp/opencode/acp2-m4-06a-work/run_root/capability-state",
+    "task_id": "legacy-capability-task",
+    "version": "1.0.0"
+  },
+  "claims": {
+    "auto": {
+      "action": "submit",
+      "claim_id": "idem_22c8cf31a518401aac0f7acdb8ba1fac",
+      "key": "auto_c7c62021c159e9f14f4a32daa8ef8d62",
+      "origin": "frozen_pre_m0_05_mcp_derivation",
+      "payload": {
+        "execution_mode": "local",
+        "input": {
+          "source": "N"
+        },
+        "molecule_name": "",
+        "name": "legacy_auto_job",
+        "node_tags": [],
+        "project_id": "uncategorized",
+        "remark": "m4-06a legacy fixture",
+        "schema_version": 1,
+        "tags": [],
+        "task_name": "",
+        "workflow": "singlepoint"
+      },
+      "request_digest": "sha256:47e89b249d10c90d866605beef7ef17c357860309c66241d8e5c7e5402863449",
+      "scope_id": "principal_local\u001funcategorized",
+      "state": "committed",
+      "task_id": "legacy_auto_job"
+    },
+    "committed": {
+      "action": "submit",
+      "claim_id": "idem_b818120fd8e941b3a74a997d988be59d",
+      "key": "legacy-submit-key",
+      "payload": {
+        "execution_mode": "local",
+        "input": {
+          "source": "O"
+        },
+        "molecule_name": "",
+        "name": "legacy_commit_job",
+        "node_tags": [],
+        "project_id": "uncategorized",
+        "remark": "m4-06a legacy fixture",
+        "schema_version": 1,
+        "tags": [],
+        "task_name": "",
+        "workflow": "singlepoint"
+      },
+      "replay_outcome": "created",
+      "request_digest": "sha256:b4cfd35e5162be0976f25dd0d4596fb4889db283dc0c459ff51d7eba4cc527aa",
+      "scope_id": "principal_local\u001funcategorized",
+      "state": "committed",
+      "task_id": "legacy_commit_job"
+    },
+    "pending": {
+      "action": "submit",
+      "claim_id": "idem_2c44efc57a2743d8bdd37bb9ae1f9cb2",
+      "key": "legacy-pending-key",
+      "lease_expires_at": "2020-01-01T00:00:01+00:00",
+      "request_digest": "sha256:1dc96990abb3cec7090661618861ea62bb5c7b0fe3f446f4114cc717fb11e68d",
+      "scope_id": "principal_local\u001funcategorized",
+      "state": "claimed"
+    },
+    "unscoped": {
+      "action": "submit",
+      "claim_id": "idem_dd1db7ca3762471089ad0566c9e9a951",
+      "key": "legacy-unscoped-key",
+      "request_digest": "sha256:a250b1dd734a571c0e7367fbd04ca91b0990ae77b7f9a337b510ef6ea8bb4fa0",
+      "scope_id": "legacy-unscoped",
+      "state": "claimed"
+    }
+  },
+  "jobs": {
+    "legacy_auto_job": "completed",
+    "legacy_commit_job": "completed"
+  },
+  "jobs_db": "/tmp/opencode/acp2-m4-06a-work/run_root/acp_jobs.db",
+  "prepare": {
+    "client_idempotency_key": "legacy-prepare-client-key",
+    "idempotency_key": "op_b81ce85904615add7aa9272c2ac07e4b",
+    "operation_id": "op_4dbbbc84328149fa897be719a764bf66",
+    "payload": {
+      "schema_version": 1,
+      "source": "O"
+    },
+    "permission_scope": "local-single",
+    "request_kwargs": {
+      "attempt": 1,
+      "client_idempotency_key": "legacy-prepare-client-key",
+      "job_id": "legacy_prepare_job",
+      "permission_scope": "local-single",
+      "resource_digest": "sha256:bac9cb846815e0efd056430480307dc13360cc31b580c790c62a0406accaf2da",
+      "resource_id": "structure_input",
+      "resource_key": "legacy\u001fprepare\u001fstructure"
+    },
+    "resource_key": "legacy\u001fprepare\u001fstructure",
+    "resource_kind": "input",
+    "state": "queued"
+  },
+  "project_id": "uncategorized",
+  "research": {
+    "proposal_digest": "sha256:0524f48e604ceff5dbfc3baacc83b3420f6289a2f05edd7193a939b16493cb83",
+    "proposal_id": "legacy-proposal-1",
+    "proposal_resource_id": "rrk_7cb90fe1e8d36759bc91c194a3b84b4f71739cab07b2001e",
+    "proposal_revision": 1,
+    "record_digest": "sha256:ae62c2327f53513258cf43bb7653fada101e568a388e0d8d8d06cb5a76fcc6f5",
+    "record_resource_id": "rrk_0bda63a18210ba1e924493f60f8b6cd03d046ecc2282e896",
+    "record_revision": 1,
+    "research_id": "legacy-research-1"
+  },
+  "run_root": "/tmp/opencode/acp2-m4-06a-work/run_root",
+  "scope_id": "principal_local\u001funcategorized",
+  "side": "previous",
+  "state": {
+    "admission_schema_version": 0,
+    "jobs_migrations": [
+      "001",
+      "002",
+      "003",
+      "004",
+      "005",
+      "006",
+      "007",
+      "008",
+      "009",
+      "010",
+      "011",
+      "012",
+      "013",
+      "014",
+      "015",
+      "016",
+      "017",
+      "018",
+      "019",
+      "020",
+      "021",
+      "022",
+      "023"
+    ],
+    "jobs_schema_version": 23,
+    "prepare_schema_version": 1
+  },
+  "usage": {
+    "attempt": 1,
+    "cores": 2,
+    "job_id": "legacy_usage_job",
+    "seconds": 60,
+    "totals": {
+      "core_hours": "0.083333",
+      "core_seconds": 300,
+      "receipts": 4
+    },
+    "usage_id": "usage_legacy_0001",
+    "written": true
+  }
+}

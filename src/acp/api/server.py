@@ -13,8 +13,11 @@ import os
 from contextlib import asynccontextmanager
 from importlib.util import find_spec
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
@@ -25,9 +28,12 @@ from acp.api.batch_preview import router as batch_preview_router
 from acp.api.drafts import router as drafts_router
 from acp.api.mechanism_readonly import router as mechanism_readonly_router
 from acp.api.routes import router as api_router
+from acp.api.v1_guidance import router as v1_guidance_router
 from acp.api.v1_routes import router as v1_router
 from acp.api.v2_approvals import router as v2_approvals_router
 from acp.api.v2_budgets import router as v2_budgets_router
+from acp.api.v2_model_gateway import build_controller_model_gateway
+from acp.api.v2_model_gateway import router as v2_model_gateway_router
 from acp.api.v2_routes import router as v2_router
 from acp.api.v2_structure_sources import router as v2_struct_router
 from acp_services.contracts.access import DeploymentTier, is_loopback_host
@@ -51,6 +57,50 @@ if not _FRONTEND_DIR.is_dir():
     if _assets_spec is not None and _assets_spec.origin is not None:
         _FRONTEND_DIR = Path(_assets_spec.origin).parent
 logger = logging.getLogger(__name__)
+
+
+def unknown_field_envelope(exc: RequestValidationError) -> dict[str, Any] | None:
+    """Return the frozen ``input_invalid`` envelope for an undeclared field.
+
+    ``None`` when the validation failure is not ``extra_forbidden`` (the caller
+    then keeps FastAPI's default error list).  One implementation so every
+    ``extra="forbid"`` DTO — not only the submit request — reports the same
+    machine-readable shape.
+    """
+    extra = [error for error in exc.errors() if error.get("type") == "extra_forbidden"]
+    if not extra:
+        return None
+    fields = [str((error.get("loc") or ("",))[-1]) for error in extra]
+    return {
+        "code": "input_invalid",
+        "message": f"request has an undeclared field {fields[0]!r}",
+        "retryable": False,
+        "params": {"field": fields[0], "rule": "unknown_field", "fields": fields},
+    }
+
+
+def _verify_packaged_static_assets() -> dict[str, Any] | None:
+    """Fail closed when the packaged Workbench assets drifted from the manifest.
+
+    Only the packaged ``acp_web_assets`` tree carries a manifest (the checkout
+    ``frontend/`` is a source tree, not a release artifact); an installed
+    release therefore cannot serve JS/CSS that differ from the verified bytes.
+    """
+    from acp.api.static_assets import MANIFEST_NAME, StaticAssetDigestError, verify_manifest
+
+    if not (_FRONTEND_DIR / MANIFEST_NAME).is_file():
+        return None
+    try:
+        manifest = verify_manifest(_FRONTEND_DIR)
+    except StaticAssetDigestError as exc:
+        raise RuntimeError(f"packaged Workbench assets failed digest verification: {exc}") from exc
+    logger.info(
+        "Packaged Workbench assets verified against %s (release_id=%s, files=%s)",
+        MANIFEST_NAME,
+        manifest.get("release_id"),
+        manifest.get("counts", {}).get("files"),
+    )
+    return manifest
 
 
 class _RevalidatingStaticFiles(StaticFiles):
@@ -238,11 +288,22 @@ _IDENTITY_EXEMPT_PATHS = frozenset(
 _IDENTITY_EXEMPT_PREFIXES = ("/docs/", "/redoc/", "/assets/", "/static/", "/next/")
 
 
+#: The Workbench page's own static asset mounts.  A browser session with an
+#: API-key identity must be able to load the page's scripts/styles or the
+#: product UI cannot run at all (found by the M4-02 browser leg: `/js/...`
+#: answered 401 under ``ACP_IDENTITY_MODE=api-key``).  These mounts serve
+#: committed frontend assets only — never a task, an approval, a budget or any
+#: other tenant-scoped read — so they carry no authorization fact.
+_STATIC_ASSET_PREFIXES = ("/js/", "/css/", "/legacy/")
+
+
 def _identity_exempt(path: str) -> bool:
     """Discovery/static routes that must stay reachable without a credential."""
     if path in _IDENTITY_EXEMPT_PATHS:
         return True
-    return any(path.startswith(prefix) for prefix in _IDENTITY_EXEMPT_PREFIXES)
+    return any(
+        path.startswith(prefix) for prefix in (*_IDENTITY_EXEMPT_PREFIXES, *_STATIC_ASSET_PREFIXES)
+    )
 
 
 def _maybe_configure_structured_logging() -> bool:
@@ -281,10 +342,19 @@ def create_app(
     Reads ``ACP_RUN_ROOT`` / ``ACP_HOST`` / ``ACP_PORT`` / ``ACP_MAX_RUNNING`` /
     ``ACP_POLL_INTERVAL`` env vars (set by ``acp run serve``) so the
     configuration survives uvicorn's module re-import under ``--reload``.
+
+    Raises:
+        MutuallyExclusiveDistributions: the root ``acp`` distribution and the
+            role distributions are installed together (M5-03 finding F2).
     """
     from acp.core.paths import check_run_root_safety, resolve_run_root
+    from acp.install_guard import ensure_exclusive_install
 
+    # F2 (M5-03): the API process is a product entry point; refuse a mixed
+    # root/roles install before any run_root is claimed or a thread starts.
+    ensure_exclusive_install()
     _maybe_configure_structured_logging()
+    _verify_packaged_static_assets()
 
     run_root_path = resolve_run_root(run_root or os.environ.get("ACP_RUN_ROOT"))
     eff_host = host or os.environ.get("ACP_HOST", "127.0.0.1")
@@ -319,6 +389,11 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         from acp.scheduler.manager import JobManager
+        from acp.services_analysis_bootstrap import build_analysis_registry
+        from acp.services_science_plugins_bootstrap import (
+            build_plugin_analysis_capabilities,
+            build_science_plugin_registry,
+        )
         from acp_services.runtime.local_admission import build_local_admission
         from acp_services.workspace.server_identity import (
             ServerIdentity,
@@ -352,8 +427,39 @@ def create_app(
             app.state.host = eff_host
             app.state.port = eff_port
             app.state.run_root = str(run_root_path)
+            # M4-02: the one Controller model gateway (M3-03) bound to the
+            # admission ledger.  DSH/RPH reach a provider only through this
+            # object; the credential stays in the process environment.
+            app.state.model_gateway = build_controller_model_gateway(
+                admission.ledger, run_root_path
+            )
             # Dedicated DB file: never the jobs DB.
             app.state.research_resources = ResearchResourceStore(run_root_path / "acp_research.db")
+            # M2-02: the application-level analysis registry is built once here
+            # (never the module-level default) and is the only table the analyze
+            # command and the discovery projection read.  `vibration.analyze` is
+            # executable over prepared artifacts; `vibration.compute` stays a
+            # declared compute capability (a frequency task, not an analysis).
+            # M2-05: enabled third-party pure-analysis plugins are registered
+            # into the *same* injected registry from the install/enablement
+            # facts, so a new process serves them without any manual register.
+            plugin_registry = build_science_plugin_registry(run_root=run_root_path)
+            # Fail closed before serving: a plugin that violates the contract
+            # (licence, version range, conflicting name/capability, unreadable
+            # payload) refuses startup instead of becoming silently discoverable.
+            plugin_registry.scan()
+            app.state.science_plugin_registry = plugin_registry
+            prepare_operations = getattr(manager, "_prepare_operations", None)
+            plugin_analysis = build_plugin_analysis_capabilities(
+                registry=plugin_registry,
+                prepare_operations=prepare_operations,
+                artifact_store_root=run_root_path / "artifact-store",
+            )
+            app.state.analysis_registry = build_analysis_registry(
+                prepare_operations=prepare_operations,
+                artifact_store_root=run_root_path / "artifact-store",
+                plugin_capabilities=plugin_analysis,
+            )
             yield
         finally:
             # A store-close failure must never skip the manager shutdown.
@@ -416,6 +522,24 @@ def create_app(
             )
         return await call_next(request)
 
+    @app.exception_handler(RequestValidationError)
+    async def request_validation_handler(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        """Report an undeclared request field as the shared application error.
+
+        M0-06 freezes ``extra="forbid"`` on the execution DTOs.  FastAPI's default
+        422 body is a list of pydantic errors; the frozen application contract is
+        ``input_invalid`` with ``params={"field": ..., "rule": "unknown_field"}``
+        (``unknown_field_policy`` U1), identical to what the MCP adapter answers
+        locally and what the CLI projects.  Every other validation error keeps the
+        long-standing FastAPI shape.
+        """
+        envelope = unknown_field_envelope(exc)
+        if envelope is not None:
+            return JSONResponse(status_code=422, content={"detail": envelope})
+        return JSONResponse(status_code=422, content={"detail": jsonable_encoder(exc.errors())})
+
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         logger.exception(
@@ -434,10 +558,12 @@ def create_app(
     app.include_router(v2_router, prefix="/api/v2")
     app.include_router(v2_approvals_router, prefix="/api/v2")
     app.include_router(v2_budgets_router, prefix="/api/v2")
+    app.include_router(v2_model_gateway_router, prefix="/api/v2")
     app.include_router(v2_struct_router, prefix="/api/v2")
     app.include_router(v2_science.router, prefix="/api/v2")
     app.include_router(v1_science.router, prefix="/api/v1")
     app.include_router(v2_research.router, prefix="/api/v2")
+    app.include_router(v1_guidance_router)
     app.include_router(api_router, prefix="/api")
 
     # Without these mounts /js|/css 404 and the viewer tabs render blank (46a5626 regression).

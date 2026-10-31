@@ -1,0 +1,1456 @@
+{
+  "batch_id": "batch-b03b147a065341bb",
+  "created_at": "2026-10-22T22:21:53Z",
+  "scenarios": {
+    "selftest-caps": {
+      "caps": {
+        "input_tokens": 150000,
+        "model_requests": 12,
+        "output_tokens": 30000
+      },
+      "created_at": "2026-10-22T22:22:03Z",
+      "events": [],
+      "events_truncated": 0,
+      "inflight": {
+        "input_tokens": 0,
+        "requests": 0
+      },
+      "models": [
+        "acp2-proxy-model",
+        "stub-error",
+        "stub-interrupt",
+        "stub-no-usage",
+        "stub-ok",
+        "stub-slow",
+        "stub-usage10"
+      ],
+      "refused": {},
+      "run_ids": [],
+      "scenario_budget_id": "selftest-caps",
+      "seq": 0,
+      "settled": {
+        "input_cap_overshoot_events": 0,
+        "input_tokens_estimated": 0,
+        "input_tokens_reported": 0,
+        "output_cap_violation_events": 0,
+        "output_tokens_reported": 0,
+        "output_tokens_unknown_events": 0,
+        "requests": 0,
+        "unknown_usage_events": 0
+      },
+      "updated_at": "2026-10-22T22:22:03Z"
+    },
+    "selftest-concurrency": {
+      "caps": {
+        "input_tokens": 150000,
+        "model_requests": 12,
+        "output_tokens": 30000
+      },
+      "created_at": "2026-10-22T22:22:00Z",
+      "events": [
+        {
+          "counted": false,
+          "detail": "only one model request may be in flight per scenario",
+          "kind": "refusal",
+          "model": "stub-slow",
+          "outcome": "concurrency_cap",
+          "run_id": "",
+          "seq": 1,
+          "stream": false,
+          "ts": "2026-10-22T22:22:00Z"
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 45,
+          "kind": "request",
+          "model": "stub-slow",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "",
+          "sent_max_tokens": 16,
+          "seq": 2,
+          "stream": false,
+          "ts": "2026-10-22T22:22:01Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        }
+      ],
+      "events_truncated": 0,
+      "inflight": {
+        "input_tokens": 0,
+        "requests": 0
+      },
+      "models": [
+        "acp2-proxy-model",
+        "stub-error",
+        "stub-interrupt",
+        "stub-no-usage",
+        "stub-ok",
+        "stub-slow",
+        "stub-usage10"
+      ],
+      "refused": {
+        "concurrency_cap": 1
+      },
+      "run_ids": [],
+      "scenario_budget_id": "selftest-concurrency",
+      "seq": 2,
+      "settled": {
+        "input_cap_overshoot_events": 0,
+        "input_tokens_estimated": 0,
+        "input_tokens_reported": 11,
+        "output_cap_violation_events": 0,
+        "output_tokens_reported": 7,
+        "output_tokens_unknown_events": 0,
+        "requests": 1,
+        "unknown_usage_events": 0
+      },
+      "updated_at": "2026-10-22T22:22:01Z"
+    },
+    "selftest-count": {
+      "caps": {
+        "input_tokens": 150000,
+        "model_requests": 12,
+        "output_tokens": 30000
+      },
+      "created_at": "2026-10-22T22:21:53Z",
+      "events": [
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 45,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "run-count-a",
+          "sent_max_tokens": 16,
+          "seq": 1,
+          "stream": false,
+          "ts": "2026-10-22T22:21:53Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 45,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "run-count-a",
+          "sent_max_tokens": 16,
+          "seq": 2,
+          "stream": false,
+          "ts": "2026-10-22T22:21:54Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 45,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "run-count-a",
+          "sent_max_tokens": 16,
+          "seq": 3,
+          "stream": false,
+          "ts": "2026-10-22T22:21:54Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 45,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "run-count-a",
+          "sent_max_tokens": 16,
+          "seq": 4,
+          "stream": false,
+          "ts": "2026-10-22T22:21:54Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 45,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "run-count-a",
+          "sent_max_tokens": 16,
+          "seq": 5,
+          "stream": false,
+          "ts": "2026-10-22T22:21:54Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 45,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "run-count-a",
+          "sent_max_tokens": 16,
+          "seq": 6,
+          "stream": false,
+          "ts": "2026-10-22T22:21:54Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 45,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "run-count-a",
+          "sent_max_tokens": 16,
+          "seq": 7,
+          "stream": false,
+          "ts": "2026-10-22T22:21:54Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 45,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "run-count-a",
+          "sent_max_tokens": 16,
+          "seq": 8,
+          "stream": false,
+          "ts": "2026-10-22T22:21:54Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 45,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "run-count-a",
+          "sent_max_tokens": 16,
+          "seq": 9,
+          "stream": false,
+          "ts": "2026-10-22T22:21:54Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 45,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "run-count-a",
+          "sent_max_tokens": 16,
+          "seq": 10,
+          "stream": false,
+          "ts": "2026-10-22T22:21:54Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 46,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "run-count-a",
+          "sent_max_tokens": 16,
+          "seq": 11,
+          "stream": false,
+          "ts": "2026-10-22T22:21:54Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 46,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "run-count-a",
+          "sent_max_tokens": 16,
+          "seq": 12,
+          "stream": false,
+          "ts": "2026-10-22T22:21:54Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": false,
+          "detail": "model request cap reached (12); the next request is refused before reaching the provider",
+          "kind": "refusal",
+          "model": "stub-ok",
+          "outcome": "model_requests",
+          "run_id": "run-count-a",
+          "seq": 13,
+          "stream": false,
+          "ts": "2026-10-22T22:21:54Z"
+        }
+      ],
+      "events_truncated": 0,
+      "inflight": {
+        "input_tokens": 0,
+        "requests": 0
+      },
+      "models": [
+        "acp2-proxy-model",
+        "stub-error",
+        "stub-interrupt",
+        "stub-no-usage",
+        "stub-ok",
+        "stub-slow",
+        "stub-usage10"
+      ],
+      "refused": {
+        "model_requests": 1
+      },
+      "run_ids": [
+        "run-count-a"
+      ],
+      "scenario_budget_id": "selftest-count",
+      "seq": 13,
+      "settled": {
+        "input_cap_overshoot_events": 0,
+        "input_tokens_estimated": 0,
+        "input_tokens_reported": 132,
+        "output_cap_violation_events": 0,
+        "output_tokens_reported": 84,
+        "output_tokens_unknown_events": 0,
+        "requests": 12,
+        "unknown_usage_events": 0
+      },
+      "updated_at": "2026-10-22T22:21:54Z"
+    },
+    "selftest-crash": {
+      "caps": {
+        "input_tokens": 150000,
+        "model_requests": 12,
+        "output_tokens": 30000
+      },
+      "created_at": "2026-10-22T22:22:03Z",
+      "events": [
+        {
+          "counted": true,
+          "detail": {
+            "input_tokens_estimate": 321,
+            "recovered_requests": 1
+          },
+          "kind": "request",
+          "model": null,
+          "outcome": "restart_recovered",
+          "run_id": null,
+          "seq": 1,
+          "stream": false,
+          "ts": "2026-10-22T22:22:03Z",
+          "usage": {
+            "input_tokens": null,
+            "output_tokens": null,
+            "source": "unknown"
+          }
+        }
+      ],
+      "events_truncated": 0,
+      "inflight": {
+        "input_tokens": 0,
+        "requests": 0
+      },
+      "models": [
+        "acp2-proxy-model",
+        "stub-error",
+        "stub-interrupt",
+        "stub-no-usage",
+        "stub-ok",
+        "stub-slow",
+        "stub-usage10"
+      ],
+      "refused": {},
+      "run_ids": [],
+      "scenario_budget_id": "selftest-crash",
+      "seq": 1,
+      "settled": {
+        "input_cap_overshoot_events": 0,
+        "input_tokens_estimated": 321,
+        "input_tokens_reported": 0,
+        "output_cap_violation_events": 0,
+        "output_tokens_reported": 0,
+        "output_tokens_unknown_events": 1,
+        "requests": 1,
+        "unknown_usage_events": 1
+      },
+      "updated_at": "2026-10-22T22:22:03Z"
+    },
+    "selftest-input-cap": {
+      "caps": {
+        "input_tokens": 50,
+        "model_requests": 12,
+        "output_tokens": 30000
+      },
+      "created_at": "2026-10-22T22:21:59Z",
+      "events": [
+        {
+          "counted": false,
+          "detail": "input token cap would be exceeded: used=0 estimate=177 cap=50",
+          "kind": "refusal",
+          "model": "stub-ok",
+          "outcome": "input_tokens",
+          "run_id": "",
+          "seq": 1,
+          "stream": false,
+          "ts": "2026-10-22T22:21:59Z"
+        }
+      ],
+      "events_truncated": 0,
+      "inflight": {
+        "input_tokens": 0,
+        "requests": 0
+      },
+      "models": [
+        "acp2-proxy-model",
+        "stub-error",
+        "stub-interrupt",
+        "stub-no-usage",
+        "stub-ok",
+        "stub-slow",
+        "stub-usage10"
+      ],
+      "refused": {
+        "input_tokens": 1
+      },
+      "run_ids": [],
+      "scenario_budget_id": "selftest-input-cap",
+      "seq": 1,
+      "settled": {
+        "input_cap_overshoot_events": 0,
+        "input_tokens_estimated": 0,
+        "input_tokens_reported": 0,
+        "output_cap_violation_events": 0,
+        "output_tokens_reported": 0,
+        "output_tokens_unknown_events": 0,
+        "requests": 0,
+        "unknown_usage_events": 0
+      },
+      "updated_at": "2026-10-22T22:21:59Z"
+    },
+    "selftest-interrupt": {
+      "caps": {
+        "input_tokens": 150000,
+        "model_requests": 12,
+        "output_tokens": 30000
+      },
+      "created_at": "2026-10-22T22:21:56Z",
+      "events": [
+        {
+          "counted": true,
+          "detail": "IncompleteRead: IncompleteRead(332 bytes read)",
+          "estimated_input_tokens": 44,
+          "kind": "request",
+          "model": "stub-interrupt",
+          "outcome": "upstream_interrupted",
+          "requested_max_tokens": 16,
+          "run_id": "",
+          "sent_max_tokens": 16,
+          "seq": 1,
+          "stream": true,
+          "ts": "2026-10-22T22:21:56Z",
+          "usage": {
+            "input_source": "estimated",
+            "input_tokens": null,
+            "output_source": "unknown",
+            "output_tokens": null
+          }
+        },
+        {
+          "counted": true,
+          "detail": "ConnectionResetError: [Errno 104] Connection reset by peer",
+          "estimated_input_tokens": 47,
+          "kind": "request",
+          "model": "stub-slow",
+          "outcome": "client_disconnected",
+          "requested_max_tokens": 16,
+          "run_id": "",
+          "sent_max_tokens": 16,
+          "seq": 2,
+          "stream": true,
+          "ts": "2026-10-22T22:21:56Z",
+          "usage": {
+            "input_source": "estimated",
+            "input_tokens": null,
+            "output_source": "unknown",
+            "output_tokens": null
+          }
+        }
+      ],
+      "events_truncated": 0,
+      "inflight": {
+        "input_tokens": 0,
+        "requests": 0
+      },
+      "models": [
+        "acp2-proxy-model",
+        "stub-error",
+        "stub-interrupt",
+        "stub-no-usage",
+        "stub-ok",
+        "stub-slow",
+        "stub-usage10"
+      ],
+      "refused": {},
+      "run_ids": [],
+      "scenario_budget_id": "selftest-interrupt",
+      "seq": 2,
+      "settled": {
+        "input_cap_overshoot_events": 0,
+        "input_tokens_estimated": 91,
+        "input_tokens_reported": 0,
+        "output_cap_violation_events": 0,
+        "output_tokens_reported": 0,
+        "output_tokens_unknown_events": 2,
+        "requests": 2,
+        "unknown_usage_events": 2
+      },
+      "updated_at": "2026-10-22T22:21:56Z"
+    },
+    "selftest-lifecycle": {
+      "caps": {
+        "input_tokens": 150000,
+        "model_requests": 12,
+        "output_tokens": 30000
+      },
+      "created_at": "2026-10-22T22:21:53Z",
+      "events": [],
+      "events_truncated": 0,
+      "inflight": {
+        "input_tokens": 0,
+        "requests": 0
+      },
+      "models": [
+        "acp2-proxy-model",
+        "stub-error",
+        "stub-interrupt",
+        "stub-no-usage",
+        "stub-ok",
+        "stub-slow",
+        "stub-usage10"
+      ],
+      "refused": {},
+      "run_ids": [],
+      "scenario_budget_id": "selftest-lifecycle",
+      "seq": 0,
+      "settled": {
+        "input_cap_overshoot_events": 0,
+        "input_tokens_estimated": 0,
+        "input_tokens_reported": 0,
+        "output_cap_violation_events": 0,
+        "output_tokens_reported": 0,
+        "output_tokens_unknown_events": 0,
+        "requests": 0,
+        "unknown_usage_events": 0
+      },
+      "updated_at": "2026-10-22T22:21:53Z"
+    },
+    "selftest-no-usage": {
+      "caps": {
+        "input_tokens": 150000,
+        "model_requests": 12,
+        "output_tokens": 30000
+      },
+      "created_at": "2026-10-22T22:21:55Z",
+      "events": [
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 46,
+          "kind": "request",
+          "model": "stub-no-usage",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "",
+          "sent_max_tokens": 16,
+          "seq": 1,
+          "stream": false,
+          "ts": "2026-10-22T22:21:55Z",
+          "usage": {
+            "input_source": "estimated",
+            "input_tokens": null,
+            "output_source": "unknown",
+            "output_tokens": null
+          }
+        }
+      ],
+      "events_truncated": 0,
+      "inflight": {
+        "input_tokens": 0,
+        "requests": 0
+      },
+      "models": [
+        "acp2-proxy-model",
+        "stub-error",
+        "stub-interrupt",
+        "stub-no-usage",
+        "stub-ok",
+        "stub-slow",
+        "stub-usage10"
+      ],
+      "refused": {},
+      "run_ids": [],
+      "scenario_budget_id": "selftest-no-usage",
+      "seq": 1,
+      "settled": {
+        "input_cap_overshoot_events": 0,
+        "input_tokens_estimated": 46,
+        "input_tokens_reported": 0,
+        "output_cap_violation_events": 0,
+        "output_tokens_reported": 0,
+        "output_tokens_unknown_events": 1,
+        "requests": 1,
+        "unknown_usage_events": 1
+      },
+      "updated_at": "2026-10-22T22:21:55Z"
+    },
+    "selftest-output-cap": {
+      "caps": {
+        "input_tokens": 150000,
+        "model_requests": 12,
+        "output_tokens": 10
+      },
+      "created_at": "2026-10-22T22:22:00Z",
+      "events": [
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 44,
+          "kind": "request",
+          "model": "stub-usage10",
+          "outcome": "completed",
+          "requested_max_tokens": 10,
+          "run_id": "",
+          "sent_max_tokens": 10,
+          "seq": 1,
+          "stream": false,
+          "ts": "2026-10-22T22:22:00Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 10
+          }
+        },
+        {
+          "counted": false,
+          "detail": "output token cap reached (10); no further model request may run",
+          "kind": "refusal",
+          "model": "stub-usage10",
+          "outcome": "output_tokens",
+          "run_id": "",
+          "seq": 2,
+          "stream": false,
+          "ts": "2026-10-22T22:22:00Z"
+        }
+      ],
+      "events_truncated": 0,
+      "inflight": {
+        "input_tokens": 0,
+        "requests": 0
+      },
+      "models": [
+        "acp2-proxy-model",
+        "stub-error",
+        "stub-interrupt",
+        "stub-no-usage",
+        "stub-ok",
+        "stub-slow",
+        "stub-usage10"
+      ],
+      "refused": {
+        "output_tokens": 1
+      },
+      "run_ids": [],
+      "scenario_budget_id": "selftest-output-cap",
+      "seq": 2,
+      "settled": {
+        "input_cap_overshoot_events": 0,
+        "input_tokens_estimated": 0,
+        "input_tokens_reported": 11,
+        "output_cap_violation_events": 0,
+        "output_tokens_reported": 10,
+        "output_tokens_unknown_events": 0,
+        "requests": 1,
+        "unknown_usage_events": 0
+      },
+      "updated_at": "2026-10-22T22:22:00Z"
+    },
+    "selftest-per-request": {
+      "caps": {
+        "input_tokens": 150000,
+        "model_requests": 12,
+        "output_tokens": 30000
+      },
+      "created_at": "2026-10-22T22:21:54Z",
+      "events": [
+        {
+          "counted": false,
+          "detail": "requested max_tokens=4097 exceeds the per-request output cap 4096",
+          "kind": "refusal",
+          "model": "stub-ok",
+          "outcome": "per_request_output_cap",
+          "run_id": "",
+          "seq": 1,
+          "stream": false,
+          "ts": "2026-10-22T22:21:54Z"
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 48,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 4096,
+          "run_id": "",
+          "sent_max_tokens": 4096,
+          "seq": 2,
+          "stream": false,
+          "ts": "2026-10-22T22:21:54Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        }
+      ],
+      "events_truncated": 0,
+      "inflight": {
+        "input_tokens": 0,
+        "requests": 0
+      },
+      "models": [
+        "acp2-proxy-model",
+        "stub-error",
+        "stub-interrupt",
+        "stub-no-usage",
+        "stub-ok",
+        "stub-slow",
+        "stub-usage10"
+      ],
+      "refused": {
+        "per_request_output_cap": 1
+      },
+      "run_ids": [],
+      "scenario_budget_id": "selftest-per-request",
+      "seq": 2,
+      "settled": {
+        "input_cap_overshoot_events": 0,
+        "input_tokens_estimated": 0,
+        "input_tokens_reported": 11,
+        "output_cap_violation_events": 0,
+        "output_tokens_reported": 7,
+        "output_tokens_unknown_events": 0,
+        "requests": 1,
+        "unknown_usage_events": 0
+      },
+      "updated_at": "2026-10-22T22:21:54Z"
+    },
+    "selftest-restart": {
+      "caps": {
+        "input_tokens": 150000,
+        "model_requests": 12,
+        "output_tokens": 30000
+      },
+      "created_at": "2026-10-22T22:21:57Z",
+      "events": [
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 46,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "",
+          "sent_max_tokens": 16,
+          "seq": 1,
+          "stream": false,
+          "ts": "2026-10-22T22:21:57Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 46,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "",
+          "sent_max_tokens": 16,
+          "seq": 2,
+          "stream": false,
+          "ts": "2026-10-22T22:21:57Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 46,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "",
+          "sent_max_tokens": 16,
+          "seq": 3,
+          "stream": false,
+          "ts": "2026-10-22T22:21:57Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 46,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "",
+          "sent_max_tokens": 16,
+          "seq": 4,
+          "stream": false,
+          "ts": "2026-10-22T22:21:58Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 46,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "",
+          "sent_max_tokens": 16,
+          "seq": 5,
+          "stream": false,
+          "ts": "2026-10-22T22:21:58Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 46,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "",
+          "sent_max_tokens": 16,
+          "seq": 6,
+          "stream": false,
+          "ts": "2026-10-22T22:21:58Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 46,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "",
+          "sent_max_tokens": 16,
+          "seq": 7,
+          "stream": false,
+          "ts": "2026-10-22T22:21:58Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 46,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "",
+          "sent_max_tokens": 16,
+          "seq": 8,
+          "stream": false,
+          "ts": "2026-10-22T22:21:58Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 46,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "",
+          "sent_max_tokens": 16,
+          "seq": 9,
+          "stream": false,
+          "ts": "2026-10-22T22:21:58Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 46,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "",
+          "sent_max_tokens": 16,
+          "seq": 10,
+          "stream": false,
+          "ts": "2026-10-22T22:21:58Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 46,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "",
+          "sent_max_tokens": 16,
+          "seq": 11,
+          "stream": false,
+          "ts": "2026-10-22T22:21:58Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 46,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "",
+          "sent_max_tokens": 16,
+          "seq": 12,
+          "stream": false,
+          "ts": "2026-10-22T22:21:58Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": false,
+          "detail": "model request cap reached (12); the next request is refused before reaching the provider",
+          "kind": "refusal",
+          "model": "stub-ok",
+          "outcome": "model_requests",
+          "run_id": "",
+          "seq": 13,
+          "stream": false,
+          "ts": "2026-10-22T22:21:58Z"
+        }
+      ],
+      "events_truncated": 0,
+      "inflight": {
+        "input_tokens": 0,
+        "requests": 0
+      },
+      "models": [
+        "acp2-proxy-model",
+        "stub-error",
+        "stub-interrupt",
+        "stub-no-usage",
+        "stub-ok",
+        "stub-slow",
+        "stub-usage10"
+      ],
+      "refused": {
+        "model_requests": 1
+      },
+      "run_ids": [],
+      "scenario_budget_id": "selftest-restart",
+      "seq": 13,
+      "settled": {
+        "input_cap_overshoot_events": 0,
+        "input_tokens_estimated": 0,
+        "input_tokens_reported": 132,
+        "output_cap_violation_events": 0,
+        "output_tokens_reported": 84,
+        "output_tokens_unknown_events": 0,
+        "requests": 12,
+        "unknown_usage_events": 0
+      },
+      "updated_at": "2026-10-22T22:21:58Z"
+    },
+    "selftest-routing": {
+      "caps": {
+        "input_tokens": 150000,
+        "model_requests": 12,
+        "output_tokens": 30000
+      },
+      "created_at": "2026-10-22T22:22:04Z",
+      "events": [],
+      "events_truncated": 0,
+      "inflight": {
+        "input_tokens": 0,
+        "requests": 0
+      },
+      "models": [
+        "acp2-proxy-model",
+        "stub-error",
+        "stub-interrupt",
+        "stub-no-usage",
+        "stub-ok",
+        "stub-slow",
+        "stub-usage10"
+      ],
+      "refused": {},
+      "run_ids": [],
+      "scenario_budget_id": "selftest-routing",
+      "seq": 0,
+      "settled": {
+        "input_cap_overshoot_events": 0,
+        "input_tokens_estimated": 0,
+        "input_tokens_reported": 0,
+        "output_cap_violation_events": 0,
+        "output_tokens_reported": 0,
+        "output_tokens_unknown_events": 0,
+        "requests": 0,
+        "unknown_usage_events": 0
+      },
+      "updated_at": "2026-10-22T22:22:04Z"
+    },
+    "selftest-run-id": {
+      "caps": {
+        "input_tokens": 150000,
+        "model_requests": 12,
+        "output_tokens": 30000
+      },
+      "created_at": "2026-10-22T22:21:58Z",
+      "events": [
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 45,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "run-alpha",
+          "sent_max_tokens": 16,
+          "seq": 1,
+          "stream": false,
+          "ts": "2026-10-22T22:21:58Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 46,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "run-beta",
+          "sent_max_tokens": 16,
+          "seq": 2,
+          "stream": false,
+          "ts": "2026-10-22T22:21:58Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        },
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 46,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 16,
+          "run_id": "run-beta",
+          "sent_max_tokens": 16,
+          "seq": 3,
+          "stream": false,
+          "ts": "2026-10-22T22:21:58Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        }
+      ],
+      "events_truncated": 0,
+      "inflight": {
+        "input_tokens": 0,
+        "requests": 0
+      },
+      "models": [
+        "acp2-proxy-model",
+        "stub-error",
+        "stub-interrupt",
+        "stub-no-usage",
+        "stub-ok",
+        "stub-slow",
+        "stub-usage10"
+      ],
+      "refused": {},
+      "run_ids": [
+        "run-alpha",
+        "run-beta"
+      ],
+      "scenario_budget_id": "selftest-run-id",
+      "seq": 3,
+      "settled": {
+        "input_cap_overshoot_events": 0,
+        "input_tokens_estimated": 0,
+        "input_tokens_reported": 33,
+        "output_cap_violation_events": 0,
+        "output_tokens_reported": 21,
+        "output_tokens_unknown_events": 0,
+        "requests": 3,
+        "unknown_usage_events": 0
+      },
+      "updated_at": "2026-10-22T22:21:58Z"
+    },
+    "selftest-stream": {
+      "caps": {
+        "input_tokens": 150000,
+        "model_requests": 12,
+        "output_tokens": 30000
+      },
+      "created_at": "2026-10-22T22:21:55Z",
+      "events": [
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 45,
+          "kind": "request",
+          "model": "stub-ok",
+          "outcome": "completed",
+          "requested_max_tokens": 32,
+          "run_id": "",
+          "sent_max_tokens": 32,
+          "seq": 1,
+          "stream": true,
+          "ts": "2026-10-22T22:21:55Z",
+          "usage": {
+            "input_source": "reported",
+            "input_tokens": 11,
+            "output_source": "reported",
+            "output_tokens": 7
+          }
+        }
+      ],
+      "events_truncated": 0,
+      "inflight": {
+        "input_tokens": 0,
+        "requests": 0
+      },
+      "models": [
+        "acp2-proxy-model",
+        "stub-error",
+        "stub-interrupt",
+        "stub-no-usage",
+        "stub-ok",
+        "stub-slow",
+        "stub-usage10"
+      ],
+      "refused": {},
+      "run_ids": [],
+      "scenario_budget_id": "selftest-stream",
+      "seq": 1,
+      "settled": {
+        "input_cap_overshoot_events": 0,
+        "input_tokens_estimated": 0,
+        "input_tokens_reported": 11,
+        "output_cap_violation_events": 0,
+        "output_tokens_reported": 7,
+        "output_tokens_unknown_events": 0,
+        "requests": 1,
+        "unknown_usage_events": 0
+      },
+      "updated_at": "2026-10-22T22:21:55Z"
+    },
+    "selftest-unapproved": {
+      "caps": {
+        "input_tokens": 150000,
+        "model_requests": 12,
+        "output_tokens": 30000
+      },
+      "created_at": "2026-10-22T22:22:02Z",
+      "events": [
+        {
+          "counted": false,
+          "detail": {
+            "approved_models": [
+              "acp2-proxy-model",
+              "stub-ok",
+              "stub-usage10",
+              "stub-no-usage",
+              "stub-error",
+              "stub-slow",
+              "stub-interrupt"
+            ],
+            "fallback_attempted": false,
+            "requested_model": "not-approved-model"
+          },
+          "kind": "refusal",
+          "model": "not-approved-model",
+          "outcome": "unapproved_model",
+          "run_id": "",
+          "seq": 1,
+          "stream": false,
+          "ts": "2026-10-22T22:22:02Z"
+        }
+      ],
+      "events_truncated": 0,
+      "inflight": {
+        "input_tokens": 0,
+        "requests": 0
+      },
+      "models": [
+        "acp2-proxy-model",
+        "stub-error",
+        "stub-interrupt",
+        "stub-no-usage",
+        "stub-ok",
+        "stub-slow",
+        "stub-usage10"
+      ],
+      "refused": {
+        "unapproved_model": 1
+      },
+      "run_ids": [],
+      "scenario_budget_id": "selftest-unapproved",
+      "seq": 1,
+      "settled": {
+        "input_cap_overshoot_events": 0,
+        "input_tokens_estimated": 0,
+        "input_tokens_reported": 0,
+        "output_cap_violation_events": 0,
+        "output_tokens_reported": 0,
+        "output_tokens_unknown_events": 0,
+        "requests": 0,
+        "unknown_usage_events": 0
+      },
+      "updated_at": "2026-10-22T22:22:02Z"
+    },
+    "selftest-upstream-error": {
+      "caps": {
+        "input_tokens": 150000,
+        "model_requests": 12,
+        "output_tokens": 30000
+      },
+      "created_at": "2026-10-22T22:21:57Z",
+      "events": [
+        {
+          "counted": true,
+          "detail": null,
+          "estimated_input_tokens": 45,
+          "kind": "request",
+          "model": "stub-error",
+          "outcome": "upstream_status_500",
+          "requested_max_tokens": 16,
+          "run_id": "",
+          "sent_max_tokens": 16,
+          "seq": 1,
+          "stream": false,
+          "ts": "2026-10-22T22:21:57Z",
+          "usage": {
+            "input_source": "estimated",
+            "input_tokens": null,
+            "output_source": "unknown",
+            "output_tokens": null
+          }
+        }
+      ],
+      "events_truncated": 0,
+      "inflight": {
+        "input_tokens": 0,
+        "requests": 0
+      },
+      "models": [
+        "acp2-proxy-model",
+        "stub-error",
+        "stub-interrupt",
+        "stub-no-usage",
+        "stub-ok",
+        "stub-slow",
+        "stub-usage10"
+      ],
+      "refused": {},
+      "run_ids": [],
+      "scenario_budget_id": "selftest-upstream-error",
+      "seq": 1,
+      "settled": {
+        "input_cap_overshoot_events": 0,
+        "input_tokens_estimated": 45,
+        "input_tokens_reported": 0,
+        "output_cap_violation_events": 0,
+        "output_tokens_reported": 0,
+        "output_tokens_unknown_events": 1,
+        "requests": 1,
+        "unknown_usage_events": 1
+      },
+      "updated_at": "2026-10-22T22:21:57Z"
+    }
+  },
+  "schema": "acp2.model-budget.ledger.v1",
+  "updated_at": "2026-10-22T22:22:04Z"
+}

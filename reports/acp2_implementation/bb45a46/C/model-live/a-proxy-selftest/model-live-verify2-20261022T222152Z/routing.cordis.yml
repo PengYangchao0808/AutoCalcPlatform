@@ -1,0 +1,11 @@
+- id: llm-pi-ai
+  config:
+    providers:
+      acp2-budget-proxy:
+        displayName: ACP2 budget proxy
+        apiKeyEnv: ACP2_PROXY_KEY
+        api: openai-completions
+        baseURL: http://127.0.0.1:41199/v1
+        models:
+          - id: acp2-proxy-model
+            name: ACP2 proxy model

@@ -1,0 +1,216 @@
+{
+  "all_ok": true,
+  "candidate_revision": "450f2cb8fe1f5b16264b3fe878a021e77f02eba9",
+  "checks": [
+    {
+      "actual_exit": "0",
+      "expected_exit": "0",
+      "name": "help",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "0",
+      "expected_exit": "0",
+      "name": "py_compile",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "3",
+      "expected_exit": "3",
+      "name": "unknown_scenario",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "3",
+      "expected_exit": "3",
+      "name": "baseline_live_forbidden",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "0",
+      "expected_exit": "0",
+      "name": "ebl_live_dry_run",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "3",
+      "expected_exit": "3",
+      "name": "bogus_subcase_a",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "3",
+      "expected_exit": "3",
+      "name": "bogus_subcase_b",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "3",
+      "expected_exit": "3",
+      "name": "unknown_namespaced_phase",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "3",
+      "expected_exit": "3",
+      "name": "missing_out",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "3",
+      "expected_exit": "3",
+      "name": "missing_timeout",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "3",
+      "expected_exit": "3",
+      "name": "mutually_exclusive_modes",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "0",
+      "expected_exit": "0",
+      "name": "baseline_dry_run",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "2",
+      "expected_exit": "2",
+      "name": "unimplemented_non_dry",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "2",
+      "expected_exit": "2",
+      "name": "manifest_missing_candidate_id",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "0",
+      "expected_exit": "0",
+      "name": "four_tuple_ebl_fixture",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "0",
+      "expected_exit": "0",
+      "name": "four_tuple_ebl_live",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "0",
+      "expected_exit": "0",
+      "name": "four_tuple_rl_control",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "0",
+      "expected_exit": "0",
+      "name": "four_tuple_rl_search",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "0",
+      "expected_exit": "0",
+      "name": "four_tuple_cd_nmr",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "0",
+      "expected_exit": "0",
+      "name": "four_tuple_cd_thermo",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "0",
+      "expected_exit": "0",
+      "name": "four_tuple_cd_selectivity",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "7-rows/7-unique",
+      "expected_exit": "1",
+      "name": "four_tuple_uniqueness",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "0",
+      "expected_exit": "0",
+      "name": "verify_receipt_positive",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "1",
+      "expected_exit": "1",
+      "name": "verify_receipt_corrupt_digest",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "0",
+      "expected_exit": "0",
+      "name": "verify_receipt_own_result",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "1",
+      "expected_exit": "1",
+      "name": "verify_receipt_self_reference",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "0",
+      "expected_exit": "0",
+      "name": "check_doc_placeholders_clean",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "1",
+      "expected_exit": "1",
+      "name": "check_doc_placeholders_dirty",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "3",
+      "expected_exit": "3",
+      "name": "check_doc_placeholders_missing",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "0",
+      "expected_exit": "0",
+      "name": "redaction_dry_run",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "absent",
+      "expected_exit": "0",
+      "name": "redaction_raw_absent",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "present",
+      "expected_exit": "0",
+      "name": "redaction_mask_present",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "0",
+      "expected_exit": "0",
+      "name": "append_only_first",
+      "verdict": "ok"
+    },
+    {
+      "actual_exit": "3",
+      "expected_exit": "3",
+      "name": "append_only_second",
+      "verdict": "ok"
+    }
+  ],
+  "interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+  "note": "T-06 harness self-check evidence; scenario bodies and P0 PASS rows belong to T-07.",
+  "owner": "C",
+  "run_id": "20261022T141500Z-c03a-harness-selftest",
+  "scenario": "harness-selftest",
+  "schema": "acp2.experience.harness-selftest.v1"
+}

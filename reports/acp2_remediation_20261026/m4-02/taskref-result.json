@@ -1,0 +1,91 @@
+{
+  "schema": "acp2.m4-02.taskref.v1",
+  "status": "ok",
+  "mcp": {
+    "ok": true,
+    "protocol_version": "2025-06-18",
+    "tools": [
+      "acp_analyze",
+      "acp_cancel",
+      "acp_capabilities",
+      "acp_preflight",
+      "acp_prepare_artifact",
+      "acp_read_artifact",
+      "acp_research_approval_decide_v1",
+      "acp_research_approval_query_v1",
+      "acp_research_approval_request_v1",
+      "acp_research_approval_revoke_v1",
+      "acp_research_proposal_create_v1",
+      "acp_research_proposal_read_v1",
+      "acp_research_proposal_update_cas_v1",
+      "acp_research_resume_v1",
+      "acp_research_snapshot_v1",
+      "acp_research_wait_v1",
+      "acp_status",
+      "acp_submit"
+    ],
+    "tool": "acp_status",
+    "is_error": false,
+    "task_id": "20261027_211539_001_m402-singlepoint",
+    "status": "completed",
+    "attempt": 1,
+    "release_id": "910ca9d3aff95737",
+    "release_digest": "adf3bbe51cb52ae473d29ef792aa9f9a6a10b91ed9ab8ff3d7e02de5ace3e057",
+    "submission_id": "sub_88bdc181c8b4f4a7",
+    "task_ref": {
+      "task_id": "20261027_211539_001_m402-singlepoint",
+      "job_id": "20261027_211539_001_m402-singlepoint",
+      "attempt": 1,
+      "release": {
+        "release_id": "910ca9d3aff95737",
+        "release_digest": "adf3bbe51cb52ae473d29ef792aa9f9a6a10b91ed9ab8ff3d7e02de5ace3e057"
+      }
+    },
+    "status_projection_keys": [
+      "attempt",
+      "error",
+      "job_id",
+      "plan_digest",
+      "project_id",
+      "reference",
+      "release_digest",
+      "release_id",
+      "revision",
+      "schema_version",
+      "state",
+      "status",
+      "submission_id",
+      "task_id",
+      "task_ref",
+      "updated_at",
+      "work_dir",
+      "workflow"
+    ],
+    "error": null
+  },
+  "workbench": {
+    "ok": true,
+    "modules": [
+      "frontend/js/client/resource-store.js",
+      "frontend/js/client/job-detail-query.js"
+    ],
+    "raw_kind": "object",
+    "task_id": "20261027_211539_001_m402-singlepoint",
+    "status": "completed",
+    "attempt": 1,
+    "release_id": "910ca9d3aff95737",
+    "legacy": false,
+    "keys": [
+      "artifacts_summary",
+      "disk_state",
+      "effective_config",
+      "error_detail",
+      "job",
+      "metrics",
+      "recovery",
+      "stages",
+      "structure_summary"
+    ]
+  },
+  "errors": []
+}

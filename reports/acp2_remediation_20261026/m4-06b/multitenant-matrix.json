@@ -1,0 +1,472 @@
+{
+  "approvals": {
+    "approvals": {
+      "ap_2afefe815f9a416298dab75a979a9bd7": {
+        "hypothesis": "hypothesis.h1",
+        "plan_digest": "sha256:88c15ad974491c5465e8f9452228b68af9f096f572aacebd1803de41b265df6a",
+        "project": "project_m406b_gamma",
+        "revision": 2,
+        "state": "approved"
+      },
+      "ap_4dd5b94a6a83417ca93e11ebdccfedef": {
+        "hypothesis": "hypothesis.h2",
+        "plan_digest": "sha256:74bde82ca45721ea64c44aeed4eff01825dda80c29f69c5e816f5a480f0e4f80",
+        "project": "project_m406b_beta",
+        "revision": 2,
+        "state": "approved"
+      },
+      "ap_a6945ec8c5b540c3bb400a468d1a16ba": {
+        "hypothesis": "hypothesis.h2",
+        "plan_digest": "sha256:8fd2cc9c35a58c0d9ef5e52059ce3182e5dd2dc12e8fb43ea8eb1ea530dfc440",
+        "project": "project_m406b_alpha",
+        "revision": 2,
+        "state": "approved"
+      },
+      "ap_cc2268ee3bed4a708f16bc851d1cae72": {
+        "hypothesis": "hypothesis.h1",
+        "plan_digest": "sha256:65447ad698358ee129615d14abace013764ff9ba57b66404848f67ff5c8ac8c2",
+        "project": "project_m406b_alpha",
+        "revision": 2,
+        "state": "approved"
+      },
+      "ap_cf54683b2739431bb138116aedb668a3": {
+        "hypothesis": "hypothesis.h1",
+        "plan_digest": "sha256:ba48ea7deac79767d584fcb5d94226a7fa975e8ab979a473d0cbfbdd0b06cd55",
+        "project": "project_m406b_beta",
+        "revision": 2,
+        "state": "approved"
+      },
+      "ap_fbcde05458dd4c89bc86fbbf12c1275a": {
+        "hypothesis": "hypothesis.h2",
+        "plan_digest": "sha256:145cb58a1ae5aee0466852542b501a2d968061224729a549559db600bcd22f3d",
+        "project": "project_m406b_gamma",
+        "revision": 2,
+        "state": "approved"
+      }
+    },
+    "approved": 6,
+    "concurrent": true,
+    "leaks": [],
+    "passed": true,
+    "query_is_project_scoped": true,
+    "visible_per_project": {
+      "project_m406b_alpha": 2,
+      "project_m406b_beta": 2,
+      "project_m406b_gamma": 2
+    }
+  },
+  "artifacts": {
+    "distinct_bytes": true,
+    "observations": [
+      {
+        "cross_body_bytes": 44,
+        "cross_status": 404,
+        "own_expected_sha256": "sha256:a54d1f17be93e2e359592abd2a535175bf9722b0fe5d871bd1c388f59faeecd4",
+        "own_served_digest": "sha256:a54d1f17be93e2e359592abd2a535175bf9722b0fe5d871bd1c388f59faeecd4",
+        "own_status": 200,
+        "prepare_status": 404,
+        "project": "project_m406b_alpha",
+        "reader": "project_m406b_beta"
+      },
+      {
+        "cross_body_bytes": 44,
+        "cross_status": 404,
+        "own_expected_sha256": "sha256:a54d1f17be93e2e359592abd2a535175bf9722b0fe5d871bd1c388f59faeecd4",
+        "own_served_digest": "sha256:a54d1f17be93e2e359592abd2a535175bf9722b0fe5d871bd1c388f59faeecd4",
+        "own_status": 200,
+        "prepare_status": 404,
+        "project": "project_m406b_alpha",
+        "reader": "project_m406b_gamma"
+      },
+      {
+        "cross_body_bytes": 43,
+        "cross_status": 404,
+        "own_expected_sha256": "sha256:b915bd53d8723a26e31e42e86631b6e9efce2d0067cc87f55ffd8a42e115e6ff",
+        "own_served_digest": "sha256:b915bd53d8723a26e31e42e86631b6e9efce2d0067cc87f55ffd8a42e115e6ff",
+        "own_status": 200,
+        "prepare_status": 404,
+        "project": "project_m406b_beta",
+        "reader": "project_m406b_alpha"
+      },
+      {
+        "cross_body_bytes": 43,
+        "cross_status": 404,
+        "own_expected_sha256": "sha256:b915bd53d8723a26e31e42e86631b6e9efce2d0067cc87f55ffd8a42e115e6ff",
+        "own_served_digest": "sha256:b915bd53d8723a26e31e42e86631b6e9efce2d0067cc87f55ffd8a42e115e6ff",
+        "own_status": 200,
+        "prepare_status": 404,
+        "project": "project_m406b_beta",
+        "reader": "project_m406b_gamma"
+      },
+      {
+        "cross_body_bytes": 44,
+        "cross_status": 404,
+        "own_expected_sha256": "sha256:76297b7b000d4685cd478921b47cb05d45e1326866c906a4a62f919a74812f67",
+        "own_served_digest": "sha256:76297b7b000d4685cd478921b47cb05d45e1326866c906a4a62f919a74812f67",
+        "own_status": 200,
+        "prepare_status": 404,
+        "project": "project_m406b_gamma",
+        "reader": "project_m406b_alpha"
+      },
+      {
+        "cross_body_bytes": 44,
+        "cross_status": 404,
+        "own_expected_sha256": "sha256:76297b7b000d4685cd478921b47cb05d45e1326866c906a4a62f919a74812f67",
+        "own_served_digest": "sha256:76297b7b000d4685cd478921b47cb05d45e1326866c906a4a62f919a74812f67",
+        "own_status": 200,
+        "prepare_status": 404,
+        "project": "project_m406b_gamma",
+        "reader": "project_m406b_beta"
+      }
+    ],
+    "passed": true,
+    "same_relative_path": "RESULT/native_artifact.txt"
+  },
+  "budgets": {
+    "budgets": {
+      "project_m406b_alpha/hypothesis.h1": "rb_c1f29b3b1fad344bbc27ce52",
+      "project_m406b_alpha/hypothesis.h2": "rb_c11d6f7c5f3ddbadeab36c97",
+      "project_m406b_beta/hypothesis.h1": "rb_9d28cde74861caf40a9fe307",
+      "project_m406b_beta/hypothesis.h2": "rb_8f5165fae4dc2d037f16df96",
+      "project_m406b_gamma/hypothesis.h1": "rb_edce75a21e99bfc5a2c4692a",
+      "project_m406b_gamma/hypothesis.h2": "rb_8897ba6451487d8c25929dff"
+    },
+    "concurrent_reservations": 6,
+    "consumed_after": {
+      "project_m406b_alpha/hypothesis.h1": {
+        "attempt": 0,
+        "bsub": 0,
+        "model_request": 0,
+        "qc_invocation": 4,
+        "recipe_step": 0,
+        "task_ref": 3
+      },
+      "project_m406b_alpha/hypothesis.h2": {
+        "attempt": 0,
+        "bsub": 0,
+        "model_request": 0,
+        "qc_invocation": 0,
+        "recipe_step": 0,
+        "task_ref": 1
+      },
+      "project_m406b_beta/hypothesis.h1": {
+        "attempt": 0,
+        "bsub": 0,
+        "model_request": 0,
+        "qc_invocation": 0,
+        "recipe_step": 0,
+        "task_ref": 1
+      },
+      "project_m406b_beta/hypothesis.h2": {
+        "attempt": 0,
+        "bsub": 0,
+        "model_request": 0,
+        "qc_invocation": 0,
+        "recipe_step": 0,
+        "task_ref": 1
+      },
+      "project_m406b_gamma/hypothesis.h1": {
+        "attempt": 0,
+        "bsub": 0,
+        "model_request": 0,
+        "qc_invocation": 0,
+        "recipe_step": 0,
+        "task_ref": 1
+      },
+      "project_m406b_gamma/hypothesis.h2": {
+        "attempt": 0,
+        "bsub": 0,
+        "model_request": 0,
+        "qc_invocation": 0,
+        "recipe_step": 0,
+        "task_ref": 1
+      }
+    },
+    "consumed_before": {
+      "project_m406b_alpha/hypothesis.h1": {
+        "attempt": 0,
+        "bsub": 0,
+        "model_request": 0,
+        "qc_invocation": 4,
+        "recipe_step": 0,
+        "task_ref": 2
+      },
+      "project_m406b_alpha/hypothesis.h2": {
+        "attempt": 0,
+        "bsub": 0,
+        "model_request": 0,
+        "qc_invocation": 0,
+        "recipe_step": 0,
+        "task_ref": 0
+      },
+      "project_m406b_beta/hypothesis.h1": {
+        "attempt": 0,
+        "bsub": 0,
+        "model_request": 0,
+        "qc_invocation": 0,
+        "recipe_step": 0,
+        "task_ref": 0
+      },
+      "project_m406b_beta/hypothesis.h2": {
+        "attempt": 0,
+        "bsub": 0,
+        "model_request": 0,
+        "qc_invocation": 0,
+        "recipe_step": 0,
+        "task_ref": 0
+      },
+      "project_m406b_gamma/hypothesis.h1": {
+        "attempt": 0,
+        "bsub": 0,
+        "model_request": 0,
+        "qc_invocation": 0,
+        "recipe_step": 0,
+        "task_ref": 0
+      },
+      "project_m406b_gamma/hypothesis.h2": {
+        "attempt": 0,
+        "bsub": 0,
+        "model_request": 0,
+        "qc_invocation": 0,
+        "recipe_step": 0,
+        "task_ref": 0
+      }
+    },
+    "cross_budget_settlement": {
+      "applied": false,
+      "budget_id": "rb_9d28cde74861caf40a9fe307",
+      "consumed": {},
+      "counters": {
+        "attempt": 0,
+        "bsub": 0,
+        "model_request": 0,
+        "qc_invocation": 0,
+        "recipe_step": 0,
+        "task_ref": 1
+      },
+      "duplicate": false,
+      "reason_code": "budget_reservation_not_found",
+      "receipt_id": "rcpt-cross-budget",
+      "remaining": {},
+      "reservation_id": "rbr-m406b-matrix-project_m406b_alpha-hypothesis-h1"
+    },
+    "distinct_budget_ids": true,
+    "multi_project_budgets": 6,
+    "passed": true,
+    "policies": 6,
+    "task_ref_deltas": {
+      "project_m406b_alpha/hypothesis.h1": 1,
+      "project_m406b_alpha/hypothesis.h2": 1,
+      "project_m406b_beta/hypothesis.h1": 1,
+      "project_m406b_beta/hypothesis.h2": 1,
+      "project_m406b_gamma/hypothesis.h1": 1,
+      "project_m406b_gamma/hypothesis.h2": 1
+    },
+    "tiny_budget": {
+      "first": {
+        "admitted": true,
+        "budget_id": "rb_787971d5014c7ead95f1faf3",
+        "detail": "",
+        "exhausted_unit": null,
+        "reason_code": "budget_admitted",
+        "remaining": {
+          "task_ref": 0
+        },
+        "requested": {
+          "task_ref": 1
+        },
+        "reservation_id": "rbr-m406b-tiny-1"
+      },
+      "second": {
+        "admitted": false,
+        "budget_id": "rb_787971d5014c7ead95f1faf3",
+        "detail": "task_ref budget 1 - consumed 1 < requested 1; new dispatch refused",
+        "exhausted_unit": "task_ref",
+        "reason_code": "budget_exhausted",
+        "remaining": {
+          "task_ref": 0
+        },
+        "requested": {
+          "task_ref": 1
+        },
+        "reservation_id": null
+      }
+    }
+  },
+  "capability_scope": {
+    "cache": {
+      "cached_catalog_warmed_by": 3,
+      "cross_read_after_warm_status": [
+        404
+      ],
+      "note": "the science catalog is one process cache; every read still re-authorizes the project, so a warm cache never widens the caller's scope",
+      "passed": true
+    },
+    "cross_project_status": {
+      "project_m406b_alpha->project_m406b_beta": 404,
+      "project_m406b_alpha->project_m406b_gamma": 404,
+      "project_m406b_beta->project_m406b_alpha": 404,
+      "project_m406b_beta->project_m406b_gamma": 404,
+      "project_m406b_gamma->project_m406b_alpha": 404,
+      "project_m406b_gamma->project_m406b_beta": 404
+    },
+    "forms_per_project": {
+      "project_m406b_alpha": {
+        "entry_count": 4,
+        "forms_sha256": "sha256:46ccc1dc75afba7633f0ccec2daceca1446f58e1fb72b242e4cb506aea808374",
+        "http_status": 200,
+        "nmr_states": [],
+        "subset_digest": "sha256:870d59473be275fa52785896cdb7e09d03aa15855a8a29dc69b90839fbf08b06",
+        "subset_version": "acp2.ui-subset.v1",
+        "thermo_states": []
+      },
+      "project_m406b_beta": {
+        "entry_count": 4,
+        "forms_sha256": "sha256:46ccc1dc75afba7633f0ccec2daceca1446f58e1fb72b242e4cb506aea808374",
+        "http_status": 200,
+        "nmr_states": [],
+        "subset_digest": "sha256:870d59473be275fa52785896cdb7e09d03aa15855a8a29dc69b90839fbf08b06",
+        "subset_version": "acp2.ui-subset.v1",
+        "thermo_states": []
+      },
+      "project_m406b_gamma": {
+        "entry_count": 4,
+        "forms_sha256": "sha256:46ccc1dc75afba7633f0ccec2daceca1446f58e1fb72b242e4cb506aea808374",
+        "http_status": 200,
+        "nmr_states": [],
+        "subset_digest": "sha256:870d59473be275fa52785896cdb7e09d03aa15855a8a29dc69b90839fbf08b06",
+        "subset_version": "acp2.ui-subset.v1",
+        "thermo_states": []
+      }
+    },
+    "passed": true,
+    "plugin_snapshot_per_project": {
+      "project_m406b_alpha": {
+        "cross_status": 404,
+        "freeze_sha256": "sha256:e8505d15a1eb4d400861d48c3351ea85c4fbbf78f82c0655576e4ef1d1738b33",
+        "own_status": 200,
+        "sha256": "sha256:a6c2827d645295b90259d8f45728d02c2f929f084b11f07471f8084a13609bb2"
+      },
+      "project_m406b_beta": {
+        "cross_status": 404,
+        "freeze_sha256": "sha256:1b5eb55de43620d1f41b0e7cb3a22378a17c26a51df59ec64ceca50312699ca1",
+        "own_status": 200,
+        "sha256": "sha256:a6c2827d645295b90259d8f45728d02c2f929f084b11f07471f8084a13609bb2"
+      },
+      "project_m406b_gamma": {
+        "cross_status": 404,
+        "freeze_sha256": "sha256:d69fe6fbfb2153f9b6d8b2aa0cba9c1328b9bfe77e61b148cb020c0cfee2c4c7",
+        "own_status": 200,
+        "sha256": "sha256:a6c2827d645295b90259d8f45728d02c2f929f084b11f07471f8084a13609bb2"
+      }
+    },
+    "scope_enforced": true,
+    "shared_catalog_same_bytes": true
+  },
+  "events": {
+    "closed_reason": "permission_changed",
+    "cross_authorized": false,
+    "cross_task": "m406b-beta-task",
+    "own_event_types": [
+      "job.failed",
+      "job.paused"
+    ],
+    "own_events": [
+      "m406b-alpha-task"
+    ],
+    "own_task": "m406b-alpha-task",
+    "passed": true,
+    "stream_closed": true
+  },
+  "research_memory": {
+    "cas_revision": 2,
+    "created": 6,
+    "cross_project_cas_denied": true,
+    "cross_project_reads": [
+      {
+        "denied": true,
+        "reason": "resource belongs to another project",
+        "resource": "rrk_0e46c0dbb8b1d48998103a64387990efd3c1eb4a2ee2459f"
+      },
+      {
+        "denied": true,
+        "reason": "resource belongs to another project",
+        "resource": "rrk_302dda481395a89e37679de80c8960edd780baa240e27f2d"
+      },
+      {
+        "denied": true,
+        "reason": "resource belongs to another project",
+        "resource": "rrk_478f312ca5b282a476da9da68edcdba1e1bcdc1a422611a7"
+      },
+      {
+        "denied": true,
+        "reason": "resource belongs to another project",
+        "resource": "rrk_dd0ce0fbe738b9eb8773e9d7a6b3397a7832a785bdbbe515"
+      },
+      {
+        "denied": true,
+        "reason": "resource belongs to another project",
+        "resource": "rrk_b2e98d78d74e27d36b48ac412d309c5b00ed220b2d711b86"
+      },
+      {
+        "denied": true,
+        "reason": "resource belongs to another project",
+        "resource": "rrk_1577e7dacc87033353d5ce464fb90e1523e503f3caed59d4"
+      }
+    ],
+    "distinct_resource_ids": 6,
+    "heads_per_project": {
+      "project_m406b_alpha": 2,
+      "project_m406b_beta": 2,
+      "project_m406b_gamma": 2
+    },
+    "hypotheses_per_project": [
+      "hypothesis.h1",
+      "hypothesis.h2"
+    ],
+    "passed": true,
+    "projects": [
+      "project_m406b_alpha",
+      "project_m406b_beta",
+      "project_m406b_gamma"
+    ],
+    "revisions": {
+      "project_m406b_alpha": 1,
+      "project_m406b_beta": 1,
+      "project_m406b_gamma": 1
+    },
+    "users": {
+      "project_m406b_alpha": "principal_m406b_alice",
+      "project_m406b_beta": "principal_m406b_bob",
+      "project_m406b_gamma": "principal_m406b_carol"
+    }
+  },
+  "taskref": {
+    "alpha_task_ref": {
+      "attempt": 1,
+      "job_id": "m406b-nmr-crossdomain",
+      "project_id": "project_m406b_alpha",
+      "release": {
+        "release_digest": "sha256:a9fc2614b92fed53a66ea43933ce92ffbfc09179a0d93d28d3a2d1bea383b8ea",
+        "release_id": "a9fc2614b92fed53"
+      },
+      "schema": "acp2.runtime.task-ref.v1",
+      "task_id": "m406b-nmr-crossdomain"
+    },
+    "beta_task_ref": {
+      "attempt": 1,
+      "job_id": "m406b-nmr-crossdomain",
+      "project_id": "project_m406b_beta",
+      "release": {
+        "release_digest": "sha256:a9fc2614b92fed53a66ea43933ce92ffbfc09179a0d93d28d3a2d1bea383b8ea",
+        "release_id": "a9fc2614b92fed53"
+      },
+      "schema": "acp2.runtime.task-ref.v1",
+      "task_id": "m406b-nmr-crossdomain"
+    },
+    "foreign_project_refused": true,
+    "passed": true,
+    "refusal": "foreign_project",
+    "same_task_id_different_project": true
+  }
+}

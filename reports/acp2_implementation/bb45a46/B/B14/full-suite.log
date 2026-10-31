@@ -175,10 +175,10 @@ s...s................................................................... [ 27%]
 =================================== FAILURES ===================================
 ___________________ test_clean_live_environment_is_accepted ____________________
 
-harness = <module 'acp2_experience_under_test' from '<acp2-dev>/integration/scripts/acceptance/acp2_experience.py'>
-scenarios = <module 'acp2_experience_scenarios_under_test' from '<acp2-dev>/integration/scripts/acceptance/acp2_experience_scenarios.py'>
-runtime_env = PosixPath('<repo>/scripts/acceptance/acp2_runtime.py')
-tmp_path = PosixPath('/tmp/pytest-of-<user>/pytest-5361/test_clean_live_environment_is0')
+harness = <module 'acp2_experience_under_test' from '/ACPServer/acp2-development/integration/scripts/acceptance/acp2_experience.py'>
+scenarios = <module 'acp2_experience_scenarios_under_test' from '/ACPServer/acp2-development/integration/scripts/acceptance/acp2_experience_scenarios.py'>
+runtime_env = PosixPath('/ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_runtime.py')
+tmp_path = PosixPath('/tmp/pytest-of-xieningke/pytest-5361/test_clean_live_environment_is0')
 monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7faab68b0a10>
 
     def test_clean_live_environment_is_accepted(harness, scenarios, runtime_env, tmp_path, monkeypatch):
@@ -197,10 +197,10 @@ E       assert 1 == 0
 
 tests/test_acp2_experience_harness.py:329: AssertionError
 ----------------------------- Captured stdout call -----------------------------
-FAIL: /tmp/pytest-of-<user>/pytest-5361/test_clean_live_environment_is0/mcp-live/clean-live-20260101T000000Z-test/main/live
+FAIL: /tmp/pytest-of-xieningke/pytest-5361/test_clean_live_environment_is0/mcp-live/clean-live-20260101T000000Z-test/main/live
 _________________ test_crash_after_reservation_before_job_row __________________
 
-tmp_path = PosixPath('/tmp/pytest-of-<user>/pytest-5361/test_crash_after_reservation_b0')
+tmp_path = PosixPath('/tmp/pytest-of-xieningke/pytest-5361/test_crash_after_reservation_b0')
 
     def test_crash_after_reservation_before_job_row(tmp_path: Path) -> None:
         run_root = tmp_path / "run-root"
@@ -236,10 +236,10 @@ E             + claimed)
 
 tests/test_acp2_runtime_persistent_idempotency.py:320: AssertionError
 ------------------------------ Captured log call -------------------------------
-WARNING  acp.scheduler.manager:manager.py:664 Stealing stale manager lock /tmp/pytest-of-<user>/pytest-5361/test_crash_after_reservation_b0/run-root/.manager.lock (recorded owner pid=823963)
+WARNING  acp.scheduler.manager:manager.py:664 Stealing stale manager lock /tmp/pytest-of-xieningke/pytest-5361/test_crash_after_reservation_b0/run-root/.manager.lock (recorded owner pid=823963)
 _______________ test_concurrent_lifespan_race_exactly_one_owner ________________
 
-tmp_path = PosixPath('/tmp/pytest-of-<user>/pytest-5361/test_concurrent_lifespan_race_0')
+tmp_path = PosixPath('/tmp/pytest-of-xieningke/pytest-5361/test_concurrent_lifespan_race_0')
 
     def test_concurrent_lifespan_race_exactly_one_owner(tmp_path: Path) -> None:
         from acp.api.server import create_app
@@ -286,7 +286,7 @@ tests/test_acp_lifespan_ownership.py:120: AssertionError
 __________________ test_prefetch_skipped_for_non_terminal_job __________________
 
 manager = <acp.scheduler.manager.JobManager object at 0x7faab76c0050>
-tmp_path = PosixPath('/tmp/pytest-of-<user>/pytest-5361/test_prefetch_skipped_for_non_0')
+tmp_path = PosixPath('/tmp/pytest-of-xieningke/pytest-5361/test_prefetch_skipped_for_non_0')
 
     def test_prefetch_skipped_for_non_terminal_job(manager: JobManager, tmp_path: Path) -> None:
         """A running remote job is never prefetched (partial manifests must not cache)."""
@@ -320,7 +320,7 @@ src/acp/scheduler/manager.py:5484: AttributeError
 _____________________ test_prefetch_skipped_for_local_job ______________________
 
 manager = <acp.scheduler.manager.JobManager object at 0x7faa102c4bd0>
-tmp_path = PosixPath('/tmp/pytest-of-<user>/pytest-5361/test_prefetch_skipped_for_loca0')
+tmp_path = PosixPath('/tmp/pytest-of-xieningke/pytest-5361/test_prefetch_skipped_for_loca0')
 
     def test_prefetch_skipped_for_local_job(manager: JobManager, tmp_path: Path) -> None:
         """Local jobs keep using their own work dir; no remote cache fetch."""
@@ -353,7 +353,7 @@ E       AttributeError: '_CompositePrepareExecutor' object has no attribute 'pre
 src/acp/scheduler/manager.py:5484: AttributeError
 __________ test_v2_reads_after_terminal_prefetch_fetch_on_demand_once __________
 
-tmp_path = PosixPath('/tmp/pytest-of-<user>/pytest-5361/test_v2_reads_after_terminal_p0')
+tmp_path = PosixPath('/tmp/pytest-of-xieningke/pytest-5361/test_v2_reads_after_terminal_p0')
 monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7faab725ec50>
 
     def test_v2_reads_after_terminal_prefetch_fetch_on_demand_once(
@@ -512,31 +512,31 @@ E         + ]
 
 tests/test_frontend_sync_viewer_framing.py:152: AssertionError
 =============================== warnings summary ===============================
-../../../home/<user>/.local/lib/python3.11/site-packages/fastapi/testclient.py:1
-  /home/<user>/.local/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+../../../home/xieningke/.local/lib/python3.11/site-packages/fastapi/testclient.py:1
+  /home/xieningke/.local/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
     from starlette.testclient import TestClient as TestClient  # noqa
 
-../../../home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py:53
-  /home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py:53: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+../../../home/xieningke/.local/lib/python3.11/site-packages/starlette/testclient.py:53
+  /home/xieningke/.local/lib/python3.11/site-packages/starlette/testclient.py:53: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
     _PortalFactoryType = Callable[[], AbstractContextManager[anyio.abc.BlockingPortal]]
 
 tests/test_acp_api_v2_lineage.py::test_diamond_dedup
-  /home/<user>/.local/lib/python3.11/site-packages/_pytest/threadexception.py:58: PytestUnhandledThreadExceptionWarning: Exception in thread acp-submit-20261023_082439_001_ethanol_pes
+  /home/xieningke/.local/lib/python3.11/site-packages/_pytest/threadexception.py:58: PytestUnhandledThreadExceptionWarning: Exception in thread acp-submit-20261023_082439_001_ethanol_pes
   
   Traceback (most recent call last):
     File "/usr/lib64/python3.11/threading.py", line 1045, in _bootstrap_inner
       self.run()
     File "/usr/lib64/python3.11/threading.py", line 982, in run
       self._target(*self._args, **self._kwargs)
-    File "<acp2-dev>/integration/src/acp/scheduler/manager.py", line 3692, in _execute_submission
+    File "/ACPServer/acp2-development/integration/src/acp/scheduler/manager.py", line 3692, in _execute_submission
       self._execute_submission_impl(job_id)
-    File "<acp2-dev>/integration/src/acp/scheduler/manager.py", line 3798, in _execute_submission_impl
+    File "/ACPServer/acp2-development/integration/src/acp/scheduler/manager.py", line 3798, in _execute_submission_impl
       record = self.store.get(job_id)
                ^^^^^^^^^^^^^^^^^^^^^^
-    File "<acp2-dev>/integration/src/acp_services/store/store.py", line 641, in get
+    File "/ACPServer/acp2-development/integration/src/acp_services/store/store.py", line 641, in get
       return _row_to_record(row) if row else None
              ^^^^^^^^^^^^^^^^^^^
-    File "<acp2-dev>/integration/src/acp_services/store/store.py", line 1632, in _row_to_record
+    File "/ACPServer/acp2-development/integration/src/acp_services/store/store.py", line 1632, in _row_to_record
       spec_raw = json.loads(row["spec_json"])
                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     File "/usr/lib64/python3.11/json/__init__.py", line 346, in loads
@@ -554,22 +554,22 @@ tests/test_acp_api_v2_lineage.py::test_diamond_dedup
     warnings.warn(pytest.PytestUnhandledThreadExceptionWarning(msg))
 
 tests/test_acp_api_v2_lineage.py::test_corrupt_spec_json_skipped
-  /home/<user>/.local/lib/python3.11/site-packages/_pytest/threadexception.py:58: PytestUnhandledThreadExceptionWarning: Exception in thread acp-submit-20261023_082450_002_ethanol_pes
+  /home/xieningke/.local/lib/python3.11/site-packages/_pytest/threadexception.py:58: PytestUnhandledThreadExceptionWarning: Exception in thread acp-submit-20261023_082450_002_ethanol_pes
   
   Traceback (most recent call last):
     File "/usr/lib64/python3.11/threading.py", line 1045, in _bootstrap_inner
       self.run()
     File "/usr/lib64/python3.11/threading.py", line 982, in run
       self._target(*self._args, **self._kwargs)
-    File "<acp2-dev>/integration/src/acp/scheduler/manager.py", line 3692, in _execute_submission
+    File "/ACPServer/acp2-development/integration/src/acp/scheduler/manager.py", line 3692, in _execute_submission
       self._execute_submission_impl(job_id)
-    File "<acp2-dev>/integration/src/acp/scheduler/manager.py", line 3798, in _execute_submission_impl
+    File "/ACPServer/acp2-development/integration/src/acp/scheduler/manager.py", line 3798, in _execute_submission_impl
       record = self.store.get(job_id)
                ^^^^^^^^^^^^^^^^^^^^^^
-    File "<acp2-dev>/integration/src/acp_services/store/store.py", line 641, in get
+    File "/ACPServer/acp2-development/integration/src/acp_services/store/store.py", line 641, in get
       return _row_to_record(row) if row else None
              ^^^^^^^^^^^^^^^^^^^
-    File "<acp2-dev>/integration/src/acp_services/store/store.py", line 1632, in _row_to_record
+    File "/ACPServer/acp2-development/integration/src/acp_services/store/store.py", line 1632, in _row_to_record
       spec_raw = json.loads(row["spec_json"])
                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     File "/usr/lib64/python3.11/json/__init__.py", line 346, in loads
@@ -587,18 +587,18 @@ tests/test_acp_api_v2_lineage.py::test_corrupt_spec_json_skipped
     warnings.warn(pytest.PytestUnhandledThreadExceptionWarning(msg))
 
 tests/test_acp_lifespan_ownership.py::test_concurrent_lifespan_race_exactly_one_owner
-  /home/<user>/.local/lib/python3.11/site-packages/_pytest/threadexception.py:58: PytestUnhandledThreadExceptionWarning: Exception in thread Thread-674 (run)
+  /home/xieningke/.local/lib/python3.11/site-packages/_pytest/threadexception.py:58: PytestUnhandledThreadExceptionWarning: Exception in thread Thread-674 (run)
   
   Traceback (most recent call last):
     File "/usr/lib64/python3.11/threading.py", line 1045, in _bootstrap_inner
       self.run()
     File "/usr/lib64/python3.11/threading.py", line 982, in run
       self._target(*self._args, **self._kwargs)
-    File "<acp2-dev>/integration/tests/test_acp_lifespan_ownership.py", line 96, in run
+    File "/ACPServer/acp2-development/integration/tests/test_acp_lifespan_ownership.py", line 96, in run
       with TestClient(app) as client:
-    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py", line 698, in __enter__
+    File "/home/xieningke/.local/lib/python3.11/site-packages/starlette/testclient.py", line 698, in __enter__
       portal.call(self.wait_startup)
-    File "/home/<user>/.local/lib/python3.11/site-packages/anyio/from_thread.py", line 340, in call
+    File "/home/xieningke/.local/lib/python3.11/site-packages/anyio/from_thread.py", line 340, in call
       return cast(T_Retval, self.start_task_soon(func, *args).result())
                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     File "/usr/lib64/python3.11/concurrent/futures/_base.py", line 456, in result
@@ -606,91 +606,91 @@ tests/test_acp_lifespan_ownership.py::test_concurrent_lifespan_race_exactly_one_
              ^^^^^^^^^^^^^^^^^^^
     File "/usr/lib64/python3.11/concurrent/futures/_base.py", line 401, in __get_result
       raise self._exception
-    File "/home/<user>/.local/lib/python3.11/site-packages/anyio/from_thread.py", line 265, in _call_func
+    File "/home/xieningke/.local/lib/python3.11/site-packages/anyio/from_thread.py", line 265, in _call_func
       retval = await retval_or_awaitable
                ^^^^^^^^^^^^^^^^^^^^^^^^^
-    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py", line 733, in wait_startup
+    File "/home/xieningke/.local/lib/python3.11/site-packages/starlette/testclient.py", line 733, in wait_startup
       await receive()
-    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py", line 724, in receive
+    File "/home/xieningke/.local/lib/python3.11/site-packages/starlette/testclient.py", line 724, in receive
       self.task.result()
     File "/usr/lib64/python3.11/concurrent/futures/_base.py", line 449, in result
       return self.__get_result()
              ^^^^^^^^^^^^^^^^^^^
     File "/usr/lib64/python3.11/concurrent/futures/_base.py", line 401, in __get_result
       raise self._exception
-    File "/home/<user>/.local/lib/python3.11/site-packages/anyio/from_thread.py", line 265, in _call_func
+    File "/home/xieningke/.local/lib/python3.11/site-packages/anyio/from_thread.py", line 265, in _call_func
       retval = await retval_or_awaitable
                ^^^^^^^^^^^^^^^^^^^^^^^^^
-    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/testclient.py", line 714, in lifespan
+    File "/home/xieningke/.local/lib/python3.11/site-packages/starlette/testclient.py", line 714, in lifespan
       await self.app(scope, self.stream_receive.receive, self.stream_send.send)
-    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/applications.py", line 1163, in __call__
+    File "/home/xieningke/.local/lib/python3.11/site-packages/fastapi/applications.py", line 1163, in __call__
       await super().__call__(scope, receive, send)
-    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/applications.py", line 96, in __call__
+    File "/home/xieningke/.local/lib/python3.11/site-packages/starlette/applications.py", line 96, in __call__
       await self.middleware_stack(scope, receive, send)
-    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/middleware/errors.py", line 151, in __call__
+    File "/home/xieningke/.local/lib/python3.11/site-packages/starlette/middleware/errors.py", line 151, in __call__
       await self.app(scope, receive, send)
-    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/middleware/base.py", line 103, in __call__
+    File "/home/xieningke/.local/lib/python3.11/site-packages/starlette/middleware/base.py", line 103, in __call__
       await self.app(scope, receive, send)
-    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 49, in __call__
+    File "/home/xieningke/.local/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 49, in __call__
       await self.app(scope, receive, send)
-    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    File "/home/xieningke/.local/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
       await self.app(scope, receive, send)
-    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/routing.py", line 670, in __call__
+    File "/home/xieningke/.local/lib/python3.11/site-packages/starlette/routing.py", line 670, in __call__
       await self.middleware_stack(scope, receive, send)
-    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 2726, in app
+    File "/home/xieningke/.local/lib/python3.11/site-packages/fastapi/routing.py", line 2726, in app
       await self.lifespan(scope, receive, send)
-    File "/home/<user>/.local/lib/python3.11/site-packages/starlette/routing.py", line 648, in lifespan
+    File "/home/xieningke/.local/lib/python3.11/site-packages/starlette/routing.py", line 648, in lifespan
       async with self.lifespan_context(app) as maybe_state:
     File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
       return await anext(self.gen)
              ^^^^^^^^^^^^^^^^^^^^^
-    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+    File "/home/xieningke/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
       async with original_context(app) as maybe_original_state:
     File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
       return await anext(self.gen)
              ^^^^^^^^^^^^^^^^^^^^^
-    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+    File "/home/xieningke/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
       async with original_context(app) as maybe_original_state:
     File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
       return await anext(self.gen)
              ^^^^^^^^^^^^^^^^^^^^^
-    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+    File "/home/xieningke/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
       async with original_context(app) as maybe_original_state:
     File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
       return await anext(self.gen)
              ^^^^^^^^^^^^^^^^^^^^^
-    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+    File "/home/xieningke/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
       async with original_context(app) as maybe_original_state:
     File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
       return await anext(self.gen)
              ^^^^^^^^^^^^^^^^^^^^^
-    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+    File "/home/xieningke/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
       async with original_context(app) as maybe_original_state:
     File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
       return await anext(self.gen)
              ^^^^^^^^^^^^^^^^^^^^^
-    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+    File "/home/xieningke/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
       async with original_context(app) as maybe_original_state:
     File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
       return await anext(self.gen)
              ^^^^^^^^^^^^^^^^^^^^^
-    File "/home/<user>/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
+    File "/home/xieningke/.local/lib/python3.11/site-packages/fastapi/routing.py", line 240, in merged_lifespan
       async with original_context(app) as maybe_original_state:
     File "/usr/lib64/python3.11/contextlib.py", line 210, in __aenter__
       return await anext(self.gen)
              ^^^^^^^^^^^^^^^^^^^^^
-    File "<acp2-dev>/integration/src/acp/api/server.py", line 274, in lifespan
+    File "/ACPServer/acp2-development/integration/src/acp/api/server.py", line 274, in lifespan
       admission = build_local_admission(
                   ^^^^^^^^^^^^^^^^^^^^^^
-    File "<acp2-dev>/integration/src/acp_services/runtime/local_admission.py", line 538, in build_local_admission
+    File "/ACPServer/acp2-development/integration/src/acp_services/runtime/local_admission.py", line 538, in build_local_admission
       return LocalAdmission.build(
              ^^^^^^^^^^^^^^^^^^^^^
-    File "<acp2-dev>/integration/src/acp_services/runtime/local_admission.py", line 358, in build
+    File "/ACPServer/acp2-development/integration/src/acp_services/runtime/local_admission.py", line 358, in build
       ledger = ReservationLedger(str(db_path))
                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    File "<acp2-dev>/integration/src/acp_services/runtime/admission.py", line 861, in __init__
+    File "/ACPServer/acp2-development/integration/src/acp_services/runtime/admission.py", line 861, in __init__
       self._init_schema()
-    File "<acp2-dev>/integration/src/acp_services/runtime/admission.py", line 875, in _init_schema
+    File "/ACPServer/acp2-development/integration/src/acp_services/runtime/admission.py", line 875, in _init_schema
       conn.execute("PRAGMA journal_mode=WAL;")
   sqlite3.OperationalError: database is locked
   
@@ -703,7 +703,7 @@ tests/test_local_cleanup.py::test_api_cleanup_dry_run
 tests/test_local_cleanup.py::test_api_cleanup_keeps_non_terminal_dirs
 tests/test_local_cleanup.py::test_api_cleanup_scope_work_dirs
 tests/test_local_cleanup.py::test_api_cleanup_bad_scope
-  <acp2-dev>/integration/tests/test_local_cleanup.py:990: DeprecationWarning: 
+  /ACPServer/acp2-development/integration/tests/test_local_cleanup.py:990: DeprecationWarning: 
           on_event is deprecated, use lifespan event handlers instead.
   
           Read more about it in the
@@ -712,7 +712,7 @@ tests/test_local_cleanup.py::test_api_cleanup_bad_scope
     @app.on_event("startup")
 
 tests/test_local_cleanup.py: 12 warnings
-  /home/<user>/.local/lib/python3.11/site-packages/fastapi/applications.py:4681: DeprecationWarning: 
+  /home/xieningke/.local/lib/python3.11/site-packages/fastapi/applications.py:4681: DeprecationWarning: 
           on_event is deprecated, use lifespan event handlers instead.
   
           Read more about it in the
@@ -725,7 +725,7 @@ tests/test_local_cleanup.py::test_api_cleanup_dry_run
 tests/test_local_cleanup.py::test_api_cleanup_keeps_non_terminal_dirs
 tests/test_local_cleanup.py::test_api_cleanup_scope_work_dirs
 tests/test_local_cleanup.py::test_api_cleanup_bad_scope
-  <acp2-dev>/integration/tests/test_local_cleanup.py:996: DeprecationWarning: 
+  /ACPServer/acp2-development/integration/tests/test_local_cleanup.py:996: DeprecationWarning: 
           on_event is deprecated, use lifespan event handlers instead.
   
           Read more about it in the
@@ -734,7 +734,7 @@ tests/test_local_cleanup.py::test_api_cleanup_bad_scope
     @app.on_event("shutdown")
 
 tests/test_local_cleanup.py::test_api_cleanup_disabled_returns_503
-  <acp2-dev>/integration/tests/test_local_cleanup.py:1082: DeprecationWarning: 
+  /ACPServer/acp2-development/integration/tests/test_local_cleanup.py:1082: DeprecationWarning: 
           on_event is deprecated, use lifespan event handlers instead.
   
           Read more about it in the
@@ -743,7 +743,7 @@ tests/test_local_cleanup.py::test_api_cleanup_disabled_returns_503
     @app.on_event("startup")
 
 tests/test_local_cleanup.py::test_api_cleanup_disabled_returns_503
-  <acp2-dev>/integration/tests/test_local_cleanup.py:1088: DeprecationWarning: 
+  /ACPServer/acp2-development/integration/tests/test_local_cleanup.py:1088: DeprecationWarning: 
           on_event is deprecated, use lifespan event handlers instead.
   
           Read more about it in the

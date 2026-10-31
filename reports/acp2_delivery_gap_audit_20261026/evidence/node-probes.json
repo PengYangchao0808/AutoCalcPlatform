@@ -1,0 +1,433 @@
+{
+  "scope": "real RPH helpers with controlled fake ports; no model, Controller or QC called",
+  "node": "v22.19.0",
+  "bridge_extension_version": "1.0.0",
+  "server_extension_compatibility": {
+    "accepted": false,
+    "error": {
+      "class": "unsupported",
+      "code": "unsupported_capability",
+      "params": {
+        "rule": "extension_version_mismatch",
+        "extension": "acp.research.v1",
+        "expected_version": "1.0.0",
+        "observed_version": "1.1.0"
+      }
+    }
+  },
+  "bridge_arguments": {
+    "prepare": {
+      "job_id": "audit-job",
+      "attempt": 1,
+      "resource_id": "result_manifest"
+    },
+    "read": {
+      "job_id": "audit-job",
+      "attempt": 1,
+      "resource_id": "result_manifest"
+    },
+    "evidence": {
+      "project_id": "audit-project",
+      "explicit": true
+    }
+  },
+  "science_report_rejected_by_rph": [
+    {
+      "path": "$.execution",
+      "code": "additional_property",
+      "message": "not allowed"
+    },
+    {
+      "path": "$.limitations",
+      "code": "additional_property",
+      "message": "not allowed"
+    },
+    {
+      "path": "$.schema_version",
+      "code": "additional_property",
+      "message": "not allowed"
+    },
+    {
+      "path": "$.subject",
+      "code": "additional_property",
+      "message": "not allowed"
+    },
+    {
+      "path": "$.schema",
+      "code": "required",
+      "message": "is required"
+    },
+    {
+      "path": "$.project_id",
+      "code": "required",
+      "message": "is required"
+    },
+    {
+      "path": "$.research_id",
+      "code": "required",
+      "message": "is required"
+    },
+    {
+      "path": "$.round",
+      "code": "required",
+      "message": "is required"
+    },
+    {
+      "path": "$.task_ref",
+      "code": "required",
+      "message": "is required"
+    },
+    {
+      "path": "$.status",
+      "code": "required",
+      "message": "is required"
+    },
+    {
+      "path": "$.decision",
+      "code": "required",
+      "message": "is required"
+    },
+    {
+      "path": "$.claims[0].limitations",
+      "code": "additional_property",
+      "message": "not allowed"
+    },
+    {
+      "path": "$.claims[0].missing_checks",
+      "code": "additional_property",
+      "message": "not allowed"
+    },
+    {
+      "path": "$.claims[0].scope",
+      "code": "additional_property",
+      "message": "not allowed"
+    },
+    {
+      "path": "$.claims[0].source_refs",
+      "code": "additional_property",
+      "message": "not allowed"
+    },
+    {
+      "path": "$.claims[0].validator",
+      "code": "additional_property",
+      "message": "not allowed"
+    },
+    {
+      "path": "$.claims[0].evidence_refs",
+      "code": "required",
+      "message": "is required"
+    },
+    {
+      "path": "$.claims[0].reason",
+      "code": "required",
+      "message": "is required"
+    },
+    {
+      "path": "$.evidence_refs",
+      "code": "required",
+      "message": "is required"
+    },
+    {
+      "path": "$.terminal_event_key",
+      "code": "required",
+      "message": "is required"
+    }
+  ],
+  "baseline": {
+    "stop_reason": "accepted",
+    "status": "completed",
+    "model_invocations": 5,
+    "submits": 1,
+    "wait_requests": [
+      {
+        "project_id": "audit-project",
+        "round": 0,
+        "task_ref": {
+          "project_id": "audit-project",
+          "job_id": "audit-job",
+          "attempt": 1,
+          "release_id": "release-a"
+        },
+        "cursor": null,
+        "max_events": 200,
+        "max_wait_ms": 60000
+      }
+    ],
+    "plan": {
+      "schema": "acp2.skill.planner.output.v1",
+      "skill": "planner",
+      "skill_version": "1.0.0",
+      "plan_id": "plan-audit-project-r0",
+      "project_id": "audit-project",
+      "round": 0,
+      "hypothesis": "Round 0: Does the supplied charged doublet retain its spin?",
+      "recipe_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "plan_definition_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "science": {
+        "capability_steps": [
+          {
+            "step_index": 0,
+            "capability": "geometry_optimization",
+            "version": "1.0.0",
+            "parameters": {
+              "max_cycles": 100
+            }
+          }
+        ],
+        "initial_inputs": [
+          {
+            "input_id": "input-a",
+            "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "format": "xyz",
+            "role": "reactant"
+          }
+        ],
+        "method": "r2SCAN-3c",
+        "mapping": "identity",
+        "charge": 0,
+        "multiplicity": 1,
+        "allowed_substitutions": []
+      },
+      "budget": {
+        "model_requests": 1,
+        "input_tokens": 1000,
+        "output_tokens": 500,
+        "task_refs": 1,
+        "recipe_steps": 1,
+        "qc_invocations": 1,
+        "wall_seconds": 600,
+        "queue_seconds": 60
+      },
+      "notes": [
+        "budget is clamped to the remaining admission budget"
+      ]
+    },
+    "persisted_port_required": false
+  },
+  "foreign_report": {
+    "stop_reason": "accepted",
+    "status": "completed",
+    "model_invocations": 5,
+    "submits": 1,
+    "wait_requests": [
+      {
+        "project_id": "audit-project",
+        "round": 0,
+        "task_ref": {
+          "project_id": "audit-project",
+          "job_id": "audit-job",
+          "attempt": 1,
+          "release_id": "release-a"
+        },
+        "cursor": null,
+        "max_events": 200,
+        "max_wait_ms": 60000
+      }
+    ],
+    "plan": {
+      "schema": "acp2.skill.planner.output.v1",
+      "skill": "planner",
+      "skill_version": "1.0.0",
+      "plan_id": "plan-audit-project-r0",
+      "project_id": "audit-project",
+      "round": 0,
+      "hypothesis": "Round 0: Does the supplied charged doublet retain its spin?",
+      "recipe_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "plan_definition_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "science": {
+        "capability_steps": [
+          {
+            "step_index": 0,
+            "capability": "geometry_optimization",
+            "version": "1.0.0",
+            "parameters": {
+              "max_cycles": 100
+            }
+          }
+        ],
+        "initial_inputs": [
+          {
+            "input_id": "input-a",
+            "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "format": "xyz",
+            "role": "reactant"
+          }
+        ],
+        "method": "r2SCAN-3c",
+        "mapping": "identity",
+        "charge": 0,
+        "multiplicity": 1,
+        "allowed_substitutions": []
+      },
+      "budget": {
+        "model_requests": 1,
+        "input_tokens": 1000,
+        "output_tokens": 500,
+        "task_refs": 1,
+        "recipe_steps": 1,
+        "qc_invocations": 1,
+        "wall_seconds": 600,
+        "queue_seconds": 60
+      },
+      "notes": [
+        "budget is clamped to the remaining admission budget"
+      ]
+    },
+    "persisted_port_required": false
+  },
+  "partial_report": {
+    "stop_reason": "accepted",
+    "status": "completed",
+    "model_invocations": 5,
+    "submits": 1,
+    "wait_requests": [
+      {
+        "project_id": "audit-project",
+        "round": 0,
+        "task_ref": {
+          "project_id": "audit-project",
+          "job_id": "audit-job",
+          "attempt": 1,
+          "release_id": "release-a"
+        },
+        "cursor": null,
+        "max_events": 200,
+        "max_wait_ms": 60000
+      }
+    ],
+    "plan": {
+      "schema": "acp2.skill.planner.output.v1",
+      "skill": "planner",
+      "skill_version": "1.0.0",
+      "plan_id": "plan-audit-project-r0",
+      "project_id": "audit-project",
+      "round": 0,
+      "hypothesis": "Round 0: Does the supplied charged doublet retain its spin?",
+      "recipe_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "plan_definition_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "science": {
+        "capability_steps": [
+          {
+            "step_index": 0,
+            "capability": "geometry_optimization",
+            "version": "1.0.0",
+            "parameters": {
+              "max_cycles": 100
+            }
+          }
+        ],
+        "initial_inputs": [
+          {
+            "input_id": "input-a",
+            "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "format": "xyz",
+            "role": "reactant"
+          }
+        ],
+        "method": "r2SCAN-3c",
+        "mapping": "identity",
+        "charge": 0,
+        "multiplicity": 1,
+        "allowed_substitutions": []
+      },
+      "budget": {
+        "model_requests": 1,
+        "input_tokens": 1000,
+        "output_tokens": 500,
+        "task_refs": 1,
+        "recipe_steps": 1,
+        "qc_invocations": 1,
+        "wall_seconds": 600,
+        "queue_seconds": 60
+      },
+      "notes": [
+        "budget is clamped to the remaining admission budget"
+      ]
+    },
+    "persisted_port_required": false
+  },
+  "first_wait_empty": {
+    "stop_reason": "wait_timeout",
+    "status": "stopped",
+    "model_invocations": 4,
+    "submits": 1,
+    "wait_requests": [
+      {
+        "project_id": "audit-project",
+        "round": 0,
+        "task_ref": {
+          "project_id": "audit-project",
+          "job_id": "audit-job",
+          "attempt": 1,
+          "release_id": "release-a"
+        },
+        "cursor": null,
+        "max_events": 200,
+        "max_wait_ms": 60000
+      }
+    ],
+    "plan": {
+      "schema": "acp2.skill.planner.output.v1",
+      "skill": "planner",
+      "skill_version": "1.0.0",
+      "plan_id": "plan-audit-project-r0",
+      "project_id": "audit-project",
+      "round": 0,
+      "hypothesis": "Round 0: Does the supplied charged doublet retain its spin?",
+      "recipe_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "plan_definition_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "science": {
+        "capability_steps": [
+          {
+            "step_index": 0,
+            "capability": "geometry_optimization",
+            "version": "1.0.0",
+            "parameters": {
+              "max_cycles": 100
+            }
+          }
+        ],
+        "initial_inputs": [
+          {
+            "input_id": "input-a",
+            "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "format": "xyz",
+            "role": "reactant"
+          }
+        ],
+        "method": "r2SCAN-3c",
+        "mapping": "identity",
+        "charge": 0,
+        "multiplicity": 1,
+        "allowed_substitutions": []
+      },
+      "budget": {
+        "model_requests": 1,
+        "input_tokens": 1000,
+        "output_tokens": 500,
+        "task_refs": 1,
+        "recipe_steps": 1,
+        "qc_invocations": 1,
+        "wall_seconds": 600,
+        "queue_seconds": 60
+      },
+      "notes": [
+        "budget is clamped to the remaining admission budget"
+      ]
+    },
+    "persisted_port_required": false
+  },
+  "frontend_approval_without_platform": {
+    "scope": "real exported UI functions in VM; no transport/persistence adapter injected",
+    "approval_ref": "apr-1",
+    "status": "approved",
+    "submit_result": {
+      "submitted": true,
+      "dispatch_ref": "dsp-2",
+      "approval_ref": "apr-1",
+      "plan_definition_digest": "sha256:32bd96dd1c8d2eb962a419590ff91ebf695adef1c587c147185f522be5422d9b",
+      "submitted_by": "audit-human",
+      "submitted_at": "2026-10-26T00:00:00.000Z"
+    }
+  }
+}

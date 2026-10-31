@@ -1,0 +1,14 @@
+{
+  "source_changed_during_review": [],
+  "pytest": {
+    "tests": 230,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "report_links_valid": true,
+  "python_snippets_parse": true,
+  "independent_install": "PASS",
+  "real_xtb": "PASS",
+  "scope": "current uncommitted working tree; Python 3.11; real H2 GFN2-xTB; no production deployment"
+}

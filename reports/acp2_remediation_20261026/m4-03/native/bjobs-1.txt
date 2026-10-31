@@ -1,0 +1,29 @@
+
+Job <1>, Job Name <acp_sub_41332c2d8baf6d9a>, User <xieningke>, Project <defaul
+                     t>, Status <RUN>, Queue <normal>, Command <#!/bin/bash;#BS
+                     UB -J acp_sub_41332c2d8baf6d9a;#BSUB -q normal;#BSUB -n 4;
+                     #BSUB -M 8808038;#BSUB -o /ACPServer/acp2-runs/remediation
+                     /m4-03/remote_jobs/M4-03_LSF_matrix_20261028T011416/CCO_xt
+                     b_optimize/stdout.log;#BSUB -e /ACPServer/a>
+Wed Oct 28 01:15:08: Submitted from host <workstation>, CWD </ACPServer/acp2-ru
+                     ns/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028
+                     T011416/CCO_xtb_optimize>, Output File </ACPServer/acp2-ru
+                     ns/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028
+                     T011416/CCO_xtb_optimize/stdout.log>, Error File </ACPServ
+                     er/acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matri
+                     x_20261028T011416/CCO_xtb_optimize/stderr.log>, 4 Processo
+                     rs Requested;
+
+ MEMLIMIT
+ 8808038 K
+Wed Oct 28 01:15:19: Started on 4 Hosts/Processors <workstation> <workstation> 
+                     <workstation> <workstation>, Execution Home </home/xiening
+                     ke>, Execution CWD </ACPServer/acp2-runs/remediation/m4-03
+                     /remote_jobs/M4-03_LSF_matrix_20261028T011416/CCO_xtb_opti
+                     mize>;
+
+ SCHEDULING PARAMETERS:
+           r15s   r1m  r15m   ut      pg    io   ls    it    tmp    swp    mem
+ loadSched   -     -     -     -       -     -    -     -     -      -      -  
+ loadStop    -     -     -     -       -     -    -     -     -      -      -  
+

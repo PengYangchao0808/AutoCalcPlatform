@@ -152,7 +152,14 @@ function setup(harness, routes, options) {
   const catalog = options.catalog ? () => options.catalog : undefined;
   const Q = W.ACPScienceQuestion;
   const initOptions = { science: W.ACPClient.science, wizardEndpoints: W.ACPClient.wizardEndpoints, submit, buildJobBody };
+  // M5-03 F6: a bound project is explicit input; live discovery never falls
+  // back to a synthetic "demo-project". Fixture bodies carry demo-project ids,
+  // so fixture mode binds that id explicitly (it is never a live default).
+  initOptions.projectId =
+    options.projectId || (options.fixtureMode ? "demo-project" : "proj-m503");
   if (catalog) initOptions.catalog = catalog;
+  if (options.researchCommands) initOptions.researchCommands = options.researchCommands;
+  if (options.researchApproval) initOptions.researchApproval = options.researchApproval;
   if (options.fixtureMode !== undefined) initOptions.fixtureMode = options.fixtureMode;
   Q.init(initOptions);
   const dom = sandbox.document;
@@ -212,6 +219,95 @@ module.exports.register = async function (h) {
     assert(detail, "submit resolves the read-only detail");
     assertEq(h0.fetchCalls.length, 0, "no global fetch during the whole flow");
     assertEq(h0.Q.getState().taskRef.job_id, QFIX.submit.job_id);
+  });
+
+  await test("research approval mode submits the SAME normalized body, never a second payload", async () => {
+    const commandCalls = [];
+    const commands = {
+      submit(scope, body, opts) {
+        commandCalls.push({ scope, body, opts });
+        return Promise.resolve({
+          submitted: true,
+          job_id: "20261027_101_manual",
+          attempt: 1,
+          task_ref: { task_id: "20261027_101_manual", job_id: "20261027_101_manual", attempt: 1 },
+        });
+      },
+    };
+    const h0 = setup(h, routeSet({
+      capabilities: { body: QFIX.capabilities },
+      preflight: { body: QFIX.preflight },
+      view: { body: QFIX.view },
+    }), {
+      fixtureMode: true,
+      researchCommands: commands,
+      researchApproval: {
+        approval: {
+          approval_ref: "ap_manual_0001",
+          status: "approved",
+          revision: 2,
+          plan_digest: "sha256:" + "2".repeat(64),
+          proposal_ref: "prop-manual-0001",
+        },
+      },
+    });
+    await h0.Q.discover();
+    await h0.Q.loadDemoStructure();
+    await h0.Q.runPreflight();
+    // The research-mode body is the SAME builder output the direct path uses.
+    const entry = h0.Q.resolveQuestionWorkflow(
+      h0.Q.getState().question.question_id, QFIX.workflowCatalog
+    );
+    const direct = h0.Q.buildNormalizedSubmissionRequest(entry);
+    const research = h0.Q.researchSubmitBody();
+    assertEq(research, direct, "one normalized body, no second submit payload");
+    await h0.Q.submit();
+    assertEq(h0.submitCalls.length, 0, "the direct submit adapter is not used in research mode");
+    assertEq(commandCalls.length, 1, "the research command received exactly one submit");
+    assertEq(commandCalls[0].body, direct, "the command receives the same normalized body");
+    assertEq(commandCalls[0].opts.approval.approval_ref, "ap_manual_0001",
+      "the bound approval is attached");
+    assertEq(h0.Q.getState().phase, "submitted", "a real TaskRef is submitted");
+    assertEq(h0.Q.getState().taskRef.job_id, "20261027_101_manual", "real job id adopted");
+    const html = h0.bodyHtml();
+    assert(html.indexOf("sq-research-approval") !== -1, "research approval mode is visible");
+    assert(html.indexOf("ap_manual_0001") !== -1, "the approval ref is displayed");
+  });
+
+  await test("research approval mode: a TaskRef-less response is unconfirmed, never submitted", async () => {
+    const commands = {
+      submit() {
+        return Promise.resolve({ submitted: true, job_id: "job-x", attempt: 1, task_ref: null });
+      },
+    };
+    const h0 = setup(h, routeSet({
+      capabilities: { body: QFIX.capabilities },
+      preflight: { body: QFIX.preflight },
+    }), {
+      fixtureMode: true,
+      researchCommands: commands,
+      researchApproval: {
+        approval: {
+          approval_ref: "ap_manual_0002",
+          status: "approved",
+          revision: 2,
+          plan_digest: "sha256:" + "2".repeat(64),
+          proposal_ref: "prop-manual-0002",
+        },
+      },
+    });
+    await h0.Q.discover();
+    await h0.Q.loadDemoStructure();
+    await h0.Q.runPreflight();
+    let rejected = false;
+    try {
+      await h0.Q.submit();
+    } catch (_error) {
+      rejected = true;
+    }
+    assert(rejected, "a TaskRef-less response is refused");
+    assertEq(h0.Q.getState().phase, "unconfirmed", "unknown outcome is unconfirmed");
+    assertEq(h0.Q.getState().taskRef, null, "no task ref is adopted");
   });
 
   await test("production mode: a capabilities failure sets state.error and never adopts fixtures", async () => {
@@ -346,7 +442,7 @@ module.exports.register = async function (h) {
   await test("task detail references the SAME job_id/attempt as submit", async () => {
     const submitResponse = { job_id: "manual_test_task", attempt: 2 };
     const viewBody = clone(QFIX.view);
-    viewBody.project_id = "demo-project";
+    viewBody.project_id = "proj-m503";
     viewBody.task_ref = { job_id: "manual_test_task", attempt: 2 };
     const h0 = setup(h, routeSet({
       capabilities: { body: QFIX.capabilities },

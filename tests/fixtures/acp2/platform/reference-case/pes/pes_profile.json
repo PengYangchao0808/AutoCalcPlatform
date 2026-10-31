@@ -1,0 +1,1376 @@
+{
+  "candidate_structures": {},
+  "coordinate": {
+    "atoms": [
+      4,
+      5
+    ],
+    "end": 3.5181,
+    "kind": "distance",
+    "n_points": 21,
+    "start": 1.5181,
+    "unit": "angstrom"
+  },
+  "coordinates": [
+    {
+      "atoms": [
+        4,
+        5
+      ],
+      "end": 3.5181,
+      "kind": "distance",
+      "n_points": 21,
+      "start": 1.5181,
+      "unit": "angstrom"
+    },
+    {
+      "atoms": [
+        1,
+        0
+      ],
+      "end": 3.4893,
+      "kind": "distance",
+      "n_points": 21,
+      "start": 1.4893,
+      "unit": "angstrom"
+    }
+  ],
+  "execution_mode": "pointwise",
+  "frames": [
+    {
+      "actual_coordinate": 1.518099730408052,
+      "actual_coordinates": {
+        "coordinate_1": 1.518099730408052,
+        "coordinate_2": 1.4893000572268842
+      },
+      "constraint_residual_ok": true,
+      "constraint_residuals": {
+        "coordinate_1": -2.6959194809883513e-07,
+        "coordinate_2": 5.7226884120353816e-08
+      },
+      "coordinate_unit": "angstrom",
+      "cumulative_arclength_A": 0.0,
+      "frame_role": "constrained_optimization",
+      "geometry_path": "scan_frames/frame_000.xyz",
+      "index": 0,
+      "invalid_reasons": [],
+      "max_constraint_residual": 2.6959194809883513e-07,
+      "optimization_converged": true,
+      "optimizer_engine": "orca",
+      "optimizer_level": {
+        "aux_c_basis": null,
+        "aux_j_basis": null,
+        "basis": null,
+        "dispersion": null,
+        "grid": null,
+        "method": "GFN2-xTB",
+        "ri_approximation": "none",
+        "scf_convergence": null,
+        "scf_max_iterations": 200,
+        "solvent": null,
+        "solvent_model": "none"
+      },
+      "reaction_progress": 0.0,
+      "retry_history": [
+        {
+          "attempt": 1,
+          "failure_class": null,
+          "opt_level": "normal",
+          "strategy": "initial"
+        }
+      ],
+      "scan_energy_hartree": -17.9306739858,
+      "scf_converged": true,
+      "single_point_energy_hartree": -234.528442645893,
+      "single_point_status": "completed",
+      "source_log": "scan.out",
+      "step_rmsd_A": 0.037595332313228084,
+      "target_coordinate": 1.5181,
+      "target_coordinates": {
+        "coordinate_1": 1.5181,
+        "coordinate_2": 1.4893
+      }
+    },
+    {
+      "actual_coordinate": 1.6181002423131887,
+      "actual_coordinates": {
+        "coordinate_1": 1.6181002423131887,
+        "coordinate_2": 1.5892997684024246
+      },
+      "constraint_residual_ok": true,
+      "constraint_residuals": {
+        "coordinate_1": 2.423131886253316e-07,
+        "coordinate_2": -2.3159757556179272e-07
+      },
+      "coordinate_unit": "angstrom",
+      "cumulative_arclength_A": 0.037595332313228084,
+      "frame_role": "constrained_optimization",
+      "geometry_path": "scan_frames/frame_001.xyz",
+      "index": 1,
+      "invalid_reasons": [],
+      "max_constraint_residual": 2.423131886253316e-07,
+      "optimization_converged": true,
+      "optimizer_engine": "orca",
+      "optimizer_level": {
+        "aux_c_basis": null,
+        "aux_j_basis": null,
+        "basis": null,
+        "dispersion": null,
+        "grid": null,
+        "method": "GFN2-xTB",
+        "ri_approximation": "none",
+        "scf_convergence": null,
+        "scf_max_iterations": 200,
+        "solvent": null,
+        "solvent_model": "none"
+      },
+      "reaction_progress": 0.02117010768000126,
+      "retry_history": [
+        {
+          "attempt": 1,
+          "failure_class": null,
+          "opt_level": "normal",
+          "strategy": "initial"
+        }
+      ],
+      "scan_energy_hartree": -17.92601545538,
+      "scf_converged": true,
+      "single_point_energy_hartree": -234.523754174651,
+      "single_point_status": "completed",
+      "source_log": "scan.out",
+      "step_rmsd_A": 0.03877316908324805,
+      "target_coordinate": 1.6181,
+      "target_coordinates": {
+        "coordinate_1": 1.6181,
+        "coordinate_2": 1.5893000000000002
+      }
+    },
+    {
+      "actual_coordinate": 1.7180998117495967,
+      "actual_coordinates": {
+        "coordinate_1": 1.7180998117495967,
+        "coordinate_2": 1.6892998971979487
+      },
+      "constraint_residual_ok": true,
+      "constraint_residuals": {
+        "coordinate_1": -1.8825040326575504e-07,
+        "coordinate_2": -1.0280205131607545e-07
+      },
+      "coordinate_unit": "angstrom",
+      "cumulative_arclength_A": 0.07636850139647614,
+      "frame_role": "constrained_optimization",
+      "geometry_path": "scan_frames/frame_002.xyz",
+      "index": 2,
+      "invalid_reasons": [],
+      "max_constraint_residual": 1.8825040326575504e-07,
+      "optimization_converged": true,
+      "optimizer_engine": "orca",
+      "optimizer_level": {
+        "aux_c_basis": null,
+        "aux_j_basis": null,
+        "basis": null,
+        "dispersion": null,
+        "grid": null,
+        "method": "GFN2-xTB",
+        "ri_approximation": "none",
+        "scf_convergence": null,
+        "scf_max_iterations": 200,
+        "solvent": null,
+        "solvent_model": "none"
+      },
+      "reaction_progress": 0.04300346076086879,
+      "retry_history": [
+        {
+          "attempt": 1,
+          "failure_class": null,
+          "opt_level": "normal",
+          "strategy": "initial"
+        }
+      ],
+      "scan_energy_hartree": -17.90737557298,
+      "scf_converged": true,
+      "single_point_energy_hartree": -234.507275563738,
+      "single_point_status": "completed",
+      "source_log": "scan.out",
+      "step_rmsd_A": 0.039890261133934714,
+      "target_coordinate": 1.7181,
+      "target_coordinates": {
+        "coordinate_1": 1.7181,
+        "coordinate_2": 1.6893
+      }
+    },
+    {
+      "actual_coordinate": 1.818100708354188,
+      "actual_coordinates": {
+        "coordinate_1": 1.818100708354188,
+        "coordinate_2": 1.7893000353439887
+      },
+      "constraint_residual_ok": true,
+      "constraint_residuals": {
+        "coordinate_1": 7.083541879726596e-07,
+        "coordinate_2": 3.5343988624703115e-08
+      },
+      "coordinate_unit": "angstrom",
+      "cumulative_arclength_A": 0.11625876253041084,
+      "frame_role": "constrained_optimization",
+      "geometry_path": "scan_frames/frame_003.xyz",
+      "index": 3,
+      "invalid_reasons": [],
+      "max_constraint_residual": 7.083541879726596e-07,
+      "optimization_converged": true,
+      "optimizer_engine": "orca",
+      "optimizer_level": {
+        "aux_c_basis": null,
+        "aux_j_basis": null,
+        "basis": null,
+        "dispersion": null,
+        "grid": null,
+        "method": "GFN2-xTB",
+        "ri_approximation": "none",
+        "scf_convergence": null,
+        "scf_max_iterations": 200,
+        "solvent": null,
+        "solvent_model": "none"
+      },
+      "reaction_progress": 0.06546585360668579,
+      "retry_history": [
+        {
+          "attempt": 1,
+          "failure_class": null,
+          "opt_level": "normal",
+          "strategy": "initial"
+        }
+      ],
+      "scan_energy_hartree": -17.88047493362,
+      "scf_converged": true,
+      "single_point_energy_hartree": -234.484578863973,
+      "single_point_status": "completed",
+      "source_log": "scan.out",
+      "step_rmsd_A": 0.04165105855586166,
+      "target_coordinate": 1.8181,
+      "target_coordinates": {
+        "coordinate_1": 1.8181,
+        "coordinate_2": 1.7893000000000001
+      }
+    },
+    {
+      "actual_coordinate": 1.91810033124365,
+      "actual_coordinates": {
+        "coordinate_1": 1.91810033124365,
+        "coordinate_2": 1.8892999333327145
+      },
+      "constraint_residual_ok": true,
+      "constraint_residuals": {
+        "coordinate_1": 3.3124365006464984e-07,
+        "coordinate_2": -6.66672854698902e-08
+      },
+      "coordinate_unit": "angstrom",
+      "cumulative_arclength_A": 0.1579098210862725,
+      "frame_role": "constrained_optimization",
+      "geometry_path": "scan_frames/frame_004.xyz",
+      "index": 4,
+      "invalid_reasons": [],
+      "max_constraint_residual": 3.3124365006464984e-07,
+      "optimization_converged": true,
+      "optimizer_engine": "orca",
+      "optimizer_level": {
+        "aux_c_basis": null,
+        "aux_j_basis": null,
+        "basis": null,
+        "dispersion": null,
+        "grid": null,
+        "method": "GFN2-xTB",
+        "ri_approximation": "none",
+        "scf_convergence": null,
+        "scf_max_iterations": 200,
+        "solvent": null,
+        "solvent_model": "none"
+      },
+      "reaction_progress": 0.08891975972639253,
+      "retry_history": [
+        {
+          "attempt": 1,
+          "failure_class": null,
+          "opt_level": "normal",
+          "strategy": "initial"
+        }
+      ],
+      "scan_energy_hartree": -17.84943389052,
+      "scf_converged": true,
+      "single_point_energy_hartree": -234.459451434423,
+      "single_point_status": "completed",
+      "source_log": "scan.out",
+      "step_rmsd_A": 0.9692122941455179,
+      "target_coordinate": 1.9181,
+      "target_coordinates": {
+        "coordinate_1": 1.9181,
+        "coordinate_2": 1.8893
+      }
+    },
+    {
+      "actual_coordinate": 2.0181002618487516,
+      "actual_coordinates": {
+        "coordinate_1": 2.0181002618487516,
+        "coordinate_2": 1.9892998508774389
+      },
+      "constraint_residual_ok": true,
+      "constraint_residuals": {
+        "coordinate_1": 2.61848751570426e-07,
+        "coordinate_2": -1.4912256118826406e-07
+      },
+      "coordinate_unit": "angstrom",
+      "cumulative_arclength_A": 1.1271221152317903,
+      "frame_role": "constrained_optimization",
+      "geometry_path": "scan_frames/frame_005.xyz",
+      "index": 5,
+      "invalid_reasons": [],
+      "max_constraint_residual": 2.61848751570426e-07,
+      "optimization_converged": true,
+      "optimizer_engine": "orca",
+      "optimizer_level": {
+        "aux_c_basis": null,
+        "aux_j_basis": null,
+        "basis": null,
+        "dispersion": null,
+        "grid": null,
+        "method": "GFN2-xTB",
+        "ri_approximation": "none",
+        "scf_convergence": null,
+        "scf_max_iterations": 200,
+        "solvent": null,
+        "solvent_model": "none"
+      },
+      "reaction_progress": 0.6346877412644145,
+      "retry_history": [
+        {
+          "attempt": 1,
+          "failure_class": null,
+          "opt_level": "normal",
+          "strategy": "initial"
+        }
+      ],
+      "scan_energy_hartree": -17.83819973123,
+      "scf_converged": true,
+      "single_point_energy_hartree": -234.451855894692,
+      "single_point_status": "completed",
+      "source_log": "scan.out",
+      "step_rmsd_A": 0.9692122941455179,
+      "target_coordinate": 2.0181,
+      "target_coordinates": {
+        "coordinate_1": 2.0181,
+        "coordinate_2": 1.9893
+      }
+    },
+    {
+      "actual_coordinate": 2.1181000355821253,
+      "actual_coordinates": {
+        "coordinate_1": 2.1181000355821253,
+        "coordinate_2": 2.089299462101831
+      },
+      "constraint_residual_ok": true,
+      "constraint_residuals": {
+        "coordinate_1": 3.5582125246236274e-08,
+        "coordinate_2": -5.378981691173124e-07
+      },
+      "coordinate_unit": "angstrom",
+      "cumulative_arclength_A": 1.1725321340565436,
+      "frame_role": "constrained_optimization",
+      "geometry_path": "scan_frames/frame_006.xyz",
+      "index": 6,
+      "invalid_reasons": [],
+      "max_constraint_residual": 5.378981691173124e-07,
+      "optimization_converged": true,
+      "optimizer_engine": "orca",
+      "optimizer_level": {
+        "aux_c_basis": null,
+        "aux_j_basis": null,
+        "basis": null,
+        "dispersion": null,
+        "grid": null,
+        "method": "GFN2-xTB",
+        "ri_approximation": "none",
+        "scf_convergence": null,
+        "scf_max_iterations": 200,
+        "solvent": null,
+        "solvent_model": "none"
+      },
+      "reaction_progress": 0.6602583355142932,
+      "retry_history": [
+        {
+          "attempt": 1,
+          "failure_class": null,
+          "opt_level": "normal",
+          "strategy": "initial"
+        }
+      ],
+      "scan_energy_hartree": -17.82268031711,
+      "scf_converged": true,
+      "single_point_energy_hartree": -234.441375177557,
+      "single_point_status": "completed",
+      "source_log": "scan.out",
+      "step_rmsd_A": 0.045410018824753165,
+      "target_coordinate": 2.1181,
+      "target_coordinates": {
+        "coordinate_1": 2.1181,
+        "coordinate_2": 2.0893
+      }
+    },
+    {
+      "actual_coordinate": 2.2181005576984103,
+      "actual_coordinates": {
+        "coordinate_1": 2.2181005576984103,
+        "coordinate_2": 2.1892999576880734
+      },
+      "constraint_residual_ok": true,
+      "constraint_residuals": {
+        "coordinate_1": 5.57698410563745e-07,
+        "coordinate_2": -4.231192685111296e-08
+      },
+      "coordinate_unit": "angstrom",
+      "cumulative_arclength_A": 1.2119528390022851,
+      "frame_role": "constrained_optimization",
+      "geometry_path": "scan_frames/frame_007.xyz",
+      "index": 7,
+      "invalid_reasons": [],
+      "max_constraint_residual": 5.57698410563745e-07,
+      "optimization_converged": true,
+      "optimizer_engine": "orca",
+      "optimizer_level": {
+        "aux_c_basis": null,
+        "aux_j_basis": null,
+        "basis": null,
+        "dispersion": null,
+        "grid": null,
+        "method": "GFN2-xTB",
+        "ri_approximation": "none",
+        "scf_convergence": null,
+        "scf_max_iterations": 200,
+        "solvent": null,
+        "solvent_model": "none"
+      },
+      "reaction_progress": 0.6824563190716635,
+      "retry_history": [
+        {
+          "attempt": 1,
+          "failure_class": null,
+          "opt_level": "normal",
+          "strategy": "initial"
+        }
+      ],
+      "scan_energy_hartree": -17.8145522114,
+      "scf_converged": true,
+      "single_point_energy_hartree": -234.435915802105,
+      "single_point_status": "completed",
+      "source_log": "scan.out",
+      "step_rmsd_A": 0.039420704945741666,
+      "target_coordinate": 2.2180999999999997,
+      "target_coordinates": {
+        "coordinate_1": 2.2180999999999997,
+        "coordinate_2": 2.1893000000000002
+      }
+    },
+    {
+      "actual_coordinate": 2.3181008246430954,
+      "actual_coordinates": {
+        "coordinate_1": 2.3181008246430954,
+        "coordinate_2": 2.289299979464465
+      },
+      "constraint_residual_ok": true,
+      "constraint_residuals": {
+        "coordinate_1": 8.246430951430739e-07,
+        "coordinate_2": -2.053553505021455e-08
+      },
+      "coordinate_unit": "angstrom",
+      "cumulative_arclength_A": 1.2458407574464565,
+      "frame_role": "constrained_optimization",
+      "geometry_path": "scan_frames/frame_008.xyz",
+      "index": 8,
+      "invalid_reasons": [],
+      "max_constraint_residual": 8.246430951430739e-07,
+      "optimization_converged": true,
+      "optimizer_engine": "orca",
+      "optimizer_level": {
+        "aux_c_basis": null,
+        "aux_j_basis": null,
+        "basis": null,
+        "dispersion": null,
+        "grid": null,
+        "method": "GFN2-xTB",
+        "ri_approximation": "none",
+        "scf_convergence": null,
+        "scf_max_iterations": 200,
+        "solvent": null,
+        "solvent_model": "none"
+      },
+      "reaction_progress": 0.7015387646406255,
+      "retry_history": [
+        {
+          "attempt": 1,
+          "failure_class": null,
+          "opt_level": "normal",
+          "strategy": "initial"
+        }
+      ],
+      "scan_energy_hartree": -17.81226926006,
+      "scf_converged": true,
+      "single_point_energy_hartree": -234.435132799905,
+      "single_point_status": "completed",
+      "source_log": "scan.out",
+      "step_rmsd_A": 0.03405652537018566,
+      "target_coordinate": 2.3181000000000003,
+      "target_coordinates": {
+        "coordinate_1": 2.3181000000000003,
+        "coordinate_2": 2.2893
+      }
+    },
+    {
+      "actual_coordinate": 2.41809945762969,
+      "actual_coordinates": {
+        "coordinate_1": 2.41809945762969,
+        "coordinate_2": 2.3892999689492735
+      },
+      "constraint_residual_ok": true,
+      "constraint_residuals": {
+        "coordinate_1": -5.423703099971533e-07,
+        "coordinate_2": -3.1050726434500575e-08
+      },
+      "coordinate_unit": "angstrom",
+      "cumulative_arclength_A": 1.2798972828166422,
+      "frame_role": "constrained_optimization",
+      "geometry_path": "scan_frames/frame_009.xyz",
+      "index": 9,
+      "invalid_reasons": [],
+      "max_constraint_residual": 5.423703099971533e-07,
+      "optimization_converged": true,
+      "optimizer_engine": "orca",
+      "optimizer_level": {
+        "aux_c_basis": null,
+        "aux_j_basis": null,
+        "basis": null,
+        "dispersion": null,
+        "grid": null,
+        "method": "GFN2-xTB",
+        "ri_approximation": "none",
+        "scf_convergence": null,
+        "scf_max_iterations": 200,
+        "solvent": null,
+        "solvent_model": "none"
+      },
+      "reaction_progress": 0.7207161535591919,
+      "retry_history": [
+        {
+          "attempt": 1,
+          "failure_class": null,
+          "opt_level": "normal",
+          "strategy": "initial"
+        }
+      ],
+      "scan_energy_hartree": -17.8130756327,
+      "scf_converged": true,
+      "single_point_energy_hartree": -234.437281140819,
+      "single_point_status": "completed",
+      "source_log": "scan.out",
+      "step_rmsd_A": 0.03681073534745872,
+      "target_coordinate": 2.4181,
+      "target_coordinates": {
+        "coordinate_1": 2.4181,
+        "coordinate_2": 2.3893
+      }
+    },
+    {
+      "actual_coordinate": 2.5181001381154404,
+      "actual_coordinates": {
+        "coordinate_1": 2.5181001381154404,
+        "coordinate_2": 2.489300551144036
+      },
+      "constraint_residual_ok": true,
+      "constraint_residuals": {
+        "coordinate_1": 1.3811544041786306e-07,
+        "coordinate_2": 5.511440357430786e-07
+      },
+      "coordinate_unit": "angstrom",
+      "cumulative_arclength_A": 1.3167080181641009,
+      "frame_role": "constrained_optimization",
+      "geometry_path": "scan_frames/frame_010.xyz",
+      "index": 10,
+      "invalid_reasons": [],
+      "max_constraint_residual": 5.511440357430786e-07,
+      "optimization_converged": true,
+      "optimizer_engine": "orca",
+      "optimizer_level": {
+        "aux_c_basis": null,
+        "aux_j_basis": null,
+        "basis": null,
+        "dispersion": null,
+        "grid": null,
+        "method": "GFN2-xTB",
+        "ri_approximation": "none",
+        "scf_convergence": null,
+        "scf_max_iterations": 200,
+        "solvent": null,
+        "solvent_model": "none"
+      },
+      "reaction_progress": 0.7414444510135951,
+      "retry_history": [
+        {
+          "attempt": 1,
+          "failure_class": null,
+          "opt_level": "normal",
+          "strategy": "initial"
+        }
+      ],
+      "scan_energy_hartree": -17.81507677863,
+      "scf_converged": true,
+      "single_point_energy_hartree": -234.440700980832,
+      "single_point_status": "completed",
+      "source_log": "scan.out",
+      "step_rmsd_A": 0.03947126310735718,
+      "target_coordinate": 2.5181,
+      "target_coordinates": {
+        "coordinate_1": 2.5181,
+        "coordinate_2": 2.4893
+      }
+    },
+    {
+      "actual_coordinate": 2.618099830067219,
+      "actual_coordinates": {
+        "coordinate_1": 2.618099830067219,
+        "coordinate_2": 2.5893000662375925
+      },
+      "constraint_residual_ok": true,
+      "constraint_residuals": {
+        "coordinate_1": -1.6993278117993782e-07,
+        "coordinate_2": 6.623759229995585e-08
+      },
+      "coordinate_unit": "angstrom",
+      "cumulative_arclength_A": 1.3561792812714581,
+      "frame_role": "constrained_optimization",
+      "geometry_path": "scan_frames/frame_011.xyz",
+      "index": 11,
+      "invalid_reasons": [],
+      "max_constraint_residual": 1.6993278117993782e-07,
+      "optimization_converged": true,
+      "optimizer_engine": "orca",
+      "optimizer_level": {
+        "aux_c_basis": null,
+        "aux_j_basis": null,
+        "basis": null,
+        "dispersion": null,
+        "grid": null,
+        "method": "GFN2-xTB",
+        "ri_approximation": "none",
+        "scf_convergence": null,
+        "scf_max_iterations": 200,
+        "solvent": null,
+        "solvent_model": "none"
+      },
+      "reaction_progress": 0.763670904108529,
+      "retry_history": [
+        {
+          "attempt": 1,
+          "failure_class": null,
+          "opt_level": "normal",
+          "strategy": "initial"
+        }
+      ],
+      "scan_energy_hartree": -17.81726263108,
+      "scf_converged": true,
+      "single_point_energy_hartree": -234.444236043921,
+      "single_point_status": "completed",
+      "source_log": "scan.out",
+      "step_rmsd_A": 0.04205726859625036,
+      "target_coordinate": 2.6181,
+      "target_coordinates": {
+        "coordinate_1": 2.6181,
+        "coordinate_2": 2.5893
+      }
+    },
+    {
+      "actual_coordinate": 2.718099788264772,
+      "actual_coordinates": {
+        "coordinate_1": 2.718099788264772,
+        "coordinate_2": 2.6893008617508753
+      },
+      "constraint_residual_ok": true,
+      "constraint_residuals": {
+        "coordinate_1": -2.117352275732287e-07,
+        "coordinate_2": 8.617508751029845e-07
+      },
+      "coordinate_unit": "angstrom",
+      "cumulative_arclength_A": 1.3982365498677085,
+      "frame_role": "constrained_optimization",
+      "geometry_path": "scan_frames/frame_012.xyz",
+      "index": 12,
+      "invalid_reasons": [],
+      "max_constraint_residual": 8.617508751029845e-07,
+      "optimization_converged": true,
+      "optimizer_engine": "orca",
+      "optimizer_level": {
+        "aux_c_basis": null,
+        "aux_j_basis": null,
+        "basis": null,
+        "dispersion": null,
+        "grid": null,
+        "method": "GFN2-xTB",
+        "ri_approximation": "none",
+        "scf_convergence": null,
+        "scf_max_iterations": 200,
+        "solvent": null,
+        "solvent_model": "none"
+      },
+      "reaction_progress": 0.7873535490042114,
+      "retry_history": [
+        {
+          "attempt": 1,
+          "failure_class": null,
+          "opt_level": "normal",
+          "strategy": "initial"
+        }
+      ],
+      "scan_energy_hartree": -17.81917128137,
+      "scf_converged": true,
+      "single_point_energy_hartree": -234.447416168303,
+      "single_point_status": "completed",
+      "source_log": "scan.out",
+      "step_rmsd_A": 0.04372772467076753,
+      "target_coordinate": 2.7180999999999997,
+      "target_coordinates": {
+        "coordinate_1": 2.7180999999999997,
+        "coordinate_2": 2.6893000000000002
+      }
+    },
+    {
+      "actual_coordinate": 2.8181002153630024,
+      "actual_coordinates": {
+        "coordinate_1": 2.8181002153630024,
+        "coordinate_2": 2.789299339824788
+      },
+      "constraint_residual_ok": true,
+      "constraint_residuals": {
+        "coordinate_1": 2.153630020984565e-07,
+        "coordinate_2": -6.601752118307047e-07
+      },
+      "coordinate_unit": "angstrom",
+      "cumulative_arclength_A": 1.441964274538476,
+      "frame_role": "constrained_optimization",
+      "geometry_path": "scan_frames/frame_013.xyz",
+      "index": 13,
+      "invalid_reasons": [],
+      "max_constraint_residual": 6.601752118307047e-07,
+      "optimization_converged": true,
+      "optimizer_engine": "orca",
+      "optimizer_level": {
+        "aux_c_basis": null,
+        "aux_j_basis": null,
+        "basis": null,
+        "dispersion": null,
+        "grid": null,
+        "method": "GFN2-xTB",
+        "ri_approximation": "none",
+        "scf_convergence": null,
+        "scf_max_iterations": 200,
+        "solvent": null,
+        "solvent_model": "none"
+      },
+      "reaction_progress": 0.8119768355379995,
+      "retry_history": [
+        {
+          "attempt": 1,
+          "failure_class": null,
+          "opt_level": "normal",
+          "strategy": "initial"
+        }
+      ],
+      "scan_energy_hartree": -17.82063787937,
+      "scf_converged": true,
+      "single_point_energy_hartree": -234.450055907053,
+      "single_point_status": "completed",
+      "source_log": "scan.out",
+      "step_rmsd_A": 0.045401468747287066,
+      "target_coordinate": 2.8181000000000003,
+      "target_coordinates": {
+        "coordinate_1": 2.8181000000000003,
+        "coordinate_2": 2.7893
+      }
+    },
+    {
+      "actual_coordinate": 2.918099444191887,
+      "actual_coordinates": {
+        "coordinate_1": 2.918099444191887,
+        "coordinate_2": 2.8893005708977393
+      },
+      "constraint_residual_ok": true,
+      "constraint_residuals": {
+        "coordinate_1": -5.558081128675951e-07,
+        "coordinate_2": 5.708977393048542e-07
+      },
+      "coordinate_unit": "angstrom",
+      "cumulative_arclength_A": 1.487365743285763,
+      "frame_role": "constrained_optimization",
+      "geometry_path": "scan_frames/frame_014.xyz",
+      "index": 14,
+      "invalid_reasons": [],
+      "max_constraint_residual": 5.708977393048542e-07,
+      "optimization_converged": true,
+      "optimizer_engine": "orca",
+      "optimizer_level": {
+        "aux_c_basis": null,
+        "aux_j_basis": null,
+        "basis": null,
+        "dispersion": null,
+        "grid": null,
+        "method": "GFN2-xTB",
+        "ri_approximation": "none",
+        "scf_convergence": null,
+        "scf_max_iterations": 200,
+        "solvent": null,
+        "solvent_model": "none"
+      },
+      "reaction_progress": 0.837542615199218,
+      "retry_history": [
+        {
+          "attempt": 1,
+          "failure_class": null,
+          "opt_level": "normal",
+          "strategy": "initial"
+        }
+      ],
+      "scan_energy_hartree": -17.82166770436,
+      "scf_converged": true,
+      "single_point_energy_hartree": -234.452078044724,
+      "single_point_status": "completed",
+      "source_log": "scan.out",
+      "step_rmsd_A": 0.04688250970177397,
+      "target_coordinate": 2.9181,
+      "target_coordinates": {
+        "coordinate_1": 2.9181,
+        "coordinate_2": 2.8893
+      }
+    },
+    {
+      "actual_coordinate": 3.018099633148813,
+      "actual_coordinates": {
+        "coordinate_1": 3.018099633148813,
+        "coordinate_2": 2.989299929009968
+      },
+      "constraint_residual_ok": true,
+      "constraint_residuals": {
+        "coordinate_1": -3.6685118720569676e-07,
+        "coordinate_2": -7.099003207500232e-08
+      },
+      "coordinate_unit": "angstrom",
+      "cumulative_arclength_A": 1.534248252987537,
+      "frame_role": "constrained_optimization",
+      "geometry_path": "scan_frames/frame_015.xyz",
+      "index": 15,
+      "invalid_reasons": [],
+      "max_constraint_residual": 3.6685118720569676e-07,
+      "optimization_converged": true,
+      "optimizer_engine": "orca",
+      "optimizer_level": {
+        "aux_c_basis": null,
+        "aux_j_basis": null,
+        "basis": null,
+        "dispersion": null,
+        "grid": null,
+        "method": "GFN2-xTB",
+        "ri_approximation": "none",
+        "scf_convergence": null,
+        "scf_max_iterations": 200,
+        "solvent": null,
+        "solvent_model": "none"
+      },
+      "reaction_progress": 0.8639423759574449,
+      "retry_history": [
+        {
+          "attempt": 1,
+          "failure_class": null,
+          "opt_level": "normal",
+          "strategy": "initial"
+        }
+      ],
+      "scan_energy_hartree": -17.82233377188,
+      "scf_converged": true,
+      "single_point_energy_hartree": -234.453517221108,
+      "single_point_status": "completed",
+      "source_log": "scan.out",
+      "step_rmsd_A": 0.04796881434572609,
+      "target_coordinate": 3.0181,
+      "target_coordinates": {
+        "coordinate_1": 3.0181,
+        "coordinate_2": 2.9893
+      }
+    },
+    {
+      "actual_coordinate": 3.1180999177220086,
+      "actual_coordinates": {
+        "coordinate_1": 3.1180999177220086,
+        "coordinate_2": 3.0893003464205293
+      },
+      "constraint_residual_ok": true,
+      "constraint_residuals": {
+        "coordinate_1": -8.227799153104343e-08,
+        "coordinate_2": 3.464205291514588e-07
+      },
+      "coordinate_unit": "angstrom",
+      "cumulative_arclength_A": 1.5822170673332632,
+      "frame_role": "constrained_optimization",
+      "geometry_path": "scan_frames/frame_016.xyz",
+      "index": 16,
+      "invalid_reasons": [],
+      "max_constraint_residual": 3.464205291514588e-07,
+      "optimization_converged": true,
+      "optimizer_engine": "orca",
+      "optimizer_level": {
+        "aux_c_basis": null,
+        "aux_j_basis": null,
+        "basis": null,
+        "dispersion": null,
+        "grid": null,
+        "method": "GFN2-xTB",
+        "ri_approximation": "none",
+        "scf_convergence": null,
+        "scf_max_iterations": 200,
+        "solvent": null,
+        "solvent_model": "none"
+      },
+      "reaction_progress": 0.8909538399477154,
+      "retry_history": [
+        {
+          "attempt": 1,
+          "failure_class": null,
+          "opt_level": "normal",
+          "strategy": "initial"
+        }
+      ],
+      "scan_energy_hartree": -17.82272731649,
+      "scf_converged": true,
+      "single_point_energy_hartree": -234.454493012783,
+      "single_point_status": "completed",
+      "source_log": "scan.out",
+      "step_rmsd_A": 0.04833103937253264,
+      "target_coordinate": 3.1181,
+      "target_coordinates": {
+        "coordinate_1": 3.1181,
+        "coordinate_2": 3.0893
+      }
+    },
+    {
+      "actual_coordinate": 3.2181001126256152,
+      "actual_coordinates": {
+        "coordinate_1": 3.2181001126256152,
+        "coordinate_2": 3.189299475725351
+      },
+      "constraint_residual_ok": true,
+      "constraint_residuals": {
+        "coordinate_1": 1.1262561550040573e-07,
+        "coordinate_2": -5.242746490274897e-07
+      },
+      "coordinate_unit": "angstrom",
+      "cumulative_arclength_A": 1.6305481067057959,
+      "frame_role": "constrained_optimization",
+      "geometry_path": "scan_frames/frame_017.xyz",
+      "index": 17,
+      "invalid_reasons": [],
+      "max_constraint_residual": 5.242746490274897e-07,
+      "optimization_converged": true,
+      "optimizer_engine": "orca",
+      "optimizer_level": {
+        "aux_c_basis": null,
+        "aux_j_basis": null,
+        "basis": null,
+        "dispersion": null,
+        "grid": null,
+        "method": "GFN2-xTB",
+        "ri_approximation": "none",
+        "scf_convergence": null,
+        "scf_max_iterations": 200,
+        "solvent": null,
+        "solvent_model": "none"
+      },
+      "reaction_progress": 0.9181692745468368,
+      "retry_history": [
+        {
+          "attempt": 1,
+          "failure_class": null,
+          "opt_level": "normal",
+          "strategy": "initial"
+        }
+      ],
+      "scan_energy_hartree": -17.82292820401,
+      "scf_converged": true,
+      "single_point_energy_hartree": -234.455099711056,
+      "single_point_status": "completed",
+      "source_log": "scan.out",
+      "step_rmsd_A": 0.04867667052453542,
+      "target_coordinate": 3.2180999999999997,
+      "target_coordinates": {
+        "coordinate_1": 3.2180999999999997,
+        "coordinate_2": 3.1893000000000002
+      }
+    },
+    {
+      "actual_coordinate": 3.318099704265079,
+      "actual_coordinates": {
+        "coordinate_1": 3.318099704265079,
+        "coordinate_2": 3.2892996370619687
+      },
+      "constraint_residual_ok": true,
+      "constraint_residuals": {
+        "coordinate_1": -2.9573492144052693e-07,
+        "coordinate_2": -3.629380311842567e-07
+      },
+      "coordinate_unit": "angstrom",
+      "cumulative_arclength_A": 1.6792247772303313,
+      "frame_role": "constrained_optimization",
+      "geometry_path": "scan_frames/frame_018.xyz",
+      "index": 18,
+      "invalid_reasons": [],
+      "max_constraint_residual": 3.629380311842567e-07,
+      "optimization_converged": true,
+      "optimizer_engine": "orca",
+      "optimizer_level": {
+        "aux_c_basis": null,
+        "aux_j_basis": null,
+        "basis": null,
+        "dispersion": null,
+        "grid": null,
+        "method": "GFN2-xTB",
+        "ri_approximation": "none",
+        "scf_convergence": null,
+        "scf_max_iterations": 200,
+        "solvent": null,
+        "solvent_model": "none"
+      },
+      "reaction_progress": 0.9455793356662002,
+      "retry_history": [
+        {
+          "attempt": 1,
+          "failure_class": null,
+          "opt_level": "normal",
+          "strategy": "initial"
+        }
+      ],
+      "scan_energy_hartree": -17.82299345828,
+      "scf_converged": true,
+      "single_point_energy_hartree": -234.4554431595,
+      "single_point_status": "completed",
+      "source_log": "scan.out",
+      "step_rmsd_A": 0.04867667052453542,
+      "target_coordinate": 3.3181000000000003,
+      "target_coordinates": {
+        "coordinate_1": 3.3181000000000003,
+        "coordinate_2": 3.2893
+      }
+    },
+    {
+      "actual_coordinate": 3.418100192597929,
+      "actual_coordinates": {
+        "coordinate_1": 3.418100192597929,
+        "coordinate_2": 3.38930082212379
+      },
+      "constraint_residual_ok": true,
+      "constraint_residuals": {
+        "coordinate_1": 1.9259792916059837e-07,
+        "coordinate_2": 8.221237899341816e-07
+      },
+      "coordinate_unit": "angstrom",
+      "cumulative_arclength_A": 1.72742841111719,
+      "frame_role": "constrained_optimization",
+      "geometry_path": "scan_frames/frame_019.xyz",
+      "index": 19,
+      "invalid_reasons": [],
+      "max_constraint_residual": 8.221237899341816e-07,
+      "optimization_converged": true,
+      "optimizer_engine": "orca",
+      "optimizer_level": {
+        "aux_c_basis": null,
+        "aux_j_basis": null,
+        "basis": null,
+        "dispersion": null,
+        "grid": null,
+        "method": "GFN2-xTB",
+        "ri_approximation": "none",
+        "scf_convergence": null,
+        "scf_max_iterations": 200,
+        "solvent": null,
+        "solvent_model": "none"
+      },
+      "reaction_progress": 0.9727230276397142,
+      "retry_history": [
+        {
+          "attempt": 1,
+          "failure_class": null,
+          "opt_level": "normal",
+          "strategy": "initial"
+        }
+      ],
+      "scan_energy_hartree": -17.82296627077,
+      "scf_converged": true,
+      "single_point_energy_hartree": -234.455603187036,
+      "single_point_status": "completed",
+      "source_log": "scan.out",
+      "step_rmsd_A": 0.04844032235851249,
+      "target_coordinate": 3.4181,
+      "target_coordinates": {
+        "coordinate_1": 3.4181,
+        "coordinate_2": 3.3893
+      }
+    },
+    {
+      "actual_coordinate": 3.5181005432217254,
+      "actual_coordinates": {
+        "coordinate_1": 3.5181005432217254,
+        "coordinate_2": 3.489299935120224
+      },
+      "constraint_residual_ok": true,
+      "constraint_residuals": {
+        "coordinate_1": 5.432217253797944e-07,
+        "coordinate_2": -6.487977621816299e-08
+      },
+      "coordinate_unit": "angstrom",
+      "cumulative_arclength_A": 1.7758687334757026,
+      "frame_role": "constrained_optimization",
+      "geometry_path": "scan_frames/frame_020.xyz",
+      "index": 20,
+      "invalid_reasons": [],
+      "max_constraint_residual": 5.432217253797944e-07,
+      "optimization_converged": true,
+      "optimizer_engine": "orca",
+      "optimizer_level": {
+        "aux_c_basis": null,
+        "aux_j_basis": null,
+        "basis": null,
+        "dispersion": null,
+        "grid": null,
+        "method": "GFN2-xTB",
+        "ri_approximation": "none",
+        "scf_convergence": null,
+        "scf_max_iterations": 200,
+        "solvent": null,
+        "solvent_model": "none"
+      },
+      "reaction_progress": 1.0,
+      "retry_history": [
+        {
+          "attempt": 1,
+          "failure_class": null,
+          "opt_level": "normal",
+          "strategy": "initial"
+        }
+      ],
+      "scan_energy_hartree": -17.82288075506,
+      "scf_converged": true,
+      "single_point_energy_hartree": -234.455608928478,
+      "single_point_status": "completed",
+      "source_log": "scan.out",
+      "step_rmsd_A": 0.04844032235851249,
+      "target_coordinate": 3.5181,
+      "target_coordinates": {
+        "coordinate_1": 3.5181,
+        "coordinate_2": 3.4893
+      }
+    }
+  ],
+  "frames_count": 21,
+  "int_candidates": [],
+  "level_warnings": [],
+  "manifest_source": null,
+  "mode": "bond_length_scan",
+  "optimization_level": {
+    "aux_c_basis": null,
+    "aux_j_basis": null,
+    "basis": null,
+    "dispersion": null,
+    "grid": null,
+    "method": "GFN2-xTB",
+    "ri_approximation": "none",
+    "scf_convergence": null,
+    "scf_max_iterations": 200,
+    "solvent": null,
+    "solvent_model": "none"
+  },
+  "optimization_level_fingerprint": "706ed942afda0f0c",
+  "profile": {
+    "energy_source": "single_point",
+    "raw_hartree": [
+      -234.528442645893,
+      -234.523754174651,
+      -234.507275563738,
+      -234.484578863973,
+      -234.459451434423,
+      -234.451855894692,
+      -234.441375177557,
+      -234.435915802105,
+      -234.435132799905,
+      -234.437281140819,
+      -234.440700980832,
+      -234.444236043921,
+      -234.447416168303,
+      -234.450055907053,
+      -234.452078044724,
+      -234.453517221108,
+      -234.454493012783,
+      -234.455099711056,
+      -234.4554431595,
+      -234.455603187036,
+      -234.455608928478
+    ],
+    "reference_index": 0,
+    "relative_energies_kcal_mol": [
+      0.0,
+      2.942060123221748,
+      13.282544590527419,
+      27.524938723025915,
+      43.29263882451984,
+      48.05891196634484,
+      54.63566126352144,
+      58.061471082122466,
+      58.55281238083161,
+      57.20470810377633,
+      55.05872609585067,
+      52.84044051609012,
+      50.84488233768704,
+      49.18842126299822,
+      47.91951071659132,
+      47.01641390078551,
+      46.40409538001797,
+      46.023386465810674,
+      45.80786931334892,
+      45.70745051839942,
+      45.703847709143474
+    ],
+    "sp_incomplete": false,
+    "unit": "kcal/mol"
+  },
+  "protocol": {
+    "coordinate": {
+      "atoms": [
+        4,
+        5
+      ],
+      "end": 3.5181,
+      "kind": "distance",
+      "n_points": 21,
+      "start": 1.5181,
+      "unit": "angstrom"
+    },
+    "execution_mode": "pointwise",
+    "name": "orca_relaxed_scan_xtb_gfn2_sp_b973c_v1",
+    "scan_driver": {
+      "failure_policy": "retry_previous",
+      "full_scan": true,
+      "max_iterations": 250,
+      "mode": "relaxed_scan",
+      "retry_count": 2,
+      "reuse_previous_geometry": true,
+      "software": "orca",
+      "use_scants": false
+    },
+    "scan_optimizer": {
+      "aux_c_basis": null,
+      "aux_j_basis": null,
+      "basis": null,
+      "convergence": "normal",
+      "dispersion": null,
+      "grid": null,
+      "max_iterations": 250,
+      "method": "GFN2-xTB",
+      "retry_count": 2,
+      "retry_strategy": "previous_geometry",
+      "ri_approximation": "none",
+      "scf_convergence": null,
+      "scf_max_iterations": 200,
+      "solvent": null,
+      "solvent_model": "none"
+    },
+    "scan_type": "bond_length",
+    "single_point": {
+      "aux_c_basis": null,
+      "aux_j_basis": null,
+      "basis": null,
+      "charge": 0,
+      "dispersion": null,
+      "enabled": true,
+      "grid": null,
+      "method": "B97-3c",
+      "multiplicity": 1,
+      "resume": true,
+      "ri_approximation": "none",
+      "scf_convergence": "Tight",
+      "software": "orca",
+      "solvent": null,
+      "solvent_model": "none"
+    }
+  },
+  "quality": {
+    "constraint_tolerance": 0.01,
+    "constraints_satisfied": true,
+    "max_constraint_residual": 8.617508751029845e-07,
+    "needs_review": true,
+    "notes": [
+      "manual_only: save exact frames explicitly"
+    ],
+    "scan_complete": true,
+    "sp_incomplete": false,
+    "status": "ready_for_review"
+  },
+  "recommendations": {
+    "intermediates": [],
+    "ts": []
+  },
+  "recommendations_file": "pes_search/pes_recommendations.json",
+  "scan_dir": "WORK/07_PATH/pes_scan_001",
+  "schema_version": "pes_profile_v2",
+  "selection": {
+    "adjacency": [
+      [
+        0,
+        1
+      ],
+      [
+        4,
+        5
+      ]
+    ],
+    "atom_indices": [
+      4,
+      5,
+      1,
+      0
+    ],
+    "atoms": [
+      4,
+      5,
+      1,
+      0
+    ],
+    "bond_pairs": [
+      [
+        4,
+        5
+      ],
+      [
+        0,
+        1
+      ]
+    ],
+    "groups": [
+      [
+        4,
+        5
+      ],
+      [
+        0,
+        1
+      ]
+    ],
+    "kind": "double_bond_scan",
+    "mode": "functional",
+    "selected_bond": false
+  },
+  "selection_mode": "manual_only",
+  "status": "completed",
+  "ts_candidates": [],
+  "workflow": "PESsearch"
+}

@@ -31,7 +31,7 @@
   },
   "fencing_token": "73883c57202c0f8b1d3fad4a4c46fefb",
   "job_id": "20261024_015940_001_fix5-lsf-sp4",
-  "owner": "local:redacted-host:1945023:1",
+  "owner": "local:workstation:1945023:1",
   "plan_identity": "v2:9bc40cd8ffd921c7e9e966978f436614",
   "receipt_version": 1,
   "release_digest": "c5ccfcd11b9eca683c002149221085d1afe1cc6ba8cd75922d2cc92cec8635c1",

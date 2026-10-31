@@ -43,7 +43,7 @@ import time
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, replace
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, TypedDict, cast
 
@@ -88,6 +88,7 @@ from acp.scheduler.runner import JobRunner, _electronic_state_cli_flags, materia
 from acp.scheduler.stage_tasks import StageTask, StageTaskObserver
 from acp.storage.layout import TaskStorage
 from acp_services.runtime.attempt_freeze import ATTEMPT_LOCK_FILENAME
+from acp_services.runtime.deadline_wiring import admission_walltime_minutes
 from acp_services.runtime.execution_chain import (
     ATTEMPT_PROTOCOL_FILENAME,
     BINDING_FILENAME,
@@ -107,6 +108,7 @@ from acp_services.runtime.execution_chain import (
     with_attempt_choice,
     write_attempt_choice,
 )
+from acp_services.runtime.execution_limits import compute_attempt_clock
 from acp_services.runtime.helpers import utc_now_iso as _utc_now_iso
 from acp_services.runtime.worker import TASK_RESULT_RELATIVE_PATH
 
@@ -499,6 +501,15 @@ class RemoteJobRunner:
         """
         state = self._job_states.get(record.id)
         if state is None:
+            # Recovery, not a guess: the submission window persists
+            # ``remote_job_id``+``remote_dir`` BEFORE the in-memory poll state
+            # exists, so a poll landing in that window used to synthesise a
+            # terminal failure (exit 1) for a job LSF had just accepted — and
+            # the real LSF job then kept running unobserved.  With persisted
+            # submission metadata we reattach and keep polling.
+            if self.recover_job_state(record):
+                state = self._job_states.get(record.id)
+        if state is None:
             return RemotePollObservation(
                 terminal=True,
                 exit_code=record.exit_code if record.exit_code is not None else 1,
@@ -684,6 +695,20 @@ class RemoteJobRunner:
         if ok:
             state["cancel_sent"] = True
         return ok
+
+    def job_detail_text(self, job_id: str, record: JobRecord | None = None) -> str:
+        """Native ``bjobs -l`` detail of this attempt's LSF job (M4-03 evidence).
+
+        Recovers the poll state from the persisted record first, so the native
+        record is available after a Controller restart and from the deadline
+        sweep.  Returns ``""`` when the state cannot be resolved.
+        """
+        state = self._job_states.get(job_id)
+        if state is None and record is not None and self.recover_job_state(record):
+            state = self._job_states.get(job_id)
+        if state is None:
+            return ""
+        return self._monitor.job_detail_text(state["node"], state["lsf_job_id"])
 
     def _cleanup_job_state(self, job_id: str) -> None:
         self._job_states.pop(job_id, None)
@@ -974,6 +999,13 @@ class RemoteJobRunner:
         result["exit_code"] = exit_code
         cli_cmd = state["cli_cmd"]
         result["command_line"] = " ".join(cli_cmd)
+        # M4-03: a native LSF run-limit kill is a *termination receipt* for the
+        # approved wall bound.  Without this the platform recorded only the
+        # wrapper's `.exit_code`, so the ``-W`` limit had no platform-side
+        # evidence even though the cluster's own record shows RUNLIMIT.
+        receipt = self._native_termination_receipt(record, node, lsf_job_id, exit_code)
+        if receipt is not None:
+            result["execution_deadline"] = receipt
         record.result = result
         self._build_provenance(record, cli_cmd)
         self._fetch_worker_artifacts(record, event_log, node, remote_job_dir)
@@ -1779,6 +1811,11 @@ class RemoteJobRunner:
             script_release = (
                 code_release if code_release and code_release != _UNVERSIONED_RELEASE else None
             )
+            # The approval deadline reaches LSF through the durable admission
+            # projection (M4-03): ``-W`` is the server-verified wall bound, not a
+            # client request value and not the cluster default.  ``None`` keeps
+            # the cluster walltime byte-identically (an unbounded approval is
+            # never rendered as a limit).
             lsf_spec, cli_cmd = build_lsf_script_spec(
                 spec,
                 record.id,
@@ -1787,6 +1824,7 @@ class RemoteJobRunner:
                 queue=node.queue or self._config.queue,
                 walltime=self._config.walltime,
                 extra_flags=self._config.extra_flags,
+                walltime_minutes=admission_walltime_minutes((record.result or {}).get("admission")),
                 input_path=remote_input_name,
                 remote_dir_name=spec.task_dir_name() if spec.uses_v2_naming else None,
                 remote_job_dir=remote_job_dir,
@@ -3012,6 +3050,83 @@ class RemoteJobRunner:
     # ------------------------------------------------------------------ #
     # Provenance
     # ------------------------------------------------------------------ #
+
+    def _native_termination_receipt(
+        self,
+        record: JobRecord,
+        node: RemoteNode,
+        lsf_job_id: str,
+        exit_code: int,
+    ) -> dict[str, Any] | None:
+        """Receipt for a batch-system run-limit termination (M4-03).
+
+        ``bjobs -l`` is the cluster's own record: when it reports ``RUNLIMIT`` /
+        ``Exited with exit code 140`` the approved ``-W`` acted, whatever the
+        wrapper's ``.exit_code`` says.  Returns ``None`` for any other exit (a
+        normal failure is not a deadline).
+        """
+        from acp_services.runtime.deadline_enforcement import (
+            DECISION_TERMINATE_WALL,
+            DeadlineDecision,
+            admission_limits,
+            receipt_from_decision,
+        )
+
+        try:
+            detail = self._monitor.job_detail_text(node, lsf_job_id)
+        except Exception:
+            logger.debug("native termination probe failed for %s", record.id, exc_info=True)
+            return None
+        if "RUNLIMIT" not in detail and "Exited with exit code 140" not in detail:
+            return None
+        try:
+            wall_seconds = admission_limits(record.result).local_terminate_after_s
+        except Exception:
+            wall_seconds = None
+        started_at = None
+        result = record.result or {}
+        remote = result.get("remote") if isinstance(result, dict) else None
+        if isinstance(remote, dict) and remote.get("started_at"):
+            try:
+                started_at = datetime.fromisoformat(
+                    str(remote["started_at"]).replace("Z", "+00:00")
+                )
+            except ValueError:
+                started_at = None
+        deadline_at = (
+            started_at + timedelta(seconds=int(wall_seconds))
+            if started_at is not None and wall_seconds
+            else None
+        )
+        now = datetime.now().astimezone()
+        clock = compute_attempt_clock(
+            admitted_at=started_at or now,
+            started_at=started_at,
+            wall_seconds=wall_seconds,
+        )
+        decision = DeadlineDecision(
+            decision=DECISION_TERMINATE_WALL,
+            clock="wall",
+            deadline_at=deadline_at,
+            remaining_s=0,
+            surface="lsf",
+            rule="the approved -W was enforced by LSF (native RUNLIMIT)",
+        )
+        return receipt_from_decision(
+            job_id=record.id,
+            attempt=record.attempt,
+            decision=decision,
+            clock=clock,
+            observed_at=now,
+            surface="lsf",
+            native={
+                "source": "lsf-runlimit",
+                "lsf_job_id": str(lsf_job_id),
+                "wrapper_exit_code": int(exit_code),
+                "bjobs_l": detail[-4000:],
+            },
+            verified=True,
+        ).to_dict()
 
     def _build_provenance(self, record: JobRecord, cli_cmd: list[str]) -> None:
         """Build provenance from CLI metadata + LSF info (no artifact capture)."""

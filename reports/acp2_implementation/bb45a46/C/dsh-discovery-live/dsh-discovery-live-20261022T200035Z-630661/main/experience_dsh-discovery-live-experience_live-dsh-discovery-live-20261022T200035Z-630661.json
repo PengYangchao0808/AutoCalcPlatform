@@ -1,0 +1,67 @@
+{
+  "artifacts": [
+    {
+      "path": "dry-run.txt",
+      "sha256": "da4c365b1ccfa25bd88665f0ea87f24a63f2abb5690858fc53330a22c58345c7",
+      "size_bytes": 727
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "input validation only; no scenario execution",
+      "name": "dry_run",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "3dc1a8c22dbcb9f3495cea41941f7ee22dcb853a",
+    "harness_revision": "8d95dd8a5781c567930b73e22efa9129fa6dc3d415fbb7d467f9230713997a95",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "3dc1a8c22dbcb9f3495cea41941f7ee22dcb853a",
+  "command": [
+    "/ACPServer/acp2-development/venvs/c/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "dsh-discovery-live",
+    "--timeout",
+    "300",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/dsh-discovery-live/dsh-discovery-live-20261022T200035Z-630661/main",
+    "--dry-run"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/acp2-development/C",
+  "evidence_kind": "live",
+  "exit_code": 0,
+  "extensions": {
+    "experience.harness_contract_revision": "8d95dd8a5781c567930b73e22efa9129fa6dc3d415fbb7d467f9230713997a95",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+    "experience.mode": "live",
+    "experience.product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+    "experience.run_id": "dsh-discovery-live-20261022T200035Z-630661",
+    "experience.scenario_key": "dsh-discovery-live",
+    "experience.subcase": null,
+    "experience.test_revision": "3dc1a8c22dbcb9f3495cea41941f7ee22dcb853a"
+  },
+  "finished_at": "2026-10-22T20:00:35Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:live",
+  "reason": "dry_run",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "dsh-discovery-live-20261022T200035Z-630661",
+  "scenario": "experience:dsh-discovery-live",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T20:00:35Z",
+  "submission_id": null,
+  "usage": null
+}

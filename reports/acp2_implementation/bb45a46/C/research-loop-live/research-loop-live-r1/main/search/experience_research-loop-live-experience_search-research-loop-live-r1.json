@@ -1,0 +1,71 @@
+{
+  "artifacts": [
+    {
+      "path": "search-report.json",
+      "sha256": "ffd0853b3ae5c6a911b8014c0fc30ad2537d2069fae7e485ce0c7b390d5da6d8",
+      "size_bytes": 634
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "[{\"contains_not_verified_rule\": true, \"path\": \"docs/reference/next-change/acp2-contracts/experience/requests/A-req-04.md\", \"status\": \"open\"}, {\"contains_not_verified_rule\": false, \"path\": \"docs/reference/next-change/acp2-contracts/experience/requests/B-req-15.md\", \"status\": \"open\"}]",
+      "name": "research_loop.search_inputs_not_integration_ready",
+      "status": "FAIL"
+    },
+    {
+      "detail": "search_capability:A-req-04_and_B-req-15_not_integration_ready",
+      "name": "prerequisite:search_capability",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "ca850291febfcfb9d4c324a6398244be7a27bb5d",
+    "harness_revision": "e4baa0e7f9ae3576848c5d0d639865cc73aba3fcf4d9e7d8d4a63d1624e7bd9b",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "ca850291febfcfb9d4c324a6398244be7a27bb5d",
+  "command": [
+    "/ACPServer/acp2-development/venvs/integration/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "research-loop-live",
+    "--timeout",
+    "2400",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/research-loop-live/research-loop-live-r1/main/search"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/acp2-development/C",
+  "evidence_kind": "live",
+  "exit_code": 2,
+  "extensions": {
+    "experience.harness_contract_revision": "e4baa0e7f9ae3576848c5d0d639865cc73aba3fcf4d9e7d8d4a63d1624e7bd9b",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/integration/bin/python",
+    "experience.mode": "live",
+    "experience.product_import": "/ACPServer/acp2-development/integration/src/acp/__init__.py",
+    "experience.run_id": "research-loop-live-r1",
+    "experience.scenario_key": "research-loop-live",
+    "experience.subcase": "search",
+    "experience.test_revision": "ca850291febfcfb9d4c324a6398244be7a27bb5d"
+  },
+  "finished_at": "2026-10-22T23:12:33Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:search",
+  "reason": "search_capability:A-req-04_and_B-req-15_not_integration_ready",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "research-loop-live-r1",
+  "scenario": "experience:research-loop-live",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T23:12:33Z",
+  "submission_id": null,
+  "usage": null
+}

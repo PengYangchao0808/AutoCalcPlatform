@@ -1,0 +1,172 @@
+{
+  "actual_orca_resources": [
+    {
+      "inp": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_prep_butadiene/optimize.inp",
+      "maxcore": 2000,
+      "pal_nprocs": 16
+    }
+  ],
+  "adr_step_index": 1,
+  "adr_task_kind": "conformer_search",
+  "attempt": 1,
+  "bounded_alternative": "alt_endpoint_prep_single_conformation",
+  "complete": true,
+  "duration_seconds": 101.1,
+  "entry": "legacy_task_core",
+  "error": null,
+  "executed_task_kind": "optimize",
+  "level": {
+    "basis": "def2-mTZVPP",
+    "charge": 0,
+    "method": "r2SCAN-3c",
+    "multiplicity": 1
+  },
+  "native_files": [
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_prep_butadiene/optimize.out",
+      "path": "optimize.out",
+      "sha256": "25c06256e8fcb7e085f836032f22a5fd8eda8633a47580adaff6cd42246e5ba3",
+      "size_bytes": 648457
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_prep_butadiene/optimize.xyz",
+      "path": "optimize.xyz",
+      "sha256": "9628c8bcab48bd092d6544e10d23251accc9a8cd85e66639c05bee7bcc849700",
+      "size_bytes": 886
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_prep_butadiene/optimize_trj.xyz",
+      "path": "optimize_trj.xyz",
+      "sha256": "62a1981cbb5ac23e4a91dca86f2d15cdc8f2c71229fd25fbdd59d8ebd334c841",
+      "size_bytes": 13938
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_prep_butadiene/optimize.inp",
+      "path": "optimize.inp",
+      "sha256": "4556b1bae5c842e1c56fdd62db900a8460fd323fa7339c9190107daaada5fe68",
+      "size_bytes": 582
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_prep_butadiene/optimize.property.txt",
+      "path": "optimize.property.txt",
+      "sha256": "eaab77bcb03b76c2693f73c065b0bb047868a85a0e56b4d18f2a1f4f7e338528",
+      "size_bytes": 153512
+    }
+  ],
+  "products": [],
+  "receipt": null,
+  "release_digest": "813583bdcaae20ef900a99180f433b34a7dfa730fb47c1efea5c9435919a061b",
+  "release_id": "2d1ab37a0f988933",
+  "resources": {
+    "cores": 16,
+    "maxcore": 2000,
+    "mem": "32GB",
+    "nproc": 16
+  },
+  "schema": "acp2.m4-04.step.v1",
+  "status": "completed",
+  "step_id": "endpoint_prep_butadiene",
+  "task_ref": "20261028_940_endpoint_prep_butadiene",
+  "task_result": {
+    "artifacts": [
+      {
+        "checksum": "sha256:4556b1bae5c842e1c56fdd62db900a8460fd323fa7339c9190107daaada5fe68",
+        "path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_prep_butadiene/optimize.inp",
+        "source": "orca",
+        "type": "output"
+      },
+      {
+        "checksum": "sha256:25c06256e8fcb7e085f836032f22a5fd8eda8633a47580adaff6cd42246e5ba3",
+        "path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_prep_butadiene/optimize.out",
+        "source": "orca",
+        "type": "log"
+      }
+    ],
+    "complete": true,
+    "coordinates": [
+      [
+        -0.765904,
+        1.064198,
+        -0.0
+      ],
+      [
+        0.015207,
+        -0.021558,
+        0.0
+      ],
+      [
+        1.464793,
+        0.021558,
+        0.0
+      ],
+      [
+        2.245904,
+        -1.064198,
+        0.0
+      ],
+      [
+        -0.340332,
+        2.064827,
+        -0.0
+      ],
+      [
+        -1.847974,
+        0.986891,
+        0.0
+      ],
+      [
+        1.921134,
+        1.011943,
+        0.0
+      ],
+      [
+        -0.441134,
+        -1.011943,
+        0.0
+      ],
+      [
+        3.327974,
+        -0.986891,
+        -0.0
+      ],
+      [
+        1.820332,
+        -2.064827,
+        -0.0
+      ]
+    ],
+    "energy_hartree": -155.940064721338,
+    "errors": [],
+    "frequencies": [],
+    "metadata": {},
+    "payload": {
+      "optimization_status": "converged",
+      "trajectory_ref": {
+        "path": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/endpoint_prep_butadiene/optimization_trajectory.json",
+        "source": "optimization_trajectory",
+        "type": "trajectory"
+      }
+    },
+    "provenance": {
+      "backend": "orca",
+      "input_signature": "/ACPServer/acp2-runs/remediation/m4-04-route-a-16c/da/inputs/butadiene.xyz",
+      "method": "r2SCAN-3c",
+      "version": "unknown"
+    },
+    "schema_version": 1,
+    "status": "completed",
+    "symbols": [
+      "C",
+      "C",
+      "C",
+      "C",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H",
+      "H"
+    ],
+    "task": "optimize"
+  }
+}

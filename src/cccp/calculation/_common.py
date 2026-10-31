@@ -438,6 +438,8 @@ def call_capability(
     inputs: CalculationInputs,
     target_dir: Path | None,
     kwargs: Mapping[str, Any],
+    *,
+    context: Any = None,
 ) -> QCResult:
     """Call one capability and normalize its legacy or standard result.
 
@@ -445,12 +447,20 @@ def call_capability(
     ``frequency`` method) is rejected here with a structured
     ``UnsupportedCapabilityError`` before anything launches — an
     ``AttributeError`` must never escape (delta D4).
+
+    M2-04c: this is **the** backend-invocation seam, so the execution allowance
+    is drawn here — immediately before the operation runs, once per call.  A
+    task that would exceed the runtime's reserved worst case is refused before
+    the subprocess starts (``TaskQuotaExceededError``), never after it spent the
+    money.
     """
     operation = getattr(backend, capability, None)
     if not callable(operation):
         raise UnsupportedCapabilityError(
             f"backend {type(backend).__name__} does not implement capability {capability!r}"
         )
+    if context is not None and hasattr(context, "take_execution_quota"):
+        context.take_execution_quota(task_kind=capability, detail=capability)
     final_kwargs = dict(kwargs)
     if inputs.scf_options:
         options = dict(inputs.scf_options)

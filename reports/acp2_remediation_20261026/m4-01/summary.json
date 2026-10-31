@@ -1,0 +1,742 @@
+{
+  "chain": {
+    "project_id": "934f5edb-53e8-4d1b-8717-41b089e5198e",
+    "round0": {
+      "approval_binding_status": "full",
+      "approval_ref": "ap_007322bf7d63477eb57342de4b177c6b",
+      "evidence": {
+        "evidence_status": "complete",
+        "overall_claim_status": "supported",
+        "projection_digest": "sha256:dc74633580369268047b62d90400dcec3e796c771a8d3e29e6a58a80aacbe532"
+      },
+      "proposal_revision": 1,
+      "record": {
+        "decision": "revise",
+        "revision": 1
+      },
+      "task_ref": {
+        "attempt": 1,
+        "job_id": "20261027_183103_001_fake",
+        "project_id": "934f5edb-53e8-4d1b-8717-41b089e5198e",
+        "release": {
+          "release_digest": "sha256:d27a05b75c6b9181860e1f12311e8e1c8430de0775778c92b15c737468b51d04",
+          "release_id": "cfea0aae4416275e"
+        },
+        "task_id": "20261027_183103_001_fake"
+      }
+    },
+    "round1": {
+      "approval_binding_status": "full",
+      "approval_ref": "ap_7e076f8da7d5466f927f1fb184ac2a01",
+      "evidence": {
+        "evidence_status": "complete",
+        "overall_claim_status": "supported",
+        "projection_digest": "sha256:867eea2a16fa7f938115b7b8f68920cffdccb5b5bc7fbdead4840bdd09df00e8"
+      },
+      "proposal_revision": 2,
+      "record": {
+        "decision": "accept",
+        "revision": 2
+      },
+      "round": 1,
+      "superseded_approval": "ap_007322bf7d63477eb57342de4b177c6b",
+      "task_ref": {
+        "attempt": 1,
+        "job_id": "20261027_183107_002_fake",
+        "project_id": "934f5edb-53e8-4d1b-8717-41b089e5198e",
+        "release": {
+          "release_digest": "sha256:d27a05b75c6b9181860e1f12311e8e1c8430de0775778c92b15c737468b51d04",
+          "release_id": "cfea0aae4416275e"
+        },
+        "task_id": "20261027_183107_002_fake"
+      }
+    }
+  },
+  "contract_digests": {
+    "docs/reference/next-change/acp2-contracts/experience/proposal.schema.json": "sha256:4f4363ee791f32ce31358fd791ad26f89f0364df1b1dad0a3dcbb0a7ea50fbcd",
+    "docs/reference/next-change/acp2-contracts/experience/research-record.schema.json": "sha256:75f8ef207feced0bb39f37fafdcf8963ba3747cbb8c2c019550eed5f56100752",
+    "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json": "sha256:32525b7bd1866ad0d3f2c73162733dd4e44f49d1eec26dbeba14b4ca55696227",
+    "docs/reference/next-change/acp2-contracts/runtime/research-session.v1.md": "sha256:80b23340bd92c41dd0c918de274b93473ead20fcce149354a433000a40fc5c21",
+    "docs/reference/next-change/acp2-contracts/science/evidence.schema.json": "sha256:74b1aa4d638f5ee0027be06817c2c00bf6d79cdb14a96514ff097783b911cc10"
+  },
+  "data_idempotency": {
+    "after": {
+      "jobs": 2,
+      "operation_rows": 1,
+      "tree": {
+        "bytes": 10599,
+        "files": 15
+      }
+    },
+    "before": {
+      "jobs": 2,
+      "operation_rows": 1,
+      "tree": {
+        "bytes": 10599,
+        "files": 15
+      }
+    },
+    "client_cache": "a fresh ControllerClient per pass (no client memo)",
+    "controller_calls": 6,
+    "controller_calls_note": "one prepare + one read per pass cross the Controller for real (fresh ControllerClient each pass, no client memo), so the platform is the dedup authority and the call count cannot be hidden by caching",
+    "controller_calls_source": "the Controller uvicorn access log of this step",
+    "controller_prepare_calls": 3,
+    "controller_read_calls": 3,
+    "latency_ms": {
+      "max": 13.21,
+      "p50": 11.89,
+      "p95": 13.21,
+      "samples": 6
+    },
+    "no_extra_job": true,
+    "no_extra_operation_row": true,
+    "no_write_amplification": true,
+    "operation_ref": "op_d344dc4d7709421196d8f81f3f7cdf61",
+    "passes": 3,
+    "prepare": [
+      {
+        "availability": "ready",
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+        "idempotent_replay": false,
+        "operation_ref": "op_d344dc4d7709421196d8f81f3f7cdf61"
+      },
+      {
+        "availability": "ready",
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+        "idempotent_replay": false,
+        "operation_ref": "op_d344dc4d7709421196d8f81f3f7cdf61"
+      },
+      {
+        "availability": "ready",
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+        "idempotent_replay": false,
+        "operation_ref": "op_d344dc4d7709421196d8f81f3f7cdf61"
+      }
+    ],
+    "read": [
+      {
+        "bytes": 400,
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c"
+      },
+      {
+        "bytes": 400,
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c"
+      },
+      {
+        "bytes": 400,
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c"
+      }
+    ],
+    "same_body_bytes": true,
+    "same_digest": true,
+    "same_operation_ref": true
+  },
+  "duration_seconds": 16.6,
+  "evidence_kind": "fixture",
+  "exit_code": 0,
+  "failed_steps": [],
+  "fault_matrix": {
+    "cases": [
+      {
+        "detail": {
+          "conflict_rule": "idempotency_conflict",
+          "conflict_status": 409,
+          "jobs_after": 3,
+          "jobs_before": 2,
+          "preflight_status": null,
+          "replay_same_task": true,
+          "side_effect": "one accepted submit (declared); the task is cancelled",
+          "task_id": "20261027_183111_003_fake"
+        },
+        "expected": "cross_tool_key_isolation",
+        "name": "fault.cross_tool_same_key",
+        "observed": "cross_tool_key_isolation",
+        "ok": true,
+        "status": 409
+      },
+      {
+        "detail": {
+          "alice": "created",
+          "alice_replay": "in_progress",
+          "bob": "conflict",
+          "bob_row": false,
+          "cross_project_status": 403,
+          "jobs_after": 3,
+          "jobs_before": 3
+        },
+        "expected": "cross_user_isolation",
+        "name": "fault.cross_user",
+        "observed": "cross_user_isolation",
+        "ok": true,
+        "status": 0
+      },
+      {
+        "detail": {
+          "conflict_rule": "execution_mode_conflict",
+          "conflict_status": 422,
+          "jobs_after": 3,
+          "jobs_before": 3,
+          "unknown_rule": "unknown_target_node",
+          "unknown_status": 422
+        },
+        "expected": "illegal_remote_target_refused",
+        "name": "fault.illegal_remote_target",
+        "observed": "illegal_remote_target_refused",
+        "ok": true,
+        "status": 422
+      },
+      {
+        "detail": {
+          "accepted": false,
+          "code": "wrong_owner",
+          "jobs_after": 3,
+          "jobs_before": 3
+        },
+        "expected": "wrong_owner",
+        "name": "fault.forged_receipt",
+        "observed": "wrong_owner",
+        "ok": true,
+        "status": 0
+      },
+      {
+        "detail": {
+          "jobs_after": 3,
+          "jobs_before": 3,
+          "no_binding_rule": "approval_required",
+          "no_binding_status": 403,
+          "wrong_digest_rule": "plan_digest_mismatch",
+          "wrong_digest_status": 400
+        },
+        "expected": "approval_bypass_refused",
+        "name": "fault.approval_bypass",
+        "observed": "approval_bypass_refused",
+        "ok": true,
+        "status": 403
+      },
+      {
+        "detail": {
+          "allowed": 1,
+          "denied": 1,
+          "denied_reasons": [
+            "capacity_concurrency"
+          ],
+          "jobs_after": 3,
+          "jobs_before": 3,
+          "requests": 2
+        },
+        "expected": "budget_concurrency_one_admission",
+        "name": "fault.budget_concurrency",
+        "observed": "budget_concurrency_one_admission",
+        "ok": true,
+        "status": 0
+      },
+      {
+        "detail": {
+          "detail": {
+            "detail": {
+              "code": "access_denied",
+              "message": "foreign_research: view research 'res-foreign0000000000000' != session research 'res-2e3811a850b801a3369be874'",
+              "params": {
+                "rule": "foreign_research"
+              },
+              "retryable": false
+            }
+          },
+          "foreign_projection_digest": "sha256:92feb7e339e588c1635f0906579477b96b42843249299118e1d475b059eb5c9b",
+          "jobs_after": 3,
+          "jobs_before": 3
+        },
+        "expected": "foreign_research",
+        "name": "fault.wrong_evidence_identity",
+        "observed": "foreign_research",
+        "ok": true,
+        "status": 403
+      },
+      {
+        "detail": {
+          "detail": {
+            "detail": {
+              "code": "resource_not_ready",
+              "message": "the wait cursor expired; re-read the snapshot instead of replaying it",
+              "params": {
+                "max_age_s": 900,
+                "rule": "cursor_expired"
+              },
+              "retryable": true
+            }
+          },
+          "jobs_after": 3,
+          "jobs_before": 3
+        },
+        "expected": "cursor_expired",
+        "name": "fault.cursor_expiry",
+        "observed": "cursor_expired",
+        "ok": true,
+        "status": 409
+      },
+      {
+        "detail": {
+          "first_attempt_error": true,
+          "jobs_after": 3,
+          "jobs_before": 3,
+          "path": "publication-retry/result_manifest.json",
+          "products": 1,
+          "publication_state": true,
+          "retry_same_bytes": true,
+          "state_complete": true
+        },
+        "expected": "publication_retry_once",
+        "name": "fault.publication_retry",
+        "observed": "publication_retry_once",
+        "ok": true,
+        "status": 0
+      },
+      {
+        "detail": {
+          "jobs_after": 3,
+          "jobs_before": 3,
+          "old_pid": 2310307,
+          "record_after_ok": true,
+          "record_before_ok": true,
+          "resume_rule": "saga_not_found",
+          "resume_status": 409,
+          "same_job_ids": true
+        },
+        "expected": "crash_recovery_same_chain",
+        "name": "fault.crash_recovery",
+        "observed": "crash_recovery_same_chain",
+        "ok": true,
+        "status": 409
+      },
+      {
+        "detail": {
+          "job_status": "failed",
+          "jobs_after": 3,
+          "jobs_before": 3,
+          "missing_facts": [
+            "frequency_payload"
+          ],
+          "publish": false,
+          "qualification": "incomplete_result",
+          "row": "d"
+        },
+        "expected": "incomplete_result_not_published",
+        "name": "fault.r01_incomplete_task_result",
+        "observed": "incomplete_result_not_published",
+        "ok": true,
+        "status": 0
+      },
+      {
+        "detail": {
+          "blocked": [
+            [
+              "freq",
+              "budget_exceeded"
+            ]
+          ],
+          "dispatched": [
+            "relax"
+          ],
+          "jobs_after": 3,
+          "jobs_before": 3,
+          "worst_case_qc": 2
+        },
+        "expected": "qc_rescue_over_limit_blocked",
+        "name": "fault.r02_qc_rescue_over_limit",
+        "observed": "qc_rescue_over_limit_blocked",
+        "ok": true,
+        "status": 0
+      },
+      {
+        "detail": {
+          "error": "envelope step_identities != frozen plan step identities",
+          "jobs_after": 3,
+          "jobs_before": 3
+        },
+        "expected": "attempt_identity_mismatch",
+        "name": "fault.r03_runtime_identity_mismatch",
+        "observed": "attempt_identity_mismatch",
+        "ok": true,
+        "status": 0
+      },
+      {
+        "detail": {
+          "authoritative_written": false,
+          "jobs_after": 3,
+          "jobs_before": 3,
+          "refused": "fenced commit refused: execution right lost: owner moved on",
+          "staged_present": true
+        },
+        "expected": "lost_right_write_refused",
+        "name": "fault.r04_lost_right_intermediate_write",
+        "observed": "lost_right_write_refused",
+        "ok": true,
+        "status": 0
+      },
+      {
+        "detail": {
+          "current_attempt_binding": 2,
+          "first_applied": true,
+          "jobs_after": 3,
+          "jobs_before": 3,
+          "replay_duplicate": true,
+          "usage_attempts": [
+            1
+          ]
+        },
+        "expected": "historical_attempt_usage_settled_once",
+        "name": "fault.r05_historical_attempt_usage",
+        "observed": "historical_attempt_usage_settled_once",
+        "ok": true,
+        "status": 0
+      },
+      {
+        "detail": {
+          "admitted": true,
+          "claim_id": "plan|934f5edb-53e8-4d1b-8717-41b089e5198e|res-2e3811a850b801a3369be874|ses-f5b45d8cdcd6121b1ece8fa2|2|1",
+          "jobs_after": 3,
+          "jobs_before": 3,
+          "model_receipt_id": "modelrcpt|934f5edb-53e8-4d1b-8717-41b089e5198e|res-2e3811a850b801a3369be874|ses-f5b45d8cdcd6121b1ece8fa2|2|1|sha256:9cc840f79bd3420bcd8928df34afa96c373586ace52d23f670f756cf63f636e5",
+          "model_request_capability": "recorded-only",
+          "projection_consumed": {
+            "attempt": 0,
+            "bsub": 0,
+            "model_request": 1,
+            "qc_invocation": 0,
+            "recipe_step": 0,
+            "task_ref": 0
+          },
+          "replay_detail": "",
+          "replay_same_reservation": true,
+          "reservation_names_a_job": false
+        },
+        "expected": "planning_claim_without_taskref_is_durable",
+        "name": "fault.r06_planning_quota_without_taskref",
+        "observed": "planning_claim_without_taskref_is_durable",
+        "ok": true,
+        "status": 0
+      },
+      {
+        "detail": {
+          "current_key_prefix": "prep_",
+          "jobs_after": 3,
+          "jobs_before": 3,
+          "keys_differ": true,
+          "legacy_key_prefix": "op_",
+          "legacy_replay": "created",
+          "legacy_replay_detail": "takeover",
+          "legacy_v1_key_differs": true,
+          "live_row_key": "prep_d9d19cc6d428b9a15299ddb251b447be",
+          "live_row_key_is_v2": true,
+          "live_row_reproduces_v2": true,
+          "unverifiable": "conflict",
+          "unverifiable_task": null
+        },
+        "expected": "legacy_key_and_row_reconciled",
+        "name": "fault.r07_legacy_key_and_data_row",
+        "observed": "legacy_key_and_row_reconciled",
+        "ok": true,
+        "status": 0
+      },
+      {
+        "detail": {
+          "approval_state": "approved",
+          "artifact_digest": "sha256:227df18302bb1a4b1e4d44f5873b0946c0c275830f69d1da1ae35cd20f31fbf7",
+          "injection_in_record": false,
+          "jobs_after": 3,
+          "jobs_before": 3
+        },
+        "expected": "malicious_artifact_cannot_authorize",
+        "name": "fault.r08_malicious_artifact_and_receipt",
+        "observed": "malicious_artifact_cannot_authorize",
+        "ok": true,
+        "status": 0
+      },
+      {
+        "detail": {
+          "detail": {
+            "detail": {
+              "code": "access_denied",
+              "message": "the approval was revoked",
+              "params": {
+                "rule": "approval_revoked"
+              },
+              "retryable": false
+            }
+          },
+          "jobs_after": 3,
+          "jobs_before": 3
+        },
+        "expected": "approval_revoked",
+        "name": "fault.revoked_approval",
+        "observed": "approval_revoked",
+        "ok": true,
+        "status": 403
+      }
+    ],
+    "passed": 19,
+    "total": 19
+  },
+  "files": [
+    "README.md",
+    "controller.log",
+    "controller.restart.log",
+    "fault-matrix.json",
+    "performance.json",
+    "stub-boundaries.json",
+    "trace.jsonl"
+  ],
+  "findings": [
+    {
+      "detail": "openMcpSession(mode=product) lists tools before the application handshake, while the server hides the ten P2 tools until negotiation; product mode can therefore never observe the negotiated surface on this server",
+      "id": "F7-session-tools-list-order"
+    },
+    {
+      "detail": "the P2 `research.wait` cursor is redacted by the machine envelope, so a bounded wait cannot be resumed over MCP: {\"code\":\"backend_failure\",\"category\":\"failed\",\"message\":\"cursor is not decodable: 'utf-8' codec can't decode byte 0xad in position 0: invalid start byte\",\"retryable\":false,\"params\":{\"operation\":\"wait\",\"rule\":\"input_invalid\"},\"diagnostic_ref\":null}",
+      "id": "F8-wait-cursor-redacted"
+    }
+  ],
+  "generated_at": "2026-10-27T10:31:16Z",
+  "git_head": "1a473b44b64ad1a1328726442e6718e998c53579",
+  "limitations": [
+    "real science / QC / LSF: NOT_VERIFIED (controlled CCCP-dispatch stub)",
+    "real model / DSH provider: NOT_VERIFIED (explicit test adapter; evidence_kind=fixture)",
+    "real browser / Chromium: NOT_VERIFIED (Workbench modules run in Node over real HTTP; the Chromium row belongs to M4-02)",
+    "remote/LSF read and publication retry against a real cluster: NOT_VERIFIED (M4-03)"
+  ],
+  "mcp": {
+    "round0": {
+      "evidence_kind": "fixture",
+      "model_adapter": "test-fixture",
+      "prepare": {
+        "passes": [
+          {
+            "availability": "readable",
+            "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+            "operation_reference": "op_0a22b49473a043c58e07713141ff5796",
+            "pass": 0,
+            "read": {
+              "body_bytes": 400,
+              "body_sha256": "e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+              "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+              "error": null,
+              "is_error": false
+            }
+          },
+          {
+            "availability": "readable",
+            "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+            "operation_reference": "op_0a22b49473a043c58e07713141ff5796",
+            "pass": 1,
+            "read": {
+              "body_bytes": 400,
+              "body_sha256": "e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+              "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+              "error": null,
+              "is_error": false
+            }
+          }
+        ],
+        "same_body": true,
+        "same_digest": true,
+        "same_operation": true
+      },
+      "protocol_version": "2025-06-18",
+      "supervisor": {
+        "decision": null,
+        "model_invocations": 4,
+        "phases": [
+          "understand@0",
+          "hypothesize@0",
+          "critique@0",
+          "plan@0",
+          "approve@0",
+          "wait@0",
+          "stop@0"
+        ],
+        "reports": 0,
+        "rounds_completed": 0,
+        "status": "stopped",
+        "stop_reason": "no_evidence",
+        "submit_port_calls": 1,
+        "submits": 1,
+        "task_refs": [
+          {
+            "attempt": 1,
+            "job_id": "20261027_183103_001_fake",
+            "project_id": "934f5edb-53e8-4d1b-8717-41b089e5198e",
+            "release_digest": "sha256:d27a05b75c6b9181860e1f12311e8e1c8430de0775778c92b15c737468b51d04",
+            "release_id": "cfea0aae4416275e"
+          }
+        ],
+        "wait_invocations": 1
+      },
+      "task_ref_source": "status+declared_release"
+    },
+    "round1": {
+      "evidence_kind": "fixture",
+      "model_adapter": "test-fixture",
+      "prepare": {
+        "passes": [
+          {
+            "availability": "readable",
+            "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+            "operation_reference": "op_d344dc4d7709421196d8f81f3f7cdf61",
+            "pass": 0,
+            "read": {
+              "body_bytes": 400,
+              "body_sha256": "e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+              "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+              "error": null,
+              "is_error": false
+            }
+          },
+          {
+            "availability": "readable",
+            "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+            "operation_reference": "op_d344dc4d7709421196d8f81f3f7cdf61",
+            "pass": 1,
+            "read": {
+              "body_bytes": 400,
+              "body_sha256": "e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+              "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+              "error": null,
+              "is_error": false
+            }
+          }
+        ],
+        "same_body": true,
+        "same_digest": true,
+        "same_operation": true
+      },
+      "protocol_version": "2025-06-18",
+      "supervisor": {
+        "decision": null,
+        "model_invocations": 4,
+        "phases": [
+          "understand@0",
+          "hypothesize@0",
+          "critique@0",
+          "plan@0",
+          "approve@0",
+          "wait@0",
+          "stop@0"
+        ],
+        "reports": 0,
+        "rounds_completed": 0,
+        "status": "stopped",
+        "stop_reason": "no_evidence",
+        "submit_port_calls": 1,
+        "submits": 1,
+        "task_refs": [
+          {
+            "attempt": 1,
+            "job_id": "20261027_183107_002_fake",
+            "project_id": "934f5edb-53e8-4d1b-8717-41b089e5198e",
+            "release_digest": "sha256:d27a05b75c6b9181860e1f12311e8e1c8430de0775778c92b15c737468b51d04",
+            "release_id": "cfea0aae4416275e"
+          }
+        ],
+        "wait_invocations": 1
+      },
+      "task_ref_source": "status+declared_release"
+    }
+  },
+  "model_adapter": "test-fixture",
+  "product_fixes": [
+    {
+      "after": "the superseding approval carries the same science_digest and signed science projection as the create path (research_session.supersede_approval_for_plan_change + ResearchWriter._supersede_plan_change)",
+      "before": "supersede_approval_for_plan_change requested the new approval without science_digest/science_projection, so a revised round was downgraded to an execution-only approval and the Workbench card reported approval_science_unbound",
+      "found_by": "the round-1 proposal CAS of this chain",
+      "id": "F9-supersede-approval-science-binding",
+      "tested_by": [
+        "tests/test_acp2_full_chain_matrix.py (round 1 binding_status=full)",
+        "tests/test_acp2_research_saga.py",
+        "tests/test_acp2_m203_approval_policy.py",
+        "tests/test_acp2_runtime_approvals.py",
+        "tests/test_acp2_research_session_contract.py",
+        "tests/test_acp2_submit_policy.py"
+      ]
+    }
+  ],
+  "reasons": [],
+  "run_root": "/tmp/opencode/acp2-m4-01-_khzo445/runs",
+  "schema": "acp2.m4-01.full-chain.v1",
+  "status": "PASS",
+  "steps": [
+    {
+      "duration_ms": 27,
+      "name": "preflight",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 2679,
+      "name": "controller.start",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 97,
+      "name": "db.migrations",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 10,
+      "name": "project.create",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 4054,
+      "name": "round0.chain",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 27,
+      "name": "round0.readback",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 4028,
+      "name": "round1.chain",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 4,
+      "name": "record.history",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 236,
+      "name": "workbench.adapter",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 115,
+      "name": "data.idempotency",
+      "status": "PASS"
+    }
+  ],
+  "task": "M4-01 no-QC full product chain and fault matrix (G20)",
+  "workbench": {
+    "approval_validity": {
+      "binding_status": "full",
+      "revision": 2,
+      "status": "approved",
+      "validity": "ok"
+    },
+    "evidence_summary": {
+      "display": "supported",
+      "evidence_status": "complete",
+      "execution_terminal_state": "completed",
+      "overall_claim_status": "supported",
+      "projection_digest": "sha256:867eea2a16fa7f938115b7b8f68920cffdccb5b5bc7fbdead4840bdd09df00e8",
+      "round": 1
+    },
+    "foreign_refusal": {
+      "code": null,
+      "message": "HTTP 403",
+      "ok": false,
+      "status": 403
+    },
+    "ok": true
+  }
+}

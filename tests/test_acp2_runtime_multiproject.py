@@ -47,7 +47,7 @@ from acp_services.workspace.keys import ApiKeyManager
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "scripts" / "acceptance" / "acp2_runtime.py"
-A_CROSS_DOMAIN = Path("<acp2-dev>/A/tests/fixtures/acp2/science/cross_domain")
+A_CROSS_DOMAIN = Path("/ACPServer/acp2-development/A/tests/fixtures/acp2/science/cross_domain")
 TENANT = "acp-b23-test"
 ALPHA = "project_alpha"
 BETA = "project_beta"

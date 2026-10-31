@@ -228,7 +228,16 @@ def test_replay_does_not_double_reserve_or_charge(
         while time.monotonic() < deadline:
             record = manager.store.get(job_id)
             if record is not None and record.status.is_terminal:
-                break
+                # Accounting is deliberately decoupled from the terminal
+                # transition (B10-4: settlement never blocks science), so the
+                # reservation release and the usage receipt may commit a beat
+                # after COMPLETED is observable. Wait for the books to settle
+                # instead of racing them.
+                if (
+                    client.app.state.admission.ledger.count(active_only=True) == 0
+                    and client.app.state.admission.controller.usage_totals()["receipts"] == 1
+                ):
+                    break
             time.sleep(0.05)
         assert record is not None and record.status == JobStatus.COMPLETED
         assert client.app.state.admission.ledger.count() == 1
@@ -474,6 +483,8 @@ def _mcp_backends() -> mcp.McpBackends:
 
 
 def _mcp_submit(server: mcp.McpServer, cores: int) -> dict[str, Any]:
+    # M1-01b: acp_submit requires a client idempotency key (typed refusal
+    # otherwise); the key is opaque to the admission path under test.
     return server.handle(
         {
             "jsonrpc": "2.0",
@@ -485,6 +496,7 @@ def _mcp_submit(server: mcp.McpServer, cores: int) -> dict[str, Any]:
                     "workflow": "singlepoint",
                     "input": {"source": "C"},
                     "resources": {"cores": cores},
+                    "idempotency_key": "admission-probe:budget-hint-1",
                 },
             },
         }

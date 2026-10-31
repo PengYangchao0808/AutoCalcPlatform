@@ -1,5 +1,5 @@
-argv: /home/<user>/molclus_1.14_Linux/isostat --version
-cwd: <repo>
+argv: /home/xieningke/molclus_1.14_Linux/isostat --version
+cwd: /ACPServer/AutoCalcPlatform
  Isostat: A statistical analysis tool for a batch of isomers (64 bit)
  Released as a component of Molclus, last update of isostat: 2022-May-28
  Developed by Tian Lu, contact: sobereva@sina.com

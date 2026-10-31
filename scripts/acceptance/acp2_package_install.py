@@ -41,7 +41,7 @@ from typing import Any
 
 try:
     import tomllib
-except ModuleNotFoundError:  # Python 3.10
+except ModuleNotFoundError:  # Python 3.10 (CI matrix)
     import tomli as tomllib
 
 EXIT_PASS = 0
@@ -53,6 +53,8 @@ TOOL_NAMES = (
     "acp_analyze",
     "acp_cancel",
     "acp_capabilities",
+        "acp_get_guidance",
+        "acp_list_jobs",
     "acp_preflight",
     "acp_prepare_artifact",
     "acp_read_artifact",
@@ -67,19 +69,19 @@ ROLE_WHEELS = {
 DEFAULT_A_C_EVIDENCE = (
     {
         "id": "A-27b",
-        "path": "<server-root>/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z",
+        "path": "/ACPServer/acp2-evidence/a-science-20261022/A/A-27/a27b-20261023T042054Z",
     },
     {
         "id": "A-28",
-        "path": "<server-root>/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z",
+        "path": "/ACPServer/acp2-evidence/a-science-20261022/A/A-28/20261023T044051Z",
     },
     {
         "id": "C33",
-        "path": "<acp2-dev>/evidence/C/clean-install-live",
+        "path": "/ACPServer/acp2-development/evidence/C/clean-install-live",
     },
     {
         "id": "C34",
-        "path": "<acp2-dev>/evidence/C/operator-runbook-live",
+        "path": "/ACPServer/acp2-development/evidence/C/operator-runbook-live",
     },
 )
 DEFAULT_STATIC_MANIFEST = (
@@ -328,7 +330,7 @@ print(json.dumps({
     "file_count": len(identity.files),
     "prefixes": sorted({key.split("/", 1)[0] for key in identity.files}),
     "keys_are_absolute": any(key.startswith("/") for key in identity.files),
-    "contains_repo_path": any("<server-root>/" in key for key in identity.files),
+    "contains_repo_path": any("/ACPServer/" in key for key in identity.files),
 }))
 """
     identity_run = _run(

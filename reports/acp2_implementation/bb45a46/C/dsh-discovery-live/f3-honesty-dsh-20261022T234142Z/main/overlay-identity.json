@@ -1,0 +1,69 @@
+{
+  "b05_path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B05/mcp-launch.json",
+  "b05_sha256": "ca807cc4b8014af265fac64c9b84ca3c4050df9bfbab3b5dc408ce068b548046",
+  "profiles": {
+    "headless": {
+      "actual": {
+        "args": [
+          "-m",
+          "acp",
+          "mcp",
+          "serve",
+          "--transport",
+          "stdio",
+          "--controller",
+          "http://127.0.0.1:18765",
+          "--log-level",
+          "INFO"
+        ],
+        "command": "/ACPServer/acp2-development/venvs/b/bin/python",
+        "cwd": "/ACPServer/AutoCalcPlatform/src",
+        "env": {
+          "ACP2_MCP_LOG_LEVEL": "INFO",
+          "ACP2_TOOLS": "/ACPServer/acp2-development/venvs",
+          "ACP_CONFIG": "/ACPServer/acp2-development/data/b/controller-config/cccp.yaml",
+          "ACP_CONTROLLER_URL": "http://127.0.0.1:18765",
+          "ACP_RUN_ROOT": "/ACPServer/acp2-development/data/b/run-root",
+          "PATH": "/ACPServer/acp2-development/venvs/b/bin:/usr/sbin:/usr/local/bin:/usr/bin:/bin"
+        }
+      },
+      "insert_id": "acp-mcp-acceptance",
+      "launch_matches_b05": true,
+      "path": "/ACPServer/acp2-development/C/rph/packages/dsh-bundle/profiles/headless.cordis.yml",
+      "plugin": "@deepseek-ai/dsh-mcp-client",
+      "sha256": "2d8141461bcec91d772f9d3a8daae5c59c17948e9ec0e667877659007ecc4513"
+    },
+    "web": {
+      "actual": {
+        "args": [
+          "-m",
+          "acp",
+          "mcp",
+          "serve",
+          "--transport",
+          "stdio",
+          "--controller",
+          "http://127.0.0.1:18765",
+          "--log-level",
+          "INFO"
+        ],
+        "command": "/ACPServer/acp2-development/venvs/b/bin/python",
+        "cwd": "/ACPServer/AutoCalcPlatform/src",
+        "env": {
+          "ACP2_MCP_LOG_LEVEL": "INFO",
+          "ACP2_TOOLS": "/ACPServer/acp2-development/venvs",
+          "ACP_CONFIG": "/ACPServer/acp2-development/data/b/controller-config/cccp.yaml",
+          "ACP_CONTROLLER_URL": "http://127.0.0.1:18765",
+          "ACP_RUN_ROOT": "/ACPServer/acp2-development/data/b/run-root",
+          "PATH": "/ACPServer/acp2-development/venvs/b/bin:/usr/sbin:/usr/local/bin:/usr/bin:/bin"
+        }
+      },
+      "insert_id": "acp-mcp-acceptance",
+      "launch_matches_b05": true,
+      "path": "/ACPServer/acp2-development/C/rph/packages/dsh-bundle/profiles/web.cordis.yml",
+      "plugin": "@deepseek-ai/dsh-mcp-client",
+      "sha256": "ca9294b0c50b60425306375b1f69376aec756fd42de52295ed5b5b2b5f7449a4"
+    }
+  },
+  "schema": "acp2.c.dsh-discovery.overlay-identity.v1"
+}

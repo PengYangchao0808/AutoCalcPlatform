@@ -1,13 +1,13 @@
 # B02 acp init (non-interactive answers) — 2026-10-22T19:37:01+08:00
-INFO:acp_services.contracts.config_plan:已写入配置 <acp2-dev>/data/b/controller-config/cccp.yaml（mode=0644）
-ACP 初始化（非交互回答文件：<acp2-dev>/data/b/controller-config/answers.json）
+INFO:acp_services.contracts.config_plan:已写入配置 /ACPServer/acp2-development/data/b/controller-config/cccp.yaml（mode=0644）
+ACP 初始化（非交互回答文件：/ACPServer/acp2-development/data/b/controller-config/answers.json）
 ACP 初始化计划 v1
-目标配置：<acp2-dev>/data/b/controller-config/cccp.yaml（来源：<acp2-dev>/data/b/controller-config/cccp.yaml）
+目标配置：/ACPServer/acp2-development/data/b/controller-config/cccp.yaml（来源：/ACPServer/acp2-development/data/b/controller-config/cccp.yaml）
 使用方式：本机部署
 部署档位：Standalone（单机） (local-single)
 组件组合：local-identity, local-storage, science-core
 参数：
-  run_root: <acp2-dev>/data/b/run-root
+  run_root: /ACPServer/acp2-development/data/b/run-root
 秘密引用：无
 回退：
   - 恢复目标文件的上一次 .bak-<时间戳> 备份
@@ -16,17 +16,17 @@ ACP 初始化计划 v1
 配置差异：
   cluster.type: {} → local
   deployment.components: {} → ["local-identity", "local-storage", "science-core"]
-  deployment.params.run_root: {} → <acp2-dev>/data/b/run-root
+  deployment.params.run_root: {} → /ACPServer/acp2-development/data/b/run-root
   deployment.tier: {} → local-single
   deployment.usage: {} → local
   executables.orca.path: {} → /usr/bin/orca
-已应用计划并写入 <acp2-dev>/data/b/controller-config/cccp.yaml
+已应用计划并写入 /ACPServer/acp2-development/data/b/controller-config/cccp.yaml
 
 == 验证（doctor） ==
 doctor 能力报告（PASS / FAIL / NOT_VERIFIED 分列）
   PASS（6）：
     - deployment-tier — local-single
-    - run_root — <acp2-dev>/data/b/run-root — 就绪
+    - run_root — /ACPServer/acp2-development/data/b/run-root — 就绪
     - software:orca — /usr/bin/orca
     - component:local-identity — 本地身份（单用户）
     - component:local-storage — 本地存储（run_root）
@@ -57,8 +57,8 @@ deployment:
   - local-storage
   - science-core
   params:
-    run_root: <acp2-dev>/data/b/run-root
+    run_root: /ACPServer/acp2-development/data/b/run-root
 
 总用量 8
--rw-------. 1 <user> <user> 360 10月 22 19:37 answers.json
--rw-------. 1 <user> <user> 288 10月 22 19:37 cccp.yaml
+-rw-------. 1 xieningke xieningke 360 10月 22 19:37 answers.json
+-rw-------. 1 xieningke xieningke 288 10月 22 19:37 cccp.yaml

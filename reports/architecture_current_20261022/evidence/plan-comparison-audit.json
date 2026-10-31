@@ -1,0 +1,266 @@
+{
+  "scope": "2026-10-22 working tree; source inspection and existing evidence, no new full test run",
+  "git_head": "096cdffe9a3817d8ee443d824830d87ec6e07bc2",
+  "plan_sha256": "b90e1de2d261f1c93abcbea11f4f4b5e06df3146f8ae4b60fec195cf280ced1b",
+  "prior_current_architecture_inventory": {
+    "compared_files": 545,
+    "changes": []
+  },
+  "repair_candidate": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12",
+  "repair_candidate_comparison": {
+    "compared_files": 1574,
+    "changes": [
+      {
+        "path": "scripts/install_systemd.sh",
+        "recorded": "14c4fac333dbc920460a47cb36964cd726876969b36b61743caa1dd762febc43",
+        "current": "1d67ed99ac28b6110b18ab7b454c4325bd80f763d2aea54f5d047385ed21bd1f"
+      },
+      {
+        "path": "src/acp/api/server.py",
+        "recorded": "a9ead9a297139fd3778b2e448f17262bfa3bab48e40020614c302ca083e09faf",
+        "current": "28d60944c612fb36a0323923686ac92d6c69c925a7eeed05ec0a68ed01fd587c"
+      },
+      {
+        "path": "src/acp/cli.py",
+        "recorded": "13f50eb066e1342328d9d08cf044d17dd9b1f28add73da7456d0efa575ea1049",
+        "current": "164956b094c0493242bfb41a088e80df0bac0ad3feaa8a2953a27333cbc60eaa"
+      },
+      {
+        "path": "src/acp/init_wizard/answers.py",
+        "recorded": "da199d5e5afd72eb5e8b2d214ec28ad968ef7c984234c91d275e1dfdae5b1f73",
+        "current": "5df54c272b5df45b2cc934e4491741eeba0952f3df0cf3b94a4a11dc2bed7286"
+      },
+      {
+        "path": "src/acp/init_wizard/flows.py",
+        "recorded": "f2db185b94566244d15b349a57b9fbabfa87cb971ee362c8ee8193acdd11e8c4",
+        "current": "e4b6ab0dcb2fb4c23f486609a5a719081a43c219ebc9f9eb8f69387eaabbc8f1"
+      },
+      {
+        "path": "src/acp/init_wizard/plan.py",
+        "recorded": "b6c1562969bbdc0a7811314c452c4c76b933ae03a577d7092864dcb690653fa6",
+        "current": "33bdbdf538067d0253e3599256fd02e7bac3336bb48a3bc3afd024b9076115b1"
+      },
+      {
+        "path": "src/acp_services/workspace/boundary.py",
+        "recorded": "8cbf5bfde58ab7877fe4248e5a3607c3deb9eccad1af7e49122e8921e26e2bfc",
+        "current": "db3a4ba3df7723718ec2fcaaa47fdff63cdbb1ddccdd257adcb94334ad646ef6"
+      },
+      {
+        "path": "tests/baseline/services-evidence/migration_ledger.md",
+        "recorded": "bbb8e67328e8cd4229bd295ac261c1a0187053904281623c76ca1235999f7f57",
+        "current": "3ac34b983be3db79ab9929d15076284b1c0d01a686e284e988ef69307a1a7ea3"
+      },
+      {
+        "path": "tests/baseline/services-evidence/public_shim_inventory.md",
+        "recorded": "00770b859265f267922af8904d83eb16f4804277af5a5a6107f4647f8d10ab42",
+        "current": "0ddda3501d28b7ed638acc0db42bb76fdf1aec2f5ada2b524c5468adf070b28f"
+      },
+      {
+        "path": "tests/test_acp_init_cli.py",
+        "recorded": "2ff71f2d8443e15f80660696866f4ccf78247fb26c7e879a3264825fd1a61ac6",
+        "current": "9bea475f5a6279b4e94b61063ee501e1807a78d06ff783db5a5aac5f55bca4bc"
+      },
+      {
+        "path": "tests/test_services_init_unified.py",
+        "recorded": "c95f9f623dfa97c896d4ecc560b0b0e6d9dba4e5c4b66dd48b2692041f903198",
+        "current": "7db1aef2dd26f08bc0de4549f843912a72a8b8474c61b71f46e6fd5c8d76e8f8"
+      },
+      {
+        "path": "tests/test_services_local_boundary.py",
+        "recorded": "ac598edc797f0f5d0036c8d691a5164a434fa464805971f26fe423d64fc59e2b",
+        "current": "a183a72a650f499f7b9d90906bff5278c251eecdbd67188ef0e492bcd4859a3a"
+      }
+    ]
+  },
+  "recorded_test_runs": {
+    "current_architecture_targeted": {
+      "tests": 230,
+      "failure": 0,
+      "error": 0,
+      "skipped": 0,
+      "passed": 230
+    },
+    "repair_candidate_full_nonslow": {
+      "tests": 10093,
+      "failure": 0,
+      "error": 0,
+      "skipped": 11,
+      "passed": 10082
+    },
+    "repair_candidate_browser": {
+      "tests": 17,
+      "failure": 0,
+      "error": 0,
+      "skipped": 0,
+      "passed": 17
+    }
+  },
+  "workflow_sets": {
+    "_C01_INTEGRATED": [
+      "singlepoint",
+      "optimize",
+      "frequency",
+      "scan",
+      "irc",
+      "casscf",
+      "xtb_optimize",
+      "OrcaGradient"
+    ],
+    "_LEGACY_SCOPE": [
+      "Confsearch",
+      "PESsearch",
+      "BatchOptimize",
+      "XtbPathSearch",
+      "XtbConstrainedOpt",
+      "tsmode",
+      "nmr"
+    ],
+    "DEFAULT_ENVELOPE_WORKFLOWS": [
+      "singlepoint"
+    ]
+  },
+  "transitional_services_ports": [
+    "tasks",
+    "task_views",
+    "control",
+    "planning",
+    "publication",
+    "catalog",
+    "remote_paths",
+    "remote_release",
+    "remote_submission",
+    "projects"
+  ],
+  "frontend_optional_capabilities": {
+    "eventCursor": false,
+    "prepareAvailability": false
+  },
+  "packaging_roles": {
+    "cccp": {
+      "distribution": "cccp",
+      "scripts": {},
+      "packages": [
+        "cccp",
+        "cccp.*"
+      ]
+    },
+    "worker": {
+      "distribution": "acp-worker",
+      "scripts": {
+        "acp-worker": "acp_services.worker_bootstrap:main"
+      },
+      "packages": [
+        "acp_services",
+        "acp_services.*"
+      ]
+    },
+    "web": {
+      "distribution": "acp-web",
+      "scripts": {
+        "acp": "acp.cli:main"
+      },
+      "packages": [
+        "acp",
+        "acp.*",
+        "acp_web_assets"
+      ]
+    }
+  },
+  "frontend_sha256": {
+    "frontend/ACP_Workbench.html": "f4c0e4925131a3e6ec24e1562001762802b73d8d97ac70da5923eebdd0900fc3",
+    "frontend/ACP_Workbench_minimal.html": "1dae353cb509651e6b7ebba34bbe3a930db1673bdba7d24bab20759ebefd768a",
+    "frontend/ACP_Workbench_v2.html": "b3dd9c0351d9f7175c06032b11f35cbf8e2ee4cce04df414649b734dc2efc27c",
+    "frontend/css/structure_source_picker.css": "f6289697638963ad5095585bc6b93e0c5ddf865c2ffb464c651c6049eca00477",
+    "frontend/css/structure_viewer.css": "126fecdd53a828c08a98cd9b26eca8aaf8c5dc483a318aaadd21357e56bd873c",
+    "frontend/css/task_input_workspace.css": "fc1b348e95f2cdee93755dcc0e2ede4ad71f2a8e5244eb0ad1435218112bb7b2",
+    "frontend/css/tsmode_editor.css": "f25dab539ff7874026585856e351ca91565e4239d6b821d68ec19238a070c674",
+    "frontend/css/workbench/base.css": "28623ab82dc69fd4811b9d3ea3544f128c0406d264dd727d324f23164eeaf2b9",
+    "frontend/css/workbench/energy.css": "f9ad271f35b10f49cdc9a0a52fa0a6a69e524890771ca43988e2b5f7d6bf0caf",
+    "frontend/css/workbench/features.css": "adcafa6e0d7d62d157e736e9624be0d2139768c47e9f7dca280fc7cf2a58d142",
+    "frontend/css/workbench/layout.css": "9f884f0c1266453582ef69985ca46814ef16d227aae8eb9b2a793b804b3f4156",
+    "frontend/css/workbench/queue-detail.css": "31e9c9954c2f00b6a787a051d768f11d6f203925239ad167911c2c5e37d40c70",
+    "frontend/css/workbench/wizard.css": "ad4597bb01c1ac3ba506b9b935aa4dd77c287ba265d6b39d8d0c0ade54cbb888",
+    "frontend/js/candidate_details.js": "1b1039bec285b2c6ef63476350f3ecbf454a27ffbe8f2caacab88409e40cb7b6",
+    "frontend/js/client/event-stream.js": "a297d292991be62ee4560450bbb2bd7c7110d35a3992534697f12510b61b2a1a",
+    "frontend/js/client/job-commands.js": "18877e0be0a7824a6f4839060b33392849a15d7bba0167b56f63951f5341b165",
+    "frontend/js/client/job-detail-query.js": "955441773ce49acfd31c44513976dc4ff79ae44a5a97b7c001edd22212a09dbb",
+    "frontend/js/client/polling-strategy.js": "881fe553b0acae45a1ad1dd793a63d78301154855a03fcb7b5c8979ffcd56e88",
+    "frontend/js/client/resource-store.js": "68c03385cb63294345960f5f49e26dea83e06d0b473c0ed85b04890095cee8a3",
+    "frontend/js/client/system-endpoints.js": "308bf17cf9039850bbcd398ebf8a5f104dacc0f35c2873f37624552d7e4f5f91",
+    "frontend/js/client/task-view-query.js": "daed4689851427e978272855edbc730671ac380b0687b3f748529e6192269ad8",
+    "frontend/js/client/transport.js": "7b68608dbe8b2b5fea681c0c8945865f1854ad4bd4271f4ac2e1962cb136ffa8",
+    "frontend/js/client/wizard-endpoints.js": "6377fdedd1e5e29e005035f2335bff7792da4b4e592d82269c09d85ebafa5a85",
+    "frontend/js/geometry_store.js": "35725a143c84fa6cf4fc1c2617d0a9d2feeb9bd6edfdd7acaafd820dd87428ab",
+    "frontend/js/job_editor.js": "6b4d39818bd6bdc64938a3431d3e561b7b5c202557b948cfc60b6ea146e26d73",
+    "frontend/js/memory_input.js": "b422cfc6e21385f70be95764e926b6bb4dcbb9d7124890fc025d223c8610ebe3",
+    "frontend/js/module_tests/candidate_review.test.js": "5d762af3caab51ae187dc1d8c1b0b0e71dddfd91c9dc98edcbd5d393acf27da7",
+    "frontend/js/module_tests/client_store.test.js": "289ffa45801240a4c8120808838a887f24b9c35605f9dd550a5847c71082de6b",
+    "frontend/js/module_tests/draft_form.test.js": "ecd68f7fbadedf4c2d031cba19b590a1a99bb59dad3fc5604630e5986bd48e56",
+    "frontend/js/module_tests/energy_renderer.test.js": "406765c96de7af29b2fc5fd2679a73f122044495f916b13e4e21c9bd666aad3c",
+    "frontend/js/module_tests/energy_viewer.test.js": "209b44399e5012b71da1d535108eb8bd49d9a82ecccd020122f1e06ee4f3267c",
+    "frontend/js/module_tests/events_polling.test.js": "c62a38f8bd2109b78b4029ed23a7c298e7a3424d44f232c43ab023fcd995ddd4",
+    "frontend/js/module_tests/fe10_dihedral_golden.test.js": "eb167108aef359bcc9f59a7f6be2889022552a995622cd50fbd63f93f577443a",
+    "frontend/js/module_tests/files_session.test.js": "2e6465e3a5d1718982598485733a95390f119a80e06d2d84f3f65e780e4f90a5",
+    "frontend/js/module_tests/job_commands_candidate.test.js": "164fc23838b0585e74a9f000b2fb5d3eaedcc427438e5eaf78e5df4f16bb43a5",
+    "frontend/js/module_tests/job_detail_controller.test.js": "2776419a7466d4bbf9c7a82d443430fd65029cf41ad3465f3d424c0d9138194b",
+    "frontend/js/module_tests/job_detail_query.test.js": "da42a74578ec2aa56685c22818826896568a649abb0d5bdbd88e147b3a436218",
+    "frontend/js/module_tests/nmr_viewer.test.js": "49c6335050d0af79c283016a65cd55f4e61feef8e411f3323191baaa8cb0f207",
+    "frontend/js/module_tests/page_integration.browser.js": "94016b566d5fc6c1520dc56a7219ad4367fac0fa07603c736f1b37404a8da5a3",
+    "frontend/js/module_tests/preview_validate.test.js": "7db821957b63a983cd7106b4b5a9d7feab29d5a71439a31c3cba8bc5a718aacc",
+    "frontend/js/module_tests/reaction_viewer.test.js": "1ed073a559a2ab2996314f41042f9c3ead7d26aa61c96f214655b2f091aa19bc",
+    "frontend/js/module_tests/run_all.js": "8746fabaf82cc4c8fc32f9f6ec585873fd8898cb63cbf80ea2e1dfd1cf8b3c10",
+    "frontend/js/module_tests/scene_instance.test.js": "cc6681e19afe419ad653907e28d0cb91b8a30c59a2259a64ed012c6671d1dedf",
+    "frontend/js/module_tests/scene_lifecycle_matrix.test.js": "8af36bd29734f1ddd0962e3e1ff873abd814a9e8db07ac4cb19aafac36a472b4",
+    "frontend/js/module_tests/structure_source_picker.test.js": "02138a0da03c657b0ef1f83ca2f2712f166e1e90f335260c2c19631b7df26bb1",
+    "frontend/js/module_tests/submit_edit.test.js": "475867362e9a6efa7ed7f52b201f83b5b44d8f4ce103badadcf64fa07ab966a6",
+    "frontend/js/module_tests/system_endpoints.test.js": "cd65e36021bf115c5f4d03b80a8acf34790d560faa73293f589ed5b8e337d7d1",
+    "frontend/js/module_tests/system_resources_controller.test.js": "2ab270fa147ccd29730ef36369a00302e0ce7399d566253c05c9f5e925f54b97",
+    "frontend/js/module_tests/task_list_controller.test.js": "96f355a5d06bf2177f9c8656df41c2dab4ae43980d1fbc27c88afb1e419dd48a",
+    "frontend/js/module_tests/task_session_controller.test.js": "7d128fff3e9f81f084fc180ff1c47e513a99eaa47ebc64d52138faf7f9016c68",
+    "frontend/js/module_tests/task_session_identity.test.js": "89625dfeadb9e762c29232f970fc1ac47bb76e2017107016b37b7ac20a5d475a",
+    "frontend/js/module_tests/transport.test.js": "0aa9f934c4f1a672e6bc5c5c8654571d69e1c1f8fa00057a7b9557482c369e49",
+    "frontend/js/module_tests/vibration_playback.test.js": "d0af93bb1165b6c83085eb4e7fbadca2e639fe12750127011128686bc10c2edf",
+    "frontend/js/module_tests/viz_framing.test.js": "21aa43cab06476d5a49c2fd69631dda4ab6a81da5cd29eb3ae1bf38e2cf012df",
+    "frontend/js/module_tests/wizard_candidate_api.test.js": "8caa2910db41763b07d9db11a18ad243fca8d42b90aa864458311ae2f164296f",
+    "frontend/js/module_tests/wizard_endpoints.test.js": "486c174098aa730abf891edf0e6372ae1807f0ce46565ad4fa52e97d0f2166d7",
+    "frontend/js/module_tests/wizard_preview_viewer.test.js": "c8f0f6fff81630ff6ff30ae7f87304e240cea9662094b7580b60fa6a1d4de6b7",
+    "frontend/js/module_tests/wizard_submit_payload.test.js": "2de5bb56911a8d631eb1cad0ddec497454c865aa936eca46560f4bf64c6159e2",
+    "frontend/js/module_tests/wizard_upload_parse.test.js": "64f66c04906b9afc43d2047eafaa63877226f330b911cf9cfade139e3986822d",
+    "frontend/js/structure_editor.js": "846aa9e9e1d04717245045b7d13e0331d3da9384134c9a6f9ecd2347425b4a59",
+    "frontend/js/structure_source_picker.js": "c78f7e4779a4f197ea191410b282fca72d8bc21b2fd94e2df5626b50de894995",
+    "frontend/js/structure_viewer.js": "1eaed3ff9aaaeec9bea9a8b87978283f827ef0512c2829bd86867a47e487c147",
+    "frontend/js/task_input_workspace.js": "7d8c418a56ab0699e106b149104079a9ae752ebd562053537f4f9624958b07c1",
+    "frontend/js/tsmode_editor.js": "861ed668633038f298b10328a7088a929cb8fb20685564e24494193850d910d9",
+    "frontend/js/vendor/3Dmol-2.5.5.min.js": "f7cc78921ae72e7623e89cdd111434f58c2efddd2ffda1cd212644b406fb8016",
+    "frontend/js/vibration_viewer.js": "8c876b243cf9ef4c49ed8622d28f4bab076b3aed015267789841bcddc24f3712",
+    "frontend/js/visualization/energy_chart_renderer.js": "d7d5626128014b54b997eed03d349c9c104c1e6461947593928ef3fa604b8b8c",
+    "frontend/js/visualization/framing.js": "471d50c7b523871da875930cb5ab072f094c60774e3611905122e08049b72d60",
+    "frontend/js/visualization/mol3d_adapter.js": "c150b7f4ac03a524826ee97c888d78b76e35f0202a9d73c2c95e1a1c872c06d9",
+    "frontend/js/visualization/scene_instance.js": "dee4862b23418200bb10e961e2643bdcf6d28d08f7028b3c3b64975eb280fece",
+    "frontend/js/workbench/bootstrap.js": "25eae5b9bb59f7b8d1b73b9d204462489ec9a9789ffdc3f0c705df5c231d6a66",
+    "frontend/js/workbench/compat/api.js": "0e52aaefd4c723978ff3b65faeeb093d24e47e50693d8212652267d72fffec30",
+    "frontend/js/workbench/compat/shared-state.js": "28425625f18f66656956253e857e0d81ca41585ed8d2386dda111b4bf09291f6",
+    "frontend/js/workbench/contracts/batch_role_defaults.js": "c49646fd2db36a8cbeda7a1f59ce2c0d1a3be51c52ec884ff5b7d0f597f5350e",
+    "frontend/js/workbench/contracts/fixtures/task_view_samples.js": "d66aa930a5fd34e6f6a79d64ef72e19e452a8a5d26b27fdc4ffafb559b5871b1",
+    "frontend/js/workbench/contracts/task_view_contract.js": "931e546c00135195214e74322e5279faed5c8354f3d876aec9407250248bc4c5",
+    "frontend/js/workbench/controllers/candidate_review_controller.js": "363d77204234f332b9b1c3c376d7bbee95b72ede370732734f5bd4cd6f1caebf",
+    "frontend/js/workbench/controllers/job_detail_controller.js": "aa3ef62934db117e07dcb524eaaf0289f583d106a0353886708f64e16f4f698c",
+    "frontend/js/workbench/controllers/system_resources_controller.js": "6d8dcdbe8cca845bb38ff560646f9ad7fe663fb516bcc92e0c12aaa6adbcdd23",
+    "frontend/js/workbench/controllers/task_list_controller.js": "4de1ebc86f382fc32022f3f898df41fa655b53497f7114c28821bde2fea00ab9",
+    "frontend/js/workbench/controllers/task_session_controller.js": "8b5133ed8aa6d79c607ee8123ade7d222a5b912e1a4bc2803ca24997ac6c7d03",
+    "frontend/js/workbench/features/energy.js": "873b78329df4a668251f0d5aa52eab7845efa432bfdabdd3cb9577708278a01d",
+    "frontend/js/workbench/features/files-logs.js": "992ef52eeb07295ec406aecb7d1512e7644a379a865405a3d1e40af4cc6fda90",
+    "frontend/js/workbench/features/job-detail.js": "f3ba469926e5392eaa1f6d21b6b6be84245ce91036ec93e341a41f4b7a6db494",
+    "frontend/js/workbench/features/molecule-view.js": "05d16859bf60b81096c8bacaa40bdf6d9691735a75063948b0f14bc82cba4275",
+    "frontend/js/workbench/features/nmr.js": "90f71c991cf8ab9b20477cb2d9a5e971d7a749cc8e4d2a3516c49ce4dc037837",
+    "frontend/js/workbench/features/queue.js": "6dae6cc337d0acca55526fad99eeb72be09814f39cf761813944ad14545bbe3b",
+    "frontend/js/workbench/features/reaction-builder.js": "f97f480db7ceffb9e3cae0305f58d475b8a3b94409d82bcafc8cf0a1285ca8d8",
+    "frontend/js/workbench/features/scan-s2.js": "f95495a9e43a90c498e9794fc837fb04b113b4fa27fd10ee28e3b44b5709afce",
+    "frontend/js/workbench/features/wizard/draft-form.js": "9e0e545f4937259e9885793b78aa87f3d4a8586594ab75ef6c2f56fc4277326e",
+    "frontend/js/workbench/features/wizard/preview-validate.js": "6df6c290584768c1a8ec7afd0d2b014e2a7fe81b98ee886469f3cdea122f7e8f",
+    "frontend/js/workbench/features/wizard/submit-edit.js": "491cf815390f2c0de30e5033b2f6ae3e81a3de4ea71f5da3aa508a18fff50252",
+    "frontend/js/workbench/features/wizard/upload-parse.js": "97f46034b113d035e560746e188aa6dc561b1cc7576852c7f25421cd21018536",
+    "frontend/js/workbench/features/wizard.js": "111e51c263c2ddfbd2e9c906c9e7e922f55c69bfd199e8a6ef7adc401fba2e03",
+    "frontend/js/workbench/i18n.js": "56be3d7579f8884e9ac8207e1ae2d55f446a599132367a9cd8d922151cf1d78f"
+  }
+}

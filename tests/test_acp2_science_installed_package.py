@@ -833,7 +833,7 @@ def test_documented_examples_run_from_the_installed_wheel(
 
 
 def test_documented_examples_source_has_no_repo_or_placeholder_paths() -> None:
-    forbidden = ("<server-root>", "/home/", "/tmp/")
+    forbidden = ("/ACPServer", "/home/", "/tmp/")
     for name in DOCUMENTED_EXAMPLE_FILES:
         text = (DOCUMENTED_EXAMPLE_DIR / name).read_text(encoding="utf-8")
         for token in forbidden:

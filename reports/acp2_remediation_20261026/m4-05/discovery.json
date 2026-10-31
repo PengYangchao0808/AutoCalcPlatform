@@ -1,0 +1,862 @@
+{
+  "analysis_entries": [
+    {
+      "analysis_id": "vibration.compute",
+      "executable": false,
+      "owner": "B12",
+      "registered": true,
+      "state": "registered",
+      "version": "1.0.0"
+    },
+    {
+      "analysis_id": "vibration.analyze",
+      "executable": true,
+      "owner": "A",
+      "registered": true,
+      "state": "executable",
+      "version": "1.0.0"
+    },
+    {
+      "analysis_id": "acp2_external_native_singlepoint",
+      "executable": true,
+      "owner": "plugin:acp2_external.native_singlepoint",
+      "registered": true,
+      "state": "executable",
+      "version": "1.0.0"
+    },
+    {
+      "analysis_id": "acp2_upgrade_native_singlepoint",
+      "executable": true,
+      "owner": "plugin:acp2_upgrade.native_singlepoint",
+      "registered": true,
+      "state": "executable",
+      "version": "1.0.0"
+    }
+  ],
+  "analysis_executable": {
+    "acp2_external_native_singlepoint": "executable",
+    "acp2_upgrade_native_singlepoint": "executable",
+    "vibration.analyze": "executable",
+    "vibration.compute": "registered"
+  },
+  "builtin_capability_ids": [
+    "electronic.energy",
+    "geometry.optimize",
+    "vibration.analyze",
+    "vibration.compute"
+  ],
+  "catalog_etag": "sha256:25f5b5674af73d47b8e5c0fc2bf6abb43ca088a9b2674ccc36c79de55168b03e",
+  "descriptors_agree": true,
+  "external_form": {
+    "capability_id": "acp2_external_native_singlepoint",
+    "capability_source": "science_plugin",
+    "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+    "descriptor_digest_pin": null,
+    "form": {
+      "capability_id": "acp2_external_native_singlepoint",
+      "description": "Third-party (fixture) form shipped inside the installed distribution as cccp_ui_form.json. The platform validates it against acp2.ui-subset.v1 and serves it through discovery; the Workbench renders it with no frontend source change.",
+      "form_digest": "sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0",
+      "form_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "charge": {
+            "default": 0,
+            "maximum": 10,
+            "minimum": -10,
+            "title": "Charge",
+            "type": "integer",
+            "x-acp": {
+              "binding": "task.charge",
+              "widget": "number"
+            }
+          },
+          "multiplicity": {
+            "default": 1,
+            "maximum": 10,
+            "minimum": 1,
+            "title": "Multiplicity",
+            "type": "integer",
+            "x-acp": {
+              "binding": "task.multiplicity",
+              "widget": "number"
+            }
+          },
+          "nproc": {
+            "default": 1,
+            "maximum": 32,
+            "minimum": 1,
+            "title": "Processes",
+            "type": "integer",
+            "x-acp": {
+              "binding": "task.resources.nproc",
+              "widget": "number"
+            }
+          },
+          "source": {
+            "description": "Inline structure text the validator consumes.",
+            "minLength": 4,
+            "title": "Native record text",
+            "type": "string",
+            "x-acp": {
+              "binding": "task.structure.source",
+              "widget": "textarea"
+            }
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "type": "object"
+      },
+      "request": {
+        "surface": "job_submit",
+        "template": {
+          "input": {
+            "source": "",
+            "source_type": "xyz_text"
+          },
+          "method": {
+            "levels": {
+              "single_point": {
+                "engine": "orca"
+              }
+            }
+          },
+          "resources": {}
+        },
+        "workflow": "singlepoint"
+      },
+      "schema": "acp2.ui.form.v1",
+      "schema_version": 1,
+      "subset_version": "acp2.ui-subset.v1",
+      "title": "Native single-point record validator"
+    },
+    "form_digest": "sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0",
+    "form_origin": "plugin:acp2-external-science-validator",
+    "state": "available"
+  },
+  "form_entries": {
+    "acp2_external_native_singlepoint": {
+      "capability_id": "acp2_external_native_singlepoint",
+      "capability_source": "science_plugin",
+      "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+      "descriptor_digest_pin": null,
+      "form": {
+        "capability_id": "acp2_external_native_singlepoint",
+        "description": "Third-party (fixture) form shipped inside the installed distribution as cccp_ui_form.json. The platform validates it against acp2.ui-subset.v1 and serves it through discovery; the Workbench renders it with no frontend source change.",
+        "form_digest": "sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0",
+        "form_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "charge": {
+              "default": 0,
+              "maximum": 10,
+              "minimum": -10,
+              "title": "Charge",
+              "type": "integer",
+              "x-acp": {
+                "binding": "task.charge",
+                "widget": "number"
+              }
+            },
+            "multiplicity": {
+              "default": 1,
+              "maximum": 10,
+              "minimum": 1,
+              "title": "Multiplicity",
+              "type": "integer",
+              "x-acp": {
+                "binding": "task.multiplicity",
+                "widget": "number"
+              }
+            },
+            "nproc": {
+              "default": 1,
+              "maximum": 32,
+              "minimum": 1,
+              "title": "Processes",
+              "type": "integer",
+              "x-acp": {
+                "binding": "task.resources.nproc",
+                "widget": "number"
+              }
+            },
+            "source": {
+              "description": "Inline structure text the validator consumes.",
+              "minLength": 4,
+              "title": "Native record text",
+              "type": "string",
+              "x-acp": {
+                "binding": "task.structure.source",
+                "widget": "textarea"
+              }
+            }
+          },
+          "required": [
+            "source"
+          ],
+          "type": "object"
+        },
+        "request": {
+          "surface": "job_submit",
+          "template": {
+            "input": {
+              "source": "",
+              "source_type": "xyz_text"
+            },
+            "method": {
+              "levels": {
+                "single_point": {
+                  "engine": "orca"
+                }
+              }
+            },
+            "resources": {}
+          },
+          "workflow": "singlepoint"
+        },
+        "schema": "acp2.ui.form.v1",
+        "schema_version": 1,
+        "subset_version": "acp2.ui-subset.v1",
+        "title": "Native single-point record validator"
+      },
+      "form_digest": "sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0",
+      "form_origin": "plugin:acp2-external-science-validator",
+      "state": "available"
+    },
+    "acp2_upgrade_native_singlepoint": {
+      "capability_id": "acp2_upgrade_native_singlepoint",
+      "capability_source": "science_plugin",
+      "error": {
+        "code": "ui_form_missing",
+        "message": "acp2_upgrade_native_singlepoint declares no acp2.ui-subset.v1 form",
+        "params": {
+          "capability_id": "acp2_upgrade_native_singlepoint"
+        }
+      },
+      "state": "unavailable"
+    },
+    "electronic.energy": {
+      "capability_id": "electronic.energy",
+      "capability_source": "builtin",
+      "descriptor_digest": null,
+      "descriptor_digest_pin": null,
+      "form": {
+        "capability_id": "electronic.energy",
+        "description": "One frozen single-point request; every field maps onto a TaskRequest path.",
+        "form_digest": "sha256:5d3b3fc9b0702f2689919194ecca3353475ca6e0482abdc72c4a0d6314b14696",
+        "form_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "basis": {
+              "maxLength": 64,
+              "minLength": 2,
+              "title": "Basis set",
+              "type": "string",
+              "x-acp": {
+                "binding": "task.level.basis",
+                "widget": "text"
+              }
+            },
+            "charge": {
+              "default": 0,
+              "maximum": 10,
+              "minimum": -10,
+              "title": "Charge",
+              "type": "integer",
+              "x-acp": {
+                "binding": "task.charge",
+                "widget": "number"
+              }
+            },
+            "method": {
+              "maxLength": 64,
+              "minLength": 2,
+              "title": "Method",
+              "type": "string",
+              "x-acp": {
+                "binding": "task.level.method",
+                "widget": "text"
+              }
+            },
+            "multiplicity": {
+              "default": 1,
+              "maximum": 10,
+              "minimum": 1,
+              "title": "Multiplicity",
+              "type": "integer",
+              "x-acp": {
+                "binding": "task.multiplicity",
+                "widget": "number"
+              }
+            },
+            "nproc": {
+              "default": 1,
+              "maximum": 128,
+              "minimum": 1,
+              "title": "Processes",
+              "type": "integer",
+              "x-acp": {
+                "binding": "task.resources.nproc",
+                "widget": "number"
+              }
+            },
+            "source": {
+              "description": "Inline structure text handed to the calculation.",
+              "minLength": 4,
+              "title": "Structure",
+              "type": "string",
+              "x-acp": {
+                "binding": "task.structure.source",
+                "widget": "textarea"
+              }
+            }
+          },
+          "required": [
+            "source"
+          ],
+          "type": "object"
+        },
+        "request": {
+          "surface": "job_submit",
+          "template": {
+            "input": {
+              "source": "",
+              "source_type": "xyz_text"
+            },
+            "method": {
+              "levels": {
+                "single_point": {
+                  "engine": "orca"
+                }
+              },
+              "schema_id": "dft_singlepoint"
+            },
+            "resources": {}
+          },
+          "workflow": "singlepoint"
+        },
+        "schema": "acp2.ui.form.v1",
+        "schema_version": 1,
+        "subset_version": "acp2.ui-subset.v1",
+        "title": "Single-point energy"
+      },
+      "form_digest": "sha256:5d3b3fc9b0702f2689919194ecca3353475ca6e0482abdc72c4a0d6314b14696",
+      "form_origin": "platform",
+      "state": "available"
+    },
+    "geometry.optimize": {
+      "capability_id": "geometry.optimize",
+      "capability_source": "builtin",
+      "descriptor_digest": null,
+      "descriptor_digest_pin": null,
+      "form": {
+        "capability_id": "geometry.optimize",
+        "description": "Optimization request bound to the optimize workflow.",
+        "form_digest": "sha256:43e94751d7c18c6815ef05f510509373d87f189101932d44ef565598d30aae46",
+        "form_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "basis": {
+              "maxLength": 64,
+              "minLength": 2,
+              "title": "Basis set",
+              "type": "string",
+              "x-acp": {
+                "binding": "task.level.basis",
+                "widget": "text"
+              }
+            },
+            "charge": {
+              "default": 0,
+              "maximum": 10,
+              "minimum": -10,
+              "title": "Charge",
+              "type": "integer",
+              "x-acp": {
+                "binding": "task.charge",
+                "widget": "number"
+              }
+            },
+            "method": {
+              "maxLength": 64,
+              "minLength": 2,
+              "title": "Method",
+              "type": "string",
+              "x-acp": {
+                "binding": "task.level.method",
+                "widget": "text"
+              }
+            },
+            "source": {
+              "minLength": 4,
+              "title": "Structure",
+              "type": "string",
+              "x-acp": {
+                "binding": "task.structure.source",
+                "widget": "textarea"
+              }
+            }
+          },
+          "required": [
+            "source"
+          ],
+          "type": "object"
+        },
+        "request": {
+          "surface": "job_submit",
+          "template": {
+            "input": {
+              "source": "",
+              "source_type": "xyz_text"
+            },
+            "method": {
+              "levels": {
+                "opt": {
+                  "engine": "orca"
+                }
+              }
+            },
+            "resources": {}
+          },
+          "workflow": "optimize"
+        },
+        "schema": "acp2.ui.form.v1",
+        "schema_version": 1,
+        "subset_version": "acp2.ui-subset.v1",
+        "title": "Geometry optimization"
+      },
+      "form_digest": "sha256:43e94751d7c18c6815ef05f510509373d87f189101932d44ef565598d30aae46",
+      "form_origin": "platform",
+      "state": "available"
+    },
+    "vibration.analyze": {
+      "capability_id": "vibration.analyze",
+      "capability_source": "builtin",
+      "descriptor_digest": null,
+      "descriptor_digest_pin": null,
+      "form": {
+        "capability_id": "vibration.analyze",
+        "description": "Frequency request whose result carries the vibrational analysis product.",
+        "form_digest": "sha256:ccfc081f6637c64f67d0a796fbf410543c830da09399b2d31887a575563b57ba",
+        "form_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "mem": {
+              "pattern": "^[0-9]+(?:MB|GB)$",
+              "title": "Memory budget",
+              "type": "string",
+              "x-acp": {
+                "binding": "task.resources.mem",
+                "widget": "text"
+              }
+            },
+            "method": {
+              "maxLength": 64,
+              "minLength": 2,
+              "title": "Method",
+              "type": "string",
+              "x-acp": {
+                "binding": "task.level.method",
+                "widget": "text"
+              }
+            },
+            "source": {
+              "minLength": 4,
+              "title": "Structure",
+              "type": "string",
+              "x-acp": {
+                "binding": "task.structure.source",
+                "widget": "textarea"
+              }
+            }
+          },
+          "required": [
+            "source"
+          ],
+          "type": "object"
+        },
+        "request": {
+          "surface": "job_submit",
+          "template": {
+            "input": {
+              "source": "",
+              "source_type": "xyz_text"
+            },
+            "method": {
+              "levels": {
+                "freq": {
+                  "engine": "orca"
+                }
+              }
+            },
+            "resources": {}
+          },
+          "workflow": "frequency"
+        },
+        "schema": "acp2.ui.form.v1",
+        "schema_version": 1,
+        "subset_version": "acp2.ui-subset.v1",
+        "title": "Vibration analysis"
+      },
+      "form_digest": "sha256:ccfc081f6637c64f67d0a796fbf410543c830da09399b2d31887a575563b57ba",
+      "form_origin": "platform",
+      "state": "available"
+    },
+    "vibration.compute": {
+      "capability_id": "vibration.compute",
+      "capability_source": "builtin",
+      "error": {
+        "code": "ui_form_missing",
+        "message": "vibration.compute declares no acp2.ui-subset.v1 form",
+        "params": {
+          "capability_id": "vibration.compute"
+        }
+      },
+      "state": "unavailable"
+    }
+  },
+  "form_subset_digest": "sha256:870d59473be275fa52785896cdb7e09d03aa15855a8a29dc69b90839fbf08b06",
+  "form_subset_version": "acp2.ui-subset.v1",
+  "inventory_analysis": [
+    {
+      "analysis_id": "vibration.compute",
+      "executable": false,
+      "owner": "B12",
+      "registered": true,
+      "state": "registered",
+      "version": "1.0.0"
+    },
+    {
+      "analysis_id": "vibration.analyze",
+      "executable": true,
+      "owner": "A",
+      "registered": true,
+      "state": "executable",
+      "version": "1.0.0"
+    },
+    {
+      "analysis_id": "acp2_external_native_singlepoint",
+      "executable": true,
+      "owner": "plugin:acp2_external.native_singlepoint",
+      "registered": true,
+      "state": "executable",
+      "version": "1.0.0"
+    },
+    {
+      "analysis_id": "acp2_upgrade_native_singlepoint",
+      "executable": true,
+      "owner": "plugin:acp2_upgrade.native_singlepoint",
+      "registered": true,
+      "state": "executable",
+      "version": "1.0.0"
+    }
+  ],
+  "plugin_entries": [
+    {
+      "capability_id": "acp2_external_native_singlepoint",
+      "capability_source": "science_plugin",
+      "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+      "distribution_digest": {
+        "algorithm": "acp2.plugin.distribution-digest.v1",
+        "declared": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+        "digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+        "file_count": 5,
+        "matches_declared": true
+      },
+      "enablement": {
+        "enabled": true,
+        "enabled_at": "2026-10-28T00:05:31Z",
+        "enabled_by": "controller"
+      },
+      "execution_semantics": {
+        "delegates_to_task_kind": null,
+        "kind": "pure_analysis",
+        "network_access": false,
+        "starts_subprocess": false
+      },
+      "implementation_id": "acp2_fixture.validator.native_singlepoint",
+      "input_schema": {
+        "ref": "acp2.science.prepared-artifact.v1",
+        "schema_version": 1
+      },
+      "output_schema": {
+        "ref": "acp2.science.external.native_singlepoint",
+        "schema_version": 1
+      },
+      "plugin": {
+        "distribution": "acp2-external-science-validator",
+        "entry_point_group": 1,
+        "license": "MIT",
+        "name": "acp2_external.native_singlepoint",
+        "trust_level": "untrusted",
+        "version": "1.0.0"
+      },
+      "provenance": {
+        "descriptor_digest_algorithm": "acp2.plugin.descriptor-digest.v1",
+        "distribution_digest": {
+          "algorithm": "acp2.plugin.distribution-digest.v1",
+          "declared": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+          "digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+          "file_count": 5,
+          "matches_declared": true
+        },
+        "fixture_evidence": [
+          {
+            "description": "Fixed water native single-point record and expected TaskResult fields; the platform owner verifies the fixture, this manifest only carries the claim.",
+            "digest": "sha256:fc06f818967f121a98b1bf7a3db30b2f43629a5633b742919ecb0b7a52fada98",
+            "fixture_id": "acp2-external-native-singlepoint",
+            "verified": true
+          }
+        ],
+        "recipe_refs": [],
+        "validator_refs": [
+          {
+            "required": true,
+            "validator_id": "check.acp2_native_singlepoint_schema",
+            "validator_version": "1.0.0"
+          }
+        ]
+      },
+      "schema": "acp2.plugin.capability-descriptor.v1",
+      "schema_version": 1
+    },
+    {
+      "capability_id": "acp2_upgrade_native_singlepoint",
+      "capability_source": "science_plugin",
+      "descriptor_digest": "sha256:4297fd794d57e3d16ec6980ab9803ffbf1010d9c89cd070637ab1ba0462314df",
+      "distribution_digest": {
+        "algorithm": "acp2.plugin.distribution-digest.v1",
+        "declared": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+        "digest": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+        "file_count": 5,
+        "matches_declared": true
+      },
+      "enablement": {
+        "enabled": true,
+        "enabled_at": "2026-10-28T00:05:32Z",
+        "enabled_by": "controller"
+      },
+      "execution_semantics": {
+        "delegates_to_task_kind": null,
+        "kind": "pure_analysis",
+        "network_access": false,
+        "starts_subprocess": false
+      },
+      "implementation_id": "acp2_upgrade.validator.native_singlepoint",
+      "input_schema": {
+        "ref": "acp2.science.prepared-artifact.v1",
+        "schema_version": 1
+      },
+      "output_schema": {
+        "ref": "acp2.science.external.upgrade_singlepoint",
+        "schema_version": 1
+      },
+      "plugin": {
+        "distribution": "acp2-upgrade-science-validator",
+        "entry_point_group": 1,
+        "license": "MIT",
+        "name": "acp2_upgrade.native_singlepoint",
+        "trust_level": "untrusted",
+        "version": "1.0.0"
+      },
+      "provenance": {
+        "descriptor_digest_algorithm": "acp2.plugin.descriptor-digest.v1",
+        "distribution_digest": {
+          "algorithm": "acp2.plugin.distribution-digest.v1",
+          "declared": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+          "digest": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+          "file_count": 5,
+          "matches_declared": true
+        },
+        "fixture_evidence": [
+          {
+            "description": "Constructed v1 fixed native JSON record and expected TaskResult fields; the platform owner verifies the fixture, this manifest only carries the claim.",
+            "digest": "sha256:6e02135cecd4044ab9c9ed9696375a125587dd7e95f8be4414646a324b4cf259",
+            "fixture_id": "acp2-upgrade-native-singlepoint",
+            "verified": true
+          }
+        ],
+        "recipe_refs": [
+          {
+            "digest": null,
+            "recipe_id": "acp2.upgrade.recipe",
+            "schema_version": 1
+          }
+        ],
+        "validator_refs": [
+          {
+            "required": true,
+            "validator_id": "check.acp2_upgrade_schema",
+            "validator_version": "1.0.0"
+          }
+        ]
+      },
+      "schema": "acp2.plugin.capability-descriptor.v1",
+      "schema_version": 1
+    }
+  ],
+  "project_id": "uncategorized",
+  "read_only": [],
+  "statuses": {
+    "capabilities": 200,
+    "capability_forms": 200,
+    "v2_capabilities": 200
+  },
+  "upgrade_form": {
+    "capability_id": "acp2_upgrade_native_singlepoint",
+    "capability_source": "science_plugin",
+    "error": {
+      "code": "ui_form_missing",
+      "message": "acp2_upgrade_native_singlepoint declares no acp2.ui-subset.v1 form",
+      "params": {
+        "capability_id": "acp2_upgrade_native_singlepoint"
+      }
+    },
+    "state": "unavailable"
+  },
+  "v2_plugin_entries": [
+    {
+      "capability_id": "acp2_external_native_singlepoint",
+      "capability_source": "science_plugin",
+      "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+      "distribution_digest": {
+        "algorithm": "acp2.plugin.distribution-digest.v1",
+        "declared": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+        "digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+        "file_count": 5,
+        "matches_declared": true
+      },
+      "enablement": {
+        "enabled": true,
+        "enabled_at": "2026-10-28T00:05:31Z",
+        "enabled_by": "controller"
+      },
+      "execution_semantics": {
+        "delegates_to_task_kind": null,
+        "kind": "pure_analysis",
+        "network_access": false,
+        "starts_subprocess": false
+      },
+      "implementation_id": "acp2_fixture.validator.native_singlepoint",
+      "input_schema": {
+        "ref": "acp2.science.prepared-artifact.v1",
+        "schema_version": 1
+      },
+      "output_schema": {
+        "ref": "acp2.science.external.native_singlepoint",
+        "schema_version": 1
+      },
+      "plugin": {
+        "distribution": "acp2-external-science-validator",
+        "entry_point_group": 1,
+        "license": "MIT",
+        "name": "acp2_external.native_singlepoint",
+        "trust_level": "untrusted",
+        "version": "1.0.0"
+      },
+      "provenance": {
+        "descriptor_digest_algorithm": "acp2.plugin.descriptor-digest.v1",
+        "distribution_digest": {
+          "algorithm": "acp2.plugin.distribution-digest.v1",
+          "declared": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+          "digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+          "file_count": 5,
+          "matches_declared": true
+        },
+        "fixture_evidence": [
+          {
+            "description": "Fixed water native single-point record and expected TaskResult fields; the platform owner verifies the fixture, this manifest only carries the claim.",
+            "digest": "sha256:fc06f818967f121a98b1bf7a3db30b2f43629a5633b742919ecb0b7a52fada98",
+            "fixture_id": "acp2-external-native-singlepoint",
+            "verified": true
+          }
+        ],
+        "recipe_refs": [],
+        "validator_refs": [
+          {
+            "required": true,
+            "validator_id": "check.acp2_native_singlepoint_schema",
+            "validator_version": "1.0.0"
+          }
+        ]
+      },
+      "schema": "acp2.plugin.capability-descriptor.v1",
+      "schema_version": 1
+    },
+    {
+      "capability_id": "acp2_upgrade_native_singlepoint",
+      "capability_source": "science_plugin",
+      "descriptor_digest": "sha256:4297fd794d57e3d16ec6980ab9803ffbf1010d9c89cd070637ab1ba0462314df",
+      "distribution_digest": {
+        "algorithm": "acp2.plugin.distribution-digest.v1",
+        "declared": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+        "digest": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+        "file_count": 5,
+        "matches_declared": true
+      },
+      "enablement": {
+        "enabled": true,
+        "enabled_at": "2026-10-28T00:05:32Z",
+        "enabled_by": "controller"
+      },
+      "execution_semantics": {
+        "delegates_to_task_kind": null,
+        "kind": "pure_analysis",
+        "network_access": false,
+        "starts_subprocess": false
+      },
+      "implementation_id": "acp2_upgrade.validator.native_singlepoint",
+      "input_schema": {
+        "ref": "acp2.science.prepared-artifact.v1",
+        "schema_version": 1
+      },
+      "output_schema": {
+        "ref": "acp2.science.external.upgrade_singlepoint",
+        "schema_version": 1
+      },
+      "plugin": {
+        "distribution": "acp2-upgrade-science-validator",
+        "entry_point_group": 1,
+        "license": "MIT",
+        "name": "acp2_upgrade.native_singlepoint",
+        "trust_level": "untrusted",
+        "version": "1.0.0"
+      },
+      "provenance": {
+        "descriptor_digest_algorithm": "acp2.plugin.descriptor-digest.v1",
+        "distribution_digest": {
+          "algorithm": "acp2.plugin.distribution-digest.v1",
+          "declared": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+          "digest": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+          "file_count": 5,
+          "matches_declared": true
+        },
+        "fixture_evidence": [
+          {
+            "description": "Constructed v1 fixed native JSON record and expected TaskResult fields; the platform owner verifies the fixture, this manifest only carries the claim.",
+            "digest": "sha256:6e02135cecd4044ab9c9ed9696375a125587dd7e95f8be4414646a324b4cf259",
+            "fixture_id": "acp2-upgrade-native-singlepoint",
+            "verified": true
+          }
+        ],
+        "recipe_refs": [
+          {
+            "digest": null,
+            "recipe_id": "acp2.upgrade.recipe",
+            "schema_version": 1
+          }
+        ],
+        "validator_refs": [
+          {
+            "required": true,
+            "validator_id": "check.acp2_upgrade_schema",
+            "validator_version": "1.0.0"
+          }
+        ]
+      },
+      "schema": "acp2.plugin.capability-descriptor.v1",
+      "schema_version": 1
+    }
+  ]
+}

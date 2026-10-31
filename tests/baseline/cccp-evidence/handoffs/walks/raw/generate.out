@@ -1,4 +1,4 @@
-RESULT fixtures_root=<repo>/tests/fixtures/science_products/bounded
+RESULT fixtures_root=/ACPServer/AutoCalcPlatform/tests/fixtures/science_products/bounded
 RESULT fixture_dirs=6
 RESULT files=32 total_bytes=125513
 FILE tests/fixtures/science_products/bounded/curve_scatter_corrupt/block_000000.json bytes=4585 sha256:1b6155ee1916c1b82a99de53e345a140b03108cd679e1ffe8a43c53daaa19594

@@ -1,4 +1,4 @@
-$ /usr/bin/python3.11 -m venv <repo>/reports/acp2_implementation/bb45a46/B/B25/venvs/worker
+$ /usr/bin/python3.11 -m venv /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/worker
 exit=0
 --- stdout ---
 

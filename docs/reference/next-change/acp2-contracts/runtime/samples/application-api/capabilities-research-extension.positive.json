@@ -1,0 +1,22 @@
+{
+  "sample_id": "capabilities-research-extension.positive",
+  "contract": "application-api.v1.json",
+  "kind": "positive",
+  "operation": "capabilities",
+  "payload": {
+    "schema_version": 1,
+    "research_extension": {
+      "id": "acp.research.v1",
+      "version": "1.0.0"
+    },
+    "project_id": "proj-demo",
+    "client": {
+      "name": "dsh-mcp-client",
+      "version": "0.0.1"
+    }
+  },
+  "expected": {
+    "valid": true
+  },
+  "note": "M0-09 handshake request: the supported version is accepted as a request; the answer still reports implemented=false / negotiated=false because the ten P2 tools are not registered."
+}

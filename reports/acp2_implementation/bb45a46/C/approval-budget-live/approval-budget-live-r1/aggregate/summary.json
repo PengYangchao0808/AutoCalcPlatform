@@ -1,0 +1,10 @@
+{
+  "candidate_revision": "8413db719681ffa08370c00001bb634f4dea274a",
+  "contract_version": "1.1.0",
+  "generated_at": "2026-10-23T02:22:48Z",
+  "runs": [
+    "experience_approval-budget-live-aggregate-approval-budget-live-r1.json"
+  ],
+  "schema": "acp2.acceptance.summary.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema"
+}

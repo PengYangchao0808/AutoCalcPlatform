@@ -1,0 +1,9 @@
+{
+  "action": "migrate",
+  "admission_schema_version": 26,
+  "applied": 3,
+  "jobs_db": "/tmp/opencode/acp2-m4-06a-work/scratch/acp_jobs.db",
+  "jobs_schema_version": 26,
+  "prepare_ok": true,
+  "prepare_schema_version": 1
+}

@@ -4,6 +4,16 @@
 >
 > 代码契约以仓库根的 `AGENTS.md` 和各包 `AGENTS.md` 为准；两者冲突时**以代码与 `AGENTS.md` 为准**，文档按它修正。
 
+## 0. 当前状态与最新审查（2026-10-31 合并 origin/main 后）
+
+- **完整功能审查**（执行跨 2026-10-28—29，审查基线 `fd2087c7`）：[reports/acp2_function_audit_20261028/REPORT.md](../reports/acp2_function_audit_20261028/REPORT.md) —— 记录测试失败、代码缺口与未验证项；不自动关闭发布门。
+- **ACP / RPH 现状说明**（10-28）：[reference/current/ACP_RPH_Status_20261028.md](reference/current/ACP_RPH_Status_20261028.md)。
+- **MCP 使用指南**：[根 README §MCP 使用指南](../README.md#mcp-使用指南)。
+- **RPH 三阶段路线图**：[RPH_Agent_Three_Phase_Roadmap_20261027(1).md](<RPH_Agent_Three_Phase_Roadmap_20261027(1).md>)（文件名含 `(1)`，链接必须用尖括号）。
+- **下一批 MCP / Agent 开发计划**（计划中的工具与指南**尚未实现**）：[reference/next-change/ACP_MCP_Agent_Guidance_PES_Batch_Plan_20261030.md](reference/next-change/ACP_MCP_Agent_Guidance_PES_Batch_Plan_20261030.md)。
+
+> **完整 ACP2 放行仍为 `NOT_VERIFIED`。** 独立安装通过、科研闭环通过分别记录，不能相互替代；`NOT_VERIFIED` 不得改写成 PASS。
+
 ## 1. 按任务找文档
 
 | 你要做的事 | 先读 | 再读 |
@@ -14,6 +24,8 @@
 | 改 API / 前端接口 | `src/acp/api/AGENTS.md` | [任务文件布局](reference/current/ACP_Job_File_Layout_Spec.md)、[前端目标形态方案](reference/next-change/ACP_Frontend_Target_Workbench_Plan_20261030.md) |
 | 改结构输入 / 结果复用 / 查看器 | [ACP_Structure_Sources_DevDoc](reference/current/ACP_Structure_Sources_DevDoc.md) | [ACP_Structure_Viewer_DevDoc](reference/current/ACP_Structure_Viewer_DevDoc.md)、[能量与轨迹查看器](reference/current/ACP_Energy_Trajectory_Viewer_DevDoc.md) |
 | 改 NMR / DP4 | `src/acp/nmr/AGENTS.md` | [ACP_NMR_DP4_DevDoc](reference/current/ACP_NMR_DP4_DevDoc.md) |
+| 改 MCP / Agent 接口与指南 | `src/acp_services/AGENTS.md`（MCP 段） | [MCP / Agent 统一计划](reference/next-change/ACP_MCP_Agent_Guidance_PES_Batch_Plan_20261030.md) |
+| 了解当前真实状态（审查与放行门） | [ACP2 功能审查](../reports/acp2_function_audit_20261028/REPORT.md) | [ACP / RPH 现状说明](reference/current/ACP_RPH_Status_20261028.md) |
 | 看下一轮路线 | [ACP 3.0 架构](reference/next-change/ACP_3.0_Architecture_20261031.md) | [3.0 后端计划](reference/next-change/ACP_3.0_Backend_Plan_20261031.md)、[3.0 前端计划](reference/next-change/ACP_3.0_Frontend_Plan_20261031.md) |
 | 跑真实计算验收 | [ACP_Function_Test_Manual](reference/current/ACP_Function_Test_Manual.md) | — |
 | 查历史决策/旧方案 | [archive/](archive/) | [2026-10-31 批次](archive/2026-10-31/README.md)、[2026-10-16 批次](archive/2026-10-16/README.md) |

@@ -1,0 +1,158 @@
+{
+  "artifacts": [
+    {
+      "path": "research-source-scan.json",
+      "sha256": "c7a05b7f27b84c4a80a25deaf38b79013d8010e2a2de11dcd21ff1b7aba8a2ec",
+      "size_bytes": 412
+    },
+    {
+      "path": "research-record-matrix.json",
+      "sha256": "0360e461848fa758235f49780e9559bd5b2c116318a8dbe0cbf3b9351795d5af",
+      "size_bytes": 1285
+    },
+    {
+      "path": "rph-test.log",
+      "sha256": "7bb26574d39ee528c007d64a5c287bf5a0b671d9cf42cda36b1ac8a094681b4d",
+      "size_bytes": 10751
+    },
+    {
+      "path": "rph-gates.log",
+      "sha256": "60492358b3ad83414bcda33ca57eb28d64791941d3650ed584387e068651f9a0",
+      "size_bytes": 12196
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "evidence_kind=fixture",
+      "name": "research.evidence_kind_fixture",
+      "status": "PASS"
+    },
+    {
+      "detail": "[]",
+      "name": "research.source_has_no_local_db_file_or_shell",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 $ tsc -b",
+      "name": "research.build",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 ide-effect free\n  ---\n  duration_ms: 0.434909\n  type: 'test'\n  ...\n# Subtest: cli parser rejects unknown arguments and missing profile values\nok 57 - cli parser rejects unknown arguments and missing profile values\n  ---\n  duration_ms: 0.380583\n  type: 'test'\n  ...\n1..57\n# tests 57\n# suites 0\n# pass 57\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 153.891278\n$ node scripts/run-tests.mjs",
+      "name": "research.test",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 $ node scripts/check-boundaries.mjs && tsc -b --pretty false",
+      "name": "research.check",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0  scanned files: 8\n  research: 5 file(s), imports -> research\n  bridge: 1 file(s), imports -> bridge, research\n  dsh-bundle: 1 file(s), imports -> dsh-bundle, bridge\n  cli: 1 file(s), imports -> cli, dsh-bundle\n  forbidden: child_process, spawn/exec/execFile, ssh2, node:net (bridge/research),\n             DSH private source paths, platform store imports, wrong-direction imports\n\nBOUNDARY CHECK PASS",
+      "name": "research.boundaries",
+      "status": "PASS"
+    },
+    {
+      "detail": "research_cases=16 minimum=10",
+      "name": "research.record_cases_ge_10",
+      "status": "PASS"
+    },
+    {
+      "detail": "tests=57 research_cases=16 failures=0",
+      "name": "research.workspace_tests_green",
+      "status": "PASS"
+    },
+    {
+      "detail": "missing=[] covered=['approval_binding', 'chat_not_authority', 'digest_sensitivity', 'digest_stability', 'duplicate_round', 'event_idempotency', 'p2_allowlist', 'project_mismatch', 'revision_conflict', 'round_idempotency', 'stale_reference']",
+      "name": "research.cas_and_idempotency_matrix_present",
+      "status": "PASS"
+    },
+    {
+      "detail": "NOT_VERIFIED(b18a_handoff): B18a versioned resource endpoint is not delivered; fixture evidence only",
+      "name": "record.live_resource_create",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "NOT_VERIFIED(b18a_handoff): B18a versioned resource endpoint is not delivered; fixture evidence only",
+      "name": "record.live_read_revision",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "NOT_VERIFIED(b18a_handoff): B18a versioned resource endpoint is not delivered; fixture evidence only",
+      "name": "record.live_cas_conflict",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "NOT_VERIFIED(b18a_handoff): B18a versioned resource endpoint is not delivered; fixture evidence only",
+      "name": "record.live_project_isolation",
+      "status": "NOT_VERIFIED"
+    },
+    {
+      "detail": "NOT_VERIFIED(b18a_handoff): B18a versioned resource endpoint is not delivered; fixture evidence only",
+      "name": "proposal.live_resource_create",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "694523e1e245d29c0b106ed0880e7466ba17df7a",
+    "harness_revision": "c68280d4929748e07e3db2093b21f70467ab15330b30da6cb8406c8bceb3f5ee",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "694523e1e245d29c0b106ed0880e7466ba17df7a",
+  "command": [
+    "/ACPServer/acp2-development/venvs/c/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "research-record-fixtures",
+    "--timeout",
+    "300",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/research-record-fixtures/research-record-fixtures-20261022T224051Z/main"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/acp2-development/C",
+  "evidence_kind": "fixture",
+  "exit_code": 0,
+  "extensions": {
+    "experience.harness_contract_revision": "c68280d4929748e07e3db2093b21f70467ab15330b30da6cb8406c8bceb3f5ee",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+    "experience.mode": "fixture",
+    "experience.product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+    "experience.research_record": {
+      "evidence_kind": "fixture",
+      "fixture_adapter": "rph/test/research-fixture-client.ts",
+      "live_b18a_rows": {
+        "proposal.live_resource_create": "NOT_VERIFIED(b18a_handoff)",
+        "record.live_cas_conflict": "NOT_VERIFIED(b18a_handoff)",
+        "record.live_project_isolation": "NOT_VERIFIED(b18a_handoff)",
+        "record.live_read_revision": "NOT_VERIFIED(b18a_handoff)",
+        "record.live_resource_create": "NOT_VERIFIED(b18a_handoff)"
+      },
+      "source_module": "rph/packages/research/src/store.ts"
+    },
+    "experience.run_id": "research-record-fixtures-20261022T224051Z",
+    "experience.scenario_key": "research-record-fixtures",
+    "experience.subcase": null,
+    "experience.test_revision": "694523e1e245d29c0b106ed0880e7466ba17df7a"
+  },
+  "finished_at": "2026-10-22T22:40:54Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:fixture",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "research-record-fixtures-20261022T224051Z",
+  "scenario": "experience:research-record-fixtures",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T22:40:51Z",
+  "submission_id": null,
+  "usage": null
+}

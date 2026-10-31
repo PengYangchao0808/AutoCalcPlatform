@@ -1,0 +1,563 @@
+{
+  "analysis_form_digest": "sha256:6a63412755834547272a70de4a658819569cbe1b14cb9e1faf32afe918cd3090",
+  "artifact_operation": {
+    "artifact_ref": {
+      "attempt": 1,
+      "authorization": {
+        "action": "read",
+        "allowed": true,
+        "authorization_version": 0,
+        "principal_id": "principal_local",
+        "project_id": "uncategorized",
+        "scope": "local-single"
+      },
+      "availability": "ready",
+      "digest": "sha256:91d512456ce0741851c824c6ee4d296f47c74748316875bbcaf47b3a8238ce74",
+      "generation": 1,
+      "job_id": "20261028_090000_101_m405plugin",
+      "media_type": "text/plain",
+      "operation_id": "op_e01ba4c286c1470dbf18df60f4b8dae3",
+      "relative_path": "RESULT/native.acp2n",
+      "resource_id": "native_record",
+      "schema": "acp2.artifact-ref.v1",
+      "size_bytes": 273,
+      "source_refs": [],
+      "source_schema": "",
+      "version": 1
+    },
+    "attempt": 1,
+    "availability": "ready",
+    "basis_revision": 1,
+    "bytes": 273,
+    "digest": "sha256:91d512456ce0741851c824c6ee4d296f47c74748316875bbcaf47b3a8238ce74",
+    "error": null,
+    "expected_revision": 1,
+    "freshness": "current",
+    "generation": 1,
+    "idempotency_key": "prep_eac4f97bce6acb12382af973e9e987f0",
+    "idempotent_replay": false,
+    "job_id": "20261028_090000_101_m405plugin",
+    "observed_at": "2026-10-28T00:05:35Z",
+    "operation_id": "op_e01ba4c286c1470dbf18df60f4b8dae3",
+    "operation_ref": {
+      "id": "op_e01ba4c286c1470dbf18df60f4b8dae3",
+      "kind": "operation"
+    },
+    "purpose": "artifact",
+    "resource": {
+      "attempt": 1,
+      "authorization": {
+        "action": "read",
+        "allowed": true,
+        "authorization_version": 0,
+        "principal_id": "principal_local",
+        "project_id": "uncategorized",
+        "scope": "local-single"
+      },
+      "availability": "ready",
+      "digest": "sha256:91d512456ce0741851c824c6ee4d296f47c74748316875bbcaf47b3a8238ce74",
+      "generation": 1,
+      "job_id": "20261028_090000_101_m405plugin",
+      "media_type": "text/plain",
+      "operation_id": "op_e01ba4c286c1470dbf18df60f4b8dae3",
+      "relative_path": "RESULT/native.acp2n",
+      "resource_id": "native_record",
+      "schema": "acp2.artifact-ref.v1",
+      "size_bytes": 273,
+      "source_refs": [],
+      "source_schema": "",
+      "version": 1
+    },
+    "resource_id": "native_record",
+    "resource_kind": "artifact",
+    "schema": "acp2.artifact-ref.v1",
+    "schema_version": 1,
+    "sha256": "91d512456ce0741851c824c6ee4d296f47c74748316875bbcaf47b3a8238ce74",
+    "size_bytes": 273,
+    "source_refs": [],
+    "source_schema": "",
+    "state": "ready",
+    "updated_at": "2026-10-28T00:05:35Z",
+    "version": 1
+  },
+  "artifact_ref": {
+    "artifact_id": "native_record",
+    "attempt": 1,
+    "digest": "sha256:91d512456ce0741851c824c6ee4d296f47c74748316875bbcaf47b3a8238ce74",
+    "generation": 1,
+    "task_id": "20261028_090000_101_m405plugin"
+  },
+  "checks": {
+    "analysis_form_digest": true,
+    "atom_order": true,
+    "computed_distribution_digest": true,
+    "controller_executed": true,
+    "descriptor_digest": true,
+    "distribution_record": true,
+    "energy_matches_fixture": true,
+    "input_digest": true,
+    "no_subprocess": true,
+    "no_task": true,
+    "output_schema": true,
+    "pin_ref": true,
+    "pin_version": true,
+    "started_nothing": true,
+    "state_computed": true,
+    "task_completed": true
+  },
+  "job": {
+    "artifact_sha256": "sha256:91d512456ce0741851c824c6ee4d296f47c74748316875bbcaf47b3a8238ce74",
+    "artifact_source": "/ACPServer/acp2-runs/remediation/m4-05/run-root/uncategorized/20261028_090000_101_m405plugin-1/RESULT/native.acp2n",
+    "attempt": 1,
+    "bytes": 273,
+    "job_id": "20261028_090000_101_m405plugin",
+    "project_id": "uncategorized",
+    "relative_path": "RESULT/native.acp2n",
+    "stub_boundary": "upstream_science_qc_replaced_by_fixed_native_record",
+    "work_dir": "/ACPServer/acp2-runs/remediation/m4-05/run-root/uncategorized/20261028_090000_101_m405plugin-1"
+  },
+  "product": {
+    "analysis_id": "acp2_external_native_singlepoint",
+    "evidence_refs": [
+      {
+        "attempt": 1,
+        "authorization": {
+          "action": "read",
+          "allowed": true,
+          "authorization_version": 0,
+          "principal_id": "",
+          "project_id": "",
+          "scope": "local-single"
+        },
+        "availability": "ready",
+        "digest": "sha256:91d512456ce0741851c824c6ee4d296f47c74748316875bbcaf47b3a8238ce74",
+        "generation": 1,
+        "job_id": "20261028_090000_101_m405plugin",
+        "media_type": "text/plain",
+        "operation_id": "op_e01ba4c286c1470dbf18df60f4b8dae3",
+        "relative_path": "RESULT/native.acp2n",
+        "resource_id": "native_record",
+        "schema": "acp2.artifact-ref.v1",
+        "size_bytes": 273,
+        "source_refs": [],
+        "source_schema": "",
+        "version": 1
+      }
+    ],
+    "operation_ref": null,
+    "product_digest": "sha256:e6026aa36651959adab26f5b09af46f7b7fd386ee814ebbc5862512be6bbba30",
+    "result": {
+      "analysis_id": "acp2_external_native_singlepoint",
+      "inputs": [
+        {
+          "attempt": 1,
+          "authorization": {
+            "action": "read",
+            "allowed": true,
+            "authorization_version": 0,
+            "principal_id": "",
+            "project_id": "",
+            "scope": "local-single"
+          },
+          "availability": "ready",
+          "digest": "sha256:91d512456ce0741851c824c6ee4d296f47c74748316875bbcaf47b3a8238ce74",
+          "generation": 1,
+          "job_id": "20261028_090000_101_m405plugin",
+          "media_type": "text/plain",
+          "operation_id": "op_e01ba4c286c1470dbf18df60f4b8dae3",
+          "relative_path": "RESULT/native.acp2n",
+          "resource_id": "native_record",
+          "schema": "acp2.artifact-ref.v1",
+          "size_bytes": 273,
+          "source_refs": [],
+          "source_schema": "",
+          "version": 1
+        }
+      ],
+      "product": {
+        "capability_output_schema": "acp2.science.external.native_singlepoint",
+        "capability_output_schema_version": 1,
+        "digest": "sha256:e6026aa36651959adab26f5b09af46f7b7fd386ee814ebbc5862512be6bbba30",
+        "input_digests": [
+          "sha256:91d512456ce0741851c824c6ee4d296f47c74748316875bbcaf47b3a8238ce74"
+        ],
+        "schema": "acp2.science.plugin_analysis.v1",
+        "schema_version": 1,
+        "task_result": {
+          "artifacts": [],
+          "complete": true,
+          "coordinates": [
+            [
+              0.0,
+              0.0,
+              0.1173
+            ],
+            [
+              0.0,
+              0.7572,
+              -0.4692
+            ],
+            [
+              0.0,
+              -0.7572,
+              -0.4692
+            ]
+          ],
+          "energy_hartree": -76.026632,
+          "errors": [],
+          "frequencies": [],
+          "metadata": {
+            "atom_order": [
+              "O",
+              "H",
+              "H"
+            ],
+            "capability": "acp2_external_native_singlepoint",
+            "capability_schema": "acp2.science.external.native_singlepoint",
+            "capability_schema_version": 1,
+            "charge": 0,
+            "declared_atom_count": 3,
+            "multiplicity": 1,
+            "native_schema": "acp2.native.singlepoint.v1",
+            "units": {
+              "coordinates": "angstrom",
+              "energy": "hartree"
+            }
+          },
+          "provenance": {
+            "backend": "acp2_external_fixture",
+            "input_signature": "91d512456ce0741851c824c6ee4d296f47c74748316875bbcaf47b3a8238ce74",
+            "method": "native_singlepoint_v1",
+            "version": "1.0.0"
+          },
+          "schema_version": 1,
+          "status": "completed",
+          "symbols": [
+            "O",
+            "H",
+            "H"
+          ],
+          "task": "singlepoint"
+        }
+      },
+      "provenance": {
+        "capability_id": "acp2_external_native_singlepoint",
+        "capability_ref": "acp2_external_native_singlepoint@1.0.0",
+        "capability_version": "1.0.0",
+        "computed_distribution_digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+        "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+        "descriptor_schema": "acp2.plugin.capability-descriptor.v1",
+        "distribution_digest": {
+          "algorithm": "acp2.plugin.distribution-digest.v1",
+          "declared": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+          "digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+          "file_count": 5,
+          "matches_declared": true
+        },
+        "enabled_at": "2026-10-28T00:05:31Z",
+        "enabled_by": "controller",
+        "executed_in": "controller",
+        "form_digest": "sha256:6a63412755834547272a70de4a658819569cbe1b14cb9e1faf32afe918cd3090",
+        "input_digests": [
+          "sha256:91d512456ce0741851c824c6ee4d296f47c74748316875bbcaf47b3a8238ce74"
+        ],
+        "plugin_name": "acp2_external.native_singlepoint",
+        "starts_subprocess": false,
+        "starts_task": false
+      },
+      "schema_version": 1,
+      "started": false,
+      "state": "computed"
+    },
+    "schema_version": 1,
+    "started": false,
+    "task_ref": null
+  },
+  "product_digest": "sha256:e6026aa36651959adab26f5b09af46f7b7fd386ee814ebbc5862512be6bbba30",
+  "product_files": {
+    "external_v1": "product-external-v1.json",
+    "upgrade_v1": "product-upgrade-v1.json"
+  },
+  "provenance": {
+    "capability_id": "acp2_external_native_singlepoint",
+    "capability_ref": "acp2_external_native_singlepoint@1.0.0",
+    "capability_version": "1.0.0",
+    "computed_distribution_digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+    "descriptor_digest": "sha256:633216e3e4c0150f3b3f2b30dd25e3b9ce2ff42bc8b7d05d5564b97d41cfb780",
+    "descriptor_schema": "acp2.plugin.capability-descriptor.v1",
+    "distribution_digest": {
+      "algorithm": "acp2.plugin.distribution-digest.v1",
+      "declared": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+      "digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
+      "file_count": 5,
+      "matches_declared": true
+    },
+    "enabled_at": "2026-10-28T00:05:31Z",
+    "enabled_by": "controller",
+    "executed_in": "controller",
+    "form_digest": "sha256:6a63412755834547272a70de4a658819569cbe1b14cb9e1faf32afe918cd3090",
+    "input_digests": [
+      "sha256:91d512456ce0741851c824c6ee4d296f47c74748316875bbcaf47b3a8238ce74"
+    ],
+    "plugin_name": "acp2_external.native_singlepoint",
+    "starts_subprocess": false,
+    "starts_task": false
+  },
+  "refusals": {
+    "checks": {
+      "tampered_rule": true,
+      "tampered_status": true,
+      "unknown_allowed_names_plugin": true,
+      "unknown_code": true,
+      "unknown_status": true
+    },
+    "tampered": {
+      "detail": {
+        "code": "revision_conflict",
+        "message": "requested digest does not match the committed digest",
+        "params": {
+          "committed": "sha256:91d512456ce0741851c824c6ee4d296f47c74748316875bbcaf47b3a8238ce74",
+          "requested": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+          "rule": "digest_mismatch"
+        }
+      },
+      "status": 409
+    },
+    "unknown": {
+      "detail": {
+        "code": "unsupported_capability",
+        "message": "unknown analysis capability 'plugin.invented'",
+        "params": {
+          "allowed": [
+            "vibration.compute",
+            "vibration.analyze",
+            "acp2_external_native_singlepoint",
+            "acp2_upgrade_native_singlepoint",
+            "vibration.analyze",
+            "vibration.compute"
+          ],
+          "field": "analysis_id"
+        }
+      },
+      "status": 422
+    }
+  },
+  "ui_form_digest": "sha256:5fd46abe5c7c5d3c3b2fb9b3ffc4d1cb9962ae19c2180148de7d689f44f4c7d0",
+  "upgrade_job": {
+    "artifact_sha256": "sha256:bad10efd7d24addc0e4338cc48a254d53ee48b9556c1adc14ad23266abe9d64c",
+    "artifact_source": "/ACPServer/acp2-runs/remediation/m4-05/run-root/uncategorized/20261028_090000_102_m405upgradev1-1/RESULT/native.json",
+    "attempt": 1,
+    "bytes": 283,
+    "job_id": "20261028_090000_102_m405upgradev1",
+    "project_id": "uncategorized",
+    "relative_path": "RESULT/native.json",
+    "stub_boundary": "upstream_science_qc_replaced_by_fixed_native_record",
+    "work_dir": "/ACPServer/acp2-runs/remediation/m4-05/run-root/uncategorized/20261028_090000_102_m405upgradev1-1"
+  },
+  "upgrade_v1": {
+    "artifact_ref": {
+      "artifact_id": "native_record",
+      "attempt": 1,
+      "digest": "sha256:bad10efd7d24addc0e4338cc48a254d53ee48b9556c1adc14ad23266abe9d64c",
+      "generation": 1,
+      "operation": {
+        "artifact_ref": {
+          "attempt": 1,
+          "authorization": {
+            "action": "read",
+            "allowed": true,
+            "authorization_version": 0,
+            "principal_id": "principal_local",
+            "project_id": "uncategorized",
+            "scope": "local-single"
+          },
+          "availability": "ready",
+          "digest": "sha256:bad10efd7d24addc0e4338cc48a254d53ee48b9556c1adc14ad23266abe9d64c",
+          "generation": 1,
+          "job_id": "20261028_090000_102_m405upgradev1",
+          "media_type": "text/plain",
+          "operation_id": "op_5a9c752138bc4ce9a40256c598be489f",
+          "relative_path": "RESULT/native.json",
+          "resource_id": "native_record",
+          "schema": "acp2.artifact-ref.v1",
+          "size_bytes": 283,
+          "source_refs": [],
+          "source_schema": "",
+          "version": 1
+        },
+        "attempt": 1,
+        "availability": "ready",
+        "basis_revision": 1,
+        "bytes": 283,
+        "digest": "sha256:bad10efd7d24addc0e4338cc48a254d53ee48b9556c1adc14ad23266abe9d64c",
+        "error": null,
+        "expected_revision": 1,
+        "freshness": "current",
+        "generation": 1,
+        "idempotency_key": "prep_c9d84545f5e4e83b7a2f23dbf6eb2eba",
+        "idempotent_replay": false,
+        "job_id": "20261028_090000_102_m405upgradev1",
+        "observed_at": "2026-10-28T00:05:35Z",
+        "operation_id": "op_5a9c752138bc4ce9a40256c598be489f",
+        "operation_ref": {
+          "id": "op_5a9c752138bc4ce9a40256c598be489f",
+          "kind": "operation"
+        },
+        "purpose": "artifact",
+        "resource": {
+          "attempt": 1,
+          "authorization": {
+            "action": "read",
+            "allowed": true,
+            "authorization_version": 0,
+            "principal_id": "principal_local",
+            "project_id": "uncategorized",
+            "scope": "local-single"
+          },
+          "availability": "ready",
+          "digest": "sha256:bad10efd7d24addc0e4338cc48a254d53ee48b9556c1adc14ad23266abe9d64c",
+          "generation": 1,
+          "job_id": "20261028_090000_102_m405upgradev1",
+          "media_type": "text/plain",
+          "operation_id": "op_5a9c752138bc4ce9a40256c598be489f",
+          "relative_path": "RESULT/native.json",
+          "resource_id": "native_record",
+          "schema": "acp2.artifact-ref.v1",
+          "size_bytes": 283,
+          "source_refs": [],
+          "source_schema": "",
+          "version": 1
+        },
+        "resource_id": "native_record",
+        "resource_kind": "artifact",
+        "schema": "acp2.artifact-ref.v1",
+        "schema_version": 1,
+        "sha256": "bad10efd7d24addc0e4338cc48a254d53ee48b9556c1adc14ad23266abe9d64c",
+        "size_bytes": 283,
+        "source_refs": [],
+        "source_schema": "",
+        "state": "ready",
+        "updated_at": "2026-10-28T00:05:35Z",
+        "version": 1
+      },
+      "request": {
+        "artifact_ref": {
+          "attempt": 1,
+          "authorization": {
+            "action": "write",
+            "allowed": true,
+            "authorization_version": 0,
+            "principal_id": "principal_local",
+            "project_id": "uncategorized",
+            "scope": "local-single"
+          },
+          "availability": "absent",
+          "digest": "",
+          "generation": 1,
+          "job_id": "20261028_090000_102_m405upgradev1",
+          "media_type": "text/plain",
+          "operation_id": "op_5a9c752138bc4ce9a40256c598be489f",
+          "relative_path": "RESULT/native.json",
+          "resource_id": "native_record",
+          "schema": "acp2.artifact-ref.v1",
+          "size_bytes": 0,
+          "source_refs": [],
+          "source_schema": "",
+          "version": 1
+        },
+        "attempt": 1,
+        "availability": "absent",
+        "basis_revision": 1,
+        "bytes": null,
+        "digest": "",
+        "error": null,
+        "expected_revision": 1,
+        "freshness": "unknown",
+        "generation": 1,
+        "idempotency_key": "prep_c9d84545f5e4e83b7a2f23dbf6eb2eba",
+        "idempotent_replay": false,
+        "job_id": "20261028_090000_102_m405upgradev1",
+        "observed_at": "2026-10-28T00:05:35Z",
+        "operation_id": "op_5a9c752138bc4ce9a40256c598be489f",
+        "operation_ref": {
+          "id": "op_5a9c752138bc4ce9a40256c598be489f",
+          "kind": "operation"
+        },
+        "purpose": "artifact",
+        "resource": {
+          "attempt": 1,
+          "authorization": {
+            "action": "write",
+            "allowed": true,
+            "authorization_version": 0,
+            "principal_id": "principal_local",
+            "project_id": "uncategorized",
+            "scope": "local-single"
+          },
+          "availability": "absent",
+          "digest": "",
+          "generation": 1,
+          "job_id": "20261028_090000_102_m405upgradev1",
+          "media_type": "text/plain",
+          "operation_id": "op_5a9c752138bc4ce9a40256c598be489f",
+          "relative_path": "RESULT/native.json",
+          "resource_id": "native_record",
+          "schema": "acp2.artifact-ref.v1",
+          "size_bytes": 0,
+          "source_refs": [],
+          "source_schema": "",
+          "version": 1
+        },
+        "resource_id": "native_record",
+        "resource_kind": "artifact",
+        "schema": "acp2.artifact-ref.v1",
+        "schema_version": 1,
+        "sha256": null,
+        "size_bytes": 0,
+        "source_refs": [],
+        "source_schema": "",
+        "state": "pending",
+        "updated_at": "2026-10-28T00:05:35Z",
+        "version": 1
+      },
+      "task_id": "20261028_090000_102_m405upgradev1"
+    },
+    "job": {
+      "artifact_sha256": "sha256:bad10efd7d24addc0e4338cc48a254d53ee48b9556c1adc14ad23266abe9d64c",
+      "artifact_source": "/ACPServer/acp2-runs/remediation/m4-05/run-root/uncategorized/20261028_090000_102_m405upgradev1-1/RESULT/native.json",
+      "attempt": 1,
+      "bytes": 283,
+      "job_id": "20261028_090000_102_m405upgradev1",
+      "project_id": "uncategorized",
+      "relative_path": "RESULT/native.json",
+      "stub_boundary": "upstream_science_qc_replaced_by_fixed_native_record",
+      "work_dir": "/ACPServer/acp2-runs/remediation/m4-05/run-root/uncategorized/20261028_090000_102_m405upgradev1-1"
+    },
+    "product_digest": "sha256:c96ee7ecae2c7f9b57d77e12b9783996d88d2853afe2052a1e9b32bfcf711bbd",
+    "provenance": {
+      "capability_id": "acp2_upgrade_native_singlepoint",
+      "capability_ref": "acp2_upgrade_native_singlepoint@1.0.0",
+      "capability_version": "1.0.0",
+      "computed_distribution_digest": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+      "descriptor_digest": "sha256:4297fd794d57e3d16ec6980ab9803ffbf1010d9c89cd070637ab1ba0462314df",
+      "descriptor_schema": "acp2.plugin.capability-descriptor.v1",
+      "distribution_digest": {
+        "algorithm": "acp2.plugin.distribution-digest.v1",
+        "declared": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+        "digest": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
+        "file_count": 5,
+        "matches_declared": true
+      },
+      "enabled_at": "2026-10-28T00:05:32Z",
+      "enabled_by": "controller",
+      "executed_in": "controller",
+      "form_digest": "sha256:358d1846ba4919558e91a98fd7f82cb96f949e424f62490313a2a82eb5801e00",
+      "input_digests": [
+        "sha256:bad10efd7d24addc0e4338cc48a254d53ee48b9556c1adc14ad23266abe9d64c"
+      ],
+      "plugin_name": "acp2_upgrade.native_singlepoint",
+      "starts_subprocess": false,
+      "starts_task": false
+    }
+  }
+}

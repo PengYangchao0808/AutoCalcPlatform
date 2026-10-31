@@ -1,0 +1,236 @@
+{
+  "mode": "workbench",
+  "view": {
+    "blocking_missing_checks": [
+      "c-ts-exactly-one-imaginary-mode/artifact_missing",
+      "c-frequency-hessian-present/artifact_missing",
+      "c-irc-bidirectional-complete/not_executed",
+      "c-irc-forward-endpoint/irc_not_bidirectional",
+      "c-electronic-activation-barrier-comparable/not_executed",
+      "c-reactant-stoichiometry-complete/artifact_missing"
+    ],
+    "claims": [
+      {
+        "blocking_missing_checks": [
+          "artifact_missing"
+        ],
+        "claim_id": "c-ts-exactly-one-imaginary-mode",
+        "source_ref_count": 0,
+        "status": "inconclusive",
+        "validator_id": "check.ts_saddle_candidate",
+        "validator_version": "1.0.0"
+      },
+      {
+        "blocking_missing_checks": [],
+        "claim_id": "c-ts-mapped-imaginary-mode",
+        "source_ref_count": 20,
+        "status": "supported",
+        "validator_id": "check.ts_mode_mapping",
+        "validator_version": "1.0.0"
+      },
+      {
+        "blocking_missing_checks": [
+          "artifact_missing"
+        ],
+        "claim_id": "c-frequency-hessian-present",
+        "source_ref_count": 0,
+        "status": "inconclusive",
+        "validator_id": "check.frequency_evidence",
+        "validator_version": "1.0.0"
+      },
+      {
+        "blocking_missing_checks": [
+          "not_executed"
+        ],
+        "claim_id": "c-irc-bidirectional-complete",
+        "source_ref_count": 0,
+        "status": "not_evaluated",
+        "validator_id": "check.irc_bidirectional_completion",
+        "validator_version": "1.0.0"
+      },
+      {
+        "blocking_missing_checks": [
+          "irc_not_bidirectional"
+        ],
+        "claim_id": "c-irc-forward-endpoint",
+        "source_ref_count": 0,
+        "status": "inconclusive",
+        "validator_id": "check.irc_endpoint_identity",
+        "validator_version": "1.0.0"
+      },
+      {
+        "blocking_missing_checks": [
+          "not_executed"
+        ],
+        "claim_id": "c-electronic-activation-barrier-comparable",
+        "source_ref_count": 0,
+        "status": "not_evaluated",
+        "validator_id": "check.activation_energy_comparability",
+        "validator_version": "1.0.0"
+      },
+      {
+        "blocking_missing_checks": [
+          "artifact_missing"
+        ],
+        "claim_id": "c-reactant-stoichiometry-complete",
+        "source_ref_count": 0,
+        "status": "inconclusive",
+        "validator_id": "check.reactant_stoichiometry_completeness",
+        "validator_version": "1.0.0"
+      }
+    ],
+    "contract_version": "1.0.0",
+    "evidence_refs": [
+      {
+        "evidence_id": "art-127242b5cd9cd64c",
+        "kind": "step:ts_optimize",
+        "relative_path": "RESULT/m4-04/ts_optimize/004_ts_opt.property.txt",
+        "sha256": "sha256:127242b5cd9cd64c7656f63b238f7ee4467e4a8a4d6cf577f0b3fccf2f635c57"
+      },
+      {
+        "evidence_id": "art-136b24724a15f4ac",
+        "kind": "step:candidate_frequency",
+        "relative_path": "RESULT/m4-04/candidate_frequency/003_step_result.json",
+        "sha256": "sha256:136b24724a15f4ac71d4a6463fb28a0c5b1a22efa5f55b7ce10d5d312b12bb83"
+      },
+      {
+        "evidence_id": "art-1a42911d3d77ccb9",
+        "kind": "step:candidate_frequency",
+        "relative_path": "RESULT/m4-04/candidate_frequency/009_step_dag_state.json",
+        "sha256": "sha256:1a42911d3d77ccb9b25790daa44ba8a9a8cf6321803c1a8fb22da4788acb86d2"
+      },
+      {
+        "evidence_id": "art-219ac99408b17ad6",
+        "kind": "step:candidate_frequency",
+        "relative_path": "RESULT/m4-04/candidate_frequency/008_quota_reservation.json",
+        "sha256": "sha256:219ac99408b17ad61880c2dd22429363db8f12f754288fd558f512d7eecd1bd2"
+      },
+      {
+        "evidence_id": "art-28e86b4cdeba0bde",
+        "kind": "step:ts_optimize",
+        "relative_path": "RESULT/m4-04/ts_optimize/003_ts_opt.inp",
+        "sha256": "sha256:28e86b4cdeba0bdec1f51a2bd504a8e4ba23d39a44cb67a1711f1f2bc8f6800d"
+      },
+      {
+        "evidence_id": "art-2d14795519872f6b",
+        "kind": "step:ts_optimize",
+        "relative_path": "RESULT/m4-04/ts_optimize/000_ts_opt.out",
+        "sha256": "sha256:2d14795519872f6b27349e5d9cde2807194478f6c12c855f672c1ef305fe28d7"
+      },
+      {
+        "evidence_id": "art-3e85135c1d97ed38",
+        "kind": "step:candidate_frequency",
+        "relative_path": "RESULT/m4-04/candidate_frequency/007_plan.json",
+        "sha256": "sha256:3e85135c1d97ed3897ca46e6517dfe5675f98c5c6cf9413c2872078b12fe9248"
+      },
+      {
+        "evidence_id": "art-480e823ed3206217",
+        "kind": "step:ts_optimize",
+        "relative_path": "RESULT/m4-04/ts_optimize/001_ts_opt.xyz",
+        "sha256": "sha256:480e823ed320621715c1bfc240caf3e1ab93654b0d3d26d93ecdf99aab118a4f"
+      },
+      {
+        "evidence_id": "art-481d932544b9c131",
+        "kind": "step:candidate_frequency",
+        "relative_path": "RESULT/m4-04/candidate_frequency/004_execution_receipt.json",
+        "sha256": "sha256:481d932544b9c131da979b347a92d058c0d6d04ae00a59836987024e280dadce"
+      },
+      {
+        "evidence_id": "art-6c85f86471d153f1",
+        "kind": "step:ts_optimize",
+        "relative_path": "RESULT/m4-04/ts_optimize/006_ts_opt.002.hess",
+        "sha256": "sha256:6c85f86471d153f172d856ada438a993847ecd4d47bed07de88c4a2e251a53d5"
+      },
+      {
+        "evidence_id": "art-8434c537416bde27",
+        "kind": "step:ts_optimize",
+        "relative_path": "RESULT/m4-04/ts_optimize/005_ts_opt.001.hess",
+        "sha256": "sha256:8434c537416bde276639c438a58ed87a2c26964f865add6bcdc9dc30ba9f942e"
+      },
+      {
+        "evidence_id": "art-a1341128627c6ff2",
+        "kind": "step:ts_optimize",
+        "relative_path": "RESULT/m4-04/ts_optimize/002_ts_opt_trj.xyz",
+        "sha256": "sha256:a1341128627c6ff253bb30c4028b799d3beb0edfff31a7d6c4c8225fa77f623a"
+      },
+      {
+        "evidence_id": "art-a8c7bdc2151e633c",
+        "kind": "step:candidate_frequency",
+        "relative_path": "RESULT/m4-04/candidate_frequency/000_frozen_group.json",
+        "sha256": "sha256:a8c7bdc2151e633cf812799524ea9239152b6f2ceea423d5c148561509e7a6b3"
+      },
+      {
+        "evidence_id": "art-c56a316dd2cc5ec0",
+        "kind": "step:candidate_frequency",
+        "relative_path": "RESULT/m4-04/candidate_frequency/006_binding.json",
+        "sha256": "sha256:c56a316dd2cc5ec0e2297a1a7413fbb2910f7643289cf57a98361c8716625f23"
+      },
+      {
+        "evidence_id": "art-ce3c289a0f54499f",
+        "kind": "step:ts_optimize",
+        "relative_path": "RESULT/m4-04/ts_optimize/007_ts_opt.003.hess",
+        "sha256": "sha256:ce3c289a0f54499ff8eea0a8ad4123b9c75ad1a2f4343de7232adead2bd43529"
+      },
+      {
+        "evidence_id": "art-ce58681a9f393e8b",
+        "kind": "step:candidate_frequency",
+        "relative_path": "RESULT/m4-04/candidate_frequency/005_input.xyz",
+        "sha256": "sha256:ce58681a9f393e8b278c15700cf18fbb4e458d38c48341d8aa8ed704fdca918c"
+      },
+      {
+        "evidence_id": "art-d5bab4162cf2d7e3",
+        "kind": "step:candidate_frequency",
+        "relative_path": "RESULT/m4-04/candidate_frequency/002_publication.json",
+        "sha256": "sha256:d5bab4162cf2d7e3892a5a369d533aef234f8b326f5695926e418790906754f2"
+      },
+      {
+        "evidence_id": "art-e063f0fd82f26f49",
+        "kind": "step:candidate_frequency",
+        "relative_path": "RESULT/m4-04/candidate_frequency/001_envelope.json",
+        "sha256": "sha256:e063f0fd82f26f49c1b3a353f2d192cfb3c168036e14a74068bd4b4a18e5eeca"
+      },
+      {
+        "evidence_id": "art-f8f3e0d6ac5fd683",
+        "kind": "step:ts_optimize",
+        "relative_path": "RESULT/m4-04/ts_optimize/008_ts_opt.004.hess",
+        "sha256": "sha256:f8f3e0d6ac5fd6831945c6149b37fdfec6d657809f0bf65b5fcc9636a3e53497"
+      }
+    ],
+    "evidence_status": "complete",
+    "execution_terminal_state": "completed",
+    "limitations": [
+      "A frozen known candidate was carried through the execution chain; this is a control run, never a search result.",
+      "One conformer per endpoint and one declared candidate path: a declared boundary, not a finding.",
+      "Every compared quantity was produced at the ADR-008 frozen level; no equivalent tier was substituted."
+    ],
+    "normal_reuse": true,
+    "overall_claim_status": "inconclusive",
+    "projection_digest": "sha256:c5c8627d96e5d6bd82bbbfde33ba5b02ea02890b93e974cffd6193080ea9a305",
+    "provenance_digest": "",
+    "qualification": "complete",
+    "report": {
+      "digest": "sha256:2c7636c8aac663325b10968b18d54c8544e231c7e87542fcfde37681a5113678",
+      "report_id": "report.m4-04.diels-alder.v1",
+      "schema_version": 1,
+      "subject_id": "subject.diels_alder.limited.v1"
+    },
+    "research": {
+      "principal_id": "principal_m404",
+      "project_id": "project_m404_da",
+      "research_id": "res-m404-da",
+      "round": 0,
+      "session_id": "ses-m404-da"
+    },
+    "schema": "acp2.runtime.evidence-projection.v1",
+    "task_ref": {
+      "attempt": 1,
+      "job_id": "20261028_943_projection_attempt",
+      "project_id": "project_m404_da",
+      "release": {
+        "release_digest": "sha256:813583bdcaae20ef900a99180f433b34a7dfa730fb47c1efea5c9435919a061b",
+        "release_id": "2d1ab37a0f988933"
+      },
+      "task_id": "20261028_943_projection_attempt"
+    }
+  }
+}

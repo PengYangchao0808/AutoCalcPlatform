@@ -1,0 +1,462 @@
+{
+  "files": [
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_butadiene/optimize.out",
+      "adr_step_index": 1,
+      "entry": "legacy_task_core",
+      "path": "optimize.out",
+      "sha256": "59664df763973ff2266595a6bac24d7e1f3c70aae9e1fd5ce1b5ac6d728f1385",
+      "size_bytes": 1295957,
+      "step_id": "endpoint_prep",
+      "task_ref": null
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_butadiene/optimize.xyz",
+      "adr_step_index": 1,
+      "entry": "legacy_task_core",
+      "path": "optimize.xyz",
+      "sha256": "0fc096d9278a3fd9d6885cfe2a4447b751bf9ba5bfe45c56f8c41f38e87cacd6",
+      "size_bytes": 874,
+      "step_id": "endpoint_prep",
+      "task_ref": null
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_butadiene/optimize_trj.xyz",
+      "adr_step_index": 1,
+      "entry": "legacy_task_core",
+      "path": "optimize_trj.xyz",
+      "sha256": "a2a649046d540069fc18cd09d402d9796b78a25dc66637c8188ec66e115d1d59",
+      "size_bytes": 23760,
+      "step_id": "endpoint_prep",
+      "task_ref": null
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_butadiene/optimize.inp",
+      "adr_step_index": 1,
+      "entry": "legacy_task_core",
+      "path": "optimize.inp",
+      "sha256": "2724a4794c2adc3dc826c0af245e7fad45fa07d4357ae523073291a6ce97c989",
+      "size_bytes": 590,
+      "step_id": "endpoint_prep",
+      "task_ref": null
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_butadiene/optimize.property.txt",
+      "adr_step_index": 1,
+      "entry": "legacy_task_core",
+      "path": "optimize.property.txt",
+      "sha256": "238a9fb246570cea53b93e846c799166f30c36e4252b93e41050350a415c02a5",
+      "size_bytes": 246885,
+      "step_id": "endpoint_prep",
+      "task_ref": null
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_ethene/optimize.out",
+      "adr_step_index": 1,
+      "entry": "legacy_task_core",
+      "path": "optimize.out",
+      "sha256": "c01b68f339b76523d58fb82e301287920502fca75e567d1f7036fc5469fa619c",
+      "size_bytes": 196582,
+      "step_id": "endpoint_prep",
+      "task_ref": null
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_ethene/optimize.xyz",
+      "adr_step_index": 1,
+      "entry": "legacy_task_core",
+      "path": "optimize.xyz",
+      "sha256": "e1b99e39f41133e4cf133bf63cbafbffa2693147d2683a6c7000822be1e2841a",
+      "size_bytes": 569,
+      "step_id": "endpoint_prep",
+      "task_ref": null
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_ethene/optimize_trj.xyz",
+      "adr_step_index": 1,
+      "entry": "legacy_task_core",
+      "path": "optimize_trj.xyz",
+      "sha256": "3a3323319c3e8c7ae14083932aba463ce170040226c177d39d1bcac76b6ae473",
+      "size_bytes": 2406,
+      "step_id": "endpoint_prep",
+      "task_ref": null
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_ethene/optimize.inp",
+      "adr_step_index": 1,
+      "entry": "legacy_task_core",
+      "path": "optimize.inp",
+      "sha256": "b4e9022764462dd66b398c1385a3fbd1d7ba4f269c111007ca9ff53c443729e0",
+      "size_bytes": 386,
+      "step_id": "endpoint_prep",
+      "task_ref": null
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_ethene/optimize.property.txt",
+      "adr_step_index": 1,
+      "entry": "legacy_task_core",
+      "path": "optimize.property.txt",
+      "sha256": "6da00834eeb9440362a07ae333f428040f8963282b9a17ae0e3aff04bb097847",
+      "size_bytes": 43728,
+      "step_id": "endpoint_prep",
+      "task_ref": null
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_cyclohexene/optimize.out",
+      "adr_step_index": 1,
+      "entry": "legacy_task_core",
+      "path": "optimize.out",
+      "sha256": "de4706e477dffab0c344940d559cd0a7982d06ee31e3e20d5aafa04a1e8dac1f",
+      "size_bytes": 867829,
+      "step_id": "endpoint_prep",
+      "task_ref": null
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_cyclohexene/optimize.xyz",
+      "adr_step_index": 1,
+      "entry": "legacy_task_core",
+      "path": "optimize.xyz",
+      "sha256": "9765432038945496207b096e238a36abddd0bf49ca765960b7c95c7515c63346",
+      "size_bytes": 1326,
+      "step_id": "endpoint_prep",
+      "task_ref": null
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_cyclohexene/optimize_trj.xyz",
+      "adr_step_index": 1,
+      "entry": "legacy_task_core",
+      "path": "optimize_trj.xyz",
+      "sha256": "3337e56e7711354f84246925a73b49ca9584f52ae20f57047f2e67642dfac149",
+      "size_bytes": 21072,
+      "step_id": "endpoint_prep",
+      "task_ref": null
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_cyclohexene/optimize.inp",
+      "adr_step_index": 1,
+      "entry": "legacy_task_core",
+      "path": "optimize.inp",
+      "sha256": "715110f5623c8275f8e706f1987b57a570bb0441c576d38f16c6c5083c0c6e36",
+      "size_bytes": 896,
+      "step_id": "endpoint_prep",
+      "task_ref": null
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04/da/endpoint_prep_cyclohexene/optimize.property.txt",
+      "adr_step_index": 1,
+      "entry": "legacy_task_core",
+      "path": "optimize.property.txt",
+      "sha256": "04f32eae5ca3d15f202e00339f7d45393c4edad4eb667d6507b9adaed3c9478f",
+      "size_bytes": 202959,
+      "step_id": "endpoint_prep",
+      "task_ref": null
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtb_path.stderr.log",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtb_path.stderr.log",
+      "sha256": "db41edc1c74dad5a3527d5c6e4a48bfce3c2cabc0f0ad20acb5e420ad2a68ea9",
+      "size_bytes": 26,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtb_path.stdout.log",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtb_path.stdout.log",
+      "sha256": "ba863c84bb9447c04b32533899b81854be0eac13d804175f0bf9f2669f68d2bd",
+      "size_bytes": 34107,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbopt.log",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbopt.log",
+      "sha256": "4e93a0ad83181845b2325860c55197f566c02c13f01aec52202eebf91e72c4bc",
+      "size_bytes": 59400,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/path_end.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "path_end.xyz",
+      "sha256": "0f9bd6397111b4090efbd79eaa98ce90567b7da108cfc2937f6f49ed817e7d26",
+      "size_bytes": 820,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/path_start.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "path_start.xyz",
+      "sha256": "7d782d0447fa5695058d23511f2ea5969d0c7878de47a934dbb217b7ec81a63d",
+      "size_bytes": 820,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbpath_1.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbpath_1.xyz",
+      "sha256": "8f1e808cc6e869756e184087f191eff2be4e9e8f34135bdf9b52e5d1bfacb46f",
+      "size_bytes": 59749,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbpath_10.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbpath_10.xyz",
+      "sha256": "0d3bd5818a9368dbffa50657b887da82aba16290d2ebbf6b658f23e8256620fd",
+      "size_bytes": 58450,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbpath_11.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbpath_11.xyz",
+      "sha256": "f425d91c765073bdf8ee4f0193768378f00ddcde2b04e040b68aa78eec654592",
+      "size_bytes": 54553,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbpath_12.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbpath_12.xyz",
+      "sha256": "a71a4be91fac02429cf29ee4e675c7f24054b052ae6f3247a987cdac645b2d0f",
+      "size_bytes": 57150,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbpath_13.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbpath_13.xyz",
+      "sha256": "14edb29c685c71baaa2a421537c21ed5743f268c70289ca622661d0c45056edd",
+      "size_bytes": 84430,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbpath_14.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbpath_14.xyz",
+      "sha256": "ed36ad39caf351df847f5215a45483f54fa8e1150bbde03ae45d8acbb0ec2551",
+      "size_bytes": 89626,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbpath_15.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbpath_15.xyz",
+      "sha256": "a874e73245745a3d4446859a5de069d52173b447fc18f1ed6f4e0afbc17b236d",
+      "size_bytes": 55852,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbpath_16.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbpath_16.xyz",
+      "sha256": "ea8304966ee249c6d9ef346c51d69b42005cdda23a301d11decb123f6326e364",
+      "size_bytes": 55852,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbpath_17.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbpath_17.xyz",
+      "sha256": "0cf314f85818d553b10609dbdad8a5528e183f804dd48fea0466665b6b15a93c",
+      "size_bytes": 58450,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbpath_18.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbpath_18.xyz",
+      "sha256": "e88d6a2cab3a6f1112d7587644cda19bf466f9afaf74febd3d54e795fc6aea2d",
+      "size_bytes": 58449,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbpath_19.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbpath_19.xyz",
+      "sha256": "d50f19abb1975ce1862ad393b5be427f44799bc21d6be9218758d5367bb896ae",
+      "size_bytes": 77935,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbpath_2.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbpath_2.xyz",
+      "sha256": "3f4b90ffee823109db110fcd195ec64149845a37e896dd455cfef6c1586a6e5b",
+      "size_bytes": 58450,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbpath_20.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbpath_20.xyz",
+      "sha256": "e14934fbe4755b2c90a35cdc806d495c0697481c5b28617b6a5a9515fbda4f51",
+      "size_bytes": 84430,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbpath_21.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbpath_21.xyz",
+      "sha256": "5c6de64c26c89e84b02c17d58ce05177c99fcbd915dfabddeb4f34a4ccfe4140",
+      "size_bytes": 58450,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbpath_22.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbpath_22.xyz",
+      "sha256": "a0d925d2f7d4150b4f2bbab9ad261227c9d7174b2f28eea75e96cf535e949405",
+      "size_bytes": 57151,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbpath_23.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbpath_23.xyz",
+      "sha256": "03040684099fc23d46f46cd045d5398add1336a1fd3372a4e1f7993718626b89",
+      "size_bytes": 58450,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbpath_24.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbpath_24.xyz",
+      "sha256": "1886159f77e39ff4434d20d3a1f556bc1f11c1a03e9764c3e7fe4a88bff021f0",
+      "size_bytes": 58450,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbpath_3.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbpath_3.xyz",
+      "sha256": "6eb54fe51d98a52c6127b90afe08979fba5185ff9b1831ab3780676ec4e130f2",
+      "size_bytes": 58450,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbpath_4.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbpath_4.xyz",
+      "sha256": "f10b9d480463d38cb0f901aab845eabd0faeaddee5bbff15421d60ab5a32d42e",
+      "size_bytes": 58450,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbpath_5.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbpath_5.xyz",
+      "sha256": "af6c7432b3137fd6131b4000b57e71b211dd3162cb5a84b8b018255e579d2f1d",
+      "size_bytes": 54552,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbpath_6.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbpath_6.xyz",
+      "sha256": "0df360fd585f9ecffebd7642d4d0eb63b3055a63f834ef915937ac20d453d93d",
+      "size_bytes": 53253,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbpath_7.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbpath_7.xyz",
+      "sha256": "8500dc13441d1512d8f90d48aa1b33e189b9ec1bd630ce756afcc42f090d5211",
+      "size_bytes": 59749,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbpath_8.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbpath_8.xyz",
+      "sha256": "ab1df94a6b7064fdc07b48c41cd2aead412888041a089b551a26dcd06bf26713",
+      "size_bytes": 59749,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/xtbpath_9.xyz",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "xtbpath_9.xyz",
+      "sha256": "a2bae184df8e0b4aa3f3dda9696750a1b95ddfb6705a98bd1775feba160f0377",
+      "size_bytes": 59749,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    },
+    {
+      "absolute_path": "/ACPServer/acp2-runs/remediation/m4-04-final/da/candidate_path/path.inp",
+      "adr_step_index": 2,
+      "entry": "legacy_task_core",
+      "path": "path.inp",
+      "sha256": "5932fe20a55e06e9d79883f6b72d989fedab2921403770caf904a94bf8b082a1",
+      "size_bytes": 102,
+      "step_id": "candidate_path",
+      "task_ref": "20261027_940_candidate_path"
+    }
+  ],
+  "generated_at": "2026-10-27T15:31:36Z",
+  "release": {
+    "built": true,
+    "manifest_path": "",
+    "release_digest": "813583bdcaae20ef900a99180f433b34a7dfa730fb47c1efea5c9435919a061b",
+    "release_id": "2d1ab37a0f988933"
+  },
+  "schema": "acp2.m4-04.native-digests.v1"
+}

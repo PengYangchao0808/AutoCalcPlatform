@@ -1,0 +1,10 @@
+{
+  "candidate_revision": "ca850291febfcfb9d4c324a6398244be7a27bb5d",
+  "contract_version": "1.1.0",
+  "generated_at": "2026-10-22T23:12:33Z",
+  "runs": [
+    "experience_research-loop-live-experience_control-research-loop-live-r1.json"
+  ],
+  "schema": "acp2.acceptance.summary.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema"
+}

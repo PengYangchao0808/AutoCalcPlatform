@@ -1,0 +1,90 @@
+{
+  "artifacts": [
+    {
+      "path": "question-reaction-fixtures.log",
+      "sha256": "4ffc7473d813689cdb328264d90f003f0739e5fbe5839454e0b5a1dccd7553bd",
+      "size_bytes": 886
+    },
+    {
+      "path": "question-reaction-fixtures.json",
+      "sha256": "60c040f509d61235a49e9b08b3f4802901852fa287df210ee5d1c02de3db342b",
+      "size_bytes": 1439
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "rc=0 passed=12 failed=0 min=10",
+      "name": "question_reaction.node_suite",
+      "status": "PASS"
+    },
+    {
+      "detail": "passing negative fixtures for: duplicate atom map, missing product, charge non-conservation",
+      "name": "question_reaction.negative_rejections",
+      "status": "PASS"
+    },
+    {
+      "detail": "net-reaction-as-single-TS must yield a clarification item, not a submit; fragment='clarification item' present=True",
+      "name": "question_reaction.clarification_not_submit",
+      "status": "PASS"
+    },
+    {
+      "detail": "CDXML input must stay DEFERRED and never parse to an empty structure; fragment='DEFERRED' present=True",
+      "name": "question_reaction.cdxml_deferred",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "aecaea61cac7b77b6a0369751ff36012e9967ffa",
+    "harness_revision": "ddf1e40ee8381adc4ff1f97c811df2dacb11bdfa834a204762c5948a9e6c5d36",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "aecaea61cac7b77b6a0369751ff36012e9967ffa",
+  "command": [
+    "/ACPServer/acp2-development/venvs/c/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "question-reaction-fixtures",
+    "--timeout",
+    "300",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/question-reaction-fixtures/question-reaction-fixtures-20261022T192338Z-603155/main"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/acp2-development/C",
+  "evidence_kind": "fixture",
+  "exit_code": 0,
+  "extensions": {
+    "experience.harness_contract_revision": "ddf1e40ee8381adc4ff1f97c811df2dacb11bdfa834a204762c5948a9e6c5d36",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+    "experience.mode": "fixture",
+    "experience.product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+    "experience.question_reaction_min_tests": 10,
+    "experience.question_reaction_negative_rejections": true,
+    "experience.question_reaction_suite_failed": 0,
+    "experience.question_reaction_suite_passed": 12,
+    "experience.run_id": "question-reaction-fixtures-20261022T192338Z-603155",
+    "experience.scenario_key": "question-reaction-fixtures",
+    "experience.subcase": null,
+    "experience.test_revision": "aecaea61cac7b77b6a0369751ff36012e9967ffa"
+  },
+  "finished_at": "2026-10-22T19:23:38Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:fixture",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "question-reaction-fixtures-20261022T192338Z-603155",
+  "scenario": "experience:question-reaction-fixtures",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T19:23:38Z",
+  "submission_id": null,
+  "usage": null
+}

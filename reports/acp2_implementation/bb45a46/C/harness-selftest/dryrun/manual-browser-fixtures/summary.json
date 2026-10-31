@@ -1,0 +1,10 @@
+{
+  "candidate_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+  "contract_version": "1.0.0",
+  "generated_at": "2026-10-22T14:08:40Z",
+  "runs": [
+    "experience_manual-browser-fixtures-experience_fixture-manual-browser-fixtures-20261022T140840Z-116532-02cbbb.json"
+  ],
+  "schema": "acp2.acceptance.summary.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema"
+}

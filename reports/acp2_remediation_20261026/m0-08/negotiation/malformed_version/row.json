@@ -1,0 +1,16 @@
+{
+  "error": {
+    "code": -32602,
+    "data": {
+      "code": "invalid_protocol_version",
+      "received_type": "int"
+    },
+    "message": "protocolVersion must be a non-empty version string"
+  },
+  "error_code": "invalid_protocol_version",
+  "jsonrpc_code": -32602,
+  "requested": 20250618,
+  "row": "malformed_version",
+  "status": "PASS",
+  "tools_call_frames": 0
+}

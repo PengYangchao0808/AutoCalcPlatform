@@ -1,0 +1,12 @@
+$ node scripts/check-boundaries.mjs && tsc -b --pretty false
+RPH boundary matrix
+  packages: research, bridge, dsh-bundle, cli
+  scanned files: 17
+  research: 6 file(s), imports -> research
+  bridge: 1 file(s), imports -> bridge, research
+  dsh-bundle: 9 file(s), imports -> dsh-bundle, bridge
+  cli: 1 file(s), imports -> cli, dsh-bundle
+  forbidden: child_process, spawn/exec/execFile, ssh2, node:net (bridge/research),
+             DSH private source paths, platform store imports, wrong-direction imports
+
+BOUNDARY CHECK PASS

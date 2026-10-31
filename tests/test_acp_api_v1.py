@@ -244,11 +244,12 @@ def test_v1_job_create_defaults_node_tags_to_empty(client: TestClient) -> None:
     assert detail.json()["spec"]["node_tags"] == []
 
 
-def test_v1_job_create_mode_conflict_returns_400_code(client: TestClient) -> None:
-    """A validate_execution_request conflict shares the D12 dict detail (m4).
+def test_v1_job_create_mode_conflict_returns_422_input_invalid(client: TestClient) -> None:
+    """A validate_execution_request conflict is the shared application envelope.
 
-    Same shape as the continue endpoint and the unknown/disabled target
-    errors: a dict with a stable machine-readable ``code``.
+    M0-06/G23: HTTP, MCP and the CLI answer ``input_invalid`` with
+    ``params.field``/``params.rule`` (the fine-grained ``execution_mode_conflict``
+    survives in ``params.rule``), so one client mapping covers every entry.
     """
     response = client.post(
         "/api/v1/jobs",
@@ -261,10 +262,12 @@ def test_v1_job_create_mode_conflict_returns_400_code(client: TestClient) -> Non
             "target_node": "local",
         },
     )
-    assert response.status_code == 400
+    assert response.status_code == 422
     detail = response.json()["detail"]
     assert isinstance(detail, dict)
-    assert detail["code"] == "execution_mode_conflict"
+    assert detail["code"] == "input_invalid"
+    assert detail["params"]["rule"] == "execution_mode_conflict"
+    assert detail["params"]["field"] == "execution_mode"
     assert "conflict" in detail["message"]
 
 
@@ -516,7 +519,7 @@ def _stub_manager_submit(client: TestClient, tmp_path: Path) -> dict[str, object
     captured: dict[str, object] = {}
     original = manager.submit
 
-    def _submit(spec, group_id=None):
+    def _submit(spec, group_id=None, **_kwargs):
         captured["spec"] = spec
         work_dir = tmp_path / "captured"
         work_dir.mkdir(parents=True, exist_ok=True)
@@ -1277,6 +1280,32 @@ def _submit_batch_optimize(client: TestClient, items: list[dict[str, object]]) -
     return response.json()
 
 
+def test_v1_batch_structures_multi_item_is_refused_at_submit(client: TestClient) -> None:
+    """Round 3: single_flat means one structure per task — refuse >1 at submit."""
+    response = client.post(
+        "/api/v1/jobs",
+        json={
+            "workflow": "BatchOptimize",
+            "name": "batch_optimize",
+            "input": {
+                "source_type": "batch_structures",
+                "charge": 0,
+                "multiplicity": 1,
+                "items": [
+                    {"name": "a", "tag": "TS", "xyz": "3\n\nO 0 0 0\nH 0.9 0 0\nH -0.3 0.9 0\n"},
+                    {"name": "b", "tag": "INT", "xyz": "3\n\nO 0 0 0\nH 0.9 0 0\nH -0.3 0.9 0\n"},
+                ],
+            },
+            "method": {"profile": "opt_freq"},
+            "resources": {"nproc": 2, "mem": "4GB"},
+        },
+    )
+    assert response.status_code == 422, response.text
+    detail = response.json()["detail"]
+    assert detail["params"]["rule"] == "layout_limit"
+    assert detail["params"]["limit"] == 1
+
+
 def test_v1_batch_structures_inline_xyz_submission(
     client: TestClient, qc_capable_local: None
 ) -> None:
@@ -1291,19 +1320,8 @@ def test_v1_batch_structures_inline_xyz_submission(
                 "charge": 0,
                 "multiplicity": 1,
                 "include": True,
-            },
-            {
-                "name": "int_1",
-                "tag": "INT",
-                "xyz": "3\nTAG: INT\nO 0 0 0\nH 0.9 0 0\nH -0.3 0.9 0\n",
-                "include": True,
-            },
-            {
-                "name": "dropped",
-                "xyz": "3\nplain\nO 0 0 0\nH 0.9 0 0\nH -0.3 0.9 0\n",
-                "include": False,
-            },
-        ],
+            }
+        ]
     )
     assert job["status"] in {"queued", "pending", "starting", "failed"}
 
@@ -1315,11 +1333,9 @@ def test_v1_batch_structures_inline_xyz_submission(
     assert batch_input["schema_version"] == "batch_structures_v1"
     assert batch_input["source_type"] == "batch_structures"
     items = batch_input["items"]
-    assert len(items) == 3, "BatchOptimize receives the submitted request unchanged"
+    assert len(items) == 1, "BatchOptimize receives the submitted request unchanged"
     assert items[0]["tag"] == "TS"
-    assert items[1]["tag"] == "INT"
     assert items[0]["xyz"]
-    assert items[2]["include"] is False
 
     tasks = client.get(f"/api/v1/jobs/{job['job_id']}/tasks")
     assert tasks.status_code == 200
@@ -1884,14 +1900,8 @@ def test_batchoptimize_submit_stageplan(client: TestClient, qc_capable_local: No
                 "charge": 0,
                 "multiplicity": 1,
                 "include": True,
-            },
-            {
-                "name": "int_1",
-                "tag": "INT",
-                "xyz": "3\nTAG: INT\nO 0 0 0\nH 0.9 0 0\nH -0.3 0.9 0\n",
-                "include": True,
-            },
-        ],
+            }
+        ]
     )
     assert job["status"] in {"queued", "pending", "starting", "failed"}
 

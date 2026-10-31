@@ -123,6 +123,8 @@ function scienceHarness(h) {
   Q.init({
     science: W.ACPClient.science,
     buildJobBody: W.ACPWizardSubmitEdit.buildStructureJobBody,
+    // M5-03 F6: fixture harness binds its project explicitly.
+    projectId: "demo-project",
     submit: function (body) {
       submitCalls.push(body);
       return Promise.resolve({ job_id: "concurrency_job", attempt: 1 });

@@ -1,0 +1,15 @@
+{
+  "sample_id": "task-ref-flat-release.positive",
+  "contract": "ADR-003-taskref-evidence-decision.md",
+  "kind": "positive",
+  "payload": {
+    "project_id": "proj-m1-03",
+    "job_id": "job-m1-03-static",
+    "attempt": 1,
+    "release_id": "release-m1-03",
+    "release_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  },
+  "expected": {
+    "valid": true
+  }
+}

@@ -21,6 +21,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +37,9 @@ EXPECTED_TOOLS = {
     "acp_prepare_artifact",
     "acp_read_artifact",
     "acp_analyze",
+    # 2026-10-30 guidance batch (plan §5): additive read-only registration.
+    "acp_get_guidance",
+    "acp_list_jobs",
 }
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SRC = _REPO_ROOT / "src"
@@ -46,6 +50,20 @@ class _ControllerState:
         self.health_reads = 0
         self.capabilities_reads = 0
         self.submit_posts = 0
+        self.status_paths: list[str] = []
+        self.capabilities_posts: list[dict[str, Any]] = []
+        import hashlib as _hashlib
+
+        self.chain_body = b"hello chain"
+        self.chain_digest = "sha256:" + _hashlib.sha256(self.chain_body).hexdigest()
+        self.chain_ref = {
+            "task_id": "job_chain",
+            "attempt": 1,
+            "artifact_id": "final_report",
+            "generation": 1,
+            "digest": self.chain_digest,
+            "size_bytes": len(self.chain_body),
+        }
         self.long_description = "capability descriptor " * 500
 
 
@@ -94,7 +112,77 @@ class _ControllerHandler(http.server.BaseHTTPRequestHandler):
                 },
             )
             return
+        if self.path == "/api/v1/operations/op_chain":
+            self._send_json(
+                200,
+                {
+                    "operation_id": "op_chain",
+                    "state": "ready",
+                    "artifact_ref": self.state.chain_ref,
+                },
+            )
+            return
+        if self.path == "/api/v1/jobs/job_chain":
+            self.state.status_paths.append(self.path)
+            self._send_json(
+                200,
+                {
+                    "id": "job_chain",
+                    "spec": {"workflow": "Confsearch"},
+                    "state": "completed",
+                    "status": "completed",
+                    "attempt": 1,
+                    "revision": 3,
+                    "current_stage": "finalize",
+                    "progress": 1.0,
+                    "live_status": {"stage_label": "done", "metrics": []},
+                    "artifacts": [
+                        {
+                            "resource_id": "final_report",
+                            "relative_path": "RESULT/confsearch/final_report.json",
+                            "kind": "file",
+                            "label": "Final report",
+                            "size_bytes": None,
+                            "prepared": False,
+                        }
+                    ],
+                    "artifacts_truncated": False,
+                },
+            )
+            return
+        if self.path.startswith("/api/v1/jobs/job_chain/prepared/"):
+            from urllib.parse import parse_qs, urlparse
+
+            parsed = urlparse(self.path)
+            resource = parsed.path.rsplit("/", 1)[-1]
+            query = parse_qs(parsed.query)
+            if resource != "final_report":
+                self._send_json(404, {"detail": "not prepared"})
+                return
+            if query.get("expected_revision", ["1"])[0] != "1":
+                self._send_json(409, {"code": "revision_conflict"})
+                return
+            if query.get("digest", [""])[0] != self.state.chain_digest:
+                self._send_json(409, {"code": "revision_conflict"})
+                return
+            self._send_json(
+                200,
+                {
+                    "schema_version": 1,
+                    "artifact_ref": self.state.chain_ref,
+                    "body": self.state.chain_body.decode("utf-8"),
+                    "encoding": "identity",
+                    "truncated": False,
+                    "digest": self.state.chain_digest,
+                    "generation": 1,
+                    "size_bytes": len(self.state.chain_body),
+                    "availability": "ready",
+                    "media_type": "text/plain",
+                },
+            )
+            return
         if self.path.startswith("/api/v1/jobs/"):
+            self.state.status_paths.append(self.path)
             task_id = self.path.rsplit("/", 1)[-1]
             if task_id == "known-job":
                 self._send_json(
@@ -113,11 +201,58 @@ class _ControllerHandler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
         length = int(self.headers.get("Content-Length", "0") or "0")
-        if length:
-            self.rfile.read(length)
+        raw = self.rfile.read(length) if length else b""
+        if self.path == "/api/capabilities":
+            body = json.loads(raw or b"{}")
+            self.state.capabilities_posts.append(body)
+            if body.get("workflow") == "Refused":
+                self._send_json(
+                    422,
+                    {"detail": {"code": "input_invalid", "message": "unknown workflow"}},
+                )
+                return
+            payload = {
+                "schema_version": 1,
+                "task_kinds": ["singlepoint"],
+                "workflows": ["singlepoint", "optimize"],
+                "backends": [{"name": "orca", "available": True}],
+                "limits": {"max_cores": 64},
+                "tools": sorted(EXPECTED_TOOLS),
+                "protocol_version": PROTOCOL_VERSION,
+            }
+            if body.get("workflow"):
+                payload["workflow_contract"] = {
+                    "workflow": body["workflow"],
+                    "coverage": "complete",
+                }
+            self._send_json(200, payload)
+            return
         if self.path == "/api/v1/jobs":
+            body = json.loads(raw or b"{}")
+            if body.get("workflow") == "Confsearch":
+                self.state.submit_posts += 1
+                self._send_json(
+                    201,
+                    {
+                        "job_id": "job_chain",
+                        "status": "queued",
+                        "result": "accepted",
+                        "task_ref": {"task_id": "job_chain", "attempt": 1},
+                    },
+                )
+                return
             self.state.submit_posts += 1
             self._send_json(201, {"job_id": "must-not-be-created"})
+            return
+        if self.path == "/api/v1/jobs/job_chain/prepare":
+            self._send_json(
+                200,
+                {
+                    "operation_id": "op_chain",
+                    "state": "ready",
+                    "artifact_ref": self.state.chain_ref,
+                },
+            )
             return
         self._send_json(404, {"detail": "not found"})
 
@@ -181,10 +316,17 @@ class _McpProcess:
         )
         self._buffer = b""
         self._stderr: bytes | None = None
+        self._stderr_buffer = bytearray()
+        self._stderr_lock = threading.Lock()
         self.lines: list[str] = []
         assert self.proc.stdin is not None
         assert self.proc.stdout is not None
         assert self.proc.stderr is not None
+        # Drain stderr continuously.  The server logs at DEBUG and a loaded
+        # runner can fill the OS pipe while the test is waiting for shutdown;
+        # that manifests as a false timeout because the child blocks in logging.
+        self._stderr_thread = threading.Thread(target=self._drain_stderr, daemon=True)
+        self._stderr_thread.start()
 
     def __enter__(self) -> _McpProcess:
         return self
@@ -261,12 +403,28 @@ class _McpProcess:
         except OSError:
             pass
 
-    def wait(self, timeout: float = 60.0) -> int:
+    def wait(self, timeout: float = 300.0) -> int:
+        # The stdio server imports the whole runtime; on a loaded CI runner a
+        # clean shutdown can legitimately take longer than two minutes. The
+        # assertion is "clean exit", not "exits within 120 s".
+        
         return self.proc.wait(timeout=timeout)
+
+    def _drain_stderr(self) -> None:
+        assert self.proc.stderr is not None
+        while True:
+            chunk = self.proc.stderr.read(65536)
+            if not chunk:
+                return
+            with self._stderr_lock:
+                self._stderr_buffer.extend(chunk)
 
     def stderr_text(self) -> str:
         if self._stderr is None:
-            self._stderr = self.proc.stderr.read() if self.proc.stderr else b""
+            if self.proc.poll() is not None:
+                self._stderr_thread.join(timeout=5)
+            with self._stderr_lock:
+                self._stderr = bytes(self._stderr_buffer)
         return self._stderr.decode("utf-8", errors="replace")
 
     def close(self) -> None:
@@ -419,15 +577,13 @@ def test_same_version_negotiation(controller: Any, tmp_path: Path) -> None:
         assert process.wait() == 0
 
 
-def test_different_preferred_version_with_common_support_negotiates(
+def test_unsupported_preferred_version_returns_server_version(
     controller: Any, tmp_path: Path
 ) -> None:
+    """M0-08: the client's offered version (2025-11-25) is not a server error."""
     _, url = controller
     with _McpProcess(url, tmp_path / "run-root") as process:
-        response = process.handshake(
-            version="2025-03-26",
-            declared=["2025-03-26", PROTOCOL_VERSION],
-        )
+        response = process.handshake(version="2025-11-25")
         assert "error" not in response, response
         assert response["result"]["protocolVersion"] == PROTOCOL_VERSION
         assert response["result"]["supportedProtocolVersions"] == [PROTOCOL_VERSION]
@@ -438,13 +594,48 @@ def test_different_preferred_version_with_common_support_negotiates(
         assert process.wait() == 0
 
 
-def test_no_common_version_fails_and_blocks_tools(controller: Any, tmp_path: Path) -> None:
-    _, url = controller
+def test_unknown_version_with_declared_hint_still_initializes(
+    controller: Any, tmp_path: Path
+) -> None:
+    """No ``protocolVersions`` gate: an unknown declared set is recorded, not refused."""
+    state, url = controller
     with _McpProcess(url, tmp_path / "run-root") as process:
         response = process.handshake(version="1999-01-01", declared=["1999-01-01"])
-        assert response["error"]["code"] == -32602
-        assert response["error"]["data"]["code"] == "unsupported_protocol_version"
-        assert response["error"]["data"]["supported"] == [PROTOCOL_VERSION]
+        assert "error" not in response, response
+        result = response["result"]
+        assert result["protocolVersion"] == PROTOCOL_VERSION
+        guidance = result["capabilities"]["extensions"]["acp.negotiation.v1"]
+        assert guidance["requested_version"] == "1999-01-01"
+        assert guidance["client_declared_versions"] == ["1999-01-01"]
+        assert "extensions" not in result
+        assert "negotiated" not in json.dumps(result["capabilities"])
+        process.notify_initialized()
+        listed = process.request(2, "tools/list", {})
+        assert {tool["name"] for tool in listed["result"]["tools"]} == EXPECTED_TOOLS
+        process.close_stdin()
+        assert process.wait() == 0
+    assert state.submit_posts == 0
+
+
+def test_malformed_protocol_version_is_invalid_params_and_blocks_tools(
+    controller: Any, tmp_path: Path
+) -> None:
+    _, url = controller
+    with _McpProcess(url, tmp_path / "run-root") as process:
+        process.send(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": 20250618,
+                    "clientInfo": {"name": "x", "version": "1"},
+                },
+            }
+        )
+        malformed = json.loads(process.read_line())
+        assert malformed["error"]["code"] == -32602
+        assert malformed["error"]["data"]["code"] == "invalid_protocol_version"
         blocked = process.request(2, "tools/list", {})
         assert blocked["error"]["data"]["code"] == "not_initialized"
         assert "result" not in blocked
@@ -455,6 +646,27 @@ def test_no_common_version_fails_and_blocks_tools(controller: Any, tmp_path: Pat
         assert {tool["name"] for tool in listed["result"]["tools"]} == EXPECTED_TOOLS
         process.close_stdin()
         assert process.wait() == 0
+
+
+def test_server_discover_probe_is_plain_unknown_method(controller: Any, tmp_path: Path) -> None:
+    """An era-probing client must get -32601 before initialize (not not_initialized)."""
+    state, url = controller
+    with _McpProcess(url, tmp_path / "run-root") as process:
+        probe = process.request(
+            1,
+            "server/discover",
+            {"protocolVersions": [PROTOCOL_VERSION], "clientInfo": {"name": "x", "version": "1"}},
+        )
+        assert probe["error"]["code"] == -32601
+        assert (probe["error"].get("data") or {}).get("code") != "not_initialized"
+        assert "result" not in probe
+        assert "error" not in process.handshake(request_id=2)
+        process.notify_initialized()
+        listed = process.request(3, "tools/list", {})
+        assert {tool["name"] for tool in listed["result"]["tools"]} == EXPECTED_TOOLS
+        process.close_stdin()
+        assert process.wait() == 0
+    assert state.submit_posts == 0
 
 
 def test_tools_before_initialize_are_rejected(controller: Any, tmp_path: Path) -> None:
@@ -512,6 +724,71 @@ def test_status_is_a_real_read_only_controller_call(controller: Any, tmp_path: P
     assert state.submit_posts == 0
 
 
+def test_status_reference_object_and_stringified_json_are_distinct(
+    controller: Any, tmp_path: Path
+) -> None:
+    """C1 wire regression: ``{kind,id}`` reaches the same URL; JSON text does not.
+
+    ``_require_reference`` unwraps ``reference.id``, so a real object must hit
+    the same Controller path as the bare id.  A *stringified* JSON blob is a
+    string on the wire: it is forwarded as an opaque id and must never be
+    decoded into the real task.  The Controller call log is the evidence.
+    """
+    state, url = controller
+    with _McpProcess(url, tmp_path / "run-root") as process:
+        assert "error" not in process.handshake()
+        process.notify_initialized()
+
+        as_id = process.request(
+            2,
+            "tools/call",
+            {"name": "acp_status", "arguments": {"reference": "known-job"}},
+        )
+        assert as_id["result"]["isError"] is False
+
+        as_object = process.request(
+            3,
+            "tools/call",
+            {
+                "name": "acp_status",
+                "arguments": {"reference": {"kind": "job", "id": "known-job"}},
+            },
+        )
+        assert as_object["result"]["isError"] is False
+        assert as_object["result"]["structuredContent"]["data"]["state"] == "completed"
+        # Same task identity, not merely the same URL.
+        assert (
+            as_id["result"]["structuredContent"]["data"]["task_id"]
+            == as_object["result"]["structuredContent"]["data"]["task_id"]
+            == "known-job"
+        )
+
+        as_json_text = process.request(
+            4,
+            "tools/call",
+            {
+                "name": "acp_status",
+                "arguments": {"reference": '{"kind":"job","id":"known-job"}'},
+            },
+        )
+        assert as_json_text["result"]["isError"] is True
+        assert (
+            as_json_text["result"]["structuredContent"]["error"]["code"]
+            == "resource_not_ready"
+        )
+
+        process.close_stdin()
+        assert process.wait() == 0
+
+    assert len(state.status_paths) == 3
+    assert state.status_paths[0] == state.status_paths[1] == "/api/v1/jobs/known-job"
+    assert (
+        urllib.parse.unquote(state.status_paths[2])
+        == '/api/v1/jobs/{"kind":"job","id":"known-job"}'
+    )
+    assert state.submit_posts == 0
+
+
 def test_eof_cleanup_does_not_submit(controller: Any, tmp_path: Path) -> None:
     state, url = controller
     with _McpProcess(url, tmp_path / "run-root") as process:
@@ -551,7 +828,7 @@ def test_signal_shutdown_is_clean(controller: Any, tmp_path: Path, signum: int) 
 
 
 def test_protocol_negotiation_matrix(controller: Any, tmp_path: Path) -> None:
-    _, url = controller
+    state, url = controller
     cases: list[tuple[str, dict[str, Any]]] = []
 
     with _McpProcess(url, tmp_path / "matrix-same") as process:
@@ -569,32 +846,41 @@ def test_protocol_negotiation_matrix(controller: Any, tmp_path: Path) -> None:
         process.close_stdin()
         assert process.wait() == 0
 
-    with _McpProcess(url, tmp_path / "matrix-different") as process:
-        response = process.handshake(
-            version="2025-03-26", declared=["2025-03-26", PROTOCOL_VERSION]
-        )
+    with _McpProcess(url, tmp_path / "matrix-unsupported") as process:
+        response = process.handshake(version="2025-11-25", declared=["2025-11-25"])
+        guidance = response["result"]["capabilities"]["extensions"]["acp.negotiation.v1"]
         cases.append(
             (
-                "different-supported",
+                "unsupported-version",
                 {
-                    "requested": "2025-03-26",
+                    "requested": "2025-11-25",
                     "negotiated": response["result"]["protocolVersion"],
                     "error": None,
+                    "client_declared_versions": guidance["client_declared_versions"],
                 },
             )
         )
         process.close_stdin()
         assert process.wait() == 0
 
-    with _McpProcess(url, tmp_path / "matrix-none") as process:
-        response = process.handshake(version="1999-01-01", declared=["1999-01-01"])
+    with _McpProcess(url, tmp_path / "matrix-malformed") as process:
+        process.send(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {"protocolVersion": ["2025-06-18"]},
+            }
+        )
+        response = json.loads(process.read_line())
         cases.append(
             (
-                "no-common",
+                "malformed-version",
                 {
-                    "requested": "1999-01-01",
+                    "requested": None,
                     "negotiated": None,
                     "error": response["error"]["data"]["code"],
+                    "error_code": response["error"]["code"],
                 },
             )
         )
@@ -638,6 +924,180 @@ def test_protocol_negotiation_matrix(controller: Any, tmp_path: Path) -> None:
 
     assert cases[0][1]["negotiated"] == PROTOCOL_VERSION
     assert cases[1][1]["negotiated"] == PROTOCOL_VERSION
-    assert cases[2][1]["error"] == "unsupported_protocol_version"
+    assert cases[1][1]["client_declared_versions"] == ["2025-11-25"]
+    assert cases[2][1]["error"] == "invalid_protocol_version"
+    assert cases[2][1]["error_code"] == -32602
     assert cases[3][1]["error"] == "not_initialized"
     assert cases[4][1]["exit_code"] == 0
+    # Zero task side effects across the whole matrix (no process called a tool).
+    assert state.submit_posts == 0
+
+
+def test_capabilities_workflow_selector_is_forwarded(controller: Any, tmp_path: Path) -> None:
+    state, url = controller
+    with _McpProcess(url, tmp_path / "run-root") as process:
+        assert "error" not in process.handshake()
+        process.notify_initialized()
+        result = process.request(
+            2,
+            "tools/call",
+            {"name": "acp_capabilities", "arguments": {"workflow": "Confsearch"}},
+        )
+        assert result["result"]["isError"] is False
+        data = result["result"]["structuredContent"]["data"]
+        assert data["workflow_contract"]["workflow"] == "Confsearch"
+        plain = process.request(
+            3,
+            "tools/call",
+            {"name": "acp_capabilities", "arguments": {}},
+        )
+        assert plain["result"]["isError"] is False
+        assert "workflow_contract" not in plain["result"]["structuredContent"]["data"]
+        process.close_stdin()
+        assert process.wait() == 0
+    assert state.capabilities_posts[-1]["workflow"] == "Confsearch"
+
+
+def test_research_tools_visible_after_negotiation(controller: Any, tmp_path: Path) -> None:
+    _, url = controller
+    with _McpProcess(url, tmp_path / "run-root") as process:
+        assert "error" not in process.handshake()
+        process.notify_initialized()
+        before = process.request(2, "tools/list")
+        names = {tool["name"] for tool in before["result"]["tools"]}
+        assert "acp_research_proposal_create_v1" not in names
+        negotiated = process.request(
+            3,
+            "tools/call",
+            {
+                "name": "acp_capabilities",
+                "arguments": {"research_extension": {"id": "acp.research.v1"}},
+            },
+        )
+        assert negotiated["result"]["isError"] is False
+        after = process.request(4, "tools/list")
+        names = {tool["name"] for tool in after["result"]["tools"]}
+        assert "acp_research_proposal_create_v1" in names
+        process.close_stdin()
+        assert process.wait() == 0
+
+
+def test_selector_refusal_is_not_downgraded(controller: Any, tmp_path: Path) -> None:
+    _, url = controller
+    with _McpProcess(url, tmp_path / "run-root") as process:
+        assert "error" not in process.handshake()
+        process.notify_initialized()
+        result = process.request(
+            2,
+            "tools/call",
+            {"name": "acp_capabilities", "arguments": {"workflow": "Refused"}},
+        )
+        assert result["result"]["isError"] is True
+        assert result["result"]["structuredContent"]["error"]["code"] == "input_invalid"
+        process.close_stdin()
+        assert process.wait() == 0
+
+
+def test_closed_loop_submit_status_prepare_read(controller: Any, tmp_path: Path) -> None:
+    """P3-08: one scripted chain, no hand-written paths or digests."""
+    state, url = controller
+    with _McpProcess(url, tmp_path / "run-root") as process:
+        assert "error" not in process.handshake()
+        process.notify_initialized()
+
+        submitted = process.request(
+            2,
+            "tools/call",
+            {
+                "name": "acp_submit",
+                "arguments": {
+                    "workflow": "Confsearch",
+                    "input": {"smiles": "CCO"},
+                    "method": {"protocol": "xtb-crest"},
+                    "idempotency_key": "p3-chain-1",
+                },
+            },
+        )
+        assert submitted["result"]["isError"] is False
+        assert submitted["result"]["structuredContent"]["data"]["job_id"] == "job_chain"
+
+        status = process.request(
+            3,
+            "tools/call",
+            {"name": "acp_status", "arguments": {"reference": "job_chain"}},
+        )
+        data = status["result"]["structuredContent"]["data"]
+        descriptor = data["artifacts"][0]
+        assert descriptor["resource_id"] == "final_report"
+        assert data["artifacts_truncated"] is False
+        assert data["workflow"] == "Confsearch"
+        assert data["progress"] == 1.0
+
+        prepared = process.request(
+            4,
+            "tools/call",
+            {
+                "name": "acp_prepare_artifact",
+                "arguments": {
+                    "task_ref": {"task_id": "job_chain", "attempt": 1},
+                    "artifact_id": "final_report",
+                    "relative_path": descriptor["relative_path"],
+                    "purpose": "artifact",
+                },
+            },
+        )
+        assert prepared["result"]["isError"] is False
+        ref = prepared["result"]["structuredContent"]["data"]["artifact_ref"]
+        assert ref["digest"] == state.chain_digest
+
+        operation = process.request(
+            9,
+            "tools/call",
+            {"name": "acp_status", "arguments": {"reference": "op_chain"}},
+        )
+        op_data = operation["result"]["structuredContent"]["data"]
+        assert op_data["artifact_ref"]["digest"] == state.chain_digest
+
+        read = process.request(
+            5,
+            "tools/call",
+            {"name": "acp_read_artifact", "arguments": {"artifact_ref": ref}},
+        )
+        assert read["result"]["isError"] is False
+        assert read["result"]["structuredContent"]["data"]["body"] == "hello chain"
+
+        wrong = dict(ref)
+        wrong["digest"] = "sha256:" + "0" * 64
+        rejected = process.request(
+            6,
+            "tools/call",
+            {"name": "acp_read_artifact", "arguments": {"artifact_ref": wrong}},
+        )
+        assert rejected["result"]["isError"] is True
+        assert rejected["result"]["structuredContent"]["error"]["code"] == "revision_conflict"
+
+        stale = dict(ref)
+        stale["generation"] = 2
+        stale_result = process.request(
+            8,
+            "tools/call",
+            {"name": "acp_read_artifact", "arguments": {"artifact_ref": stale}},
+        )
+        assert stale_result["result"]["isError"] is True
+        assert (
+            stale_result["result"]["structuredContent"]["error"]["code"]
+            == "revision_conflict"
+        )
+
+        cold_ref = dict(ref)
+        cold_ref["artifact_id"] = "missing"
+        cold = process.request(
+            7,
+            "tools/call",
+            {"name": "acp_read_artifact", "arguments": {"artifact_ref": cold_ref}},
+        )
+        assert cold["result"]["isError"] is True
+        assert cold["result"]["structuredContent"]["error"]["code"] == "resource_not_ready"
+
+        process.close_stdin()
+        assert process.wait() == 0

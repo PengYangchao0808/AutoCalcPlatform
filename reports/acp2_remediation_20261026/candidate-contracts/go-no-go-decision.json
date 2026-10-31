@@ -1,0 +1,22 @@
+{
+  "schema": "acp2.remediation.go_no_go_decision.v1",
+  "decision": "go",
+  "decided_on": "2026-10-27",
+  "decided_by": "user (remediation owner) on orchestrator-presented data",
+  "basis": {
+    "thin_slice": "PASS — 14/14 steps, 24-record trace, 7 typed negatives, prompt-injection invariance, cross-instance idempotent replay",
+    "delivered_minimal_contracts": 6,
+    "rework_findings": {"total": 6, "client_handled": 4, "open": ["F2 bridge redaction blocks capabilities/prepare projections", "F4 availability ready vs readable"], "owners": {"F2": "M3-01b", "F3": "M3-01b", "F4": "M3-01b", "F1": "client-side projection (done)", "F5": "M3-01b", "F6": "declared local release identity (recorded)"}},
+    "quota_consumed": {"model": 0, "qc": 0, "lsf": 0},
+    "remaining_critical_chain": ["M2-01", "M2-03", "M3-03", "M3-04", "M4-01", "M5-01", "M5-02", "M5-03"],
+    "observability_baseline": {"http_calls": 35, "p50_ms": 11.0, "p95_ms": 17.9, "max_ms": 267}
+  },
+  "conditions": [
+    "F2/F4 ride their assigned lanes (M3-01b) — not blocking M2 start",
+    "supervisor approve port remains an orchestrator-injected fact until M3-04",
+    "remote/LSF evidence reads wire up in M4-03; LSF criteria rows stay NOT_VERIFIED until then",
+    "evidence_kind stays fixture for Candidate-Contracts; real-science claims deferred to their gates"
+  ],
+  "inputs_source": "reports/acp2_remediation_20261026/candidate-contracts/go-no-go-inputs.json",
+  "head_at_decision": "6b83e01"
+}

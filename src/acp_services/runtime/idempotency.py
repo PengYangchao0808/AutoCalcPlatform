@@ -11,9 +11,14 @@ second ledger: the single ledger is
 Key rules
 ---------
 * ``scope_id`` is the **verified** principal/project scope resolved by the
-  Controller (never a client-supplied field).  In the local-single tier the
-  principal is :data:`acp_services.contracts.access.LOCAL_PRINCIPAL_ID`; the
-  project is the server-resolved project of the submission.
+  Controller (never a client-supplied field).  M0-04 builds it from
+  :class:`acp_services.workspace.command_identity.CommandIdentity` — the
+  authenticated HTTP/MCP principal, or the explicit ``local-single`` operator
+  for the Controller itself and the local CLI.  Two authenticated users in one
+  project therefore hold two *different* scopes: the second caller's reuse of
+  the same key is an explicit ``conflict``, never a replay of the first user's
+  task.  A row written before M0-04 keeps ``identity_version = "1"`` and is
+  reconciled rather than silently adopted.
 * The request digest is canonical: mappings are key-sorted, sequences keep
   their order, and floating point values are rendered as exact decimal
   strings (no JSON float), so two semantically identical payloads hash the
@@ -42,6 +47,22 @@ from typing import Any, Protocol, runtime_checkable
 __all__ = [
     "ACTION_SUBMIT",
     "CLAIM_STATES",
+    "DIGEST_FIELD_TABLES",
+    "IDENTITY_VERSION",
+    "LEGACY_IDENTITY_VERSION",
+    "LEGACY_REQUEST_DIGEST_FIELDS",
+    "LEGACY_REQUEST_DIGEST_VERSION",
+    "MIGRATION_STATE_NATIVE",
+    "MIGRATION_STATE_PENDING",
+    "MIGRATION_STATE_UNVERIFIED",
+    "MIGRATION_STATE_VERIFIED",
+    "REQUEST_DIGEST_FIELDS",
+    "REQUEST_DIGEST_VERSION",
+    "SCOPE_ORIGIN_LEGACY_LOCAL",
+    "SCOPE_ORIGIN_LEGACY_SCOPED",
+    "SCOPE_ORIGIN_LEGACY_UNKNOWN",
+    "SCOPE_ORIGIN_UNSPECIFIED",
+    "SCOPE_ORIGIN_VERIFIED",
     "ClaimState",
     "IdempotencyClaim",
     "IdempotencyConflictError",
@@ -57,8 +78,11 @@ __all__ = [
     "ReservationPort",
     "canonical_payload",
     "canonical_request_digest",
+    "canonical_request_digest_for_version",
     "resolve_scope_id",
+    "split_scope_id",
     "task_ref_for",
+    "verify_request_digest",
 ]
 
 #: The only Runtime action that currently uses the persistent ledger.
@@ -67,6 +91,94 @@ ACTION_SUBMIT = "submit"
 #: The verified scope separator.  ``principal`` and ``project`` ids never
 #: contain it, so the folded id is unambiguous and stable in a DB dump.
 _SCOPE_SEPARATOR = "\x1f"
+
+#: Identity version written for a claim whose scope was built from a
+#: server-verified :class:`~acp_services.workspace.command_identity.CommandIdentity`
+#: (M0-04).  Version ``1`` is the legacy scope that folded every HTTP caller
+#: into ``LOCAL_PRINCIPAL_ID``; such rows are reconciled by migration ``024``.
+IDENTITY_VERSION = "2"
+LEGACY_IDENTITY_VERSION = "1"
+
+#: Version of the canonical request-digest rules (:func:`canonical_request_digest`
+#: over the full effective submit request, ``idempotency_key`` excluded).
+#:
+#: * ``"2"`` (M0-06) — the material is the **field-policy canonical request**
+#:   (:func:`acp_services.entrypoints.application_params.
+#:   canonical_submit_request`): the exhaustive policy field set with defaults
+#:   materialised, ``node_tags`` normalised, server-path fields rejected before
+#:   identity and the DTO ``schema_version`` always included.  The field table is
+#:   :data:`DIGEST_FIELD_TABLES`\\ ``["2"]``.
+#: * ``"1"`` — the pre-M0-06 rule: the raw ``V1JobCreateRequest.model_dump(
+#:   exclude_none=True)`` declaration, unknown extras dropped by the DTO.  A row
+#:   of this version is verified against its own frozen field table
+#:   (:func:`canonical_request_digest_for_version`) and never declared tampered
+#:   merely because the rule version changed.
+#:
+#: A row of another version is reconciled, never silently replayed: equal digest
+#: bytes prove the same request (the version only names the materialisation), and
+#: a differing digest is verified under the row's frozen table; when that is not
+#: possible the outcome is a typed conflict that says "reconcile", not "tampered"
+#: and not "resubmit with a new key".
+REQUEST_DIGEST_VERSION = "2"
+LEGACY_REQUEST_DIGEST_VERSION = "1"
+
+#: Frozen v1 field table (the ``V1JobCreateRequest`` declaration at the time the
+#: rule was frozen, including the two server-path fields that M0-06 now rejects
+#: at the entry).  A legacy row is only verifiable when the current request can
+#: be projected onto exactly this table.
+LEGACY_REQUEST_DIGEST_FIELDS: tuple[str, ...] = (
+    "schema_version",
+    "workflow",
+    "name",
+    "input",
+    "method",
+    "resources",
+    "output_dir",
+    "config_path",
+    "tags",
+    "node_tags",
+    "project_id",
+    "execution_mode",
+    "target_node",
+    "molecule_name",
+    "task_name",
+    "remark",
+    "plan_digest",
+    "proposal_ref",
+    "proposal_digest",
+    "budget",
+    "idempotency_key",
+    "preflight_fingerprint",
+)
+
+#: Frozen v2 field table: the policy-accepted submit fields
+#: (``application_params.SUBMIT_FIELD_POLICY`` with ``job_spec``,
+#: ``request_control`` and ``research`` dispositions; the two server-path fields
+#: are absent because they can never reach identity).
+REQUEST_DIGEST_FIELDS: tuple[str, ...] = tuple(
+    name for name in LEGACY_REQUEST_DIGEST_FIELDS if name not in {"output_dir", "config_path"}
+)
+
+#: Digest version → frozen field table.  The only authority for "which fields did
+#: this rule hash"; add a row before bumping :data:`REQUEST_DIGEST_VERSION`.
+DIGEST_FIELD_TABLES: dict[str, tuple[str, ...]] = {
+    LEGACY_REQUEST_DIGEST_VERSION: LEGACY_REQUEST_DIGEST_FIELDS,
+    REQUEST_DIGEST_VERSION: REQUEST_DIGEST_FIELDS,
+}
+
+
+#: ``scope_origin`` vocabulary of the idempotency ledger.
+SCOPE_ORIGIN_VERIFIED = "verified"
+SCOPE_ORIGIN_UNSPECIFIED = "unspecified"
+SCOPE_ORIGIN_LEGACY_LOCAL = "legacy-local"
+SCOPE_ORIGIN_LEGACY_SCOPED = "legacy-scoped"
+SCOPE_ORIGIN_LEGACY_UNKNOWN = "legacy-unknown"
+
+#: ``migration_state`` vocabulary of the idempotency ledger (R09 reconciliation).
+MIGRATION_STATE_NATIVE = "native"
+MIGRATION_STATE_VERIFIED = "legacy-verified"
+MIGRATION_STATE_PENDING = "legacy-pending"
+MIGRATION_STATE_UNVERIFIED = "legacy-unverified"
 
 
 class ClaimState(str, Enum):
@@ -140,7 +252,15 @@ class IdempotencyReservationDeniedError(IdempotencyError):
 
 @dataclass(frozen=True)
 class IdempotencyClaim:
-    """One durable row of the idempotency ledger."""
+    """One durable row of the idempotency ledger.
+
+    ``identity_version``/``request_digest_version``/``scope_origin``/
+    ``migration_state`` are the M0-04 (R09) reconciliation columns added by
+    migration ``024``.  A row written by the current code carries
+    :data:`IDENTITY_VERSION` and :data:`MIGRATION_STATE_NATIVE`; a pre-M0-04 row
+    keeps version ``1`` and one of the ``legacy-*`` migration states, and is
+    only replayable when its principal/project attribution is verifiable.
+    """
 
     claim_id: str
     scope_id: str
@@ -155,6 +275,12 @@ class IdempotencyClaim:
     operation_id: str | None = None
     created_at: str = ""
     updated_at: str = ""
+    principal_id: str | None = None
+    project_id: str | None = None
+    identity_version: str = IDENTITY_VERSION
+    request_digest_version: str = REQUEST_DIGEST_VERSION
+    scope_origin: str = SCOPE_ORIGIN_UNSPECIFIED
+    migration_state: str = MIGRATION_STATE_NATIVE
 
     @property
     def is_committed(self) -> bool:
@@ -166,6 +292,22 @@ class IdempotencyClaim:
             ClaimState.COMMITTED.value,
             ClaimState.REJECTED.value,
         }
+
+    @property
+    def is_legacy(self) -> bool:
+        """Whether this row predates the verified ``CommandIdentity`` scope."""
+        return str(self.identity_version) == LEGACY_IDENTITY_VERSION
+
+    @property
+    def is_replayable(self) -> bool:
+        """Whether the row's attribution allows a replay/mapping at all.
+
+        An unattributable legacy row is *reconciled*, never replayed: it must
+        not be handed to whichever caller happens to present the same key.
+        """
+        if not self.is_legacy:
+            return True
+        return self.migration_state == MIGRATION_STATE_VERIFIED
 
     def task_ref(self) -> dict[str, Any] | None:
         """Return the stored TaskRef for a committed claim (else ``None``)."""
@@ -188,6 +330,12 @@ class IdempotencyClaim:
             "operation_id": self.operation_id,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
+            "principal_id": self.principal_id,
+            "project_id": self.project_id,
+            "identity_version": self.identity_version,
+            "request_digest_version": self.request_digest_version,
+            "scope_origin": self.scope_origin,
+            "migration_state": self.migration_state,
         }
 
 
@@ -249,6 +397,20 @@ def resolve_scope_id(principal_id: str, project_id: str) -> str:
     return f"{principal}{_SCOPE_SEPARATOR}{project}"
 
 
+def split_scope_id(scope_id: str) -> tuple[str | None, str | None]:
+    """Split a scope id back into ``(principal, project)``.
+
+    Returns ``(None, None)`` for a value that does not carry exactly one
+    separator: such a row cannot be attributed to a verified principal and is
+    therefore *unverified* for replay purposes (R09), never guessed.
+    """
+    text = str(scope_id or "")
+    principal, separator, project = text.partition(_SCOPE_SEPARATOR)
+    if not separator or not principal or not project or _SCOPE_SEPARATOR in project:
+        return None, None
+    return principal, project
+
+
 def _canonical_value(value: Any) -> Any:
     """Recursively canonicalise *value* (JSON-compatible, no float literals)."""
     if value is None or isinstance(value, (bool, int, str)):
@@ -305,6 +467,39 @@ def canonical_request_digest(
     return "sha256:" + hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
+def canonical_request_digest_for_version(version: str, payload: Mapping[str, Any]) -> str | None:
+    """Return the digest of *payload* under the frozen rule *version*.
+
+    ``None`` when the version is not registered: an unknown rule can never
+    verify a stored row, so the caller must reconcile instead of guessing.
+    """
+    fields = DIGEST_FIELD_TABLES.get(str(version))
+    if fields is None:
+        return None
+    material = {str(key): value for key, value in payload.items() if str(key) in set(fields)}
+    return canonical_request_digest(material)
+
+
+def verify_request_digest(
+    request_digest: str, request_digest_version: str, payload: Mapping[str, Any] | None
+) -> bool:
+    """Whether *payload* is the same request a stored row recorded.
+
+    Equal digest bytes prove identity regardless of the declared rule version
+    (the version only names the materialisation).  A different digest is
+    re-derived from the row's **frozen field table** when the payload is
+    available; an unregistered version or a missing payload cannot verify and
+    therefore returns ``False`` (the caller reconciles).
+    """
+    stored = str(request_digest or "")
+    if not stored:
+        return False
+    if payload is None:
+        return False
+    computed = canonical_request_digest_for_version(request_digest_version, payload)
+    return computed is not None and computed == stored
+
+
 @dataclass(frozen=True)
 class ReservationIdempotency:
     """The claim identity a reservation ledger records alongside its row."""
@@ -334,8 +529,16 @@ class ReservationPort(Protocol):
         idempotency_key: str,
         spec: Any,
         budget: Any | None = None,
+        principal_id: str | None = None,
+        key_id: str | None = None,
     ) -> str:
-        """Reserve resources (and optionally the research budget) for *claim_id*."""
+        """Reserve resources (and optionally the research budget) for *claim_id*.
+
+        ``principal_id``/``key_id`` are the verified caller identity of the
+        claim (M0-04).  A reservation adapter that records admission must
+        attribute the reservation to that principal; an adapter without an
+        admission ledger ignores them.
+        """
         ...
 
     def release_for_claim(self, claim_id: str) -> bool:
@@ -372,8 +575,10 @@ class LedgerReservationPort:
         idempotency_key: str,
         spec: Any,
         budget: Any | None = None,
+        principal_id: str | None = None,
+        key_id: str | None = None,
     ) -> str:
-        del budget
+        del budget, principal_id, key_id
         request = self._request_factory(claim_id, spec)
         outcome = self._ledger.reserve(
             request,
@@ -407,6 +612,18 @@ class IdempotencyContext:
     and MCP entrypoints build this from the verified scope plus the request
     payload; ``request_payload`` is hashed with
     :func:`canonical_request_digest`.
+
+    ``principal_id``/``key_id`` are additive (M0-04): they are the verified
+    caller identity that the admission reservation and the ledger row are
+    attributed to.  They never widen ``scope_id`` — the scope id is built from
+    the same principal by :meth:`acp_services.workspace.command_identity.
+    CommandIdentity.idempotency_scope`.
+
+    ``request_digest_version`` is additive (M0-06): the frozen digest rule the
+    row is written with.  It defaults to :data:`REQUEST_DIGEST_VERSION`; a caller
+    replaying a pre-M0-06 row presents the same payload and the store verifies the
+    stored digest against that row's frozen field table instead of declaring a
+    different rule a conflict.
     """
 
     key: str
@@ -414,9 +631,12 @@ class IdempotencyContext:
     action: str = ACTION_SUBMIT
     request_payload: Mapping[str, Any] | None = None
     request_digest: str = ""
+    request_digest_version: str = REQUEST_DIGEST_VERSION
     lease_seconds: float = 60.0
     wait_seconds: float = 10.0
     reservations: ReservationPort | None = None
+    principal_id: str | None = None
+    key_id: str | None = None
 
     def __post_init__(self) -> None:
         if not str(self.key or "").strip():
@@ -429,6 +649,12 @@ class IdempotencyContext:
             raise ValueError("lease_seconds must be positive")
         if self.wait_seconds < 0:
             raise ValueError("wait_seconds must be non-negative")
+
+    @property
+    def principal(self) -> str | None:
+        """The verified principal of the claim (``None`` = legacy caller)."""
+        text = str(self.principal_id or "").strip()
+        return text or None
 
     def digest(self) -> str:
         """Return the canonical digest (explicit digest wins when supplied)."""

@@ -1945,6 +1945,80 @@ def test_diff_only_allowed_py_files() -> None:
     assert not (py - ALLOWED_PY), f"Unexpected .py files changed: {py - ALLOWED_PY}"
 
 
+
+# ── Amendment X — CENSO execution evidence (MCP UX P4, 2026-10-29) ──────────
+# The plan requires verified execution facts (argv/rc/final part/artifact
+# digests) and a part-bound final-part choice.  Those additions are confined to
+# CensoRunResult.execution, the allowed= parameter of _resolve_final_part, and
+# the enabled-parts/execution block inside refine_ensemble; no numeric or
+# control-flow algorithm line is touched (teeth below).
+
+
+def _amendment_x_censo_ranges(worktree: str) -> list[tuple[int, int]]:
+    lines = worktree.splitlines()
+    ranges: list[tuple[int, int]] = []
+    for index, line in enumerate(lines):
+        if line.strip().startswith("execution: Dict[str, Any] = field("):
+            ranges.append((index + 1, index + 3))
+            break
+    for function in ("_resolve_final_part",):
+        resolved = _func_range(worktree, function, "CensoInterface")
+        if resolved:
+            ranges.append(resolved)
+    refine = _func_range(worktree, "refine_ensemble", "CensoInterface")
+    if refine is not None:
+        start = next(
+            (i for i, line in enumerate(lines) if "rcfile_sha256 =" in line),
+            None,
+        )
+        end = next(
+            (i for i, line in enumerate(lines) if "env: Optional[Dict[str, str]] = None" in line),
+            None,
+        )
+        if start is not None and end is not None and start >= refine[0] and end <= refine[1]:
+            ranges.append((start - 1, end + 1))
+    start = next(
+        (i for i, line in enumerate(lines) if line.strip() == "enabled_parts = {"),
+        None,
+    )
+    end = next(
+        (
+            i
+            for i, line in enumerate(lines)
+            if "self._compare_boltzmann_weights(result, out_path)" in line
+        ),
+        None,
+    )
+    if start is not None and end is not None and end > start:
+        ranges.append((start + 1, end + 1))
+    return ranges
+
+
+def _is_amendment_x_censo_addition(ln: int, txt: str, worktree: str) -> bool:
+    if txt.strip() == "import hashlib":
+        return True
+    return any(start <= ln <= end for start, end in _amendment_x_censo_ranges(worktree))
+
+
+def _amendment_x_censo_teeth(worktree: str) -> list[str]:
+    issues: list[str] = []
+    checks = (
+        ("execution: Dict[str, Any] = field(", "execution field"),
+        ("allowed: Optional[set] = None", "_resolve_final_part allowed"),
+        ('"argv"', "argv fact"),
+        ('"returncode"', "returncode fact"),
+        ('"artifacts"', "artifact digests"),
+        ('"enabled_parts"', "enabled parts"),
+        ('"conformers"', "conformer membership"),
+        ('"input_sha256"', "input digest"),
+        ('"rcfile_sha256"', "rcfile digest"),
+    )
+    for needle, label in checks:
+        if needle not in worktree:
+            issues.append(f"  censo.py: Amendment X scope missing {label}")
+    return issues
+
+
 def test_algorithm_body_untouched() -> None:
     """① Every added line must be pure comment/blank — no algorithm-body changes.
 
@@ -1966,6 +2040,22 @@ def test_algorithm_body_untouched() -> None:
 
     for fp in ALLOWED_PY:
         added, deleted = _diff_hunks(fp)
+
+        # ── censo.py: Amendment S (memory) + X (execution evidence) ───────
+        if fp == "src/cccp/qc/interfaces/censo.py":
+            worktree = _worktree_content(fp)
+            for ln, txt in added:
+                stripped = txt.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                if _is_amendment_s_censo_addition(ln, txt, worktree):
+                    continue
+                if _is_amendment_x_censo_addition(ln, txt, worktree):
+                    continue
+                violations.append(f"  {fp}:{ln}: {txt!r}")
+            violations.extend(_amendment_s_teeth(worktree, censo=True))
+            violations.extend(_amendment_x_censo_teeth(worktree))
+            continue
 
         # ── orca_ts.py: Amendment F + G ───────────────────────────────────
         if fp == "src/cccp/qc/interfaces/orca_ts.py":
@@ -2522,11 +2612,19 @@ MIGRATION_STATION_PREFIXES = (
     # Four-site version lockstep (ANTI-PATTERN #2): every release commit bumps
     # this file, so the audit must not flag it as unaudited.
     "src/acp/__init__.py",
+    # M0-09 (remediation 2026-10-26): the single ACP-side declaration of the
+    # research MCP extension id/version, injected into the Services server so
+    # ``acp_services`` never carries an ``acp.*`` wire literal (isolation
+    # gate). Exact file only — a version bump is a contract change.
+    "src/acp/mcp_extension.py",
     # todo 19: the frequency-science delegation target (single parse in cccp).
     "src/acp/results/orca_parser.py",
     # todo 25: CENSO template-line construction points (translation-layer consumers).
     "src/acp/workflows/energy_shared.py",
     "src/acp/confsearch/shared/helpers.py",
+    # MCP UX P3 (2026-10-29): the conformer counter pair (kept vs selected)
+    # lives in the engine's pipeline telemetry; exact file only.
+    "src/acp/confsearch/engine.py",
     # todo 28: PES/路径工作流任务化改线（XtbPathSearch/OrcaGradient + PES 扫描接线）。
     "src/acp/workflows/xtb_path.py",
     "src/acp/workflows/orca_gradient.py",
@@ -2645,6 +2743,21 @@ MIGRATION_STATION_PREFIXES = (
     # ``acp_services.entrypoints.mcp``; registered as an exact file so the
     # R1 boundary keeps auditing it (no whole-directory exemption).
     "src/acp/services_mcp_bootstrap.py",
+    # M2-02 (remediation 2026-10-27): the application-level analysis registry
+    # composition root.  It builds the injected registry and registers the real
+    # ``vibration.analyze`` handler (prepared-artifact read + A's declared pure
+    # analysis binding).  Exact file: it deliberately imports
+    # ``cccp.calculation.capabilities`` (the analysis binding, never a task
+    # core), so it is registered here for the R1 boundary only and is NOT added
+    # to ``SERVICES_BOOTSTRAP_STATIONS`` (that tuple bans the calculation
+    # package prefix for the pure port-wiring seams).
+    "src/acp/services_analysis_bootstrap.py",
+    # M2-05: the third-party science plugin composition root (installed/enable
+    # facts -> registry injection); exact file only, same rule as above.
+    "src/acp/services_science_plugins_bootstrap.py",
+    # M5-03 F2: the four-distribution mutual-exclusion guard checked at the
+    # CLI/server/MCP entries (exact file only).
+    "src/acp/install_guard.py",
     # todo 36/37: the whole ``init_wizard`` package is the single ``acp init``
     # station (unified answers/plan/persist + pure node validation); the
     # package-wide module-level-paramiko ban below is the added tooth.
@@ -3098,3 +3211,9 @@ def test_services_scope_audits_acp_services_import_discipline() -> None:
     target = "src/acp_services/runtime/rogue.py"
     issues = _migration_audit_issues([target], {target: "from acp.scheduler import jobs\n"})
     assert issues and ("imports" in issues[0] or "from acp" in issues[0]), issues
+
+
+def test_amendment_x_is_function_scoped() -> None:
+    source = _worktree_content("src/cccp/qc/interfaces/censo.py")
+    outside = len(source.splitlines()) + 5
+    assert not _is_amendment_x_censo_addition(outside, 'input_sha256 = "x"', source)

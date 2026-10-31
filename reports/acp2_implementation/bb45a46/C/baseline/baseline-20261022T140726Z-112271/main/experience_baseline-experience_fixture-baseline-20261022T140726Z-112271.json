@@ -1,0 +1,91 @@
+{
+  "artifacts": [
+    {
+      "path": "node-suite.txt",
+      "sha256": "4130c9e5195d396b9f24609f45488a288ea762be87a2163fe3dd1e6e478c3eb3",
+      "size_bytes": 264
+    },
+    {
+      "path": "baseline.json",
+      "sha256": "5a223a0ec14555251baa077e7c97245ddd129438b093df5fd8ee2576b52a71a8",
+      "size_bytes": 550
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+      "name": "baseline.git_head",
+      "status": "PASS"
+    },
+    {
+      "detail": "clean",
+      "name": "baseline.worktree_clean",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"acp\": \"/ACPServer/acp2-development/C/src/acp/__init__.py\", \"acp_services\": \"/ACPServer/acp2-development/C/src/acp_services/__init__.py\", \"cccp\": \"/ACPServer/acp2-development/C/src/cccp/__init__.py\"}",
+      "name": "baseline.product_import_source",
+      "status": "PASS"
+    },
+    {
+      "detail": "C=1a1b4b23c554acaf2818db1dcee336b69494a887 B=1a1b4b23c554acaf2818db1dcee336b69494a887",
+      "name": "baseline.tree_matches_b_materialized",
+      "status": "PASS"
+    },
+    {
+      "detail": "rc=0 passed=329 failed=0",
+      "name": "baseline.node_zero_dependency_suite",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+    "harness_revision": "906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec",
+  "command": [
+    "/ACPServer/acp2-development/venvs/c/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "baseline",
+    "--timeout",
+    "300",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/baseline/baseline-20261022T140726Z-112271/main"
+  ],
+  "contract_version": "1.0.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "fixture",
+  "exit_code": 0,
+  "extensions": {
+    "experience.harness_contract_revision": "906a392020d482954aa7f7a782f3bbd7c4d5b77a06ce7fec2bfc830012d74a4e",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+    "experience.mode": "fixture",
+    "experience.product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+    "experience.run_id": "baseline-20261022T140726Z-112271",
+    "experience.scenario_key": "baseline",
+    "experience.subcase": null,
+    "experience.test_revision": "68586db48cbe4e57377c3b607ec47af50ec85cec"
+  },
+  "finished_at": "2026-10-22T14:07:31Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:fixture",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "baseline-20261022T140726Z-112271",
+  "scenario": "experience:baseline",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T14:07:26Z",
+  "submission_id": null,
+  "usage": null
+}

@@ -53,7 +53,7 @@ from urllib.parse import quote, urlparse
 
 try:
     import tomllib
-except ModuleNotFoundError:  # Python 3.10
+except ModuleNotFoundError:  # Python 3.10 (CI matrix)
     import tomli as tomllib
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -85,6 +85,8 @@ SCOPE_VALUES = ("IN_SCOPE", "DEFERRED", "NOT_APPLICABLE")
 EVIDENCE_KINDS = ("fixture", "live", "aggregate")
 MCP_TOOLS = (
     "acp_capabilities",
+        "acp_get_guidance",
+        "acp_list_jobs",
     "acp_preflight",
     "acp_submit",
     "acp_status",
@@ -118,6 +120,113 @@ TIMESTAMP_PATTERN = re.compile(
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 
+# ---------------------------------------------------------------------------
+# C experience required observations (M0-03/R10)
+# ---------------------------------------------------------------------------
+#
+# ``evidence_kind=live`` is a signed product statement, so it may no longer be
+# derived from the phase alone.  Every C live scenario declares, per
+# observation, whether the live row must have observed it (``present``) or must
+# have observed its absence/untriggered state (``absent``).  A live row that
+# does not declare its observations is a contract error, never a default
+# accept.  ``model=absent`` is a valid live negative only with exactly zero
+# model calls and a real untriggered/denial fact; a budget-denial row must also
+# carry no TaskRef.
+
+EXPERIENCE_OBSERVATIONS_SCHEMA = "acp2.experience.observations.v1"
+OBSERVATION_NAMES = (
+    "transport",
+    "controller",
+    "model",
+    "qc",
+    "lsf",
+    "browser",
+    "artifact",
+    "denial",
+)
+OBSERVATION_DIRECTIONS = ("present", "absent")
+
+_DEFAULT_OBSERVATIONS: dict[str, str] = {
+    "transport": "present",
+    "controller": "present",
+    "model": "absent",
+    "qc": "absent",
+    "lsf": "absent",
+    "browser": "absent",
+    "artifact": "absent",
+    "denial": "absent",
+}
+
+
+def _observations(**overrides: str) -> dict[str, str]:
+    """Build one declared direction map on top of the platform-only default."""
+
+    declared = dict(_DEFAULT_OBSERVATIONS)
+    for name, direction in overrides.items():
+        if name not in OBSERVATION_NAMES:
+            raise ValueError(f"unknown observation {name!r}")
+        if direction not in OBSERVATION_DIRECTIONS:
+            raise ValueError(f"unknown observation direction {direction!r}")
+        declared[name] = direction
+    return declared
+
+
+EXPERIENCE_REQUIRED_OBSERVATIONS: dict[str, dict[str, str]] = {
+    "mcp-live": _observations(),
+    "dsh-discovery-live": _observations(),
+    "model-live": _observations(controller="absent", model="present"),
+    "dsh-local-singlepoint-live": _observations(model="present", qc="present", artifact="present"),
+    "dsh-lsf-singlepoint-live": _observations(
+        model="present", qc="present", lsf="present", artifact="present"
+    ),
+    "dsh-optfreq-live": _observations(model="present", qc="present", artifact="present"),
+    # M4-02: the row now runs two real browsers plus a read-only identity, so
+    # the negative (a read-only submit refused by the platform) is a required
+    # observation of the row, not an optional extra.
+    "same-task-browser-live": _observations(
+        model="present",
+        qc="present",
+        browser="present",
+        artifact="present",
+        denial="present",
+    ),
+    "client-recovery-live": _observations(),
+    # M4-02: the row now runs in real browsers (two acting identities + one
+    # read-only), so the live row must observe the browser and the denial.
+    "approval-budget-live": _observations(browser="present", denial="present"),
+    "research-loop-live": _observations(model="present"),
+    "evidence-browser-live": _observations(
+        controller="absent", browser="present", artifact="present"
+    ),
+    "research-resume-live": _observations(model="present"),
+    "fault-boundaries-live": _observations(denial="present"),
+    "da-research-live": _observations(model="present", qc="present", artifact="present"),
+    "plugin-discovery-live": _observations(controller="absent"),
+    # M4-05: the row is executed for real — a real Controller serves the
+    # third-party capability form to a real Chromium, which renders it and shows
+    # the real preflight ViewModel.  No scientific artifact is prepared, so the
+    # artifact observation stays absent.
+    "schema-form-live": _observations(browser="present"),
+    "plugin-upgrade-live": _observations(artifact="present"),
+    "cross-domain-live": _observations(model="present", qc="present", artifact="present"),
+    "multi-project-live": _observations(),
+    "experience-upgrade-live": _observations(browser="present"),
+    "clean-install-live": _observations(transport="absent", controller="absent"),
+    "operator-runbook-live": _observations(artifact="present"),
+    # Aggregate/closeout rows resolve to ``main`` + live but start no live
+    # component of their own; every live observation is declared absent.
+    "p2-closeout": _observations(transport="absent", controller="absent"),
+    "client-release": _observations(transport="absent", controller="absent"),
+    "experience-release-closeout": _observations(transport="absent", controller="absent"),
+}
+
+
+def required_observations(scenario_key: str) -> dict[str, str] | None:
+    """Return the frozen present/absent directions for one C live scenario."""
+
+    declared = EXPERIENCE_REQUIRED_OBSERVATIONS.get(scenario_key)
+    return dict(declared) if declared is not None else None
+
 
 def contract_version() -> str:
     """Return the delivered contract version from the authoritative manifest.
@@ -144,9 +253,7 @@ METADATA_VERSION_SOURCES = (
     "src/cccp/version.py",
     "pyproject.toml",
 )
-_VERSION_LITERAL_RE = re.compile(
-    r'^[ \t]*__version__\s*=\s*["\']([^"\']+)["\']', re.MULTILINE
-)
+_VERSION_LITERAL_RE = re.compile(r'^[ \t]*__version__\s*=\s*["\']([^"\']+)["\']', re.MULTILINE)
 
 
 def source_version_locations(repo_root: Path) -> dict[str, str]:
@@ -180,13 +287,20 @@ def editable_metadata_version_check(
             {"installed": "<missing>", **sources},
         )
     mismatched = [name for name, value in sources.items() if value != installed]
-    detail = "installed=" + installed + " " + " ".join(
-        f"{name}={value}" for name, value in sources.items()
+    detail = (
+        "installed="
+        + installed
+        + " "
+        + " ".join(f"{name}={value}" for name, value in sources.items())
     )
-    return (not mismatched and len(set(sources.values()) | {installed}) == 1), detail, {
-        "installed": installed,
-        **sources,
-    }
+    return (
+        (not mismatched and len(set(sources.values()) | {installed}) == 1),
+        detail,
+        {
+            "installed": installed,
+            **sources,
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -211,7 +325,7 @@ class PhaseSpec:
 
 @dataclass(frozen=True)
 class ScenarioSpec:
-    """One of the 15 immutable B scenario IDs."""
+    """One of the 16 immutable B scenario IDs (M2-04 adds the recipe DAG)."""
 
     scenario: str
     default_owner: str
@@ -570,6 +684,22 @@ B_SCENARIOS: dict[str, ScenarioSpec] = {
         ),
         "B24a migration/backup restore acceptance is not implemented in the B01 skeleton",
     ),
+    "bounded-recipe-dag": ScenarioSpec(
+        "bounded-recipe-dag",
+        "M2-04",
+        {
+            "integration:multi-step": _phase(
+                "M2-04",
+                "read",
+                "local",
+                600,
+                args=("fixture", "out"),
+                prerequisites=("fixture",),
+                side_effects=("no QC", "no controller", "no second task"),
+            ),
+        },
+        "M2-04 bounded recipe DAG production wiring is not implemented",
+    ),
     "package-install": ScenarioSpec(
         "package-install",
         "B25b",
@@ -599,6 +729,7 @@ EXPECTED_B_SCENARIOS = (
     "infra-plugin",
     "multitenant",
     "migration",
+    "bounded-recipe-dag",
     "package-install",
 )
 
@@ -1078,6 +1209,127 @@ def _aggregate_errors(document: dict[str, Any]) -> list[str]:
     return errors
 
 
+def _nested_evidence_kinds(value: Any, path: str = "extensions") -> list[tuple[str, str]]:
+    """Collect nested ``evidence_kind`` claims that must never sit in a live row."""
+
+    found: list[tuple[str, str]] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            child_path = f"{path}.{key}"
+            if key == "evidence_kind" and isinstance(child, str):
+                if child in ("fixture", "offline_fixture"):
+                    found.append((child, child_path))
+            found.extend(_nested_evidence_kinds(child, child_path))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            found.extend(_nested_evidence_kinds(child, f"{path}[{index}]"))
+    return found
+
+
+def _experience_observation_errors(document: dict[str, Any]) -> list[str]:
+    """Validate the per-scenario required observations of one C receipt."""
+
+    errors: list[str] = []
+    if document.get("owner") != "C":
+        return errors
+    scenario = document.get("scenario")
+    if not isinstance(scenario, str):
+        return errors
+    scenario_key = (
+        scenario[len("experience:") :] if scenario.startswith("experience:") else scenario
+    )
+    evidence_kind = document.get("evidence_kind")
+    result = document.get("result")
+    extensions = document.get("extensions")
+
+    if evidence_kind == "live" and isinstance(extensions, dict):
+        for nested_kind, nested_path in _nested_evidence_kinds(extensions):
+            errors.append(f"live_nested_evidence_kind:{nested_kind}:{nested_path}")
+
+    raw = extensions.get("experience.observations") if isinstance(extensions, dict) else None
+    if raw is None:
+        if evidence_kind == "live" and result == "PASS":
+            errors.append("experience_observations_missing")
+        return errors
+    if not isinstance(raw, dict):
+        errors.append("experience_observations_invalid")
+        return errors
+
+    declared = EXPERIENCE_REQUIRED_OBSERVATIONS.get(scenario_key)
+    if evidence_kind == "live" and declared is None:
+        errors.append(f"experience_observations_undeclared:{scenario_key}")
+    published_declaration = (
+        extensions.get("experience.declared_observations") if isinstance(extensions, dict) else None
+    )
+    if declared is not None and published_declaration is not None:
+        if published_declaration != declared:
+            errors.append("experience_observations_declaration_drift")
+
+    schema = raw.get("schema")
+    if schema is not None and schema != EXPERIENCE_OBSERVATIONS_SCHEMA:
+        errors.append(f"experience_observations_schema_unsupported:{schema}")
+
+    observed = raw.get("observed")
+    if not isinstance(observed, dict) or not observed:
+        errors.append("experience_observations_invalid")
+        return errors
+
+    for name in sorted(observed):
+        direction = observed[name]
+        if name not in OBSERVATION_NAMES:
+            errors.append(f"experience_observation_unknown:{name}")
+            continue
+        if direction not in OBSERVATION_DIRECTIONS:
+            errors.append(f"experience_observation_direction_invalid:{name}")
+            continue
+        if evidence_kind == "fixture" and direction == "present":
+            errors.append(f"fixture_observation_present:{name}")
+
+    model = observed.get("model")
+    if model in OBSERVATION_DIRECTIONS:
+        calls = raw.get("model_calls")
+        model_evidence = raw.get("model_evidence")
+        calls_ok = isinstance(calls, int) and not isinstance(calls, bool)
+        has_evidence = isinstance(model_evidence, str) and bool(model_evidence.strip())
+        if not calls_ok:
+            errors.append("experience_observations_model_calls_invalid")
+        if model == "present":
+            if calls_ok and calls < 1:
+                errors.append("live_model_present_without_calls")
+            if not has_evidence:
+                errors.append("live_model_present_without_evidence")
+        else:
+            if calls_ok and calls != 0:
+                errors.append("live_model_absent_with_calls")
+            if not has_evidence:
+                errors.append("live_model_absent_without_fact")
+
+    if observed.get("denial") == "present":
+        denial_evidence = raw.get("denial_evidence")
+        denial_kind = raw.get("denial_kind")
+        has_denial = isinstance(denial_evidence, str) and bool(denial_evidence.strip())
+        if not has_denial:
+            errors.append("live_denial_present_without_fact")
+        budget_denial = denial_kind == "budget" or (
+            isinstance(denial_evidence, str) and denial_evidence.startswith("budget")
+        )
+        if budget_denial:
+            for key in ("job_id", "operation_id", "attempt"):
+                if document.get(key) is not None:
+                    errors.append(f"live_budget_denial_task_ref:{key}")
+
+    if raw.get("offline_fixture_content") is True and evidence_kind == "live":
+        errors.append("live_inner_offline_fixture")
+
+    if evidence_kind == "live" and result == "PASS" and declared is not None:
+        for name in sorted(declared):
+            if name not in observed:
+                errors.append(f"experience_observation_missing:{name}")
+            elif observed[name] != declared[name]:
+                errors.append(f"experience_observation_mismatch:{name}")
+    return errors
+
+
 def _semantic_errors(document: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     version = document.get("contract_version")
@@ -1132,6 +1384,7 @@ def _semantic_errors(document: dict[str, Any]) -> list[str]:
 
     errors.extend(_platform_matrix_errors(document, operation_class, target, phase_spec))
     errors.extend(_aggregate_errors(document))
+    errors.extend(_experience_observation_errors(document))
     return errors
 
 
@@ -1152,6 +1405,10 @@ def _artifact_errors(document: dict[str, Any], artifact_root: Path | None) -> li
     errors: list[str] = []
     artifacts = document.get("artifacts")
     if not isinstance(artifacts, list):
+        return errors
+    historical = document.get("historical") is True
+    if historical and not str(document.get("historical_note") or "").strip():
+        errors.append("historical_receipt_missing_note")
         return errors
     cwd = document.get("cwd")
     for artifact in artifacts:
@@ -1175,6 +1432,10 @@ def _artifact_errors(document: dict[str, Any], artifact_root: Path | None) -> li
         found = next((candidate for candidate in candidates if candidate.is_file()), None)
         if found is None:
             errors.append(f"artifact_missing:{raw_path}")
+            continue
+        if historical:
+            # The receipt records the run-time bytes, not the current tree;
+            # existence is checked, digest/size drift is expected.
             continue
         size_bytes = artifact.get("size_bytes")
         if isinstance(size_bytes, int) and size_bytes != found.stat().st_size:
@@ -1449,6 +1710,10 @@ def _evidence_kind_for_phase(phase: str, scenario: str | None = None) -> str:
         return "fixture"
     if phase == "aggregate":
         return "aggregate"
+    if scenario == "bounded-recipe-dag":
+        # M2-04 exercises the production adapter/fence/quota/receipt chain with a
+        # controlled CCCP stub: no QC binary, no controller, no real science.
+        return "fixture"
     if phase == "da-preflight":
         # B18 has no compute and creates no task; this is static/simulated
         # contract evidence, never a live DA execution (B20a owns that).
@@ -1826,7 +2091,7 @@ def _run_env_runtime(
     software = environment.get("software") if isinstance(environment.get("software"), dict) else {}
     orca = software.get("orca") if isinstance(software.get("orca"), dict) else {}
     probe = orca.get("probe") if isinstance(orca.get("probe"), dict) else {}
-    expected_orca = "/home/<user>/orca611/orca"
+    expected_orca = "/home/xieningke/orca611/orca"
     orca_path = str(orca.get("path") or "")
     orca_ok = (
         orca_path == expected_orca
@@ -1889,7 +2154,7 @@ def _run_env_runtime(
         and isinstance(host.get("memory_total_bytes"), int)
         and int(host["memory_total_bytes"]) > 0
         and host.get("run_root_fstype") == "xfs"
-        and run_root == "<acp2-dev>/data/b/run-root"
+        and run_root == "/ACPServer/acp2-development/data/b/run-root"
         and host.get("production_run_root_touched") is False
     )
     add(
@@ -2014,7 +2279,7 @@ def _run_env_runtime(
     raw_candidate_record = environment.get("candidate")
     candidate_record = raw_candidate_record if isinstance(raw_candidate_record, dict) else {}
     env_digest_path = (
-        Path(os.environ.get("ACP2_DATA_ROOT", "<acp2-dev>/data/b"))
+        Path(os.environ.get("ACP2_DATA_ROOT", "/ACPServer/acp2-development/data/b"))
         / "acceptance-env.sh"
     )
     env_digest_ok = (
@@ -2139,9 +2404,7 @@ def _run_entry_readonly(
     }
     project_id = os.environ.get("ACP_PROJECT_ID") or "uncategorized"
     project_query = quote(project_id, safe="")
-    science_capabilities_url = (
-        base + "/api/v2/science/capabilities?project_id=" + project_query
-    )
+    science_capabilities_url = base + "/api/v2/science/capabilities?project_id=" + project_query
     science_preflight_url = base + "/api/v2/science/preflight?project_id=" + project_query
     try:
         before = _controller_task_count(base, timeout)
@@ -2207,9 +2470,7 @@ def _run_entry_readonly(
         science_capabilities, dict
     )
     science_preflight_ok = (
-        science_preflight_status == 200
-        and isinstance(science_preflight, dict)
-        and before == after
+        science_preflight_status == 200 and isinstance(science_preflight, dict) and before == after
     )
     assertions.extend(
         [
@@ -2247,8 +2508,7 @@ def _run_entry_readonly(
                 "name": "science_preflight_v2_zero_side_effects",
                 "status": "PASS" if science_preflight_ok else "FAIL",
                 "detail": (
-                    f"status={science_preflight_status} "
-                    f"tasks_before={before} tasks_after={after}"
+                    f"status={science_preflight_status} tasks_before={before} tasks_after={after}"
                 ),
             },
             {
@@ -2281,9 +2541,7 @@ def _run_entry_readonly(
             "b06.missing_operation_status": missing_status,
             "m5.installed_version": m5_versions.get("installed"),
             "m5.source_versions": {
-                name: value
-                for name, value in m5_versions.items()
-                if name != "installed"
+                name: value for name, value in m5_versions.items() if name != "installed"
             },
         }
     )
@@ -2396,6 +2654,29 @@ class _McpStdioProbe:
         return "".join(self._stderr)
 
 
+def research_extension_authority() -> dict[str, Any]:
+    """Read the one frozen extension id/version pair (M1-01a).
+
+    The extension version is *not* hardcoded in this harness: it is read from the
+    P2 authority (``p2-research-operations.v1.json::client_path.negotiation``) and
+    the application projection is checked against it, so a partial bump fails
+    here instead of silently asserting a stale value (the B06 1.1.0 drift).
+    """
+    path = CONTRACT_ROOT / "runtime" / "p2-research-operations.v1.json"
+    contract = json.loads(path.read_text(encoding="utf-8"))
+    negotiation = (contract.get("client_path") or {}).get("negotiation") or {}
+    api = json.loads((CONTRACT_ROOT / "runtime" / "application-api.v1.json").read_text())
+    projection = (api.get("mcp_extensions") or {}).get(negotiation.get("extension_id") or "") or {}
+    return {
+        "id": negotiation.get("extension_id"),
+        "version": negotiation.get("extension_version"),
+        "request_field": negotiation.get("request_field"),
+        "projection_version": projection.get("version"),
+        "implemented": negotiation.get("implemented"),
+        "negotiated_default": negotiation.get("negotiated_default"),
+    }
+
+
 def _run_mcp_stdio(
     controller: str, launch_path: str, timeout: float
 ) -> tuple[int, list[dict[str, Any]], dict[str, Any]]:
@@ -2489,6 +2770,25 @@ def _run_mcp_stdio(
                 },
             },
         )
+        authority = research_extension_authority()
+        extension_advertised = probe.request(
+            9,
+            "tools/call",
+            {"name": "acp_capabilities", "arguments": {}},
+        )
+        extension_refused = probe.request(
+            10,
+            "tools/call",
+            {
+                "name": "acp_capabilities",
+                "arguments": {
+                    "research_extension": {
+                        "id": authority["id"],
+                        "version": authority["version"],
+                    }
+                },
+            },
+        )
         after = _controller_task_count(base, timeout)
         exit_code = probe.close()
         probe = None
@@ -2506,11 +2806,14 @@ def _run_mcp_stdio(
             probe.close()
         return EXIT_FAIL, assertions, extensions
 
-    extension = (initialized.get("extensions") or {}).get("acp.research.v1") or {}
+    negotiation = ((initialized.get("capabilities") or {}).get("extensions") or {}).get(
+        "acp.negotiation.v1"
+    ) or {}
     initialized_ok = (
         initialized.get("protocolVersion") == launch.get("protocol_version", "2025-06-18")
-        and extension.get("negotiated") is True
-        and extension.get("version") == "1.1.0"
+        and "extensions" not in initialized
+        and negotiation.get("supported_versions") == ["2025-06-18"]
+        and "negotiated" not in json.dumps(initialized.get("capabilities") or {})
     )
     tools_ok = tool_names == set(MCP_TOOLS)
     capabilities_data = capabilities.get("structuredContent", {})
@@ -2544,12 +2847,36 @@ def _run_mcp_stdio(
     analyze_unsupported_ok = analyze_unsupported.get("isError") is True and analyze_unsupported.get(
         "structuredContent", {}
     ).get("error", {}).get("code") in {"unsupported_capability", "resource_not_ready"}
+    advertised_entries = _extension_entries(extension_advertised)
+    advertised_entry = advertised_entries[0] if advertised_entries else {}
+    extension_authority_ok = (
+        bool(authority["id"])
+        and bool(authority["version"])
+        and authority["version"] == authority["projection_version"]
+        and advertised_entry.get("id") == authority["id"]
+        and advertised_entry.get("version") == authority["version"]
+        and advertised_entry.get("implemented") is authority["implemented"] is False
+        and advertised_entry.get("negotiated") is False
+    )
+    refused_error = (extension_refused.get("structuredContent") or {}).get("error") or {}
+    refused_entries = _extension_entries(extension_refused)
+    refused_entry = refused_entries[0] if refused_entries else {}
+    extension_not_negotiated_ok = (
+        extension_refused.get("isError") is True
+        and refused_error.get("code") == "unsupported_capability"
+        and (refused_error.get("params") or {}).get("rule") == "extension_not_implemented"
+        and refused_entry.get("implemented") is False
+        and refused_entry.get("negotiated") is False
+    )
     assertions.extend(
         [
             {
-                "name": "initialize_research_extension",
+                "name": "initialize_standard_handshake",
                 "status": "PASS" if initialized_ok else "FAIL",
-                "detail": "acp.research.v1 negotiated with version 1.1.0",
+                "detail": (
+                    "server answered its own version; no top-level extensions and no "
+                    "negotiated claim (ADR-006)"
+                ),
             },
             {
                 "name": "tools_allowlist",
@@ -2587,6 +2914,23 @@ def _run_mcp_stdio(
                 "detail": "unregistered analysis did not run science",
             },
             {
+                "name": "research_extension_authority",
+                "status": "PASS" if extension_authority_ok else "FAIL",
+                "detail": (
+                    f"advertised {advertised_entry.get('id')}@{advertised_entry.get('version')} "
+                    f"== P2 authority {authority['id']}@{authority['version']}; "
+                    "implemented/negotiated false"
+                ),
+            },
+            {
+                "name": "research_extension_not_negotiated",
+                "status": "PASS" if extension_not_negotiated_ok else "FAIL",
+                "detail": (
+                    "a matching-version request is refused in-band as "
+                    "unsupported_capability/extension_not_implemented (advertising is not delivery)"
+                ),
+            },
+            {
                 "name": "task_count_unchanged",
                 "status": "PASS" if before == after else "FAIL",
                 "detail": f"before={before} after={after}",
@@ -2600,6 +2944,8 @@ def _run_mcp_stdio(
             "b06.adapter_exit_code": exit_code,
             "b06.tools": sorted(tool_names),
             "b06.protocol_version": initialized.get("protocolVersion"),
+            "b06.research_extension": authority,
+            "b06.research_extension_advertised": dict(advertised_entry),
         }
     )
     passed = (
@@ -2611,10 +2957,19 @@ def _run_mcp_stdio(
         and read_ok
         and analyze_implicit_ok
         and analyze_unsupported_ok
+        and extension_authority_ok
+        and extension_not_negotiated_ok
         and before == after
         and exit_code == 0
     )
     return (EXIT_PASS if passed else EXIT_FAIL), assertions, extensions
+
+
+def _extension_entries(result: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Return the ``extensions[]`` projection of an acp_capabilities result."""
+    data = (result.get("structuredContent") or {}).get("data") or {}
+    entries = data.get("extensions") if isinstance(data, Mapping) else None
+    return [dict(entry) for entry in entries or [] if isinstance(entry, Mapping)]
 
 
 def _submit_arguments(xyz_text: str, key: str, *, project_id: str | None = None) -> dict[str, Any]:
@@ -2893,7 +3248,7 @@ B10_METHOD_LEVEL: dict[str, Any] = {
     "functional": "HF",
     "basis": "STO-3G",
 }
-B10_DEFAULT_ORCA = "/home/<user>/orca611/orca"
+B10_DEFAULT_ORCA = "/home/xieningke/orca611/orca"
 B10_NATIVE_RELATIVE: tuple[str, ...] = (
     "sp.inp",
     "sp.out",
@@ -5652,7 +6007,7 @@ def _b13_build_launch(
     if document:
         document = copy.deepcopy(document)
     else:
-        source = Path(os.environ.get("ACP2_SOURCE", "<acp2-dev>/B"))
+        source = Path(os.environ.get("ACP2_SOURCE", "/ACPServer/acp2-development/B"))
         python = os.environ.get("ACP2_B_PYTHON", sys.executable)
         document = {
             "command": python,
@@ -5691,27 +6046,27 @@ def _b13_build_launch(
         "ACP_CONFIG",
         os.environ.get(
             "ACP_CONFIG",
-            "<acp2-dev>/data/b/controller-config/cccp.yaml",
+            "/ACPServer/acp2-development/data/b/controller-config/cccp.yaml",
         ),
     )
     env.setdefault(
         "CONFSEARCH_ORCA_PATH",
-        os.environ.get("CONFSEARCH_ORCA_PATH", "/home/<user>/orca611/orca"),
+        os.environ.get("CONFSEARCH_ORCA_PATH", "/home/xieningke/orca611/orca"),
     )
     env.setdefault(
         "CONFSEARCH_ORCA_LD_LIBRARY_PATH",
         os.environ.get(
             "CONFSEARCH_ORCA_LD_LIBRARY_PATH",
-            "/home/<user>/openmpi418/lib:/home/<user>/orca611",
+            "/home/xieningke/openmpi418/lib:/home/xieningke/orca611",
         ),
     )
     env.setdefault(
         "LD_LIBRARY_PATH",
-        os.environ.get("LD_LIBRARY_PATH", "/home/<user>/openmpi418/lib:/home/<user>/orca611"),
+        os.environ.get("LD_LIBRARY_PATH", "/home/xieningke/openmpi418/lib:/home/xieningke/orca611"),
     )
     env.setdefault(
         "PATH",
-        "<acp2-dev>/venvs/b/bin:/usr/sbin:/usr/local/bin:/usr/bin:/bin",
+        "/ACPServer/acp2-development/venvs/b/bin:/usr/sbin:/usr/local/bin:/usr/bin:/bin",
     )
     document["env"] = env
     document.setdefault("command", sys.executable)
@@ -7219,7 +7574,7 @@ def _b13_source_root(base: str) -> Path:
         cwd = Path(info.get("cwd") or "")
         if cwd.name == "src" and (cwd.parent / "src").is_dir():
             return cwd.parent
-    source = Path(os.environ.get("ACP2_SOURCE", "<acp2-dev>/B"))
+    source = Path(os.environ.get("ACP2_SOURCE", "/ACPServer/acp2-development/B"))
     return source
 
 
@@ -7415,7 +7770,7 @@ def _run_control_recovery(
         )
         orca = str(
             (controller_info.get("env") or {}).get(
-                "CONFSEARCH_ORCA_PATH", "/home/<user>/orca611/orca"
+                "CONFSEARCH_ORCA_PATH", "/home/xieningke/orca611/orca"
             )
         )
         launch = _b13_build_launch(
@@ -8807,6 +9162,329 @@ def _run_da_submit(
         assertions,
         extensions,
     )
+
+
+# ---------------------------------------------------------------------------
+# M2-04 — bounded recipe DAG production wiring (independent scenario)
+# ---------------------------------------------------------------------------
+
+M204_SCHEMA = "acp2.m204.bounded-recipe-dag.v1"
+
+
+def _m204_recipe() -> dict[str, Any]:
+    """Canonical two-step bounded recipe (optimize -> frequency), no parameters."""
+    selector = {"selector_kind": "whole_product"}
+
+    def ref(from_step: str, product_kind: str) -> dict[str, Any]:
+        return {
+            "from_step": from_step,
+            "product_kind": product_kind,
+            "selector": dict(selector),
+            "required": True,
+        }
+
+    return {
+        "schema_version": 1,
+        "recipe_id": "recipe.m204.relax_freq.v1",
+        "applicability": {"supported_reaction_classes": [], "preconditions": []},
+        "limits": {"max_steps": 4, "max_edges": 4},
+        "steps": [
+            {
+                "step_id": "relax",
+                "intent": "relax the frozen guess (controlled stub)",
+                "required": True,
+                "diagnostic_only": False,
+                "task_kind": "optimize",
+                "parameters": {},
+                "consumes": [],
+                "produces": [ref("relax", "geometry")],
+                "validators": [],
+                "alternatives": [],
+            },
+            {
+                "step_id": "freq",
+                "intent": "verify the relaxed structure (controlled stub)",
+                "required": True,
+                "diagnostic_only": False,
+                "task_kind": "frequency",
+                "parameters": {},
+                "consumes": [ref("relax", "geometry")],
+                "produces": [ref("freq", "frequencies")],
+                "validators": [],
+                "alternatives": [],
+            },
+        ],
+        "edges": [
+            {
+                "edge_id": "relax_to_freq_geometry",
+                "from_step": "relax",
+                "to_step": "freq",
+                "output_ref": ref("relax", "geometry"),
+            }
+        ],
+        "validators": [],
+        "alternatives": [],
+    }
+
+
+def _m204_stub_runner(calls: list[str]):
+    """Controlled CCCP stub: typed results, real artifacts, no QC binary."""
+    from cccp.calculation.contracts import ArtifactRef, Provenance
+    from cccp.calculation.requests import TaskKind
+    from cccp.calculation.results import FrequencyPayload, TaskResult
+
+    def factory(entrypoint: str):
+        def run(request, *, context=None):  # noqa: ANN001 - cccp task seam
+            calls.append(entrypoint)
+            out_dir = Path(request.output_dir)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            provenance = Provenance(
+                backend="stub", method="stub", version="0", input_signature="stub"
+            )
+            if request.task is TaskKind.OPTIMIZE:
+                artifact = out_dir / "final.xyz"
+                artifact.write_text("3\nstub\nO 0 0 0\nH 0 0 1\nH 1 0 0\n", encoding="utf-8")
+                return TaskResult(
+                    task=TaskKind.OPTIMIZE,
+                    status="completed",
+                    complete=True,
+                    converged=True,
+                    coordinates=((0.0, 0.0, 0.0), (0.0, 0.0, 1.0), (1.0, 0.0, 0.0)),
+                    symbols=("O", "H", "H"),
+                    artifacts=(ArtifactRef(path=artifact, type="geometry"),),
+                    provenance=provenance,
+                )
+            artifact = out_dir / "freq.json"
+            artifact.write_text('{"n_imaginary": 0}', encoding="utf-8")
+            return TaskResult(
+                task=TaskKind.FREQUENCY,
+                status="completed",
+                complete=True,
+                frequencies=(1600.0, 3700.0, 3800.0),
+                artifacts=(ArtifactRef(path=artifact, type="frequencies"),),
+                payload=FrequencyPayload(n_imaginary=0),
+                provenance=provenance,
+            )
+
+        return run
+
+    return factory
+
+
+def _run_bounded_recipe_dag(
+    fixture_path: str,
+    out_dir: Path,
+    timeout: float,
+) -> tuple[int, list[dict[str, Any]], dict[str, Any]]:
+    """M2-04 independent scenario: freeze -> DAG worker -> receipt chain.
+
+    Everything except the declared CCCP stub boundary is real: the freeze
+    builder, the Services frozen-group writer, the quota reservation/ledger, the
+    fenced commit port, the step dispatch adapter, the DONE truth table and the
+    controller-side receipt verification.  No QC binary, no controller process,
+    no second platform task, no jobs DB.
+    """
+    import hashlib
+    import json as _json
+    from types import SimpleNamespace
+
+    from acp.calculations import attempt_freeze as acp_freeze
+    from acp_services.contracts.envelope import ExecutionReceipt
+    from acp_services.runtime.attempt_freeze import write_frozen_attempt
+    from acp_services.runtime.execution_quota import (
+        QuotaReservation,
+    )
+    from acp_services.runtime.receipts import verify_receipt
+    from acp_services.runtime.resource_precheck import ExecutionResourcePrecheck
+    from acp_services.runtime.step_dag_worker import StepDagTaskExecutor
+    from acp_services.worker_bootstrap import assemble_worker
+
+    assertions: list[dict[str, Any]] = []
+    extensions: dict[str, Any] = {
+        "acceptance.operation_class": "read",
+        "acceptance.target": "local",
+        "m204.schema": M204_SCHEMA,
+        "m204.fixture": str(fixture_path),
+        "m204.evidence_class": "CONTROLLED-STUB",
+        "m204.no_compute": True,
+        "m204.stub_boundaries": ["cccp.task_core"],
+    }
+
+    def record(name: str, ok: bool, detail: str) -> None:
+        assertions.append({"name": name, "status": "PASS" if ok else "FAIL", "detail": detail})
+
+    work = out_dir / "m204-work"
+    work.mkdir(parents=True, exist_ok=True)
+    structure = work / "in.xyz"
+    structure.write_text("3\nwater\nO 0 0 0\nH 0 0 1\nH 1 0 0\n", encoding="utf-8")
+
+    fixture = Path(fixture_path)
+    assert_context = "fixture file is optional for this scenario"
+    if fixture.is_file():
+        assert_context = f"fixture read ({fixture.stat().st_size} bytes)"
+    record("m204.fixture_context", True, assert_context)
+
+    record_obj = SimpleNamespace(
+        id="20260101_904_BoundedRecipe",
+        attempt=1,
+        spec=SimpleNamespace(
+            workflow=acp_freeze.BOUNDED_RECIPE_WORKFLOW,
+            input={
+                "bounded_recipe": {
+                    "recipe": _m204_recipe(),
+                    "inputs": {},
+                    "structure_role": "minimum",
+                    "step_requirements": [
+                        {"step_id": "relax", "executables": ["env"], "require_version": False}
+                    ],
+                }
+            },
+        ),
+    )
+    release = SimpleNamespace(
+        unversioned=True,
+        release_id="unversioned-shared",
+        release_digest="",
+        assert_current=lambda: None,
+    )
+    try:
+        spec = acp_freeze.build_bounded_recipe_freeze_spec(record_obj, work, structure, release)
+        group = write_frozen_attempt(work, spec)
+    except Exception as exc:  # noqa: BLE001 - acceptance reports, never crashes
+        record("m204.freeze_group", False, f"{type(exc).__name__}: {exc}")
+        extensions["m204.reason"] = "freeze failed"
+        return EXIT_FAIL, assertions, extensions
+    record(
+        "m204.freeze_group",
+        group.manifest.workflow == "BoundedRecipe",
+        f"group workflow {group.manifest.workflow}",
+    )
+
+    reservation = QuotaReservation.from_dict(
+        _json.loads(
+            (work / "WORK/00_RUNTIME/quota/quota_reservation.json").read_text(encoding="utf-8")
+        )
+    )
+    record(
+        "m204.worst_case_reservation",
+        reservation.limits.get("recipe_step") == 2 and reservation.limits.get("qc_invocation") == 2,
+        f"reservation {dict(reservation.limits)}",
+    )
+
+    calls: list[str] = []
+    runtime = assemble_worker(
+        envelope=spec.envelope,
+        plan=spec.plan,
+        work_dir=work,
+        execution_right=_M204Right(),
+    )
+    executor = StepDagTaskExecutor(
+        precheck=ExecutionResourcePrecheck(
+            resolver=lambda name, configured: Path("/usr/bin/env"),
+            version_probe=lambda name, path: "acceptance",
+        ),
+        runner_factory=_m204_stub_runner(calls),
+    )
+    original = runtime.worker.executor
+    runtime_object = runtime
+    # Inject the controlled stub through the assembled worker's executor port
+    # (the production assembly already selected the DAG executor).
+    assert isinstance(original, StepDagTaskExecutor)
+    from dataclasses import replace as _replace
+
+    runtime_object = _replace(
+        runtime_object,
+        worker=_replace(
+            runtime_object.worker,
+            executor=_replace(
+                original, precheck=executor.precheck, runner_factory=executor.runner_factory
+            ),
+        ),
+    )
+    result = runtime_object.run()
+    receipt = result if isinstance(result, ExecutionReceipt) else None
+    record(
+        "m204.receipt_completed",
+        receipt is not None and receipt.state == "completed",
+        f"receipt state {getattr(receipt, 'state', result)}",
+    )
+
+    chain = tuple(getattr(receipt, "step_execution_chain", ()) or ())
+    record(
+        "m204.execution_chain",
+        len(chain) == 2
+        and all(str(row.get("step_identity", "")).startswith("v2:") for row in chain),
+        f"{[row.get('step_id') for row in chain]}",
+    )
+    env = spec.envelope
+    verdict = (
+        verify_receipt(
+            receipt,
+            env,
+            current_attempt=env.attempt,
+            current_submission_id=env.submission_id,
+            current_release_id=env.release_id,
+            owner_token=env.owner,
+            fencing_token=env.fencing_token,
+        )
+        if receipt is not None
+        else None
+    )
+    record(
+        "m204.controller_verification",
+        bool(verdict and verdict.accepted),
+        f"verdict {getattr(verdict, 'code', 'n/a') or 'accepted'}",
+    )
+    record(
+        "m204.one_task_ref",
+        all(
+            (work / f"WORK/00_RUNTIME/steps/{step_id}/step_result.json").is_file()
+            for step_id in ("relax", "freq")
+        ),
+        "one attempt wrote both step results",
+    )
+    record(
+        "m204.no_jobs_db",
+        not list(work.rglob("*.db")),
+        "worker path opened no jobs database",
+    )
+
+    artifacts: list[dict[str, Any]] = []
+    for path in sorted(work.rglob("*.json")):
+        if "quota" in path.parts and path.name == "quota_ledger.jsonl":
+            continue
+        artifacts.append(
+            {
+                "path": str(path.relative_to(out_dir)),
+                "size_bytes": path.stat().st_size,
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+        )
+    extensions["m204.artifacts"] = artifacts
+    extensions["m204.chain_digest"] = getattr(receipt, "chain_digest", "")
+    extensions["m204.plan_definition_digest"] = _json.loads(
+        (work / "WORK/00_RUNTIME/frozen/plan.json").read_text(encoding="utf-8")
+    )["payload"]["bounded_step_dag"]["definition"]["plan_definition_digest"]
+    failed = [entry for entry in assertions if entry["status"] != "PASS"]
+    if failed:
+        extensions["m204.reason"] = f"{len(failed)} assertion(s) failed"
+        return EXIT_FAIL, assertions, extensions
+    extensions["m204.reason"] = None
+    return EXIT_PASS, assertions, extensions
+
+
+class _M204Right:
+    """Acceptance-local execution right (single holder, always the same worker)."""
+
+    def acquire(self, envelope):  # noqa: ANN001 - port shape
+        from acp_services.runtime.execution_right import ExecutionRightVerdict
+
+        return ExecutionRightVerdict()
+
+    def verify(self, envelope):  # noqa: ANN001 - port shape
+        from acp_services.runtime.execution_right import ExecutionRightVerdict
+
+        return ExecutionRightVerdict()
 
 
 def _run_da_preflight(
@@ -10405,9 +11083,56 @@ def _run_approval_budget(
     return EXIT_PASS, assertions, extensions
 
 
+def _b17_service_key(provisioned: Mapping[str, Any], project_id: str) -> str:
+    """Mint (or reuse) the dedicated service credential that may settle usage.
+
+    The producer capability is server-side identity metadata, independent of the
+    project ``write`` action ceiling used by the normal submit keys.  This is the
+    credential a worker/service receipt must present (M0-07/G26); a project write
+    key deliberately cannot write trusted usage.
+    """
+    from acp_services.runtime.usage_authority import UsageProducer, capability_for_producer
+
+    capability = capability_for_producer(UsageProducer.WORKER)
+    lifecycle = provisioned["lifecycle"]
+    key_manager = provisioned["key_manager"]
+    credentials_path = Path(str(provisioned["credentials_file"]))
+    credentials = _b15_read_json(credentials_path, {}) or {}
+    entries = credentials.setdefault("keys", {})
+    entry = entries.get("b17_service")
+    if isinstance(entry, dict) and entry.get("key_id"):
+        record = key_manager.get(str(entry["key_id"]))
+        if (
+            record is not None
+            and not record.revoked
+            and record.project == project_id
+            and capability in tuple(record.usage_capabilities)
+        ):
+            return str(entry["key"])
+    accounts = provisioned["accounts"]
+    account = next(iter(accounts.values()))
+    generated = lifecycle.issue_key(
+        account.account_id,
+        scope="workspace",
+        actions=["read", "write"],
+        project=project_id,
+        usage_capabilities=[capability],
+    )
+    entries["b17_service"] = {
+        "key_id": generated.key_id,
+        "key": generated.key,
+        "scope": generated.scope,
+        "project": generated.project,
+        "actions": list(generated.actions),
+        "usage_capabilities": list(generated.usage_capabilities),
+    }
+    _b15_write_json(credentials_path, credentials, private=True)
+    return generated.key
+
+
 def _b17_orca_pids() -> list[int]:
     """PIDs whose executable is exactly the configured ORCA binary."""
-    target = Path(os.environ.get("ACP_ORCA_BINARY") or "/home/<user>/orca611/orca")
+    target = Path(os.environ.get("ACP_ORCA_BINARY") or "/home/xieningke/orca611/orca")
     try:
         expected = str(target.resolve())
     except OSError:
@@ -10638,6 +11363,7 @@ def _run_budget_branch(
     plan = dict(scenario["plan"])
     budget = dict(scenario["budget"])
     project_id = str(scenario["alpha_project"])
+    service_key = _b17_service_key(provisioned, project_id)
     plan_digest = _b16_plan_digest(plan)
     base_proposal = dict(scenario["proposal"])
     base_proposal["plan_digest"] = plan_digest
@@ -10877,13 +11603,17 @@ def _run_budget_branch(
         )
     )
 
-    # -- duplicate settlement across the restart --------------------------
+    # -- trusted settlement across the restart ----------------------------
+    from acp_services.contracts.envelope import expected_submission_id
+    from acp_services.runtime.usage_authority import UsageProducer, UsageSource
+
     reservations = [
         row
         for row in (race_budget.get("reservations") or [])
         if str(row.get("state")) != "released"
     ]
     reservation_id = str(reservations[0]["reservation_id"]) if reservations else ""
+    settled_job = next((str(row["job_id"]) for row in accepted_rows if row["job_id"]), "")
     receipt_id = f"b17-receipt-{uuid.uuid4().hex}"
     usage = {
         "task_ref": 1,
@@ -10896,15 +11626,56 @@ def _run_budget_branch(
     settlement_body = {
         "receipt_id": receipt_id,
         "reservation_id": reservation_id,
+        "job_id": settled_job,
+        "attempt": 1,
+        "submission_id": (expected_submission_id(settled_job, 1) if settled_job else ""),
         "run_id": f"b17-run-{uuid.uuid4().hex[:8]}",
-        "trusted_source": "worker-receipt",
         "usage": usage,
     }
-    status, first_settle, _ = _b15_http(
+
+    # Negative: a project write key has no usage-producer capability.  The
+    # trusted source is server-derived; the payload cannot select it.
+    status_denied, denied_body, _ = _b15_http(
         base,
         "POST",
         f"/api/v2/research/budgets/{race_budget_id}/settle",
         key=alice,
+        body=settlement_body,
+        timeout=timeout,
+    )
+    denied_code = ""
+    if isinstance(denied_body, dict):
+        denied_detail = denied_body.get("detail")
+        denied_code = str(
+            (denied_detail or {}).get("code")
+            if isinstance(denied_detail, dict)
+            else denied_detail or ""
+        )
+    status, identity_doc, _ = _b15_http(base, "GET", "/api/identity", key=alice, timeout=timeout)
+    identity_mode = str((identity_doc or {}).get("mode") or "") if status == 200 else ""
+    assertions.append(
+        _b15_assert(
+            "b17.project_write_cannot_settle_usage",
+            status_denied == 403 and denied_code == "usage_capability_missing",
+            f"{status_denied} {denied_code}",
+            not_verified=identity_mode != "api-key",
+        )
+    )
+    assertions.append(
+        _b15_assert(
+            "b17.identity_mode_enforces_capability",
+            identity_mode == "api-key",
+            f"mode={identity_mode!r}",
+            not_verified=identity_mode not in {"api-key", "local-single"},
+        )
+    )
+
+    # Positive: the dedicated service credential carries `usage.produce.worker`.
+    status, first_settle, _ = _b15_http(
+        base,
+        "POST",
+        f"/api/v2/research/budgets/{race_budget_id}/settle",
+        key=service_key,
         body=settlement_body,
         timeout=timeout,
     )
@@ -10913,13 +11684,26 @@ def _run_budget_branch(
         base,
         "POST",
         f"/api/v2/research/budgets/{race_budget_id}/settle",
-        key=alice,
+        key=service_key,
         body=settlement_body,
         timeout=timeout,
     )
     second_budget = (second_settle or {}).get("budget") or {}
     first_applied = bool(((first_settle or {}).get("settlement") or {}).get("applied"))
     second_duplicate = bool(((second_settle or {}).get("settlement") or {}).get("duplicate"))
+    settled_source = str((first_settle or {}).get("trusted_source") or "")
+    settled_producer = str((first_settle or {}).get("producer") or "")
+    assertions.append(
+        _b15_assert(
+            "b17.usage_receipt_settled_from_capability",
+            status == 200
+            and first_applied
+            and settled_source == UsageSource.WORKER_RECEIPT
+            and settled_producer == UsageProducer.WORKER,
+            f"{status} applied={first_applied} source={settled_source!r} "
+            f"producer={settled_producer!r}",
+        )
+    )
     assertions.append(
         _b15_assert(
             "b17.duplicate_settlement_idempotent",
@@ -10966,8 +11750,12 @@ def _run_budget_branch(
             "schema": "acp2.b17.settlement.v1",
             "first": first_settle,
             "second": second_settle,
+            "denied": {"status": status_denied, "body": denied_body, "mode": identity_mode},
             "receipt_id": receipt_id,
             "reservation_id": reservation_id,
+            "job_id": settled_job,
+            "trusted_source": settled_source,
+            "producer": settled_producer,
         },
     )
 
@@ -12539,7 +13327,7 @@ def _run_infra_plugin(
                 str(
                     b22_fixture.get("a_contract_root")
                     or (
-                        "<acp2-dev>/A/docs/reference/next-change/"
+                        "/ACPServer/acp2-development/A/docs/reference/next-change/"
                         "acp2-contracts/science"
                     )
                 )
@@ -12548,7 +13336,7 @@ def _run_infra_plugin(
                 str(
                     b22_fixture.get("c_contract_root")
                     or (
-                        "<acp2-dev>/C/docs/reference/next-change/"
+                        "/ACPServer/acp2-development/C/docs/reference/next-change/"
                         "acp2-contracts/experience"
                     )
                 )
@@ -12916,8 +13704,8 @@ def _run_infra_plugin(
                 capability_item.descriptor_digest if capability_item is not None else ""
             )
             repo_license = REPO_ROOT / "LICENSE"
-            a_license = Path("<acp2-dev>/A/LICENSE")
-            c_license = Path("<acp2-dev>/C/LICENSE")
+            a_license = Path("/ACPServer/acp2-development/A/LICENSE")
+            c_license = Path("/ACPServer/acp2-development/C/LICENSE")
             plugin_files = tree_rows(fixture_plugin_root)
             notice_rows: list[dict[str, Any]] = []
             for candidate_license, owner in (
@@ -13050,8 +13838,8 @@ def _run_infra_plugin(
                     "order": 1,
                     "action": "uninstall the upgraded adapter version",
                     "command": (
-                        "PYTHONPATH=<repo>/src "
-                        "<acp2-dev>/venvs/b/bin/python -c "
+                        "PYTHONPATH=/ACPServer/AutoCalcPlatform/src "
+                        "/ACPServer/acp2-development/venvs/b/bin/python -c "
                         f'"from acp_services.runtime.adapter_registry import '
                         f"AdapterRegistry, AdapterAuthorization; "
                         f"r=AdapterRegistry(plugin_root={str(plugin_root)!r}, "
@@ -13071,8 +13859,8 @@ def _run_infra_plugin(
                     "order": 2,
                     "action": "re-enable the frozen v1 version for new work",
                     "command": (
-                        "PYTHONPATH=<repo>/src "
-                        "<acp2-dev>/venvs/b/bin/python -c "
+                        "PYTHONPATH=/ACPServer/AutoCalcPlatform/src "
+                        "/ACPServer/acp2-development/venvs/b/bin/python -c "
                         f'"from acp_services.runtime.adapter_registry import '
                         f"AdapterRegistry, AdapterAuthorization; "
                         f"r=AdapterRegistry(plugin_root={str(plugin_root)!r}, "
@@ -13089,8 +13877,8 @@ def _run_infra_plugin(
                     "order": 3,
                     "action": "revert A's package-data patch if B25a applied it",
                     "command": (
-                        "git -C <repo> apply -R "
-                        "<acp2-dev>/A/docs/reference/next-change/"
+                        "git -C /ACPServer/AutoCalcPlatform apply -R "
+                        "/ACPServer/acp2-development/A/docs/reference/next-change/"
                         "acp2-contracts/science/requests/packaging.patch"
                     ),
                     "expected": (
@@ -13102,8 +13890,8 @@ def _run_infra_plugin(
                     "order": 4,
                     "action": "unregister the third-party capability",
                     "command": (
-                        "PYTHONPATH=<repo>/src "
-                        "<acp2-dev>/venvs/b/bin/python -c "
+                        "PYTHONPATH=/ACPServer/AutoCalcPlatform/src "
+                        "/ACPServer/acp2-development/venvs/b/bin/python -c "
                         '"from acp_services.runtime.capability_registry import '
                         "CapabilityRegistry, CapabilityAuthorization; "
                         f"r=CapabilityRegistry(capability_root={str(capability_root.parent)!r}, "
@@ -13121,9 +13909,9 @@ def _run_infra_plugin(
                     "order": 5,
                     "action": "reinstall the previous B02b role wheel if a B25a wheel replaced it",
                     "command": (
-                        "<acp2-dev>/venvs/b/bin/python -m pip install "
+                        "/ACPServer/acp2-development/venvs/b/bin/python -m pip install "
                         "--no-index --force-reinstall "
-                        "<acp2-dev>/data/b/package-smoke/artifacts/"
+                        "/ACPServer/acp2-development/data/b/package-smoke/artifacts/"
                         "acp_worker-0.2.0-py3-none-any.whl"
                     ),
                     "expected": "previous installed role restored; no network access",
@@ -13270,7 +14058,7 @@ def _run_infra_plugin(
                 ("C", "docs/reference/next-change/acp2-contracts/experience/requests/B-req-12.md"),
                 ("C", "docs/reference/next-change/acp2-contracts/experience/requests/B-req-02.md"),
             ):
-                root = Path("<acp2-dev>") / owner
+                root = Path("/ACPServer/acp2-development") / owner
                 path = root / relative
                 queued_with = request_targets.get(path.name, "B25a")
                 if path.is_file():
@@ -13417,8 +14205,8 @@ def _run_infra_plugin(
                 },
                 "rollback": [
                     "Do not apply the A packaging patch until A-49/50 lands the 14-file corpus.",
-                    "If applied, revert with: git -C <repo> apply -R "
-                    "<acp2-dev>/A/docs/reference/next-change/"
+                    "If applied, revert with: git -C /ACPServer/AutoCalcPlatform apply -R "
+                    "/ACPServer/acp2-development/A/docs/reference/next-change/"
                     "acp2-contracts/science/requests/packaging.patch",
                     "If a version bump is later applied by B25a, restore all four version "
                     "locations from B25a's release commit; B22 holds no bump.",
@@ -13908,11 +14696,11 @@ B23_EXPECTED_T40A_GLOB = (
 )
 B23_CROSS_DOMAIN = {
     "nmr": (
-        "<acp2-dev>/A/tests/fixtures/acp2/science/cross_domain/"
+        "/ACPServer/acp2-development/A/tests/fixtures/acp2/science/cross_domain/"
         "nmr_shielding_constructed.json"
     ),
     "thermo": (
-        "<acp2-dev>/A/tests/fixtures/acp2/science/cross_domain/"
+        "/ACPServer/acp2-development/A/tests/fixtures/acp2/science/cross_domain/"
         "thermochemistry_weights_constructed.json"
     ),
 }
@@ -15264,6 +16052,12 @@ def dry_run_commands(
             f"--scenario da-runtime --phase {phase_name} --controller "
             f"{shlex.quote(controller)} --fixture {shlex.quote(fixture)} --out {shlex.quote(out)}"
         )
+    elif spec.scenario == "bounded-recipe-dag":
+        commands.append(
+            f"{shlex.quote(sys.executable)} scripts/acceptance/acp2_runtime.py "
+            f"--scenario bounded-recipe-dag --phase {phase_name} "
+            f"--fixture {shlex.quote(fixture)} --out {shlex.quote(out)}"
+        )
     elif spec.scenario == "infra-plugin":
         commands.append(
             f"{shlex.quote(sys.executable)} {shlex.quote(str(SCRIPT_PATH))} "
@@ -16302,6 +17096,21 @@ def execute_scenario(
             return code_value
 
         handler = da_submit
+    elif spec.scenario == "bounded-recipe-dag":
+
+        def bounded_recipe_dag(_ledger: CleanupLedger) -> int:
+            code_value, assertions, extensions = _run_bounded_recipe_dag(
+                str(args.fixture),
+                out_dir,
+                timeout,
+            )
+            outcome["assertions"] = assertions
+            outcome["extensions"] = extensions
+            outcome["artifacts"] = extensions.get("m204.artifacts", [])
+            outcome["reason"] = extensions.get("m204.reason")
+            return code_value
+
+        handler = bounded_recipe_dag
     elif spec.scenario == "infra-plugin":
 
         def infra_plugin(_ledger: CleanupLedger) -> int:
@@ -16417,6 +17226,7 @@ def execute_scenario(
         "infra-plugin",
         "migration",
         "package-install",
+        "bounded-recipe-dag",
     } or (spec.scenario == "da-runtime" and phase_name in {"da-preflight", "da-submit"}):
         result = (
             "PASS"
@@ -16453,6 +17263,7 @@ def execute_scenario(
         "infra-plugin",
         "migration",
         "package-install",
+        "bounded-recipe-dag",
     } or (spec.scenario == "da-runtime" and phase_name in {"da-preflight", "da-submit"}):
         extensions: dict[str, Any] = dict(outcome.get("extensions", {}))
         assertions = list(outcome.get("assertions", []))
@@ -16673,7 +17484,7 @@ def run_check_only(path: Path) -> int:
 
 def _help_epilog() -> str:
     lines = [
-        "Registered B scenarios (15 immutable IDs):",
+        "Registered B scenarios (16 immutable IDs):",
     ]
     for scenario in EXPECTED_B_SCENARIOS:
         spec = B_SCENARIOS[scenario]

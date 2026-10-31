@@ -14,7 +14,9 @@ registration failures RAISE — the report is a required deliverable.
 
 from __future__ import annotations
 
+import hashlib
 import logging
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -38,14 +40,15 @@ def normalize_table_reference(raw: Any, mol_dir: Path) -> Any:
     locations, non-string values, ``None`` — passes through unchanged.
     """
     if not isinstance(raw, str) or not raw:
-        return raw
+        return None
     candidate = Path(raw)
     if not candidate.is_absolute():
         candidate = Path(mol_dir) / candidate
     try:
         return candidate.resolve().relative_to(Path(mol_dir).resolve()).as_posix()
     except ValueError:
-        return raw
+        # Out-of-scope or unrepresentable references are omitted, never echoed.
+        return None
 
 
 def write_final_report(
@@ -75,6 +78,9 @@ def write_final_report(
     xyz_path = confsearch_dir / XYZ_NAME
 
     metadata = outcome.workflow_metadata or {}
+    executed = dict((metadata.get("censo_execution") or {}))
+    verified = _execution_verified(executed)
+    well_formed = _execution_well_formed(executed)
     payload: dict[str, Any] = {
         "schema_version": FINAL_REPORT_SCHEMA_VERSION,
         "workflow": "Confsearch",
@@ -91,8 +97,21 @@ def write_final_report(
                 confsearch_dir.parent.parent,
             ),
         },
-        "conformers": [_conformer_block(entry, outcome, request) for entry in entries],
     }
+    requested_levels = _requested_levels(request)
+    if requested_levels or executed:
+        payload["method_identity"] = {
+            "requested": requested_levels,
+            "executed": _publish_execution(executed),
+            "executed_status": "verified" if verified else "unverified",
+            "execution_facts_well_formed": well_formed,
+            "final_part": executed.get("final_part"),
+            "energy_kind": outcome.energy_kind,
+        }
+    payload["conformers"] = [
+        _conformer_block(entry, outcome, request, executed=executed, verified=verified)
+        for entry in entries
+    ]
     for key in ("total_gibbs_hartree", "total_gibbs_kcal_mol"):
         if key in metadata:
             payload[key] = metadata[key]
@@ -148,11 +167,99 @@ def register_final_report(mol_dir: Path, report_path: Path, xyz_path: Path) -> N
     manifest.write(result_dir)
 
 
+def _execution_verified(executed: Mapping[str, Any]) -> bool:
+    """Reserved for the full binding; this round deliberately claims nothing.
+
+    File digests/members are still cross-checked by the caller for shape, but
+    nothing proves the facts came from *this* attempt, so ``verified`` would be
+    an over-claim.  ``_execution_verified`` stays the seam for the later fix.
+    """
+    return False
+
+
+def _execution_well_formed(executed: Mapping[str, Any]) -> bool:
+    """Require a successful run and both artifact digests, not just a dict."""
+    if not isinstance(executed, Mapping) or not executed:
+        return False
+    if int(executed.get("returncode", -1)) != 0:
+        return False
+    if not executed.get("argv") or not str(executed.get("final_part") or ""):
+        return False
+    artifacts = executed.get("artifacts")
+    if not isinstance(artifacts, Mapping):
+        return False
+    for name in ("json", "xyz"):
+        entry = artifacts.get(name)
+        if not isinstance(entry, Mapping):
+            return False
+        digest = str(entry.get("sha256") or "")
+        if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+            return False
+    tracked = executed.get("conformers")
+    if not isinstance(tracked, list) or not tracked:
+        return False
+    for key, path_key in (
+        ("input_sha256", "input_path"),
+        ("rcfile_sha256", "rcfile_path"),
+    ):
+        digest = str(executed.get(key) or "")
+        if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+            return False
+        bound = Path(str(executed.get(path_key) or ""))
+        if not bound.is_file():
+            return False
+        if hashlib.sha256(bound.read_bytes()).hexdigest() != digest:
+            return False
+    cwd = Path(str(executed.get("cwd") or ""))
+    if not str(cwd) or not cwd.is_dir():
+        return False
+    for name in ("json", "xyz"):
+        entry = artifacts[name]
+        artifact = cwd / str(entry.get("path") or "")
+        if not artifact.is_file():
+            return False
+        if hashlib.sha256(artifact.read_bytes()).hexdigest() != entry["sha256"]:
+            return False
+    return True
+
+
+def _requested_levels(request: ConfsearchRequest) -> dict[str, Any]:
+    """Level settings from the request — declared intent, never evidence."""
+    requested: dict[str, Any] = {}
+    levels = request.levels or {}
+    if not isinstance(levels, dict):
+        return requested
+    for level_id, level in levels.items():
+        if not isinstance(level, dict):
+            continue
+        picked = {
+            key: level[key]
+            for key in (
+                "engine",
+                "functional",
+                "basis",
+                "solvent_model",
+                "solvent",
+                "ewin",
+                "refinement_threshold",
+            )
+            if level.get(key) not in (None, "")
+        }
+        if picked:
+            requested[str(level_id)] = picked
+    return requested
+
+
 def _conformer_block(
     entry: ConformerEntry,
     outcome: ProtocolOutcome,
     request: ConfsearchRequest,
+    *,
+    executed: Mapping[str, Any],
+    verified: bool,
 ) -> dict[str, Any]:
+    role = "refinement_sp" if entry.refined else "screening"
+    evidence = _role_evidence(entry, role, executed, verified)
     if entry.refined:
         energy_kind = "dft"
     else:
@@ -167,10 +274,61 @@ def _conformer_block(
         "energy_hartree": entry.energy_hartree,
         "free_energy_hartree": entry.free_energy_hartree,
         "energy_kind": energy_kind,
+        "method_role": role,
+        "method_evidence": evidence,
+        "energy_kind_verified": bool(evidence == "executed" and role == "screening"),
         "relative_energy_kcal": entry.relative_energy_kcal,
         "boltzmann_weight": entry.boltzmann_weight,
         "weight_source": entry.weight_source or outcome.weight_source,
     }
+
+
+def _publish_execution(executed: Mapping[str, Any]) -> dict[str, Any]:
+    """Public projection: no absolute workspace/argv paths in a report artifact.
+
+    The verifier checked the raw facts first; the report keeps the evidence
+    (rc/digests/members/part) but replaces the run directory with ``<run>`` so
+    the report itself survives the artifact content policy.
+    """
+    if not executed:
+        return {}
+    allowed = (
+        "returncode",
+        "final_part",
+        "enabled_parts",
+        "conformers",
+        "preset",
+        "temperature_k",
+        "input_sha256",
+        "rcfile_sha256",
+    )
+    published = {key: executed[key] for key in allowed if key in executed}
+    published["workspace"] = "<run>" if executed.get("cwd") else ""
+    # argv is intentionally not published: it may embed absolute executables.
+    return published
+
+
+def _role_evidence(
+    entry: ConformerEntry,
+    role: str,
+    executed: Mapping[str, Any],
+    verified: bool,
+) -> str:
+    """Only the part that ran AND contains this conformer counts as executed."""
+    if not verified:
+        return "unverified"
+    final_part = str(executed.get("final_part") or "")
+    if role == "screening" and final_part != "screening":
+        return "unverified"
+    if role == "refinement_sp" and final_part != "refinement":
+        return "unverified"
+    tracked = executed.get("conformers")
+    if not isinstance(tracked, list) or not tracked:
+        return "unverified"
+    conf_id = str(entry.source_conf_id or entry.conf_id)
+    if conf_id not in {str(item) for item in tracked}:
+        return "unverified"
+    return "executed"
 
 
 def _frame_title(entry: ConformerEntry, outcome: ProtocolOutcome) -> str:

@@ -1,0 +1,133 @@
+[
+  {
+    "duration_ms": 42.62,
+    "expected": "revision_conflict",
+    "jobs_after": 1,
+    "jobs_before": 1,
+    "message": {
+      "code": "revision_conflict",
+      "message": "expected revision 6 but current is 1",
+      "params": {
+        "current_digest": "sha256:61ea62ae2ef3bf68ca884a35e68bb9024fe52995c78bf736742abb1a7efa5bd4",
+        "current_revision": 1,
+        "rule": "revision_conflict"
+      },
+      "retryable": false
+    },
+    "name": "negative.stale_revision",
+    "ok": true,
+    "rule": "revision_conflict",
+    "status": 409
+  },
+  {
+    "duration_ms": 33.78,
+    "expected": "research_identity_mismatch",
+    "jobs_after": 1,
+    "jobs_before": 1,
+    "message": {
+      "code": "access_denied",
+      "message": "the record research_id is not the identity derived for this session",
+      "params": {
+        "rule": "research_identity_mismatch"
+      },
+      "retryable": false
+    },
+    "name": "negative.wrong_identity",
+    "ok": true,
+    "rule": "research_identity_mismatch",
+    "status": 403
+  },
+  {
+    "duration_ms": 29.77,
+    "expected": "projection_digest_mismatch",
+    "jobs_after": 1,
+    "jobs_before": 1,
+    "message": {
+      "code": "revision_conflict",
+      "message": "projection_digest_mismatch: declared 'sha256:870ad1bb6d39c8dcd35322b9bb740e1adb87cc15c7c45a6d11058cefd2aeae6e' != recomputed 'sha256:c3c5d964a05d518b6ca0394031e751a2c0d55833662feaa559a44ffdf10dd227'",
+      "params": {
+        "rule": "projection_digest_mismatch"
+      },
+      "retryable": false
+    },
+    "name": "negative.fake_evidence",
+    "ok": true,
+    "rule": "projection_digest_mismatch",
+    "status": 409
+  },
+  {
+    "duration_ms": 31.86,
+    "expected": "evidence_not_complete",
+    "jobs_after": 1,
+    "jobs_before": 1,
+    "message": {
+      "code": "research_write_error",
+      "message": "evidence_not_complete: evidence status 'partial' cannot be accepted",
+      "params": {
+        "rule": "evidence_not_complete"
+      },
+      "retryable": false
+    },
+    "name": "negative.accept_on_partial_evidence",
+    "ok": true,
+    "rule": "evidence_not_complete",
+    "status": 400
+  },
+  {
+    "duration_ms": 31.9,
+    "expected": "plan_digest_mismatch",
+    "jobs_after": 1,
+    "jobs_before": 1,
+    "message": {
+      "code": "input_invalid",
+      "message": "plan_digest does not match the submitted scientific plan",
+      "params": {
+        "field": "plan_digest",
+        "rule": "plan_digest_mismatch"
+      }
+    },
+    "name": "negative.injection_plan_digest",
+    "ok": true,
+    "rule": "plan_digest_mismatch",
+    "status": 400
+  },
+  {
+    "duration_ms": 31.2,
+    "expected": "approver_identity_from_payload",
+    "jobs_after": 1,
+    "jobs_before": 1,
+    "message": {
+      "code": "access_denied",
+      "message": "approver identity must come from the authenticated channel",
+      "params": {
+        "fields": [
+          "approver"
+        ],
+        "rule": "approver_identity_from_payload"
+      },
+      "retryable": false
+    },
+    "name": "negative.approver_identity_from_payload",
+    "ok": true,
+    "rule": "approver_identity_from_payload",
+    "status": 403
+  },
+  {
+    "duration_ms": 35.95,
+    "expected": "approval_revoked",
+    "jobs_after": 1,
+    "jobs_before": 1,
+    "message": {
+      "code": "access_denied",
+      "message": "the approval was revoked",
+      "params": {
+        "rule": "approval_revoked"
+      },
+      "retryable": false
+    },
+    "name": "negative.revoked_approval",
+    "ok": true,
+    "rule": "approval_revoked",
+    "status": 403
+  }
+]

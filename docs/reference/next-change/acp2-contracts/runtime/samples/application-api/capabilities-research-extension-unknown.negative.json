@@ -1,0 +1,21 @@
+{
+  "sample_id": "capabilities-research-extension-unknown.negative",
+  "contract": "application-api.v1.json",
+  "kind": "negative",
+  "operation": "capabilities",
+  "payload": {
+    "schema_version": 1,
+    "research_extension": {
+      "id": "acp.research.v2",
+      "version": "1.0.0"
+    }
+  },
+  "expected": {
+    "valid": false,
+    "class": "unsupported",
+    "code": "unsupported_capability",
+    "violation": "unknown_extension",
+    "field": "research_extension.id"
+  },
+  "note": "an unknown extension id is not adopted by inference; the answer carries the advertised set so the client can correct itself."
+}

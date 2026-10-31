@@ -19,7 +19,13 @@ Rules enforced here:
 * EOF, ``SIGTERM`` and ``SIGINT`` close only this adapter — nothing is
   submitted or cancelled, because the Controller owns task lifetime;
 * the per-connection lifecycle gate rejects ``tools/list``/``tools/call`` before
-  a successful ``initialize`` (``not_initialized``), without touching a backend.
+  a successful ``initialize`` (``not_initialized``), without touching a backend;
+* ``server/discover`` is a **pre-initialize** method: the gate lets it through so
+  the protocol layer answers it with an ordinary METHOD_NOT_FOUND (``-32601``).
+  No discover result is implemented — an era-negotiating client (e.g.
+  ``@modelcontextprotocol/client`` 2.2.0 with ``versionNegotiation: auto``)
+  probes with ``server/discover``, treats the ordinary error as "legacy server"
+  and falls back to the 2025-era ``initialize`` (ADR-006).
 
 No threads are started and no task/storage state is opened by this module.
 """
@@ -46,7 +52,12 @@ __all__ = [
 #: Hard maximum size of one frame (bytes, excluding the trailing newline).
 MAX_FRAME_BYTES = 1024 * 1024
 
-_PRE_INIT_METHODS = frozenset({"initialize", "ping"})
+#: Methods a fresh connection may use before ``initialize`` succeeds.
+#: ``server/discover`` is included so the protocol layer (not the lifecycle
+#: gate) answers it: ``McpServer._invoke`` has no such handler, so the client
+#: receives a plain ``-32601`` unknown-method error — never a fabricated
+#: discover result and never a ``not_initialized`` lifecycle error.
+_PRE_INIT_METHODS = frozenset({"initialize", "ping", "server/discover"})
 
 logger = logging.getLogger(__name__)
 

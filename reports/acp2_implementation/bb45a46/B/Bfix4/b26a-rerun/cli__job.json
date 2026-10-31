@@ -43,7 +43,7 @@
   "remote_job_id": null,
   "group_id": "20261023_224052_001_b26a-fix4-sp2",
   "node_id": "local",
-  "host": "redacted-host",
+  "host": "workstation",
   "result": {
     "required_software": [
       "orca"
@@ -127,7 +127,7 @@
       "basis": null,
       "solvent": null,
       "command_line": "",
-      "hostname": "redacted-host",
+      "hostname": "workstation",
       "ncores": 1,
       "memory_gb": 60.0,
       "wall_time_seconds": 14.974973,

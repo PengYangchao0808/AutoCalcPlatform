@@ -3,7 +3,7 @@
   "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
   "contract_version": "1.0.0",
   "owner": "C",
-  "scenario": "experience:dsh-local-singlepoint",
+  "scenario": "experience:dsh-local-singlepoint-live",
   "phase": "experience:live",
   "run_id": "20261022T121500Z-c-dsh-live-0001",
   "candidate_revision": "3670790363c7a1959ad1dbe4b4297adec518952a",
@@ -39,7 +39,23 @@
   "extensions": {
     "acceptance.operation_class": "submit",
     "acceptance.target": "local",
-    "experience.sample": "B-authored-shape-exemplar; C-authored sample pending",
-    "experience.mode": "display-only"
+    "experience.sample": "C-authored live shape sample; declares required observations (M0-03/R10)",
+    "experience.mode": "display-only",
+    "experience.observations": {
+      "schema": "acp2.experience.observations.v1",
+      "observed": {
+        "transport": "present",
+        "controller": "present",
+        "model": "present",
+        "qc": "present",
+        "lsf": "absent",
+        "browser": "absent",
+        "artifact": "present",
+        "denial": "absent"
+      },
+      "model_calls": 1,
+      "model_evidence": "model gateway usage receipt: 1 request settled by the C budget proxy",
+      "offline_fixture_content": false
+    }
   }
 }

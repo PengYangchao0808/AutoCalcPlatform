@@ -1,0 +1,138 @@
+{
+  "schema": "acp2.c.mcp-live.official-client.v1",
+  "status": "refused",
+  "phase": "done",
+  "scenario": "incompatible-client",
+  "package_versions": {
+    "@deepseek-ai/dsh-mcp-client": {
+      "name": "@deepseek-ai/dsh-mcp-client",
+      "version": "0.2.1-rc.2"
+    },
+    "@modelcontextprotocol/client": {
+      "name": "@modelcontextprotocol/client",
+      "version": "2.2.0"
+    }
+  },
+  "launch_path": "/tmp/opencode/m008/work/mcp-launch.json",
+  "wire": [
+    {
+      "direction": "send",
+      "message": {
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "2025-11-25",
+          "capabilities": {},
+          "clientInfo": {
+            "name": "dsh-mcp-client",
+            "version": "0.0.1"
+          }
+        },
+        "jsonrpc": "2.0",
+        "id": 0
+      }
+    },
+    {
+      "direction": "receive",
+      "message": {
+        "jsonrpc": "2.0",
+        "id": 0,
+        "result": {
+          "protocolVersion": "2025-06-18",
+          "supportedProtocolVersions": [
+            "2025-06-18"
+          ],
+          "capabilities": {
+            "tools": {
+              "listChanged": false
+            },
+            "extensions": {
+              "acp.negotiation.v1": {
+                "id": "acp.negotiation.v1",
+                "version": "1.0.0",
+                "supported_versions": [
+                  "2025-06-18"
+                ],
+                "server_preferred_version": "2025-06-18",
+                "negotiation": "server_advertises_supported_version",
+                "client_decides_compatibility": true,
+                "requested_version": "2025-11-25",
+                "client_declared_versions": []
+              }
+            }
+          },
+          "serverInfo": {
+            "name": "acp-services-mcp",
+            "version": "0.1.0"
+          },
+          "instructions": "Local stdio MCP entry (permission scope 'local-single', transport 'stdio'). Tool calls are dispatched against a closed allowlist; no shell is exposed. Long tasks return an operation/job reference that survives disconnection; query it with acp_status."
+        }
+      }
+    }
+  ],
+  "launch_sha256": null,
+  "client_options": {
+    "client_info": {
+      "name": "dsh-mcp-client",
+      "version": "0.0.1"
+    },
+    "capabilities": {},
+    "versionNegotiation": {
+      "mode": "auto"
+    },
+    "supportedProtocolVersions": [
+      "2025-11-25"
+    ]
+  },
+  "sdk_defaults": {
+    "latest_protocol_version": "2025-11-25",
+    "supported_protocol_versions": [
+      "2025-11-25",
+      "2025-06-18",
+      "2025-03-26",
+      "2024-11-05",
+      "2024-10-07"
+    ],
+    "default_negotiated_protocol_version": "2025-03-26"
+  },
+  "launch": {
+    "command": "/ACPServer/acp2-development/venvs/integration/bin/python",
+    "args": [
+      "-m",
+      "acp",
+      "mcp",
+      "serve",
+      "--transport",
+      "stdio",
+      "--controller",
+      "http://127.0.0.1:44557",
+      "--log-level",
+      "INFO"
+    ],
+    "cwd": "/ACPServer/acp2-remediation-integration/src",
+    "env_keys": [
+      "ACP2_MCP_LOG_LEVEL",
+      "ACP_CONTROLLER_URL",
+      "ACP_RUN_ROOT",
+      "PYTHONPATH"
+    ],
+    "protocol_version": "2025-06-18",
+    "server": {
+      "name": "acp",
+      "entrypoint": "acp_services.entrypoints.mcp"
+    }
+  },
+  "requested_protocol": "2025-11-25",
+  "error": {
+    "name": "Error",
+    "message": "Server's protocol version is not supported: 2025-06-18",
+    "stack": [
+      "Error: Server's protocol version is not supported: 2025-06-18",
+      "    at Client._legacyHandshake (/ACPServer/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/index.cjs:3351:64)",
+      "    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)",
+      "    at async Client._connectNegotiated (/ACPServer/acp2-tools/deepseek-harness/node_modules/.pnpm/@modelcontextprotocol+client@2.2.0/node_modules/@modelcontextprotocol/client/dist/index.cjs:3402:4)",
+      "    at async main (file:///ACPServer/acp2-remediation-integration/scripts/acceptance/acp2_mcp_live_client.mjs:229:5)"
+    ]
+  },
+  "negotiated_protocol": "2025-06-18",
+  "tool_list_attempted": false
+}

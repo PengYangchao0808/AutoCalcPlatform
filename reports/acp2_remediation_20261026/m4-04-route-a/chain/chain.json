@@ -1,0 +1,93 @@
+{
+  "generated_at": "2026-10-27T22:14:05Z",
+  "release": {
+    "built": true,
+    "manifest_path": "",
+    "release_digest": "813583bdcaae20ef900a99180f433b34a7dfa730fb47c1efea5c9435919a061b",
+    "release_id": "2d1ab37a0f988933"
+  },
+  "schema": "acp2.m4-04.chain.v1",
+  "steps": [
+    {
+      "adr_step_index": 1,
+      "digest": "be1d1b2b6a0ec625e685d9b23e6f38f7b5fd07cf2c11bb1c74b1ff3df5b48662",
+      "duration_seconds": 367.31,
+      "entry": "legacy_task_core",
+      "route_id": null,
+      "status": "completed",
+      "step_id": "endpoint_prep"
+    },
+    {
+      "adr_step_index": 2,
+      "digest": "1a20cc33ed3868b3c83ba1f057f521f71f9ea603e53a609d65f52213644458e5",
+      "duration_seconds": 802.4,
+      "entry": "platform_workflow_route",
+      "route_id": "route.diels_alder.ts_guess.pes_relaxed_scan_frame_batch_optimize_ts.v1",
+      "status": "completed",
+      "step_id": "candidate_path"
+    },
+    {
+      "adr_step_index": 3,
+      "digest": "6e6ebb19c971b58f36fde786dbbca81f4d58a8d298673887f2e83cc8bd2d9040",
+      "duration_seconds": 94.2,
+      "entry": "bounded_recipe_envelope",
+      "route_id": null,
+      "status": "completed",
+      "step_id": "candidate_frequency"
+    },
+    {
+      "adr_step_index": 4,
+      "digest": "6929089e4ca95cc42d71249b9dc80c78de2167487b50bc323d2c9bbaa5824df7",
+      "duration_seconds": 521.33,
+      "entry": "route_batch_optimize_ts",
+      "route_id": null,
+      "status": "completed",
+      "step_id": "ts_optimize"
+    },
+    {
+      "adr_step_index": 5,
+      "digest": "e852e107caca41857934c6fadbb42d4feb184da5d7cdde2832ccdb5830cce332",
+      "duration_seconds": 94.51,
+      "entry": "bounded_recipe_envelope",
+      "route_id": null,
+      "status": "completed",
+      "step_id": "ts_frequency"
+    },
+    {
+      "adr_step_index": 6,
+      "digest": "5c299b2f32aa0e07e07a12a403d290797e721a8dd67e4fd860187aae33abcab0",
+      "duration_seconds": 2454.71,
+      "entry": "legacy_task_core",
+      "route_id": null,
+      "status": "completed",
+      "step_id": "irc"
+    },
+    {
+      "adr_step_index": 7,
+      "digest": "5d45e2e621005e4516acd174f0baad301d4f917383e3dff56a6a2529d20e5e19",
+      "duration_seconds": 8.16,
+      "entry": "bounded_recipe_envelope",
+      "route_id": null,
+      "status": "completed",
+      "step_id": "endpoint_reactants"
+    },
+    {
+      "adr_step_index": 8,
+      "digest": "075f2d4e8bdecde746d6a7ce61da6c60bbc05e1b1246df245892eb16b29497e6",
+      "duration_seconds": 8.17,
+      "entry": "bounded_recipe_envelope",
+      "route_id": null,
+      "status": "completed",
+      "step_id": "endpoint_product"
+    },
+    {
+      "adr_step_index": 9,
+      "digest": "b9c5fb17c899c1e4bd5bcd7b73d1539d06efd108a8cf5ffa183d141cfbfb7787",
+      "duration_seconds": 0.0,
+      "entry": "deterministic_analysis",
+      "route_id": null,
+      "status": "completed",
+      "step_id": "energy_thermochemistry"
+    }
+  ]
+}

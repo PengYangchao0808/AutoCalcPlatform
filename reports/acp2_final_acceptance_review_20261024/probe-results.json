@@ -1,0 +1,77 @@
+{
+  "preflight": {
+    "digest": "sha256:9ef7c9601caf749943f444c6b66925c1cb749272cb82fb7f985771f5336e59e7",
+    "payload": {
+      "workflow": "singlepoint",
+      "input": {
+        "source_type": "xyz_text",
+        "charge": 0,
+        "multiplicity": 1
+      },
+      "method": {
+        "method": "HF",
+        "solvent": "none"
+      },
+      "resources": {}
+    }
+  },
+  "submit": {
+    "digest": "sha256:c8fec79d72e07b496931803094274fd7f2b053ea8fb7f2f64225aa2bb0ce3350",
+    "payload": {
+      "workflow": "singlepoint",
+      "input": {
+        "source_type": "xyz_text",
+        "source": "2\nH2\nH 0 0 0\nH 0 0 0.74\n",
+        "charge": 0,
+        "multiplicity": 1
+      },
+      "method": {
+        "schema_id": "dft_singlepoint",
+        "profile_id": "manual-research",
+        "levels": {
+          "single_point": {
+            "engine": "orca",
+            "functional": "HF",
+            "basis": "STO-3G",
+            "solvent_model": "none",
+            "solvent": ""
+          }
+        }
+      },
+      "resources": {
+        "nproc": 4,
+        "mem": "4GB",
+        "parallelism": 1,
+        "batch_id": "manual_batch",
+        "batch_index": 0,
+        "batch_total": 1
+      }
+    }
+  },
+  "resource_namespace_collision": {
+    "type": "ResearchResourceConflictError",
+    "detail": "resource 'project:same' already exists at revision 1"
+  },
+  "ordinary_envelope_workflows": [
+    "singlepoint"
+  ],
+  "dsh_install_exists": true,
+  "unpublished_report_payload": {
+    "state": "queued",
+    "availability": "absent",
+    "sha256": null,
+    "payload": {
+      "evidence_report": {
+        "claims": [
+          {
+            "claim_id": "c",
+            "source_refs": [],
+            "statement": "not published",
+            "status": "supported"
+          }
+        ]
+      },
+      "purpose": "artifact"
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "evidence_kind": "fixture",
+  "phase": "budget",
+  "reason": "b16_handoff: Runtime budget endpoint (B16/B17) is not delivered",
+  "rows": {
+    "budget.deny": "NOT_VERIFIED(b16_handoff)",
+    "budget.expire": "NOT_VERIFIED(b16_handoff)",
+    "budget.reservation": "NOT_VERIFIED(b16_handoff)",
+    "budget.revoke": "NOT_VERIFIED(b16_handoff)"
+  }
+}

@@ -39,6 +39,7 @@ from typing import Any
 
 from acp_services.data.artifacts import ArtifactAuthorization, ArtifactRef, ArtifactStore
 from acp_services.data.transfer import sha256_bytes
+from acp_services.runtime.content_digest import document_digest as content_document_digest
 from cccp.calculation.requests import (
     TASK_REQUEST_SCHEMA_VERSION,
     MethodSpec,
@@ -169,25 +170,10 @@ def _sha256_prefixed(data: bytes) -> str:
     return "sha256:" + sha256_bytes(data)
 
 
-def document_digest(document: Mapping[str, Any]) -> str:
-    """Content digest of a JSON document.
-
-    This is a *content* digest (canonical key order, compact separators), not
-    ``plan_definition_digest`` and not ``contract_digest``.  It is used for
-    opaque documents such as A's atom mapping and B's resource bodies where
-    the B16 plan projection does not apply.
-    """
-    try:
-        body = json.dumps(
-            document,
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-            allow_nan=False,
-        ).encode("utf-8")
-    except (TypeError, ValueError) as exc:
-        raise ScienceBindingError("document_not_json", str(exc)) from exc
-    return _sha256_prefixed(body)
+#: Identity forwarder: the single implementation lives in the dependency-free
+#: ``content_digest`` module so the worker import closure never pulls the Data
+#: artifact layer (and therefore never sqlite) just to digest a document.
+document_digest = content_document_digest
 
 
 # ---------------------------------------------------------------------------

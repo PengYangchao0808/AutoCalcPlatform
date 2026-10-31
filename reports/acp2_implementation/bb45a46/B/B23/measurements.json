@@ -72,7 +72,7 @@
   "generated_at": "2026-10-23T10:44:40Z",
   "machine": {
     "cpu_count": 40,
-    "hostname": "redacted-host",
+    "hostname": "workstation",
     "platform": "Linux-5.14.0-687.56.1.el9_8.x86_64-x86_64-with-glibc2.34",
     "python": "3.11.13"
   },

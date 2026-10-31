@@ -4,7 +4,7 @@
   "recorded_at": "2026-10-23",
   "state": "M1 single-wheel (C39a first-batch applied; M2 multi-wheel split NOT applied \u2014 B40b gate open)",
   "build": {
-    "command": "<acp2-dev>/venvs/b/bin/python -m build --no-isolation --outdir /tmp/opencode/b25-root-build /tmp/opencode/acp2-b25-clean",
+    "command": "/ACPServer/acp2-development/venvs/b/bin/python -m build --no-isolation --outdir /tmp/opencode/b25-root-build /tmp/opencode/acp2-b25-clean",
     "toolchain": "python 3.11.13, build 1.6.1, setuptools 65.5.1, wheel 0.48.0",
     "wheel": "acp-0.3.0-py3-none-any.whl",
     "wheel_sha256": "e0a66958eee23d605ce33025f405ed9c609809337ebd8994940972f1a94545a3",

@@ -31,7 +31,8 @@ import re
 import sqlite3
 import threading
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -397,6 +398,33 @@ class ResearchResourceStore:
             except sqlite3.Error:  # pragma: no cover - already closed
                 pass
 
+    # -- single-writer transaction seam (M2-01b) --------------------------
+
+    @contextmanager
+    def transaction(self) -> Iterator[sqlite3.Connection]:
+        """Run a caller-supplied write in one ``BEGIN IMMEDIATE`` transaction.
+
+        This is the *only* seam a composition outside this module needs for the
+        "business write + local outbox row in one transaction" invariant
+        (M2-01b): the caller receives this store's own connection, so an outbox
+        row staged on it commits or rolls back with the resource revision.  It is
+        not a second write path — every statement still goes through
+        :meth:`create_in_transaction` / :meth:`compare_and_swap_in_transaction`
+        below, which are the same implementation the single-call API uses.
+        """
+        with self._lock:
+            self._conn.execute("BEGIN IMMEDIATE")
+            try:
+                yield self._conn
+            except BaseException:
+                try:
+                    self._conn.execute("ROLLBACK")
+                except sqlite3.Error:
+                    pass
+                raise
+            else:
+                self._conn.execute("COMMIT")
+
     def __enter__(self) -> ResearchResourceStore:
         return self
 
@@ -450,39 +478,7 @@ class ResearchResourceStore:
         with self._lock:
             self._conn.execute("BEGIN IMMEDIATE")
             try:
-                current = self._latest(resource_id)
-                if current is not None:
-                    self._conn.execute("ROLLBACK")
-                    raise ResearchResourceConflictError(
-                        f"resource {resource_id!r} already exists at revision {current.revision}",
-                        current,
-                    )
-                now = self._clock()
-                document_json = _canonical_bytes(request.document).decode("utf-8")
-                authorization = ResearchResourceAuthorization(
-                    principal_id=request.principal_id,
-                    project_id=request.project_id,
-                    scope=request.scope,
-                    action="write",
-                    allowed=True,
-                )
-                self._conn.execute(
-                    "INSERT INTO research_resources "
-                    "(resource_id, revision, schema, digest, project_id, principal_id, "
-                    " authorization_json, document_json, created_at, updated_at) "
-                    "VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        resource_id,
-                        request.schema,
-                        research_resource_digest(request.document),
-                        request.project_id,
-                        request.principal_id,
-                        json.dumps(authorization.to_dict(), sort_keys=True),
-                        document_json,
-                        now,
-                        now,
-                    ),
-                )
+                created = self._create_on(self._conn, request, resource_id)
                 self._conn.execute("COMMIT")
             except BaseException:
                 try:
@@ -490,10 +486,73 @@ class ResearchResourceStore:
                 except sqlite3.Error:
                     pass
                 raise
-            created = self._latest(resource_id)
-            if created is None:  # pragma: no cover - insert just committed
-                raise ResearchResourceError("resource disappeared after create")
             return created
+
+    def create_in_transaction(
+        self, conn: sqlite3.Connection, request: ResearchResourceRequest
+    ) -> ResearchResourceRecord:
+        """Create revision 1 on a caller-owned transaction (M2-01b seam).
+
+        The caller must have opened :meth:`transaction` (or an equivalent
+        ``BEGIN IMMEDIATE`` on this store's connection); this method never
+        commits, so a surrounding outbox insert commits or rolls back atomically
+        with the revision.  Semantics are identical to :meth:`create`.
+        """
+        _validate_request(request)
+        resource_id = request.resource_id or _default_resource_key(request)
+        return self._create_on(conn, request, resource_id)
+
+    def _create_on(
+        self,
+        conn: sqlite3.Connection,
+        request: ResearchResourceRequest,
+        resource_id: str,
+    ) -> ResearchResourceRecord:
+        current = self._latest(resource_id)
+        if current is not None:
+            raise ResearchResourceConflictError(
+                f"resource {resource_id!r} already exists at revision {current.revision}",
+                current,
+            )
+        now = self._clock()
+        document_json = _canonical_bytes(request.document).decode("utf-8")
+        authorization = ResearchResourceAuthorization(
+            principal_id=request.principal_id,
+            project_id=request.project_id,
+            scope=request.scope,
+            action="write",
+            allowed=True,
+        )
+        digest = research_resource_digest(request.document)
+        conn.execute(
+            "INSERT INTO research_resources "
+            "(resource_id, revision, schema, digest, project_id, principal_id, "
+            " authorization_json, document_json, created_at, updated_at) "
+            "VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                resource_id,
+                request.schema,
+                digest,
+                request.project_id,
+                request.principal_id,
+                json.dumps(authorization.to_dict(), sort_keys=True),
+                document_json,
+                now,
+                now,
+            ),
+        )
+        return ResearchResourceRecord(
+            resource_id=resource_id,
+            schema=request.schema,
+            revision=1,
+            digest=digest,
+            document=request.document,
+            project_id=request.project_id,
+            principal_id=request.principal_id,
+            authorization=authorization,
+            created_at=now,
+            updated_at=now,
+        )
 
     def read(
         self,
@@ -527,59 +586,16 @@ class ResearchResourceStore:
     ) -> ResearchResourceRecord:
         """Append revision ``expected_revision + 1`` only if the head matches."""
         with self._lock:
-            current = self._latest(resource_id)
-            if current is None:
-                raise ResearchResourceNotFoundError(f"resource {resource_id!r} was not found")
-            _require_access(current, principal_id, project_id)
-            if current.revoked_at:
-                raise ResearchResourceRevokedError(
-                    f"resource {resource_id!r} is revoked; CAS is refused"
-                )
-            if int(expected_revision) != current.revision:
-                raise ResearchResourceConflictError(
-                    f"expected revision {expected_revision} but current is {current.revision}",
-                    current,
-                )
-            request = ResearchResourceRequest(
-                resource_id=resource_id,
-                schema=schema or current.schema,
-                document=document,
-                principal_id=principal_id,
-                project_id=project_id,
-            )
-            _validate_request(request)
-            if request.schema != current.schema:
-                raise ResearchResourceValidationError(
-                    "a resource revision cannot change its document schema"
-                )
-            now = self._clock()
-            document_json = _canonical_bytes(document).decode("utf-8")
-            authorization = ResearchResourceAuthorization(
-                principal_id=principal_id,
-                project_id=project_id,
-                scope=current.authorization.scope,
-                action="write",
-                allowed=True,
-            )
             self._conn.execute("BEGIN IMMEDIATE")
             try:
-                self._conn.execute(
-                    "INSERT INTO research_resources "
-                    "(resource_id, revision, schema, digest, project_id, principal_id, "
-                    " authorization_json, document_json, created_at, updated_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        resource_id,
-                        current.revision + 1,
-                        request.schema,
-                        research_resource_digest(document),
-                        project_id,
-                        principal_id,
-                        json.dumps(authorization.to_dict(), sort_keys=True),
-                        document_json,
-                        current.created_at,
-                        now,
-                    ),
+                updated = self._cas_on(
+                    self._conn,
+                    resource_id,
+                    expected_revision=expected_revision,
+                    document=document,
+                    principal_id=principal_id,
+                    project_id=project_id,
+                    schema=schema,
                 )
                 self._conn.execute("COMMIT")
             except BaseException:
@@ -588,10 +604,106 @@ class ResearchResourceStore:
                 except sqlite3.Error:
                     pass
                 raise
-            updated = self._latest(resource_id)
-            if updated is None:  # pragma: no cover - insert just committed
-                raise ResearchResourceError("resource disappeared after CAS")
             return updated
+
+    def compare_and_swap_in_transaction(
+        self,
+        conn: sqlite3.Connection,
+        resource_id: str,
+        *,
+        expected_revision: int,
+        document: Mapping[str, Any],
+        principal_id: str,
+        project_id: str,
+        schema: str | None = None,
+    ) -> ResearchResourceRecord:
+        """CAS on a caller-owned transaction (M2-01b seam; never commits)."""
+        return self._cas_on(
+            conn,
+            resource_id,
+            expected_revision=expected_revision,
+            document=document,
+            principal_id=principal_id,
+            project_id=project_id,
+            schema=schema,
+        )
+
+    def _cas_on(
+        self,
+        conn: sqlite3.Connection,
+        resource_id: str,
+        *,
+        expected_revision: int,
+        document: Mapping[str, Any],
+        principal_id: str,
+        project_id: str,
+        schema: str | None,
+    ) -> ResearchResourceRecord:
+        current = self._latest(resource_id)
+        if current is None:
+            raise ResearchResourceNotFoundError(f"resource {resource_id!r} was not found")
+        _require_access(current, principal_id, project_id)
+        if current.revoked_at:
+            raise ResearchResourceRevokedError(
+                f"resource {resource_id!r} is revoked; CAS is refused"
+            )
+        if int(expected_revision) != current.revision:
+            raise ResearchResourceConflictError(
+                f"expected revision {expected_revision} but current is {current.revision}",
+                current,
+            )
+        request = ResearchResourceRequest(
+            resource_id=resource_id,
+            schema=schema or current.schema,
+            document=document,
+            principal_id=principal_id,
+            project_id=project_id,
+        )
+        _validate_request(request)
+        if request.schema != current.schema:
+            raise ResearchResourceValidationError(
+                "a resource revision cannot change its document schema"
+            )
+        now = self._clock()
+        document_json = _canonical_bytes(document).decode("utf-8")
+        authorization = ResearchResourceAuthorization(
+            principal_id=principal_id,
+            project_id=project_id,
+            scope=current.authorization.scope,
+            action="write",
+            allowed=True,
+        )
+        digest = research_resource_digest(document)
+        conn.execute(
+            "INSERT INTO research_resources "
+            "(resource_id, revision, schema, digest, project_id, principal_id, "
+            " authorization_json, document_json, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                resource_id,
+                current.revision + 1,
+                request.schema,
+                digest,
+                project_id,
+                principal_id,
+                json.dumps(authorization.to_dict(), sort_keys=True),
+                document_json,
+                current.created_at,
+                now,
+            ),
+        )
+        return ResearchResourceRecord(
+            resource_id=resource_id,
+            schema=request.schema,
+            revision=current.revision + 1,
+            digest=digest,
+            document=document,
+            project_id=project_id,
+            principal_id=principal_id,
+            authorization=authorization,
+            created_at=current.created_at,
+            updated_at=now,
+        )
 
     def revoke(
         self,
@@ -634,4 +746,35 @@ class ResearchResourceStore:
                 "SELECT * FROM research_resources WHERE resource_id = ? ORDER BY revision ASC",
                 (resource_id,),
             ).fetchall()
+        return [self._record(row) for row in rows]
+
+    def list_heads(
+        self,
+        *,
+        project_id: str,
+        schema: str | None = None,
+        limit: int = 100,
+    ) -> list[ResearchResourceRecord]:
+        """Latest revision of every resource of one project (bounded, read-only).
+
+        Used by the bounded research snapshot/query surfaces (M2-01c) so they can
+        observe the authority without a second index.  Revoked resources are
+        included (their ``revoked_at`` is the fact); no body authorization is
+        re-checked here — the caller already resolved the project scope.
+        """
+        clauses = ["project_id = ?"]
+        params: list[Any] = [str(project_id)]
+        if schema is not None:
+            clauses.append("schema = ?")
+            params.append(str(schema))
+        sql = (
+            "SELECT * FROM ("
+            "  SELECT *, ROW_NUMBER() OVER ("
+            "    PARTITION BY resource_id ORDER BY revision DESC"
+            "  ) AS head_rank FROM research_resources "
+            f"  WHERE {' AND '.join(clauses)}"
+            ") WHERE head_rank = 1 ORDER BY resource_id LIMIT ?"
+        )
+        with self._lock:
+            rows = self._conn.execute(sql, [*params, max(1, int(limit))]).fetchall()
         return [self._record(row) for row in rows]

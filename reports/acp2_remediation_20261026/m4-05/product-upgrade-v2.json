@@ -1,0 +1,158 @@
+{
+  "analysis_id": "acp2_upgrade_native_singlepoint",
+  "evidence_refs": [
+    {
+      "attempt": 1,
+      "authorization": {
+        "action": "read",
+        "allowed": true,
+        "authorization_version": 0,
+        "principal_id": "",
+        "project_id": "",
+        "scope": "local-single"
+      },
+      "availability": "ready",
+      "digest": "sha256:bad10efd7d24addc0e4338cc48a254d53ee48b9556c1adc14ad23266abe9d64c",
+      "generation": 1,
+      "job_id": "20261028_090000_103_m405upgradev2",
+      "media_type": "text/plain",
+      "operation_id": "op_d48542a15ea346b2a9ea6766a8badc06",
+      "relative_path": "RESULT/native.json",
+      "resource_id": "native_record",
+      "schema": "acp2.artifact-ref.v1",
+      "size_bytes": 283,
+      "source_refs": [],
+      "source_schema": "",
+      "version": 1
+    }
+  ],
+  "operation_ref": null,
+  "product_digest": "sha256:6bd2cd918c80d77728910fe4b210424be2cedf4f0a61cc8969859f692e3df46e",
+  "result": {
+    "analysis_id": "acp2_upgrade_native_singlepoint",
+    "inputs": [
+      {
+        "attempt": 1,
+        "authorization": {
+          "action": "read",
+          "allowed": true,
+          "authorization_version": 0,
+          "principal_id": "",
+          "project_id": "",
+          "scope": "local-single"
+        },
+        "availability": "ready",
+        "digest": "sha256:bad10efd7d24addc0e4338cc48a254d53ee48b9556c1adc14ad23266abe9d64c",
+        "generation": 1,
+        "job_id": "20261028_090000_103_m405upgradev2",
+        "media_type": "text/plain",
+        "operation_id": "op_d48542a15ea346b2a9ea6766a8badc06",
+        "relative_path": "RESULT/native.json",
+        "resource_id": "native_record",
+        "schema": "acp2.artifact-ref.v1",
+        "size_bytes": 283,
+        "source_refs": [],
+        "source_schema": "",
+        "version": 1
+      }
+    ],
+    "product": {
+      "capability_output_schema": "acp2.science.external.upgrade_singlepoint",
+      "capability_output_schema_version": 2,
+      "digest": "sha256:6bd2cd918c80d77728910fe4b210424be2cedf4f0a61cc8969859f692e3df46e",
+      "input_digests": [
+        "sha256:bad10efd7d24addc0e4338cc48a254d53ee48b9556c1adc14ad23266abe9d64c"
+      ],
+      "schema": "acp2.science.plugin_analysis.v1",
+      "schema_version": 1,
+      "task_result": {
+        "artifacts": [],
+        "complete": true,
+        "coordinates": [
+          [
+            0.0,
+            0.0,
+            0.1173
+          ],
+          [
+            0.0,
+            0.7572,
+            -0.4692
+          ],
+          [
+            0.0,
+            -0.7572,
+            -0.4692
+          ]
+        ],
+        "energy_hartree": -76.026632,
+        "errors": [],
+        "frequencies": [],
+        "metadata": {
+          "atom_order": [
+            "O",
+            "H",
+            "H"
+          ],
+          "capability": "acp2_upgrade_native_singlepoint",
+          "capability_schema": "acp2.science.external.upgrade_singlepoint",
+          "capability_schema_version": 2,
+          "charge": 0,
+          "declared_atom_count": 3,
+          "multiplicity": 1,
+          "native_schema": "acp2.native.singlepoint.v1",
+          "plugin_version": "2.0.0",
+          "units": {
+            "coordinates": "angstrom",
+            "energy": "hartree"
+          }
+        },
+        "provenance": {
+          "backend": "acp2_upgrade_fixture",
+          "input_signature": "bad10efd7d24addc0e4338cc48a254d53ee48b9556c1adc14ad23266abe9d64c",
+          "method": "native_singlepoint_json_v1",
+          "version": "2.0.0"
+        },
+        "schema_version": 1,
+        "status": "completed",
+        "symbols": [
+          "O",
+          "H",
+          "H"
+        ],
+        "task": "singlepoint"
+      }
+    },
+    "provenance": {
+      "capability_id": "acp2_upgrade_native_singlepoint",
+      "capability_ref": "acp2_upgrade_native_singlepoint@2.0.0",
+      "capability_version": "2.0.0",
+      "computed_distribution_digest": "sha256:7a9564cb1841d0da4e45fcfbf454786db2f23a7223466f050bb55fe8f158d04c",
+      "descriptor_digest": "sha256:dff39eb1f9bdabe04e4f4aa36712c3e6b132da21fe8453fc981f77df78140087",
+      "descriptor_schema": "acp2.plugin.capability-descriptor.v1",
+      "distribution_digest": {
+        "algorithm": "acp2.plugin.distribution-digest.v1",
+        "declared": "sha256:7a9564cb1841d0da4e45fcfbf454786db2f23a7223466f050bb55fe8f158d04c",
+        "digest": "sha256:7a9564cb1841d0da4e45fcfbf454786db2f23a7223466f050bb55fe8f158d04c",
+        "file_count": 5,
+        "matches_declared": true
+      },
+      "enabled_at": "2026-10-28T00:05:37Z",
+      "enabled_by": "controller",
+      "executed_in": "controller",
+      "form_digest": "sha256:f27bef30b23e2d9b19e903480c71713b998c71552ad633e376e4d1b44ea60e53",
+      "input_digests": [
+        "sha256:bad10efd7d24addc0e4338cc48a254d53ee48b9556c1adc14ad23266abe9d64c"
+      ],
+      "plugin_name": "acp2_upgrade.native_singlepoint",
+      "starts_subprocess": false,
+      "starts_task": false
+    },
+    "schema_version": 1,
+    "started": false,
+    "state": "computed"
+  },
+  "schema_version": 1,
+  "started": false,
+  "task_ref": null
+}

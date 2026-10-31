@@ -1,16 +1,15 @@
-/* Q4 layout swap: queue is the flexible region, the info panel is a
-   fixed-height bottom slice. When a --*-h var is set the panel becomes
-   fixed-height (drag-resized). */
-/* The queue is the column's only shrinkable region. The research panels
-   (science-question/scientific-evidence/research-approval) are
-   natural-height by design (features.css — the right column itself is
-   their scroll container, pinned by acp2_layout.test.js), so when their
-   content exceeds the column the queue must never shrink below its own
-   chrome (summary + view toolbar ≈ 200px), otherwise it is crushed to 0
-   height and #btn-new-project is covered by the overlapping panels
-   (page_integration.browser.js). The right column scrolls instead. */
-.right-col > .queue-panel { flex: 1 1 auto; min-height: 0; }
-.right-col > .queue-panel:not(.collapsed) { min-height: 200px; }
+/* The column scrolls between panels. Never shrink the queue to zero when
+   research forms grow: its controls and rows need their own bounded region. */
+.right-col > .queue-panel {
+  flex: 0 0 auto;
+  max-height: calc(100vh - 64px);
+  overflow: auto;
+}
+.right-col > .panel-section {
+  flex-shrink: 0;
+  max-height: min(640px, calc(100vh - 64px));
+  overflow: auto;
+}
 /* info-panel-section: natural height (260px cap removed in task-12) */
 .info-panel-section { flex: 0 0 auto; max-height: none; border-top: 1px solid var(--border-default); }
 .info-panel-section .panel-body { flex: 1 1 auto; min-height: 0; overflow: auto; }

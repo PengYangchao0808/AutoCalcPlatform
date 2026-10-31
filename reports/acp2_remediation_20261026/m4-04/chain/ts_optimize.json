@@ -1,0 +1,27 @@
+{
+  "adr_step_index": 4,
+  "adr_task_kind": "optimize",
+  "attempt": 1,
+  "bounded_alternative": null,
+  "complete": false,
+  "duration_seconds": null,
+  "entry": null,
+  "error": "no TS-guess structure exists for the optimization",
+  "executed_task_kind": "optimize",
+  "level": {
+    "basis": "def2-TZVP",
+    "charge": 0,
+    "method": "wB97X-D4",
+    "multiplicity": 1
+  },
+  "native_files": [],
+  "products": [],
+  "receipt": null,
+  "release_digest": "813583bdcaae20ef900a99180f433b34a7dfa730fb47c1efea5c9435919a061b",
+  "release_id": "2d1ab37a0f988933",
+  "schema": "acp2.m4-04.step.v1",
+  "status": "skipped",
+  "step_id": "ts_optimize",
+  "task_ref": null,
+  "task_result": null
+}

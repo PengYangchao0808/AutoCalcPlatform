@@ -55,6 +55,8 @@ __all__ = [
     "CURRENT_SWITCH_SCHEMA",
     "DEFAULT_ENVELOPE_WORKFLOWS",
     "ENVELOPE_FILENAME",
+    "EnvelopeRequiredError",
+    "RECIPE_WORKFLOWS",
     "EXECUTION_ENTRY_ENVELOPE",
     "EXECUTION_ENTRY_LEGACY",
     "EXECUTION_PROTOCOL_LOCAL",
@@ -128,6 +130,26 @@ _GROUP_MEMBER_NAMES: Final[frozenset[str]] = frozenset(
 _SHA256_HEX: Final = re.compile(r"^[0-9a-f]{64}$")
 
 
+class EnvelopeRequiredError(ValueError):
+    """The workflow may only run from a frozen envelope, and none is usable.
+
+    A workflow with ``requires_envelope`` has no legacy implementation, so the
+    dispatcher refuses instead of recording a legacy entry the platform cannot
+    honour (never half-switched, never a silent fallback).  It is a
+    :class:`ValueError` (not an ``AttemptProtocolError``, which is the
+    *corrupt record* error) so callers can tell "no legacy path exists" apart
+    from "the recorded protocol is unreadable".
+    """
+
+    def __init__(self, workflow: str, *, reason: str, protocol: str = "") -> None:
+        super().__init__(
+            f"workflow {workflow!r} requires the frozen envelope entry ({reason}); "
+            f"protocol {protocol or 'unknown'} refuses a legacy fallback"
+        )
+        self.workflow = workflow
+        self.reason = reason
+
+
 class UnsupportedExecutionWorkflowError(Exception):
     """No execution capability is registered for the workflow."""
 
@@ -155,6 +177,21 @@ class WorkflowExecutionCapability:
     closure: str
     remote_supported: bool
     release_required: bool = True
+    #: M2-04d additive: the workflow has **no legacy implementation** — its only
+    #: entry is the frozen envelope.  A missing/unusable frozen group is a typed
+    #: refusal, never a silent fallback to the legacy entry.
+    requires_envelope: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return the frozen capability row (fixtures/schema parity)."""
+        return {
+            "workflow": self.workflow,
+            "capabilities": list(self.capabilities),
+            "closure": self.closure,
+            "remote_supported": self.remote_supported,
+            "release_required": self.release_required,
+            "requires_envelope": self.requires_envelope,
+        }
 
 
 #: C01 (HN-01) delivered-and-applied closure: the eight workflows whose
@@ -168,6 +205,20 @@ _C01_INTEGRATED: Final[tuple[tuple[str, tuple[str, ...], bool], ...]] = (
     ("casscf", ("casscf",), False),
     ("xtb_optimize", ("optimize",), True),
     ("OrcaGradient", ("orca_gradient",), False),
+)
+
+#: M2-04d: the bounded-recipe workflow.  It has no legacy implementation at all:
+#: one TaskRef/attempt executes the frozen step DAG through
+#: ``acp_services.worker_bootstrap`` + the Services ``StepDispatchAdapter``, so
+#: the entry is always ``envelope`` and a missing frozen group is a typed error.
+RECIPE_WORKFLOWS: Final[frozenset[str]] = frozenset({"BoundedRecipe"})
+
+#: Capability rows of the envelope-only recipe workflows (closure ``integrated``:
+#: the DAG producer, adapter, completion gate, quota, fence and recovery are in
+#: place; the *complete* ADR-008 science chain is still OPEN, see
+#: ``acp_services.runtime.step_definition.ADR008_REQUIRED_STEPS``).
+_ENVELOPE_ONLY_SCOPE: Final[tuple[tuple[str, tuple[str, ...], bool], ...]] = (
+    ("BoundedRecipe", ("singlepoint", "optimize", "frequency", "irc"), True),
 )
 
 #: Not yet closed by C01: keep the legacy path; never claimed independent.
@@ -191,6 +242,14 @@ def _build_table() -> dict[str, WorkflowExecutionCapability]:
             closure="integrated",
             remote_supported=remote_supported,
         )
+    for workflow, capabilities, remote_supported in _ENVELOPE_ONLY_SCOPE:
+        table[workflow] = WorkflowExecutionCapability(
+            workflow=workflow,
+            capabilities=capabilities,
+            closure="integrated",
+            remote_supported=remote_supported,
+            requires_envelope=True,
+        )
     for workflow, capabilities, remote_supported in _LEGACY_SCOPE:
         table[workflow] = WorkflowExecutionCapability(
             workflow=workflow,
@@ -212,9 +271,14 @@ ENABLED_WORKFLOWS: Final[frozenset[str]] = frozenset(
 #: Workflows whose ORDINARY submission freezes an envelope attempt by default.
 #: Activation is separate from scientific closure: only workflows with a
 #: request builder + publication/recovery evidence are added here.  Task 29
-#: activates ``singlepoint`` first; other C01 workflows stay on their
-#: registered path until their own evidence lands.
-DEFAULT_ENVELOPE_WORKFLOWS: Final[frozenset[str]] = frozenset({"singlepoint"})
+#: activated ``singlepoint`` first; the 2026-10-29 batch adds ``xtb_optimize``
+#: after a real pre-flip rehearsal (frozen attempt → real xTB worker → receipt →
+#: publication products) recorded in
+#: ``reports/acp2_dev_batch_20261029/phaseC2/``.  Every later workflow follows
+#: the same evidence-first order; nothing is enabled by closure alone.
+DEFAULT_ENVELOPE_WORKFLOWS: Final[frozenset[str]] = (
+    frozenset({"singlepoint", "xtb_optimize"}) | RECIPE_WORKFLOWS
+)
 
 
 def capability_for(workflow: str) -> WorkflowExecutionCapability:
@@ -258,8 +322,12 @@ def select_execution_entry(
     if capability.closure != "integrated":
         return ExecutionEntrySelection(EXECUTION_ENTRY_LEGACY, protocol, capability.closure)
     if remote and not capability.remote_supported:
+        if capability.requires_envelope:
+            raise EnvelopeRequiredError(workflow, reason="remote-unsupported", protocol=protocol)
         return ExecutionEntrySelection(EXECUTION_ENTRY_LEGACY, protocol, capability.closure)
     if not envelope_available:
+        if capability.requires_envelope:
+            raise EnvelopeRequiredError(workflow, reason="frozen_group_missing", protocol=protocol)
         return ExecutionEntrySelection(EXECUTION_ENTRY_LEGACY, protocol, capability.closure)
     return ExecutionEntrySelection(EXECUTION_ENTRY_ENVELOPE, protocol, capability.closure)
 

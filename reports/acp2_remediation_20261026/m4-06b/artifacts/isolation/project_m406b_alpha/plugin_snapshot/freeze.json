@@ -1,0 +1,7 @@
+{
+  "capability_id": "acp2_external_native_singlepoint",
+  "descriptor_digest": "sha256:aeeb42cfddbbdc570758ac0d64d08c2243ee6b78e8b8abb2fc945d037f557247",
+  "frozen_by": "m4-06b-acceptance",
+  "project_id": "project_m406b_alpha",
+  "schema": "acp2.capability.freeze.v1"
+}

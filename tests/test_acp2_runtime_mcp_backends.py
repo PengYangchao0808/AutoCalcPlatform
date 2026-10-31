@@ -31,12 +31,14 @@ import pytest
 import uvicorn
 
 _XYZ = "2\nH2\nH 0 0 0\nH 0 0 0.74\n"
-_METHOD = {"method": "r2SCAN-3c", "charge": 0, "multiplicity": 1}
+_METHOD = {"levels": {"single_point": {"functional": "r2SCAN-3c"}}}
 _SUBMIT = {
     "workflow": "singlepoint",
-    "input": {"xyz_text": _XYZ},
+    "input": {"xyz_text": _XYZ, "charge": 0, "multiplicity": 1},
     "method": _METHOD,
     "resources": {"cores": 1},
+    # M1-01b: acp_submit requires the retry key; the HTTP body does not.
+    "idempotency_key": "b06-submit-parity-0001",
 }
 
 
@@ -267,6 +269,14 @@ def test_prepare_operation_projection_and_not_prepared(live_controller: _LiveCon
 def test_analyze_requires_explicit_and_is_registry_gated(
     live_controller: _LiveController,
 ) -> None:
+    """M2-02: the analyze surface is executable, and refusals stay typed.
+
+    ``vibration.analyze`` is executable since M2-02, so an *incomplete*
+    ArtifactRef is now the input error (never the "unsupported" default it used
+    to be), ``vibration.compute`` is a registered-but-not-executable compute
+    capability, and an unprepared reference is ``resource_not_ready``.  None of
+    them creates a task or a prepare operation.
+    """
     created = _submit(live_controller)
     job_id = created["job_id"]
     mcp_runtime = _runtime(live_controller)
@@ -285,7 +295,8 @@ def test_analyze_requires_explicit_and_is_registry_gated(
     assert implicit["isError"] is True
     assert implicit["structuredContent"]["error"]["code"] == "input_invalid"
 
-    unsupported = _tool(
+    # A partial reference can never prove which artifact was meant.
+    partial = _tool(
         mcp_runtime,
         "acp_analyze",
         {
@@ -294,8 +305,42 @@ def test_analyze_requires_explicit_and_is_registry_gated(
             "explicit": True,
         },
     )
-    assert unsupported["isError"] is True
-    assert unsupported["structuredContent"]["error"]["code"] == "unsupported_capability"
+    assert partial["isError"] is True
+    partial_error = partial["structuredContent"]["error"]
+    assert partial_error["code"] == "input_invalid"
+    assert partial_error["params"]["rule"] == "missing_artifact_ref"
+
+    prepared_ref = {
+        "task_id": job_id,
+        "attempt": 1,
+        "artifact_id": "freq_out",
+        "generation": 1,
+        "digest": "sha256:" + "0" * 64,
+    }
+    # ``vibration.compute`` is registered (owner B12) but not executable as an
+    # analysis: it runs one frequency task, submitted as a task.
+    compute = _tool(
+        mcp_runtime,
+        "acp_analyze",
+        {"analysis_id": "vibration.compute", "input_refs": [prepared_ref], "explicit": True},
+    )
+    assert compute["isError"] is True
+    compute_error = compute["structuredContent"]["error"]
+    assert compute_error["code"] == "unsupported_capability"
+    assert compute_error["params"]["rule"] == "analysis_capability_not_executable"
+    assert compute_error["params"]["state"] == "registered"
+
+    # Nothing is prepared for this task yet: the executable capability refuses
+    # with the named not-prepared class instead of fabricating a product.
+    unprepared = _tool(
+        mcp_runtime,
+        "acp_analyze",
+        {"analysis_id": "vibration.analyze", "input_refs": [prepared_ref], "explicit": True},
+    )
+    assert unprepared["isError"] is True
+    assert unprepared["structuredContent"]["error"]["code"] == "resource_not_ready"
+    assert "not_prepared" in unprepared["structuredContent"]["error"]["message"]
+
     assert _task_count(live_controller) == tasks_before
     assert _prepare_count(live_controller) == prepares_before
 
@@ -307,19 +352,36 @@ def test_mcp_and_http_submit_parameters_match(live_controller: _LiveController) 
     manager = live_controller.manager
     original_submit = manager.submit
 
-    def capture(spec: Any, group_id: str | None = None, *, idempotency: Any | None = None) -> Any:
+    def capture(
+        spec: Any,
+        group_id: str | None = None,
+        *,
+        idempotency: Any | None = None,
+        budget: Any | None = None,
+        identity: Any | None = None,
+    ) -> Any:
         captured.append(spec)
-        if idempotency is None:
-            return original_submit(spec, group_id=group_id)
-        return original_submit(spec, group_id=group_id, idempotency=idempotency)
+        return original_submit(
+            spec,
+            group_id=group_id,
+            idempotency=idempotency,
+            budget=budget,
+            identity=identity,
+        )
 
     manager.submit = capture  # type: ignore[method-assign]
     try:
         payload = dict(_SUBMIT, name="parity")
-        normalized = normalize_submit(payload)
+        # M1-01b: both entries need their own retry key; the two bodies are the
+        # same logical request but the HTTP normaliser does not carry ``name``
+        # into the digest material, so reusing one key across the two entries
+        # would be a (correct) idempotency conflict rather than a parity check.
+        normalized = normalize_submit({**payload, "idempotency_key": "b06-http-parity-0001"})
         http_created = _client(live_controller).submit(normalized)
         mcp_runtime = _runtime(live_controller)
-        mcp_created = _tool(mcp_runtime, "acp_submit", payload)
+        mcp_created = _tool(
+            mcp_runtime, "acp_submit", {**payload, "idempotency_key": "b06-mcp-parity-0001"}
+        )
     finally:
         manager.submit = original_submit  # type: ignore[method-assign]
 
@@ -371,8 +433,16 @@ def test_error_matrix_is_structured_and_consistent(live_controller: _LiveControl
     with pytest.raises(UnsupportedError):
         client.analyze(
             {
-                "analysis_id": "vibration.analyze",
-                "input_refs": [{"task_id": created["job_id"]}],
+                "analysis_id": "vibration.compute",
+                "input_refs": [
+                    {
+                        "task_id": created["job_id"],
+                        "attempt": 1,
+                        "artifact_id": "freq_out",
+                        "generation": 1,
+                        "digest": "sha256:" + "0" * 64,
+                    }
+                ],
                 "explicit": True,
             }
         )
@@ -402,3 +472,66 @@ def test_research_launch_validates_budget_and_project(live_controller: _LiveCont
                 project_id="project-that-does-not-exist",
             )
         )
+
+
+def test_legacy_flat_method_shape_is_normalized_at_submit(
+    live_controller: _LiveController,
+) -> None:
+    """Old clients send method={method, charge, multiplicity}; it must still run.
+
+    The contract accepts the legacy keys only because the API normalizes them
+    (direct method name -> levels.functional; charge/multiplicity -> input)
+    before the plan digest, so execution does not silently ignore them.
+    """
+    body = {**_SUBMIT, "method": {"method": "r2SCAN-3c", "charge": 0, "multiplicity": 1}}
+    body["idempotency_key"] = "b06-legacy-shape-0001"
+    submitted = _submit(live_controller, body)
+    job_id = dict(submitted)["job_id"]
+    # the legacy payload produced one canonical spec: both consumers see the
+    # same method (method.method was folded into levels.functional, not kept
+    # alongside it)
+    record = live_controller.manager.get(job_id)
+    assert record is not None
+    method = record.spec.method
+    levels = method.get("levels") or {}
+    assert levels["single_point"]["functional"] == "r2SCAN-3c"
+    assert "method" not in method
+    assert record.spec.input["charge"] == 0
+    assert record.spec.input["multiplicity"] == 1
+    from acp.calculations.attempt_freeze import _singlepoint_method_kwargs
+
+    assert _singlepoint_method_kwargs(method).get("method") == "r2SCAN-3c"
+
+
+def test_legacy_method_conflict_is_refused(live_controller: _LiveController) -> None:
+    """Two consumers disagreeing on the method is an input error, not a silent pick."""
+    from acp_services.entrypoints.controller_client import UnsupportedError
+
+    body = {
+        **_SUBMIT,
+        "method": {"method": "B3LYP", "levels": {"single_point": {"functional": "PBE0"}}},
+        "idempotency_key": "b06-legacy-conflict-0001",
+    }
+    with pytest.raises(UnsupportedError) as excinfo:
+        _submit(live_controller, body)
+    assert "conflict" in str(excinfo.value).lower()
+
+
+def test_real_summary_keeps_the_navigation_core(live_controller: _LiveController) -> None:
+    """On the real assembly the bounded summary must still carry the recipe.
+
+    The first post-merge probe found the MCP envelope additions pushing the
+    summary over budget and the clipper eating task_instructions and
+    workflow_contracts — a summary without the navigation core is useless.
+    """
+    mcp_runtime = _runtime(live_controller)
+    result = _tool(mcp_runtime, "acp_capabilities", {"detail": "summary"})
+    assert result.get("isError") is not True
+    text = result["content"][0]["text"]
+    assert len(text.encode("utf-8")) <= 8192, len(text.encode("utf-8"))
+    data = result["structuredContent"]["data"]
+    assert data["detail"] == "summary"
+    assert "task_instructions" in data, data.get("omitted")
+    assert "workflow_contracts" in data, data.get("omitted")
+    assert "capacity" in data
+    assert data["budget"]["overflow"] is False

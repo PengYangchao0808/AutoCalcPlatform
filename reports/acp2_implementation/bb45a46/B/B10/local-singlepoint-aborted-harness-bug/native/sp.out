@@ -172,9 +172,9 @@ interface, adapt or use parts of their codes:
 
   ***********************************
   * Starting time: Fri Oct 23 03:13:41 2026
-  * Host name:     redacted-host
+  * Host name:     workstation
   * Process ID:    595373
-  * Working dir.:  <acp2-dev>/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint
+  * Working dir.:  /ACPServer/acp2-development/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint
   ***********************************
 
 NOTE: MaxCore=819 MB was set to SCF,MP2,MDCI,CIPSI,MRCI,RASCI and CIS
@@ -197,7 +197,7 @@ Your calculation utilizes the basis: STO-3G
 ================================================================================
                                        INPUT FILE
 ================================================================================
-NAME = <acp2-dev>/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.inp
+NAME = /ACPServer/acp2-development/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.inp
 |  1> ! HF STO-3G SP
 |  2> %maxcore 819
 |  3> %pal nprocs 1 end
@@ -385,7 +385,7 @@ Hamiltonian:
 
 
 General Settings:
- Integral files         IntName         .... <acp2-dev>/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp
+ Integral files         IntName         .... /ACPServer/acp2-development/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp
  Hartree-Fock type      HFTyp           .... RHF
  Total Charge           Charge          ....    0
  Multiplicity           Mult            ....    1
@@ -473,7 +473,7 @@ Now organizing SCF variables                       ... done
                       ------------------
                       INITIAL GUESS DONE (   0.0 sec)
                       ------------------
-             **** ENERGY FILE WAS UPDATED (<acp2-dev>/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.en.tmp) ****
+             **** ENERGY FILE WAS UPDATED (/ACPServer/acp2-development/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.en.tmp) ****
 Finished Guess after   0.0 sec
 Maximum memory used throughout the entire GUESS-calculation: 1.2 MB
 
@@ -501,7 +501,7 @@ Iteration    Energy (Eh)           Delta-E    RMSDP     MaxDP     MaxGrad    Tim
                *           SCF CONVERGED AFTER   1 CYCLES          *
                *****************************************************
 
-             **** ENERGY FILE WAS UPDATED (<acp2-dev>/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.en.tmp) ****
+             **** ENERGY FILE WAS UPDATED (/ACPServer/acp2-development/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.en.tmp) ****
 
 ----------------
 TOTAL SCF ENERGY
@@ -633,7 +633,7 @@ FINAL SINGLE POINT ENERGY        -1.116759307204
                               ORCA PROPERTY CALCULATIONS
 ------------------------------------------------------------------------------
 
-GBWName                                 ... <acp2-dev>/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.gbw
+GBWName                                 ... /ACPServer/acp2-development/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.gbw
 Number of atoms                         ...      2
 Number of basis functions               ...      2
 Max core memory                         ...    819 MB
@@ -738,7 +738,7 @@ But we need these citations in order to attract the funding resources that allow
 
 Therefore, if you are a happy ORCA user, please consider citing a few of the papers listed below in the main body of your paper
 
-In addition to the list printed below, the program has created the file <acp2-dev>/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.bibtex that contains the list in bibtex format
+In addition to the list printed below, the program has created the file /ACPServer/acp2-development/data/b/run-root-b10/uncategorized/STO-3G_H_0.000000_0.000000_0.000000_H_0.000000_0.000000_0.740000_singlepoint/sp.bibtex that contains the list in bibtex format
 You can import this file easily into all common literature databanks and citation aid programs
 
 It goes without saying that in many instances, there are alternative algorithms to achieve similar

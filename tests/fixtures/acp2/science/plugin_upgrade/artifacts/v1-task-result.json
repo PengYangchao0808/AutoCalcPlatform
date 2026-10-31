@@ -4,7 +4,7 @@
   "capability_schema_version": 1,
   "constructed": true,
   "default_enabled": false,
-  "distribution_digest": "sha256:30ae47306814dea5ce8aa3f3608740fd1b75528c43dac39569482e3341aeb748",
+  "distribution_digest": "sha256:467799225b6cc24a047751678cc562ffab04d619bc0b12dffc6f6fd532276f98",
   "label": "constructed A-23 upgrade-pair artifact; not a real QC result",
   "plugin_lock_digest": "7820646bf5780e89754e0371f625d0231368d055e26347248227d6a5dc09d95c",
   "plugin_name": "acp2_upgrade.native_singlepoint",

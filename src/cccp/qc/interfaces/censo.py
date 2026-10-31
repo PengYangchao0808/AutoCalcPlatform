@@ -10,6 +10,7 @@ Author: QCcalc Team
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import logging
 import math
@@ -71,6 +72,8 @@ class CensoRunResult:
     final_part: str = ""
     work_dir: Optional[Path] = None
     temperature: float = 298.15
+    execution: Dict[str, Any] = field(default_factory=dict)
+    """Verified execution facts (argv/rc/artifact digests); never a request echo."""
 
     def boltzmann_weights(self) -> Dict[str, float]:
         k_b_hartree_per_kelvin = 3.166811563e-6
@@ -467,8 +470,12 @@ class CensoInterface:
 
     # ----- Output parsing --------------------------------------------------
 
-    def _resolve_final_part(self, output_dir: Path) -> Optional[str]:
+    def _resolve_final_part(
+        self, output_dir: Path, *, allowed: Optional[set] = None
+    ) -> Optional[str]:
         for part_name in CENSO_PARSE_PRIORITY:
+            if allowed is not None and part_name not in allowed:
+                continue
             json_path = output_dir / f"{_part_index(part_name)}_{part_name.upper()}.json"
             if json_path.exists():
                 return part_name
@@ -748,7 +755,15 @@ class CensoInterface:
             templated_parts=set(effective_templates),
             solvent_model=solvent_model,
         )
+        try:
+            rcfile_sha256 = hashlib.sha256(Path(rcfile).read_bytes()).hexdigest()
+        except (OSError, TypeError):
+            rcfile_sha256 = ""
 
+        try:
+            input_sha256 = hashlib.sha256(ensemble_xyz.read_bytes()).hexdigest()
+        except OSError:
+            input_sha256 = ""
         env: Optional[Dict[str, str]] = None
 
         orca_cfg = self.config.get("executables", {}).get("orca", {})
@@ -859,7 +874,21 @@ class CensoInterface:
 
             raise CensoExecutionError(error_msg)
 
-        final_part = self._resolve_final_part(output_dir)
+        enabled_parts = {
+            name
+            for flag, name in (
+                ("-P", "prescreening"),
+                ("-S", "screening"),
+                ("-R", "refinement"),
+                ("-O", "optimization"),
+            )
+            if flag in cmd
+        }
+        # Bind the final part to a part this run actually enabled: a stale
+        # artifact from an earlier run in the same dir cannot be adopted.
+        final_part = self._resolve_final_part(
+            output_dir, allowed=enabled_parts or None
+        )
         if final_part is None:
             raise CensoParseError(
                 f"No CENSO output JSON found in {output_dir}. Checked: {_PARSE_PRIORITY}"
@@ -890,6 +919,35 @@ class CensoInterface:
         result.sort_by_gtot()
 
         out_path = output_dir / f"{part_idx}_{final_part.upper()}.out"
+        artifact_facts: Dict[str, Any] = {}
+        for label, artifact_path in (
+            ("json", json_path),
+            ("xyz", xyz_path),
+            ("out", out_path),
+        ):
+            try:
+                digest = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+            except OSError:
+                digest = ""
+            artifact_facts[label] = {
+                "path": artifact_path.name,
+                "sha256": digest,
+            }
+        result.execution = {
+            "argv": list(cmd),
+            "returncode": int(proc.returncode),
+            "cwd": str(output_dir),
+            "preset": preset_cfg["name"],
+            "final_part": final_part,
+            "temperature_k": float(temp),
+            "artifacts": artifact_facts,
+            "enabled_parts": sorted(enabled_parts),
+            "conformers": [str(rec.conf_id) for rec in records],
+            "input_sha256": input_sha256,
+            "input_path": str(ensemble_xyz),
+            "rcfile_sha256": rcfile_sha256,
+            "rcfile_path": str(rcfile),
+        }
         self._compare_boltzmann_weights(result, out_path)
 
         return result

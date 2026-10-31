@@ -16,8 +16,12 @@ The reservation is made **queued** at submit time (storage + an active-task
 slot), then re-validated and promoted at dispatch.  A denial therefore happens
 before a work directory, a QC process or a remote submission exists.
 
-This is local single-principal enforcement.  It is not multi-tenant security,
-and model-token metering remains ``NOT_VERIFIED``.
+The reservation is attributed to the **verified** principal of the command
+(M0-04): a multi-user HTTP/CLI submit carries its own ``CommandIdentity``
+principal/key reference, while the legacy local-single path keeps the
+Controller-process default.  ``principal_id`` on this object is that default,
+never a request field.  This is local single-tier quota enforcement; it is not
+multi-tenant security, and model-token metering remains ``NOT_VERIFIED``.
 """
 
 from __future__ import annotations
@@ -39,11 +43,16 @@ from acp_services.runtime.admission import (
     GrantResolution,
     ReservationLedger,
 )
+from acp_services.runtime.execution_limits import (
+    ResourceLimits,
+    resource_limits_from_projection,
+)
 from acp_services.runtime.idempotency import (
     IdempotencyReservationDeniedError,
     ReservationIdempotency,
     ReservationPort,
 )
+from acp_services.runtime.receipts import ReceiptHistoryBinding
 from acp_services.runtime.research_budget import (
     BudgetConfigurationError,
     BudgetReason,
@@ -51,6 +60,7 @@ from acp_services.runtime.research_budget import (
     release_statement,
 )
 from acp_services.runtime.usage import UsageUnitCounts, usage_id_for
+from acp_services.runtime.usage_authority import UsageProducer
 
 __all__ = [
     "ADMISSION_ENFORCEMENT",
@@ -282,6 +292,36 @@ def _as_datetime(value: Any) -> datetime | None:
     return parsed
 
 
+def approval_resource_limits(
+    budget: Mapping[str, Any] | None,
+) -> ResourceLimits:
+    """The one resolver projection of an approval budget (M2-03c).
+
+    The claim dict carries the *approved* budget (server-derived from the B16
+    record); the request's own numbers never widen it.  An empty/absent budget
+    is "not bounded" (no invented default).  A malformed non-empty shape is a
+    typed :class:`~acp_services.runtime.execution_limits.ExecutionLimitError`.
+    """
+    if not budget:
+        return ResourceLimits()
+    definition = budget.get("approved_budget")
+    if not isinstance(definition, Mapping) or not definition:
+        definition = budget.get("budget")
+    if not isinstance(definition, Mapping) or not definition:
+        return ResourceLimits()
+    # One mapping for every accepted budget vocabulary (v1 launch field, D09
+    # shape and the RPH PlanBudget a C-shaped Proposal carries).
+    from acp_services.runtime.budget_projection import (
+        BudgetRequestError,
+        budget_request_from_approval,
+    )
+
+    try:
+        return budget_request_from_approval(definition).resources
+    except BudgetRequestError as exc:
+        raise BudgetConfigurationError(exc.message) from exc
+
+
 class _ControllerReservationPort:
     """Claim-keyed reservation adapter over the one admission controller."""
 
@@ -297,9 +337,13 @@ class _ControllerReservationPort:
         idempotency_key: str,
         spec: Any,
         budget: Mapping[str, Any] | None = None,
+        principal_id: str | None = None,
+        key_id: str | None = None,
     ) -> str:
         reservation_id = "res_" + str(claim_id)
-        request = self._admission.request_for_spec(claim_id, spec)
+        request = self._admission.request_for_spec(
+            claim_id, spec, principal_id=principal_id, key_id=key_id, budget=budget
+        )
         if (
             self._admission.verified_project is not None
             and request.project_id != self._admission.verified_project
@@ -426,8 +470,27 @@ class LocalAdmission:
 
     # -- request construction -------------------------------------------
 
-    def request_for_spec(self, job_id: str, spec: Any) -> AdmissionRequest:
-        """Build the server-verified admission request for *spec*."""
+    def request_for_spec(
+        self,
+        job_id: str,
+        spec: Any,
+        *,
+        principal_id: str | None = None,
+        key_id: str | None = None,
+        budget: Mapping[str, Any] | None = None,
+    ) -> AdmissionRequest:
+        """Build the server-verified admission request for *spec*.
+
+        ``principal_id``/``key_id`` are the verified caller identity of this
+        command (M0-04).  When omitted the Controller-process default principal
+        applies — the legacy local-single path.  A client can never supply
+        either: they come from the resolved ``CommandIdentity``.
+
+        M2-03c: ``budget`` is the server-derived approval claim.  Its resolved
+        wall bound clamps ``duration_s`` so an admission-bound ceiling can never
+        exceed the approved deadline (a request asking for more is refused
+        before dispatch, never silently granted the deployment default).
+        """
         resources = getattr(spec, "resources", None)
         project = (
             str(getattr(spec, "project_id", None) or self.verified_project or "default").strip()
@@ -438,13 +501,19 @@ class LocalAdmission:
             duration = _walltime_s(
                 resources.get("walltime") if isinstance(resources, dict) else None
             )
+        approval_limits = approval_resource_limits(budget)
+        approved_wall = approval_limits.local_terminate_after_s
         if duration is None:
             duration = self.limits.default_walltime_s
+        if approved_wall is not None:
+            duration = min(int(duration), int(approved_wall))
         target = getattr(spec, "target_node", None)
+        resolved_key = None if key_id is None else (str(key_id).strip() or None)
         return AdmissionRequest(
-            principal_id=self.principal_id,
+            principal_id=str(principal_id or "").strip() or self.principal_id,
             project_id=project,
             job_id=str(job_id),
+            key_id=resolved_key,
             cores=_cores(resources),
             memory_mb=_memory_mb(resources.get("mem") if isinstance(resources, dict) else None),
             duration_s=int(duration),
@@ -462,9 +531,18 @@ class LocalAdmission:
         *,
         project_id: str | None = None,
         budget: Mapping[str, Any] | None = None,
+        principal_id: str | None = None,
+        key_id: str | None = None,
     ) -> AdmissionDecision:
-        """Pre-claim admission for the legacy (no-idempotency) submit path."""
-        request = self.request_for_spec(job_id, spec)
+        """Pre-claim admission for the legacy (no-idempotency) submit path.
+
+        ``principal_id``/``key_id`` are forwarded from the verified
+        ``CommandIdentity`` of the command (M0-04) so a multi-user HTTP submit
+        without an idempotency key is still attributed to the real principal.
+        """
+        request = self.request_for_spec(
+            job_id, spec, principal_id=principal_id, key_id=key_id, budget=budget
+        )
         project = str(project_id or request.project_id)
         if self.verified_project is not None and project != self.verified_project:
             return AdmissionDecision(
@@ -556,15 +634,29 @@ class LocalAdmission:
         reservation_id: str | None,
         *,
         decision: AdmissionDecision | None = None,
+        principal_id: str | None = None,
+        key_id: str | None = None,
     ) -> dict[str, Any]:
-        """Return the persisted ``result["admission"]`` projection."""
+        """Return the persisted ``result["admission"]`` projection.
+
+        The recorded principal/key are read back from the reservation row (the
+        ledger is the authority) and fall back to the caller-supplied verified
+        identity.  That keeps the persisted projection truthful per user instead
+        of echoing the Controller-process default.
+        """
+        reservation = None
+        if reservation_id:
+            reservation = self.controller.reservation(str(reservation_id))
+        recorded_principal = None if reservation is None else reservation.principal_id
+        recorded_key = None if reservation is None else reservation.key_id
         payload: dict[str, Any] = {
             "reservation_id": reservation_id,
             "enforcement": ADMISSION_ENFORCEMENT,
             "mode": (decision.mode if decision is not None else "quota-only"),
             "enforced": bool(decision.enforced) if decision is not None else True,
             "policy_version": self.limits.policy_version,
-            "principal_id": self.principal_id,
+            "principal_id": recorded_principal or principal_id or self.principal_id,
+            "key_id": recorded_key or key_id,
             "verified_project": self.verified_project,
             "multi_tenant_security": False,
         }
@@ -579,7 +671,29 @@ class LocalAdmission:
                     "units": dict(budget_reservation.units),
                     "state": budget_reservation.state,
                 }
+                # M2-03c: the resolved deadline is published from the *durable*
+                # policy projection, so a restart reads the same three surfaces
+                # instead of re-deriving them from the request.
+                payload["execution_limits"] = self._execution_limits_for_budget(
+                    budget_reservation.budget_id
+                )
         return payload
+
+    def _execution_limits_for_budget(self, budget_id: str) -> dict[str, Any]:
+        """The persisted deadline projection of one research budget (M2-03c)."""
+        projection = self.ledger.research_budget_projection(str(budget_id))
+        if projection is None:
+            return {}
+        limits = resource_limits_from_projection(projection.policy.shape)
+        return {
+            **limits.to_dict(),
+            "source": "research-budget-policy",
+            "wired_surfaces": {
+                "local_admission_duration_s": limits.local_terminate_after_s,
+                "cccp_resources_timeout_s": limits.ccp_resources_timeout_s,
+                "lsf_walltime": limits.lsf_walltime,
+            },
+        }
 
     def reservation_id_for_record(self, record: Any) -> str | None:
         result = getattr(record, "result", None)
@@ -592,14 +706,80 @@ class LocalAdmission:
         return None if reservation_id is None else str(reservation_id)
 
     def revalidate_job(self, record: Any) -> AdmissionDecision | None:
-        """Re-validate the job's reservation immediately before dispatch."""
+        """Re-validate the job's reservation immediately before dispatch.
+
+        M2-03b adds the *attempt* enforcement point: every attempt beyond the
+        first one the submit reservation already charged reserves its own
+        ``attempt`` unit through the same durable ledger, keyed by
+        ``attempt|<job>|<attempt>`` so a re-dispatch of the same attempt replays
+        the reservation instead of charging twice.  An exhausted attempt
+        allowance refuses the dispatch **before** any QC process exists.
+        """
         reservation_id = self.reservation_id_for_record(record)
         if reservation_id is None:
             return None
         decision = self.controller.revalidate(reservation_id)
         if decision.allowed:
+            attempt_decision = self.reserve_attempt(record, reservation_id=str(reservation_id))
+            if attempt_decision is not None and not attempt_decision.admitted:
+                self.controller.release(str(reservation_id))
+                return AdmissionDecision(
+                    admitted=False,
+                    reason_code=attempt_decision.reason_code,
+                    detail=attempt_decision.detail,
+                    mode=decision.mode,
+                    enforced=True,
+                    effective_bounds=decision.effective_bounds,
+                    policy_version=decision.policy_version,
+                    exceeded=(
+                        {
+                            "scope": "research_budget",
+                            "dimension": attempt_decision.exhausted_unit or "remaining",
+                            "requested": dict(attempt_decision.requested),
+                        },
+                    ),
+                )
             self.ledger.mark_research_budget_dispatched(str(reservation_id))
+            job_id = str(getattr(record, "id", "") or "")
+            if job_id:
+                # The idempotent path reserves before the task id exists; bind
+                # the admitted task to its reservation now so trusted usage can
+                # verify the (reservation, job) pair without a work directory.
+                self.ledger.bind_reservation_job(str(reservation_id), job_id)
+                # Record the dispatched attempt: an external usage receipt may
+                # not invent an attempt number that was never dispatched.
+                self.ledger.declare_attempt(
+                    job_id,
+                    int(getattr(record, "attempt", 1) or 1),
+                    reservation_id=str(reservation_id),
+                )
         return decision
+
+    def reserve_attempt(self, record: Any, *, reservation_id: str) -> Any | None:
+        """Reserve the worst-case ``attempt`` unit for this dispatch (M2-03b).
+
+        The submit reservation already charges the first attempt; attempt 2..N
+        each reserve one more unit before the attempt starts.  Returns ``None``
+        when the job has no research budget (legacy submit), so the behaviour of
+        a legacy job is unchanged.
+        """
+        budget_reservation = self.ledger.research_budget_for_admission(str(reservation_id))
+        if budget_reservation is None:
+            return None
+        job_id = str(getattr(record, "id", "") or "")
+        attempt = int(getattr(record, "attempt", 1) or 1)
+        if attempt <= 1 or not job_id:
+            return None
+        return self.ledger.reserve_research_budget(
+            budget_reservation.budget_id,
+            {"attempt": 1},
+            reservation_id=f"bres_attempt_{job_id}_{attempt}",
+            task_ref=job_id,
+            run_id="",
+            claim_id=f"attempt|{job_id}|{attempt}",
+            admission_reservation_id=str(reservation_id),
+            detail="attempt reservation before dispatch",
+        )
 
     def release_job(self, record: Any) -> bool:
         """Release the job's reservation and apply the frozen budget release rule."""
@@ -634,7 +814,14 @@ class LocalAdmission:
         return self.controller.release(str(reservation_id))
 
     def record_usage(self, record: Any) -> bool:
-        """Record trusted usage once for a terminal job (duplicate-safe)."""
+        """Book trusted usage once for a terminal job (duplicate-safe, M0-07).
+
+        The Controller is the internal producer: it derives the trusted source
+        itself and hands the settlement ledger the attempt execution identity it
+        observed.  Usage and the research-budget settlement are written in one
+        transaction by :meth:`ReservationLedger.record_usage_once` — there is no
+        separate settlement hop that could double-charge or be skipped.
+        """
         reservation_id = self.reservation_id_for_record(record)
         if reservation_id is None:
             return False
@@ -652,35 +839,41 @@ class LocalAdmission:
         if started is not None and finished is not None and finished >= started:
             seconds = int((finished - started).total_seconds())
         submission_id = None
+        release_id = ""
         result = getattr(record, "result", None)
         if isinstance(result, dict):
             remote = result.get("remote")
             if isinstance(remote, dict) and remote.get("submission_id") is not None:
                 submission_id = str(remote["submission_id"])
-        usage_id = usage_id_for(
-            str(record.id), int(getattr(record, "attempt", 1) or 1), submission_id
+            execution = result.get("execution")
+            if isinstance(execution, dict):
+                release_id = str(execution.get("release_id") or "")
+        attempt = int(getattr(record, "attempt", 1) or 1)
+        usage_id = usage_id_for(str(record.id), attempt, submission_id)
+        binding = ReceiptHistoryBinding(
+            job_id=str(record.id),
+            attempt=attempt,
+            submission_id=submission_id or "",
+            release_id=release_id,
+            reservation_id=str(reservation_id),
         )
+        budget_reservation = self.ledger.research_budget_for_admission(reservation_id)
         recorded = self.controller.record_usage_receipt(
             usage_id,
             reservation_id=reservation_id,
             job_id=str(record.id),
-            attempt=int(getattr(record, "attempt", 1) or 1),
+            attempt=attempt,
             cores=cores,
             seconds=seconds,
+            producer=UsageProducer.INTERNAL,
+            binding=binding,
+            counters=UsageUnitCounts(task_ref=1, attempt=attempt),
+            budget_id="" if budget_reservation is None else budget_reservation.budget_id,
+            budget_reservation_id=(
+                "" if budget_reservation is None else budget_reservation.reservation_id
+            ),
+            run_id=str(getattr(record, "id", "")),
         )
-        budget_reservation = self.ledger.research_budget_for_admission(reservation_id)
-        if budget_reservation is not None:
-            self.ledger.settle_research_budget(
-                budget_reservation.budget_id,
-                receipt_id=usage_id,
-                reservation_id=budget_reservation.reservation_id,
-                counters=UsageUnitCounts(
-                    task_ref=1,
-                    attempt=int(getattr(record, "attempt", 1) or 1),
-                ),
-                run_id=str(getattr(record, "id", "")),
-                trusted_source="controller-terminal-receipt",
-            )
         return recorded
 
     def reservation_port(self) -> ReservationPort:
@@ -689,8 +882,18 @@ class LocalAdmission:
     # -- projections ----------------------------------------------------
 
     def snapshot(self) -> dict[str, Any]:
-        """P2-compatible admission capability projection."""
+        """P2-compatible admission capability projection.
+
+        M1-04b/D09: ``quota_enforced`` is about *units and admission ceilings*
+        only.  The walltime claim is split explicitly through
+        ``limit_semantics`` so an admission-bound check can never be read as
+        "the process is terminated at the deadline".
+        """
+        from acp_services.runtime.enforcement_projection import enforcement_projection
+        from acp_services.runtime.execution_limits import execution_limits_statement
+
         occupancy = self.controller.occupancy()
+        limits_statement = execution_limits_statement()
         return {
             "enforcement": ADMISSION_ENFORCEMENT,
             "mode": "quota-only",
@@ -702,6 +905,18 @@ class LocalAdmission:
             "verified_project": self.verified_project,
             "policy_version": self.limits.policy_version,
             "limits": self.limits.to_dict(),
+            # Split semantics (never a single "hard limit enforced" claim):
+            #   admission-bound = enforced; process termination and queue
+            #   deadline = NOT_VERIFIED until their receipts exist.
+            "limit_semantics": {
+                row["limit"]: {"kind": row["kind"], "capability": row["capability"]}
+                for row in limits_statement["limits"]
+            },
+            "execution_limits": limits_statement,
+            # M2-03c: one composed projection (units + limits + approval policy +
+            # deadline wiring + the upgrade gate of every non-final row).
+            # ``enforcement`` stays the admission-enforcement token (P2 wire).
+            "enforcement_projection": enforcement_projection(),
             "occupancy": occupancy,
             "usage": self.controller.usage_totals(),
             "research_budget": {
@@ -721,10 +936,17 @@ def build_local_admission(
     *,
     limits: AdmissionLimits | None = None,
     verified_project: str | None = None,
+    principal_id: str = LOCAL_PRINCIPAL_ID,
 ) -> LocalAdmission:
-    """Build the Controller's single local admission composition."""
+    """Build the Controller's single local admission composition.
+
+    ``principal_id`` is the process-level default (the trusted local operator).
+    A multi-user HTTP/CLI command overrides it per request with the verified
+    ``CommandIdentity`` principal; the ledger row keeps the real principal.
+    """
     return LocalAdmission.build(
         db_path,
         limits=limits,
+        principal_id=principal_id,
         verified_project=verified_project,
     )

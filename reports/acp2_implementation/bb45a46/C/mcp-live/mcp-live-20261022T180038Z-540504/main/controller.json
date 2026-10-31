@@ -1,0 +1,40 @@
+{
+  "pid": {
+    "candidates": [
+      {
+        "alive": false,
+        "cmdline": "",
+        "cmdline_matches_port": false,
+        "pid": 81900,
+        "source": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B05/controller.pid"
+      },
+      {
+        "alive": false,
+        "cmdline": "",
+        "cmdline_matches_port": false,
+        "pid": 255506,
+        "source": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B06/controller.pid"
+      },
+      {
+        "alive": false,
+        "cmdline": "",
+        "cmdline_matches_port": false,
+        "pid": 365514,
+        "source": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B07/topology/controller.pid"
+      },
+      {
+        "alive": false,
+        "cmdline": "",
+        "cmdline_matches_port": false,
+        "pid": 448951,
+        "source": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B08/controller.pid"
+      }
+    ],
+    "url": "http://127.0.0.1:18765",
+    "verified_pid": null,
+    "verified_source": null
+  },
+  "reachable": false,
+  "reason": "URLError: <urlopen error [Errno 111] Connection refused>",
+  "url": "http://127.0.0.1:18765"
+}

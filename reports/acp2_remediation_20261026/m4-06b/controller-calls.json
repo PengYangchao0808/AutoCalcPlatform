@@ -1,0 +1,236 @@
+[
+  {
+    "method": "GET",
+    "ms": 242.17,
+    "path": "/api/status",
+    "status": 200
+  },
+  {
+    "method": "GET",
+    "ms": 16.23,
+    "path": "/api/v2/science/capabilities?project_id=project_m406b_alpha",
+    "status": 200
+  },
+  {
+    "method": "GET",
+    "ms": 12.86,
+    "path": "/api/v2/science/capability-forms?project_id=project_m406b_alpha",
+    "status": 200
+  },
+  {
+    "method": "GET",
+    "ms": 13.26,
+    "path": "/api/v2/science/capabilities?project_id=project_m406b_alpha",
+    "status": 200
+  },
+  {
+    "method": "GET",
+    "ms": 12.44,
+    "path": "/api/v2/science/capability-forms?project_id=project_m406b_alpha",
+    "status": 200
+  },
+  {
+    "method": "GET",
+    "ms": 34.16,
+    "path": "/api/v1/jobs/m406b-alpha-task/files/RESULT/native_artifact.txt",
+    "status": 200
+  },
+  {
+    "method": "GET",
+    "ms": 11.77,
+    "path": "/api/v1/jobs/m406b-alpha-task/files/RESULT/native_artifact.txt",
+    "status": 404
+  },
+  {
+    "method": "POST",
+    "ms": 23.72,
+    "path": "/api/v1/jobs/m406b-alpha-task/prepare",
+    "status": 404
+  },
+  {
+    "method": "GET",
+    "ms": 11.53,
+    "path": "/api/v1/jobs/m406b-alpha-task/files/RESULT/native_artifact.txt",
+    "status": 404
+  },
+  {
+    "method": "POST",
+    "ms": 12.86,
+    "path": "/api/v1/jobs/m406b-alpha-task/prepare",
+    "status": 404
+  },
+  {
+    "method": "GET",
+    "ms": 17.13,
+    "path": "/api/v1/jobs/m406b-beta-task/files/RESULT/native_artifact.txt",
+    "status": 200
+  },
+  {
+    "method": "GET",
+    "ms": 10.32,
+    "path": "/api/v1/jobs/m406b-beta-task/files/RESULT/native_artifact.txt",
+    "status": 404
+  },
+  {
+    "method": "POST",
+    "ms": 11.51,
+    "path": "/api/v1/jobs/m406b-beta-task/prepare",
+    "status": 404
+  },
+  {
+    "method": "GET",
+    "ms": 11.13,
+    "path": "/api/v1/jobs/m406b-beta-task/files/RESULT/native_artifact.txt",
+    "status": 404
+  },
+  {
+    "method": "POST",
+    "ms": 10.96,
+    "path": "/api/v1/jobs/m406b-beta-task/prepare",
+    "status": 404
+  },
+  {
+    "method": "GET",
+    "ms": 14.4,
+    "path": "/api/v1/jobs/m406b-gamma-task/files/RESULT/native_artifact.txt",
+    "status": 200
+  },
+  {
+    "method": "GET",
+    "ms": 9.51,
+    "path": "/api/v1/jobs/m406b-gamma-task/files/RESULT/native_artifact.txt",
+    "status": 404
+  },
+  {
+    "method": "POST",
+    "ms": 13.23,
+    "path": "/api/v1/jobs/m406b-gamma-task/prepare",
+    "status": 404
+  },
+  {
+    "method": "GET",
+    "ms": 8.52,
+    "path": "/api/v1/jobs/m406b-gamma-task/files/RESULT/native_artifact.txt",
+    "status": 404
+  },
+  {
+    "method": "POST",
+    "ms": 9.53,
+    "path": "/api/v1/jobs/m406b-gamma-task/prepare",
+    "status": 404
+  },
+  {
+    "method": "GET",
+    "ms": 12.86,
+    "path": "/api/v2/science/capability-forms?project_id=project_m406b_alpha",
+    "status": 200
+  },
+  {
+    "method": "GET",
+    "ms": 11.62,
+    "path": "/api/v2/science/capability-forms?project_id=project_m406b_beta",
+    "status": 200
+  },
+  {
+    "method": "GET",
+    "ms": 11.74,
+    "path": "/api/v2/science/capability-forms?project_id=project_m406b_gamma",
+    "status": 200
+  },
+  {
+    "method": "GET",
+    "ms": 9.19,
+    "path": "/api/v2/science/capability-forms?project_id=project_m406b_beta",
+    "status": 404
+  },
+  {
+    "method": "GET",
+    "ms": 9.51,
+    "path": "/api/v2/science/capability-forms?project_id=project_m406b_gamma",
+    "status": 404
+  },
+  {
+    "method": "GET",
+    "ms": 10.47,
+    "path": "/api/v2/science/capability-forms?project_id=project_m406b_alpha",
+    "status": 404
+  },
+  {
+    "method": "GET",
+    "ms": 9.28,
+    "path": "/api/v2/science/capability-forms?project_id=project_m406b_gamma",
+    "status": 404
+  },
+  {
+    "method": "GET",
+    "ms": 8.56,
+    "path": "/api/v2/science/capability-forms?project_id=project_m406b_alpha",
+    "status": 404
+  },
+  {
+    "method": "GET",
+    "ms": 8.26,
+    "path": "/api/v2/science/capability-forms?project_id=project_m406b_beta",
+    "status": 404
+  },
+  {
+    "method": "GET",
+    "ms": 14.43,
+    "path": "/api/v1/jobs/m406b-alpha-task/files/WORK/00_RUNTIME/frozen/plugin_snapshot/descriptor.json",
+    "status": 200
+  },
+  {
+    "method": "GET",
+    "ms": 8.9,
+    "path": "/api/v1/jobs/m406b-alpha-task/files/WORK/00_RUNTIME/frozen/plugin_snapshot/descriptor.json",
+    "status": 404
+  },
+  {
+    "method": "GET",
+    "ms": 14.0,
+    "path": "/api/v1/jobs/m406b-beta-task/files/WORK/00_RUNTIME/frozen/plugin_snapshot/descriptor.json",
+    "status": 200
+  },
+  {
+    "method": "GET",
+    "ms": 9.19,
+    "path": "/api/v1/jobs/m406b-beta-task/files/WORK/00_RUNTIME/frozen/plugin_snapshot/descriptor.json",
+    "status": 404
+  },
+  {
+    "method": "GET",
+    "ms": 14.76,
+    "path": "/api/v1/jobs/m406b-gamma-task/files/WORK/00_RUNTIME/frozen/plugin_snapshot/descriptor.json",
+    "status": 200
+  },
+  {
+    "method": "GET",
+    "ms": 8.8,
+    "path": "/api/v1/jobs/m406b-gamma-task/files/WORK/00_RUNTIME/frozen/plugin_snapshot/descriptor.json",
+    "status": 404
+  },
+  {
+    "method": "GET",
+    "ms": 9.82,
+    "path": "/api/identity",
+    "status": 200
+  },
+  {
+    "method": "GET",
+    "ms": 15.73,
+    "path": "/api/v1/jobs/m406b-alpha-task",
+    "status": 200
+  },
+  {
+    "method": "GET",
+    "ms": 3.06,
+    "path": "/api/identity",
+    "status": 401
+  },
+  {
+    "method": "GET",
+    "ms": 2.92,
+    "path": "/api/v1/jobs/m406b-alpha-task",
+    "status": 401
+  }
+]

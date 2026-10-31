@@ -21,7 +21,7 @@
 
 Environment: `ACP_RUN_ROOT=/tmp/todo79_runs`, cwd `/tmp/todo79_work`
 (no project config), isolated explicit config `/tmp/todo79_home/.cccp.yaml`
-(orca `/home/<user>/orca611/orca`, xtb `6.7.1`), OpenMPI bin on PATH.
+(orca `/home/xieningke/orca611/orca`, xtb `6.7.1`), OpenMPI bin on PATH.
 
 ### D2 — real ORCA recover (before: `! default def2-TZVPP` + GNOME fallback)
 

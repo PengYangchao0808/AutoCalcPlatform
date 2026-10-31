@@ -42,7 +42,7 @@
   "default_enabled": false,
   "science_version_range": ">=1,<2",
   "entry_point_group_version": 1,
-  "distribution_digest": "sha256:fc23d7bb3540b3657f772d087bfbb0646cbdc6fcfc8472d614af971ed8e52203",
+  "distribution_digest": "sha256:107e10b24a4674e5f96b5b084ef5f0afcc6c43ffdf0bf4bb55b1df07e0a1fc85",
   "fixture_evidence": [
     {
       "fixture_id": "acp2-external-native-singlepoint",

@@ -47,9 +47,9 @@ NOTE: compileall proves SYNTAX ONLY. It does NOT prove imports or dependency ava
 
 --- [5] import/dependency smoke in a clean interpreter (the real import proof) ---
 $ python3.11 -c "import acp, cccp, acp_services; ..."
-acp: OK file=<repo>/src/acp/__init__.py
-cccp: OK file=<repo>/src/cccp/__init__.py
-acp_services: OK file=<repo>/src/acp_services/__init__.py
+acp: OK file=/ACPServer/AutoCalcPlatform/src/acp/__init__.py
+cccp: OK file=/ACPServer/AutoCalcPlatform/src/cccp/__init__.py
+acp_services: OK file=/ACPServer/AutoCalcPlatform/src/acp_services/__init__.py
 acp.cli / acp.api.server / cccp.software / acp_services.runtime.execution_chain: OK
 ENABLED_WORKFLOWS = ['OrcaGradient', 'casscf', 'frequency', 'irc', 'optimize', 'scan', 'singlepoint', 'xtb_optimize']
 executable = /usr/bin/python3.11 | version = 3.11.13

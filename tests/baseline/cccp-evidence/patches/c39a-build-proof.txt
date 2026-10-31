@@ -1,6 +1,6 @@
 ########################################################################
 # C08-s0 (T56 / C39a) first-batch build spec — raw evidence log
-# generated: 2026-10-18T12:49:38Z  host: redacted-host
+# generated: 2026-10-18T12:49:38Z  host: workstation
 # interpreter: /usr/bin/python3.11 (Python 3.11.13)
 ########################################################################
 
@@ -25,28 +25,28 @@
 ?? tests/fixtures/science_products/
 
 == [2] asset digests (sha256sum) ==
-bb8f798c1dd898811801a9fdd9f4bf037e434968f66e050acf3fb616a7652a65  <repo>/src/acp/nmr/models/atomic_reps.gz
-246025abffd97e32cc405d8956deaf3fd03e7426ff688e7052340135e79dc309  <repo>/src/acp/nmr/models/c_w_kde_mean_s_0.025.p
-c59bd8d3218b28db0e5dde3cf70911688ce530351c45f7930a4b470bd9d200dd  <repo>/src/acp/nmr/models/folded_scaled_errors.p
-e5daae0f7b525632beed6cbd9b972b0be466f33e28c5cdb7efd1f1caaafb6c64  <repo>/src/acp/nmr/models/frag_reps.gz
-2d523808d3859e8a48c695f5dbf8f9b9fe1fd3f02ee2dc70c8016414cf8f383e  <repo>/src/acp/nmr/models/i_w_kde_mean_s_0.025.p
-55bc399b93914549e797365ac07b46527775f9aa28275ccb9fe43c4ebaf08146  <repo>/src/acp/nmr/models/LICENSE-DP5
-f99522ae9c481ceacba628e994cdd8a958b6febaa7ae66136020849cc6925ad0  <repo>/src/acp/nmr/models/NOTICE.md
-5ff2429aa73ade13aa6a98b3cc6433cc8eedd9d2a687c6b9fa907be03be7dcf7  <repo>/src/acp/nmr/models/tms_references.txt
+bb8f798c1dd898811801a9fdd9f4bf037e434968f66e050acf3fb616a7652a65  /ACPServer/AutoCalcPlatform/src/acp/nmr/models/atomic_reps.gz
+246025abffd97e32cc405d8956deaf3fd03e7426ff688e7052340135e79dc309  /ACPServer/AutoCalcPlatform/src/acp/nmr/models/c_w_kde_mean_s_0.025.p
+c59bd8d3218b28db0e5dde3cf70911688ce530351c45f7930a4b470bd9d200dd  /ACPServer/AutoCalcPlatform/src/acp/nmr/models/folded_scaled_errors.p
+e5daae0f7b525632beed6cbd9b972b0be466f33e28c5cdb7efd1f1caaafb6c64  /ACPServer/AutoCalcPlatform/src/acp/nmr/models/frag_reps.gz
+2d523808d3859e8a48c695f5dbf8f9b9fe1fd3f02ee2dc70c8016414cf8f383e  /ACPServer/AutoCalcPlatform/src/acp/nmr/models/i_w_kde_mean_s_0.025.p
+55bc399b93914549e797365ac07b46527775f9aa28275ccb9fe43c4ebaf08146  /ACPServer/AutoCalcPlatform/src/acp/nmr/models/LICENSE-DP5
+f99522ae9c481ceacba628e994cdd8a958b6febaa7ae66136020849cc6925ad0  /ACPServer/AutoCalcPlatform/src/acp/nmr/models/NOTICE.md
+5ff2429aa73ade13aa6a98b3cc6433cc8eedd9d2a687c6b9fa907be03be7dcf7  /ACPServer/AutoCalcPlatform/src/acp/nmr/models/tms_references.txt
 
 == [3] asset sizes (stat -c '%s %n') ==
-22171041 <repo>/src/acp/nmr/models/atomic_reps.gz
-79518 <repo>/src/acp/nmr/models/c_w_kde_mean_s_0.025.p
-851489 <repo>/src/acp/nmr/models/folded_scaled_errors.p
-18044581 <repo>/src/acp/nmr/models/frag_reps.gz
-24353668 <repo>/src/acp/nmr/models/i_w_kde_mean_s_0.025.p
-1175 <repo>/src/acp/nmr/models/LICENSE-DP5
-3204 <repo>/src/acp/nmr/models/NOTICE.md
-4578 <repo>/src/acp/nmr/models/tms_references.txt
+22171041 /ACPServer/AutoCalcPlatform/src/acp/nmr/models/atomic_reps.gz
+79518 /ACPServer/AutoCalcPlatform/src/acp/nmr/models/c_w_kde_mean_s_0.025.p
+851489 /ACPServer/AutoCalcPlatform/src/acp/nmr/models/folded_scaled_errors.p
+18044581 /ACPServer/AutoCalcPlatform/src/acp/nmr/models/frag_reps.gz
+24353668 /ACPServer/AutoCalcPlatform/src/acp/nmr/models/i_w_kde_mean_s_0.025.p
+1175 /ACPServer/AutoCalcPlatform/src/acp/nmr/models/LICENSE-DP5
+3204 /ACPServer/AutoCalcPlatform/src/acp/nmr/models/NOTICE.md
+4578 /ACPServer/AutoCalcPlatform/src/acp/nmr/models/tms_references.txt
 
 == [4] directory apparent size (du -sb / du -sh) ==
-65513350	<repo>/src/acp/nmr/models
-63M	<repo>/src/acp/nmr/models
+65513350	/ACPServer/AutoCalcPlatform/src/acp/nmr/models
+63M	/ACPServer/AutoCalcPlatform/src/acp/nmr/models
 
 == [4b] sum of file sizes only vs du (4096 = directory entry) ==
 sum_file_bytes= 65509254 count= 8
@@ -63,7 +63,7 @@ CHECK_EXIT=0
  1 file changed, 10 insertions(+)
 
 == [7] patch sha256 ==
-0059eb6b20d0ea05b231fdf3e8d0b854718b166789d59e6f2dd1ff23621f3450  <repo>/tests/baseline/cccp-evidence/patches/c39a-pyproject-first-batch.patch
+0059eb6b20d0ea05b231fdf3e8d0b854718b166789d59e6f2dd1ff23621f3450  /ACPServer/AutoCalcPlatform/tests/baseline/cccp-evidence/patches/c39a-pyproject-first-batch.patch
 
 == [8] toolchain ==
 build 1.6.1 setuptools 65.5.1

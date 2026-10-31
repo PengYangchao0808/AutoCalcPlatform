@@ -1,4 +1,4 @@
-$ <repo>/reports/acp2_implementation/bb45a46/B/B25/venvs/web/bin/python -c 
+$ /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/bin/python -c 
 import json, subprocess, sys
 argv = [sys.argv[1], "mcp", "serve", "--controller", sys.argv[2]]
 proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -30,7 +30,7 @@ finally:
         proc.kill()
     err = proc.stderr.read().decode(errors="replace")
     open(sys.argv[3], "w", encoding="utf-8").write(err)
- <repo>/reports/acp2_implementation/bb45a46/B/B25/venvs/web/bin/acp http://127.0.0.1:51245 <repo>/reports/acp2_implementation/bb45a46/B/B25/logs/mcp-server.stderr.log
+ /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/venvs/web/bin/acp http://127.0.0.1:51245 /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B25/logs/mcp-server.stderr.log
 exit=0
 --- stdout ---
 {"protocol": "2025-06-18", "tools": ["acp_analyze", "acp_cancel", "acp_capabilities", "acp_preflight", "acp_prepare_artifact", "acp_read_artifact", "acp_status", "acp_submit"]}

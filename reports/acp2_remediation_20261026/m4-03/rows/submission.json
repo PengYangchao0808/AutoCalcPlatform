@@ -1,0 +1,59 @@
+{
+  "data": {
+    "bjobs_row": {
+      "exec_host": "workstation",
+      "from_host": "workstation",
+      "job_id": "1",
+      "job_name": "*d8baf6d9a",
+      "queue": "normal",
+      "raw": "1       xiening RUN   normal     workstation workstation *d8baf6d9a Oct 28 01:15",
+      "stat": "RUN",
+      "submit_time": "Oct 28 01:15",
+      "user": "xiening"
+    },
+    "checks": {
+      "exec_host_matches_node": true,
+      "http_201": true,
+      "job_name_matches_submission_id": true,
+      "new_lsf_job_created": true,
+      "no_walltime_for_unbounded_approval": true,
+      "node_tags_in_spec": true,
+      "persisted_lsf_id": true,
+      "queue_matches_frozen_target": true,
+      "release_bound": true,
+      "remote_dir_matches": true,
+      "target_in_spec": true
+    },
+    "duration_s": 56.24,
+    "frozen_spec": {
+      "execution_mode": "remote",
+      "node_tags": [
+        "xtb"
+      ],
+      "target_node": "lsf-local",
+      "workflow": "xtb_optimize"
+    },
+    "job_id": "20261028_011442_001_m403-submission",
+    "lsf_job_id": "1",
+    "release_id": "2d1ab37a0f988933",
+    "remote_start_observed": false,
+    "submit_directives": {
+      "#BSUB -J": "acp_sub_41332c2d8baf6d9a",
+      "#BSUB -M": "8808038",
+      "#BSUB -e": "/ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028T011416/CCO_xtb_optimize/stderr.log",
+      "#BSUB -n": "4",
+      "#BSUB -o": "/ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028T011416/CCO_xtb_optimize/stdout.log",
+      "#BSUB -q": "normal"
+    },
+    "terminal": "completed"
+  },
+  "detail": "real bsub 1 on normal/workstation matches the frozen JobSpec; release 2d1ab37a0f988933",
+  "evidence": [
+    "native/submit-1.lsf",
+    "native/bjobs-1.txt"
+  ],
+  "name": "submission",
+  "recorded_at": "2026-10-27T17:15:32.188272Z",
+  "schema": "acp2.m403.acceptance.v1",
+  "status": "PASS"
+}

@@ -31,7 +31,7 @@
   },
   "fencing_token": "d650cf7c3735f9d7cb35dcfe23082e2e",
   "job_id": "20261023_223703_002_b26a-fix4-http",
-  "owner": "local:redacted-host:1690622:1",
+  "owner": "local:workstation:1690622:1",
   "plan_identity": "v2:9bc40cd8ffd921c7e9e966978f436614",
   "receipt_version": 1,
   "release_digest": "b59ec6b6b502ed70104baacb17b41873769813def34224840017792e438900b3",

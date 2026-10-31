@@ -1,0 +1,10 @@
+{
+  "adapter_calls": 1,
+  "transmitted_sources": [
+    "XYZ-A"
+  ],
+  "second_requested_source": "XYZ-B",
+  "second_received_source": "XYZ-A",
+  "second_received_fingerprint": "fingerprint-A",
+  "caveat": "In-flight coalescing only. Completed requests are reloaded; this is not persistent cache reuse."
+}

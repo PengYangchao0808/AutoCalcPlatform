@@ -546,12 +546,28 @@ def _complete_marker_ok(
     return data.get("release_id") == release_id
 
 
+#: Above this many files a single batched ``sha256sum`` per chunk replaces the
+#: per-file round trips (same comparison, far less latency).  Small manifests
+#: keep the primitive path so the unit-test fakes stay authoritative.
+_BATCH_VERIFY_THRESHOLD = 32
+
+
 def _verify_release_dir(
     node: RemoteNode, manifest: ReleaseManifest, directory: str, stager: FileStager
 ) -> bool:
     """Per-file ``sha256sum`` comparison of *directory* against *manifest*."""
+    targets = {rel: posixpath.join(directory, rel) for rel in manifest.files}
+    if len(targets) > _BATCH_VERIFY_THRESHOLD:
+        batch = getattr(stager, "remote_sha256_many", None)
+        if batch is not None:
+            digests = batch(node, list(targets.values()))
+            if digests is not None:
+                return all(
+                    digests.get(targets[rel]) == str(meta["sha256"])
+                    for rel, meta in manifest.files.items()
+                )
     for rel, meta in manifest.files.items():
-        target = posixpath.join(directory, rel)
+        target = targets[rel]
         try:
             digest = stager.remote_sha256(node, target)
         except OSError:
@@ -657,6 +673,14 @@ def _release_staging_claim(node: RemoteNode, release_id: str) -> None:
         _ACTIVE_STAGING.pop((node.name, release_id), None)
 
 
+#: Files per batched SFTP session / batched sha256sum invocation.
+_UPLOAD_CHUNK = 64
+
+
+def _chunks(items: list[Any], size: int) -> list[list[Any]]:
+    return [items[start : start + size] for start in range(0, len(items), size)]
+
+
 def _upload_missing(
     node: RemoteNode,
     manifest: ReleaseManifest,
@@ -666,20 +690,41 @@ def _upload_missing(
     *,
     force: bool,
 ) -> int:
-    """Upload manifest files into *staging*, skipping verified ones."""
-    uploaded = 0
+    """Upload manifest files into *staging*, skipping verified ones.
+
+    Large manifests use the batched primitives (one ``sha256sum`` and one SFTP
+    session per chunk): a 600-file release otherwise costs ~600 SSH round trips
+    before a single ``bsub``.  Small manifests keep the per-file primitives so
+    the unit-test fakes stay authoritative.
+    """
+    targets = {rel: posixpath.join(staging, rel) for rel in manifest.files}
+    batched = len(targets) > _BATCH_VERIFY_THRESHOLD
+    existing: dict[str, str] = {}
+    if batched and not force:
+        batch = getattr(stager, "remote_sha256_many", None)
+        if batch is not None:
+            existing = batch(node, list(targets.values())) or {}
+    pending: list[tuple[Path, str]] = []
     for rel, meta in manifest.files.items():
-        remote = posixpath.join(staging, rel)
+        remote = targets[rel]
         if not force:
-            try:
-                current = stager.remote_sha256(node, remote)
-            except OSError:
-                current = None
+            current = existing.get(remote)
+            if current is None and not batched:
+                try:
+                    current = stager.remote_sha256(node, remote)
+                except OSError:
+                    current = None
             if current == str(meta["sha256"]):
                 continue
-        stager.upload_file(node, resolve_sync_source(project_root, rel), remote)
-        uploaded += 1
-    return uploaded
+        pending.append((resolve_sync_source(project_root, rel), remote))
+    upload_many = getattr(stager, "upload_files", None)
+    if upload_many is None:
+        for local, remote in pending:
+            stager.upload_file(node, local, remote)
+    else:
+        for chunk in _chunks(pending, _UPLOAD_CHUNK):
+            upload_many(node, chunk)
+    return len(pending)
 
 
 # ---------------------------------------------------------------------- #

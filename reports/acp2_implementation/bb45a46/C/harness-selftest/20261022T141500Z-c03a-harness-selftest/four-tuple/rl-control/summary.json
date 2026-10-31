@@ -1,0 +1,10 @@
+{
+  "candidate_revision": "450f2cb8fe1f5b16264b3fe878a021e77f02eba9",
+  "contract_version": "1.0.0",
+  "generated_at": "2026-10-22T13:45:48Z",
+  "runs": [
+    "experience_research-loop-live-experience_control-20261022T141500Z-c03a-harness-selftest.json"
+  ],
+  "schema": "acp2.acceptance.summary.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema"
+}

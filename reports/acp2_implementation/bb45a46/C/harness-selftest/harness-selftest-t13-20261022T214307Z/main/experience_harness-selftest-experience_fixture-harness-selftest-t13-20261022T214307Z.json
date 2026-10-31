@@ -1,0 +1,66 @@
+{
+  "artifacts": [
+    {
+      "path": "pytest.log",
+      "sha256": "ada987c472bd501920443b11a53c3768f0ebe8aa55d3c353e18c34b0c2b1901f",
+      "size_bytes": 99
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "rc=0 passed=37 failed=0",
+      "name": "harness_selftest.pytest",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "2b56235a9900b73ce7d7f52ec260f9ea4a4b7cec",
+    "harness_revision": "3d2336581fe60cd8ba63fbb40d6e235f52327d751b7c4ee04c91ba3818c376a6",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "2b56235a9900b73ce7d7f52ec260f9ea4a4b7cec",
+  "command": [
+    "/ACPServer/acp2-development/venvs/c/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "harness-selftest",
+    "--timeout",
+    "120",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/harness-selftest/harness-selftest-t13-20261022T214307Z/main"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/acp2-development/C",
+  "evidence_kind": "fixture",
+  "exit_code": 0,
+  "extensions": {
+    "experience.harness_contract_revision": "3d2336581fe60cd8ba63fbb40d6e235f52327d751b7c4ee04c91ba3818c376a6",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/c/bin/python",
+    "experience.mode": "fixture",
+    "experience.product_import": "/ACPServer/acp2-development/C/src/acp/__init__.py",
+    "experience.run_id": "harness-selftest-t13-20261022T214307Z",
+    "experience.scenario_key": "harness-selftest",
+    "experience.subcase": null,
+    "experience.test_revision": "2b56235a9900b73ce7d7f52ec260f9ea4a4b7cec"
+  },
+  "finished_at": "2026-10-22T21:43:08Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:fixture",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "harness-selftest-t13-20261022T214307Z",
+  "scenario": "experience:harness-selftest",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T21:43:07Z",
+  "submission_id": null,
+  "usage": null
+}

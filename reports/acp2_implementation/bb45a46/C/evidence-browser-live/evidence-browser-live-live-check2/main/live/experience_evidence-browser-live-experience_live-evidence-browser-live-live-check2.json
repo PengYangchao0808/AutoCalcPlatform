@@ -1,0 +1,60 @@
+{
+  "artifacts": [],
+  "assertions": [
+    {
+      "detail": "upstream_not_delivered",
+      "name": "prerequisite:upstream_not_delivered",
+      "status": "NOT_VERIFIED"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "712af267423a573d262c4649b8dabbffd53e568d",
+    "harness_revision": "072e05cd857498c11eea50703343386080d9024802885aa52ce45432f2ea544f",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "712af267423a573d262c4649b8dabbffd53e568d",
+  "command": [
+    "/ACPServer/acp2-development/venvs/integration/bin/python",
+    "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "evidence-browser-live",
+    "--timeout",
+    "600",
+    "--out",
+    "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/C/evidence-browser-live/evidence-browser-live-live-check2/main/live"
+  ],
+  "contract_version": "1.1.0",
+  "cwd": "/ACPServer/AutoCalcPlatform",
+  "evidence_kind": "live",
+  "exit_code": 2,
+  "extensions": {
+    "experience.harness_contract_revision": "072e05cd857498c11eea50703343386080d9024802885aa52ce45432f2ea544f",
+    "experience.harness_path": "/ACPServer/acp2-development/C/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/ACPServer/acp2-development/venvs/integration/bin/python",
+    "experience.mode": "live",
+    "experience.product_import": "/ACPServer/acp2-development/integration/src/acp/__init__.py",
+    "experience.run_id": "evidence-browser-live-live-check2",
+    "experience.scenario_key": "evidence-browser-live",
+    "experience.subcase": null,
+    "experience.test_revision": "712af267423a573d262c4649b8dabbffd53e568d"
+  },
+  "finished_at": "2026-10-22T21:11:29Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "experience:live",
+  "reason": "upstream_not_delivered",
+  "release_id": null,
+  "result": "NOT_VERIFIED",
+  "run_id": "evidence-browser-live-live-check2",
+  "scenario": "experience:evidence-browser-live",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-22T21:11:29Z",
+  "submission_id": null,
+  "usage": null
+}

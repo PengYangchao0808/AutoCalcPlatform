@@ -81,6 +81,26 @@ One JSON ledger lives at `$ACP2_DATA_ROOT/budget/ledger.json` (lock file
   charged as `restart_recovered` (one request, estimated input, unknown output)
   so a crash cannot refund a provider call.
 
+## 3a. Platform mapping (D09 / M1-04b)
+
+The proxy caps above are a **client-side throttle**. They are never a platform
+enforcement claim; the platform mapping is frozen in
+`src/acp_services/runtime/execution_limits.py::EXECUTION_LIMITS`:
+
+| RPH/plan field | platform meaning | capability |
+| --- | --- | --- |
+| `wall_seconds` | `ResourceBounds`/timeout → local termination + CCCP `resources.timeout_s` (subprocess level) + LSF `-W` | `walltime_admission_bound` = enforced; `walltime_process_termination` = NOT_VERIFIED until the termination receipt (M1-05/M4-03) |
+| `queue_seconds` | queue deadline (absolute, from admission) | NOT_VERIFIED until the expiry→terminal transition |
+| `input_tokens` / `output_tokens` | recorded-only usage; the throttle stays in this proxy | recorded-only (`model_token_enforcement` = NOT_VERIFIED) |
+| `core_hours` | recorded-only cumulative usage | recorded-only |
+
+The single planner/bridge mapper is `toResourceLimits()` in
+`rph/packages/dsh-bundle/skills/models.ts`: it drops none of the four fields and
+throws `BudgetShapeError` for an unknown non-empty shape. `wall_seconds = 0`
+means "unbounded" and maps to `null` (an unbounded run is never rendered as a
+limit), which is why `toPlatformBudget()` returns `timeout_s = null` rather than
+inventing one.
+
 ## 4. Caps and pre-request interception
 
 Frozen per-scenario caps (plan C budget table):

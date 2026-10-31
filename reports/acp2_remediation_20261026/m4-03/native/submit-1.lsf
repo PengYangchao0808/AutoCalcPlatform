@@ -1,0 +1,16 @@
+#!/bin/bash
+#BSUB -J acp_sub_41332c2d8baf6d9a
+#BSUB -q normal
+#BSUB -n 4
+#BSUB -M 8808038
+#BSUB -o /ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028T011416/CCO_xtb_optimize/stdout.log
+#BSUB -e /ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028T011416/CCO_xtb_optimize/stderr.log
+
+_acp_record_exit() { [ -f .exit_code ] || echo "$?" > .exit_code; }
+trap 'exit $?' USR2 TERM INT HUP
+trap _acp_record_exit EXIT
+
+export PYTHONPATH="/ACPServer/acp2-runs/remediation/m4-03/remote_code/releases/2d1ab37a0f988933/src:$PYTHONPATH"
+cd "/ACPServer/acp2-runs/remediation/m4-03/remote_jobs/M4-03_LSF_matrix_20261028T011416/CCO_xtb_optimize"
+/usr/bin/python3.11 -m acp.cli run xtb_optimize --input input.xyz --output . --name CCO_xtb_optimize --nproc 4 --mem 8GB
+echo $? > .exit_code

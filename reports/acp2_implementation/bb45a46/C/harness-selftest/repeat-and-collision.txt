@@ -1,0 +1,13 @@
+# c_accept run-id and append-only proof
+
+first:  baseline-20261022T140726Z-112271  (matrix row 1)
+second: baseline-20261022T140927Z-117944  (repeat c_accept baseline 300)
+        -> different run_id, both exit 0 / PASS
+
+fixed ACP2_RUN_ID=baseline-20261022T140927Z-117944 c_accept baseline 300
+        rc=3
+        c_accept: refusing non-empty run directory:
+          .../C/baseline/baseline-20261022T140927Z-117944/main
+
+Conclusion: repeated calls create a new run_id; reusing a fixed run id into a
+non-empty leaf exits 3 and never overwrites the existing receipt.

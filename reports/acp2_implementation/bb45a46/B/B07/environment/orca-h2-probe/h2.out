@@ -172,9 +172,9 @@ interface, adapt or use parts of their codes:
 
   ***********************************
   * Starting time: Thu Oct 22 23:14:00 2026
-  * Host name:     redacted-host
+  * Host name:     workstation
   * Process ID:    326506
-  * Working dir.:  <acp2-dev>/data/b/tmp/b07-orca-probe-20261022T151400Z
+  * Working dir.:  /ACPServer/acp2-development/data/b/tmp/b07-orca-probe-20261022T151400Z
   ***********************************
 
 ================================================================================

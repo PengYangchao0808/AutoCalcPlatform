@@ -1,0 +1,163 @@
+{
+  "claims": [
+    {
+      "claim_id": "thermochemistry.weight_policy",
+      "limitations": [
+        "ensemble_scope"
+      ],
+      "missing_checks": [],
+      "scope": {
+        "applicability": "ensemble_specific",
+        "conditions": "mode=raw; tolerance=1e-09",
+        "not_in_scope": [],
+        "subject": "m406b-thermo-crossdomain-ensemble#weights"
+      },
+      "source_refs": [
+        {
+          "artifact_path": "component_energy_table.json",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "0fc68495f561e16142442267f51810180d027c3e152f4695ee6bd82ca76e898d"
+          },
+          "role": "component_energy_table",
+          "units": "hartree"
+        }
+      ],
+      "statement": "The supplied component weights satisfy the explicit policy; the supplied form, tolerance, sum and resulting normalized weights are recorded.",
+      "status": "supported",
+      "validator": {
+        "kind": "deterministic",
+        "validator_id": "check.ensemble_weight_policy",
+        "validator_version": "1.0.0"
+      }
+    },
+    {
+      "claim_id": "thermochemistry.ensemble_completeness",
+      "limitations": [
+        "ensemble_scope"
+      ],
+      "missing_checks": [],
+      "scope": {
+        "applicability": "ensemble_specific",
+        "conditions": "components=1",
+        "not_in_scope": [],
+        "subject": "m406b-thermo-crossdomain-ensemble#completeness"
+      },
+      "source_refs": [
+        {
+          "artifact_path": "component_energy_table.json",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "0fc68495f561e16142442267f51810180d027c3e152f4695ee6bd82ca76e898d"
+          },
+          "role": "component_energy_table",
+          "units": "hartree"
+        }
+      ],
+      "statement": "Every declared ensemble component contributes a weight and a Gibbs value; no component is silently dropped.",
+      "status": "supported",
+      "validator": {
+        "kind": "deterministic",
+        "validator_id": "check.ensemble_completeness",
+        "validator_version": "1.0.0"
+      }
+    },
+    {
+      "claim_id": "thermochemistry.conditions",
+      "limitations": [
+        "ensemble_scope"
+      ],
+      "missing_checks": [],
+      "scope": {
+        "applicability": "condition_specific",
+        "conditions": "T=298.15 K; standard_state=1atm",
+        "not_in_scope": [],
+        "subject": "m406b-thermo-crossdomain-ensemble#conditions"
+      },
+      "source_refs": [
+        {
+          "artifact_path": "component_energy_table.json",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "0fc68495f561e16142442267f51810180d027c3e152f4695ee6bd82ca76e898d"
+          },
+          "role": "component_energy_table",
+          "units": "hartree"
+        }
+      ],
+      "statement": "The ensemble temperature and standard state in force are recorded in provenance.",
+      "status": "supported",
+      "validator": {
+        "kind": "deterministic",
+        "validator_id": "check.ensemble_conditions",
+        "validator_version": "1.0.0"
+      }
+    },
+    {
+      "claim_id": "thermochemistry.total_gibbs",
+      "limitations": [
+        "ensemble_scope"
+      ],
+      "missing_checks": [],
+      "scope": {
+        "applicability": "ensemble_specific",
+        "conditions": "T=298.15 K; unit=hartree",
+        "not_in_scope": [],
+        "subject": "m406b-thermo-crossdomain-ensemble#total-gibbs"
+      },
+      "source_refs": [
+        {
+          "artifact_path": "component_energy_table.json",
+          "digest": {
+            "algorithm": "sha256",
+            "value": "0fc68495f561e16142442267f51810180d027c3e152f4695ee6bd82ca76e898d"
+          },
+          "role": "component_energy_table",
+          "units": "hartree"
+        }
+      ],
+      "statement": "The ensemble total Gibbs energy is computed from the recorded rank-1 component, its normalized weight and the supplied temperature.",
+      "status": "supported",
+      "validator": {
+        "kind": "deterministic",
+        "validator_id": "check.ensemble_total_gibbs",
+        "validator_version": "1.0.0"
+      }
+    }
+  ],
+  "execution": {
+    "argv": [
+      "cccp.calculation.tasks.thermochemistry.run_thermochemistry"
+    ],
+    "exit_code": null,
+    "finished_at": null,
+    "started_at": null,
+    "stderr_path": null,
+    "stdout_path": null,
+    "terminal_state": "completed"
+  },
+  "limitations": [
+    {
+      "description": "This report applies the supplied component weights and the existing rank-1 total-Gibbs formula. It does not re-derive Boltzmann weights, re-optimize conformers or claim a new thermochemistry calculation.",
+      "limitation_id": "ensemble_scope"
+    }
+  ],
+  "provenance_digest": {
+    "algorithm": "sha256",
+    "value": "2dc150cabc82d03efe08d766fa4715fc43dd59c207bc7e9c00079567b5cde765"
+  },
+  "report_id": "report-m406b-thermo-crossdomain",
+  "schema_version": 1,
+  "subject": {
+    "description": "Thermochemistry cross-domain row: real Shermo 2.6.1 thermochemistry recomputed from the M4-04 route-a endpoint TS frequency log and its native single-point energy (digest-verified); the ensemble analysis is the real cccp.analysis.ensemble implementation.",
+    "input_digests": [
+      {
+        "algorithm": "sha256",
+        "value": "0fc68495f561e16142442267f51810180d027c3e152f4695ee6bd82ca76e898d"
+      }
+    ],
+    "science_identity": null,
+    "subject_id": "m406b-thermo-crossdomain",
+    "subject_kind": "artifact_set"
+  }
+}

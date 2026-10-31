@@ -9,7 +9,7 @@
 # example apps/cli/config/examples/mcp-memory/mcp-reference-memory.cordis.yml).
 #
 # command/args/cwd/env below are byte-for-byte the B05 launch descriptor
-# (sha256 07e140de13b72ef4ef5fcd87bcfb185467625d61ae20499b58ab0420ee827971).
+# (sha256 ca807cc4b8014af265fac64c9b84ca3c4050df9bfbab3b5dc408ce068b548046).
 # They must not drift from the B-owned launch manifest.
 #
 # The model sees MCP tools as `mcp__<serverName>__<rawName>`; `serverName: acp`
@@ -25,7 +25,7 @@
       config:
         serverName: acp
         transport: stdio
-        command: <acp2-dev>/venvs/b/bin/python
+        command: /ACPServer/acp2-development/venvs/b/bin/python
         args:
           - '-m'
           - acp
@@ -37,14 +37,14 @@
           - http://127.0.0.1:18765
           - '--log-level'
           - INFO
-        cwd: <repo>/src
+        cwd: /ACPServer/AutoCalcPlatform/src
         env:
-          ACP_RUN_ROOT: <acp2-dev>/data/b/run-root
+          ACP_RUN_ROOT: /ACPServer/acp2-development/data/b/run-root
           ACP_CONTROLLER_URL: http://127.0.0.1:18765
           ACP2_MCP_LOG_LEVEL: INFO
-          ACP2_TOOLS: <acp2-dev>/venvs
-          ACP_CONFIG: <acp2-dev>/data/b/controller-config/cccp.yaml
-          PATH: <acp2-dev>/venvs/b/bin:/usr/sbin:/usr/local/bin:/usr/bin:/bin
+          ACP2_TOOLS: /ACPServer/acp2-development/venvs
+          ACP_CONFIG: /ACPServer/acp2-development/data/b/controller-config/cccp.yaml
+          PATH: /ACPServer/acp2-development/venvs/b/bin:/usr/sbin:/usr/local/bin:/usr/bin:/bin
         toolCallTimeoutMs: 120000
         failOnStartupError: true
         reconnect:

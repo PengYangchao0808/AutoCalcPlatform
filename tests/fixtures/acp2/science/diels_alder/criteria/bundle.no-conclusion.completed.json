@@ -1,0 +1,26 @@
+{
+  "constructed": true,
+  "expected": {
+    "criteria": {
+      "DA-C01-ts-single-imaginary-mode": "not_evaluated",
+      "DA-C02-ts-mode-mapping": "not_evaluated",
+      "DA-C03-frequency-evidence": "not_evaluated",
+      "DA-C04-irc-bidirectional": "not_evaluated",
+      "DA-C05-endpoint-association": "not_evaluated",
+      "DA-C06-energy-comparability": "not_evaluated",
+      "DA-C07-reactant-stoichiometry": "not_evaluated"
+    },
+    "overall_claim_status": "not_evaluated",
+    "questions": {
+      "question.diels_alder.activation_energy.v1": "not_evaluated",
+      "question.diels_alder.path_connectivity.v1": "not_evaluated"
+    }
+  },
+  "fixture_id": "da-criteria-no-conclusion",
+  "notes": "Execution-completed-but-scientifically-inconclusive sample: the scenario result is PASS and no evidence exists, so every claim is not_evaluated. A PASS scenario never becomes a supported science claim.",
+  "real_run": false,
+  "records": [],
+  "scenario_result": "PASS",
+  "schema": "acp2.science.criteria-evaluation",
+  "schema_version": 1
+}

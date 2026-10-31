@@ -1,18 +1,18 @@
-orca_path=/home/<user>/orca611/orca
-/home/<user>/orca611/orca: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 2.6.32, stripped
-d65fe8fe3136e0008de9e5784ab8d853b0ef51a02635d7d6fb0f6a1c95d648d1  /home/<user>/orca611/orca
+orca_path=/home/xieningke/orca611/orca
+/home/xieningke/orca611/orca: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 2.6.32, stripped
+d65fe8fe3136e0008de9e5784ab8d853b0ef51a02635d7d6fb0f6a1c95d648d1  /home/xieningke/orca611/orca
 size_bytes=43977904 mode=755
 	linux-vdso.so.1 (0x00007ffc9d087000)
-	liborca_tools_6_1_1_avx2.so.6 => /home/<user>/orca611/lib/liborca_tools_6_1_1_avx2.so.6 (0x00007f2aee800000)
+	liborca_tools_6_1_1_avx2.so.6 => /home/xieningke/orca611/lib/liborca_tools_6_1_1_avx2.so.6 (0x00007f2aee800000)
 	libdl.so.2 => /lib64/libdl.so.2 (0x00007f2b03284000)
-	libstdc++.so.6 => /home/<user>/orca611/lib/libstdc++.so.6 (0x00007f2aee400000)
+	libstdc++.so.6 => /home/xieningke/orca611/lib/libstdc++.so.6 (0x00007f2aee400000)
 	libm.so.6 => /lib64/libm.so.6 (0x00007f2b031a7000)
-	libgcc_s.so.1 => /home/<user>/orca611/lib/libgcc_s.so.1 (0x00007f2b03180000)
+	libgcc_s.so.1 => /home/xieningke/orca611/lib/libgcc_s.so.1 (0x00007f2b03180000)
 	libpthread.so.0 => /lib64/libpthread.so.0 (0x00007f2b0317b000)
 	libc.so.6 => /lib64/libc.so.6 (0x00007f2aee000000)
 	/lib64/ld-linux-x86-64.so.2 (0x00007f2b0329c000)
-license_pdf=/home/<user>/orca611/Third_Party_Licenses_Academic_6.1.pdf
-16f68a456fe4ef576ed037c2abc1d471336da9a02fedab9216f2f0c50cfea974  /home/<user>/orca611/Third_Party_Licenses_Academic_6.1.pdf
+license_pdf=/home/xieningke/orca611/Third_Party_Licenses_Academic_6.1.pdf
+16f68a456fe4ef576ed037c2abc1d471336da9a02fedab9216f2f0c50cfea974  /home/xieningke/orca611/Third_Party_Licenses_Academic_6.1.pdf
 usr_bin_orca=orca-40.3-1.el9.noarch
 /usr/bin/orca: Python script, ASCII text executable
 #!/usr/bin/python3

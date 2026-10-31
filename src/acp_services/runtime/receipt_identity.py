@@ -27,6 +27,8 @@ Author: ACP Services (B lane, D02).
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Iterable
 from dataclasses import dataclass, fields
 from typing import Any
@@ -47,6 +49,9 @@ __all__ = [
     "ReceiptIdentityError",
     "assert_receipt_identity",
     "compare_receipt_identity",
+    "envelope_identity_digest",
+    "identity_digest",
+    "receipt_identity_digest",
     "receipt_identity_matches",
 ]
 
@@ -157,6 +162,35 @@ class ReceiptIdentity:
 
 
 _IDENTITY_FIELDS: tuple[str, ...] = tuple(field.name for field in fields(ReceiptIdentity))
+
+
+def identity_digest(identity: ReceiptIdentity) -> str:
+    """Return the stable ``sha256:`` digest of one canonical identity projection.
+
+    This is the *chain summary* persisted with a usage receipt/binding so a
+    historical attempt can be re-verified without its work directory.  It is
+    derived from :meth:`ReceiptIdentity.to_dict` — the frozen identity
+    projection — so a field added to the contract joins the digest instead of
+    silently escaping it.
+    """
+    payload = json.dumps(
+        identity.to_dict(),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        default=str,
+    )
+    return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def receipt_identity_digest(receipt: ExecutionReceipt) -> str:
+    """Chain digest of an observed receipt's identity."""
+    return identity_digest(ReceiptIdentity.from_receipt(receipt))
+
+
+def envelope_identity_digest(envelope: ExecutionEnvelope) -> str:
+    """Chain digest of a frozen envelope's identity."""
+    return identity_digest(ReceiptIdentity.from_envelope(envelope))
 
 
 @dataclass(frozen=True)

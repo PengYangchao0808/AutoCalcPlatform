@@ -1,0 +1,14 @@
+{
+  "products": [
+    {
+      "id": "nmr_comparison",
+      "kind": "report",
+      "label": "NMR shielding comparison",
+      "path": "nmr_comparison.json"
+    }
+  ],
+  "status": "completed",
+  "task_id": "m406b-nmr-crossdomain",
+  "version": 2,
+  "workflow": "nmr"
+}

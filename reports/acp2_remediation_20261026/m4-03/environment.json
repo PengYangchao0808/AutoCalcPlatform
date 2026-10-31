@@ -1,0 +1,56 @@
+{
+  "config": {
+    "cluster": {
+      "enabled": true,
+      "execution_mode": "remote",
+      "extra_flags": "",
+      "local_retention": {
+        "enabled": false
+      },
+      "nodes": [
+        {
+          "capabilities": {
+            "software": [
+              "xtb",
+              "orca",
+              "crest"
+            ],
+            "tags": [
+              "workstation",
+              "xtb",
+              "orca"
+            ]
+          },
+          "host": "127.0.0.1",
+          "host_key_policy": "auto_add",
+          "key_file": "/ACPServer/acp2-runs/remediation/m4-03/ssh/id_ed25519",
+          "name": "lsf-local",
+          "port": 22,
+          "pre_cmds": [
+            "export LSF_ENVDIR=/opt/openlava-2.0/etc",
+            "export PATH=/home/xieningke/xtb-dist/bin:/home/xieningke/crest:/opt/openlava-2.0/bin:$PATH",
+            "export CONFSEARCH_XTB_PATH=/home/xieningke/xtb-dist/bin/xtb",
+            "export CONFSEARCH_ORCA_PATH=/home/xieningke/orca611/orca"
+          ],
+          "python_executable": "/usr/bin/python3.11",
+          "remote_code_dir": "/ACPServer/acp2-runs/remediation/m4-03/remote_code",
+          "remote_work_dir": "/ACPServer/acp2-runs/remediation/m4-03/remote_jobs",
+          "type": "openlava",
+          "username": "xieningke"
+        }
+      ],
+      "queue": "normal",
+      "type": "openlava",
+      "walltime": ""
+    }
+  },
+  "config_path": "/ACPServer/acp2-runs/remediation/m4-03/config/cccp.yaml",
+  "environment_orca_path": "/usr/bin/orca",
+  "lsf_envdir": "/opt/openlava-2.0/etc",
+  "node": "lsf-local",
+  "orca_path": "/home/xieningke/orca611/orca",
+  "remote_code_dir": "/ACPServer/acp2-runs/remediation/m4-03/remote_code",
+  "remote_work_dir": "/ACPServer/acp2-runs/remediation/m4-03/remote_jobs",
+  "run_root": "/ACPServer/acp2-runs/remediation/m4-03",
+  "schema": "acp2.m403.acceptance.v1"
+}

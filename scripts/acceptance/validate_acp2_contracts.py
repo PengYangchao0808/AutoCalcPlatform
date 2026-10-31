@@ -74,6 +74,23 @@ DELIVERED_IDS_BY_STAGE = {
     "B19": {
         "events-recovery",
     },
+    "M0-07": {
+        "trusted-usage-receipts",
+    },
+    "M0-12": {
+        "decision-freeze-identity",
+        "decision-freeze-integration",
+    },
+    "M1-02": {
+        "research-session",
+    },
+    "B26": {
+        "release-scope",
+        "release-evidence-coverage-schema",
+        "release-bom-schema",
+        "release-bom-current",
+        "release-evidence-coverage-current",
+    },
 }
 EXPECTED_TODOS = {
     "B00",
@@ -158,7 +175,12 @@ def require(data: dict[str, Any], key: str, label: str) -> Any:
     return data[key]
 
 
-SELF_REFERENTIAL_CONTRACTS = frozenset({"manifest", "baseline-lock"})
+#: Contracts excluded from ``contract_digest`` because they either embed it or
+#: would create a fixed-point cycle.  ``release-bom-current`` records the
+#: aggregate contract digest inside the BOM itself, so its own file digest
+#: cannot be part of that aggregate; the BOM *schema* and both coverage
+#: contracts stay inside the digest.
+SELF_REFERENTIAL_CONTRACTS = frozenset({"manifest", "baseline-lock", "release-bom-current"})
 
 
 def contract_digest_for(manifest: dict[str, Any]) -> str:
@@ -241,8 +263,10 @@ def validate_manifest(root: Path, manifest: dict[str, Any]) -> None:
         path_value = require(entry, "path", f"contracts[{contract_id}].path")
         status = require(entry, "status", f"contracts[{contract_id}].status")
         owner = require(entry, "owner", f"contracts[{contract_id}].owner")
-        if owner not in {"A", "B", "C"}:
-            fail(f"contracts[{contract_id}].owner must be A, B or C")
+        if owner not in {"A", "B", "C", "INT"}:
+            # M0-12/D-INT-08: the decision-freeze documents are aggregated by
+            # the INT lane and registered with owner INT.
+            fail(f"contracts[{contract_id}].owner must be A, B, C or INT")
         if status not in {"planned", "delivered"}:
             fail(f"contracts[{contract_id}].status must be planned or delivered")
         target = root / path_value
@@ -337,6 +361,109 @@ def validate_manifest(root: Path, manifest: dict[str, Any]) -> None:
     transport = require(p2, "transport", "p2_entry.transport")
     if "stdio" not in str(transport) or "JSON-RPC" not in str(transport):
         fail("p2_entry.transport must freeze stdio JSON-RPC over loopback HTTP Controller")
+
+
+P2_IMPLEMENTATION_STATUS = {"planned", "delivered", "verified"}
+P2_TOOL_SETS_KEY = "client_path.tool_sets"
+
+
+def validate_p2_implementation_status(root: Path) -> None:
+    """Validate the P2 implementation-status vocabulary and tool-set relation.
+
+    M1-01a: the rows reuse the existing ``implementation_status`` field and the
+    ``planned|delivered`` values; ``verified`` is additive and demands evidence.
+    No second status field and no ``delivered -> implemented`` migration is
+    allowed, and the advertised/implemented/negotiated relation is closed: only a
+    registered set that covers the whole promise set may report ``negotiated``.
+    """
+    path = root / "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json"
+    contract = load_json(path, "p2-research-operations.v1.json")
+    vocabulary = require(contract, "implementation_status_vocabulary", "P2 vocabulary")
+    values = set(vocabulary.get("values") or [])
+    if values != P2_IMPLEMENTATION_STATUS:
+        fail(
+            "P2 implementation_status values must be planned|delivered|verified; "
+            f"got {sorted(values)}"
+        )
+    if vocabulary.get("field") != "rows[].implementation_status":
+        fail("P2 vocabulary must name rows[].implementation_status as the one reused field")
+    required_fields = vocabulary.get("required_fields") or {}
+    if set(required_fields.get("delivered") or []) != {"delivered_by"}:
+        fail("P2 delivered rows must require delivered_by only")
+    if set(required_fields.get("verified") or []) != {"delivered_by", "verified_by", "evidence"}:
+        fail("P2 verified rows must require delivered_by, verified_by and evidence")
+
+    rows = require(contract, "rows", "P2 rows")
+    if not isinstance(rows, list) or not rows:
+        fail("P2 rows must be a non-empty array")
+    for row in rows:
+        row_id = require(row, "id", "rows[].id")
+        status = require(row, "implementation_status", f"rows[{row_id}].implementation_status")
+        if status not in P2_IMPLEMENTATION_STATUS:
+            fail(f"{row_id}.implementation_status is invalid: {status}")
+        if "implemented" in row:
+            fail(f"{row_id} must not add a second 'implemented' status field")
+        if status in {"delivered", "verified"} and not row.get("delivered_by"):
+            fail(f"{row_id} is {status} but names no delivered_by")
+        if status == "verified":
+            for field in ("verified_by", "evidence"):
+                if not row.get(field):
+                    fail(f"{row_id} is verified but names no {field}")
+        if status == "planned" and row.get("verified_by"):
+            fail(f"{row_id} is planned but names a verified_by")
+
+    client_path = contract.get("client_path")
+    tool_sets = client_path.get("tool_sets") if isinstance(client_path, dict) else None
+    if not isinstance(tool_sets, dict):
+        fail(f"P2 {P2_TOOL_SETS_KEY} is missing")
+    advertised = list(tool_sets.get("p1_advertised") or [])
+    promised = list(tool_sets.get("p2_promised") or [])
+    # The frozen eight P1 names plus the additive read-only acp_get_guidance
+    # (2026-10-30 guidance batch, plan §5). Registry-derived, not a bare count:
+    # a new registration updates this expectation, a removal breaks it.
+    _FROZEN_P1 = {
+        "acp_capabilities",
+        "acp_preflight",
+        "acp_submit",
+        "acp_status",
+        "acp_cancel",
+        "acp_prepare_artifact",
+        "acp_read_artifact",
+        "acp_analyze",
+    }
+    expected_p1 = _FROZEN_P1 | {"acp_get_guidance", "acp_list_jobs"}
+    if set(advertised) != expected_p1:
+        fail(
+            "P2 p1_advertised must list the frozen P1 tools plus the additive "
+            "acp_get_guidance/acp_list_jobs; got "
+            f"{sorted(set(advertised) ^ expected_p1)}"
+        )
+    if len(promised) != 10:
+        fail(f"P2 p2_promised must list the ten research tools; got {len(promised)}")
+    if set(advertised) & set(promised):
+        fail("P2 p1_advertised and p2_promised must be disjoint")
+    for row in rows:
+        for tool in row.get("tools") or []:
+            if tool.get("name") not in promised:
+                fail(f"{row['id']} promises {tool.get('name')!r} outside p2_promised")
+    negotiation = (contract.get("client_path") or {}).get("negotiation") or {}
+    # M2-01c: `implemented` is derived from the registered set, which the contract
+    # expresses as the delivered/verified rows.  Advertising alone never sets it,
+    # and a partial registration must still report implemented=false.
+    registered_tools = {
+        tool.get("name")
+        for row in rows
+        if row.get("implementation_status") in {"delivered", "verified"}
+        for tool in row.get("tools") or []
+    }
+    covering = set(promised) <= registered_tools
+    if negotiation.get("implemented") is not covering:
+        fail(
+            "P2 negotiation.implemented must equal whether the delivered rows cover "
+            f"the whole promise set (covered={covering})"
+        )
+    if negotiation.get("negotiated_default") is not False:
+        fail("P2 negotiation.negotiated_default must stay false")
 
 
 def validate_dependencies(root: Path, manifest_path: Path) -> None:
@@ -500,6 +627,7 @@ def main(argv: list[str] | None = None) -> int:
         manifest = load_json(args.manifest, "manifest.json")
         validate_manifest(root, manifest)
         validate_dependencies(root, args.manifest.resolve())
+        validate_p2_implementation_status(root)
     except InvalidContractError as exc:
         print(f"INVALID: {exc}", file=sys.stderr)
         return 1

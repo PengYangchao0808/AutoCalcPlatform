@@ -240,6 +240,9 @@ def _extract_input_source(inp: dict[str, Any]) -> str:
         or inp.get("source")
         or inp.get("input")
         or inp.get("smiles")
+        # v1 accepts a top-level xyz_text (inp.get("source") or inp.get("xyz_text")
+        # in the API); the scheduler is a real consumer and must see it too.
+        or inp.get("xyz_text")
         or ""
     )
     return str(source)
@@ -296,6 +299,7 @@ def _materialize_single_input(
 ) -> Path | None:
     source_type = str(inp.get("source_type", ""))
     source = _extract_input_source(inp)
+    xyz_text = inp.get("xyz_text")
 
     if not source:
         return None
@@ -305,6 +309,12 @@ def _materialize_single_input(
 
     if source_type == "xyz_text":
         dest.write_text(source, encoding="utf-8")
+        return dest
+    if not source_type and isinstance(xyz_text, str) and xyz_text.strip():
+        # a bare top-level xyz_text is a contract-accepted input (v1); write the
+        # xyz_text itself — a mixed payload (source="CCO" + xyz_text) must not
+        # write the SMILES string into a .xyz file
+        dest.write_text(xyz_text, encoding="utf-8")
         return dest
 
     if source_type == "structure_asset":

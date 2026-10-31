@@ -1,5 +1,5 @@
 # B02 controller config review + doctor — 2026-10-22T19:37:10+08:00
-## effective merged config (cwd=<acp2-dev>/data/b/controller-config, redacted)
+## effective merged config (cwd=/ACPServer/acp2-development/data/b/controller-config, redacted)
 {
   "cluster": {
     "enabled": true,
@@ -38,7 +38,7 @@
       "science-core"
     ],
     "params": {
-      "run_root": "<acp2-dev>/data/b/run-root"
+      "run_root": "/ACPServer/acp2-development/data/b/run-root"
     }
   },
   "executables": {
@@ -46,33 +46,33 @@
       "path": "/usr/bin/orca",
       "nproc": 20,
       "maxcore": null,
-      "ld_library_path": "/home/<user>/openmpi418/lib:/home/<user>/orca611"
+      "ld_library_path": "/home/xieningke/openmpi418/lib:/home/xieningke/orca611"
     },
     "xtb": {
-      "path": "/home/<user>/xtb-dist/bin/xtb",
+      "path": "/home/xieningke/xtb-dist/bin/xtb",
       "fallback_paths": [
         "/opt/xtb/bin/xtb",
         "/usr/local/bin/xtb"
       ]
     },
     "crest": {
-      "path": "/home/<user>/crest/crest",
+      "path": "/home/xieningke/crest/crest",
       "gfn_level": 2
     },
     "censo": {
-      "path": "/home/<user>/anaconda3/bin/censo"
+      "path": "/home/xieningke/anaconda3/bin/censo"
     },
     "isostat": {
-      "path": "/home/<user>/molclus_1.14_Linux/isostat"
+      "path": "/home/xieningke/molclus_1.14_Linux/isostat"
     },
     "shermo": {
-      "path": "/home/<user>/Shermo_2.6.1/Shermo"
+      "path": "/home/xieningke/Shermo_2.6.1/Shermo"
     },
     "molclus": {
-      "path": "/home/<user>/molclus_1.14_Linux/molclus"
+      "path": "/home/xieningke/molclus_1.14_Linux/molclus"
     },
     "gaussian": {
-      "path": "/home/<user>/g16/g16",
+      "path": "/home/xieningke/g16/g16",
       "use_wrapper": true,
       "wrapper_path": "./scripts/run_g16_worker.sh"
     }
@@ -80,21 +80,21 @@
 }
 cluster.execution_mode = local
 cluster.nodes = []
-deployment.params.run_root = <acp2-dev>/data/b/run-root
+deployment.params.run_root = /ACPServer/acp2-development/data/b/run-root
 ## acp doctor
-INFO:cccp.config:Loaded defaults from: <acp2-dev>/B/config/defaults.yaml
+INFO:cccp.config:Loaded defaults from: /ACPServer/acp2-development/B/config/defaults.yaml
 No remote nodes configured — running local capability checks (local/standalone deployment).
 
 Local capability report (usage=local, tier=local-single)
   PASS（9）：
-    - software:xtb — /home/<user>/xtb-dist/bin/xtb（source=config）
-    - software:crest — /home/<user>/crest/crest（source=config）
-    - software:censo — /home/<user>/anaconda3/bin/censo（source=config）
-    - software:shermo — /home/<user>/Shermo_2.6.1/Shermo（source=config）
-    - software:isostat — /home/<user>/molclus_1.14_Linux/isostat（source=config）
-    - software:molclus — /home/<user>/molclus_1.14_Linux/molclus（source=config）
-    - run_root — <acp2-dev>/data/b/run-root — 就绪
-    - store — <acp2-dev>/data/b/run-root/acp_jobs.db
+    - software:xtb — /home/xieningke/xtb-dist/bin/xtb（source=config）
+    - software:crest — /home/xieningke/crest/crest（source=config）
+    - software:censo — /home/xieningke/anaconda3/bin/censo（source=config）
+    - software:shermo — /home/xieningke/Shermo_2.6.1/Shermo（source=config）
+    - software:isostat — /home/xieningke/molclus_1.14_Linux/isostat（source=config）
+    - software:molclus — /home/xieningke/molclus_1.14_Linux/molclus（source=config）
+    - run_root — /ACPServer/acp2-development/data/b/run-root — 就绪
+    - store — /ACPServer/acp2-development/data/b/run-root/acp_jobs.db
     - config — merged configuration loaded
   FAIL（1）：
     - software:orca — /usr/bin/orca — GNOME Orca 屏幕阅读器（非 QC 二进制）
@@ -141,20 +141,20 @@ Examples:
         
 serve_help_exit=0
 # B02 doctor rerun after explicit local executable pins — 2026-10-22T19:37:33+08:00
-INFO:cccp.config:Loaded defaults from: <acp2-dev>/B/config/defaults.yaml
+INFO:cccp.config:Loaded defaults from: /ACPServer/acp2-development/B/config/defaults.yaml
 No remote nodes configured — running local capability checks (local/standalone deployment).
 
 Local capability report (usage=local, tier=local-single)
   PASS（10）：
-    - software:orca — /home/<user>/orca611/orca（source=config）
-    - software:xtb — /home/<user>/xtb-dist/bin/xtb（source=config）
-    - software:crest — /home/<user>/crest/crest（source=config）
-    - software:censo — /home/<user>/anaconda3/bin/censo（source=config）
-    - software:shermo — /home/<user>/Shermo_2.6.1/Shermo（source=config）
-    - software:isostat — /home/<user>/molclus_1.14_Linux/isostat（source=config）
-    - software:molclus — /home/<user>/molclus_1.14_Linux/molclus（source=config）
-    - run_root — <acp2-dev>/data/b/run-root — 就绪
-    - store — <acp2-dev>/data/b/run-root/acp_jobs.db
+    - software:orca — /home/xieningke/orca611/orca（source=config）
+    - software:xtb — /home/xieningke/xtb-dist/bin/xtb（source=config）
+    - software:crest — /home/xieningke/crest/crest（source=config）
+    - software:censo — /home/xieningke/anaconda3/bin/censo（source=config）
+    - software:shermo — /home/xieningke/Shermo_2.6.1/Shermo（source=config）
+    - software:isostat — /home/xieningke/molclus_1.14_Linux/isostat（source=config）
+    - software:molclus — /home/xieningke/molclus_1.14_Linux/molclus（source=config）
+    - run_root — /ACPServer/acp2-development/data/b/run-root — 就绪
+    - store — /ACPServer/acp2-development/data/b/run-root/acp_jobs.db
     - config — merged configuration loaded
   FAIL（0）：
     - （无）

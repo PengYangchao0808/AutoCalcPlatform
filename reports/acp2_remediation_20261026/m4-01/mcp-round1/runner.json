@@ -1,0 +1,181 @@
+{
+  "schema": "acp2.m4-01.full-chain.mcp.v1",
+  "status": "ok",
+  "mode": "resume",
+  "model_adapter": "test-fixture",
+  "evidence_kind": "fixture",
+  "protocol_version": "2025-06-18",
+  "tools": [
+    "acp_analyze",
+    "acp_cancel",
+    "acp_capabilities",
+    "acp_preflight",
+    "acp_prepare_artifact",
+    "acp_read_artifact",
+    "acp_research_approval_decide_v1",
+    "acp_research_approval_query_v1",
+    "acp_research_approval_request_v1",
+    "acp_research_approval_revoke_v1",
+    "acp_research_proposal_create_v1",
+    "acp_research_proposal_read_v1",
+    "acp_research_proposal_update_cas_v1",
+    "acp_research_resume_v1",
+    "acp_research_snapshot_v1",
+    "acp_research_wait_v1",
+    "acp_status",
+    "acp_submit"
+  ],
+  "proposal": {
+    "proposal_id": "prop-m4-01-rounds",
+    "round": 1,
+    "digests": {
+      "canonical_digest_version": "1.0.0",
+      "science_digest": "sha256:5444684f852645353007615c8cccdd77ad594a2061577b79ea520c20d2f25e49",
+      "plan_digest": "sha256:fa868afe03f7355383c2b3de399978d9d49b12b381d6d961081a427ca50145cb",
+      "proposal_digest": "sha256:02c6b863adc0cd706f7ba161f7a5524f942c2daec446db73ce2160868cc38697"
+    },
+    "approval_ref": "ap_7e076f8da7d5466f927f1fb184ac2a01",
+    "research": {
+      "principal_id": "principal_local",
+      "project_id": "934f5edb-53e8-4d1b-8717-41b089e5198e",
+      "research_id": "res-2e3811a850b801a3369be874",
+      "session_id": "ses-f5b45d8cdcd6121b1ece8fa2",
+      "round": 1
+    }
+  },
+  "approval": {
+    "approval_ref": "ap_7e076f8da7d5466f927f1fb184ac2a01",
+    "state": "approved",
+    "revision": 2,
+    "binding_status": "full"
+  },
+  "wait": {
+    "first_timed_out": false,
+    "first_events": 2,
+    "cursor_present": true,
+    "cursor_roundtrip": false,
+    "replay_timed_out": null,
+    "replay_error": {
+      "code": "backend_failure",
+      "category": "failed",
+      "message": "cursor is not decodable: 'utf-8' codec can't decode byte 0xad in position 0: invalid start byte",
+      "retryable": false,
+      "params": {
+        "operation": "wait",
+        "rule": "input_invalid"
+      },
+      "diagnostic_ref": null
+    }
+  },
+  "snapshot": {
+    "snapshot_revision": "sha256:e45a4a30890cb48397cdd663523431e9b74e2e576480960ee123a46580ced75b",
+    "refs": [
+      {
+        "ref": "ap_7e076f8da7d5466f927f1fb184ac2a01",
+        "state": "approved"
+      },
+      {
+        "ref": "prop-m4-01-rounds",
+        "state": "stored"
+      }
+    ],
+    "approval_state": "approved"
+  },
+  "task_ref": {
+    "task_id": "20261027_183107_002_fake",
+    "job_id": "20261027_183107_002_fake",
+    "attempt": 1
+  },
+  "task_ref_normalized": {
+    "project_id": "934f5edb-53e8-4d1b-8717-41b089e5198e",
+    "task_id": "20261027_183107_002_fake",
+    "job_id": "20261027_183107_002_fake",
+    "attempt": 1,
+    "release": {
+      "release_id": "cfea0aae4416275e",
+      "release_digest": "sha256:d27a05b75c6b9181860e1f12311e8e1c8430de0775778c92b15c737468b51d04"
+    }
+  },
+  "task_ref_source": "status+declared_release",
+  "prepare": {
+    "passes": [
+      {
+        "pass": 0,
+        "availability": "readable",
+        "operation_reference": "op_d344dc4d7709421196d8f81f3f7cdf61",
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+        "read": {
+          "is_error": false,
+          "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+          "body_bytes": 400,
+          "body_sha256": "e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+          "error": null
+        }
+      },
+      {
+        "pass": 1,
+        "availability": "readable",
+        "operation_reference": "op_d344dc4d7709421196d8f81f3f7cdf61",
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+        "read": {
+          "is_error": false,
+          "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+          "body_bytes": 400,
+          "body_sha256": "e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+          "error": null
+        }
+      }
+    ],
+    "same_operation": true,
+    "same_digest": true,
+    "same_body": true
+  },
+  "read": {
+    "is_error": false,
+    "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+    "body_bytes": 400,
+    "body_sha256": "e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+    "error": null
+  },
+  "supervisor": {
+    "status": "stopped",
+    "stop_reason": "no_evidence",
+    "rounds_completed": 0,
+    "submits": 1,
+    "submit_port_calls": 1,
+    "task_refs": [
+      {
+        "job_id": "20261027_183107_002_fake",
+        "attempt": 1,
+        "release_id": "cfea0aae4416275e",
+        "release_digest": "sha256:d27a05b75c6b9181860e1f12311e8e1c8430de0775778c92b15c737468b51d04",
+        "project_id": "934f5edb-53e8-4d1b-8717-41b089e5198e"
+      }
+    ],
+    "model_invocations": 4,
+    "wait_invocations": 1,
+    "phases": [
+      "understand@0",
+      "hypothesize@0",
+      "critique@0",
+      "plan@0",
+      "approve@0",
+      "wait@0",
+      "stop@0"
+    ],
+    "decision": null,
+    "reports": 0
+  },
+  "errors": [],
+  "findings": [
+    {
+      "id": "F7-session-tools-list-order",
+      "detail": "openMcpSession(mode=product) lists tools before the application handshake, while the server hides the ten P2 tools until negotiation; product mode can therefore never observe the negotiated surface on this server"
+    },
+    {
+      "id": "F8-wait-cursor-redacted",
+      "detail": "the P2 `research.wait` cursor is redacted by the machine envelope, so a bounded wait cannot be resumed over MCP: {\"code\":\"backend_failure\",\"category\":\"failed\",\"message\":\"cursor is not decodable: 'utf-8' codec can't decode byte 0xad in position 0: invalid start byte\",\"retryable\":false,\"params\":{\"operation\":\"wait\",\"rule\":\"input_invalid\"},\"diagnostic_ref\":null}"
+    }
+  ],
+  "trace_path": "/ACPServer/acp2-remediation-integration/reports/acp2_remediation_20261026/m4-01/mcp-round1/mcp-trace.jsonl"
+}

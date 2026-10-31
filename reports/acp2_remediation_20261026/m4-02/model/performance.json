@@ -1,0 +1,81 @@
+{
+  "data": {
+    "after": {
+      "jobs": 2,
+      "operation_rows": 1,
+      "tree": {
+        "bytes": 10599,
+        "files": 15
+      }
+    },
+    "before": {
+      "jobs": 2,
+      "operation_rows": 1,
+      "tree": {
+        "bytes": 10599,
+        "files": 15
+      }
+    },
+    "client_cache": "a fresh ControllerClient per pass (no client memo)",
+    "controller_calls": 6,
+    "controller_calls_note": "one prepare + one read per pass cross the Controller for real (fresh ControllerClient each pass, no client memo), so the platform is the dedup authority and the call count cannot be hidden by caching",
+    "controller_calls_source": "the Controller uvicorn access log of this step",
+    "controller_prepare_calls": 3,
+    "controller_read_calls": 3,
+    "latency_ms": {
+      "max": 12.66,
+      "p50": 10.83,
+      "p95": 12.66,
+      "samples": 6
+    },
+    "no_extra_job": true,
+    "no_extra_operation_row": true,
+    "no_write_amplification": true,
+    "operation_ref": "op_fee6d92cc70b46238062f4b6892abf2a",
+    "passes": 3,
+    "prepare": [
+      {
+        "availability": "ready",
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+        "idempotent_replay": false,
+        "operation_ref": "op_fee6d92cc70b46238062f4b6892abf2a"
+      },
+      {
+        "availability": "ready",
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+        "idempotent_replay": false,
+        "operation_ref": "op_fee6d92cc70b46238062f4b6892abf2a"
+      },
+      {
+        "availability": "ready",
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+        "idempotent_replay": false,
+        "operation_ref": "op_fee6d92cc70b46238062f4b6892abf2a"
+      }
+    ],
+    "read": [
+      {
+        "bytes": 400,
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c"
+      },
+      {
+        "bytes": 400,
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c"
+      },
+      {
+        "bytes": 400,
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c"
+      }
+    ],
+    "same_body_bytes": true,
+    "same_digest": true,
+    "same_operation_ref": true
+  },
+  "evidence_kind": "fixture",
+  "generated_at": "2026-10-27T13:15:30Z",
+  "mcp_rounds": {
+    "round0_ms": 6349.78,
+    "round1_ms": 8460.82
+  },
+  "schema": "acp2.m4-01.data-idempotency.v1"
+}

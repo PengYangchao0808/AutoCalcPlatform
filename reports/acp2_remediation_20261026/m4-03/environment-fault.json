@@ -1,0 +1,37 @@
+{
+  "environment_facts": {
+    "lsf_envdir": "/opt/openlava-2.0/etc",
+    "orca_path_in_profile": "/usr/bin/orca (the GNOME screen reader, NOT the QC engine)",
+    "queue": "normal (MEMLIMIT 60 GB, PROCLIMIT 20, RUNLIMIT 24h)",
+    "real_orca": "/home/xieningke/orca611/orca (ORCA 6.1.1), exported to the Controller and to remote jobs",
+    "ssh": "localhost key-based SSH prepared for the acceptance (key under m4-03/ssh, public key appended to ~/.ssh/authorized_keys)"
+  },
+  "fault": "Openlava 2.0 mbatchd crashed repeatedly (SIGSEGV / general protection fault) under the acceptance load and stopped being respawned by lim for ~15 minutes.",
+  "impact": "One matrix attempt (01:13-01:33 local) was interrupted between the queue-deadline and paused-timing rows; the product was hardened (dedicated deadline thread, bounded remote termination, claim-then-terminate) and the authoritative matrix then ran 15/15 PASS.",
+  "native_evidence": {
+    "dmesg_tail": [
+      "[823151.128945] traps: mbatchd[714879] general protection fault ip:476a21 sp:7ffe5b10d0e0 error:0 in mbatchd[404000+105000]",
+      "[823161.682508] traps: mbatchd[798569] general protection fault ip:476a21 sp:7ffe4c3901a0 error:0 in mbatchd[404000+105000]",
+      "[823576.413949] traps: mbatchd[803386] general protection fault ip:476a21 sp:7fffb72c32c0 error:0 in mbatchd[404000+105000]",
+      "[823998.105267] traps: mbatchd[809227] general protection fault ip:476a21 sp:7ffc9e381650 error:0 in mbatchd[404000+105000]",
+      "[824419.805205] traps: mbatchd[813742] general protection fault ip:476a21 sp:7ffe98d3b3a0 error:0 in mbatchd[404000+105000]",
+      "[825419.090521] traps: mbatchd[819901] general protection fault ip:476a21 sp:7ffcca1f8a00 error:0 in mbatchd[404000+105000]"
+    ],
+    "sbatchd_log_tail": [
+      "Oct 28 00:53:08 2087 3 20 mbatchd core dumped",
+      "Oct 28 01:00:10 2087 3 20 mbatchd died with signal <11> termination",
+      "Oct 28 01:00:10 2087 3 20 mbatchd core dumped",
+      "Oct 28 01:08:50 2087 3 20 status_job(): Job <2929> is forgotten by mbatchd on host <workstation>, ignored.",
+      "Oct 28 01:16:52 2087 3 20 mbatchd died with signal <11> termination",
+      "Oct 28 01:16:52 2087 3 20 mbatchd core dumped"
+    ]
+  },
+  "recorded_at": "2026-10-28T01:40:00Z",
+  "recovery": {
+    "final_state": "bjobs: 'No unfinished job found'; 9 tracked LSF jobs all DONE/EXIT; no leftovers",
+    "queue_state_backup": "/ACPServer/acp2-runs/remediation/m4-03/lsf-backup/lsb-state-010213.tgz",
+    "queue_state_reset": "moved /opt/openlava-2.0/work/logdir/lsb.events and logdir/info aside (reversible from the backup); lim respawned mbatchd at 01:08 and it stayed up for the authoritative run",
+    "root_restart": "not permitted for this user (sudo requires a password; lsadmin limrestart -> Operation permission denied by LIM; systemctl restart openlava -> interactive authentication required)"
+  },
+  "schema": "acp2.m403.environment-fault.v1"
+}

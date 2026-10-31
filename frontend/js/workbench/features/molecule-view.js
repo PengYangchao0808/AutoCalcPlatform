@@ -105,6 +105,19 @@ function initViewer() {
   // 3Dmol viewer); scene.create owns the underlying viewer internally.
   viewer = ACPVisualization.scene.create({ container: container, options: { backgroundColor: molDoc.bgColor, antialias: true } });
   if (!viewer) return false;
+  // Graceful degradation (audit F09): a lost WebGL context would otherwise
+  // leave a silently blank canvas area. Capture-phase listening on the
+  // container survives 3Dmol's canvas swaps (resize recreates the element).
+  if (container && !container.dataset.contextLostHook) {
+    container.dataset.contextLostHook = "1";
+    container.addEventListener("webglcontextlost", function() {
+      const empty = document.getElementById("viewer-empty");
+      if (empty) {
+        empty.style.display = "grid";
+        empty.textContent = t("viewer.render_failed");
+      }
+    }, true);
+  }
   // Resize handled by the global rAF-throttled listener → applyLayout → viewer.resize
   return true;
 }

@@ -1,0 +1,1157 @@
+{
+  "chain": {
+    "project_id": "eac04e7b-fa5a-4074-a379-1174087d0707",
+    "round0": {
+      "approval_binding_status": "full",
+      "approval_ref": "ap_9431e98e945f44278452ae3c298ad459",
+      "evidence": {
+        "evidence_status": "complete",
+        "overall_claim_status": "supported",
+        "projection_digest": "sha256:7e514bc99cf98416b8f925052aa9e1e6ebe1b26462fff503f2dd2561d70f49de"
+      },
+      "proposal_revision": 1,
+      "record": {
+        "decision": "revise",
+        "revision": 1
+      },
+      "task_ref": {
+        "attempt": 1,
+        "job_id": "20261027_211510_001_fake",
+        "project_id": "eac04e7b-fa5a-4074-a379-1174087d0707",
+        "release": {
+          "release_digest": "sha256:adf3bbe51cb52ae473d29ef792aa9f9a6a10b91ed9ab8ff3d7e02de5ace3e057",
+          "release_id": "910ca9d3aff95737"
+        },
+        "task_id": "20261027_211510_001_fake"
+      }
+    },
+    "round1": {
+      "approval_binding_status": "full",
+      "approval_ref": "ap_033d41d4293e4c58a3eb4247ac2ab344",
+      "evidence": {
+        "evidence_status": "complete",
+        "overall_claim_status": "supported",
+        "projection_digest": "sha256:8b5eaa95800e9b6cfa7dc965075d20c2d8d1498ef15960caa0808bcbb22e0864"
+      },
+      "proposal_revision": 2,
+      "record": {
+        "decision": "accept",
+        "revision": 2
+      },
+      "round": 1,
+      "superseded_approval": "ap_9431e98e945f44278452ae3c298ad459",
+      "task_ref": {
+        "attempt": 1,
+        "job_id": "20261027_211517_002_fake",
+        "project_id": "eac04e7b-fa5a-4074-a379-1174087d0707",
+        "release": {
+          "release_digest": "sha256:adf3bbe51cb52ae473d29ef792aa9f9a6a10b91ed9ab8ff3d7e02de5ace3e057",
+          "release_id": "910ca9d3aff95737"
+        },
+        "task_id": "20261027_211517_002_fake"
+      }
+    }
+  },
+  "closed_findings": [
+    {
+      "closed_by": "M4-02: openMcpSession performs the acp_capabilities negotiation before tools/list (platform-session.ts), so a product-mode session sees the negotiated surface",
+      "detail": "a real product-mode session observes the negotiated 8+10 tool surface on a server that hides the ten P2 tools until negotiation",
+      "evidence": {
+        "handshake_status": "negotiated",
+        "research_tools_visible": 10,
+        "session_mode": "product",
+        "tools_observed": 18
+      },
+      "found_by": "M4-01 (reports/acp2_remediation_20261026/m4-01/summary.json)",
+      "id": "F7-session-tools-list-order",
+      "status": "closed"
+    },
+    {
+      "closed_by": "M4-02: machine_output.PASSTHROUGH_FIELD_VALUES carries a server-issued opaque wait cursor through the envelope verbatim",
+      "detail": "the cursor issued by `research.wait` survives the machine envelope and a replayed bounded wait reports timed_out without inventing an event",
+      "evidence": {
+        "cursor_chars": 212,
+        "replay_events": 0,
+        "replay_timed_out": true
+      },
+      "found_by": "M4-01 (reports/acp2_remediation_20261026/m4-01/summary.json)",
+      "id": "F8-wait-cursor-redacted",
+      "status": "closed"
+    }
+  ],
+  "contract_digests": {
+    "docs/reference/next-change/acp2-contracts/experience/proposal.schema.json": "sha256:4f4363ee791f32ce31358fd791ad26f89f0364df1b1dad0a3dcbb0a7ea50fbcd",
+    "docs/reference/next-change/acp2-contracts/experience/research-record.schema.json": "sha256:75f8ef207feced0bb39f37fafdcf8963ba3747cbb8c2c019550eed5f56100752",
+    "docs/reference/next-change/acp2-contracts/runtime/p2-research-operations.v1.json": "sha256:32525b7bd1866ad0d3f2c73162733dd4e44f49d1eec26dbeba14b4ca55696227",
+    "docs/reference/next-change/acp2-contracts/runtime/research-session.v1.md": "sha256:80b23340bd92c41dd0c918de274b93473ead20fcce149354a433000a40fc5c21",
+    "docs/reference/next-change/acp2-contracts/science/evidence.schema.json": "sha256:74b1aa4d638f5ee0027be06817c2c00bf6d79cdb14a96514ff097783b911cc10"
+  },
+  "data_idempotency": {
+    "after": {
+      "jobs": 2,
+      "operation_rows": 1,
+      "tree": {
+        "bytes": 10599,
+        "files": 15
+      }
+    },
+    "before": {
+      "jobs": 2,
+      "operation_rows": 1,
+      "tree": {
+        "bytes": 10599,
+        "files": 15
+      }
+    },
+    "client_cache": "a fresh ControllerClient per pass (no client memo)",
+    "controller_calls": 6,
+    "controller_calls_note": "one prepare + one read per pass cross the Controller for real (fresh ControllerClient each pass, no client memo), so the platform is the dedup authority and the call count cannot be hidden by caching",
+    "controller_calls_source": "the Controller uvicorn access log of this step",
+    "controller_prepare_calls": 3,
+    "controller_read_calls": 3,
+    "latency_ms": {
+      "max": 12.66,
+      "p50": 10.83,
+      "p95": 12.66,
+      "samples": 6
+    },
+    "no_extra_job": true,
+    "no_extra_operation_row": true,
+    "no_write_amplification": true,
+    "operation_ref": "op_fee6d92cc70b46238062f4b6892abf2a",
+    "passes": 3,
+    "prepare": [
+      {
+        "availability": "ready",
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+        "idempotent_replay": false,
+        "operation_ref": "op_fee6d92cc70b46238062f4b6892abf2a"
+      },
+      {
+        "availability": "ready",
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+        "idempotent_replay": false,
+        "operation_ref": "op_fee6d92cc70b46238062f4b6892abf2a"
+      },
+      {
+        "availability": "ready",
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+        "idempotent_replay": false,
+        "operation_ref": "op_fee6d92cc70b46238062f4b6892abf2a"
+      }
+    ],
+    "read": [
+      {
+        "bytes": 400,
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c"
+      },
+      {
+        "bytes": 400,
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c"
+      },
+      {
+        "bytes": 400,
+        "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c"
+      }
+    ],
+    "same_body_bytes": true,
+    "same_digest": true,
+    "same_operation_ref": true
+  },
+  "duration_seconds": 23.8,
+  "evidence_kind": "live",
+  "exit_code": 0,
+  "failed_steps": [],
+  "fault_matrix": {
+    "cases": [
+      {
+        "detail": {
+          "conflict_rule": "idempotency_conflict",
+          "conflict_status": 409,
+          "jobs_after": 3,
+          "jobs_before": 2,
+          "preflight_status": null,
+          "replay_same_task": true,
+          "side_effect": "one accepted submit (declared); the task is cancelled",
+          "task_id": "20261027_211525_003_fake"
+        },
+        "expected": "cross_tool_key_isolation",
+        "name": "fault.cross_tool_same_key",
+        "observed": "cross_tool_key_isolation",
+        "ok": true,
+        "status": 409
+      },
+      {
+        "detail": {
+          "alice": "created",
+          "alice_replay": "in_progress",
+          "bob": "conflict",
+          "bob_row": false,
+          "cross_project_status": 403,
+          "jobs_after": 3,
+          "jobs_before": 3
+        },
+        "expected": "cross_user_isolation",
+        "name": "fault.cross_user",
+        "observed": "cross_user_isolation",
+        "ok": true,
+        "status": 0
+      },
+      {
+        "detail": {
+          "conflict_rule": "execution_mode_conflict",
+          "conflict_status": 422,
+          "jobs_after": 3,
+          "jobs_before": 3,
+          "unknown_rule": "unknown_target_node",
+          "unknown_status": 422
+        },
+        "expected": "illegal_remote_target_refused",
+        "name": "fault.illegal_remote_target",
+        "observed": "illegal_remote_target_refused",
+        "ok": true,
+        "status": 422
+      },
+      {
+        "detail": {
+          "accepted": false,
+          "code": "wrong_owner",
+          "jobs_after": 3,
+          "jobs_before": 3
+        },
+        "expected": "wrong_owner",
+        "name": "fault.forged_receipt",
+        "observed": "wrong_owner",
+        "ok": true,
+        "status": 0
+      },
+      {
+        "detail": {
+          "jobs_after": 3,
+          "jobs_before": 3,
+          "no_binding_rule": "approval_required",
+          "no_binding_status": 403,
+          "wrong_digest_rule": "plan_digest_mismatch",
+          "wrong_digest_status": 400
+        },
+        "expected": "approval_bypass_refused",
+        "name": "fault.approval_bypass",
+        "observed": "approval_bypass_refused",
+        "ok": true,
+        "status": 403
+      },
+      {
+        "detail": {
+          "allowed": 1,
+          "denied": 1,
+          "denied_reasons": [
+            "capacity_concurrency"
+          ],
+          "jobs_after": 3,
+          "jobs_before": 3,
+          "requests": 2
+        },
+        "expected": "budget_concurrency_one_admission",
+        "name": "fault.budget_concurrency",
+        "observed": "budget_concurrency_one_admission",
+        "ok": true,
+        "status": 0
+      },
+      {
+        "detail": {
+          "detail": {
+            "detail": {
+              "code": "access_denied",
+              "message": "foreign_research: view research 'res-foreign0000000000000' != session research 'res-dcf760e391c82720be6d4bbd'",
+              "params": {
+                "rule": "foreign_research"
+              },
+              "retryable": false
+            }
+          },
+          "foreign_projection_digest": "sha256:76b443a5598b89d2b2d129373de79addad797556fe6f1a7c189dae6b5548f3c6",
+          "jobs_after": 3,
+          "jobs_before": 3
+        },
+        "expected": "foreign_research",
+        "name": "fault.wrong_evidence_identity",
+        "observed": "foreign_research",
+        "ok": true,
+        "status": 403
+      },
+      {
+        "detail": {
+          "detail": {
+            "detail": {
+              "code": "resource_not_ready",
+              "message": "the wait cursor expired; re-read the snapshot instead of replaying it",
+              "params": {
+                "max_age_s": 900,
+                "rule": "cursor_expired"
+              },
+              "retryable": true
+            }
+          },
+          "jobs_after": 3,
+          "jobs_before": 3
+        },
+        "expected": "cursor_expired",
+        "name": "fault.cursor_expiry",
+        "observed": "cursor_expired",
+        "ok": true,
+        "status": 409
+      },
+      {
+        "detail": {
+          "first_attempt_error": true,
+          "jobs_after": 3,
+          "jobs_before": 3,
+          "path": "publication-retry/result_manifest.json",
+          "products": 1,
+          "publication_state": true,
+          "retry_same_bytes": true,
+          "state_complete": true
+        },
+        "expected": "publication_retry_once",
+        "name": "fault.publication_retry",
+        "observed": "publication_retry_once",
+        "ok": true,
+        "status": 0
+      },
+      {
+        "detail": {
+          "jobs_after": 3,
+          "jobs_before": 3,
+          "old_pid": 2616783,
+          "record_after_ok": true,
+          "record_before_ok": true,
+          "resume_rule": "saga_not_found",
+          "resume_status": 409,
+          "same_job_ids": true
+        },
+        "expected": "crash_recovery_same_chain",
+        "name": "fault.crash_recovery",
+        "observed": "crash_recovery_same_chain",
+        "ok": true,
+        "status": 409
+      },
+      {
+        "detail": {
+          "job_status": "failed",
+          "jobs_after": 3,
+          "jobs_before": 3,
+          "missing_facts": [
+            "frequency_payload"
+          ],
+          "publish": false,
+          "qualification": "incomplete_result",
+          "row": "d"
+        },
+        "expected": "incomplete_result_not_published",
+        "name": "fault.r01_incomplete_task_result",
+        "observed": "incomplete_result_not_published",
+        "ok": true,
+        "status": 0
+      },
+      {
+        "detail": {
+          "blocked": [
+            [
+              "freq",
+              "budget_exceeded"
+            ]
+          ],
+          "dispatched": [
+            "relax"
+          ],
+          "jobs_after": 3,
+          "jobs_before": 3,
+          "worst_case_qc": 2
+        },
+        "expected": "qc_rescue_over_limit_blocked",
+        "name": "fault.r02_qc_rescue_over_limit",
+        "observed": "qc_rescue_over_limit_blocked",
+        "ok": true,
+        "status": 0
+      },
+      {
+        "detail": {
+          "error": "envelope step_identities != frozen plan step identities",
+          "jobs_after": 3,
+          "jobs_before": 3
+        },
+        "expected": "attempt_identity_mismatch",
+        "name": "fault.r03_runtime_identity_mismatch",
+        "observed": "attempt_identity_mismatch",
+        "ok": true,
+        "status": 0
+      },
+      {
+        "detail": {
+          "authoritative_written": false,
+          "jobs_after": 3,
+          "jobs_before": 3,
+          "refused": "fenced commit refused: execution right lost: owner moved on",
+          "staged_present": true
+        },
+        "expected": "lost_right_write_refused",
+        "name": "fault.r04_lost_right_intermediate_write",
+        "observed": "lost_right_write_refused",
+        "ok": true,
+        "status": 0
+      },
+      {
+        "detail": {
+          "current_attempt_binding": 2,
+          "first_applied": true,
+          "jobs_after": 3,
+          "jobs_before": 3,
+          "replay_duplicate": true,
+          "usage_attempts": [
+            1
+          ]
+        },
+        "expected": "historical_attempt_usage_settled_once",
+        "name": "fault.r05_historical_attempt_usage",
+        "observed": "historical_attempt_usage_settled_once",
+        "ok": true,
+        "status": 0
+      },
+      {
+        "detail": {
+          "admitted": true,
+          "claim_id": "plan|eac04e7b-fa5a-4074-a379-1174087d0707|res-dcf760e391c82720be6d4bbd|ses-8266e6f1d20009b433a8e9c4|2|1",
+          "jobs_after": 3,
+          "jobs_before": 3,
+          "model_receipt_id": "modelrcpt|eac04e7b-fa5a-4074-a379-1174087d0707|res-dcf760e391c82720be6d4bbd|ses-8266e6f1d20009b433a8e9c4|2|1|sha256:9cc840f79bd3420bcd8928df34afa96c373586ace52d23f670f756cf63f636e5",
+          "model_request_capability": "recorded-only",
+          "projection_consumed": {
+            "attempt": 0,
+            "bsub": 0,
+            "model_request": 1,
+            "qc_invocation": 0,
+            "recipe_step": 0,
+            "task_ref": 0
+          },
+          "replay_detail": "",
+          "replay_same_reservation": true,
+          "reservation_names_a_job": false
+        },
+        "expected": "planning_claim_without_taskref_is_durable",
+        "name": "fault.r06_planning_quota_without_taskref",
+        "observed": "planning_claim_without_taskref_is_durable",
+        "ok": true,
+        "status": 0
+      },
+      {
+        "detail": {
+          "current_key_prefix": "prep_",
+          "jobs_after": 3,
+          "jobs_before": 3,
+          "keys_differ": true,
+          "legacy_key_prefix": "op_",
+          "legacy_replay": "created",
+          "legacy_replay_detail": "takeover",
+          "legacy_v1_key_differs": true,
+          "live_row_key": "prep_0033df536e38454b210165e1bf70f4b6",
+          "live_row_key_is_v2": true,
+          "live_row_reproduces_v2": true,
+          "unverifiable": "conflict",
+          "unverifiable_task": null
+        },
+        "expected": "legacy_key_and_row_reconciled",
+        "name": "fault.r07_legacy_key_and_data_row",
+        "observed": "legacy_key_and_row_reconciled",
+        "ok": true,
+        "status": 0
+      },
+      {
+        "detail": {
+          "approval_state": "approved",
+          "artifact_digest": "sha256:227df18302bb1a4b1e4d44f5873b0946c0c275830f69d1da1ae35cd20f31fbf7",
+          "injection_in_record": false,
+          "jobs_after": 3,
+          "jobs_before": 3
+        },
+        "expected": "malicious_artifact_cannot_authorize",
+        "name": "fault.r08_malicious_artifact_and_receipt",
+        "observed": "malicious_artifact_cannot_authorize",
+        "ok": true,
+        "status": 0
+      },
+      {
+        "detail": {
+          "detail": {
+            "detail": {
+              "code": "access_denied",
+              "message": "the approval was revoked",
+              "params": {
+                "rule": "approval_revoked"
+              },
+              "retryable": false
+            }
+          },
+          "jobs_after": 3,
+          "jobs_before": 3
+        },
+        "expected": "approval_revoked",
+        "name": "fault.revoked_approval",
+        "observed": "approval_revoked",
+        "ok": true,
+        "status": 403
+      }
+    ],
+    "passed": 19,
+    "total": 19
+  },
+  "files": [
+    "README.md",
+    "controller.log",
+    "controller.restart.log",
+    "fault-matrix.json",
+    "performance.json",
+    "stub-boundaries.json",
+    "trace.jsonl"
+  ],
+  "findings": [],
+  "generated_at": "2026-10-27T13:15:30Z",
+  "git_head": "980122608540b27ff734745a5542bf3872bf1f66",
+  "limitations": [
+    "real science / QC / LSF: NOT_VERIFIED (controlled CCCP-dispatch stub)",
+    "real browser / Chromium: NOT_VERIFIED (Workbench modules run in Node over real HTTP; the Chromium row belongs to M4-02)",
+    "remote/LSF read and publication retry against a real cluster: NOT_VERIFIED (M4-03)",
+    "real model: LIVE through the Controller model gateway (M3-03); the scientific dispatch is still the declared CCCP-dispatch seam of this chain (M4-02 runs real Local science in its own leg)"
+  ],
+  "mcp": {
+    "round0": {
+      "evidence_feedback": {
+        "provided": false,
+        "report_id": null
+      },
+      "evidence_kind": "live",
+      "model_adapter": "model-gateway",
+      "prepare": {
+        "passes": [
+          {
+            "availability": "readable",
+            "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+            "operation_reference": "op_defd1969681b4b7fa0509e3fcf281305",
+            "pass": 0,
+            "read": {
+              "body_bytes": 400,
+              "body_sha256": "e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+              "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+              "error": null,
+              "is_error": false
+            }
+          },
+          {
+            "availability": "readable",
+            "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+            "operation_reference": "op_defd1969681b4b7fa0509e3fcf281305",
+            "pass": 1,
+            "read": {
+              "body_bytes": 400,
+              "body_sha256": "e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+              "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+              "error": null,
+              "is_error": false
+            }
+          }
+        ],
+        "same_body": true,
+        "same_digest": true,
+        "same_operation": true
+      },
+      "protocol_version": "2025-06-18",
+      "supervisor": {
+        "decision": null,
+        "model_invocations": 4,
+        "phases": [
+          "understand@0",
+          "hypothesize@0",
+          "critique@0",
+          "plan@0",
+          "approve@0",
+          "wait@0",
+          "stop@0"
+        ],
+        "reports": 0,
+        "rounds_completed": 0,
+        "status": "stopped",
+        "stop_reason": "no_evidence",
+        "submit_port_calls": 1,
+        "submits": 1,
+        "task_refs": [
+          {
+            "attempt": 1,
+            "job_id": "20261027_211510_001_fake",
+            "project_id": "eac04e7b-fa5a-4074-a379-1174087d0707",
+            "release_digest": "sha256:adf3bbe51cb52ae473d29ef792aa9f9a6a10b91ed9ab8ff3d7e02de5ace3e057",
+            "release_id": "910ca9d3aff95737"
+          }
+        ],
+        "wait_invocations": 1
+      },
+      "task_ref_source": "status+declared_release",
+      "tools": [
+        "acp_analyze",
+        "acp_cancel",
+        "acp_capabilities",
+        "acp_preflight",
+        "acp_prepare_artifact",
+        "acp_read_artifact",
+        "acp_research_approval_decide_v1",
+        "acp_research_approval_query_v1",
+        "acp_research_approval_request_v1",
+        "acp_research_approval_revoke_v1",
+        "acp_research_proposal_create_v1",
+        "acp_research_proposal_read_v1",
+        "acp_research_proposal_update_cas_v1",
+        "acp_research_resume_v1",
+        "acp_research_snapshot_v1",
+        "acp_research_wait_v1",
+        "acp_status",
+        "acp_submit"
+      ]
+    },
+    "round1": {
+      "evidence_feedback": {
+        "provided": true,
+        "report_id": "report-20261027_211510_001_fake-a1"
+      },
+      "evidence_kind": "live",
+      "model_adapter": "model-gateway",
+      "prepare": {
+        "passes": [
+          {
+            "availability": "readable",
+            "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+            "operation_reference": "op_fee6d92cc70b46238062f4b6892abf2a",
+            "pass": 0,
+            "read": {
+              "body_bytes": 400,
+              "body_sha256": "e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+              "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+              "error": null,
+              "is_error": false
+            }
+          },
+          {
+            "availability": "readable",
+            "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+            "operation_reference": "op_fee6d92cc70b46238062f4b6892abf2a",
+            "pass": 1,
+            "read": {
+              "body_bytes": 400,
+              "body_sha256": "e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+              "digest": "sha256:e7d40e28cae3f547ba0f964a74d60f7d20172b997b0554870a91d92910b54b0c",
+              "error": null,
+              "is_error": false
+            }
+          }
+        ],
+        "same_body": true,
+        "same_digest": true,
+        "same_operation": true
+      },
+      "protocol_version": "2025-06-18",
+      "supervisor": {
+        "decision": null,
+        "model_invocations": 5,
+        "phases": [
+          "understand@0",
+          "hypothesize@0",
+          "critique@0",
+          "plan@0",
+          "approve@0",
+          "wait@0",
+          "evaluate@0",
+          "revise@0",
+          "stop@1"
+        ],
+        "reports": 1,
+        "rounds_completed": 1,
+        "status": "stopped",
+        "stop_reason": "round_cap",
+        "submit_port_calls": 1,
+        "submits": 1,
+        "task_refs": [
+          {
+            "attempt": 1,
+            "job_id": "20261027_211517_002_fake",
+            "project_id": "eac04e7b-fa5a-4074-a379-1174087d0707",
+            "release_digest": "sha256:adf3bbe51cb52ae473d29ef792aa9f9a6a10b91ed9ab8ff3d7e02de5ace3e057",
+            "release_id": "910ca9d3aff95737"
+          }
+        ],
+        "wait_invocations": 1
+      },
+      "task_ref_source": "status+declared_release",
+      "tools": [
+        "acp_analyze",
+        "acp_cancel",
+        "acp_capabilities",
+        "acp_preflight",
+        "acp_prepare_artifact",
+        "acp_read_artifact",
+        "acp_research_approval_decide_v1",
+        "acp_research_approval_query_v1",
+        "acp_research_approval_request_v1",
+        "acp_research_approval_revoke_v1",
+        "acp_research_proposal_create_v1",
+        "acp_research_proposal_read_v1",
+        "acp_research_proposal_update_cas_v1",
+        "acp_research_resume_v1",
+        "acp_research_snapshot_v1",
+        "acp_research_wait_v1",
+        "acp_status",
+        "acp_submit"
+      ]
+    }
+  },
+  "model_adapter": "model-gateway",
+  "model_gateway": {
+    "budget": {
+      "budget_id": "rb_3a755d808024281c18d7e6c7",
+      "credential": {
+        "base_url": "https://api.deepseek.com/v1",
+        "configured": true,
+        "environment": "ACP2_MODEL_API_KEY",
+        "model": "deepseek-chat"
+      },
+      "identity": {
+        "principal_id": "principal_local",
+        "project_id": "eac04e7b-fa5a-4074-a379-1174087d0707",
+        "research_id": "res-21b31bc8376ff00357667d9d",
+        "session_id": "ses-f132170eaf25ba84d87f6519"
+      },
+      "limit": 20,
+      "model_requests": 3,
+      "receipt_rows": [
+        {
+          "attempt": 0,
+          "call_seq": 1,
+          "claim_id": "plan|eac04e7b-fa5a-4074-a379-1174087d0707|res-21b31bc8376ff00357667d9d|ses-f132170eaf25ba84d87f6519|0|1",
+          "job_id": "",
+          "model": "deepseek-chat",
+          "outcome": "completed",
+          "phase": "plan",
+          "receipt_id": "modelrcpt|eac04e7b-fa5a-4074-a379-1174087d0707|res-21b31bc8376ff00357667d9d|ses-f132170eaf25ba84d87f6519|0|1|sha256:02fbb7d8b4edb5509acd8ceb3d3df0acda8d7afa564b342f407f2c12705f3b2c",
+          "recorded_at": "2026-10-27T13:15:16.230614+00:00",
+          "request_digest": "sha256:02fbb7d8b4edb5509acd8ceb3d3df0acda8d7afa564b342f407f2c12705f3b2c",
+          "round": 0,
+          "usage": {
+            "complete": true,
+            "estimate": false,
+            "input_tokens": 1055,
+            "output_tokens": 454,
+            "source": "provider-reported",
+            "total_tokens": 1509
+          }
+        },
+        {
+          "attempt": 0,
+          "call_seq": 2,
+          "claim_id": "plan|eac04e7b-fa5a-4074-a379-1174087d0707|res-21b31bc8376ff00357667d9d|ses-f132170eaf25ba84d87f6519|0|2",
+          "job_id": "",
+          "model": "deepseek-chat",
+          "outcome": "completed",
+          "phase": "plan",
+          "receipt_id": "modelrcpt|eac04e7b-fa5a-4074-a379-1174087d0707|res-21b31bc8376ff00357667d9d|ses-f132170eaf25ba84d87f6519|0|2|sha256:e63ce233dbc6622d743f74ebad315fbbde28646a8cf2b5db8cbb36ff42ad5d24",
+          "recorded_at": "2026-10-27T13:15:22.711328+00:00",
+          "request_digest": "sha256:e63ce233dbc6622d743f74ebad315fbbde28646a8cf2b5db8cbb36ff42ad5d24",
+          "round": 0,
+          "usage": {
+            "complete": true,
+            "estimate": false,
+            "input_tokens": 1349,
+            "output_tokens": 459,
+            "source": "provider-reported",
+            "total_tokens": 1808
+          }
+        },
+        {
+          "attempt": 0,
+          "call_seq": 3,
+          "claim_id": "plan|eac04e7b-fa5a-4074-a379-1174087d0707|res-21b31bc8376ff00357667d9d|ses-f132170eaf25ba84d87f6519|0|3",
+          "job_id": "",
+          "model": "deepseek-chat",
+          "outcome": "completed",
+          "phase": "plan",
+          "receipt_id": "modelrcpt|eac04e7b-fa5a-4074-a379-1174087d0707|res-21b31bc8376ff00357667d9d|ses-f132170eaf25ba84d87f6519|0|3|sha256:429d599eaaee3983c066738138dc56591166a7b34df6f3711441f87dfbd1ceef",
+          "recorded_at": "2026-10-27T13:15:24.944645+00:00",
+          "request_digest": "sha256:429d599eaaee3983c066738138dc56591166a7b34df6f3711441f87dfbd1ceef",
+          "round": 0,
+          "usage": {
+            "complete": true,
+            "estimate": false,
+            "input_tokens": 1479,
+            "output_tokens": 454,
+            "source": "provider-reported",
+            "total_tokens": 1933
+          }
+        }
+      ],
+      "receipts": 3,
+      "released": 0,
+      "remaining": 17,
+      "reserved": 0,
+      "schema": "acp2.api.model-usage.v1",
+      "settled": 3
+    },
+    "call_cap": 20,
+    "call_count": 3,
+    "calls": [
+      {
+        "attempt": 1,
+        "budget": {
+          "budget_id": "rb_3a755d808024281c18d7e6c7",
+          "is_planned_identity": true,
+          "limit": 20,
+          "model_requests": 1,
+          "receipts": 1,
+          "released": 0,
+          "remaining": 19,
+          "reserved": 0,
+          "round": 0,
+          "settled": 1
+        },
+        "duration_ms": 2334,
+        "evidence_in_prompt": false,
+        "http_status": 200,
+        "identity": {
+          "principal_id": "principal_local",
+          "project_id": "eac04e7b-fa5a-4074-a379-1174087d0707",
+          "research_id": "res-21b31bc8376ff00357667d9d",
+          "session_id": "ses-f132170eaf25ba84d87f6519"
+        },
+        "output_chars": 1288,
+        "output_head": "{\"plan_id\":\"plan-eac04e7b-fa5a-4074-a379-1174087d0707-r0\",\"project_id\":\"eac04e7b-fa5a-4074-a379-1174087d0707\",\"round\":0,\"hypothesis\":\"Round 0: M4-01 round 0: does the stub evidence support the hypothesis?\",\"recipe_digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"pla",
+        "output_sha256": "582f2e5b7eaa11e68c7deac6e12b77cbbb8c165d392f5db11e04bc13eab90ff0",
+        "output_tail": "0,\"task_refs\":1,\"recipe_steps\":1,\"qc_invocations\":1,\"wall_seconds\":60,\"queue_seconds\":60},\"notes\":[\"m4-02 live plan\"],\"schema\":\"acp2.skill.planner.output.v1\",\"skill\":\"planner\",\"skill_version\":\"1.1.0\"}",
+        "phase": "plan",
+        "receipt_id": "modelrcpt|eac04e7b-fa5a-4074-a379-1174087d0707|res-21b31bc8376ff00357667d9d|ses-f132170eaf25ba84d87f6519|0|1|sha256:02fbb7d8b4edb5509acd8ceb3d3df0acda8d7afa564b342f407f2c12705f3b2c",
+        "refusal": null,
+        "round": 0,
+        "round_leg": "round0",
+        "usage": {
+          "complete": true,
+          "estimate": false,
+          "input_tokens": 1055,
+          "output_tokens": 454,
+          "source": "provider-reported",
+          "total_tokens": 1509
+        }
+      },
+      {
+        "attempt": 1,
+        "budget": {
+          "budget_id": "rb_3a755d808024281c18d7e6c7",
+          "is_planned_identity": true,
+          "limit": 20,
+          "model_requests": 2,
+          "receipts": 2,
+          "released": 0,
+          "remaining": 18,
+          "reserved": 0,
+          "round": 0,
+          "settled": 2
+        },
+        "duration_ms": 2065,
+        "evidence_in_prompt": true,
+        "http_status": 200,
+        "identity": {
+          "principal_id": "principal_local",
+          "project_id": "eac04e7b-fa5a-4074-a379-1174087d0707",
+          "research_id": "res-21b31bc8376ff00357667d9d",
+          "session_id": "ses-f132170eaf25ba84d87f6519"
+        },
+        "output_body": "{\"plan_id\":\"plan-eac04e7b-fa5a-4074-a379-1174087d0707-r0\",\"project_id\":\"eac04e7b-fa5a-4074-a379-1174087d0707\",\"round\":0,\"hypothesis\":\"Round 0: M4-01 round 1: does the stub evidence support the hypothesis?\",\"recipe_digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"plan_definition_digest\":\"sha256:5444684f852645353007615c8cccdd77ad594a2061577b79ea520c20d2f25e49\",\"science\":{\"capability_steps\":[{\"step_index\":0,\"capability\":\"singlepoint\",\"version\":\"1.0.0\",\"parameters\":{}}],\"initial_inputs\":[{\"input_id\":\"in-m4-01\",\"sha256\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"format\":\"smiles\",\"role\":\"minimum\"}],\"method\":\"r2SCAN-3c\",\"mapping\":\"canonical\",\"charge\":0,\"multiplicity\":1,\"electronic_state\":null,\"allowed_substitutions\":[]},\"science_inputs\":{\"charge\":0,\"multiplicity\":1,\"electronic_state\":null,\"structure_provenance\":[{\"input_id\":\"in-m4-01\",\"sha256\":\"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"format\":\"smiles\",\"role\":\"minimum\"}],\"constraints\":[]},\"budget\":{\"model_requests\":2,\"input_tokens\":1000,\"output_tokens\":1000,\"task_refs\":1,\"recipe_steps\":1,\"qc_invocations\":1,\"wall_seconds\":60,\"queue_seconds\":60},\"notes\":[\"m4-02 live plan\"],\"schema\":\"acp2.skill.planner.output.v1\",\"skill\":\"planner\",\"skill_version\":\"1.1.0\"}",
+        "output_chars": 1312,
+        "output_head": "{\"plan_id\":\"plan-eac04e7b-fa5a-4074-a379-1174087d0707-r0\",\"project_id\":\"eac04e7b-fa5a-4074-a379-1174087d0707\",\"round\":0,\"hypothesis\":\"Round 0: M4-01 round 1: does the stub evidence support the hypothesis?\",\"recipe_digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"pla",
+        "output_sha256": "5dc02ede4b37f7438886f0991d99c78b056626934370aa13b49d816c99e5ab24",
+        "output_tail": "0,\"task_refs\":1,\"recipe_steps\":1,\"qc_invocations\":1,\"wall_seconds\":60,\"queue_seconds\":60},\"notes\":[\"m4-02 live plan\"],\"schema\":\"acp2.skill.planner.output.v1\",\"skill\":\"planner\",\"skill_version\":\"1.1.0\"}",
+        "phase": "plan",
+        "receipt_id": "modelrcpt|eac04e7b-fa5a-4074-a379-1174087d0707|res-21b31bc8376ff00357667d9d|ses-f132170eaf25ba84d87f6519|0|2|sha256:e63ce233dbc6622d743f74ebad315fbbde28646a8cf2b5db8cbb36ff42ad5d24",
+        "refusal": null,
+        "rejected_issues": [
+          {
+            "code": "additional_property",
+            "message": "not allowed",
+            "path": "$.science.electronic_state"
+          }
+        ],
+        "rejected_reason": "planner_output_invalid",
+        "repairable": true,
+        "round": 0,
+        "round_leg": "round1",
+        "usage": {
+          "complete": true,
+          "estimate": false,
+          "input_tokens": 1349,
+          "output_tokens": 459,
+          "source": "provider-reported",
+          "total_tokens": 1808
+        }
+      },
+      {
+        "attempt": 2,
+        "budget": {
+          "budget_id": "rb_3a755d808024281c18d7e6c7",
+          "is_planned_identity": true,
+          "limit": 20,
+          "model_requests": 3,
+          "receipts": 3,
+          "released": 0,
+          "remaining": 17,
+          "reserved": 0,
+          "round": 0,
+          "settled": 3
+        },
+        "duration_ms": 2231,
+        "evidence_in_prompt": true,
+        "http_status": 200,
+        "identity": {
+          "principal_id": "principal_local",
+          "project_id": "eac04e7b-fa5a-4074-a379-1174087d0707",
+          "research_id": "res-21b31bc8376ff00357667d9d",
+          "session_id": "ses-f132170eaf25ba84d87f6519"
+        },
+        "output_chars": 1288,
+        "output_head": "{\"plan_id\":\"plan-eac04e7b-fa5a-4074-a379-1174087d0707-r0\",\"project_id\":\"eac04e7b-fa5a-4074-a379-1174087d0707\",\"round\":0,\"hypothesis\":\"Round 0: M4-01 round 1: does the stub evidence support the hypothesis?\",\"recipe_digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"pla",
+        "output_sha256": "92aed255ffbad9606bd48690620f20c36fa8932f5a30fbc349d703d5489fa061",
+        "output_tail": "0,\"task_refs\":1,\"recipe_steps\":1,\"qc_invocations\":1,\"wall_seconds\":60,\"queue_seconds\":60},\"notes\":[\"m4-02 live plan\"],\"schema\":\"acp2.skill.planner.output.v1\",\"skill\":\"planner\",\"skill_version\":\"1.1.0\"}",
+        "phase": "plan",
+        "receipt_id": "modelrcpt|eac04e7b-fa5a-4074-a379-1174087d0707|res-21b31bc8376ff00357667d9d|ses-f132170eaf25ba84d87f6519|0|3|sha256:429d599eaaee3983c066738138dc56591166a7b34df6f3711441f87dfbd1ceef",
+        "refusal": null,
+        "round": 0,
+        "round_leg": "round1",
+        "usage": {
+          "complete": true,
+          "estimate": false,
+          "input_tokens": 1479,
+          "output_tokens": 454,
+          "source": "provider-reported",
+          "total_tokens": 1933
+        }
+      }
+    ],
+    "cost": {
+      "basis": "upper bound from the call cap and the per-call output cap",
+      "input_usd_per_mtok": 0.28,
+      "invoice_read": false,
+      "output_usd_per_mtok": 0.42,
+      "upper_bound_usd": 0.0092
+    },
+    "credential_env_names": [
+      "ACP2_MODEL_API_KEY",
+      "DEEPSEEK_API_KEY"
+    ],
+    "credential_holder": "Controller process environment (never in this document)",
+    "credential_state": {
+      "base_url": "https://api.deepseek.com/v1",
+      "configured": true,
+      "environment": "ACP2_MODEL_API_KEY",
+      "model": "deepseek-chat"
+    },
+    "credential_values_recorded": false,
+    "gateway": "Controller /api/v2/model/plan (M3-03 ModelGateway)",
+    "max_output_tokens_per_call": 2000,
+    "model": "deepseek-chat",
+    "receipts": [
+      {
+        "attempt": 0,
+        "call_seq": 1,
+        "claim_id": "plan|eac04e7b-fa5a-4074-a379-1174087d0707|res-21b31bc8376ff00357667d9d|ses-f132170eaf25ba84d87f6519|0|1",
+        "job_id": "",
+        "model": "deepseek-chat",
+        "outcome": "completed",
+        "phase": "plan",
+        "receipt_id": "modelrcpt|eac04e7b-fa5a-4074-a379-1174087d0707|res-21b31bc8376ff00357667d9d|ses-f132170eaf25ba84d87f6519|0|1|sha256:02fbb7d8b4edb5509acd8ceb3d3df0acda8d7afa564b342f407f2c12705f3b2c",
+        "recorded_at": "2026-10-27T13:15:16.230614+00:00",
+        "request_digest": "sha256:02fbb7d8b4edb5509acd8ceb3d3df0acda8d7afa564b342f407f2c12705f3b2c",
+        "round": 0,
+        "usage": {
+          "complete": true,
+          "estimate": false,
+          "input_tokens": 1055,
+          "output_tokens": 454,
+          "source": "provider-reported",
+          "total_tokens": 1509
+        }
+      },
+      {
+        "attempt": 0,
+        "call_seq": 2,
+        "claim_id": "plan|eac04e7b-fa5a-4074-a379-1174087d0707|res-21b31bc8376ff00357667d9d|ses-f132170eaf25ba84d87f6519|0|2",
+        "job_id": "",
+        "model": "deepseek-chat",
+        "outcome": "completed",
+        "phase": "plan",
+        "receipt_id": "modelrcpt|eac04e7b-fa5a-4074-a379-1174087d0707|res-21b31bc8376ff00357667d9d|ses-f132170eaf25ba84d87f6519|0|2|sha256:e63ce233dbc6622d743f74ebad315fbbde28646a8cf2b5db8cbb36ff42ad5d24",
+        "recorded_at": "2026-10-27T13:15:22.711328+00:00",
+        "request_digest": "sha256:e63ce233dbc6622d743f74ebad315fbbde28646a8cf2b5db8cbb36ff42ad5d24",
+        "round": 0,
+        "usage": {
+          "complete": true,
+          "estimate": false,
+          "input_tokens": 1349,
+          "output_tokens": 459,
+          "source": "provider-reported",
+          "total_tokens": 1808
+        }
+      },
+      {
+        "attempt": 0,
+        "call_seq": 3,
+        "claim_id": "plan|eac04e7b-fa5a-4074-a379-1174087d0707|res-21b31bc8376ff00357667d9d|ses-f132170eaf25ba84d87f6519|0|3",
+        "job_id": "",
+        "model": "deepseek-chat",
+        "outcome": "completed",
+        "phase": "plan",
+        "receipt_id": "modelrcpt|eac04e7b-fa5a-4074-a379-1174087d0707|res-21b31bc8376ff00357667d9d|ses-f132170eaf25ba84d87f6519|0|3|sha256:429d599eaaee3983c066738138dc56591166a7b34df6f3711441f87dfbd1ceef",
+        "recorded_at": "2026-10-27T13:15:24.944645+00:00",
+        "request_digest": "sha256:429d599eaaee3983c066738138dc56591166a7b34df6f3711441f87dfbd1ceef",
+        "round": 0,
+        "usage": {
+          "complete": true,
+          "estimate": false,
+          "input_tokens": 1479,
+          "output_tokens": 454,
+          "source": "provider-reported",
+          "total_tokens": 1933
+        }
+      }
+    ],
+    "schema": "acp2.m4-02.model-gateway-calls.v1",
+    "statement": {
+      "credential": {
+        "base_url": "https://api.deepseek.com/v1",
+        "configured": true,
+        "environment": "ACP2_MODEL_API_KEY",
+        "model": "deepseek-chat"
+      },
+      "job_or_attempt_fabricated": false,
+      "model_request_limit": 20,
+      "phases": [
+        "understand",
+        "hypothesize",
+        "critique",
+        "plan"
+      ],
+      "provider_calls_are_never_fabricated": true,
+      "receipt_root": "/tmp/opencode/acp2-m4-01-ten15saw/runs/model-gateway",
+      "schema": "acp2.runtime.model-gateway.v1"
+    },
+    "statement_http_status": 200,
+    "tokens": {
+      "calls_with_unknown_usage": 0,
+      "input_tokens": 3883,
+      "output_tokens": 1367
+    },
+    "usage_http_status": 200,
+    "within_call_cap": true
+  },
+  "product_fixes": [
+    {
+      "after": "the superseding approval carries the same science_digest and signed science projection as the create path (research_session.supersede_approval_for_plan_change + ResearchWriter._supersede_plan_change)",
+      "before": "supersede_approval_for_plan_change requested the new approval without science_digest/science_projection, so a revised round was downgraded to an execution-only approval and the Workbench card reported approval_science_unbound",
+      "found_by": "the round-1 proposal CAS of this chain",
+      "id": "F9-supersede-approval-science-binding",
+      "tested_by": [
+        "tests/test_acp2_full_chain_matrix.py (round 1 binding_status=full)",
+        "tests/test_acp2_research_saga.py",
+        "tests/test_acp2_m203_approval_policy.py",
+        "tests/test_acp2_runtime_approvals.py",
+        "tests/test_acp2_research_session_contract.py",
+        "tests/test_acp2_submit_policy.py"
+      ]
+    }
+  ],
+  "reasons": [],
+  "run_root": "/tmp/opencode/acp2-m4-01-ten15saw/runs",
+  "schema": "acp2.m4-01.full-chain.v1",
+  "status": "PASS",
+  "steps": [
+    {
+      "duration_ms": 28,
+      "name": "preflight",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 2703,
+      "name": "controller.start",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 107,
+      "name": "db.migrations",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 12,
+      "name": "project.create",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 6573,
+      "name": "round0.chain",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 22,
+      "name": "round0.readback",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 8535,
+      "name": "round1.chain",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 9,
+      "name": "record.history",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 252,
+      "name": "workbench.adapter",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 112,
+      "name": "data.idempotency",
+      "status": "PASS"
+    },
+    {
+      "duration_ms": 17,
+      "name": "model.gateway.evidence",
+      "status": "PASS"
+    }
+  ],
+  "task": "M4-01 no-QC full product chain and fault matrix (G20)",
+  "workbench": {
+    "approval_validity": {
+      "binding_status": "full",
+      "revision": 2,
+      "status": "approved",
+      "validity": "ok"
+    },
+    "evidence_summary": {
+      "display": "supported",
+      "evidence_status": "complete",
+      "execution_terminal_state": "completed",
+      "overall_claim_status": "supported",
+      "projection_digest": "sha256:8b5eaa95800e9b6cfa7dc965075d20c2d8d1498ef15960caa0808bcbb22e0864",
+      "round": 1
+    },
+    "foreign_refusal": {
+      "code": null,
+      "message": "HTTP 403",
+      "ok": false,
+      "status": 403
+    },
+    "ok": true
+  }
+}

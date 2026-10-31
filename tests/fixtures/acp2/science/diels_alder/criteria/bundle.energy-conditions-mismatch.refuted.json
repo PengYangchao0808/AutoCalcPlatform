@@ -1,0 +1,186 @@
+{
+  "constructed": true,
+  "expected": {
+    "criteria": {
+      "DA-C01-ts-single-imaginary-mode": "supported",
+      "DA-C02-ts-mode-mapping": "supported",
+      "DA-C03-frequency-evidence": "supported",
+      "DA-C04-irc-bidirectional": "supported",
+      "DA-C05-endpoint-association": "supported",
+      "DA-C06-energy-comparability": "refuted",
+      "DA-C07-reactant-stoichiometry": "supported"
+    },
+    "overall_claim_status": "refuted",
+    "questions": {
+      "question.diels_alder.activation_energy.v1": "refuted",
+      "question.diels_alder.path_connectivity.v1": "supported"
+    }
+  },
+  "fixture_id": "da-criteria-energy-conditions-mismatch",
+  "notes": "Comparability refutation sample: a different standard state and energy unit make the barrier non-comparable under the frozen conditions; connectivity is unaffected.",
+  "real_run": false,
+  "records": [
+    {
+      "claim_id": "c-ts-exactly-one-imaginary-mode",
+      "criterion_id": "DA-C01-ts-single-imaginary-mode",
+      "evidence": {
+        "classification": "first_order_saddle_candidate",
+        "imaginary_mode_count": 1,
+        "imaginary_mode_threshold_cm1": 0.0,
+        "imaginary_modes_cm1": [
+          -512.84
+        ],
+        "mode_count": 45
+      },
+      "evidence_digest": "062dabafdf649335a5e7f262201f0bc844feca824cb136c638bd2e77719944a0",
+      "missing_check_ids": [],
+      "source_digests": [
+        "062dabafdf649335a5e7f262201f0bc844feca824cb136c638bd2e77719944a0"
+      ],
+      "status": "supported",
+      "validator_id": "check.ts_saddle_candidate",
+      "validator_version": "1.0.0"
+    },
+    {
+      "claim_id": "c-ts-mapped-imaginary-mode",
+      "criterion_id": "DA-C02-ts-mode-mapping",
+      "evidence": {
+        "atom_count": 16,
+        "atom_count_tolerance": 0,
+        "coordinate_abs_tolerance_angstrom": 0.001,
+        "coordinate_max_abs_deviation_angstrom": 0.0004,
+        "mapping_status": "resolved",
+        "native_printed_index": 6,
+        "target_mode_id": "ts_imag_mode_6"
+      },
+      "evidence_digest": "0aa5c10fbe086f7d4890171be2fe011b246a09725b8454372738c80ff6770b25",
+      "missing_check_ids": [],
+      "source_digests": [
+        "0aa5c10fbe086f7d4890171be2fe011b246a09725b8454372738c80ff6770b25"
+      ],
+      "status": "supported",
+      "validator_id": "check.ts_mode_mapping",
+      "validator_version": "1.0.0"
+    },
+    {
+      "claim_id": "c-frequency-hessian-present",
+      "criterion_id": "DA-C03-frequency-evidence",
+      "evidence": {
+        "frequency_count": 45,
+        "low_frequency_threshold_cm1": 50.0,
+        "lowest_real_mode_cm1": 71.32,
+        "missing_mode_indices": [],
+        "mode_vector_count": 45,
+        "soft_modes_cm1": [],
+        "wrong_atom_count_mode_indices": []
+      },
+      "evidence_digest": "daad02a1a415d61a7948f8d5ed89298da16f6e3eb56683b30902b266c05facd2",
+      "missing_check_ids": [],
+      "source_digests": [
+        "daad02a1a415d61a7948f8d5ed89298da16f6e3eb56683b30902b266c05facd2"
+      ],
+      "status": "supported",
+      "validator_id": "check.frequency_evidence",
+      "validator_version": "1.0.0"
+    },
+    {
+      "claim_id": "c-irc-bidirectional-complete",
+      "criterion_id": "DA-C04-irc-bidirectional",
+      "evidence": {
+        "forward": {
+          "final_structure": true,
+          "status": "converged",
+          "steps": 22
+        },
+        "reverse": {
+          "final_structure": true,
+          "status": "converged",
+          "steps": 19
+        }
+      },
+      "evidence_digest": "126dc12f4f95eb5eade766500fa777926924ecdee98578c965a5b4f054f32bf8",
+      "missing_check_ids": [],
+      "source_digests": [
+        "126dc12f4f95eb5eade766500fa777926924ecdee98578c965a5b4f054f32bf8"
+      ],
+      "status": "supported",
+      "validator_id": "check.irc_bidirectional_completion",
+      "validator_version": "1.0.0"
+    },
+    {
+      "claim_id": "c-irc-forward-endpoint",
+      "criterion_id": "DA-C05-endpoint-association",
+      "evidence": {
+        "declared_endpoint_count": 2,
+        "forward": {
+          "atom_order_stability": "stable",
+          "endpoint_id": "cyclohexene",
+          "status": "resolved"
+        },
+        "reverse": {
+          "atom_order_stability": "stable",
+          "endpoint_id": "butadiene+ethene",
+          "status": "resolved"
+        }
+      },
+      "evidence_digest": "976ee294696ed734e2b7256bb46cd471fa4e7e4379247242a0834db5da5106cf",
+      "missing_check_ids": [],
+      "source_digests": [
+        "976ee294696ed734e2b7256bb46cd471fa4e7e4379247242a0834db5da5106cf"
+      ],
+      "status": "supported",
+      "validator_id": "check.irc_endpoint_identity",
+      "validator_version": "1.0.0"
+    },
+    {
+      "claim_id": "c-energy-identities-comparable",
+      "criterion_id": "DA-C06-energy-comparability",
+      "evidence": {
+        "basis": "def2-TZVP",
+        "energy_kind": "electronic",
+        "energy_unit": "hartree",
+        "method": "wB97X-D4",
+        "pressure_pa": 100000.0,
+        "reference_state_matched": true,
+        "standard_state": "1_atm_ideal_gas",
+        "temperature_k": 298.15
+      },
+      "evidence_digest": "96e0e88c01523c1b7fdb97c31ab0254d226e98c336fdca66b2548754a577c7a1",
+      "missing_check_ids": [],
+      "source_digests": [
+        "96e0e88c01523c1b7fdb97c31ab0254d226e98c336fdca66b2548754a577c7a1"
+      ],
+      "status": "refuted",
+      "validator_id": "check.energy_comparability",
+      "validator_version": "1.0.0"
+    },
+    {
+      "claim_id": "c-reactant-stoichiometry-complete",
+      "criterion_id": "DA-C07-reactant-stoichiometry",
+      "evidence": {
+        "coefficient_mismatches": {},
+        "missing_components": [],
+        "required_reactants": {
+          "butadiene": 1,
+          "ethene": 1
+        },
+        "supplied_reactants": {
+          "butadiene": 1,
+          "ethene": 1
+        },
+        "unexpected_components": []
+      },
+      "evidence_digest": "2deef81db3b5e6b5b872bd925b50802bc47443f5ded7cde2a46108b7eb170cbc",
+      "missing_check_ids": [],
+      "source_digests": [
+        "2deef81db3b5e6b5b872bd925b50802bc47443f5ded7cde2a46108b7eb170cbc"
+      ],
+      "status": "supported",
+      "validator_id": "check.reactant_stoichiometry_completeness",
+      "validator_version": "1.0.0"
+    }
+  ],
+  "scenario_result": "PASS",
+  "schema": "acp2.science.criteria-evaluation",
+  "schema_version": 1
+}

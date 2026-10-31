@@ -1,0 +1,280 @@
+{
+  "artifacts": [
+    {
+      "path": "01-operator-workbench.png",
+      "sha256": "bb23a90c6a6c559673e953e7bdebeed611cee1bc07b461a491564684306f61aa",
+      "size_bytes": 359804
+    },
+    {
+      "path": "02-reviewer-edge-workbench.png",
+      "sha256": "c9c72b7aeb9b39464f6d584ab4a98b71ac72d6bea73515d2163de4fcc9c54bc3",
+      "size_bytes": 359961
+    },
+    {
+      "path": "03-operator-self-approve-denied.png",
+      "sha256": "bb23a90c6a6c559673e953e7bdebeed611cee1bc07b461a491564684306f61aa",
+      "size_bytes": 359804
+    },
+    {
+      "path": "04-reviewer-edge-approved.png",
+      "sha256": "c9c72b7aeb9b39464f6d584ab4a98b71ac72d6bea73515d2163de4fcc9c54bc3",
+      "size_bytes": 359961
+    },
+    {
+      "path": "05-reviewer-edge-rejected.png",
+      "sha256": "c9c72b7aeb9b39464f6d584ab4a98b71ac72d6bea73515d2163de4fcc9c54bc3",
+      "size_bytes": 359961
+    },
+    {
+      "path": "06-reviewer-revoked.png",
+      "sha256": "c9c72b7aeb9b39464f6d584ab4a98b71ac72d6bea73515d2163de4fcc9c54bc3",
+      "size_bytes": 359961
+    },
+    {
+      "path": "07-auditor-readonly-denied.png",
+      "sha256": "bb23a90c6a6c559673e953e7bdebeed611cee1bc07b461a491564684306f61aa",
+      "size_bytes": 359804
+    },
+    {
+      "path": "08-operator-budget-denied.png",
+      "sha256": "bb23a90c6a6c559673e953e7bdebeed611cee1bc07b461a491564684306f61aa",
+      "size_bytes": 359804
+    },
+    {
+      "path": "approvals.json",
+      "sha256": "eb5c38531d8d37934979b8d2e8b34e64ee9a61f748c61a605ac20765b7a4f468",
+      "size_bytes": 2547
+    },
+    {
+      "path": "budget-denial.json",
+      "sha256": "963fa2602ad5d1e8701a4e5604a051a93bc7acd9b9e6b8caa4db462321f97533",
+      "size_bytes": 479
+    },
+    {
+      "path": "browser-console.json",
+      "sha256": "2551a46103c1527a0636865c7a7b98388102b878fb7da8da66ca878e6ff56e96",
+      "size_bytes": 6517
+    },
+    {
+      "path": "browser-network.json",
+      "sha256": "962ca5fcafb24c0cdd89afaebd622b5ef7da2f9c037e584571f359fe967621b6",
+      "size_bytes": 1317
+    },
+    {
+      "path": "controller.log",
+      "sha256": "e2a23ffed51ff95b9a3d5388b62e91b881e78f7a192a2de05d2f118921672e9d",
+      "size_bytes": 267
+    },
+    {
+      "path": "approval-browser.json",
+      "sha256": "839b5e2af536cec63bc804ba7a0f2a0432dfa419b8298f67ec2528e9b6f97ca0",
+      "size_bytes": 3513
+    }
+  ],
+  "assertions": [
+    {
+      "detail": "[{\"ref\": \"ap_5345587eb1be4054b95dc02fd77abbe9\", \"requester\": \"principal_m402_operator\", \"budget\": {\"count\": 1, \"timeout_s\": 600, \"unit\": \"task_count\"}}, {\"ref\": \"ap_ea9c14ebb44a42ce8867bdd13e0e80c6\", \"requester\": \"principal_m402_operator\", \"budget\": {\"count\": 1, \"timeout_s\": 600, \"unit\": \"task_count\"}}, {\"ref\": \"ap_1db5633db5c043c9b3492099126103c4\", \"requester\": \"principal_m402_operator\", \"budget\": {\"count\": 1, \"timeout_s\": 600, \"unit\": \"task_count\"}}, {\"ref\": \"ap_7b1296c3eee04af181629be97da2cf8d\", \"requester\": \"principal_m402_operator\", \"budget\": {\"count\": 1, \"timeout_s\": 600, \"unit\": \"task_count\"}}]",
+      "name": "platform.approvals_created",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"status\": null, \"rule\": \"access_denied\", \"message\": \"access_denied: this deployment profile requires the approver to be a different verified principal from the requester\"}",
+      "name": "operator.self_approve_denied",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"first\": {\"browser\": true, \"platform\": \"approved\", \"message\": \"\", \"args\": 1}, \"second\": {\"browser\": true, \"platform\": \"approved\", \"message\": \"\", \"args\": 1}}",
+      "name": "reviewer.approve_two",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"browser\": true, \"platform\": \"rejected\"}",
+      "name": "reviewer.reject_negative",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"browser\": true, \"platform\": \"revoked\", \"rule\": \"\"}",
+      "name": "operator.revoke_negative",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"status\": null, \"rule\": \"approval_not_granted\", \"message\": \"approval_not_granted: approval status is revoked\"}",
+      "name": "revoked_approval.cannot_submit",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"status\": 0, \"rule\": \"not_found\", \"message\": \"not_found: {\\\"code\\\":\\\"not_found\\\"}\"}",
+      "name": "auditor.not_requester_not_approver",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"status\": 0, \"rule\": \"access_denied\", \"message\": \"access_denied: approval permission is required\"}",
+      "name": "auditor.decision_denied",
+      "status": "PASS"
+    },
+    {
+      "detail": "{\"status\": 0, \"rule\": \"approved_budget_mismatch\", \"message\": \"approved_budget_mismatch: the requested budget changed after approval\"}",
+      "name": "budget.over_approved_refused",
+      "status": "PASS"
+    },
+    {
+      "detail": "jobs before=0 after=0",
+      "name": "budget.no_task_created",
+      "status": "PASS"
+    },
+    {
+      "detail": "[]",
+      "name": "browser.no_page_errors",
+      "status": "PASS"
+    },
+    {
+      "detail": null,
+      "name": "observations.published",
+      "status": "PASS"
+    }
+  ],
+  "attempt": null,
+  "candidate": {
+    "client_revision": "980122608540b27ff734745a5542bf3872bf1f66",
+    "harness_revision": "59716a676b220aebd043da192bdb8d7f2a2343efdb4411a874ab9d5477740d3a",
+    "server_revision": "sha256:bb45a46c93d241d03ffae2952a78a2736a637a3f2c8d69b72d2bd0c4fafc3e12"
+  },
+  "candidate_revision": "980122608540b27ff734745a5542bf3872bf1f66",
+  "command": [
+    "/usr/bin/python3.11",
+    "/ACPServer/acp2-remediation-integration/scripts/acceptance/acp2_experience.py",
+    "--scenario",
+    "approval-budget-live",
+    "--phase",
+    "approval",
+    "--out",
+    "/ACPServer/acp2-remediation-integration/reports/acp2_remediation_20261026/m4-02/browser/approval-budget-live",
+    "--timeout",
+    "900"
+  ],
+  "contract_version": "1.6.0",
+  "cwd": "/ACPServer/acp2-remediation-integration",
+  "evidence_kind": "live",
+  "exit_code": 0,
+  "extensions": {
+    "acceptance.operation_class": "standalone",
+    "acceptance.target": "local",
+    "experience.approval_budget": {
+      "approvals": [
+        {
+          "budget": {
+            "count": 1,
+            "timeout_s": 600,
+            "unit": "task_count"
+          },
+          "ref": "ap_5345587eb1be4054b95dc02fd77abbe9",
+          "requester": "principal_m402_operator"
+        },
+        {
+          "budget": {
+            "count": 1,
+            "timeout_s": 600,
+            "unit": "task_count"
+          },
+          "ref": "ap_ea9c14ebb44a42ce8867bdd13e0e80c6",
+          "requester": "principal_m402_operator"
+        },
+        {
+          "budget": {
+            "count": 1,
+            "timeout_s": 600,
+            "unit": "task_count"
+          },
+          "ref": "ap_1db5633db5c043c9b3492099126103c4",
+          "requester": "principal_m402_operator"
+        },
+        {
+          "budget": {
+            "count": 1,
+            "timeout_s": 600,
+            "unit": "task_count"
+          },
+          "ref": "ap_7b1296c3eee04af181629be97da2cf8d",
+          "requester": "principal_m402_operator"
+        }
+      ],
+      "auditor": {
+        "decision_status": 0,
+        "read_status": 0
+      },
+      "browsers": {
+        "auditor-chromium-readonly": "chromium/153.0.8010.12",
+        "operator-chromium": "chromium/153.0.8010.12",
+        "reviewer-edge": "msedge/156.0.4314.50"
+      },
+      "budget_denial": {
+        "denial_kind": "budget",
+        "rule": "approved_budget_mismatch",
+        "status": 0
+      },
+      "mode": "live-browser",
+      "phase": "approval",
+      "self_approve_refused": "access_denied",
+      "states": {
+        "first_approved": "approved",
+        "rejected": "rejected",
+        "second_approved_then_revoked": "revoked"
+      }
+    },
+    "experience.declared_observations": {
+      "artifact": "absent",
+      "browser": "present",
+      "controller": "present",
+      "denial": "present",
+      "lsf": "absent",
+      "model": "absent",
+      "qc": "absent",
+      "transport": "present"
+    },
+    "experience.harness_contract_revision": "59716a676b220aebd043da192bdb8d7f2a2343efdb4411a874ab9d5477740d3a",
+    "experience.harness_path": "/ACPServer/acp2-remediation-integration/scripts/acceptance/acp2_experience.py",
+    "experience.interpreter": "/usr/bin/python3.11",
+    "experience.mode": "live",
+    "experience.observations": {
+      "denial_evidence": "budget_denied: a submit bound to an approved approval but carrying a budget above the approved range was refused (HTTP 0, rule=approved_budget_mismatch); no task was created (jobs 0->0)",
+      "denial_kind": "budget",
+      "model_calls": 0,
+      "model_evidence": "this row spends no model request: approval and budget decisions are platform authority actions, not planning calls (0 calls)",
+      "observed": {
+        "artifact": "absent",
+        "browser": "present",
+        "controller": "present",
+        "denial": "present",
+        "lsf": "absent",
+        "model": "absent",
+        "qc": "absent",
+        "transport": "present"
+      },
+      "offline_fixture_content": false,
+      "schema": "acp2.experience.observations.v1"
+    },
+    "experience.product_import": "/ACPServer/acp2-remediation-integration/src/acp/__init__.py",
+    "experience.run_id": "approval-budget-live-20261027T131724Z-2620519-29a38c",
+    "experience.scenario_key": "approval-budget-live",
+    "experience.subcase": null,
+    "experience.test_revision": "980122608540b27ff734745a5542bf3872bf1f66"
+  },
+  "finished_at": "2026-10-27T13:17:33Z",
+  "job_id": null,
+  "manifest_generation": null,
+  "negotiated_protocol": null,
+  "operation_id": null,
+  "owner": "C",
+  "phase": "approval",
+  "reason": null,
+  "release_id": null,
+  "result": "PASS",
+  "run_id": "approval-budget-live-20261027T131724Z-2620519-29a38c",
+  "scenario": "experience:approval-budget-live",
+  "schema": "acp2.acceptance.v1",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "scope": "IN_SCOPE",
+  "started_at": "2026-10-27T13:17:24Z",
+  "submission_id": null,
+  "usage": null
+}

@@ -727,7 +727,7 @@ def minimal_mount_policy(
     mounts = [
         MountSpec(source=workdir, target="/work", mode=MountMode.RW, role="workdir"),
         MountSpec(
-            source=code_release, target="<acp-root>/code", mode=MountMode.RO, role="code_release"
+            source=code_release, target="/opt/acp/code", mode=MountMode.RO, role="code_release"
         ),
     ]
     if include_tmp:

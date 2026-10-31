@@ -1,11 +1,11 @@
-WARNING: run_root <acp2-dev>/data/b/run-root-b15 lives inside the ACP install tree (<acp2-dev>/data/b); keep data and code directories separate.
-run_root safety: run_root <acp2-dev>/data/b/run-root-b15 lives inside the ACP install tree (<acp2-dev>/data/b); keep data and code directories separate.
+WARNING: run_root /ACPServer/acp2-development/data/b/run-root-b15 lives inside the ACP install tree (/ACPServer/acp2-development/data/b); keep data and code directories separate.
+run_root safety: run_root /ACPServer/acp2-development/data/b/run-root-b15 lives inside the ACP install tree (/ACPServer/acp2-development/data/b); keep data and code directories separate.
 INFO:     Started server process [1162171]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://127.0.0.1:18775 (Press CTRL+C to quit)
 ACP Workbench starting at http://127.0.0.1:18775
-  Run root      : <acp2-dev>/data/b/run-root-b15
+  Run root      : /ACPServer/acp2-development/data/b/run-root-b15
   Poll interval : 1s
   Docs (Swagger): http://127.0.0.1:18775/docs
   Reload        : off

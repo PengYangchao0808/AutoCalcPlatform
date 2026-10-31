@@ -4,7 +4,7 @@ B06 (plan ``.omo/plans/acp2-parallel-plan-b-runtime.md`` todo 7).  This module i
 the only place that wires the stdlib-only Controller client into the
 protocol/allowlist/policy owner :mod:`acp_services.entrypoints.mcp`.
 
-Every one of the eight tools is bound to **one Controller application command**:
+Every one of the ten tools is bound to **one Controller application command**:
 
 ======================================  =========================================
 MCP tool                                Controller command
@@ -18,6 +18,8 @@ MCP tool                                Controller command
 ``acp_prepare_artifact``                ``POST /api/v1/jobs/{id}/prepare``
 ``acp_read_artifact``                   ``GET /api/v1/jobs/{id}/prepared/{r}``
 ``acp_analyze``                         ``POST /api/v1/jobs/{id}/analyze``
+``acp_get_guidance``                    ``GET /api/v1/guidance/{guide_id}``
+``acp_list_jobs``                       ``GET /api/v1/jobs?status=&limit=``
 ======================================  =========================================
 
 Parameters pass through the shared :mod:`acp_services.entrypoints.
@@ -37,15 +39,18 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from acp.mcp_extension import RESEARCH_EXTENSION_SPEC
 from acp_services.entrypoints import machine_output as mo
 from acp_services.entrypoints import mcp
 from acp_services.entrypoints.application_params import (
+    ENTRY_MCP,
+    REQUEST_PREFLIGHT,
+    REQUEST_PREPARE,
+    REQUEST_SUBMIT,
     ApplicationParamError,
     normalize_analyze,
-    normalize_preflight,
-    normalize_prepare,
     normalize_read,
-    normalize_submit,
+    validate_request_fields,
 )
 from acp_services.entrypoints.controller_client import (
     DEFAULT_TIMEOUT_SECONDS,
@@ -54,6 +59,8 @@ from acp_services.entrypoints.controller_client import (
     Health,
     NotPreparedError,
 )
+from acp_services.entrypoints.research_consumption import ControllerConsumptionPort
+from acp_services.entrypoints.research_port import ControllerResearchPort
 from acp_services.entrypoints.status_projection import (
     project_operation_status,
     project_task_status,
@@ -80,10 +87,17 @@ _TOOL_ERROR_CODES: dict[str, str] = {
     "resource_unavailable": mo.ErrorCode.RESOURCE_UNAVAILABLE,
     "resource_not_ready": mo.ErrorCode.RESOURCE_NOT_READY,
     "revision_conflict": mo.ErrorCode.REVISION_CONFLICT,
+    # P3 (round 3): "preflight fingerprint does not match the submitted plan"
+    # is a caller-side input error, never backend_failure.
+    "preflight_stale": mo.ErrorCode.INPUT_INVALID,
     "idempotency_conflict": mo.ErrorCode.REVISION_CONFLICT,
     "idempotency_in_progress": mo.ErrorCode.REVISION_CONFLICT,
     "admission_denied": mo.ErrorCode.ACCESS_DENIED,
     "access_denied": mo.ErrorCode.ACCESS_DENIED,
+    # B15 identity denials: a revoked/expired/unknown credential answers one
+    # uniform 401 (``unauthenticated``) and must stay a typed access denial at
+    # the MCP surface (M0-05 per-call revalidation).
+    "unauthenticated": mo.ErrorCode.ACCESS_DENIED,
     "timeout": mo.ErrorCode.TIMEOUT,
     "interrupted": mo.ErrorCode.INTERRUPTED,
     "cancelled": mo.ErrorCode.CANCELLED,
@@ -145,18 +159,23 @@ class _ControllerCapabilities:
     def __init__(self, client: ControllerClient) -> None:
         self._client = client
 
-    def capabilities(self) -> dict[str, Any]:
+    def capabilities(
+        self, *, workflow: str | None = None, detail: str | None = None
+    ) -> dict[str, Any]:
         try:
-            snapshot = self._client.capabilities()
+            if workflow is None and detail is None:
+                snapshot = self._client.capabilities()
+            else:
+                snapshot = self._client.capabilities(workflow=workflow, detail=detail)
         except ControllerClientError as exc:
             raise _tool_error("capabilities", exc) from None
         data = dict(snapshot.raw)
         data.setdefault("protocol_version", mcp.MCP_PROTOCOL_VERSION)
         data.setdefault("tools", list(mcp.TOOL_ALLOWLIST))
-        data.setdefault(
-            "extensions",
-            [{"id": "acp.research.v1", "version": "1.1.0", "negotiated": True}],
-        )
+        # The research extension is *not* injected here: `extensions[]` is the
+        # server's application-level handshake answer and is computed once by
+        # `mcp.McpServer._tool_capabilities`.  A hard-coded `negotiated: true`
+        # fallback (B06) claimed a delivery that does not exist and is gone.
         return data
 
 
@@ -165,10 +184,20 @@ class _ControllerPreflight:
         self._client = client
 
     def preflight(self, request: Mapping[str, Any], *, workspace_id: str) -> Mapping[str, Any]:
+        """Forward the caller's preflight request unchanged (M0-06).
+
+        Preflight is the dry run of a submit, so it must reach the Controller with
+        the same fields: rebuild-through-``normalize_preflight`` dropped the
+        execution-target/naming fields, which made an MCP preflight of a pinned
+        (unknown/incapable) node look feasible while the HTTP submit rejected it.
+        The field policy is applied first so an undeclared field is the same
+        ``input_invalid`` before any network call.
+        """
         del workspace_id
+        payload = dict(request)
         try:
-            normalized = normalize_preflight(request)
-            return dict(self._client.preflight(normalized))
+            validate_request_fields(payload, request_kind=REQUEST_PREFLIGHT, entry=ENTRY_MCP)
+            return dict(self._client.preflight(payload))
         except ApplicationParamError as exc:
             raise _param_error("preflight", exc) from None
         except ControllerClientError as exc:
@@ -180,34 +209,45 @@ class _ControllerSubmit:
         self._client = client
 
     def submit(self, spec: Mapping[str, Any], *, idempotency_key: str, workspace_id: str) -> Any:
+        """Forward the caller's request body and raw idempotency key (M0-05/M0-06).
+
+        The adapter no longer rebuilds a trimmed payload (field equivalence is
+        M0-06) and never adds an identity: the Controller derives the principal
+        and the project scope from its own credential, so ``principal_id`` and
+        ``project_id`` are server facts, never request fields.  ``idempotency_key``
+        is forwarded verbatim (``""`` = no key, an explicitly non-idempotent
+        request); the Controller's persistent ledger owns claim/replay/conflict.
+
+        M0-06 adds the *same* exhaustive field policy the HTTP entry applies, so an
+        undeclared field (``execution_mod``) or a server-path field is the same
+        ``input_invalid`` here instead of being silently dropped and forwarded.
+        Nothing else about the body is rewritten.
+        """
         del workspace_id
+        payload = dict(spec)
+        key = str(idempotency_key or "").strip()
+        if key:
+            payload["idempotency_key"] = key
+        else:
+            payload.pop("idempotency_key", None)
         try:
-            normalized = normalize_submit(spec)
-            normalized.setdefault("idempotency_key", idempotency_key)
-            record = dict(self._client.submit(normalized))
+            validate_request_fields(payload, request_kind=REQUEST_SUBMIT, entry=ENTRY_MCP)
+            record = dict(self._client.submit(payload))
         except ApplicationParamError as exc:
             raise _param_error("submit", exc) from None
         except ControllerClientError as exc:
             raise _tool_error("submit", exc) from None
         except Exception as exc:  # pragma: no cover - defensive transport failure
             raise _terminal_failure("submit", exc) from None
-        payload = _job_reference(record)
-        for key in (
-            "state",
-            "status",
-            "plan_digest",
-            "proposal_digest",
-            "idempotency_key",
-            "idempotent_replay",
-            "admission",
-            "identity",
-            "submission_id",
-            "result",
-            "approval_ref",
-        ):
-            if record.get(key) is not None:
-                payload[key] = record[key]
-        return payload
+        payload_out = _job_reference(record)
+        # Full response passthrough: a replay must deliver the same complete
+        # TaskRef/attempt/admission envelope as the first call.
+        for field_name, value in record.items():
+            if value is not None:
+                payload_out[field_name] = value
+        payload_out["idempotency_key"] = record.get("idempotency_key", key or None)
+        payload_out["idempotent_replay"] = bool(record.get("idempotent_replay", False))
+        return payload_out
 
 
 class _ControllerStatus:
@@ -224,6 +264,15 @@ class _ControllerStatus:
             return ""
         value = str(reference or "")
         return value if value.startswith("op_") else ""
+
+    def list_tasks(
+        self, *, status: str | None = None, limit: int = 50, workspace_id: str = ""
+    ) -> dict[str, Any]:
+        del workspace_id
+        try:
+            return dict(self._client.list_tasks(status=status, limit=limit))
+        except ControllerClientError as exc:
+            raise _tool_error("list_tasks", exc) from None
 
     def get(self, reference: Any, *, workspace_id: str) -> Mapping[str, Any] | None:
         del workspace_id
@@ -268,23 +317,36 @@ class _ControllerArtifacts:
     def prepare(
         self, request: Mapping[str, Any], *, idempotency_key: str, workspace_id: str
     ) -> Any:
+        """Forward the prepare request unchanged (M0-06 field equivalence).
+
+        The adapter used to rebuild the request through ``normalize_prepare`` and
+        send the normalised subset, so a field the Controller's DTO declares but
+        the local normaliser did not know was silently dropped before validation.
+        The request now reaches the Controller exactly as the caller wrote it (the
+        route normalises once, server-side); the frozen field policy is applied
+        first so an undeclared field is the same ``input_invalid`` the HTTP entry
+        reports.
+        """
         del workspace_id
+        payload = dict(request)
+        key = str(idempotency_key or "").strip()
+        if key:
+            payload.setdefault("idempotency_key", key)
         try:
-            normalized = normalize_prepare(request)
-            normalized.setdefault("idempotency_key", idempotency_key)
-            record = dict(self._client.prepare(normalized))
+            validate_request_fields(payload, request_kind=REQUEST_PREPARE, entry=ENTRY_MCP)
+            record = dict(self._client.prepare(payload))
         except ApplicationParamError as exc:
             raise _param_error("prepare", exc) from None
         except ControllerClientError as exc:
             raise _tool_error("prepare", exc) from None
         operation_ref = record.get("operation_ref") or record.get("operation_id") or ""
-        payload = dict(record)
-        payload["operation_ref"] = operation_ref
-        payload.setdefault(
+        payload_out = dict(record)
+        payload_out["operation_ref"] = operation_ref
+        payload_out.setdefault(
             "reference",
             {"kind": "operation", "id": str(operation_ref)},
         )
-        return payload
+        return payload_out
 
     def read(self, request: Mapping[str, Any], *, workspace_id: str) -> Any:
         del workspace_id
@@ -310,6 +372,50 @@ class _ControllerAnalysis:
             raise _param_error("analyze", exc) from None
         except ControllerClientError as exc:
             raise _tool_error("analyze", exc) from None
+
+
+class _ControllerGuidance:
+    """Read-only guidance forward (plan 2026-10-30 §5: 指南读取).
+
+    The port is a thin forward to the Controller route; version/digest and the
+    explicit-omission budget policy live in the content pack behind the route,
+    so this adapter adds no second guidance authority.
+    """
+
+    def __init__(self, client: ControllerClient) -> None:
+        self._client = client
+
+    def guidance(self, request: Mapping[str, Any], *, workspace_id: str) -> Any:
+        del workspace_id
+        guide_id = str(request.get("guide_id") or "").strip()
+        if not guide_id:
+            raise mcp.McpToolError(
+                mo.ErrorCode.INPUT_INVALID,
+                "guidance read requires a non-empty guide_id",
+                params={"field": "guide_id", "rule": "missing_required_field"},
+                retryable=False,
+            )
+        section = request.get("section")
+        version = request.get("version")
+        max_bytes = request.get("max_bytes")
+        try:
+            return dict(
+                self._client.guidance(
+                    guide_id,
+                    section=str(section) if section is not None else None,
+                    version=str(version) if version is not None else None,
+                    max_bytes=int(max_bytes) if max_bytes is not None else None,
+                )
+            )
+        except ControllerClientError as exc:
+            raise _tool_error("guidance", exc) from None
+        except (TypeError, ValueError) as exc:
+            raise mcp.McpToolError(
+                mo.ErrorCode.INPUT_INVALID,
+                f"invalid guidance request: {exc}",
+                params={"field": "max_bytes", "rule": "invalid_type"},
+                retryable=False,
+            ) from None
 
 
 @dataclass(frozen=True)
@@ -365,40 +471,61 @@ def build_mcp_runtime(
         cancel=_ControllerCancel(client),
         artifacts=_ControllerArtifacts(client),
         analysis=_ControllerAnalysis(client),
+        guidance=_ControllerGuidance(client),
+        # M2-01c: the ten research tools reach the Controller application service
+        # through the one transport; the adapter holds no research store.
+        research=ControllerResearchPort(client),
+        consumption=ControllerConsumptionPort(client),
     )
     identity = _stdio_identity_mapper(client, api_key)
     server = mcp.McpServer(
         backends=backends,
         identity=identity,
         configured_tier=mcp.STDIO_PERMISSION_SCOPE,
+        # M0-09: the research extension is advertised/negotiated through
+        # `acp_capabilities`; `initialize` makes no extension claim.
+        extension=RESEARCH_EXTENSION_SPEC,
     )
     return McpRuntime(server=server, client=client, health=health)
 
 
 def _stdio_identity_mapper(client: ControllerClient, api_key: str | None) -> mcp.IdentityMapper:
-    """Bind the stdio mapper to the Controller-resolved principal (B15)."""
+    """Bind the stdio mapper to the Controller-resolved principal (B15/M0-05).
+
+    Without a key this is the trusted ``local-single`` operator entry.  With a
+    key the binding is the Controller's ``/api/identity`` answer — never a
+    client claim — and it is **revalidated before every tool call**, so a
+    revoked key refuses reads, writes and control on an already-open stdio
+    session (G25).
+    """
     if not api_key:
         return mcp.IdentityMapper(configured_tier=mcp.STDIO_PERMISSION_SCOPE)
-    from acp_services.contracts.access import Principal
 
-    identity = client.identity()
-    principal_data = identity.get("principal")
-    if not isinstance(principal_data, Mapping):
-        raise ControllerClientError("identity response carries no principal")
-    principal = Principal.from_dict(principal_data)
-    bound_actions = tuple(str(action) for action in identity.get("actions") or ())
+    def _resolve_binding() -> mcp.StdioCredentialBinding:
+        try:
+            return mcp.StdioCredentialBinding.from_identity_response(client.identity())
+        except ControllerClientError as exc:
+            raise _tool_error("identity", exc) from None
+        except (TypeError, ValueError) as exc:
+            raise mcp.McpToolError(
+                mo.ErrorCode.ACCESS_DENIED,
+                "the Controller no longer resolves this credential",
+                params={"command": "identity", "exception": type(exc).__name__},
+                retryable=False,
+            ) from None
+
+    binding = _resolve_binding()
     logger.info(
         "MCP stdio identity bound to principal=%s project=%s actions=%s",
-        principal.principal_id,
-        identity.get("verified_project"),
-        list(bound_actions),
+        binding.principal.principal_id,
+        binding.verified_project,
+        list(binding.actions),
     )
     return mcp.IdentityMapper(
         configured_tier=mcp.STDIO_PERMISSION_SCOPE,
         permission_scope=mcp.STDIO_MULTIUSER_SCOPE,
-        bound_principal=principal,
-        bound_project=identity.get("verified_project"),
-        bound_actions=bound_actions,
+        credential=binding,
+        revalidate=_resolve_binding,
     )
 
 

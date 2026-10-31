@@ -253,6 +253,30 @@ def test_proxy_draft_save_roundtrip(tmp_path: Path, monkeypatch: pytest.MonkeyPa
         client.close()
 
 
+def test_temporary_browser_origin_isolated_from_deployment(
+    isolated_browser_deployment: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ACP_RUN_ROOT", str(tmp_path))
+    from acp.api.server import _resolve_public_origin
+
+    # The explicit empty environment value overrides even deployment YAML.
+    monkeypatch.setattr(
+        "cccp.config.load_config",
+        lambda: {"deployment": {"params": {"public_origin": "https://deployed.example"}}},
+    )
+    assert _resolve_public_origin() is None
+    policy = boundary.OriginPolicy(public_origin=_resolve_public_origin())
+    assert policy.evaluate(
+        method="POST", host="127.0.0.1:41937", origin="http://127.0.0.1:41937"
+    ).allowed
+    denied = policy.evaluate(
+        method="POST", host="127.0.0.1:41937", origin="https://evil.example"
+    )
+    assert not denied.allowed
+    assert denied.http_status == 403
+    assert denied.reason_code == boundary.BoundaryReason.CROSS_ORIGIN
+
+
 def test_unconfigured_proxy_headers_cannot_override_origin(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

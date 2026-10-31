@@ -36,9 +36,10 @@ import {
   SYNTHESIZER_INPUT_SCHEMA,
   SYNTHESIZER_SKILL,
   SYNTHESIZER_SKILL_VERSION,
+  FIXTURE_SUPERVISOR_SKILLS,
   decideFromReport,
+  runFixturePlanner,
   runInterpreter,
-  runPlanner,
   runReviewer,
   runSupervisor,
   runSynthesizer,
@@ -61,6 +62,7 @@ import {
   type SupervisorResult,
   type SupervisorSkills,
   type SynthesizerInput,
+  type ScienceSeed,
   type TaskRef,
   type WaitEvent,
   type WaitResult,
@@ -77,6 +79,32 @@ const TASK: TaskRef = {
   attempt: 1,
   release_id: "release-1",
 };
+
+// M1-04a: a charged, open-shell science seed.  The planner must carry it
+// verbatim (charge -1 / multiplicity 2), never default it to 0/1.
+const SCIENCE_SEED: ScienceSeed = {
+  method: "r2SCAN-3c",
+  mapping: "identity",
+  charge: -1,
+  multiplicity: 2,
+  electronic_state: {
+    charge: -1,
+    multiplicity: 2,
+    state_label: "doublet",
+    spin_polarization: 1,
+  },
+  structure_provenance: [
+    {
+      input_id: "reactant-complex",
+      sha256: DIGEST,
+      format: "xyz",
+      role: "reactant_complex",
+    },
+  ],
+  constraints: [
+    { kind: "bond" as const, atoms: [0, 1], target: "1.4", unit: "angstrom" },
+  ],
+} as const;
 
 function budget(overrides: Partial<PlanBudget> = {}): PlanBudget {
   return {
@@ -134,6 +162,7 @@ function supervisorInput(
       format: "xyz",
       role: "reactant_complex",
     },
+    science_seed: SCIENCE_SEED,
     limits: { max_rounds: 3, budget: budget() },
     plan_definition_digest: () => DIGEST,
     ...overrides,
@@ -251,7 +280,7 @@ function countingSkills(): {
     },
     plan: async (input) => {
       state.calls += 1;
-      return runPlanner(input);
+      return runFixturePlanner(input);
     },
   };
   return { skills, state };
@@ -281,11 +310,22 @@ test("interpreter: versioned input/output schema accepts a valid request", TEST_
     question_ref: null,
     constraints: ["no_ts_seed"],
     available_inputs: ["diene"],
+    science_seed: SCIENCE_SEED,
   };
   assert.deepEqual(validateInterpreterInput(input), []);
   const output = runInterpreter(input);
   assert.deepEqual(validateInterpreterOutput(output), []);
   assert.equal(output.intent, "research");
+  assert.deepEqual(output.missing_science, []);
+
+  // M1-04a: without a typed science seed the intent is `clarify` and the
+  // missing critical values are named — never filled with 0/1.
+  const withoutScience = runInterpreter({
+    ...input,
+    science_seed: null,
+  });
+  assert.equal(withoutScience.intent, "clarify");
+  assert.deepEqual(withoutScience.missing_science, ["charge", "multiplicity"]);
 
   assert.notDeepEqual(
     validateInterpreterInput({ ...input, schema: "acp2.skill.interpreter.input.v2" }),
@@ -370,15 +410,23 @@ test("planner: output is a complete plan with a digest, science and budget", TES
       format: "xyz",
       role: "reactant_complex",
     },
+    science_seed: SCIENCE_SEED,
     critique_findings: [],
     evidence: null,
     remaining_budget: budget(),
   };
   assert.deepEqual(validatePlannerInput(input), []);
-  const output = runPlanner(input);
+  const output = runFixturePlanner(input);
   assert.deepEqual(validatePlannerOutput(output), []);
   assert.equal(output.science.method, "r2SCAN-3c");
   assert.equal(output.budget.task_refs, 1);
+  // M1-04a: the typed block carries the seed values (charged/open-shell kept).
+  assert.equal(output.science_inputs.charge, -1);
+  assert.equal(output.science_inputs.multiplicity, 2);
+  assert.deepEqual(
+    output.science_inputs.structure_provenance.map((item) => item.role),
+    ["reactant_complex"],
+  );
 
   assert.notDeepEqual(validatePlannerOutput({ ...output, budget: {} }), []);
   assert.notDeepEqual(
@@ -393,7 +441,7 @@ test("planner: output is a complete plan with a digest, science and budget", TES
 
 test("supervisor: happy path runs every phase once and stops on an accepted report", TEST_OPTIONS, async () => {
   const { ports: supervisorPorts, log } = ports();
-  const result = await runSupervisor(supervisorInput(), supervisorPorts);
+  const result = await runSupervisor(supervisorInput(), supervisorPorts, FIXTURE_SUPERVISOR_SKILLS);
   assert.equal(result.status, "completed");
   assert.equal(result.stop_reason, "accepted");
   assert.equal(result.submits, 1);
@@ -423,7 +471,7 @@ test("supervisor: no-evidence report goes to Stop and never submits again", TEST
     evidence_refs: [],
   });
   const { ports: supervisorPorts, log } = ports({ reports: [empty] });
-  const result = await runSupervisor(supervisorInput(), supervisorPorts);
+  const result = await runSupervisor(supervisorInput(), supervisorPorts, FIXTURE_SUPERVISOR_SKILLS);
   assertStop(result, "no_evidence");
   assert.equal(result.submits, 1);
   assert.equal(log.submitters.length, 1);
@@ -453,6 +501,7 @@ test("supervisor: a duplicate terminal event cannot start another round", TEST_O
   const result = await runSupervisor(
     supervisorInput({ limits: { max_rounds: 4, budget: budget() } }),
     supervisorPorts,
+    FIXTURE_SUPERVISOR_SKILLS,
   );
   assertStop(result, "duplicate_terminal");
   assert.equal(result.submits, 2);
@@ -479,6 +528,7 @@ test("supervisor: round cap stops before the next submit", TEST_OPTIONS, async (
   const result = await runSupervisor(
     supervisorInput({ limits: { max_rounds: 2, budget: budget() } }),
     supervisorPorts,
+    FIXTURE_SUPERVISOR_SKILLS,
   );
   assertStop(result, "round_cap");
   assert.equal(result.submits, 2);
@@ -488,7 +538,7 @@ test("supervisor: round cap stops before the next submit", TEST_OPTIONS, async (
 
 test("supervisor: preflight failure blocks submit", TEST_OPTIONS, async () => {
   const { ports: supervisorPorts, log } = ports({ preflightOk: false });
-  const result = await runSupervisor(supervisorInput(), supervisorPorts);
+  const result = await runSupervisor(supervisorInput(), supervisorPorts, FIXTURE_SUPERVISOR_SKILLS);
   assertStop(result, "preflight_failed");
   assert.equal(result.submits, 0);
   assert.equal(log.submitters.length, 0);
@@ -498,7 +548,7 @@ test("supervisor: preflight failure blocks submit", TEST_OPTIONS, async () => {
 
 test("supervisor: admission failure blocks submit", TEST_OPTIONS, async () => {
   const { ports: supervisorPorts, log } = ports({ admissionOk: false });
-  const result = await runSupervisor(supervisorInput(), supervisorPorts);
+  const result = await runSupervisor(supervisorInput(), supervisorPorts, FIXTURE_SUPERVISOR_SKILLS);
   assertStop(result, "admission_denied");
   assert.equal(result.submits, 0);
   assert.equal(log.submitters.length, 0);
@@ -557,7 +607,7 @@ test("supervisor: model advice cannot override an inconclusive report", TEST_OPT
     ],
   });
   const { ports: supervisorPorts, log } = ports({ reports: [inconclusive] });
-  const result = await runSupervisor(supervisorInput(), supervisorPorts);
+  const result = await runSupervisor(supervisorInput(), supervisorPorts, FIXTURE_SUPERVISOR_SKILLS);
   assertStop(result, "inconclusive");
   assert.equal(result.submits, 1);
   assert.equal(log.submitters.length, 1);
@@ -584,6 +634,7 @@ test("supervisor: budget cap stops before a second submit", TEST_OPTIONS, async 
       limits: { max_rounds: 4, budget: budget({ task_refs: 1 }) },
     }),
     supervisorPorts,
+    FIXTURE_SUPERVISOR_SKILLS,
   );
   assertStop(result, "budget_cap");
   assert.equal(result.submits, 1);
@@ -597,7 +648,7 @@ test("supervisor: an invalid report never becomes a verdict", TEST_OPTIONS, asyn
   } as unknown as EvidenceReport;
   assert.notDeepEqual(validateEvidenceReport(invalid), []);
   const { ports: supervisorPorts } = ports({ reports: [invalid] });
-  const result = await runSupervisor(supervisorInput(), supervisorPorts);
+  const result = await runSupervisor(supervisorInput(), supervisorPorts, FIXTURE_SUPERVISOR_SKILLS);
   assertStop(result, "invalid_report");
   assert.equal(result.submits, 1);
 });

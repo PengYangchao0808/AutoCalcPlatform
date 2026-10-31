@@ -1,0 +1,33 @@
+{
+  "grep_gates_corrected": {
+    "command": "python3.11 scripts/check_grep_gates.py --suite architecture-remediation",
+    "exit_code": 0,
+    "log": "grep-gates-suite.log",
+    "supersedes": "initial missing --suite invocation in checks.json; original retained"
+  },
+  "rph_package": {
+    "command": "PATH=/home/xieningke/.nvm/versions/node/v24.22.1/bin:$PATH pnpm --dir rph package",
+    "exit_code": 0,
+    "log": "rph-package-unrestricted.log",
+    "initial_log": "rph-package.log",
+    "note": "Initial sandbox pnpm store access failure; authorized unrestricted rerun passed."
+  },
+  "browser_origin": {
+    "command": "ACP_PUBLIC_ORIGIN= pytest -m slow tests/test_frontend_interaction.py::TestMethodFamilyGatingBrowser tests/test_frontend_interaction.py::TestScanWizardBrowser --run-slow -q --disable-warnings --junitxml=reports/acp2_function_audit_20261028/evidence/browser-isolated-origin.xml",
+    "exit_code": 0,
+    "passed": 10,
+    "note": "Test-only explicit empty ACP_PUBLIC_ORIGIN stops inheritance from host deployment configuration. No product guard disabled or source modified. Original browser.xml remains FAIL."
+  },
+  "ui_probe": {
+    "command": "python3.11 reports/acp2_function_audit_20261028/evidence/workbench-overlap-probe.py",
+    "observed_result": "new_project_click=blocked",
+    "note": "Archived verbatim diagnostic originally executed from /tmp/acp2_ui_audit_probe.py; ephemeral Controller, no task submitted."
+  },
+  "test_scope": "No new real model/QC/LSF science execution or production restart. Slow suite limited to five browser modules. Not an exhaustive all-environment certification.",
+  "doc_and_install_checks": {
+    "command": "pytest -m 'not slow' tests/test_services_doc_sync.py tests/test_services_closure_record.py tests/test_acp2_rph_install_surface.py -q --disable-warnings --junitxml=reports/acp2_function_audit_20261028/evidence/doc-and-install-checks.xml",
+    "exit_code": 0,
+    "passed": 41,
+    "note": "RPH generated install surface now present; supplements original skipped results without rewriting them."
+  }
+}

@@ -1,0 +1,58 @@
+[
+  {
+    "argv": [
+      "rg",
+      "-n",
+      "PluginHost|from_science_entry_points",
+      "src/acp",
+      "src/acp_services"
+    ],
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "rg",
+      "-n",
+      "queue_wait_s|science_runtime_s",
+      "src/acp_services/runtime",
+      "src/acp/scheduler"
+    ],
+    "exit_code": 0,
+    "stdout": "src/acp_services/runtime/research_budget.py:243:    \"queue_wait_s\",\nsrc/acp_services/runtime/research_budget.py:244:    \"science_runtime_s\",\nsrc/acp_services/runtime/research_budget.py:250:    \"queue_wait_s\": 0.0,\nsrc/acp_services/runtime/research_budget.py:251:    \"science_runtime_s\": 1800.0,\nsrc/acp_services/runtime/research_budget.py:354:    ``science_runtime_s`` for compatibility; the four timeout classes stay\nsrc/acp_services/runtime/research_budget.py:370:    if \"timeout_s\" in source and \"science_runtime_s\" not in timeouts:\nsrc/acp_services/runtime/research_budget.py:371:        timeouts[\"science_runtime_s\"] = float(source[\"timeout_s\"])\n",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "rg",
+      "-n",
+      "fencing|before_write|execution_right",
+      "src/acp_services/runtime/step_dag.py"
+    ],
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "rg",
+      "-n",
+      "outbox",
+      "src/acp_services/data/research_resources.py"
+    ],
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "git",
+      "diff",
+      "--name-only"
+    ],
+    "exit_code": 0,
+    "stdout": "reports/acp2_implementation/bb45a46/integration/h7-index.json\nreports/acp2_implementation/bb45a46/integration/summary.json\ntests/baseline/refactor-evidence/e2e-task-root.txt\n",
+    "stderr": ""
+  }
+]

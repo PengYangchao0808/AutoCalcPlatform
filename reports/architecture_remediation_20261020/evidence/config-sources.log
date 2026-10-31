@@ -1,6 +1,6 @@
 === config source resolution (read-only) ===
-/home/<user>/.cccp.yaml: exists=True size=5675
-/home/<user>/.conformer_search.yaml: exists=False 
+/home/xieningke/.cccp.yaml: exists=True size=5675
+/home/xieningke/.conformer_search.yaml: exists=False 
 cccp.yaml: exists=True size=5675
 config/defaults.yaml: exists=True size=14238
 ACP_RUN_ROOT env: None
@@ -8,7 +8,7 @@ CONFSEARCH_* env: {}
 exit=0
 === acp.core.paths resolve_run_root (read-only resolve) ===
 resolve_run_root signature: (explicit: 'str | Path | None' = None) -> 'Path'
-resolved: /home/<user>/.local/share/acp/runs
+resolved: /home/xieningke/.local/share/acp/runs
 exit=0
 === config/defaults.yaml sha256 ===
 037f18616c60dd1374d15f964cae0d1f6e95f6c6c2ae3b04d0e759f726b195d1  config/defaults.yaml

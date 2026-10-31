@@ -1,0 +1,46 @@
+{
+  "attempt": 1,
+  "data_bindings": [
+    {
+      "artifact_digests": {
+        "input.xyz": "sha256:3ba442e949c46e020ea42187f2c0cab7decceed85af97317f3074c8a7017a916"
+      },
+      "binding_id": "local:7698b06589bb30c2:2_H2_H_0_0_0_H_0_0_0.74_singlepoint",
+      "endpoint": "local",
+      "kind": "local",
+      "mapping_version": 1,
+      "project_id": "",
+      "relative_path": "2_H2_H_0_0_0_H_0_0_0.74_singlepoint",
+      "root": "/tmp/acp2-acceptance-20261024/installed-release/lab-run-root/uncategorized",
+      "tenant_id": ""
+    }
+  ],
+  "errors": [],
+  "evidence_digests": {
+    "exit_code": "0",
+    "job_status": "completed",
+    "missing_required_facts": "",
+    "normal_reuse": "true",
+    "partial_result": "false",
+    "publish": "true",
+    "publish_policy": "normal",
+    "qualification": "complete",
+    "required_facts": "energy_hartree",
+    "task_result_digest": "sha256:6a135888afeb63f3bd4b68d7ec21ec363ea97eb43704b1e916c1c6802e98a656",
+    "truth_table_row": "b"
+  },
+  "fencing_token": "3cba84158dde6aa4aeb75233b718bf28",
+  "job_id": "20261024_104743_001_b25-scheduler-smoke",
+  "owner": "local:workstation:2092993:1",
+  "plan_identity": "v2:9bc40cd8ffd921c7e9e966978f436614",
+  "receipt_version": 1,
+  "release_digest": "c4b54feb6a0b25ccbf0163b852ec66e0a1f003e778081d079030844871e90cc0",
+  "release_id": "7698b06589bb30c2",
+  "result_digest": "sha256:44fc88ea9ab76db59ebaec5a3c0a6839b3428edb67bc7616802cc54d65b99d22",
+  "state": "completed",
+  "step_identities": [
+    "v2:853c5b2672a754adfa9088420fc0c126"
+  ],
+  "submission_id": "sub_b65135e739ec4b55",
+  "written_at": "2026-10-24T02:47:47.758735+00:00"
+}

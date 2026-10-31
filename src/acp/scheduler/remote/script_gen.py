@@ -619,13 +619,62 @@ def derive_lsf_resources(
     queue: str = _DEFAULT_QUEUE,
     walltime: str = _DEFAULT_WALLTIME,
     extra_flags: str = "",
+    *,
+    walltime_minutes: int | None = None,
 ) -> tuple[int, int, str, str, str]:
-    """Derive LSF resource parameters from a :class:`JobSpec`."""
+    """Derive LSF resource parameters from a :class:`JobSpec`.
+
+    ``walltime_minutes`` (M2-03c) is the approval deadline projected by the one
+    resource resolver (:func:`acp_services.runtime.execution_limits.
+    resolve_resource_limits` → ``lsf_walltime_minutes``).  It only ever narrows
+    ``walltime``: an empty cluster walltime is "not limited" and never becomes a
+    limit, and a deadline wider than the cluster default keeps the default.
+    """
     res = resolve_job_resources(spec)
     nproc = res["nproc"]
     total_mem_mb = mem_to_mb(res["mem"])
     mem_mb_per_core = math.ceil(total_mem_mb / nproc)
+    deadline = _deadline_walltime(walltime_minutes)
+    if deadline is not None:
+        walltime = _tighter_walltime(walltime, deadline)
     return nproc, mem_mb_per_core, queue, walltime, extra_flags
+
+
+def _deadline_walltime(minutes: int | None) -> str | None:
+    """Render the resolver's minute count as an LSF ``-W`` value."""
+    from acp_services.runtime.deadline_wiring import lsf_walltime_string
+
+    return lsf_walltime_string(minutes)
+
+
+def _walltime_minutes(value: str) -> int | None:
+    """Minutes encoded by an LSF ``-W`` value (``HH:MM``/``HH:MM:SS``/minutes)."""
+    text = str(value or "").strip()
+    if not text:
+        return None
+    parts = text.split(":")
+    try:
+        numbers = [int(part) for part in parts]
+    except ValueError:
+        return None
+    if len(numbers) == 1:
+        return max(0, numbers[0])
+    if len(numbers) == 2:
+        return max(0, numbers[0] * 60 + numbers[1])
+    if len(numbers) == 3:
+        return max(0, numbers[0] * 60 + numbers[1])
+    return None
+
+
+def _tighter_walltime(cluster: str, deadline: str) -> str:
+    """The tighter of the cluster walltime and the approval deadline."""
+    configured = _walltime_minutes(cluster)
+    approved = _walltime_minutes(deadline)
+    if configured is None:
+        return deadline
+    if approved is None:
+        return cluster
+    return deadline if approved <= configured else cluster
 
 
 def build_lsf_script_spec(
@@ -635,6 +684,7 @@ def build_lsf_script_spec(
     queue: str = _DEFAULT_QUEUE,
     walltime: str = _DEFAULT_WALLTIME,
     extra_flags: str = "",
+    walltime_minutes: int | None = None,
     input_path: str = "inputs/input.xyz",
     config_path: str | None = None,
     remote_dir_name: str | None = None,
@@ -702,7 +752,11 @@ def build_lsf_script_spec(
         execution=execution,
     )
     nproc, mem_mb_per_core, queue, walltime, extra_flags = derive_lsf_resources(
-        spec, queue=queue, walltime=walltime, extra_flags=extra_flags
+        spec,
+        queue=queue,
+        walltime=walltime,
+        extra_flags=extra_flags,
+        walltime_minutes=walltime_minutes,
     )
     # Contract A: ``-J acp_<submission_id>`` (attempt-digested) replaces the
     # former ``acp_<job_id>`` name so reconcile can query it unambiguously.

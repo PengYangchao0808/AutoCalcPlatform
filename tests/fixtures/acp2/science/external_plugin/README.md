@@ -53,7 +53,7 @@ python -m venv --system-site-packages /tmp/acp2-plugin-venv
   "$PWD/dist/acp2_external_science_validator-1.0.0-py3-none-any.whl"
 
 # discovery is metadata-only; the plugin module is not imported
-PYTHONPATH=/path/to<acp2-dev>/A/src \
+PYTHONPATH=/path/to/ACPServer/acp2-development/A/src \
   /tmp/acp2-plugin-venv/bin/python - <<'PY'
 from pathlib import Path
 from cccp.calculation.requests import StructureInput, TaskKind, TaskRequest

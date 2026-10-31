@@ -14,7 +14,7 @@ import json
 import os
 import sys
 import time
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Iterator, Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
@@ -48,6 +48,8 @@ from acp.scheduler.jobs import ALL_WORKFLOWS, PUBLIC_WORKFLOWS
 from acp.scheduler.logs import read_log_tail
 from acp.storage.layout import runtime_file
 from acp.workflows.registry import list_workflow_entries, workflow_to_dict
+from acp_services.entrypoints.application_params import MAX_READ_BYTES
+from acp_services.entrypoints.mcp import TOOL_ALLOWLIST as _MCP_TOOL_ALLOWLIST
 
 router = APIRouter()
 
@@ -154,20 +156,14 @@ def get_status(request: Request) -> StatusResponse:
 
 _CONTRACT_MANIFEST_RELATIVE = "docs/reference/next-change/acp2-contracts/manifest.json"
 _MCP_PROTOCOL_VERSION = "2025-06-18"
-_MCP_TOOLS: tuple[str, ...] = (
-    "acp_capabilities",
-    "acp_preflight",
-    "acp_submit",
-    "acp_status",
-    "acp_cancel",
-    "acp_prepare_artifact",
-    "acp_read_artifact",
-    "acp_analyze",
-)
+#: Derived from the protocol owner's allowlist (never a second hand-written
+#: list): the 2026-10-30 guidance batch added ``acp_get_guidance`` there and
+#: this projection inherits registration changes automatically.
+_MCP_TOOLS: tuple[str, ...] = tuple(sorted(_MCP_TOOL_ALLOWLIST))
 #: Bounded discovery limits (application-api.v1 ``capabilities.limits``).
 _CONTROLLER_LIMITS: dict[str, int] = {
     "max_artifact_bytes": 8 * 1024 * 1024,
-    "max_read_bytes": 1 << 20,
+    "max_read_bytes": MAX_READ_BYTES,
     "max_walltime_s": 7 * 24 * 60 * 60,
     "max_cores": 64,
 }
@@ -260,9 +256,10 @@ def _backend_capability_summary() -> list[dict[str, Any]]:
     except ImportError:
         return []
     summaries: list[dict[str, Any]] = []
+    probe_config = _backend_probe_config(_load_executables())
     for name in list_backends():
         try:
-            status = cast(dict[str, Any], backend_status(name))
+            status = cast(dict[str, Any], backend_status(name, config=probe_config))
         except (KeyError, OSError, ValueError):
             summaries.append({"name": name, "available": False})
             continue
@@ -270,9 +267,240 @@ def _backend_capability_summary() -> list[dict[str, Any]]:
     return summaries
 
 
-@router.get("/capabilities")
-def get_capabilities(request: Request) -> dict[str, Any]:
-    """Read-only discovery (``capabilities`` application command)."""
+def _capability_limits(request: Request) -> dict[str, Any]:
+    """Publish the ceilings the running admission instance actually enforces.
+
+    C6: the previous dict was a second hardcoded set of numbers, so discovery
+    and admission could disagree.  The admission instance is the authority;
+    when it is not assembled, say so instead of inventing a limit.
+    """
+    published = dict(_CONTROLLER_LIMITS)
+    admission = getattr(request.app.state, "admission", None)
+    limits = getattr(admission, "limits", None)
+    if limits is None:
+        published["enforcement"] = "not-verified"
+        return published
+    published.update(
+        {
+            "max_cores": int(limits.max_cores),
+            "max_walltime_s": int(limits.max_walltime_s),
+            "default_walltime_s": int(limits.default_walltime_s),
+            "enforcement": "admission",
+        }
+    )
+    return published
+
+
+def _workflow_contract_index() -> dict[str, Any]:
+    """Workflow -> coverage/detail/guidance/fallback (one read, no probing)."""
+    from acp.api.workflow_contracts import ACTIVE_WORKFLOWS, describe_workflow
+
+    fallbacks = {
+        "singlepoint": "use `acp run singlepoint` or report the gap",
+        "optimize": "use `acp run optimize` or report the gap",
+        "frequency": "use `acp run frequency` or report the gap",
+        "xtb_optimize": "use `acp run xtb_optimize` or report the gap",
+        "irc": "needs a TS bundle/provenance: use `acp run irc` or report the gap",
+        "tsmode": "needs a frequency source bundle: use `acp run tsmode` or report the gap",
+        "casscf": "active-space choice is a scientific decision: use `acp run casscf`",
+        "nmr": "protocol/asset discovery first: use `acp run nmr` or report the gap",
+    }
+    supported_entries = {
+        "singlepoint": ["acp run singlepoint"],
+        "optimize": ["acp run optimize"],
+        "frequency": ["acp run frequency"],
+        "xtb_optimize": ["acp run xtb_optimize"],
+        "irc": ["acp run irc"],
+        "tsmode": ["acp run tsmode"],
+        "casscf": ["acp run casscf"],
+        "nmr": ["acp run nmr"],
+    }
+    index: dict[str, Any] = {}
+    for name in ACTIVE_WORKFLOWS:
+        block = describe_workflow(name)
+        coverage = str(block.get("coverage") or "not_provided")
+        entry: dict[str, Any] = {"coverage": coverage}
+        guide_ref = block.get("guide_ref")
+        if isinstance(guide_ref, dict):
+            entry["guidance"] = str(guide_ref["guide_id"])
+        if coverage == "not_provided":
+            entry["fallback"] = {
+                "status": "uncontracted",
+                "message": fallbacks.get(name, "report the gap"),
+                "supported_entries": supported_entries.get(name, []),
+            }
+        index[name] = entry
+    return index
+
+
+def _task_instruction_index() -> list[dict[str, Any]]:
+    """Goal -> chain routing entries (task.* guidance cards)."""
+    from acp.api.guidance_pack import guidance_index
+
+    entries = []
+    for card in guidance_index()["guides"]:
+        if card["kind"] != "task":
+            continue
+        summary = str(card.get("summary") or "")
+        entries.append(
+            {
+                "guide_id": card["guide_id"],
+                "title": card["title"],
+                # bounded cue only; the full recipe is one acp_get_guidance away
+                "summary": summary[:60] + ("…" if len(summary) > 60 else ""),
+                "coverage": card["coverage"],
+            }
+        )
+    return entries
+
+
+def _capacity_block(request: Request) -> dict[str, Any]:
+    """Controller admission-view capacity (U04)."""
+    from acp.api.capacity import build_capacity_projection
+
+    try:
+        return build_capacity_projection(
+            request.app.state.job_manager,
+            admission=getattr(request.app.state, "admission", None),
+        )
+    except Exception:  # noqa: BLE001 - discovery survives a probe failure
+        return {
+            "schema": "acp2.capacity.view.v1",
+            "semantics": "unavailable",
+            "unknown": ["capacity"],
+        }
+
+
+def _capability_index(request: Request) -> list[dict[str, Any]]:
+    """Compact capability index: identity, contract version, state, limits.
+
+    A *separate* projection — never a trimmed copy of a full descriptor (the
+    declared/installed/available/verified distinction and the blocking
+    limitations must survive; astra round-4 review).
+    """
+    from acp.api import science_catalog
+
+    entries = []
+    for desc in science_catalog.capability_descriptors(request.app.state):
+        if not isinstance(desc, Mapping):
+            continue
+        compatibility = desc.get("compatibility") or {}
+        projections = desc.get("projections") or {}
+        limitation_texts = [
+            str(item.get("text"))
+            for item in (desc.get("limitations") or [])
+            if isinstance(item, Mapping) and item.get("text")
+        ]
+        limitations = {
+            "count": len(limitation_texts),
+            "first": limitation_texts[0] if limitation_texts else None,
+        }
+        entries.append(
+            {
+                "capability_id": desc.get("capability_id"),
+                "implementation_id": desc.get("implementation_id"),
+                "contract_version": compatibility.get("contract_version"),
+                "state": {
+                    state: (projections.get(state) or {}).get("state")
+                    for state in ("described", "installed", "available", "verified")
+                },
+                "limitations": limitations,
+            }
+        )
+    return entries
+
+
+def _admission_summary(snapshot: Mapping[str, Any]) -> dict[str, Any]:
+    """Small admission view: enforcement semantics + the numeric ceilings."""
+    limits = snapshot.get("limits") if isinstance(snapshot.get("limits"), Mapping) else {}
+    return {
+        "enforcement": snapshot.get("enforcement"),
+        "mode": snapshot.get("mode"),
+        "quota_enforced": snapshot.get("quota_enforced"),
+        "recorded_only": snapshot.get("recorded_only"),
+        "model_token_enforcement": snapshot.get("model_token_enforcement"),
+        "multi_tenant_security": snapshot.get("multi_tenant_security"),
+        "policy_version": snapshot.get("policy_version"),
+        "limits": {
+            key: limits.get(key)
+            for key in ("max_cores", "max_memory_mb", "max_tasks", "max_walltime_s")
+        },
+        "detail": {"tool": "acp_capabilities", "arguments": {"detail": "full"}},
+    }
+
+
+def _discovery_navigation() -> dict[str, Any]:
+    """The explicit next steps of the discovery protocol (head of the payload)."""
+    return {
+        "task_recipe": {
+            "tool": "acp_capabilities",
+            "arguments": {"detail": "summary"},
+            "note": "read task_instructions first (goal -> chain)",
+        },
+        "workflow_contract": {
+            "tool": "acp_capabilities",
+            "arguments": {"workflow": "<id>"},
+            "note": (
+                "workflow_contracts[q].coverage; this call returns that schema only"
+            ),
+        },
+        "capability_detail": {
+            "tool": "acp_capabilities",
+            "arguments": {"detail": "full"},
+        },
+        "guidance": {
+            "tool": "acp_get_guidance",
+            "arguments": {"guide_id": "<id>"},
+        },
+        "rule": "do not read platform source to guess payloads; follow fallbacks or report a gap",
+    }
+
+
+def _capabilities_payload(
+    request: Request,
+    *,
+    research_extension: Mapping[str, Any] | str | None = None,
+    project_id: str | None = None,
+    client: Mapping[str, Any] | None = None,
+    workflow: str | None = None,
+    detail: str | None = None,
+) -> dict[str, Any]:
+    """Build the discovery payload and answer the extension handshake.
+
+    One builder serves the credential-free ``GET`` query surface and the
+    equivalent ``POST`` body surface (``application-api.v1``
+    ``capabilities.request``), so the two can never diverge.  The
+    ``research_extension``/``project_id``/``client`` inputs are audit facts: the
+    project hint is checked against the server-resolved binding and can only
+    *narrow* (a mismatch is refused), never widen, and no input can authorize.
+
+    Response scopes (round-4 bounded discovery):
+
+    * ``workflow=<id>``: only that workflow's contract plus the small public
+      refs — never the full 60 KB payload (a second read used to be truncated
+      just like the first).
+    * ``detail="summary"``: bounded navigation package (indexes + capacity +
+      summaries), keyed for agents.
+    * omitted / ``detail="full"``: the historical full shape, unchanged for
+      old clients.
+    """
+    if detail is not None and detail not in ("summary", "full"):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "input_invalid",
+                "message": "detail must be 'summary' or 'full'",
+                "params": {"field": "detail", "rule": "invalid_enum"},
+            },
+        )
+    from acp.api import science_catalog
+    from acp.mcp_extension import RESEARCH_EXTENSION_SPEC
+    from acp_services.entrypoints.mcp import (
+        RESEARCH_TOOL_NAMES,
+        negotiate_research_extension,
+        normalize_extension_request,
+    )
+    from acp_services.runtime.execution_limits import execution_limits_statement
     from acp_services.workspace.http_identity import (
         IdentityMode,
         remote_identity_providers,
@@ -282,6 +510,7 @@ def get_capabilities(request: Request) -> dict[str, Any]:
     admission = getattr(request.app.state, "admission", None)
     identity = getattr(request.app.state, "server_identity", None)
     identity_mode = getattr(request.app.state, "identity_mode", IdentityMode.LOCAL_SINGLE)
+
     if admission is not None:
         admission_snapshot = admission.snapshot()
     else:
@@ -293,17 +522,147 @@ def get_capabilities(request: Request) -> dict[str, Any]:
             "model_token_enforcement": "NOT_VERIFIED",
             "multi_tenant_security": False,
         }
+    try:
+        requested = normalize_extension_request(research_extension)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "input_invalid", "message": str(exc)},
+        ) from None
+    handshake = negotiate_research_extension(RESEARCH_EXTENSION_SPEC, requested)
+    resolved = getattr(request.state, "request_identity", None)
+    bound_project = getattr(resolved, "verified_project", None) or getattr(
+        identity, "verified_project", None
+    )
+    # Round-4 scoping must not skip the handshake refusal or the project-hint
+    # check: both apply to every response scope.
+    if handshake.refusal is not None:
+        # Typed, in-band refusal: the client still receives extensions[] so it
+        # can read the supported version instead of guessing.
+        params = dict(handshake.refusal.get("params") or {})
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": str(handshake.refusal.get("code") or "unsupported_capability"),
+                "message": "research extension request refused",
+                "params": params,
+                "extensions": [dict(entry) for entry in handshake.entries],
+            },
+        )
+    if project_id is not None and bound_project is not None and project_id != bound_project:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "access_denied",
+                "message": "requested project does not match the server binding",
+                "params": {
+                    "rule": "project_scope_mismatch",
+                    "requested_project_id": project_id,
+                    "bound_project_id": bound_project,
+                },
+                "extensions": [dict(entry) for entry in handshake.entries],
+            },
+        )
+    _visible_tools = list(_MCP_TOOLS) + (
+        [*RESEARCH_TOOL_NAMES] if handshake.negotiated else []
+    )
+    if workflow is not None:
+        from acp.api.workflow_contracts import (
+            ACTIVE_WORKFLOWS,
+            canonical_workflow,
+            describe_workflow,
+            workflow_suggestion,
+        )
+
+        canonical = canonical_workflow(workflow)
+        if canonical is None:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "input_invalid",
+                    "message": f"unknown workflow {workflow!r}",
+                    "params": {
+                        "field": "workflow",
+                        "rule": "unknown_workflow",
+                        "allowed": list(ACTIVE_WORKFLOWS),
+                        "suggestion": workflow_suggestion(workflow),
+                    },
+                },
+            )
+        # Bounded single-workflow read: only the target contract + the small
+        # public refs an agent needs to address the next call.
+        return {
+            "schema_version": 1,
+            "protocol_version": _MCP_PROTOCOL_VERSION,
+            "workflows": _active_workflows(),
+            "backends": _backend_capability_summary(),
+            "tools": _visible_tools,
+            "extensions": [dict(entry) for entry in handshake.entries],
+            "workflow_contract": describe_workflow(canonical),
+        }
+    if detail == "summary":
+        return {
+            "schema_version": 1,
+            "detail": "summary",
+            "navigation": _discovery_navigation(),
+            "protocol_version": _MCP_PROTOCOL_VERSION,
+            "tools": _visible_tools,
+            "extensions": [
+                {
+                    key: entry.get(key)
+                    for key in ("id", "version", "supported", "negotiated", "refusal")
+                }
+                for entry in handshake.entries
+            ],
+            "workflows": _active_workflows(),
+            "workflow_contracts": _workflow_contract_index(),
+            "task_instructions": _task_instruction_index(),
+            "capacity": _capacity_block(request),
+            "capability_index": _capability_index(request),
+            "limits": _capability_limits(request),
+            "admission": _admission_summary(admission_snapshot),
+            "identity_mode": identity_mode,
+        }
+
     payload: dict[str, Any] = {
         "schema_version": 1,
         "task_kinds": _task_kinds(),
         "workflows": _active_workflows(),
         "backends": _backend_capability_summary(),
-        "capability_descriptors": None,
-        "limits": dict(_CONTROLLER_LIMITS),
-        "tools": list(_MCP_TOOLS),
+        # M2-02: the A-owned capability descriptors are forwarded instead of
+        # returning ``None``.  The documents come from the one per-application
+        # science catalog that `/api/v2/science/capabilities` also reads, so no
+        # executable probe runs twice.  The analysis registry projection is the
+        # platform fact ("what this process can execute") and keeps the frozen
+        # registered/executable/unavailable distinction: a declared capability is
+        # never reported as executable.
+        "capability_descriptors": list(science_catalog.capability_descriptors(request.app.state)),
+        "analysis_capabilities": list(science_catalog.analysis_capabilities(request.app.state)),
+        "limits": _capability_limits(request),
+        # M2-01c: the HTTP surface mirrors tools/list — the eight P1 tools, plus
+        # the ten research tools only for a request that negotiated the extension.
+        "tools": list(_MCP_TOOLS) + ([*RESEARCH_TOOL_NAMES] if handshake.negotiated else []),
+        "research_tools": {
+            "registered": [*RESEARCH_TOOL_NAMES],
+            "visible": bool(handshake.negotiated),
+            "negotiated": bool(handshake.negotiated),
+        },
         "protocol_version": _MCP_PROTOCOL_VERSION,
+        "extensions": [dict(entry) for entry in handshake.entries],
+        "capability_request": {
+            "client": dict(client) if client is not None else None,
+            "project_id": project_id,
+            "research_extension": (
+                dict(handshake.requested) if handshake.requested is not None else None
+            ),
+            "authorization": "none: audit and advisory hints only",
+        },
         "admission": admission_snapshot,
         "admission_enforcement": admission_snapshot["enforcement"],
+        # M1-04b: the non-BudgetUnit execution limits (admission-bound /
+        # process-termination / queue-deadline) and the three clocks.  Same
+        # matrix as the release statement; never re-derived per surface.
+        "execution_limits": execution_limits_statement(),
         "model_token_enforcement": "NOT_VERIFIED",
         "multi_tenant_security": (
             False if identity_mode == IdentityMode.LOCAL_SINGLE else "api-key-scoped"
@@ -322,7 +681,142 @@ def get_capabilities(request: Request) -> dict[str, Any]:
             "project_hint_policy": "narrow-only",
             "multi_tenant_security": "api-key-scoped",
         }
+    if workflow is not None:
+        from acp.api.workflow_contracts import (
+            ACTIVE_WORKFLOWS,
+            canonical_workflow,
+            describe_workflow,
+            workflow_suggestion,
+        )
+
+        canonical = canonical_workflow(workflow)
+        if canonical is None:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "input_invalid",
+                    "message": f"unknown workflow {workflow!r}",
+                    "params": {
+                        "field": "workflow",
+                        "rule": "unknown_workflow",
+                        "allowed": list(ACTIVE_WORKFLOWS),
+                        "suggestion": workflow_suggestion(workflow),
+                    },
+                },
+            )
+        payload["workflow_contract"] = describe_workflow(canonical)
+
+    # Round 3/4: one compact index so a discovery read answers "which
+    # workflows publish a contract, and how to fetch the detail" without
+    # probing 15 candidates one by one.
+    payload["workflow_contracts"] = _workflow_contract_index()
+    payload["task_instructions"] = _task_instruction_index()
+
+    # Round 3 / U04: the Controller's admission-view capacity so an agent can
+    # choose nproc/mem from measured numbers instead of guessing.
+    payload["capacity"] = _capacity_block(request)
+
     return payload
+
+
+@router.get("/capabilities")
+def get_capabilities(
+    request: Request,
+    research_extension: str | None = Query(default=None),
+    project_id: str | None = Query(default=None),
+    client: str | None = Query(default=None),
+    workflow: str | None = Query(default=None),
+    detail: str | None = Query(default=None),
+) -> dict[str, Any]:
+    """Read-only discovery (``capabilities`` application command).
+
+    Credential-free by design.  The optional query parameters are the flat
+    spelling of the ``POST`` body surface: ``research_extension=id@version``,
+    ``project_id`` and ``client`` (``name/version``), all audit-only.
+    """
+    client_facts: dict[str, Any] | None = None
+    if client:
+        name, _, version = client.partition("/")
+        client_facts = {"name": name.strip(), "version": version.strip() or None}
+    return _capabilities_payload(
+        request,
+        research_extension=research_extension,
+        project_id=project_id,
+        client=client_facts,
+        workflow=workflow,
+        detail=detail,
+    )
+
+
+@router.post("/capabilities")
+async def post_capabilities(request: Request) -> dict[str, Any]:
+    """Body-form discovery: the exact equivalent of ``GET /api/capabilities``.
+
+    Still a read-only command in the identity-exempt discovery set; the body may
+    only add audit facts and the extension handshake request.
+    """
+    try:
+        body = await request.json()
+    except ValueError:
+        body = None
+    if body is None:
+        body = {}
+    if not isinstance(body, dict):
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "input_invalid", "message": "capabilities body must be an object"},
+        )
+    allowed_fields = {
+        "schema_version",
+        "extensions",
+        "research_extension",
+        "project_id",
+        "client",
+        "workflow",
+        "detail",
+    }
+    unknown = set(body) - allowed_fields
+    if unknown:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "input_invalid",
+                "message": "unknown capabilities field",
+                "params": {"unknown_fields": sorted(unknown)},
+            },
+        )
+    research = body.get("research_extension")
+    if research is not None and not isinstance(research, dict):
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "input_invalid", "message": "research_extension must be an object"},
+        )
+    client = body.get("client")
+    if client is not None and not isinstance(client, dict):
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "input_invalid", "message": "client must be an object"},
+        )
+    project_id = body.get("project_id")
+    if project_id is not None and not isinstance(project_id, str):
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "input_invalid", "message": "project_id must be a string"},
+        )
+    workflow = body.get("workflow")
+    if workflow is not None and not isinstance(workflow, str):
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "input_invalid", "message": "workflow must be a string"},
+        )
+    return _capabilities_payload(
+        request,
+        research_extension=research,
+        project_id=project_id,
+        client=client,
+        workflow=workflow,
+        detail=body.get("detail"),
+    )
 
 
 @router.get("/identity")
@@ -350,6 +844,22 @@ def _load_executables() -> dict[str, Any]:
         return load_config().get("executables", {})
     except Exception:
         return {}
+
+
+def _backend_probe_config(executables: dict[str, Any]) -> dict[str, Any]:
+    """Configuration a backend constructor needs to judge binary presence.
+
+    ``/api/backends`` must answer "is this binary present *for this
+    deployment*", and the install pin lives in ``executables.<name>.path``.
+    Constructing a backend with an empty config downgrades every interface to
+    ``PATH``-only resolution, which misreports a config-pinned install as a
+    missing binary whenever the serving process runs with a minimal ``PATH``
+    (systemd's default, where e.g. ``xtb``/``crest``/``censo`` live outside
+    ``/usr/bin``).  Only the ``executables`` section is relevant to these
+    probes, so it is reused from the single :func:`_load_executables`
+    authority instead of loading the config twice.
+    """
+    return {"executables": executables}
 
 
 def _resolve_backend_path(name: str, executables: dict[str, Any]) -> str:
@@ -411,10 +921,11 @@ def get_backends(request: Request) -> BackendsResponse:
     from acp.backends import BackendCapabilityStatus, backend_status, list_backends
 
     executables = _load_executables()
+    probe_config = _backend_probe_config(executables)
     remote = _remote_backend_map(request)
     backends: list[BackendInfo] = []
     for name in list_backends():
-        status = cast(dict[str, Any], backend_status(name))
+        status = cast(dict[str, Any], backend_status(name, config=probe_config))
         capabilities = cast(dict[str, Any], status["capabilities"])
         caps = [
             CapabilityInfo(name=cap, available=(st is BackendCapabilityStatus.AVAILABLE))

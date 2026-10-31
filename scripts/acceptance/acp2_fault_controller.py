@@ -19,17 +19,17 @@ the acceptance-only seam:
 
 Usage (run from the repository root)::
 
-    <acp2-dev>/venvs/b/bin/python \
-        <repo>/scripts/acceptance/acp2_fault_controller.py \
-        --source <acp2-dev>/B/src \
-        --fault-file <repo>/reports/acp2_implementation/bb45a46/\
+    /ACPServer/acp2-development/venvs/b/bin/python \
+        /ACPServer/AutoCalcPlatform/scripts/acceptance/acp2_fault_controller.py \
+        --source /ACPServer/acp2-development/B/src \
+        --fault-file /ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/\
 B/B13/fault/publication-fault.json \
-        --config <acp2-dev>/data/b/controller-config/cccp.yaml \
+        --config /ACPServer/acp2-development/data/b/controller-config/cccp.yaml \
         --candidate-revision 10eb71e4bc1811054c9d19ae4fd71d974e027f8a \
-        --orca /home/<user>/orca611/orca \
-        --orca-ld-library-path /home/<user>/openmpi418/lib:/home/<user>/orca611 \
+        --orca /home/xieningke/orca611/orca \
+        --orca-ld-library-path /home/xieningke/openmpi418/lib:/home/xieningke/orca611 \
         -- run serve --host 127.0.0.1 --port 18771 \
-        --run-root <acp2-dev>/data/b/run-root-b13 \
+        --run-root /ACPServer/acp2-development/data/b/run-root-b13 \
         --poll-interval 1 --no-browser
 
 Exit codes follow the wrapped ``acp`` CLI.  This file is acceptance tooling; it

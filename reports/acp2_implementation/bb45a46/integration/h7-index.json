@@ -104,7 +104,7 @@
   "harness_revision": {
     "path": "scripts/acceptance/acp2_runtime.py",
     "rule": "sha256 of the harness file used to validate this index",
-    "value": "0e6043d78aa61dfa7e2190fb6db61f418bbf36f5efc70b77f3f798387c5ebb2e"
+    "value": "8bd0f777e4ba209e176073132c57c5b83f91bfa18aeafca6f4f79fa876f38396"
   },
   "notes": [
     "Every row has an explicit PASS/FAIL/NOT_VERIFIED result and immutable evidence path.",

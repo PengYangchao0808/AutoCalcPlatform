@@ -1,0 +1,118 @@
+{
+  "closes_h2": false,
+  "controller": {
+    "reachable": false,
+    "task_count_after": null,
+    "task_count_before": null,
+    "url": "http://127.0.0.1:18765",
+    "verified_pid": null
+  },
+  "failures": [],
+  "launch": {
+    "b05": {
+      "contract_version": "1.0.0",
+      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B05/mcp-launch.json",
+      "protocol_version": "2025-06-18",
+      "sha256": "ca807cc4b8014af265fac64c9b84ca3c4050df9bfbab3b5dc408ce068b548046"
+    },
+    "b06": {
+      "contract_version": "1.1.0",
+      "path": "/ACPServer/AutoCalcPlatform/reports/acp2_implementation/bb45a46/B/B06/mcp-launch.json",
+      "protocol_version": "2025-06-18",
+      "sha256": "867d25a6e5757ded401006e2c51f3512fcce551299a3221e7b892e3b82c9a7f6"
+    }
+  },
+  "matrix": {
+    "different_supported": "NOT_VERIFIED",
+    "no_common": "NOT_VERIFIED",
+    "notification_eof": "NOT_VERIFIED",
+    "same": "NOT_VERIFIED",
+    "tools_before_init": "NOT_VERIFIED"
+  },
+  "not_verified": [
+    {
+      "detail": "controller_unavailable",
+      "name": "controller.reachable"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "controller.pid"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "controller.task_count_before"
+    },
+    {
+      "detail": "controller_unavailable; B05 archived tools/list differs from the descriptor: acp_analyze,acp_cancel,acp_capabilities,acp_preflight,acp_prepare_artifact,acp_read_artifact,acp_status,acp_submit",
+      "name": "schema.live_snapshot"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "probe.stdlib_exit"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "probe.stdlib_protocol"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "official.client_handshake"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "official.tool_allowlist"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "official.tool_schemas"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "official.capabilities_read"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "matrix.same"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "matrix.different_supported"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "matrix.no_common"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "matrix.tools_before_init"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "matrix.notification_eof"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "no_side_effect.task_count_unchanged"
+    },
+    {
+      "detail": "controller_unavailable",
+      "name": "no_side_effect.controller_alive_after"
+    }
+  ],
+  "official_client": {
+    "negotiated_protocol": null,
+    "package_versions": {
+      "@deepseek-ai/dsh-mcp-client": {
+        "name": "@deepseek-ai/dsh-mcp-client",
+        "version": "0.2.1-rc.2"
+      },
+      "@modelcontextprotocol/client": {
+        "name": "@modelcontextprotocol/client",
+        "version": "2.2.0"
+      }
+    },
+    "requested_protocol": "2025-11-25",
+    "tool_count": 0
+  },
+  "schema": "acp2.c.mcp-live.summary.v1"
+}

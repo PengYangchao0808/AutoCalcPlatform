@@ -255,6 +255,7 @@ def censo_refine_via_task(
         final_part=final_part,
         work_dir=run_dir,
         temperature=float(metadata.get("temperature_k") or temperature or 298.15),
+        execution=dict(metadata.get("execution") or {}),
     )
     run_result.sort_by_gtot()
     return run_result

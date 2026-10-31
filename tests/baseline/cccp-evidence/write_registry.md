@@ -47,11 +47,11 @@
 
 ## 3. 补丁程序（具体命令序列）
 
-> 混合文件迁移一律走此程序，**不以改工作区代替**。所有命令在共享仓库根 `<repo>` 的**隔离 worktree** 执行，避免污染 A/B 在途工作树。
+> 混合文件迁移一律走此程序，**不以改工作区代替**。所有命令在共享仓库根 `/ACPServer/AutoCalcPlatform` 的**隔离 worktree** 执行，避免污染 A/B 在途工作树。
 
 ```bash
 # ── 变量 ────────────────────────────────────────────────────────────────
-REPO=<repo>
+REPO=/ACPServer/AutoCalcPlatform
 PATCH=/abs/path/to/c00-slice-N-write-registry.patch   # 由 C 产出并入库
 BASE=<provider_base_commit>                            # C 产出补丁时的基线 SHA
 WT=/tmp/acp-c-apply-$$                                 # 隔离 worktree，勿落在原数据目录

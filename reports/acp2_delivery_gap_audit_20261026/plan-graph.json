@@ -1,0 +1,7256 @@
+{
+  "schema": "acp2.execution-plan-graph.v3",
+  "task_id": "M0-01",
+  "generator": "scripts/acceptance/build_acp2_plan_graph.py",
+  "generator_sha256": "b1c9a32f20ce34b5ab33e902a024a0ee35ca3f2b1807bc081ca9fb6216795705",
+  "source_plan": "reports/acp2_delivery_gap_audit_20261026/EXECUTION_PLAN.md",
+  "source_plan_sha256": "87c58195b0d89301671e9bdf2eac242338ceaa52e9cd413eb5e83c8015ae00db",
+  "task_count": 39,
+  "checkpoint_count": 32,
+  "checkpoints": {
+    "M0-01": [
+      "M0-01a",
+      "M0-01b"
+    ],
+    "M0-02": [
+      "M0-02a",
+      "M0-02b",
+      "M0-02c"
+    ],
+    "M0-03": [
+      "M0-03a",
+      "M0-03b",
+      "M0-03c"
+    ],
+    "M0-04": [],
+    "M0-05": [],
+    "M0-06": [],
+    "M0-07": [],
+    "M0-08": [],
+    "M0-09": [],
+    "M0-10": [],
+    "M0-11": [],
+    "M0-12": [],
+    "M0-13": [],
+    "M1-01": [
+      "M1-01a",
+      "M1-01b",
+      "M1-01c"
+    ],
+    "M1-02": [],
+    "M1-03": [],
+    "M1-04": [
+      "M1-04a",
+      "M1-04b",
+      "M1-04c"
+    ],
+    "M1-05": [],
+    "M1-06": [],
+    "M2-01": [
+      "M2-01a",
+      "M2-01b",
+      "M2-01c"
+    ],
+    "M2-02": [],
+    "M2-03": [
+      "M2-03a",
+      "M2-03b",
+      "M2-03c"
+    ],
+    "M2-04": [
+      "M2-04a",
+      "M2-04b",
+      "M2-04c",
+      "M2-04d"
+    ],
+    "M2-05": [],
+    "M3-01": [
+      "M3-01a",
+      "M3-01b"
+    ],
+    "M3-02": [
+      "M3-02a",
+      "M3-02b"
+    ],
+    "M3-03": [],
+    "M3-04": [],
+    "M3-05": [
+      "M3-05a",
+      "M3-05b"
+    ],
+    "M3-06": [],
+    "M4-01": [],
+    "M4-02": [],
+    "M4-03": [],
+    "M4-04": [],
+    "M4-05": [],
+    "M4-06": [
+      "M4-06a",
+      "M4-06b"
+    ],
+    "M5-01": [],
+    "M5-02": [],
+    "M5-03": []
+  },
+  "unknown_refs": [],
+  "cycles": [],
+  "gap_count": 26,
+  "scope_item_counts": {
+    "IN_SCOPE": 5,
+    "DEFERRED": 3,
+    "OUT_OF_SCOPE": 7
+  },
+  "conditional_edges": [
+    {
+      "from": "M1-01",
+      "to": "M0-13",
+      "condition": "external_change_required"
+    }
+  ],
+  "close_only_text_rules": [
+    {
+      "dependent": "M4-06",
+      "dependencies": [
+        "M4-03",
+        "M4-05"
+      ],
+      "reason": "M4-06b（跨领域/多租户 required 行）在前置行之外还要求 M4-03 与 M4-05"
+    }
+  ],
+  "dependency_model": {
+    "start": "task-start dependencies from the '**前置**' field; close-only augmentations and the conditional M0-13 external-change task are excluded",
+    "close": "whole-item sign-off: start graph plus close-only edges (M5-01/M5-02 'M4 全部', M4-06b M4-03/M4-05)",
+    "close_external_change": "close graph plus M0-13 and its M1-01 gate when M0-09 selects external_change_required",
+    "tie_break": "longest path by node count; lexicographically smallest predecessor"
+  },
+  "graphs": {
+    "start": {
+      "mode": "start",
+      "nodes": [
+        {
+          "id": "M0-01",
+          "title": "冻结整改基线与 26 项机器可追踪台账",
+          "size": "S",
+          "owner": "INT（M0-01a 基线/coverage）+ B（M0-01b 契约注册）",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [],
+          "declared_dependencies": [],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-02",
+          "title": "建立真实消费者 CI 门并修复 CI 自身断点",
+          "size": "L",
+          "owner": "INT + B + C-RPH",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-01"
+          ],
+          "declared_dependencies": [
+            "M0-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-03",
+          "title": "修正证据标签、live harness 骨架与候选索引骨架",
+          "size": "M",
+          "owner": "B（`acp2_runtime.py`）+ C-RPH（research harness）+ C-Web（browser harness）+ INT/REL（证据/BOM）",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-01"
+          ],
+          "declared_dependencies": [
+            "M0-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-04",
+          "title": "统一 CommandIdentity，修复跨用户幂等与 admission 归属（G24）",
+          "size": "M",
+          "owner": "B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-01"
+          ],
+          "declared_dependencies": [
+            "M0-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-05",
+          "title": "删除 MCP/Bridge 第二幂等权威并加入撤权重验（G21/G22/G25）",
+          "size": "L",
+          "owner": "B + C-RPH",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-04"
+          ],
+          "declared_dependencies": [
+            "M0-04"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-06",
+          "title": "修复执行字段与跨入口 JobSpec 等价（G23）",
+          "size": "M",
+          "owner": "B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-02",
+            "M0-05"
+          ],
+          "declared_dependencies": [
+            "M0-02",
+            "M0-05"
+          ],
+          "prereq_notes": [
+            "与 M0-05 顺序合入同模块"
+          ]
+        },
+        {
+          "id": "M0-07",
+          "title": "可信 usage receipt 与结算绑定（G26）",
+          "size": "L",
+          "owner": "B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-04"
+          ],
+          "declared_dependencies": [
+            "M0-04"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-08",
+          "title": "标准 MCP 握手与 ADR-006（G01）",
+          "size": "M",
+          "owner": "B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-02"
+          ],
+          "declared_dependencies": [
+            "M0-02"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-09",
+          "title": "真实 DSH 研究扩展协商接线验证（G02/G04，R12）",
+          "size": "L",
+          "owner": "C-RPH + B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-02",
+            "M0-08"
+          ],
+          "declared_dependencies": [
+            "M0-02",
+            "M0-08"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-10",
+          "title": "环境、账号与授权就绪（G06/G17/G18）",
+          "size": "L",
+          "owner": "INT",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-01"
+          ],
+          "declared_dependencies": [
+            "M0-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-11",
+          "title": "身份、字段与迁移决策冻结（G02/G03/G12/G13/G20）",
+          "size": "M",
+          "owner": "INT 汇总，B/A/C-RPH/C-Web 各 owner 签核",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-04",
+            "M0-05",
+            "M0-06"
+          ],
+          "declared_dependencies": [
+            "M0-04",
+            "M0-05",
+            "M0-06"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-12",
+          "title": "扩展协商与 CI 决策冻结（G02/G04/G20）",
+          "size": "M",
+          "owner": "INT 汇总，B/C-RPH 签核",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-02",
+            "M0-08",
+            "M0-09",
+            "M0-11"
+          ],
+          "declared_dependencies": [
+            "M0-02",
+            "M0-08",
+            "M0-09",
+            "M0-11"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-13",
+          "title": "DSH 外部适配依赖变更（条件任务，G02/G05）",
+          "size": "L",
+          "owner": "C-RPH + B",
+          "conditional": true,
+          "applies": false,
+          "dependencies": [],
+          "declared_dependencies": [
+            "M0-09",
+            "M0-12"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M1-01",
+          "title": "应用/MCP/Artifact/Analysis 契约统一（G02/G03/G04）",
+          "size": "L",
+          "owner": "B，A/C 消费确认",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-02",
+            "M0-06",
+            "M0-08",
+            "M0-09",
+            "M0-12"
+          ],
+          "declared_dependencies": [
+            "M0-02",
+            "M0-06",
+            "M0-08",
+            "M0-09",
+            "M0-12",
+            "M0-13"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M1-02",
+          "title": "ResearchRecord、提交意图、事件与恢复契约（G09/G14）",
+          "size": "L",
+          "owner": "B + C-RPH",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-04",
+            "M0-11"
+          ],
+          "declared_dependencies": [
+            "M0-04",
+            "M0-11"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M1-03",
+          "title": "Evidence 投影、TaskRef 与 ResearchDecision 契约（G07/G08）",
+          "size": "L",
+          "owner": "A + B + C-RPH",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-02"
+          ],
+          "declared_dependencies": [
+            "M0-02"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M1-04",
+          "title": "科学输入、多摘要、SubmitPolicy 与 Budget 契约（G10/G12/G13）",
+          "size": "L",
+          "owner": "B + A + C-RPH/C-Web",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-04",
+            "M0-06",
+            "M0-07",
+            "M0-11"
+          ],
+          "declared_dependencies": [
+            "M0-04",
+            "M0-06",
+            "M0-07",
+            "M0-11"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M1-05",
+          "title": "新建 ADR-008 并冻结限定 DA 科学判据（G15/G18）",
+          "size": "L",
+          "owner": "A，B/C-RPH/C-Web 会签",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M1-03",
+            "M1-04"
+          ],
+          "declared_dependencies": [
+            "M1-03",
+            "M1-04"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M1-06",
+          "title": "早期薄纵切与 Candidate-Contracts（G02/G07/G11/G14/G20）",
+          "size": "L",
+          "owner": "INT",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-05",
+            "M1-01",
+            "M1-02",
+            "M1-03",
+            "M1-04"
+          ],
+          "declared_dependencies": [
+            "M0-05",
+            "M1-01",
+            "M1-02",
+            "M1-03",
+            "M1-04"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M2-01",
+          "title": "Research writer、跨库 Saga 与 P2 工具（G02/G14）",
+          "size": "XL",
+          "owner": "B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M1-06"
+          ],
+          "declared_dependencies": [
+            "M1-06"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M2-02",
+          "title": "Artifact 链、科学发现与真实 `vibration.analyze`（G03/G04）",
+          "size": "L",
+          "owner": "B + A",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-06",
+            "M1-01"
+          ],
+          "declared_dependencies": [
+            "M0-06",
+            "M1-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M2-03",
+          "title": "服务端审批策略与预算强制（G12/G13）",
+          "size": "XL",
+          "owner": "B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-07",
+            "M1-04",
+            "M2-01"
+          ],
+          "declared_dependencies": [
+            "M0-07",
+            "M1-04",
+            "M2-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M2-04",
+          "title": "Bounded Recipe DAG 生产接线（G15）",
+          "size": "XL",
+          "owner": "B + A",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M1-03",
+            "M1-04",
+            "M2-02",
+            "M2-03"
+          ],
+          "declared_dependencies": [
+            "M1-03",
+            "M1-04",
+            "M2-02",
+            "M2-03"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M2-05",
+          "title": "第三方科学插件生产装配（G04/G16，R07）",
+          "size": "L",
+          "owner": "B + A",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M1-04",
+            "M2-02"
+          ],
+          "declared_dependencies": [
+            "M1-04",
+            "M2-02"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M3-01",
+          "title": "真实 MCP PlatformClient、Bridge 参数与 TaskRef（G02/G03/G21）",
+          "size": "L",
+          "owner": "C-RPH",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-05",
+            "M2-01",
+            "M2-02"
+          ],
+          "declared_dependencies": [
+            "M0-05",
+            "M2-01",
+            "M2-02"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M3-02",
+          "title": "CLI 组合根、可移植 profile 与 doctor（G05/G06/G17）",
+          "size": "XL",
+          "owner": "C-RPH",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M3-01"
+          ],
+          "declared_dependencies": [
+            "M3-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M3-03",
+          "title": "生产 Planner、科学确认与模型预算 gateway（G10/G13）",
+          "size": "L",
+          "owner": "C-RPH + A/B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M1-04",
+            "M2-01",
+            "M2-03"
+          ],
+          "declared_dependencies": [
+            "M1-04",
+            "M2-01",
+            "M2-03"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M3-04",
+          "title": "可恢复 Supervisor、证据归属与研究决策（G07/G08/G09）",
+          "size": "XL",
+          "owner": "C-RPH",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M1-02",
+            "M1-03",
+            "M3-01",
+            "M3-03"
+          ],
+          "declared_dependencies": [
+            "M1-02",
+            "M1-03",
+            "M3-01",
+            "M3-03"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M3-05",
+          "title": "Workbench 真实审批与提交（G11）",
+          "size": "L",
+          "owner": "C-Web + B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M2-01",
+            "M2-03"
+          ],
+          "declared_dependencies": [
+            "M2-01",
+            "M2-03"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M3-06",
+          "title": "P3 Schema-Driven capability form（G16）",
+          "size": "L",
+          "owner": "A + C-Web + B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M2-02",
+            "M2-05"
+          ],
+          "declared_dependencies": [
+            "M2-02",
+            "M2-05"
+          ],
+          "prereq_notes": [
+            "不阻塞 M4 的 P2 最小纵切"
+          ]
+        },
+        {
+          "id": "M4-01",
+          "title": "无 QC 的全产品链与故障矩阵（G20 及所有接口项）",
+          "size": "L",
+          "owner": "INT",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-03",
+            "M2-01",
+            "M2-02",
+            "M2-03",
+            "M2-04",
+            "M3-01",
+            "M3-02",
+            "M3-03",
+            "M3-04",
+            "M3-05"
+          ],
+          "declared_dependencies": [
+            "M0-03",
+            "M2-01",
+            "M2-02",
+            "M2-03",
+            "M2-04",
+            "M3-01",
+            "M3-02",
+            "M3-03",
+            "M3-04",
+            "M3-05"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M4-02",
+          "title": "真 DSH/模型 + Local 科学 + Chromium（G05/G06/G11/G18）",
+          "size": "XL",
+          "owner": "INT + C + A/B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-10",
+            "M4-01"
+          ],
+          "declared_dependencies": [
+            "M0-10",
+            "M4-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M4-03",
+          "title": "LSF、执行约束、控制与恢复（G18/G23/G24/G25/G13）",
+          "size": "XL",
+          "owner": "B + INT",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-10",
+            "M4-02"
+          ],
+          "declared_dependencies": [
+            "M0-10",
+            "M4-02"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M4-04",
+          "title": "限定 Diels–Alder 科学纵切（G07/G08/G15/G18）",
+          "size": "XL",
+          "owner": "A + B + C + INT",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M1-05",
+            "M2-04",
+            "M3-04",
+            "M4-02"
+          ],
+          "declared_dependencies": [
+            "M1-05",
+            "M2-04",
+            "M3-04",
+            "M4-02"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M4-05",
+          "title": "第三方 capability 插件纵切（G16/G18）",
+          "size": "L",
+          "owner": "A + C-Web + B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M3-06",
+            "M4-02"
+          ],
+          "declared_dependencies": [
+            "M3-06",
+            "M4-02"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M4-06",
+          "title": "跨领域、迁移与长期可靠性 required 行（G18）",
+          "size": "XL",
+          "owner": "A + B + C + INT",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-04",
+            "M0-05",
+            "M0-06",
+            "M0-10",
+            "M4-01"
+          ],
+          "declared_dependencies": [
+            "M0-04",
+            "M0-05",
+            "M0-06",
+            "M0-10",
+            "M4-01",
+            "M4-03",
+            "M4-05"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M5-01",
+          "title": "全组件制品与安装入口（G06/G17）",
+          "size": "L",
+          "owner": "REL + C-RPH + B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M3-02",
+            "M3-06",
+            "M4-01"
+          ],
+          "declared_dependencies": [
+            "M3-02",
+            "M3-06",
+            "M4-01",
+            "M4-02",
+            "M4-03",
+            "M4-04",
+            "M4-05",
+            "M4-06"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M5-02",
+          "title": "单一 BOM、可取回制品与证据覆盖矩阵（G18/G19/G20）",
+          "size": "L",
+          "owner": "B（manifest/契约注册）+ REL（制品/BOM）+ INT（coverage/签收）",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-03",
+            "M5-01"
+          ],
+          "declared_dependencies": [
+            "M0-03",
+            "M4-01",
+            "M4-02",
+            "M4-03",
+            "M4-04",
+            "M4-05",
+            "M4-06",
+            "M5-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M5-03",
+          "title": "独立操作者验收与最终放行（G17/G18/G19）",
+          "size": "L",
+          "owner": "独立操作者 + INT",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-10",
+            "M5-02"
+          ],
+          "declared_dependencies": [
+            "M0-10",
+            "M5-02"
+          ],
+          "prereq_notes": []
+        }
+      ],
+      "edges": [
+        {
+          "from": "M0-01",
+          "to": "M0-02"
+        },
+        {
+          "from": "M0-01",
+          "to": "M0-03"
+        },
+        {
+          "from": "M0-01",
+          "to": "M0-04"
+        },
+        {
+          "from": "M0-04",
+          "to": "M0-05"
+        },
+        {
+          "from": "M0-02",
+          "to": "M0-06"
+        },
+        {
+          "from": "M0-05",
+          "to": "M0-06"
+        },
+        {
+          "from": "M0-04",
+          "to": "M0-07"
+        },
+        {
+          "from": "M0-02",
+          "to": "M0-08"
+        },
+        {
+          "from": "M0-02",
+          "to": "M0-09"
+        },
+        {
+          "from": "M0-08",
+          "to": "M0-09"
+        },
+        {
+          "from": "M0-01",
+          "to": "M0-10"
+        },
+        {
+          "from": "M0-04",
+          "to": "M0-11"
+        },
+        {
+          "from": "M0-05",
+          "to": "M0-11"
+        },
+        {
+          "from": "M0-06",
+          "to": "M0-11"
+        },
+        {
+          "from": "M0-02",
+          "to": "M0-12"
+        },
+        {
+          "from": "M0-08",
+          "to": "M0-12"
+        },
+        {
+          "from": "M0-09",
+          "to": "M0-12"
+        },
+        {
+          "from": "M0-11",
+          "to": "M0-12"
+        },
+        {
+          "from": "M0-02",
+          "to": "M1-01"
+        },
+        {
+          "from": "M0-06",
+          "to": "M1-01"
+        },
+        {
+          "from": "M0-08",
+          "to": "M1-01"
+        },
+        {
+          "from": "M0-09",
+          "to": "M1-01"
+        },
+        {
+          "from": "M0-12",
+          "to": "M1-01"
+        },
+        {
+          "from": "M0-04",
+          "to": "M1-02"
+        },
+        {
+          "from": "M0-11",
+          "to": "M1-02"
+        },
+        {
+          "from": "M0-02",
+          "to": "M1-03"
+        },
+        {
+          "from": "M0-04",
+          "to": "M1-04"
+        },
+        {
+          "from": "M0-06",
+          "to": "M1-04"
+        },
+        {
+          "from": "M0-07",
+          "to": "M1-04"
+        },
+        {
+          "from": "M0-11",
+          "to": "M1-04"
+        },
+        {
+          "from": "M1-03",
+          "to": "M1-05"
+        },
+        {
+          "from": "M1-04",
+          "to": "M1-05"
+        },
+        {
+          "from": "M0-05",
+          "to": "M1-06"
+        },
+        {
+          "from": "M1-01",
+          "to": "M1-06"
+        },
+        {
+          "from": "M1-02",
+          "to": "M1-06"
+        },
+        {
+          "from": "M1-03",
+          "to": "M1-06"
+        },
+        {
+          "from": "M1-04",
+          "to": "M1-06"
+        },
+        {
+          "from": "M1-06",
+          "to": "M2-01"
+        },
+        {
+          "from": "M0-06",
+          "to": "M2-02"
+        },
+        {
+          "from": "M1-01",
+          "to": "M2-02"
+        },
+        {
+          "from": "M0-07",
+          "to": "M2-03"
+        },
+        {
+          "from": "M1-04",
+          "to": "M2-03"
+        },
+        {
+          "from": "M2-01",
+          "to": "M2-03"
+        },
+        {
+          "from": "M1-03",
+          "to": "M2-04"
+        },
+        {
+          "from": "M1-04",
+          "to": "M2-04"
+        },
+        {
+          "from": "M2-02",
+          "to": "M2-04"
+        },
+        {
+          "from": "M2-03",
+          "to": "M2-04"
+        },
+        {
+          "from": "M1-04",
+          "to": "M2-05"
+        },
+        {
+          "from": "M2-02",
+          "to": "M2-05"
+        },
+        {
+          "from": "M0-05",
+          "to": "M3-01"
+        },
+        {
+          "from": "M2-01",
+          "to": "M3-01"
+        },
+        {
+          "from": "M2-02",
+          "to": "M3-01"
+        },
+        {
+          "from": "M3-01",
+          "to": "M3-02"
+        },
+        {
+          "from": "M1-04",
+          "to": "M3-03"
+        },
+        {
+          "from": "M2-01",
+          "to": "M3-03"
+        },
+        {
+          "from": "M2-03",
+          "to": "M3-03"
+        },
+        {
+          "from": "M1-02",
+          "to": "M3-04"
+        },
+        {
+          "from": "M1-03",
+          "to": "M3-04"
+        },
+        {
+          "from": "M3-01",
+          "to": "M3-04"
+        },
+        {
+          "from": "M3-03",
+          "to": "M3-04"
+        },
+        {
+          "from": "M2-01",
+          "to": "M3-05"
+        },
+        {
+          "from": "M2-03",
+          "to": "M3-05"
+        },
+        {
+          "from": "M2-02",
+          "to": "M3-06"
+        },
+        {
+          "from": "M2-05",
+          "to": "M3-06"
+        },
+        {
+          "from": "M0-03",
+          "to": "M4-01"
+        },
+        {
+          "from": "M2-01",
+          "to": "M4-01"
+        },
+        {
+          "from": "M2-02",
+          "to": "M4-01"
+        },
+        {
+          "from": "M2-03",
+          "to": "M4-01"
+        },
+        {
+          "from": "M2-04",
+          "to": "M4-01"
+        },
+        {
+          "from": "M3-01",
+          "to": "M4-01"
+        },
+        {
+          "from": "M3-02",
+          "to": "M4-01"
+        },
+        {
+          "from": "M3-03",
+          "to": "M4-01"
+        },
+        {
+          "from": "M3-04",
+          "to": "M4-01"
+        },
+        {
+          "from": "M3-05",
+          "to": "M4-01"
+        },
+        {
+          "from": "M0-10",
+          "to": "M4-02"
+        },
+        {
+          "from": "M4-01",
+          "to": "M4-02"
+        },
+        {
+          "from": "M0-10",
+          "to": "M4-03"
+        },
+        {
+          "from": "M4-02",
+          "to": "M4-03"
+        },
+        {
+          "from": "M1-05",
+          "to": "M4-04"
+        },
+        {
+          "from": "M2-04",
+          "to": "M4-04"
+        },
+        {
+          "from": "M3-04",
+          "to": "M4-04"
+        },
+        {
+          "from": "M4-02",
+          "to": "M4-04"
+        },
+        {
+          "from": "M3-06",
+          "to": "M4-05"
+        },
+        {
+          "from": "M4-02",
+          "to": "M4-05"
+        },
+        {
+          "from": "M0-04",
+          "to": "M4-06"
+        },
+        {
+          "from": "M0-05",
+          "to": "M4-06"
+        },
+        {
+          "from": "M0-06",
+          "to": "M4-06"
+        },
+        {
+          "from": "M0-10",
+          "to": "M4-06"
+        },
+        {
+          "from": "M4-01",
+          "to": "M4-06"
+        },
+        {
+          "from": "M3-02",
+          "to": "M5-01"
+        },
+        {
+          "from": "M3-06",
+          "to": "M5-01"
+        },
+        {
+          "from": "M4-01",
+          "to": "M5-01"
+        },
+        {
+          "from": "M0-03",
+          "to": "M5-02"
+        },
+        {
+          "from": "M5-01",
+          "to": "M5-02"
+        },
+        {
+          "from": "M0-10",
+          "to": "M5-03"
+        },
+        {
+          "from": "M5-02",
+          "to": "M5-03"
+        }
+      ],
+      "node_count": 39,
+      "edge_count": 96,
+      "xl_count": 3,
+      "xl_total": 9,
+      "xl_on_critical_path": [
+        "M2-01",
+        "M2-03",
+        "M3-04"
+      ],
+      "critical_path": [
+        "M0-01",
+        "M0-04",
+        "M0-05",
+        "M0-06",
+        "M0-11",
+        "M0-12",
+        "M1-01",
+        "M1-06",
+        "M2-01",
+        "M2-03",
+        "M3-03",
+        "M3-04",
+        "M4-01",
+        "M5-01",
+        "M5-02",
+        "M5-03"
+      ],
+      "critical_path_length": 16
+    },
+    "close": {
+      "mode": "close",
+      "nodes": [
+        {
+          "id": "M0-01",
+          "title": "冻结整改基线与 26 项机器可追踪台账",
+          "size": "S",
+          "owner": "INT（M0-01a 基线/coverage）+ B（M0-01b 契约注册）",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [],
+          "declared_dependencies": [],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-02",
+          "title": "建立真实消费者 CI 门并修复 CI 自身断点",
+          "size": "L",
+          "owner": "INT + B + C-RPH",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-01"
+          ],
+          "declared_dependencies": [
+            "M0-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-03",
+          "title": "修正证据标签、live harness 骨架与候选索引骨架",
+          "size": "M",
+          "owner": "B（`acp2_runtime.py`）+ C-RPH（research harness）+ C-Web（browser harness）+ INT/REL（证据/BOM）",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-01"
+          ],
+          "declared_dependencies": [
+            "M0-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-04",
+          "title": "统一 CommandIdentity，修复跨用户幂等与 admission 归属（G24）",
+          "size": "M",
+          "owner": "B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-01"
+          ],
+          "declared_dependencies": [
+            "M0-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-05",
+          "title": "删除 MCP/Bridge 第二幂等权威并加入撤权重验（G21/G22/G25）",
+          "size": "L",
+          "owner": "B + C-RPH",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-04"
+          ],
+          "declared_dependencies": [
+            "M0-04"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-06",
+          "title": "修复执行字段与跨入口 JobSpec 等价（G23）",
+          "size": "M",
+          "owner": "B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-02",
+            "M0-05"
+          ],
+          "declared_dependencies": [
+            "M0-02",
+            "M0-05"
+          ],
+          "prereq_notes": [
+            "与 M0-05 顺序合入同模块"
+          ]
+        },
+        {
+          "id": "M0-07",
+          "title": "可信 usage receipt 与结算绑定（G26）",
+          "size": "L",
+          "owner": "B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-04"
+          ],
+          "declared_dependencies": [
+            "M0-04"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-08",
+          "title": "标准 MCP 握手与 ADR-006（G01）",
+          "size": "M",
+          "owner": "B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-02"
+          ],
+          "declared_dependencies": [
+            "M0-02"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-09",
+          "title": "真实 DSH 研究扩展协商接线验证（G02/G04，R12）",
+          "size": "L",
+          "owner": "C-RPH + B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-02",
+            "M0-08"
+          ],
+          "declared_dependencies": [
+            "M0-02",
+            "M0-08"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-10",
+          "title": "环境、账号与授权就绪（G06/G17/G18）",
+          "size": "L",
+          "owner": "INT",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-01"
+          ],
+          "declared_dependencies": [
+            "M0-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-11",
+          "title": "身份、字段与迁移决策冻结（G02/G03/G12/G13/G20）",
+          "size": "M",
+          "owner": "INT 汇总，B/A/C-RPH/C-Web 各 owner 签核",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-04",
+            "M0-05",
+            "M0-06"
+          ],
+          "declared_dependencies": [
+            "M0-04",
+            "M0-05",
+            "M0-06"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-12",
+          "title": "扩展协商与 CI 决策冻结（G02/G04/G20）",
+          "size": "M",
+          "owner": "INT 汇总，B/C-RPH 签核",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-02",
+            "M0-08",
+            "M0-09",
+            "M0-11"
+          ],
+          "declared_dependencies": [
+            "M0-02",
+            "M0-08",
+            "M0-09",
+            "M0-11"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-13",
+          "title": "DSH 外部适配依赖变更（条件任务，G02/G05）",
+          "size": "L",
+          "owner": "C-RPH + B",
+          "conditional": true,
+          "applies": false,
+          "dependencies": [],
+          "declared_dependencies": [
+            "M0-09",
+            "M0-12"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M1-01",
+          "title": "应用/MCP/Artifact/Analysis 契约统一（G02/G03/G04）",
+          "size": "L",
+          "owner": "B，A/C 消费确认",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-02",
+            "M0-06",
+            "M0-08",
+            "M0-09",
+            "M0-12"
+          ],
+          "declared_dependencies": [
+            "M0-02",
+            "M0-06",
+            "M0-08",
+            "M0-09",
+            "M0-12",
+            "M0-13"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M1-02",
+          "title": "ResearchRecord、提交意图、事件与恢复契约（G09/G14）",
+          "size": "L",
+          "owner": "B + C-RPH",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-04",
+            "M0-11"
+          ],
+          "declared_dependencies": [
+            "M0-04",
+            "M0-11"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M1-03",
+          "title": "Evidence 投影、TaskRef 与 ResearchDecision 契约（G07/G08）",
+          "size": "L",
+          "owner": "A + B + C-RPH",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-02"
+          ],
+          "declared_dependencies": [
+            "M0-02"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M1-04",
+          "title": "科学输入、多摘要、SubmitPolicy 与 Budget 契约（G10/G12/G13）",
+          "size": "L",
+          "owner": "B + A + C-RPH/C-Web",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-04",
+            "M0-06",
+            "M0-07",
+            "M0-11"
+          ],
+          "declared_dependencies": [
+            "M0-04",
+            "M0-06",
+            "M0-07",
+            "M0-11"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M1-05",
+          "title": "新建 ADR-008 并冻结限定 DA 科学判据（G15/G18）",
+          "size": "L",
+          "owner": "A，B/C-RPH/C-Web 会签",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M1-03",
+            "M1-04"
+          ],
+          "declared_dependencies": [
+            "M1-03",
+            "M1-04"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M1-06",
+          "title": "早期薄纵切与 Candidate-Contracts（G02/G07/G11/G14/G20）",
+          "size": "L",
+          "owner": "INT",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-05",
+            "M1-01",
+            "M1-02",
+            "M1-03",
+            "M1-04"
+          ],
+          "declared_dependencies": [
+            "M0-05",
+            "M1-01",
+            "M1-02",
+            "M1-03",
+            "M1-04"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M2-01",
+          "title": "Research writer、跨库 Saga 与 P2 工具（G02/G14）",
+          "size": "XL",
+          "owner": "B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M1-06"
+          ],
+          "declared_dependencies": [
+            "M1-06"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M2-02",
+          "title": "Artifact 链、科学发现与真实 `vibration.analyze`（G03/G04）",
+          "size": "L",
+          "owner": "B + A",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-06",
+            "M1-01"
+          ],
+          "declared_dependencies": [
+            "M0-06",
+            "M1-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M2-03",
+          "title": "服务端审批策略与预算强制（G12/G13）",
+          "size": "XL",
+          "owner": "B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-07",
+            "M1-04",
+            "M2-01"
+          ],
+          "declared_dependencies": [
+            "M0-07",
+            "M1-04",
+            "M2-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M2-04",
+          "title": "Bounded Recipe DAG 生产接线（G15）",
+          "size": "XL",
+          "owner": "B + A",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M1-03",
+            "M1-04",
+            "M2-02",
+            "M2-03"
+          ],
+          "declared_dependencies": [
+            "M1-03",
+            "M1-04",
+            "M2-02",
+            "M2-03"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M2-05",
+          "title": "第三方科学插件生产装配（G04/G16，R07）",
+          "size": "L",
+          "owner": "B + A",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M1-04",
+            "M2-02"
+          ],
+          "declared_dependencies": [
+            "M1-04",
+            "M2-02"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M3-01",
+          "title": "真实 MCP PlatformClient、Bridge 参数与 TaskRef（G02/G03/G21）",
+          "size": "L",
+          "owner": "C-RPH",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-05",
+            "M2-01",
+            "M2-02"
+          ],
+          "declared_dependencies": [
+            "M0-05",
+            "M2-01",
+            "M2-02"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M3-02",
+          "title": "CLI 组合根、可移植 profile 与 doctor（G05/G06/G17）",
+          "size": "XL",
+          "owner": "C-RPH",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M3-01"
+          ],
+          "declared_dependencies": [
+            "M3-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M3-03",
+          "title": "生产 Planner、科学确认与模型预算 gateway（G10/G13）",
+          "size": "L",
+          "owner": "C-RPH + A/B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M1-04",
+            "M2-01",
+            "M2-03"
+          ],
+          "declared_dependencies": [
+            "M1-04",
+            "M2-01",
+            "M2-03"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M3-04",
+          "title": "可恢复 Supervisor、证据归属与研究决策（G07/G08/G09）",
+          "size": "XL",
+          "owner": "C-RPH",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M1-02",
+            "M1-03",
+            "M3-01",
+            "M3-03"
+          ],
+          "declared_dependencies": [
+            "M1-02",
+            "M1-03",
+            "M3-01",
+            "M3-03"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M3-05",
+          "title": "Workbench 真实审批与提交（G11）",
+          "size": "L",
+          "owner": "C-Web + B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M2-01",
+            "M2-03"
+          ],
+          "declared_dependencies": [
+            "M2-01",
+            "M2-03"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M3-06",
+          "title": "P3 Schema-Driven capability form（G16）",
+          "size": "L",
+          "owner": "A + C-Web + B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M2-02",
+            "M2-05"
+          ],
+          "declared_dependencies": [
+            "M2-02",
+            "M2-05"
+          ],
+          "prereq_notes": [
+            "不阻塞 M4 的 P2 最小纵切"
+          ]
+        },
+        {
+          "id": "M4-01",
+          "title": "无 QC 的全产品链与故障矩阵（G20 及所有接口项）",
+          "size": "L",
+          "owner": "INT",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-03",
+            "M2-01",
+            "M2-02",
+            "M2-03",
+            "M2-04",
+            "M3-01",
+            "M3-02",
+            "M3-03",
+            "M3-04",
+            "M3-05"
+          ],
+          "declared_dependencies": [
+            "M0-03",
+            "M2-01",
+            "M2-02",
+            "M2-03",
+            "M2-04",
+            "M3-01",
+            "M3-02",
+            "M3-03",
+            "M3-04",
+            "M3-05"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M4-02",
+          "title": "真 DSH/模型 + Local 科学 + Chromium（G05/G06/G11/G18）",
+          "size": "XL",
+          "owner": "INT + C + A/B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-10",
+            "M4-01"
+          ],
+          "declared_dependencies": [
+            "M0-10",
+            "M4-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M4-03",
+          "title": "LSF、执行约束、控制与恢复（G18/G23/G24/G25/G13）",
+          "size": "XL",
+          "owner": "B + INT",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-10",
+            "M4-02"
+          ],
+          "declared_dependencies": [
+            "M0-10",
+            "M4-02"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M4-04",
+          "title": "限定 Diels–Alder 科学纵切（G07/G08/G15/G18）",
+          "size": "XL",
+          "owner": "A + B + C + INT",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M1-05",
+            "M2-04",
+            "M3-04",
+            "M4-02"
+          ],
+          "declared_dependencies": [
+            "M1-05",
+            "M2-04",
+            "M3-04",
+            "M4-02"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M4-05",
+          "title": "第三方 capability 插件纵切（G16/G18）",
+          "size": "L",
+          "owner": "A + C-Web + B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M3-06",
+            "M4-02"
+          ],
+          "declared_dependencies": [
+            "M3-06",
+            "M4-02"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M4-06",
+          "title": "跨领域、迁移与长期可靠性 required 行（G18）",
+          "size": "XL",
+          "owner": "A + B + C + INT",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-04",
+            "M0-05",
+            "M0-06",
+            "M0-10",
+            "M4-01",
+            "M4-03",
+            "M4-05"
+          ],
+          "declared_dependencies": [
+            "M0-04",
+            "M0-05",
+            "M0-06",
+            "M0-10",
+            "M4-01",
+            "M4-03",
+            "M4-05"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M5-01",
+          "title": "全组件制品与安装入口（G06/G17）",
+          "size": "L",
+          "owner": "REL + C-RPH + B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M3-02",
+            "M3-06",
+            "M4-01",
+            "M4-02",
+            "M4-03",
+            "M4-04",
+            "M4-05",
+            "M4-06"
+          ],
+          "declared_dependencies": [
+            "M3-02",
+            "M3-06",
+            "M4-01",
+            "M4-02",
+            "M4-03",
+            "M4-04",
+            "M4-05",
+            "M4-06"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M5-02",
+          "title": "单一 BOM、可取回制品与证据覆盖矩阵（G18/G19/G20）",
+          "size": "L",
+          "owner": "B（manifest/契约注册）+ REL（制品/BOM）+ INT（coverage/签收）",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-03",
+            "M4-01",
+            "M4-02",
+            "M4-03",
+            "M4-04",
+            "M4-05",
+            "M4-06",
+            "M5-01"
+          ],
+          "declared_dependencies": [
+            "M0-03",
+            "M4-01",
+            "M4-02",
+            "M4-03",
+            "M4-04",
+            "M4-05",
+            "M4-06",
+            "M5-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M5-03",
+          "title": "独立操作者验收与最终放行（G17/G18/G19）",
+          "size": "L",
+          "owner": "独立操作者 + INT",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-10",
+            "M5-02"
+          ],
+          "declared_dependencies": [
+            "M0-10",
+            "M5-02"
+          ],
+          "prereq_notes": []
+        }
+      ],
+      "edges": [
+        {
+          "from": "M0-01",
+          "to": "M0-02"
+        },
+        {
+          "from": "M0-01",
+          "to": "M0-03"
+        },
+        {
+          "from": "M0-01",
+          "to": "M0-04"
+        },
+        {
+          "from": "M0-04",
+          "to": "M0-05"
+        },
+        {
+          "from": "M0-02",
+          "to": "M0-06"
+        },
+        {
+          "from": "M0-05",
+          "to": "M0-06"
+        },
+        {
+          "from": "M0-04",
+          "to": "M0-07"
+        },
+        {
+          "from": "M0-02",
+          "to": "M0-08"
+        },
+        {
+          "from": "M0-02",
+          "to": "M0-09"
+        },
+        {
+          "from": "M0-08",
+          "to": "M0-09"
+        },
+        {
+          "from": "M0-01",
+          "to": "M0-10"
+        },
+        {
+          "from": "M0-04",
+          "to": "M0-11"
+        },
+        {
+          "from": "M0-05",
+          "to": "M0-11"
+        },
+        {
+          "from": "M0-06",
+          "to": "M0-11"
+        },
+        {
+          "from": "M0-02",
+          "to": "M0-12"
+        },
+        {
+          "from": "M0-08",
+          "to": "M0-12"
+        },
+        {
+          "from": "M0-09",
+          "to": "M0-12"
+        },
+        {
+          "from": "M0-11",
+          "to": "M0-12"
+        },
+        {
+          "from": "M0-02",
+          "to": "M1-01"
+        },
+        {
+          "from": "M0-06",
+          "to": "M1-01"
+        },
+        {
+          "from": "M0-08",
+          "to": "M1-01"
+        },
+        {
+          "from": "M0-09",
+          "to": "M1-01"
+        },
+        {
+          "from": "M0-12",
+          "to": "M1-01"
+        },
+        {
+          "from": "M0-04",
+          "to": "M1-02"
+        },
+        {
+          "from": "M0-11",
+          "to": "M1-02"
+        },
+        {
+          "from": "M0-02",
+          "to": "M1-03"
+        },
+        {
+          "from": "M0-04",
+          "to": "M1-04"
+        },
+        {
+          "from": "M0-06",
+          "to": "M1-04"
+        },
+        {
+          "from": "M0-07",
+          "to": "M1-04"
+        },
+        {
+          "from": "M0-11",
+          "to": "M1-04"
+        },
+        {
+          "from": "M1-03",
+          "to": "M1-05"
+        },
+        {
+          "from": "M1-04",
+          "to": "M1-05"
+        },
+        {
+          "from": "M0-05",
+          "to": "M1-06"
+        },
+        {
+          "from": "M1-01",
+          "to": "M1-06"
+        },
+        {
+          "from": "M1-02",
+          "to": "M1-06"
+        },
+        {
+          "from": "M1-03",
+          "to": "M1-06"
+        },
+        {
+          "from": "M1-04",
+          "to": "M1-06"
+        },
+        {
+          "from": "M1-06",
+          "to": "M2-01"
+        },
+        {
+          "from": "M0-06",
+          "to": "M2-02"
+        },
+        {
+          "from": "M1-01",
+          "to": "M2-02"
+        },
+        {
+          "from": "M0-07",
+          "to": "M2-03"
+        },
+        {
+          "from": "M1-04",
+          "to": "M2-03"
+        },
+        {
+          "from": "M2-01",
+          "to": "M2-03"
+        },
+        {
+          "from": "M1-03",
+          "to": "M2-04"
+        },
+        {
+          "from": "M1-04",
+          "to": "M2-04"
+        },
+        {
+          "from": "M2-02",
+          "to": "M2-04"
+        },
+        {
+          "from": "M2-03",
+          "to": "M2-04"
+        },
+        {
+          "from": "M1-04",
+          "to": "M2-05"
+        },
+        {
+          "from": "M2-02",
+          "to": "M2-05"
+        },
+        {
+          "from": "M0-05",
+          "to": "M3-01"
+        },
+        {
+          "from": "M2-01",
+          "to": "M3-01"
+        },
+        {
+          "from": "M2-02",
+          "to": "M3-01"
+        },
+        {
+          "from": "M3-01",
+          "to": "M3-02"
+        },
+        {
+          "from": "M1-04",
+          "to": "M3-03"
+        },
+        {
+          "from": "M2-01",
+          "to": "M3-03"
+        },
+        {
+          "from": "M2-03",
+          "to": "M3-03"
+        },
+        {
+          "from": "M1-02",
+          "to": "M3-04"
+        },
+        {
+          "from": "M1-03",
+          "to": "M3-04"
+        },
+        {
+          "from": "M3-01",
+          "to": "M3-04"
+        },
+        {
+          "from": "M3-03",
+          "to": "M3-04"
+        },
+        {
+          "from": "M2-01",
+          "to": "M3-05"
+        },
+        {
+          "from": "M2-03",
+          "to": "M3-05"
+        },
+        {
+          "from": "M2-02",
+          "to": "M3-06"
+        },
+        {
+          "from": "M2-05",
+          "to": "M3-06"
+        },
+        {
+          "from": "M0-03",
+          "to": "M4-01"
+        },
+        {
+          "from": "M2-01",
+          "to": "M4-01"
+        },
+        {
+          "from": "M2-02",
+          "to": "M4-01"
+        },
+        {
+          "from": "M2-03",
+          "to": "M4-01"
+        },
+        {
+          "from": "M2-04",
+          "to": "M4-01"
+        },
+        {
+          "from": "M3-01",
+          "to": "M4-01"
+        },
+        {
+          "from": "M3-02",
+          "to": "M4-01"
+        },
+        {
+          "from": "M3-03",
+          "to": "M4-01"
+        },
+        {
+          "from": "M3-04",
+          "to": "M4-01"
+        },
+        {
+          "from": "M3-05",
+          "to": "M4-01"
+        },
+        {
+          "from": "M0-10",
+          "to": "M4-02"
+        },
+        {
+          "from": "M4-01",
+          "to": "M4-02"
+        },
+        {
+          "from": "M0-10",
+          "to": "M4-03"
+        },
+        {
+          "from": "M4-02",
+          "to": "M4-03"
+        },
+        {
+          "from": "M1-05",
+          "to": "M4-04"
+        },
+        {
+          "from": "M2-04",
+          "to": "M4-04"
+        },
+        {
+          "from": "M3-04",
+          "to": "M4-04"
+        },
+        {
+          "from": "M4-02",
+          "to": "M4-04"
+        },
+        {
+          "from": "M3-06",
+          "to": "M4-05"
+        },
+        {
+          "from": "M4-02",
+          "to": "M4-05"
+        },
+        {
+          "from": "M0-04",
+          "to": "M4-06"
+        },
+        {
+          "from": "M0-05",
+          "to": "M4-06"
+        },
+        {
+          "from": "M0-06",
+          "to": "M4-06"
+        },
+        {
+          "from": "M0-10",
+          "to": "M4-06"
+        },
+        {
+          "from": "M4-01",
+          "to": "M4-06"
+        },
+        {
+          "from": "M4-03",
+          "to": "M4-06"
+        },
+        {
+          "from": "M4-05",
+          "to": "M4-06"
+        },
+        {
+          "from": "M3-02",
+          "to": "M5-01"
+        },
+        {
+          "from": "M3-06",
+          "to": "M5-01"
+        },
+        {
+          "from": "M4-01",
+          "to": "M5-01"
+        },
+        {
+          "from": "M4-02",
+          "to": "M5-01"
+        },
+        {
+          "from": "M4-03",
+          "to": "M5-01"
+        },
+        {
+          "from": "M4-04",
+          "to": "M5-01"
+        },
+        {
+          "from": "M4-05",
+          "to": "M5-01"
+        },
+        {
+          "from": "M4-06",
+          "to": "M5-01"
+        },
+        {
+          "from": "M0-03",
+          "to": "M5-02"
+        },
+        {
+          "from": "M4-01",
+          "to": "M5-02"
+        },
+        {
+          "from": "M4-02",
+          "to": "M5-02"
+        },
+        {
+          "from": "M4-03",
+          "to": "M5-02"
+        },
+        {
+          "from": "M4-04",
+          "to": "M5-02"
+        },
+        {
+          "from": "M4-05",
+          "to": "M5-02"
+        },
+        {
+          "from": "M4-06",
+          "to": "M5-02"
+        },
+        {
+          "from": "M5-01",
+          "to": "M5-02"
+        },
+        {
+          "from": "M0-10",
+          "to": "M5-03"
+        },
+        {
+          "from": "M5-02",
+          "to": "M5-03"
+        }
+      ],
+      "node_count": 39,
+      "edge_count": 109,
+      "xl_count": 6,
+      "xl_total": 9,
+      "xl_on_critical_path": [
+        "M2-01",
+        "M2-03",
+        "M3-04",
+        "M4-02",
+        "M4-03",
+        "M4-06"
+      ],
+      "critical_path": [
+        "M0-01",
+        "M0-04",
+        "M0-05",
+        "M0-06",
+        "M0-11",
+        "M0-12",
+        "M1-01",
+        "M1-06",
+        "M2-01",
+        "M2-03",
+        "M3-03",
+        "M3-04",
+        "M4-01",
+        "M4-02",
+        "M4-03",
+        "M4-06",
+        "M5-01",
+        "M5-02",
+        "M5-03"
+      ],
+      "critical_path_length": 19
+    },
+    "close_external_change": {
+      "mode": "close_external_change",
+      "nodes": [
+        {
+          "id": "M0-01",
+          "title": "冻结整改基线与 26 项机器可追踪台账",
+          "size": "S",
+          "owner": "INT（M0-01a 基线/coverage）+ B（M0-01b 契约注册）",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [],
+          "declared_dependencies": [],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-02",
+          "title": "建立真实消费者 CI 门并修复 CI 自身断点",
+          "size": "L",
+          "owner": "INT + B + C-RPH",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-01"
+          ],
+          "declared_dependencies": [
+            "M0-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-03",
+          "title": "修正证据标签、live harness 骨架与候选索引骨架",
+          "size": "M",
+          "owner": "B（`acp2_runtime.py`）+ C-RPH（research harness）+ C-Web（browser harness）+ INT/REL（证据/BOM）",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-01"
+          ],
+          "declared_dependencies": [
+            "M0-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-04",
+          "title": "统一 CommandIdentity，修复跨用户幂等与 admission 归属（G24）",
+          "size": "M",
+          "owner": "B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-01"
+          ],
+          "declared_dependencies": [
+            "M0-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-05",
+          "title": "删除 MCP/Bridge 第二幂等权威并加入撤权重验（G21/G22/G25）",
+          "size": "L",
+          "owner": "B + C-RPH",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-04"
+          ],
+          "declared_dependencies": [
+            "M0-04"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-06",
+          "title": "修复执行字段与跨入口 JobSpec 等价（G23）",
+          "size": "M",
+          "owner": "B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-02",
+            "M0-05"
+          ],
+          "declared_dependencies": [
+            "M0-02",
+            "M0-05"
+          ],
+          "prereq_notes": [
+            "与 M0-05 顺序合入同模块"
+          ]
+        },
+        {
+          "id": "M0-07",
+          "title": "可信 usage receipt 与结算绑定（G26）",
+          "size": "L",
+          "owner": "B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-04"
+          ],
+          "declared_dependencies": [
+            "M0-04"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-08",
+          "title": "标准 MCP 握手与 ADR-006（G01）",
+          "size": "M",
+          "owner": "B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-02"
+          ],
+          "declared_dependencies": [
+            "M0-02"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-09",
+          "title": "真实 DSH 研究扩展协商接线验证（G02/G04，R12）",
+          "size": "L",
+          "owner": "C-RPH + B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-02",
+            "M0-08"
+          ],
+          "declared_dependencies": [
+            "M0-02",
+            "M0-08"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-10",
+          "title": "环境、账号与授权就绪（G06/G17/G18）",
+          "size": "L",
+          "owner": "INT",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-01"
+          ],
+          "declared_dependencies": [
+            "M0-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-11",
+          "title": "身份、字段与迁移决策冻结（G02/G03/G12/G13/G20）",
+          "size": "M",
+          "owner": "INT 汇总，B/A/C-RPH/C-Web 各 owner 签核",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-04",
+            "M0-05",
+            "M0-06"
+          ],
+          "declared_dependencies": [
+            "M0-04",
+            "M0-05",
+            "M0-06"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-12",
+          "title": "扩展协商与 CI 决策冻结（G02/G04/G20）",
+          "size": "M",
+          "owner": "INT 汇总，B/C-RPH 签核",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-02",
+            "M0-08",
+            "M0-09",
+            "M0-11"
+          ],
+          "declared_dependencies": [
+            "M0-02",
+            "M0-08",
+            "M0-09",
+            "M0-11"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M0-13",
+          "title": "DSH 外部适配依赖变更（条件任务，G02/G05）",
+          "size": "L",
+          "owner": "C-RPH + B",
+          "conditional": true,
+          "applies": true,
+          "dependencies": [
+            "M0-09",
+            "M0-12"
+          ],
+          "declared_dependencies": [
+            "M0-09",
+            "M0-12"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M1-01",
+          "title": "应用/MCP/Artifact/Analysis 契约统一（G02/G03/G04）",
+          "size": "L",
+          "owner": "B，A/C 消费确认",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-02",
+            "M0-06",
+            "M0-08",
+            "M0-09",
+            "M0-12",
+            "M0-13"
+          ],
+          "declared_dependencies": [
+            "M0-02",
+            "M0-06",
+            "M0-08",
+            "M0-09",
+            "M0-12",
+            "M0-13"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M1-02",
+          "title": "ResearchRecord、提交意图、事件与恢复契约（G09/G14）",
+          "size": "L",
+          "owner": "B + C-RPH",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-04",
+            "M0-11"
+          ],
+          "declared_dependencies": [
+            "M0-04",
+            "M0-11"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M1-03",
+          "title": "Evidence 投影、TaskRef 与 ResearchDecision 契约（G07/G08）",
+          "size": "L",
+          "owner": "A + B + C-RPH",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-02"
+          ],
+          "declared_dependencies": [
+            "M0-02"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M1-04",
+          "title": "科学输入、多摘要、SubmitPolicy 与 Budget 契约（G10/G12/G13）",
+          "size": "L",
+          "owner": "B + A + C-RPH/C-Web",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-04",
+            "M0-06",
+            "M0-07",
+            "M0-11"
+          ],
+          "declared_dependencies": [
+            "M0-04",
+            "M0-06",
+            "M0-07",
+            "M0-11"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M1-05",
+          "title": "新建 ADR-008 并冻结限定 DA 科学判据（G15/G18）",
+          "size": "L",
+          "owner": "A，B/C-RPH/C-Web 会签",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M1-03",
+            "M1-04"
+          ],
+          "declared_dependencies": [
+            "M1-03",
+            "M1-04"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M1-06",
+          "title": "早期薄纵切与 Candidate-Contracts（G02/G07/G11/G14/G20）",
+          "size": "L",
+          "owner": "INT",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-05",
+            "M1-01",
+            "M1-02",
+            "M1-03",
+            "M1-04"
+          ],
+          "declared_dependencies": [
+            "M0-05",
+            "M1-01",
+            "M1-02",
+            "M1-03",
+            "M1-04"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M2-01",
+          "title": "Research writer、跨库 Saga 与 P2 工具（G02/G14）",
+          "size": "XL",
+          "owner": "B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M1-06"
+          ],
+          "declared_dependencies": [
+            "M1-06"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M2-02",
+          "title": "Artifact 链、科学发现与真实 `vibration.analyze`（G03/G04）",
+          "size": "L",
+          "owner": "B + A",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-06",
+            "M1-01"
+          ],
+          "declared_dependencies": [
+            "M0-06",
+            "M1-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M2-03",
+          "title": "服务端审批策略与预算强制（G12/G13）",
+          "size": "XL",
+          "owner": "B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-07",
+            "M1-04",
+            "M2-01"
+          ],
+          "declared_dependencies": [
+            "M0-07",
+            "M1-04",
+            "M2-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M2-04",
+          "title": "Bounded Recipe DAG 生产接线（G15）",
+          "size": "XL",
+          "owner": "B + A",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M1-03",
+            "M1-04",
+            "M2-02",
+            "M2-03"
+          ],
+          "declared_dependencies": [
+            "M1-03",
+            "M1-04",
+            "M2-02",
+            "M2-03"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M2-05",
+          "title": "第三方科学插件生产装配（G04/G16，R07）",
+          "size": "L",
+          "owner": "B + A",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M1-04",
+            "M2-02"
+          ],
+          "declared_dependencies": [
+            "M1-04",
+            "M2-02"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M3-01",
+          "title": "真实 MCP PlatformClient、Bridge 参数与 TaskRef（G02/G03/G21）",
+          "size": "L",
+          "owner": "C-RPH",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-05",
+            "M2-01",
+            "M2-02"
+          ],
+          "declared_dependencies": [
+            "M0-05",
+            "M2-01",
+            "M2-02"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M3-02",
+          "title": "CLI 组合根、可移植 profile 与 doctor（G05/G06/G17）",
+          "size": "XL",
+          "owner": "C-RPH",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M3-01"
+          ],
+          "declared_dependencies": [
+            "M3-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M3-03",
+          "title": "生产 Planner、科学确认与模型预算 gateway（G10/G13）",
+          "size": "L",
+          "owner": "C-RPH + A/B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M1-04",
+            "M2-01",
+            "M2-03"
+          ],
+          "declared_dependencies": [
+            "M1-04",
+            "M2-01",
+            "M2-03"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M3-04",
+          "title": "可恢复 Supervisor、证据归属与研究决策（G07/G08/G09）",
+          "size": "XL",
+          "owner": "C-RPH",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M1-02",
+            "M1-03",
+            "M3-01",
+            "M3-03"
+          ],
+          "declared_dependencies": [
+            "M1-02",
+            "M1-03",
+            "M3-01",
+            "M3-03"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M3-05",
+          "title": "Workbench 真实审批与提交（G11）",
+          "size": "L",
+          "owner": "C-Web + B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M2-01",
+            "M2-03"
+          ],
+          "declared_dependencies": [
+            "M2-01",
+            "M2-03"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M3-06",
+          "title": "P3 Schema-Driven capability form（G16）",
+          "size": "L",
+          "owner": "A + C-Web + B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M2-02",
+            "M2-05"
+          ],
+          "declared_dependencies": [
+            "M2-02",
+            "M2-05"
+          ],
+          "prereq_notes": [
+            "不阻塞 M4 的 P2 最小纵切"
+          ]
+        },
+        {
+          "id": "M4-01",
+          "title": "无 QC 的全产品链与故障矩阵（G20 及所有接口项）",
+          "size": "L",
+          "owner": "INT",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-03",
+            "M2-01",
+            "M2-02",
+            "M2-03",
+            "M2-04",
+            "M3-01",
+            "M3-02",
+            "M3-03",
+            "M3-04",
+            "M3-05"
+          ],
+          "declared_dependencies": [
+            "M0-03",
+            "M2-01",
+            "M2-02",
+            "M2-03",
+            "M2-04",
+            "M3-01",
+            "M3-02",
+            "M3-03",
+            "M3-04",
+            "M3-05"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M4-02",
+          "title": "真 DSH/模型 + Local 科学 + Chromium（G05/G06/G11/G18）",
+          "size": "XL",
+          "owner": "INT + C + A/B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-10",
+            "M4-01"
+          ],
+          "declared_dependencies": [
+            "M0-10",
+            "M4-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M4-03",
+          "title": "LSF、执行约束、控制与恢复（G18/G23/G24/G25/G13）",
+          "size": "XL",
+          "owner": "B + INT",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-10",
+            "M4-02"
+          ],
+          "declared_dependencies": [
+            "M0-10",
+            "M4-02"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M4-04",
+          "title": "限定 Diels–Alder 科学纵切（G07/G08/G15/G18）",
+          "size": "XL",
+          "owner": "A + B + C + INT",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M1-05",
+            "M2-04",
+            "M3-04",
+            "M4-02"
+          ],
+          "declared_dependencies": [
+            "M1-05",
+            "M2-04",
+            "M3-04",
+            "M4-02"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M4-05",
+          "title": "第三方 capability 插件纵切（G16/G18）",
+          "size": "L",
+          "owner": "A + C-Web + B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M3-06",
+            "M4-02"
+          ],
+          "declared_dependencies": [
+            "M3-06",
+            "M4-02"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M4-06",
+          "title": "跨领域、迁移与长期可靠性 required 行（G18）",
+          "size": "XL",
+          "owner": "A + B + C + INT",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-04",
+            "M0-05",
+            "M0-06",
+            "M0-10",
+            "M4-01",
+            "M4-03",
+            "M4-05"
+          ],
+          "declared_dependencies": [
+            "M0-04",
+            "M0-05",
+            "M0-06",
+            "M0-10",
+            "M4-01",
+            "M4-03",
+            "M4-05"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M5-01",
+          "title": "全组件制品与安装入口（G06/G17）",
+          "size": "L",
+          "owner": "REL + C-RPH + B",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M3-02",
+            "M3-06",
+            "M4-01",
+            "M4-02",
+            "M4-03",
+            "M4-04",
+            "M4-05",
+            "M4-06"
+          ],
+          "declared_dependencies": [
+            "M3-02",
+            "M3-06",
+            "M4-01",
+            "M4-02",
+            "M4-03",
+            "M4-04",
+            "M4-05",
+            "M4-06"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M5-02",
+          "title": "单一 BOM、可取回制品与证据覆盖矩阵（G18/G19/G20）",
+          "size": "L",
+          "owner": "B（manifest/契约注册）+ REL（制品/BOM）+ INT（coverage/签收）",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-03",
+            "M4-01",
+            "M4-02",
+            "M4-03",
+            "M4-04",
+            "M4-05",
+            "M4-06",
+            "M5-01"
+          ],
+          "declared_dependencies": [
+            "M0-03",
+            "M4-01",
+            "M4-02",
+            "M4-03",
+            "M4-04",
+            "M4-05",
+            "M4-06",
+            "M5-01"
+          ],
+          "prereq_notes": []
+        },
+        {
+          "id": "M5-03",
+          "title": "独立操作者验收与最终放行（G17/G18/G19）",
+          "size": "L",
+          "owner": "独立操作者 + INT",
+          "conditional": false,
+          "applies": true,
+          "dependencies": [
+            "M0-10",
+            "M5-02"
+          ],
+          "declared_dependencies": [
+            "M0-10",
+            "M5-02"
+          ],
+          "prereq_notes": []
+        }
+      ],
+      "edges": [
+        {
+          "from": "M0-01",
+          "to": "M0-02"
+        },
+        {
+          "from": "M0-01",
+          "to": "M0-03"
+        },
+        {
+          "from": "M0-01",
+          "to": "M0-04"
+        },
+        {
+          "from": "M0-04",
+          "to": "M0-05"
+        },
+        {
+          "from": "M0-02",
+          "to": "M0-06"
+        },
+        {
+          "from": "M0-05",
+          "to": "M0-06"
+        },
+        {
+          "from": "M0-04",
+          "to": "M0-07"
+        },
+        {
+          "from": "M0-02",
+          "to": "M0-08"
+        },
+        {
+          "from": "M0-02",
+          "to": "M0-09"
+        },
+        {
+          "from": "M0-08",
+          "to": "M0-09"
+        },
+        {
+          "from": "M0-01",
+          "to": "M0-10"
+        },
+        {
+          "from": "M0-04",
+          "to": "M0-11"
+        },
+        {
+          "from": "M0-05",
+          "to": "M0-11"
+        },
+        {
+          "from": "M0-06",
+          "to": "M0-11"
+        },
+        {
+          "from": "M0-02",
+          "to": "M0-12"
+        },
+        {
+          "from": "M0-08",
+          "to": "M0-12"
+        },
+        {
+          "from": "M0-09",
+          "to": "M0-12"
+        },
+        {
+          "from": "M0-11",
+          "to": "M0-12"
+        },
+        {
+          "from": "M0-09",
+          "to": "M0-13"
+        },
+        {
+          "from": "M0-12",
+          "to": "M0-13"
+        },
+        {
+          "from": "M0-02",
+          "to": "M1-01"
+        },
+        {
+          "from": "M0-06",
+          "to": "M1-01"
+        },
+        {
+          "from": "M0-08",
+          "to": "M1-01"
+        },
+        {
+          "from": "M0-09",
+          "to": "M1-01"
+        },
+        {
+          "from": "M0-12",
+          "to": "M1-01"
+        },
+        {
+          "from": "M0-13",
+          "to": "M1-01"
+        },
+        {
+          "from": "M0-04",
+          "to": "M1-02"
+        },
+        {
+          "from": "M0-11",
+          "to": "M1-02"
+        },
+        {
+          "from": "M0-02",
+          "to": "M1-03"
+        },
+        {
+          "from": "M0-04",
+          "to": "M1-04"
+        },
+        {
+          "from": "M0-06",
+          "to": "M1-04"
+        },
+        {
+          "from": "M0-07",
+          "to": "M1-04"
+        },
+        {
+          "from": "M0-11",
+          "to": "M1-04"
+        },
+        {
+          "from": "M1-03",
+          "to": "M1-05"
+        },
+        {
+          "from": "M1-04",
+          "to": "M1-05"
+        },
+        {
+          "from": "M0-05",
+          "to": "M1-06"
+        },
+        {
+          "from": "M1-01",
+          "to": "M1-06"
+        },
+        {
+          "from": "M1-02",
+          "to": "M1-06"
+        },
+        {
+          "from": "M1-03",
+          "to": "M1-06"
+        },
+        {
+          "from": "M1-04",
+          "to": "M1-06"
+        },
+        {
+          "from": "M1-06",
+          "to": "M2-01"
+        },
+        {
+          "from": "M0-06",
+          "to": "M2-02"
+        },
+        {
+          "from": "M1-01",
+          "to": "M2-02"
+        },
+        {
+          "from": "M0-07",
+          "to": "M2-03"
+        },
+        {
+          "from": "M1-04",
+          "to": "M2-03"
+        },
+        {
+          "from": "M2-01",
+          "to": "M2-03"
+        },
+        {
+          "from": "M1-03",
+          "to": "M2-04"
+        },
+        {
+          "from": "M1-04",
+          "to": "M2-04"
+        },
+        {
+          "from": "M2-02",
+          "to": "M2-04"
+        },
+        {
+          "from": "M2-03",
+          "to": "M2-04"
+        },
+        {
+          "from": "M1-04",
+          "to": "M2-05"
+        },
+        {
+          "from": "M2-02",
+          "to": "M2-05"
+        },
+        {
+          "from": "M0-05",
+          "to": "M3-01"
+        },
+        {
+          "from": "M2-01",
+          "to": "M3-01"
+        },
+        {
+          "from": "M2-02",
+          "to": "M3-01"
+        },
+        {
+          "from": "M3-01",
+          "to": "M3-02"
+        },
+        {
+          "from": "M1-04",
+          "to": "M3-03"
+        },
+        {
+          "from": "M2-01",
+          "to": "M3-03"
+        },
+        {
+          "from": "M2-03",
+          "to": "M3-03"
+        },
+        {
+          "from": "M1-02",
+          "to": "M3-04"
+        },
+        {
+          "from": "M1-03",
+          "to": "M3-04"
+        },
+        {
+          "from": "M3-01",
+          "to": "M3-04"
+        },
+        {
+          "from": "M3-03",
+          "to": "M3-04"
+        },
+        {
+          "from": "M2-01",
+          "to": "M3-05"
+        },
+        {
+          "from": "M2-03",
+          "to": "M3-05"
+        },
+        {
+          "from": "M2-02",
+          "to": "M3-06"
+        },
+        {
+          "from": "M2-05",
+          "to": "M3-06"
+        },
+        {
+          "from": "M0-03",
+          "to": "M4-01"
+        },
+        {
+          "from": "M2-01",
+          "to": "M4-01"
+        },
+        {
+          "from": "M2-02",
+          "to": "M4-01"
+        },
+        {
+          "from": "M2-03",
+          "to": "M4-01"
+        },
+        {
+          "from": "M2-04",
+          "to": "M4-01"
+        },
+        {
+          "from": "M3-01",
+          "to": "M4-01"
+        },
+        {
+          "from": "M3-02",
+          "to": "M4-01"
+        },
+        {
+          "from": "M3-03",
+          "to": "M4-01"
+        },
+        {
+          "from": "M3-04",
+          "to": "M4-01"
+        },
+        {
+          "from": "M3-05",
+          "to": "M4-01"
+        },
+        {
+          "from": "M0-10",
+          "to": "M4-02"
+        },
+        {
+          "from": "M4-01",
+          "to": "M4-02"
+        },
+        {
+          "from": "M0-10",
+          "to": "M4-03"
+        },
+        {
+          "from": "M4-02",
+          "to": "M4-03"
+        },
+        {
+          "from": "M1-05",
+          "to": "M4-04"
+        },
+        {
+          "from": "M2-04",
+          "to": "M4-04"
+        },
+        {
+          "from": "M3-04",
+          "to": "M4-04"
+        },
+        {
+          "from": "M4-02",
+          "to": "M4-04"
+        },
+        {
+          "from": "M3-06",
+          "to": "M4-05"
+        },
+        {
+          "from": "M4-02",
+          "to": "M4-05"
+        },
+        {
+          "from": "M0-04",
+          "to": "M4-06"
+        },
+        {
+          "from": "M0-05",
+          "to": "M4-06"
+        },
+        {
+          "from": "M0-06",
+          "to": "M4-06"
+        },
+        {
+          "from": "M0-10",
+          "to": "M4-06"
+        },
+        {
+          "from": "M4-01",
+          "to": "M4-06"
+        },
+        {
+          "from": "M4-03",
+          "to": "M4-06"
+        },
+        {
+          "from": "M4-05",
+          "to": "M4-06"
+        },
+        {
+          "from": "M3-02",
+          "to": "M5-01"
+        },
+        {
+          "from": "M3-06",
+          "to": "M5-01"
+        },
+        {
+          "from": "M4-01",
+          "to": "M5-01"
+        },
+        {
+          "from": "M4-02",
+          "to": "M5-01"
+        },
+        {
+          "from": "M4-03",
+          "to": "M5-01"
+        },
+        {
+          "from": "M4-04",
+          "to": "M5-01"
+        },
+        {
+          "from": "M4-05",
+          "to": "M5-01"
+        },
+        {
+          "from": "M4-06",
+          "to": "M5-01"
+        },
+        {
+          "from": "M0-03",
+          "to": "M5-02"
+        },
+        {
+          "from": "M4-01",
+          "to": "M5-02"
+        },
+        {
+          "from": "M4-02",
+          "to": "M5-02"
+        },
+        {
+          "from": "M4-03",
+          "to": "M5-02"
+        },
+        {
+          "from": "M4-04",
+          "to": "M5-02"
+        },
+        {
+          "from": "M4-05",
+          "to": "M5-02"
+        },
+        {
+          "from": "M4-06",
+          "to": "M5-02"
+        },
+        {
+          "from": "M5-01",
+          "to": "M5-02"
+        },
+        {
+          "from": "M0-10",
+          "to": "M5-03"
+        },
+        {
+          "from": "M5-02",
+          "to": "M5-03"
+        }
+      ],
+      "node_count": 39,
+      "edge_count": 112,
+      "xl_count": 6,
+      "xl_total": 9,
+      "xl_on_critical_path": [
+        "M2-01",
+        "M2-03",
+        "M3-04",
+        "M4-02",
+        "M4-03",
+        "M4-06"
+      ],
+      "critical_path": [
+        "M0-01",
+        "M0-04",
+        "M0-05",
+        "M0-06",
+        "M0-11",
+        "M0-12",
+        "M0-13",
+        "M1-01",
+        "M1-06",
+        "M2-01",
+        "M2-03",
+        "M3-03",
+        "M3-04",
+        "M4-01",
+        "M4-02",
+        "M4-03",
+        "M4-06",
+        "M5-01",
+        "M5-02",
+        "M5-03"
+      ],
+      "critical_path_length": 20
+    }
+  },
+  "default_start": {
+    "mode": "start",
+    "nodes": [
+      {
+        "id": "M0-01",
+        "title": "冻结整改基线与 26 项机器可追踪台账",
+        "size": "S",
+        "owner": "INT（M0-01a 基线/coverage）+ B（M0-01b 契约注册）",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [],
+        "declared_dependencies": [],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-02",
+        "title": "建立真实消费者 CI 门并修复 CI 自身断点",
+        "size": "L",
+        "owner": "INT + B + C-RPH",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-01"
+        ],
+        "declared_dependencies": [
+          "M0-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-03",
+        "title": "修正证据标签、live harness 骨架与候选索引骨架",
+        "size": "M",
+        "owner": "B（`acp2_runtime.py`）+ C-RPH（research harness）+ C-Web（browser harness）+ INT/REL（证据/BOM）",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-01"
+        ],
+        "declared_dependencies": [
+          "M0-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-04",
+        "title": "统一 CommandIdentity，修复跨用户幂等与 admission 归属（G24）",
+        "size": "M",
+        "owner": "B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-01"
+        ],
+        "declared_dependencies": [
+          "M0-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-05",
+        "title": "删除 MCP/Bridge 第二幂等权威并加入撤权重验（G21/G22/G25）",
+        "size": "L",
+        "owner": "B + C-RPH",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-04"
+        ],
+        "declared_dependencies": [
+          "M0-04"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-06",
+        "title": "修复执行字段与跨入口 JobSpec 等价（G23）",
+        "size": "M",
+        "owner": "B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-02",
+          "M0-05"
+        ],
+        "declared_dependencies": [
+          "M0-02",
+          "M0-05"
+        ],
+        "prereq_notes": [
+          "与 M0-05 顺序合入同模块"
+        ]
+      },
+      {
+        "id": "M0-07",
+        "title": "可信 usage receipt 与结算绑定（G26）",
+        "size": "L",
+        "owner": "B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-04"
+        ],
+        "declared_dependencies": [
+          "M0-04"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-08",
+        "title": "标准 MCP 握手与 ADR-006（G01）",
+        "size": "M",
+        "owner": "B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-02"
+        ],
+        "declared_dependencies": [
+          "M0-02"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-09",
+        "title": "真实 DSH 研究扩展协商接线验证（G02/G04，R12）",
+        "size": "L",
+        "owner": "C-RPH + B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-02",
+          "M0-08"
+        ],
+        "declared_dependencies": [
+          "M0-02",
+          "M0-08"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-10",
+        "title": "环境、账号与授权就绪（G06/G17/G18）",
+        "size": "L",
+        "owner": "INT",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-01"
+        ],
+        "declared_dependencies": [
+          "M0-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-11",
+        "title": "身份、字段与迁移决策冻结（G02/G03/G12/G13/G20）",
+        "size": "M",
+        "owner": "INT 汇总，B/A/C-RPH/C-Web 各 owner 签核",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-04",
+          "M0-05",
+          "M0-06"
+        ],
+        "declared_dependencies": [
+          "M0-04",
+          "M0-05",
+          "M0-06"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-12",
+        "title": "扩展协商与 CI 决策冻结（G02/G04/G20）",
+        "size": "M",
+        "owner": "INT 汇总，B/C-RPH 签核",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-02",
+          "M0-08",
+          "M0-09",
+          "M0-11"
+        ],
+        "declared_dependencies": [
+          "M0-02",
+          "M0-08",
+          "M0-09",
+          "M0-11"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-13",
+        "title": "DSH 外部适配依赖变更（条件任务，G02/G05）",
+        "size": "L",
+        "owner": "C-RPH + B",
+        "conditional": true,
+        "applies": false,
+        "dependencies": [],
+        "declared_dependencies": [
+          "M0-09",
+          "M0-12"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M1-01",
+        "title": "应用/MCP/Artifact/Analysis 契约统一（G02/G03/G04）",
+        "size": "L",
+        "owner": "B，A/C 消费确认",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-02",
+          "M0-06",
+          "M0-08",
+          "M0-09",
+          "M0-12"
+        ],
+        "declared_dependencies": [
+          "M0-02",
+          "M0-06",
+          "M0-08",
+          "M0-09",
+          "M0-12",
+          "M0-13"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M1-02",
+        "title": "ResearchRecord、提交意图、事件与恢复契约（G09/G14）",
+        "size": "L",
+        "owner": "B + C-RPH",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-04",
+          "M0-11"
+        ],
+        "declared_dependencies": [
+          "M0-04",
+          "M0-11"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M1-03",
+        "title": "Evidence 投影、TaskRef 与 ResearchDecision 契约（G07/G08）",
+        "size": "L",
+        "owner": "A + B + C-RPH",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-02"
+        ],
+        "declared_dependencies": [
+          "M0-02"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M1-04",
+        "title": "科学输入、多摘要、SubmitPolicy 与 Budget 契约（G10/G12/G13）",
+        "size": "L",
+        "owner": "B + A + C-RPH/C-Web",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-04",
+          "M0-06",
+          "M0-07",
+          "M0-11"
+        ],
+        "declared_dependencies": [
+          "M0-04",
+          "M0-06",
+          "M0-07",
+          "M0-11"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M1-05",
+        "title": "新建 ADR-008 并冻结限定 DA 科学判据（G15/G18）",
+        "size": "L",
+        "owner": "A，B/C-RPH/C-Web 会签",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M1-03",
+          "M1-04"
+        ],
+        "declared_dependencies": [
+          "M1-03",
+          "M1-04"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M1-06",
+        "title": "早期薄纵切与 Candidate-Contracts（G02/G07/G11/G14/G20）",
+        "size": "L",
+        "owner": "INT",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-05",
+          "M1-01",
+          "M1-02",
+          "M1-03",
+          "M1-04"
+        ],
+        "declared_dependencies": [
+          "M0-05",
+          "M1-01",
+          "M1-02",
+          "M1-03",
+          "M1-04"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M2-01",
+        "title": "Research writer、跨库 Saga 与 P2 工具（G02/G14）",
+        "size": "XL",
+        "owner": "B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M1-06"
+        ],
+        "declared_dependencies": [
+          "M1-06"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M2-02",
+        "title": "Artifact 链、科学发现与真实 `vibration.analyze`（G03/G04）",
+        "size": "L",
+        "owner": "B + A",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-06",
+          "M1-01"
+        ],
+        "declared_dependencies": [
+          "M0-06",
+          "M1-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M2-03",
+        "title": "服务端审批策略与预算强制（G12/G13）",
+        "size": "XL",
+        "owner": "B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-07",
+          "M1-04",
+          "M2-01"
+        ],
+        "declared_dependencies": [
+          "M0-07",
+          "M1-04",
+          "M2-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M2-04",
+        "title": "Bounded Recipe DAG 生产接线（G15）",
+        "size": "XL",
+        "owner": "B + A",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M1-03",
+          "M1-04",
+          "M2-02",
+          "M2-03"
+        ],
+        "declared_dependencies": [
+          "M1-03",
+          "M1-04",
+          "M2-02",
+          "M2-03"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M2-05",
+        "title": "第三方科学插件生产装配（G04/G16，R07）",
+        "size": "L",
+        "owner": "B + A",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M1-04",
+          "M2-02"
+        ],
+        "declared_dependencies": [
+          "M1-04",
+          "M2-02"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M3-01",
+        "title": "真实 MCP PlatformClient、Bridge 参数与 TaskRef（G02/G03/G21）",
+        "size": "L",
+        "owner": "C-RPH",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-05",
+          "M2-01",
+          "M2-02"
+        ],
+        "declared_dependencies": [
+          "M0-05",
+          "M2-01",
+          "M2-02"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M3-02",
+        "title": "CLI 组合根、可移植 profile 与 doctor（G05/G06/G17）",
+        "size": "XL",
+        "owner": "C-RPH",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M3-01"
+        ],
+        "declared_dependencies": [
+          "M3-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M3-03",
+        "title": "生产 Planner、科学确认与模型预算 gateway（G10/G13）",
+        "size": "L",
+        "owner": "C-RPH + A/B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M1-04",
+          "M2-01",
+          "M2-03"
+        ],
+        "declared_dependencies": [
+          "M1-04",
+          "M2-01",
+          "M2-03"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M3-04",
+        "title": "可恢复 Supervisor、证据归属与研究决策（G07/G08/G09）",
+        "size": "XL",
+        "owner": "C-RPH",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M1-02",
+          "M1-03",
+          "M3-01",
+          "M3-03"
+        ],
+        "declared_dependencies": [
+          "M1-02",
+          "M1-03",
+          "M3-01",
+          "M3-03"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M3-05",
+        "title": "Workbench 真实审批与提交（G11）",
+        "size": "L",
+        "owner": "C-Web + B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M2-01",
+          "M2-03"
+        ],
+        "declared_dependencies": [
+          "M2-01",
+          "M2-03"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M3-06",
+        "title": "P3 Schema-Driven capability form（G16）",
+        "size": "L",
+        "owner": "A + C-Web + B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M2-02",
+          "M2-05"
+        ],
+        "declared_dependencies": [
+          "M2-02",
+          "M2-05"
+        ],
+        "prereq_notes": [
+          "不阻塞 M4 的 P2 最小纵切"
+        ]
+      },
+      {
+        "id": "M4-01",
+        "title": "无 QC 的全产品链与故障矩阵（G20 及所有接口项）",
+        "size": "L",
+        "owner": "INT",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-03",
+          "M2-01",
+          "M2-02",
+          "M2-03",
+          "M2-04",
+          "M3-01",
+          "M3-02",
+          "M3-03",
+          "M3-04",
+          "M3-05"
+        ],
+        "declared_dependencies": [
+          "M0-03",
+          "M2-01",
+          "M2-02",
+          "M2-03",
+          "M2-04",
+          "M3-01",
+          "M3-02",
+          "M3-03",
+          "M3-04",
+          "M3-05"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M4-02",
+        "title": "真 DSH/模型 + Local 科学 + Chromium（G05/G06/G11/G18）",
+        "size": "XL",
+        "owner": "INT + C + A/B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-10",
+          "M4-01"
+        ],
+        "declared_dependencies": [
+          "M0-10",
+          "M4-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M4-03",
+        "title": "LSF、执行约束、控制与恢复（G18/G23/G24/G25/G13）",
+        "size": "XL",
+        "owner": "B + INT",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-10",
+          "M4-02"
+        ],
+        "declared_dependencies": [
+          "M0-10",
+          "M4-02"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M4-04",
+        "title": "限定 Diels–Alder 科学纵切（G07/G08/G15/G18）",
+        "size": "XL",
+        "owner": "A + B + C + INT",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M1-05",
+          "M2-04",
+          "M3-04",
+          "M4-02"
+        ],
+        "declared_dependencies": [
+          "M1-05",
+          "M2-04",
+          "M3-04",
+          "M4-02"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M4-05",
+        "title": "第三方 capability 插件纵切（G16/G18）",
+        "size": "L",
+        "owner": "A + C-Web + B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M3-06",
+          "M4-02"
+        ],
+        "declared_dependencies": [
+          "M3-06",
+          "M4-02"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M4-06",
+        "title": "跨领域、迁移与长期可靠性 required 行（G18）",
+        "size": "XL",
+        "owner": "A + B + C + INT",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-04",
+          "M0-05",
+          "M0-06",
+          "M0-10",
+          "M4-01"
+        ],
+        "declared_dependencies": [
+          "M0-04",
+          "M0-05",
+          "M0-06",
+          "M0-10",
+          "M4-01",
+          "M4-03",
+          "M4-05"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M5-01",
+        "title": "全组件制品与安装入口（G06/G17）",
+        "size": "L",
+        "owner": "REL + C-RPH + B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M3-02",
+          "M3-06",
+          "M4-01"
+        ],
+        "declared_dependencies": [
+          "M3-02",
+          "M3-06",
+          "M4-01",
+          "M4-02",
+          "M4-03",
+          "M4-04",
+          "M4-05",
+          "M4-06"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M5-02",
+        "title": "单一 BOM、可取回制品与证据覆盖矩阵（G18/G19/G20）",
+        "size": "L",
+        "owner": "B（manifest/契约注册）+ REL（制品/BOM）+ INT（coverage/签收）",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-03",
+          "M5-01"
+        ],
+        "declared_dependencies": [
+          "M0-03",
+          "M4-01",
+          "M4-02",
+          "M4-03",
+          "M4-04",
+          "M4-05",
+          "M4-06",
+          "M5-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M5-03",
+        "title": "独立操作者验收与最终放行（G17/G18/G19）",
+        "size": "L",
+        "owner": "独立操作者 + INT",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-10",
+          "M5-02"
+        ],
+        "declared_dependencies": [
+          "M0-10",
+          "M5-02"
+        ],
+        "prereq_notes": []
+      }
+    ],
+    "edges": [
+      {
+        "from": "M0-01",
+        "to": "M0-02"
+      },
+      {
+        "from": "M0-01",
+        "to": "M0-03"
+      },
+      {
+        "from": "M0-01",
+        "to": "M0-04"
+      },
+      {
+        "from": "M0-04",
+        "to": "M0-05"
+      },
+      {
+        "from": "M0-02",
+        "to": "M0-06"
+      },
+      {
+        "from": "M0-05",
+        "to": "M0-06"
+      },
+      {
+        "from": "M0-04",
+        "to": "M0-07"
+      },
+      {
+        "from": "M0-02",
+        "to": "M0-08"
+      },
+      {
+        "from": "M0-02",
+        "to": "M0-09"
+      },
+      {
+        "from": "M0-08",
+        "to": "M0-09"
+      },
+      {
+        "from": "M0-01",
+        "to": "M0-10"
+      },
+      {
+        "from": "M0-04",
+        "to": "M0-11"
+      },
+      {
+        "from": "M0-05",
+        "to": "M0-11"
+      },
+      {
+        "from": "M0-06",
+        "to": "M0-11"
+      },
+      {
+        "from": "M0-02",
+        "to": "M0-12"
+      },
+      {
+        "from": "M0-08",
+        "to": "M0-12"
+      },
+      {
+        "from": "M0-09",
+        "to": "M0-12"
+      },
+      {
+        "from": "M0-11",
+        "to": "M0-12"
+      },
+      {
+        "from": "M0-02",
+        "to": "M1-01"
+      },
+      {
+        "from": "M0-06",
+        "to": "M1-01"
+      },
+      {
+        "from": "M0-08",
+        "to": "M1-01"
+      },
+      {
+        "from": "M0-09",
+        "to": "M1-01"
+      },
+      {
+        "from": "M0-12",
+        "to": "M1-01"
+      },
+      {
+        "from": "M0-04",
+        "to": "M1-02"
+      },
+      {
+        "from": "M0-11",
+        "to": "M1-02"
+      },
+      {
+        "from": "M0-02",
+        "to": "M1-03"
+      },
+      {
+        "from": "M0-04",
+        "to": "M1-04"
+      },
+      {
+        "from": "M0-06",
+        "to": "M1-04"
+      },
+      {
+        "from": "M0-07",
+        "to": "M1-04"
+      },
+      {
+        "from": "M0-11",
+        "to": "M1-04"
+      },
+      {
+        "from": "M1-03",
+        "to": "M1-05"
+      },
+      {
+        "from": "M1-04",
+        "to": "M1-05"
+      },
+      {
+        "from": "M0-05",
+        "to": "M1-06"
+      },
+      {
+        "from": "M1-01",
+        "to": "M1-06"
+      },
+      {
+        "from": "M1-02",
+        "to": "M1-06"
+      },
+      {
+        "from": "M1-03",
+        "to": "M1-06"
+      },
+      {
+        "from": "M1-04",
+        "to": "M1-06"
+      },
+      {
+        "from": "M1-06",
+        "to": "M2-01"
+      },
+      {
+        "from": "M0-06",
+        "to": "M2-02"
+      },
+      {
+        "from": "M1-01",
+        "to": "M2-02"
+      },
+      {
+        "from": "M0-07",
+        "to": "M2-03"
+      },
+      {
+        "from": "M1-04",
+        "to": "M2-03"
+      },
+      {
+        "from": "M2-01",
+        "to": "M2-03"
+      },
+      {
+        "from": "M1-03",
+        "to": "M2-04"
+      },
+      {
+        "from": "M1-04",
+        "to": "M2-04"
+      },
+      {
+        "from": "M2-02",
+        "to": "M2-04"
+      },
+      {
+        "from": "M2-03",
+        "to": "M2-04"
+      },
+      {
+        "from": "M1-04",
+        "to": "M2-05"
+      },
+      {
+        "from": "M2-02",
+        "to": "M2-05"
+      },
+      {
+        "from": "M0-05",
+        "to": "M3-01"
+      },
+      {
+        "from": "M2-01",
+        "to": "M3-01"
+      },
+      {
+        "from": "M2-02",
+        "to": "M3-01"
+      },
+      {
+        "from": "M3-01",
+        "to": "M3-02"
+      },
+      {
+        "from": "M1-04",
+        "to": "M3-03"
+      },
+      {
+        "from": "M2-01",
+        "to": "M3-03"
+      },
+      {
+        "from": "M2-03",
+        "to": "M3-03"
+      },
+      {
+        "from": "M1-02",
+        "to": "M3-04"
+      },
+      {
+        "from": "M1-03",
+        "to": "M3-04"
+      },
+      {
+        "from": "M3-01",
+        "to": "M3-04"
+      },
+      {
+        "from": "M3-03",
+        "to": "M3-04"
+      },
+      {
+        "from": "M2-01",
+        "to": "M3-05"
+      },
+      {
+        "from": "M2-03",
+        "to": "M3-05"
+      },
+      {
+        "from": "M2-02",
+        "to": "M3-06"
+      },
+      {
+        "from": "M2-05",
+        "to": "M3-06"
+      },
+      {
+        "from": "M0-03",
+        "to": "M4-01"
+      },
+      {
+        "from": "M2-01",
+        "to": "M4-01"
+      },
+      {
+        "from": "M2-02",
+        "to": "M4-01"
+      },
+      {
+        "from": "M2-03",
+        "to": "M4-01"
+      },
+      {
+        "from": "M2-04",
+        "to": "M4-01"
+      },
+      {
+        "from": "M3-01",
+        "to": "M4-01"
+      },
+      {
+        "from": "M3-02",
+        "to": "M4-01"
+      },
+      {
+        "from": "M3-03",
+        "to": "M4-01"
+      },
+      {
+        "from": "M3-04",
+        "to": "M4-01"
+      },
+      {
+        "from": "M3-05",
+        "to": "M4-01"
+      },
+      {
+        "from": "M0-10",
+        "to": "M4-02"
+      },
+      {
+        "from": "M4-01",
+        "to": "M4-02"
+      },
+      {
+        "from": "M0-10",
+        "to": "M4-03"
+      },
+      {
+        "from": "M4-02",
+        "to": "M4-03"
+      },
+      {
+        "from": "M1-05",
+        "to": "M4-04"
+      },
+      {
+        "from": "M2-04",
+        "to": "M4-04"
+      },
+      {
+        "from": "M3-04",
+        "to": "M4-04"
+      },
+      {
+        "from": "M4-02",
+        "to": "M4-04"
+      },
+      {
+        "from": "M3-06",
+        "to": "M4-05"
+      },
+      {
+        "from": "M4-02",
+        "to": "M4-05"
+      },
+      {
+        "from": "M0-04",
+        "to": "M4-06"
+      },
+      {
+        "from": "M0-05",
+        "to": "M4-06"
+      },
+      {
+        "from": "M0-06",
+        "to": "M4-06"
+      },
+      {
+        "from": "M0-10",
+        "to": "M4-06"
+      },
+      {
+        "from": "M4-01",
+        "to": "M4-06"
+      },
+      {
+        "from": "M3-02",
+        "to": "M5-01"
+      },
+      {
+        "from": "M3-06",
+        "to": "M5-01"
+      },
+      {
+        "from": "M4-01",
+        "to": "M5-01"
+      },
+      {
+        "from": "M0-03",
+        "to": "M5-02"
+      },
+      {
+        "from": "M5-01",
+        "to": "M5-02"
+      },
+      {
+        "from": "M0-10",
+        "to": "M5-03"
+      },
+      {
+        "from": "M5-02",
+        "to": "M5-03"
+      }
+    ],
+    "node_count": 39,
+    "edge_count": 96,
+    "xl_count": 3,
+    "xl_total": 9,
+    "xl_on_critical_path": [
+      "M2-01",
+      "M2-03",
+      "M3-04"
+    ],
+    "critical_path": [
+      "M0-01",
+      "M0-04",
+      "M0-05",
+      "M0-06",
+      "M0-11",
+      "M0-12",
+      "M1-01",
+      "M1-06",
+      "M2-01",
+      "M2-03",
+      "M3-03",
+      "M3-04",
+      "M4-01",
+      "M5-01",
+      "M5-02",
+      "M5-03"
+    ],
+    "critical_path_length": 16
+  },
+  "default_close": {
+    "mode": "close",
+    "nodes": [
+      {
+        "id": "M0-01",
+        "title": "冻结整改基线与 26 项机器可追踪台账",
+        "size": "S",
+        "owner": "INT（M0-01a 基线/coverage）+ B（M0-01b 契约注册）",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [],
+        "declared_dependencies": [],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-02",
+        "title": "建立真实消费者 CI 门并修复 CI 自身断点",
+        "size": "L",
+        "owner": "INT + B + C-RPH",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-01"
+        ],
+        "declared_dependencies": [
+          "M0-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-03",
+        "title": "修正证据标签、live harness 骨架与候选索引骨架",
+        "size": "M",
+        "owner": "B（`acp2_runtime.py`）+ C-RPH（research harness）+ C-Web（browser harness）+ INT/REL（证据/BOM）",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-01"
+        ],
+        "declared_dependencies": [
+          "M0-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-04",
+        "title": "统一 CommandIdentity，修复跨用户幂等与 admission 归属（G24）",
+        "size": "M",
+        "owner": "B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-01"
+        ],
+        "declared_dependencies": [
+          "M0-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-05",
+        "title": "删除 MCP/Bridge 第二幂等权威并加入撤权重验（G21/G22/G25）",
+        "size": "L",
+        "owner": "B + C-RPH",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-04"
+        ],
+        "declared_dependencies": [
+          "M0-04"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-06",
+        "title": "修复执行字段与跨入口 JobSpec 等价（G23）",
+        "size": "M",
+        "owner": "B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-02",
+          "M0-05"
+        ],
+        "declared_dependencies": [
+          "M0-02",
+          "M0-05"
+        ],
+        "prereq_notes": [
+          "与 M0-05 顺序合入同模块"
+        ]
+      },
+      {
+        "id": "M0-07",
+        "title": "可信 usage receipt 与结算绑定（G26）",
+        "size": "L",
+        "owner": "B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-04"
+        ],
+        "declared_dependencies": [
+          "M0-04"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-08",
+        "title": "标准 MCP 握手与 ADR-006（G01）",
+        "size": "M",
+        "owner": "B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-02"
+        ],
+        "declared_dependencies": [
+          "M0-02"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-09",
+        "title": "真实 DSH 研究扩展协商接线验证（G02/G04，R12）",
+        "size": "L",
+        "owner": "C-RPH + B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-02",
+          "M0-08"
+        ],
+        "declared_dependencies": [
+          "M0-02",
+          "M0-08"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-10",
+        "title": "环境、账号与授权就绪（G06/G17/G18）",
+        "size": "L",
+        "owner": "INT",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-01"
+        ],
+        "declared_dependencies": [
+          "M0-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-11",
+        "title": "身份、字段与迁移决策冻结（G02/G03/G12/G13/G20）",
+        "size": "M",
+        "owner": "INT 汇总，B/A/C-RPH/C-Web 各 owner 签核",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-04",
+          "M0-05",
+          "M0-06"
+        ],
+        "declared_dependencies": [
+          "M0-04",
+          "M0-05",
+          "M0-06"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-12",
+        "title": "扩展协商与 CI 决策冻结（G02/G04/G20）",
+        "size": "M",
+        "owner": "INT 汇总，B/C-RPH 签核",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-02",
+          "M0-08",
+          "M0-09",
+          "M0-11"
+        ],
+        "declared_dependencies": [
+          "M0-02",
+          "M0-08",
+          "M0-09",
+          "M0-11"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-13",
+        "title": "DSH 外部适配依赖变更（条件任务，G02/G05）",
+        "size": "L",
+        "owner": "C-RPH + B",
+        "conditional": true,
+        "applies": false,
+        "dependencies": [],
+        "declared_dependencies": [
+          "M0-09",
+          "M0-12"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M1-01",
+        "title": "应用/MCP/Artifact/Analysis 契约统一（G02/G03/G04）",
+        "size": "L",
+        "owner": "B，A/C 消费确认",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-02",
+          "M0-06",
+          "M0-08",
+          "M0-09",
+          "M0-12"
+        ],
+        "declared_dependencies": [
+          "M0-02",
+          "M0-06",
+          "M0-08",
+          "M0-09",
+          "M0-12",
+          "M0-13"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M1-02",
+        "title": "ResearchRecord、提交意图、事件与恢复契约（G09/G14）",
+        "size": "L",
+        "owner": "B + C-RPH",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-04",
+          "M0-11"
+        ],
+        "declared_dependencies": [
+          "M0-04",
+          "M0-11"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M1-03",
+        "title": "Evidence 投影、TaskRef 与 ResearchDecision 契约（G07/G08）",
+        "size": "L",
+        "owner": "A + B + C-RPH",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-02"
+        ],
+        "declared_dependencies": [
+          "M0-02"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M1-04",
+        "title": "科学输入、多摘要、SubmitPolicy 与 Budget 契约（G10/G12/G13）",
+        "size": "L",
+        "owner": "B + A + C-RPH/C-Web",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-04",
+          "M0-06",
+          "M0-07",
+          "M0-11"
+        ],
+        "declared_dependencies": [
+          "M0-04",
+          "M0-06",
+          "M0-07",
+          "M0-11"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M1-05",
+        "title": "新建 ADR-008 并冻结限定 DA 科学判据（G15/G18）",
+        "size": "L",
+        "owner": "A，B/C-RPH/C-Web 会签",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M1-03",
+          "M1-04"
+        ],
+        "declared_dependencies": [
+          "M1-03",
+          "M1-04"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M1-06",
+        "title": "早期薄纵切与 Candidate-Contracts（G02/G07/G11/G14/G20）",
+        "size": "L",
+        "owner": "INT",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-05",
+          "M1-01",
+          "M1-02",
+          "M1-03",
+          "M1-04"
+        ],
+        "declared_dependencies": [
+          "M0-05",
+          "M1-01",
+          "M1-02",
+          "M1-03",
+          "M1-04"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M2-01",
+        "title": "Research writer、跨库 Saga 与 P2 工具（G02/G14）",
+        "size": "XL",
+        "owner": "B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M1-06"
+        ],
+        "declared_dependencies": [
+          "M1-06"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M2-02",
+        "title": "Artifact 链、科学发现与真实 `vibration.analyze`（G03/G04）",
+        "size": "L",
+        "owner": "B + A",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-06",
+          "M1-01"
+        ],
+        "declared_dependencies": [
+          "M0-06",
+          "M1-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M2-03",
+        "title": "服务端审批策略与预算强制（G12/G13）",
+        "size": "XL",
+        "owner": "B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-07",
+          "M1-04",
+          "M2-01"
+        ],
+        "declared_dependencies": [
+          "M0-07",
+          "M1-04",
+          "M2-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M2-04",
+        "title": "Bounded Recipe DAG 生产接线（G15）",
+        "size": "XL",
+        "owner": "B + A",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M1-03",
+          "M1-04",
+          "M2-02",
+          "M2-03"
+        ],
+        "declared_dependencies": [
+          "M1-03",
+          "M1-04",
+          "M2-02",
+          "M2-03"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M2-05",
+        "title": "第三方科学插件生产装配（G04/G16，R07）",
+        "size": "L",
+        "owner": "B + A",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M1-04",
+          "M2-02"
+        ],
+        "declared_dependencies": [
+          "M1-04",
+          "M2-02"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M3-01",
+        "title": "真实 MCP PlatformClient、Bridge 参数与 TaskRef（G02/G03/G21）",
+        "size": "L",
+        "owner": "C-RPH",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-05",
+          "M2-01",
+          "M2-02"
+        ],
+        "declared_dependencies": [
+          "M0-05",
+          "M2-01",
+          "M2-02"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M3-02",
+        "title": "CLI 组合根、可移植 profile 与 doctor（G05/G06/G17）",
+        "size": "XL",
+        "owner": "C-RPH",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M3-01"
+        ],
+        "declared_dependencies": [
+          "M3-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M3-03",
+        "title": "生产 Planner、科学确认与模型预算 gateway（G10/G13）",
+        "size": "L",
+        "owner": "C-RPH + A/B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M1-04",
+          "M2-01",
+          "M2-03"
+        ],
+        "declared_dependencies": [
+          "M1-04",
+          "M2-01",
+          "M2-03"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M3-04",
+        "title": "可恢复 Supervisor、证据归属与研究决策（G07/G08/G09）",
+        "size": "XL",
+        "owner": "C-RPH",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M1-02",
+          "M1-03",
+          "M3-01",
+          "M3-03"
+        ],
+        "declared_dependencies": [
+          "M1-02",
+          "M1-03",
+          "M3-01",
+          "M3-03"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M3-05",
+        "title": "Workbench 真实审批与提交（G11）",
+        "size": "L",
+        "owner": "C-Web + B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M2-01",
+          "M2-03"
+        ],
+        "declared_dependencies": [
+          "M2-01",
+          "M2-03"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M3-06",
+        "title": "P3 Schema-Driven capability form（G16）",
+        "size": "L",
+        "owner": "A + C-Web + B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M2-02",
+          "M2-05"
+        ],
+        "declared_dependencies": [
+          "M2-02",
+          "M2-05"
+        ],
+        "prereq_notes": [
+          "不阻塞 M4 的 P2 最小纵切"
+        ]
+      },
+      {
+        "id": "M4-01",
+        "title": "无 QC 的全产品链与故障矩阵（G20 及所有接口项）",
+        "size": "L",
+        "owner": "INT",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-03",
+          "M2-01",
+          "M2-02",
+          "M2-03",
+          "M2-04",
+          "M3-01",
+          "M3-02",
+          "M3-03",
+          "M3-04",
+          "M3-05"
+        ],
+        "declared_dependencies": [
+          "M0-03",
+          "M2-01",
+          "M2-02",
+          "M2-03",
+          "M2-04",
+          "M3-01",
+          "M3-02",
+          "M3-03",
+          "M3-04",
+          "M3-05"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M4-02",
+        "title": "真 DSH/模型 + Local 科学 + Chromium（G05/G06/G11/G18）",
+        "size": "XL",
+        "owner": "INT + C + A/B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-10",
+          "M4-01"
+        ],
+        "declared_dependencies": [
+          "M0-10",
+          "M4-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M4-03",
+        "title": "LSF、执行约束、控制与恢复（G18/G23/G24/G25/G13）",
+        "size": "XL",
+        "owner": "B + INT",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-10",
+          "M4-02"
+        ],
+        "declared_dependencies": [
+          "M0-10",
+          "M4-02"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M4-04",
+        "title": "限定 Diels–Alder 科学纵切（G07/G08/G15/G18）",
+        "size": "XL",
+        "owner": "A + B + C + INT",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M1-05",
+          "M2-04",
+          "M3-04",
+          "M4-02"
+        ],
+        "declared_dependencies": [
+          "M1-05",
+          "M2-04",
+          "M3-04",
+          "M4-02"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M4-05",
+        "title": "第三方 capability 插件纵切（G16/G18）",
+        "size": "L",
+        "owner": "A + C-Web + B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M3-06",
+          "M4-02"
+        ],
+        "declared_dependencies": [
+          "M3-06",
+          "M4-02"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M4-06",
+        "title": "跨领域、迁移与长期可靠性 required 行（G18）",
+        "size": "XL",
+        "owner": "A + B + C + INT",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-04",
+          "M0-05",
+          "M0-06",
+          "M0-10",
+          "M4-01",
+          "M4-03",
+          "M4-05"
+        ],
+        "declared_dependencies": [
+          "M0-04",
+          "M0-05",
+          "M0-06",
+          "M0-10",
+          "M4-01",
+          "M4-03",
+          "M4-05"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M5-01",
+        "title": "全组件制品与安装入口（G06/G17）",
+        "size": "L",
+        "owner": "REL + C-RPH + B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M3-02",
+          "M3-06",
+          "M4-01",
+          "M4-02",
+          "M4-03",
+          "M4-04",
+          "M4-05",
+          "M4-06"
+        ],
+        "declared_dependencies": [
+          "M3-02",
+          "M3-06",
+          "M4-01",
+          "M4-02",
+          "M4-03",
+          "M4-04",
+          "M4-05",
+          "M4-06"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M5-02",
+        "title": "单一 BOM、可取回制品与证据覆盖矩阵（G18/G19/G20）",
+        "size": "L",
+        "owner": "B（manifest/契约注册）+ REL（制品/BOM）+ INT（coverage/签收）",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-03",
+          "M4-01",
+          "M4-02",
+          "M4-03",
+          "M4-04",
+          "M4-05",
+          "M4-06",
+          "M5-01"
+        ],
+        "declared_dependencies": [
+          "M0-03",
+          "M4-01",
+          "M4-02",
+          "M4-03",
+          "M4-04",
+          "M4-05",
+          "M4-06",
+          "M5-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M5-03",
+        "title": "独立操作者验收与最终放行（G17/G18/G19）",
+        "size": "L",
+        "owner": "独立操作者 + INT",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-10",
+          "M5-02"
+        ],
+        "declared_dependencies": [
+          "M0-10",
+          "M5-02"
+        ],
+        "prereq_notes": []
+      }
+    ],
+    "edges": [
+      {
+        "from": "M0-01",
+        "to": "M0-02"
+      },
+      {
+        "from": "M0-01",
+        "to": "M0-03"
+      },
+      {
+        "from": "M0-01",
+        "to": "M0-04"
+      },
+      {
+        "from": "M0-04",
+        "to": "M0-05"
+      },
+      {
+        "from": "M0-02",
+        "to": "M0-06"
+      },
+      {
+        "from": "M0-05",
+        "to": "M0-06"
+      },
+      {
+        "from": "M0-04",
+        "to": "M0-07"
+      },
+      {
+        "from": "M0-02",
+        "to": "M0-08"
+      },
+      {
+        "from": "M0-02",
+        "to": "M0-09"
+      },
+      {
+        "from": "M0-08",
+        "to": "M0-09"
+      },
+      {
+        "from": "M0-01",
+        "to": "M0-10"
+      },
+      {
+        "from": "M0-04",
+        "to": "M0-11"
+      },
+      {
+        "from": "M0-05",
+        "to": "M0-11"
+      },
+      {
+        "from": "M0-06",
+        "to": "M0-11"
+      },
+      {
+        "from": "M0-02",
+        "to": "M0-12"
+      },
+      {
+        "from": "M0-08",
+        "to": "M0-12"
+      },
+      {
+        "from": "M0-09",
+        "to": "M0-12"
+      },
+      {
+        "from": "M0-11",
+        "to": "M0-12"
+      },
+      {
+        "from": "M0-02",
+        "to": "M1-01"
+      },
+      {
+        "from": "M0-06",
+        "to": "M1-01"
+      },
+      {
+        "from": "M0-08",
+        "to": "M1-01"
+      },
+      {
+        "from": "M0-09",
+        "to": "M1-01"
+      },
+      {
+        "from": "M0-12",
+        "to": "M1-01"
+      },
+      {
+        "from": "M0-04",
+        "to": "M1-02"
+      },
+      {
+        "from": "M0-11",
+        "to": "M1-02"
+      },
+      {
+        "from": "M0-02",
+        "to": "M1-03"
+      },
+      {
+        "from": "M0-04",
+        "to": "M1-04"
+      },
+      {
+        "from": "M0-06",
+        "to": "M1-04"
+      },
+      {
+        "from": "M0-07",
+        "to": "M1-04"
+      },
+      {
+        "from": "M0-11",
+        "to": "M1-04"
+      },
+      {
+        "from": "M1-03",
+        "to": "M1-05"
+      },
+      {
+        "from": "M1-04",
+        "to": "M1-05"
+      },
+      {
+        "from": "M0-05",
+        "to": "M1-06"
+      },
+      {
+        "from": "M1-01",
+        "to": "M1-06"
+      },
+      {
+        "from": "M1-02",
+        "to": "M1-06"
+      },
+      {
+        "from": "M1-03",
+        "to": "M1-06"
+      },
+      {
+        "from": "M1-04",
+        "to": "M1-06"
+      },
+      {
+        "from": "M1-06",
+        "to": "M2-01"
+      },
+      {
+        "from": "M0-06",
+        "to": "M2-02"
+      },
+      {
+        "from": "M1-01",
+        "to": "M2-02"
+      },
+      {
+        "from": "M0-07",
+        "to": "M2-03"
+      },
+      {
+        "from": "M1-04",
+        "to": "M2-03"
+      },
+      {
+        "from": "M2-01",
+        "to": "M2-03"
+      },
+      {
+        "from": "M1-03",
+        "to": "M2-04"
+      },
+      {
+        "from": "M1-04",
+        "to": "M2-04"
+      },
+      {
+        "from": "M2-02",
+        "to": "M2-04"
+      },
+      {
+        "from": "M2-03",
+        "to": "M2-04"
+      },
+      {
+        "from": "M1-04",
+        "to": "M2-05"
+      },
+      {
+        "from": "M2-02",
+        "to": "M2-05"
+      },
+      {
+        "from": "M0-05",
+        "to": "M3-01"
+      },
+      {
+        "from": "M2-01",
+        "to": "M3-01"
+      },
+      {
+        "from": "M2-02",
+        "to": "M3-01"
+      },
+      {
+        "from": "M3-01",
+        "to": "M3-02"
+      },
+      {
+        "from": "M1-04",
+        "to": "M3-03"
+      },
+      {
+        "from": "M2-01",
+        "to": "M3-03"
+      },
+      {
+        "from": "M2-03",
+        "to": "M3-03"
+      },
+      {
+        "from": "M1-02",
+        "to": "M3-04"
+      },
+      {
+        "from": "M1-03",
+        "to": "M3-04"
+      },
+      {
+        "from": "M3-01",
+        "to": "M3-04"
+      },
+      {
+        "from": "M3-03",
+        "to": "M3-04"
+      },
+      {
+        "from": "M2-01",
+        "to": "M3-05"
+      },
+      {
+        "from": "M2-03",
+        "to": "M3-05"
+      },
+      {
+        "from": "M2-02",
+        "to": "M3-06"
+      },
+      {
+        "from": "M2-05",
+        "to": "M3-06"
+      },
+      {
+        "from": "M0-03",
+        "to": "M4-01"
+      },
+      {
+        "from": "M2-01",
+        "to": "M4-01"
+      },
+      {
+        "from": "M2-02",
+        "to": "M4-01"
+      },
+      {
+        "from": "M2-03",
+        "to": "M4-01"
+      },
+      {
+        "from": "M2-04",
+        "to": "M4-01"
+      },
+      {
+        "from": "M3-01",
+        "to": "M4-01"
+      },
+      {
+        "from": "M3-02",
+        "to": "M4-01"
+      },
+      {
+        "from": "M3-03",
+        "to": "M4-01"
+      },
+      {
+        "from": "M3-04",
+        "to": "M4-01"
+      },
+      {
+        "from": "M3-05",
+        "to": "M4-01"
+      },
+      {
+        "from": "M0-10",
+        "to": "M4-02"
+      },
+      {
+        "from": "M4-01",
+        "to": "M4-02"
+      },
+      {
+        "from": "M0-10",
+        "to": "M4-03"
+      },
+      {
+        "from": "M4-02",
+        "to": "M4-03"
+      },
+      {
+        "from": "M1-05",
+        "to": "M4-04"
+      },
+      {
+        "from": "M2-04",
+        "to": "M4-04"
+      },
+      {
+        "from": "M3-04",
+        "to": "M4-04"
+      },
+      {
+        "from": "M4-02",
+        "to": "M4-04"
+      },
+      {
+        "from": "M3-06",
+        "to": "M4-05"
+      },
+      {
+        "from": "M4-02",
+        "to": "M4-05"
+      },
+      {
+        "from": "M0-04",
+        "to": "M4-06"
+      },
+      {
+        "from": "M0-05",
+        "to": "M4-06"
+      },
+      {
+        "from": "M0-06",
+        "to": "M4-06"
+      },
+      {
+        "from": "M0-10",
+        "to": "M4-06"
+      },
+      {
+        "from": "M4-01",
+        "to": "M4-06"
+      },
+      {
+        "from": "M4-03",
+        "to": "M4-06"
+      },
+      {
+        "from": "M4-05",
+        "to": "M4-06"
+      },
+      {
+        "from": "M3-02",
+        "to": "M5-01"
+      },
+      {
+        "from": "M3-06",
+        "to": "M5-01"
+      },
+      {
+        "from": "M4-01",
+        "to": "M5-01"
+      },
+      {
+        "from": "M4-02",
+        "to": "M5-01"
+      },
+      {
+        "from": "M4-03",
+        "to": "M5-01"
+      },
+      {
+        "from": "M4-04",
+        "to": "M5-01"
+      },
+      {
+        "from": "M4-05",
+        "to": "M5-01"
+      },
+      {
+        "from": "M4-06",
+        "to": "M5-01"
+      },
+      {
+        "from": "M0-03",
+        "to": "M5-02"
+      },
+      {
+        "from": "M4-01",
+        "to": "M5-02"
+      },
+      {
+        "from": "M4-02",
+        "to": "M5-02"
+      },
+      {
+        "from": "M4-03",
+        "to": "M5-02"
+      },
+      {
+        "from": "M4-04",
+        "to": "M5-02"
+      },
+      {
+        "from": "M4-05",
+        "to": "M5-02"
+      },
+      {
+        "from": "M4-06",
+        "to": "M5-02"
+      },
+      {
+        "from": "M5-01",
+        "to": "M5-02"
+      },
+      {
+        "from": "M0-10",
+        "to": "M5-03"
+      },
+      {
+        "from": "M5-02",
+        "to": "M5-03"
+      }
+    ],
+    "node_count": 39,
+    "edge_count": 109,
+    "xl_count": 6,
+    "xl_total": 9,
+    "xl_on_critical_path": [
+      "M2-01",
+      "M2-03",
+      "M3-04",
+      "M4-02",
+      "M4-03",
+      "M4-06"
+    ],
+    "critical_path": [
+      "M0-01",
+      "M0-04",
+      "M0-05",
+      "M0-06",
+      "M0-11",
+      "M0-12",
+      "M1-01",
+      "M1-06",
+      "M2-01",
+      "M2-03",
+      "M3-03",
+      "M3-04",
+      "M4-01",
+      "M4-02",
+      "M4-03",
+      "M4-06",
+      "M5-01",
+      "M5-02",
+      "M5-03"
+    ],
+    "critical_path_length": 19
+  },
+  "external_change_required_close": {
+    "mode": "close_external_change",
+    "nodes": [
+      {
+        "id": "M0-01",
+        "title": "冻结整改基线与 26 项机器可追踪台账",
+        "size": "S",
+        "owner": "INT（M0-01a 基线/coverage）+ B（M0-01b 契约注册）",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [],
+        "declared_dependencies": [],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-02",
+        "title": "建立真实消费者 CI 门并修复 CI 自身断点",
+        "size": "L",
+        "owner": "INT + B + C-RPH",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-01"
+        ],
+        "declared_dependencies": [
+          "M0-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-03",
+        "title": "修正证据标签、live harness 骨架与候选索引骨架",
+        "size": "M",
+        "owner": "B（`acp2_runtime.py`）+ C-RPH（research harness）+ C-Web（browser harness）+ INT/REL（证据/BOM）",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-01"
+        ],
+        "declared_dependencies": [
+          "M0-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-04",
+        "title": "统一 CommandIdentity，修复跨用户幂等与 admission 归属（G24）",
+        "size": "M",
+        "owner": "B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-01"
+        ],
+        "declared_dependencies": [
+          "M0-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-05",
+        "title": "删除 MCP/Bridge 第二幂等权威并加入撤权重验（G21/G22/G25）",
+        "size": "L",
+        "owner": "B + C-RPH",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-04"
+        ],
+        "declared_dependencies": [
+          "M0-04"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-06",
+        "title": "修复执行字段与跨入口 JobSpec 等价（G23）",
+        "size": "M",
+        "owner": "B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-02",
+          "M0-05"
+        ],
+        "declared_dependencies": [
+          "M0-02",
+          "M0-05"
+        ],
+        "prereq_notes": [
+          "与 M0-05 顺序合入同模块"
+        ]
+      },
+      {
+        "id": "M0-07",
+        "title": "可信 usage receipt 与结算绑定（G26）",
+        "size": "L",
+        "owner": "B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-04"
+        ],
+        "declared_dependencies": [
+          "M0-04"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-08",
+        "title": "标准 MCP 握手与 ADR-006（G01）",
+        "size": "M",
+        "owner": "B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-02"
+        ],
+        "declared_dependencies": [
+          "M0-02"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-09",
+        "title": "真实 DSH 研究扩展协商接线验证（G02/G04，R12）",
+        "size": "L",
+        "owner": "C-RPH + B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-02",
+          "M0-08"
+        ],
+        "declared_dependencies": [
+          "M0-02",
+          "M0-08"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-10",
+        "title": "环境、账号与授权就绪（G06/G17/G18）",
+        "size": "L",
+        "owner": "INT",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-01"
+        ],
+        "declared_dependencies": [
+          "M0-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-11",
+        "title": "身份、字段与迁移决策冻结（G02/G03/G12/G13/G20）",
+        "size": "M",
+        "owner": "INT 汇总，B/A/C-RPH/C-Web 各 owner 签核",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-04",
+          "M0-05",
+          "M0-06"
+        ],
+        "declared_dependencies": [
+          "M0-04",
+          "M0-05",
+          "M0-06"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-12",
+        "title": "扩展协商与 CI 决策冻结（G02/G04/G20）",
+        "size": "M",
+        "owner": "INT 汇总，B/C-RPH 签核",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-02",
+          "M0-08",
+          "M0-09",
+          "M0-11"
+        ],
+        "declared_dependencies": [
+          "M0-02",
+          "M0-08",
+          "M0-09",
+          "M0-11"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M0-13",
+        "title": "DSH 外部适配依赖变更（条件任务，G02/G05）",
+        "size": "L",
+        "owner": "C-RPH + B",
+        "conditional": true,
+        "applies": true,
+        "dependencies": [
+          "M0-09",
+          "M0-12"
+        ],
+        "declared_dependencies": [
+          "M0-09",
+          "M0-12"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M1-01",
+        "title": "应用/MCP/Artifact/Analysis 契约统一（G02/G03/G04）",
+        "size": "L",
+        "owner": "B，A/C 消费确认",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-02",
+          "M0-06",
+          "M0-08",
+          "M0-09",
+          "M0-12",
+          "M0-13"
+        ],
+        "declared_dependencies": [
+          "M0-02",
+          "M0-06",
+          "M0-08",
+          "M0-09",
+          "M0-12",
+          "M0-13"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M1-02",
+        "title": "ResearchRecord、提交意图、事件与恢复契约（G09/G14）",
+        "size": "L",
+        "owner": "B + C-RPH",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-04",
+          "M0-11"
+        ],
+        "declared_dependencies": [
+          "M0-04",
+          "M0-11"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M1-03",
+        "title": "Evidence 投影、TaskRef 与 ResearchDecision 契约（G07/G08）",
+        "size": "L",
+        "owner": "A + B + C-RPH",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-02"
+        ],
+        "declared_dependencies": [
+          "M0-02"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M1-04",
+        "title": "科学输入、多摘要、SubmitPolicy 与 Budget 契约（G10/G12/G13）",
+        "size": "L",
+        "owner": "B + A + C-RPH/C-Web",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-04",
+          "M0-06",
+          "M0-07",
+          "M0-11"
+        ],
+        "declared_dependencies": [
+          "M0-04",
+          "M0-06",
+          "M0-07",
+          "M0-11"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M1-05",
+        "title": "新建 ADR-008 并冻结限定 DA 科学判据（G15/G18）",
+        "size": "L",
+        "owner": "A，B/C-RPH/C-Web 会签",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M1-03",
+          "M1-04"
+        ],
+        "declared_dependencies": [
+          "M1-03",
+          "M1-04"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M1-06",
+        "title": "早期薄纵切与 Candidate-Contracts（G02/G07/G11/G14/G20）",
+        "size": "L",
+        "owner": "INT",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-05",
+          "M1-01",
+          "M1-02",
+          "M1-03",
+          "M1-04"
+        ],
+        "declared_dependencies": [
+          "M0-05",
+          "M1-01",
+          "M1-02",
+          "M1-03",
+          "M1-04"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M2-01",
+        "title": "Research writer、跨库 Saga 与 P2 工具（G02/G14）",
+        "size": "XL",
+        "owner": "B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M1-06"
+        ],
+        "declared_dependencies": [
+          "M1-06"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M2-02",
+        "title": "Artifact 链、科学发现与真实 `vibration.analyze`（G03/G04）",
+        "size": "L",
+        "owner": "B + A",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-06",
+          "M1-01"
+        ],
+        "declared_dependencies": [
+          "M0-06",
+          "M1-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M2-03",
+        "title": "服务端审批策略与预算强制（G12/G13）",
+        "size": "XL",
+        "owner": "B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-07",
+          "M1-04",
+          "M2-01"
+        ],
+        "declared_dependencies": [
+          "M0-07",
+          "M1-04",
+          "M2-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M2-04",
+        "title": "Bounded Recipe DAG 生产接线（G15）",
+        "size": "XL",
+        "owner": "B + A",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M1-03",
+          "M1-04",
+          "M2-02",
+          "M2-03"
+        ],
+        "declared_dependencies": [
+          "M1-03",
+          "M1-04",
+          "M2-02",
+          "M2-03"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M2-05",
+        "title": "第三方科学插件生产装配（G04/G16，R07）",
+        "size": "L",
+        "owner": "B + A",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M1-04",
+          "M2-02"
+        ],
+        "declared_dependencies": [
+          "M1-04",
+          "M2-02"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M3-01",
+        "title": "真实 MCP PlatformClient、Bridge 参数与 TaskRef（G02/G03/G21）",
+        "size": "L",
+        "owner": "C-RPH",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-05",
+          "M2-01",
+          "M2-02"
+        ],
+        "declared_dependencies": [
+          "M0-05",
+          "M2-01",
+          "M2-02"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M3-02",
+        "title": "CLI 组合根、可移植 profile 与 doctor（G05/G06/G17）",
+        "size": "XL",
+        "owner": "C-RPH",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M3-01"
+        ],
+        "declared_dependencies": [
+          "M3-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M3-03",
+        "title": "生产 Planner、科学确认与模型预算 gateway（G10/G13）",
+        "size": "L",
+        "owner": "C-RPH + A/B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M1-04",
+          "M2-01",
+          "M2-03"
+        ],
+        "declared_dependencies": [
+          "M1-04",
+          "M2-01",
+          "M2-03"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M3-04",
+        "title": "可恢复 Supervisor、证据归属与研究决策（G07/G08/G09）",
+        "size": "XL",
+        "owner": "C-RPH",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M1-02",
+          "M1-03",
+          "M3-01",
+          "M3-03"
+        ],
+        "declared_dependencies": [
+          "M1-02",
+          "M1-03",
+          "M3-01",
+          "M3-03"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M3-05",
+        "title": "Workbench 真实审批与提交（G11）",
+        "size": "L",
+        "owner": "C-Web + B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M2-01",
+          "M2-03"
+        ],
+        "declared_dependencies": [
+          "M2-01",
+          "M2-03"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M3-06",
+        "title": "P3 Schema-Driven capability form（G16）",
+        "size": "L",
+        "owner": "A + C-Web + B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M2-02",
+          "M2-05"
+        ],
+        "declared_dependencies": [
+          "M2-02",
+          "M2-05"
+        ],
+        "prereq_notes": [
+          "不阻塞 M4 的 P2 最小纵切"
+        ]
+      },
+      {
+        "id": "M4-01",
+        "title": "无 QC 的全产品链与故障矩阵（G20 及所有接口项）",
+        "size": "L",
+        "owner": "INT",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-03",
+          "M2-01",
+          "M2-02",
+          "M2-03",
+          "M2-04",
+          "M3-01",
+          "M3-02",
+          "M3-03",
+          "M3-04",
+          "M3-05"
+        ],
+        "declared_dependencies": [
+          "M0-03",
+          "M2-01",
+          "M2-02",
+          "M2-03",
+          "M2-04",
+          "M3-01",
+          "M3-02",
+          "M3-03",
+          "M3-04",
+          "M3-05"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M4-02",
+        "title": "真 DSH/模型 + Local 科学 + Chromium（G05/G06/G11/G18）",
+        "size": "XL",
+        "owner": "INT + C + A/B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-10",
+          "M4-01"
+        ],
+        "declared_dependencies": [
+          "M0-10",
+          "M4-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M4-03",
+        "title": "LSF、执行约束、控制与恢复（G18/G23/G24/G25/G13）",
+        "size": "XL",
+        "owner": "B + INT",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-10",
+          "M4-02"
+        ],
+        "declared_dependencies": [
+          "M0-10",
+          "M4-02"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M4-04",
+        "title": "限定 Diels–Alder 科学纵切（G07/G08/G15/G18）",
+        "size": "XL",
+        "owner": "A + B + C + INT",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M1-05",
+          "M2-04",
+          "M3-04",
+          "M4-02"
+        ],
+        "declared_dependencies": [
+          "M1-05",
+          "M2-04",
+          "M3-04",
+          "M4-02"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M4-05",
+        "title": "第三方 capability 插件纵切（G16/G18）",
+        "size": "L",
+        "owner": "A + C-Web + B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M3-06",
+          "M4-02"
+        ],
+        "declared_dependencies": [
+          "M3-06",
+          "M4-02"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M4-06",
+        "title": "跨领域、迁移与长期可靠性 required 行（G18）",
+        "size": "XL",
+        "owner": "A + B + C + INT",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-04",
+          "M0-05",
+          "M0-06",
+          "M0-10",
+          "M4-01",
+          "M4-03",
+          "M4-05"
+        ],
+        "declared_dependencies": [
+          "M0-04",
+          "M0-05",
+          "M0-06",
+          "M0-10",
+          "M4-01",
+          "M4-03",
+          "M4-05"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M5-01",
+        "title": "全组件制品与安装入口（G06/G17）",
+        "size": "L",
+        "owner": "REL + C-RPH + B",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M3-02",
+          "M3-06",
+          "M4-01",
+          "M4-02",
+          "M4-03",
+          "M4-04",
+          "M4-05",
+          "M4-06"
+        ],
+        "declared_dependencies": [
+          "M3-02",
+          "M3-06",
+          "M4-01",
+          "M4-02",
+          "M4-03",
+          "M4-04",
+          "M4-05",
+          "M4-06"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M5-02",
+        "title": "单一 BOM、可取回制品与证据覆盖矩阵（G18/G19/G20）",
+        "size": "L",
+        "owner": "B（manifest/契约注册）+ REL（制品/BOM）+ INT（coverage/签收）",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-03",
+          "M4-01",
+          "M4-02",
+          "M4-03",
+          "M4-04",
+          "M4-05",
+          "M4-06",
+          "M5-01"
+        ],
+        "declared_dependencies": [
+          "M0-03",
+          "M4-01",
+          "M4-02",
+          "M4-03",
+          "M4-04",
+          "M4-05",
+          "M4-06",
+          "M5-01"
+        ],
+        "prereq_notes": []
+      },
+      {
+        "id": "M5-03",
+        "title": "独立操作者验收与最终放行（G17/G18/G19）",
+        "size": "L",
+        "owner": "独立操作者 + INT",
+        "conditional": false,
+        "applies": true,
+        "dependencies": [
+          "M0-10",
+          "M5-02"
+        ],
+        "declared_dependencies": [
+          "M0-10",
+          "M5-02"
+        ],
+        "prereq_notes": []
+      }
+    ],
+    "edges": [
+      {
+        "from": "M0-01",
+        "to": "M0-02"
+      },
+      {
+        "from": "M0-01",
+        "to": "M0-03"
+      },
+      {
+        "from": "M0-01",
+        "to": "M0-04"
+      },
+      {
+        "from": "M0-04",
+        "to": "M0-05"
+      },
+      {
+        "from": "M0-02",
+        "to": "M0-06"
+      },
+      {
+        "from": "M0-05",
+        "to": "M0-06"
+      },
+      {
+        "from": "M0-04",
+        "to": "M0-07"
+      },
+      {
+        "from": "M0-02",
+        "to": "M0-08"
+      },
+      {
+        "from": "M0-02",
+        "to": "M0-09"
+      },
+      {
+        "from": "M0-08",
+        "to": "M0-09"
+      },
+      {
+        "from": "M0-01",
+        "to": "M0-10"
+      },
+      {
+        "from": "M0-04",
+        "to": "M0-11"
+      },
+      {
+        "from": "M0-05",
+        "to": "M0-11"
+      },
+      {
+        "from": "M0-06",
+        "to": "M0-11"
+      },
+      {
+        "from": "M0-02",
+        "to": "M0-12"
+      },
+      {
+        "from": "M0-08",
+        "to": "M0-12"
+      },
+      {
+        "from": "M0-09",
+        "to": "M0-12"
+      },
+      {
+        "from": "M0-11",
+        "to": "M0-12"
+      },
+      {
+        "from": "M0-09",
+        "to": "M0-13"
+      },
+      {
+        "from": "M0-12",
+        "to": "M0-13"
+      },
+      {
+        "from": "M0-02",
+        "to": "M1-01"
+      },
+      {
+        "from": "M0-06",
+        "to": "M1-01"
+      },
+      {
+        "from": "M0-08",
+        "to": "M1-01"
+      },
+      {
+        "from": "M0-09",
+        "to": "M1-01"
+      },
+      {
+        "from": "M0-12",
+        "to": "M1-01"
+      },
+      {
+        "from": "M0-13",
+        "to": "M1-01"
+      },
+      {
+        "from": "M0-04",
+        "to": "M1-02"
+      },
+      {
+        "from": "M0-11",
+        "to": "M1-02"
+      },
+      {
+        "from": "M0-02",
+        "to": "M1-03"
+      },
+      {
+        "from": "M0-04",
+        "to": "M1-04"
+      },
+      {
+        "from": "M0-06",
+        "to": "M1-04"
+      },
+      {
+        "from": "M0-07",
+        "to": "M1-04"
+      },
+      {
+        "from": "M0-11",
+        "to": "M1-04"
+      },
+      {
+        "from": "M1-03",
+        "to": "M1-05"
+      },
+      {
+        "from": "M1-04",
+        "to": "M1-05"
+      },
+      {
+        "from": "M0-05",
+        "to": "M1-06"
+      },
+      {
+        "from": "M1-01",
+        "to": "M1-06"
+      },
+      {
+        "from": "M1-02",
+        "to": "M1-06"
+      },
+      {
+        "from": "M1-03",
+        "to": "M1-06"
+      },
+      {
+        "from": "M1-04",
+        "to": "M1-06"
+      },
+      {
+        "from": "M1-06",
+        "to": "M2-01"
+      },
+      {
+        "from": "M0-06",
+        "to": "M2-02"
+      },
+      {
+        "from": "M1-01",
+        "to": "M2-02"
+      },
+      {
+        "from": "M0-07",
+        "to": "M2-03"
+      },
+      {
+        "from": "M1-04",
+        "to": "M2-03"
+      },
+      {
+        "from": "M2-01",
+        "to": "M2-03"
+      },
+      {
+        "from": "M1-03",
+        "to": "M2-04"
+      },
+      {
+        "from": "M1-04",
+        "to": "M2-04"
+      },
+      {
+        "from": "M2-02",
+        "to": "M2-04"
+      },
+      {
+        "from": "M2-03",
+        "to": "M2-04"
+      },
+      {
+        "from": "M1-04",
+        "to": "M2-05"
+      },
+      {
+        "from": "M2-02",
+        "to": "M2-05"
+      },
+      {
+        "from": "M0-05",
+        "to": "M3-01"
+      },
+      {
+        "from": "M2-01",
+        "to": "M3-01"
+      },
+      {
+        "from": "M2-02",
+        "to": "M3-01"
+      },
+      {
+        "from": "M3-01",
+        "to": "M3-02"
+      },
+      {
+        "from": "M1-04",
+        "to": "M3-03"
+      },
+      {
+        "from": "M2-01",
+        "to": "M3-03"
+      },
+      {
+        "from": "M2-03",
+        "to": "M3-03"
+      },
+      {
+        "from": "M1-02",
+        "to": "M3-04"
+      },
+      {
+        "from": "M1-03",
+        "to": "M3-04"
+      },
+      {
+        "from": "M3-01",
+        "to": "M3-04"
+      },
+      {
+        "from": "M3-03",
+        "to": "M3-04"
+      },
+      {
+        "from": "M2-01",
+        "to": "M3-05"
+      },
+      {
+        "from": "M2-03",
+        "to": "M3-05"
+      },
+      {
+        "from": "M2-02",
+        "to": "M3-06"
+      },
+      {
+        "from": "M2-05",
+        "to": "M3-06"
+      },
+      {
+        "from": "M0-03",
+        "to": "M4-01"
+      },
+      {
+        "from": "M2-01",
+        "to": "M4-01"
+      },
+      {
+        "from": "M2-02",
+        "to": "M4-01"
+      },
+      {
+        "from": "M2-03",
+        "to": "M4-01"
+      },
+      {
+        "from": "M2-04",
+        "to": "M4-01"
+      },
+      {
+        "from": "M3-01",
+        "to": "M4-01"
+      },
+      {
+        "from": "M3-02",
+        "to": "M4-01"
+      },
+      {
+        "from": "M3-03",
+        "to": "M4-01"
+      },
+      {
+        "from": "M3-04",
+        "to": "M4-01"
+      },
+      {
+        "from": "M3-05",
+        "to": "M4-01"
+      },
+      {
+        "from": "M0-10",
+        "to": "M4-02"
+      },
+      {
+        "from": "M4-01",
+        "to": "M4-02"
+      },
+      {
+        "from": "M0-10",
+        "to": "M4-03"
+      },
+      {
+        "from": "M4-02",
+        "to": "M4-03"
+      },
+      {
+        "from": "M1-05",
+        "to": "M4-04"
+      },
+      {
+        "from": "M2-04",
+        "to": "M4-04"
+      },
+      {
+        "from": "M3-04",
+        "to": "M4-04"
+      },
+      {
+        "from": "M4-02",
+        "to": "M4-04"
+      },
+      {
+        "from": "M3-06",
+        "to": "M4-05"
+      },
+      {
+        "from": "M4-02",
+        "to": "M4-05"
+      },
+      {
+        "from": "M0-04",
+        "to": "M4-06"
+      },
+      {
+        "from": "M0-05",
+        "to": "M4-06"
+      },
+      {
+        "from": "M0-06",
+        "to": "M4-06"
+      },
+      {
+        "from": "M0-10",
+        "to": "M4-06"
+      },
+      {
+        "from": "M4-01",
+        "to": "M4-06"
+      },
+      {
+        "from": "M4-03",
+        "to": "M4-06"
+      },
+      {
+        "from": "M4-05",
+        "to": "M4-06"
+      },
+      {
+        "from": "M3-02",
+        "to": "M5-01"
+      },
+      {
+        "from": "M3-06",
+        "to": "M5-01"
+      },
+      {
+        "from": "M4-01",
+        "to": "M5-01"
+      },
+      {
+        "from": "M4-02",
+        "to": "M5-01"
+      },
+      {
+        "from": "M4-03",
+        "to": "M5-01"
+      },
+      {
+        "from": "M4-04",
+        "to": "M5-01"
+      },
+      {
+        "from": "M4-05",
+        "to": "M5-01"
+      },
+      {
+        "from": "M4-06",
+        "to": "M5-01"
+      },
+      {
+        "from": "M0-03",
+        "to": "M5-02"
+      },
+      {
+        "from": "M4-01",
+        "to": "M5-02"
+      },
+      {
+        "from": "M4-02",
+        "to": "M5-02"
+      },
+      {
+        "from": "M4-03",
+        "to": "M5-02"
+      },
+      {
+        "from": "M4-04",
+        "to": "M5-02"
+      },
+      {
+        "from": "M4-05",
+        "to": "M5-02"
+      },
+      {
+        "from": "M4-06",
+        "to": "M5-02"
+      },
+      {
+        "from": "M5-01",
+        "to": "M5-02"
+      },
+      {
+        "from": "M0-10",
+        "to": "M5-03"
+      },
+      {
+        "from": "M5-02",
+        "to": "M5-03"
+      }
+    ],
+    "node_count": 39,
+    "edge_count": 112,
+    "xl_count": 6,
+    "xl_total": 9,
+    "xl_on_critical_path": [
+      "M2-01",
+      "M2-03",
+      "M3-04",
+      "M4-02",
+      "M4-03",
+      "M4-06"
+    ],
+    "critical_path": [
+      "M0-01",
+      "M0-04",
+      "M0-05",
+      "M0-06",
+      "M0-11",
+      "M0-12",
+      "M0-13",
+      "M1-01",
+      "M1-06",
+      "M2-01",
+      "M2-03",
+      "M3-03",
+      "M3-04",
+      "M4-01",
+      "M4-02",
+      "M4-03",
+      "M4-06",
+      "M5-01",
+      "M5-02",
+      "M5-03"
+    ],
+    "critical_path_length": 20
+  }
+}

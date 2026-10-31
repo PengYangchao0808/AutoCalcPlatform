@@ -114,6 +114,7 @@ class VerifiedRequestIdentity:
     key_scope: str | None = None
     key_project: str | None = None
     actions: tuple[str, ...] = ()
+    usage_capabilities: tuple[str, ...] = ()
     account_id: str | None = None
 
     @property
@@ -142,6 +143,7 @@ class VerifiedRequestIdentity:
             "key_scope": self.key_scope,
             "key_project": self.key_project,
             "actions": list(self.actions),
+            "usage_capabilities": list(self.usage_capabilities),
             "account_id": self.account_id,
             "project_hint_policy": "narrow-only",
             "multi_tenant_security": "api-key-scoped",
@@ -333,6 +335,7 @@ class MultiUserIdentity:
                 key_scope=decision.scope,
                 key_project=key_project,
                 actions=actions,
+                usage_capabilities=tuple(decision.usage_capabilities),
                 account_id=account.account_id,
             ),
             None,

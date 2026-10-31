@@ -170,7 +170,7 @@ always preserved and silent substitution is always forbidden:
 
 ## 11. QA probes (recorded)
 
-Harness: `/usr/bin/python3.11` (3.11.13), repo root `<repo>`.
+Harness: `/usr/bin/python3.11` (3.11.13), repo root `/ACPServer/AutoCalcPlatform`.
 
 ```bash
 # 1) SDK + T44 pilot contract suite

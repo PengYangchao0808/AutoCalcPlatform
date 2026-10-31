@@ -1,0 +1,25 @@
+{
+  "data": {
+    "after": "completed",
+    "attempt_after": 1,
+    "attempt_before": 1,
+    "before": "completed",
+    "duration_s": 6.02,
+    "job_id": "20261028_011442_001_m403-submission",
+    "late_event": {
+      "job_id": "20261028_011442_001_m403-submission",
+      "late": true,
+      "note": "an observation emitted after the terminal transition",
+      "timestamp": "2026-10-27T17:27:37.445199Z",
+      "type": "remote.observed_done"
+    }
+  },
+  "detail": "a terminal row is not revived by a later observation (CAS + terminal scan set)",
+  "evidence": [
+    "native/late-done.json"
+  ],
+  "name": "late_done",
+  "recorded_at": "2026-10-27T17:27:43.456314Z",
+  "schema": "acp2.m403.acceptance.v1",
+  "status": "PASS"
+}

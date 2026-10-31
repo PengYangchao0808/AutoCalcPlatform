@@ -460,9 +460,10 @@ def test_science_capabilities_shape(descriptors: dict, domain: dict) -> None:
     assert "fixture" not in document
 
     capabilities = document["capabilities"]
-    assert set(capabilities) == {"questions", "descriptors", "domain"}
+    assert set(capabilities) == {"questions", "descriptors", "domain", "analysis"}
     assert capabilities["descriptors"] is descriptors
     assert capabilities["domain"] is domain
+    assert capabilities["analysis"] == []
     assert len(capabilities["questions"]) == 3
     assert "fixture" not in capabilities
 
@@ -474,7 +475,7 @@ def test_science_capabilities_tools_match_frontend_allowlist(
     tools = document["tools"]
 
     assert tools == sorted(tools)
-    assert len(tools) == 8
+    assert len(tools) == 10
     assert set(tools) == set(_acp_tools_from_frontend_contract())
 
 

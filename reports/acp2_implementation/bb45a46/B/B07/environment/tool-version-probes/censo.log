@@ -1,5 +1,5 @@
-argv: /home/<user>/anaconda3/bin/censo --version
-cwd: <repo>
+argv: /home/xieningke/anaconda3/bin/censo --version
+cwd: /ACPServer/AutoCalcPlatform
 
                ______________________________________________________________
               |                                                              |
@@ -25,6 +25,6 @@ cwd: <repo>
               MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
 
-CALL: /home/<user>/anaconda3/bin/censo --version
+CALL: /home/xieningke/anaconda3/bin/censo --version
 3.0.8
 exit_code=0

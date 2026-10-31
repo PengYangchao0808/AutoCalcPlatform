@@ -15,7 +15,7 @@
 # Exit status mirrors route_select.
 set -u
 
-ACP2_ACCEPTANCE_ENV="${ACP2_ACCEPTANCE_ENV:-<acp2-dev>/data/acceptance-env-c.sh}"
+ACP2_ACCEPTANCE_ENV="${ACP2_ACCEPTANCE_ENV:-/ACPServer/acp2-development/data/acceptance-env-c.sh}"
 if [ ! -f "$ACP2_ACCEPTANCE_ENV" ]; then
   echo "exit=2"
   exit 2

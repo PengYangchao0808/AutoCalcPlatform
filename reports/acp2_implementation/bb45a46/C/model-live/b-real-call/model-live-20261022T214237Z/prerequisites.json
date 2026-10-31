@@ -1,0 +1,44 @@
+{
+  "approved": false,
+  "configured_routes": {},
+  "controller": {
+    "detail": "URLError: <urlopen error [Errno 111] Connection refused>",
+    "health_url": "http://127.0.0.1:18765/api/health",
+    "reachable": false,
+    "status": null,
+    "url": "http://127.0.0.1:18765"
+  },
+  "credential_present": false,
+  "credential_refs": [],
+  "detail": [
+    "no_approved_provider_configured",
+    "GET http://127.0.0.1:18765/api/health -> URLError: <urlopen error [Errno 111] Connection refused>"
+  ],
+  "env_credentials_present": [],
+  "env_model": null,
+  "env_provider": null,
+  "missing": [
+    "no_model_credential",
+    "controller_unavailable"
+  ],
+  "providers": {
+    "credential_refs": [],
+    "profiles": {
+      "headless": {
+        "patch": "/ACPServer/acp2-development/data/dsh-home/profiles/headless/cordis.patch.yml",
+        "providers": {}
+      },
+      "web": {
+        "patch": "/ACPServer/acp2-development/data/dsh-home/profiles/web/cordis.patch.yml",
+        "providers": {}
+      }
+    },
+    "store_records": [
+      "client-connection/browser-session"
+    ]
+  },
+  "reason": "no_model_credential|controller_unavailable:no_approved_provider_configured;GET http://127.0.0.1:18765/api/health -> URLError: <urlopen error [Errno 111] Connection refused>",
+  "schema": "acp2.model-live.prerequisites.v1",
+  "stored_model_credentials": [],
+  "timestamp": "2026-10-22T21:42:50Z"
+}

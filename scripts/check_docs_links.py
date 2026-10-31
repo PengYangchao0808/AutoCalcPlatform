@@ -22,7 +22,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOCS = REPO_ROOT / "docs"
 
-LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)\s]+)\)")
+LINK_RE = re.compile(r"!?\[[^\]]*\]\(\s*(?:<([^>]+)>|([^)\s]+))\s*\)")
 DOCS_PATH_RE = re.compile(r"(?<![\w./-])(docs/[A-Za-z0-9_./-]+\.(?:md|txt|html|json|py))")
 SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
 LINE_SUFFIX_RE = re.compile(r":\d+$")
@@ -34,14 +34,12 @@ SKIP_DIR_PARTS = {"archive", "acp2-contracts"}
 # is an audit fact, not a waiver: the path is either explicitly NOT_VERIFIED in
 # AGENTS.md or was a planned artifact that was never produced. Keep this list
 # small and never add an entry to silence a real broken link.
-ALLOWED_ABSENT: dict[str, str] = {
-    "docs/reference/next-change/acp2-contracts/experience/static-assets.manifest.json": (
-        "AGENTS.md: C 轨静态资产清单登记为 NOT_VERIFIED，预期路径尚未落地"
-    ),
-    "reports/architecture_repair_20261022/REPORT.md": (
-        "计划中的整改报告，仓库内从未提交；保留为原始计划口径"
-    ),
-}
+#
+# Empty as of 2026-10-31: the two entries that used to live here
+# (acp2-contracts/experience/static-assets.manifest.json and
+# reports/architecture_repair_20261022/REPORT.md) both landed on origin/main, so
+# keeping them would mask a future break at those paths.
+ALLOWED_ABSENT: dict[str, str] = {}
 
 
 def _strip_fences(text: str) -> str:
@@ -94,7 +92,8 @@ def check(verbose: bool) -> int:
             rel_file = path.as_posix()
         text = _strip_fences(path.read_text(encoding="utf-8"))
 
-        for target in LINK_RE.findall(text):
+        for match in LINK_RE.finditer(text):
+            target = match.group(1) or match.group(2) or ""
             if target.startswith("#") or SCHEME_RE.match(target):
                 continue
             path_part = target.split("#", 1)[0]

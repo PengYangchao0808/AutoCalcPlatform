@@ -30,6 +30,12 @@ from acp.workflows.irc import run_irc_workflow
 from tests.conftest import FakeBackend
 
 _COORD_FILE = Path("tests/baseline/refactor-evidence/e2e-task-root.txt")
+#: Session-scoped marker written inside ``session_task_root`` once
+#: ``test_e2e_full_chain`` succeeds.  The tracked coordination file under
+#: ``tests/baseline/refactor-evidence/`` is audit history and must never be
+#: rewritten by a test run (running the suite as a different user used to
+#: dirty the checkout); only the session-local marker is consulted.
+_CHAIN_DONE_MARKER = ".full_chain_done"
 
 _TS_XYZ = "2\nTAG: TS | candidate_id=candidate_001\nH 0.0 0.0 0.0\nH 0.0 0.0 0.7\n"
 _INT_XYZ = "2\nTAG: INT | candidate_id=int_001\nH 0.0 0.0 0.0\nH 0.0 0.0 0.7\n"
@@ -169,9 +175,9 @@ def test_e2e_full_chain(
     irc_manifest = ResultManifest.read(irc_output / "RESULT")
     assert any(p.kind == ProductKind.REPORT for p in irc_manifest.products)
 
-    # ── coordinator file ──────────────────────────────────────────
-    _COORD_FILE.parent.mkdir(parents=True, exist_ok=True)
-    _COORD_FILE.write_text(str(task_root), encoding="utf-8")
+    # ── coordinator marker ────────────────────────────────────────
+    # Session-local only: the tracked evidence file stays untouched.
+    (task_root / _CHAIN_DONE_MARKER).write_text("ok", encoding="utf-8")
 
 
 # ── session-scoped task root fixture ─────────────────────────────────
@@ -194,8 +200,8 @@ def test_e2e_interrupt_continue(
 
     Only unfinished steps are executed; fake call counts asserted.
     """
-    if not _COORD_FILE.is_file():
-        pytest.skip("Run test_e2e_full_chain first to create the coordination file")
+    if not (session_task_root / _CHAIN_DONE_MARKER).is_file():
+        pytest.skip("Run test_e2e_full_chain first to create the coordination marker")
 
     task_root = session_task_root
 
