@@ -27,6 +27,7 @@ Author: ACP Services (B lane, B04a).
 from __future__ import annotations
 
 import json
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -49,6 +50,7 @@ __all__ = [
     "AuthorizationError",
     "InvalidParameterError",
     "ConflictError",
+    "NotFoundError",
     "NotPreparedError",
     "UnsupportedError",
 ]
@@ -344,6 +346,24 @@ class NotPreparedError(ControllerClientError):
     retryable = True
 
 
+class NotFoundError(NotPreparedError):
+    """The referenced *task id* does not exist at all (round-8 K6).
+
+    ``resource_not_ready`` says "this will become readable once prepared, retry
+    later"; an unknown task id never will.  The class stays a
+    :class:`NotPreparedError` subclass on purpose: every 404 consumer keeps its
+    existing ``except`` clause, and only the retryable classification changes.
+
+    Scope: this is raised for the **task status read** (``GET
+    /api/v1/jobs/{id}``) when the Controller's 404 says the job row is missing.
+    Other 404s (an unknown *operation* row, a not-prepared artifact) keep
+    ``resource_not_ready``: those are genuinely transient.
+    """
+
+    code = "not_found"
+    retryable = False
+
+
 class UnsupportedError(ControllerClientError):
     """The command/workflow/version is outside the frozen contract."""
 
@@ -494,6 +514,7 @@ class ControllerClient:
         client: Mapping[str, Any] | None = None,
         workflow: str | None = None,
         detail: str | None = None,
+        contract_sections: str | None = None,
     ) -> Capabilities:
         """Return what the Controller currently offers (no side effects).
 
@@ -528,6 +549,11 @@ class ControllerClient:
             body["workflow"] = str(workflow)
         if detail is not None:
             body["detail"] = str(detail)
+        if contract_sections is not None:
+            # Round-8: the workflow-scoped contract has named sections; the MCP
+            # adapter must be able to request them or the CORE view is a dead end
+            # for an MCP-only agent.
+            body["contract_sections"] = str(contract_sections)
         if body:
             body.setdefault("schema_version", 1)
             data = self._request_json("POST", "/api/capabilities", body)
@@ -576,12 +602,20 @@ class ControllerClient:
         self,
         *,
         status: str | None = None,
+        status_group: str | None = None,
         limit: int = 50,
     ) -> Mapping[str, Any]:
-        """Bounded task list (read-only convenience for ``acp task query``)."""
+        """Bounded task list (read-only convenience for ``acp task query``).
+
+        ``status_group`` (round-8 K5) is the mutually-exclusive family filter
+        (``active``/``terminal``/``running_now``); the Controller refuses a
+        request that sends both, exactly like the MCP surface.
+        """
         query: dict[str, Any] = {"limit": max(1, min(int(limit), 1000))}
         if status:
             query["status"] = status
+        if status_group:
+            query["status_group"] = status_group
         data = self._request_json("GET", "/api/v1/jobs?" + urllib.parse.urlencode(query))
         if not isinstance(data, Mapping):
             raise ControllerClientError("list response is not an object")
@@ -1131,6 +1165,35 @@ def _research_extension_request(
     }
 
 
+#: The task-status read path (exactly ``/api/v1/jobs/{id}``, no sub-resource).
+#: Used only to scope the round-8 K6 unknown-reference split.
+_STATUS_READ_PATH_RE = re.compile(r"^/api/v1/jobs/[^/]+/?$")
+
+
+def _is_unknown_task_read(
+    exc: urllib.error.HTTPError,
+    *,
+    code: str,
+    message: str,
+    params: Mapping[str, Any],
+) -> bool:
+    """True when a 404 means "no such task", not "not prepared yet".
+
+    Two signals, both server-authored: the structured ``job_row_missing`` code
+    the status route emits (round-8), or the historical ``Job not found: <id>``
+    prose.  Restricted to the task-status read path so an unknown *operation*
+    or an unprepared artifact keeps :class:`NotPreparedError`.
+    """
+    if int(getattr(exc, "code", 0) or 0) != 404:
+        return False
+    path = urllib.parse.urlsplit(str(getattr(exc, "url", "") or "")).path
+    if _STATUS_READ_PATH_RE.match(path) is None:
+        return False
+    if str(params.get("code") or code or "") == "job_row_missing":
+        return True
+    return "job not found" in str(message).casefold()
+
+
 def _error_from_http(exc: urllib.error.HTTPError) -> ControllerClientError:
     default_code, error_cls = _HTTP_ERRORS.get(
         int(exc.code), ("unknown_error", ControllerClientError)
@@ -1167,6 +1230,13 @@ def _error_from_http(exc: urllib.error.HTTPError) -> ControllerClientError:
                 params = dict(detail["params"])
             if isinstance(detail.get("retryable"), bool):
                 retryable = detail["retryable"]
+    # Round-8 K6: an unknown *task* id on the task-status read is not "not
+    # prepared" — it is "this id does not exist", which must never be retried
+    # with the same id.  The split is deliberately narrow: only the read of
+    # ``/api/v1/jobs/{id}`` (plus the structured ``job_row_missing`` marker the
+    # route emits) changes class; every other 404 keeps ``resource_not_ready``.
+    if _is_unknown_task_read(exc, code=code, message=message, params=params):
+        return NotFoundError(message, code="not_found", params=params, retryable=False)
     # ``not_prepared`` is a distinct request-outcome class: the artifact/cache
     # exists in principle but its body is not prepared.  A 404 for an unknown
     # operation is the same class (never an empty success).

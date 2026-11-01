@@ -86,6 +86,9 @@ _TOOL_ERROR_CODES: dict[str, str] = {
     "backend_unavailable": mo.ErrorCode.BACKEND_UNAVAILABLE,
     "resource_unavailable": mo.ErrorCode.RESOURCE_UNAVAILABLE,
     "resource_not_ready": mo.ErrorCode.RESOURCE_NOT_READY,
+    # Round-8 K6: an unknown reference is a usage error, never a retryable
+    # "not prepared yet" (that misclassification hid a missing job row).
+    "not_found": mo.ErrorCode.NOT_FOUND,
     "revision_conflict": mo.ErrorCode.REVISION_CONFLICT,
     # P3 (round 3): "preflight fingerprint does not match the submitted plan"
     # is a caller-side input error, never backend_failure.
@@ -271,11 +274,22 @@ class _ControllerStatus:
         return value if value.startswith("op_") else ""
 
     def list_tasks(
-        self, *, status: str | None = None, limit: int = 50, workspace_id: str = ""
+        self,
+        *,
+        status: str | None = None,
+        status_group: str | None = None,
+        limit: int = 50,
+        workspace_id: str = "",
     ) -> dict[str, Any]:
         del workspace_id
         try:
-            return dict(self._client.list_tasks(status=status, limit=limit))
+            # Round-8 K5: forward the family filter so the Controller applies it
+            # (one authority) instead of filtering a page after the fact.
+            return dict(
+                self._client.list_tasks(
+                    status=status, status_group=status_group, limit=limit
+                )
+            )
         except ControllerClientError as exc:
             raise _tool_error("list_tasks", exc) from None
 

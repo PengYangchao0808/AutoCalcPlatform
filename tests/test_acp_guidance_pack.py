@@ -190,7 +190,7 @@ def test_wire_syntax_guidance_present_v1_1_0() -> None:
     prompt-side gap (reports/acp2_mcp_guidance_20261030).
     """
     batch = read_guide("workflow.BatchOptimize")
-    assert batch["version"] == "1.3.0"  # per-role SP + mirror rule (round-7)
+    assert batch["version"] == "1.4.0"  # round-8: levels/mirror/items guidance
     steps = batch["sections"]["steps"]
     assert 'role:"ts"' in steps
     assert "默认按 INT" in steps
@@ -242,7 +242,7 @@ def test_round7_singlepoint_sp_out_layouts_are_both_named() -> None:
     from acp.api.guidance_pack import get_guide
 
     topic = get_guide("topic.artifact_locating")
-    assert topic.version == "1.3.0"
+    assert topic.version == "1.4.0"
     fields = topic.sections["result_fields"]
     assert "<job_dir>/sp.out" in fields
     assert "<job_dir>/WORK/05_SP/sp.out" in fields

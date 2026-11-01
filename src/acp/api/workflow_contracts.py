@@ -18,11 +18,17 @@ from typing import Any
 
 from acp.api.guidance_pack import PACK_VERSION as GUIDANCE_PACK_VERSION
 from acp.api.guidance_pack import workflow_guide_map
-from acp.api.submission_contract import WORKFLOW_CONTRACTS
+from acp.api.submission_contract import (
+    BATCH_SOURCE_TYPES,
+    SIMPLE_SOURCE_TYPES,
+    WORKFLOW_CONTRACTS,
+)
 from acp.catalog import WORKFLOW_CATALOG
+from acp_services.store.records import JobStatus
 
 __all__ = [
     "ACTIVE_WORKFLOWS",
+    "SOURCE_SHAPE_BY_WORKFLOW",
     "canonical_workflow",
     "describe_workflow",
     "workflow_suggestion",
@@ -42,17 +48,153 @@ _COVERAGE: dict[str, str] = {
     "scan": "partial",
 }
 
+#: Round-8 #1: four *different* input-source shapes coexist and the same field
+#: name does not always mean the same thing.  This table is a static, human/machine
+#: readable projection for discovery only — validation stays with
+#: :data:`acp.api.submission_contract.WORKFLOW_CONTRACTS` and the runtime
+#: consumers (a table must never become a second parser).  Each workflow's
+#: published block carries its entry under ``source_shape`` and the short
+#: ``carrier`` key under ``input.source_shape``.
+SOURCE_SHAPE_BY_WORKFLOW: dict[str, dict[str, Any]] = {
+    "Confsearch": {
+        "carrier": "source_type+inline_text",
+        "enum": sorted(SIMPLE_SOURCE_TYPES),
+        "notes": (
+            "input.source_type names the encoding of input.source/input.smiles/"
+            "input.xyz_text; charge/multiplicity ride in the same envelope"
+        ),
+    },
+    "PESsearch": {
+        "carrier": "source_object",
+        "enum": ["structure_asset", "task_artifact", "xyz_text"],
+        "notes": (
+            "input.source is an object (BondLengthScanSource) with its own "
+            "source_type; the top-level input.source_type is still the simple "
+            "chemistry envelope, not the scan source"
+        ),
+    },
+    "BatchOptimize": {
+        "carrier": "batch_structures",
+        "enum": sorted(BATCH_SOURCE_TYPES),
+        "notes": (
+            "non-empty input.items requires input.source_type=batch_structures "
+            "(rule=missing_source_type); from_artifact/items_file need no source_type"
+        ),
+    },
+    "scan": {
+        "carrier": "source_type+inline_text",
+        "enum": sorted(SIMPLE_SOURCE_TYPES),
+        "notes": (
+            "same chemistry envelope as the simple workflows; scan coordinates "
+            "ride in input.coordinate/input.scan_coordinates or method"
+        ),
+    },
+    "singlepoint": {
+        "carrier": "source_type+inline_text",
+        "enum": sorted(SIMPLE_SOURCE_TYPES),
+        "notes": (
+            "chemistry envelope: input.source/input.xyz_text/input.smiles "
+            "+ charge/multiplicity"
+        ),
+    },
+    "optimize": {
+        "carrier": "source_type+inline_text",
+        "enum": sorted(SIMPLE_SOURCE_TYPES),
+        "notes": (
+            "chemistry envelope: input.source/input.xyz_text/input.smiles "
+            "+ charge/multiplicity"
+        ),
+    },
+    "frequency": {
+        "carrier": "source_type+inline_text",
+        "enum": sorted(SIMPLE_SOURCE_TYPES),
+        "notes": (
+            "chemistry envelope: input.source/input.xyz_text/input.smiles "
+            "+ charge/multiplicity"
+        ),
+    },
+    "xtb_optimize": {
+        "carrier": "source_type+inline_text",
+        "enum": sorted(SIMPLE_SOURCE_TYPES),
+        "notes": "chemistry envelope; the GFN level rides in method.levels.xtb_opt",
+    },
+    "irc": {
+        "carrier": "source_reference",
+        "enum": [],
+        "notes": (
+            "input.source_job_id + input.source_product_id identify the verified "
+            "TS result; input.ts_source is server-derived and must not be hand-written"
+        ),
+    },
+    "tsmode": {
+        "carrier": "source_reference",
+        "enum": [],
+        "notes": (
+            "input.source_job_id (+ entry_id/source_mode_index) selects the "
+            "frequency source bundle; the API rewrites source_type to tsmode_bundle"
+        ),
+    },
+    "XtbPathSearch": {
+        "carrier": "frozen_request",
+        "enum": [],
+        "notes": (
+            "input.path_request is the frozen pes2ts_xtb_path_request_v1 "
+            "payload (upstream-owned)"
+        ),
+    },
+    "OrcaGradient": {
+        "carrier": "frozen_request",
+        "enum": [],
+        "notes": (
+            "input.gradient_request is the frozen "
+            "pes2ts_orca_gradient_request_v1 payload (upstream-owned)"
+        ),
+    },
+    "XtbConstrainedOpt": {
+        "carrier": "frozen_request",
+        "enum": [],
+        "notes": (
+            "input.constrained_opt_request is the frozen "
+            "pes2ts_xtb_constrained_opt_request_v1 payload (upstream-owned)"
+        ),
+    },
+    "casscf": {
+        "carrier": "uncontracted",
+        "enum": [],
+        "notes": (
+            "no published submit schema; use the CLI/Workbench form and treat "
+            "unknown keys as unsafe"
+        ),
+    },
+    "nmr": {
+        "carrier": "uncontracted",
+        "enum": [],
+        "notes": (
+            "no published submit schema; use the CLI/Workbench form and treat "
+            "unknown keys as unsafe"
+        ),
+    },
+}
+
 _STATUS_VOCABULARY: dict[str, Any] = {
     "envelope": {"ok": "the call succeeded", "error": "the call failed"},
-    "task_state": [
-        "queued",
-        "running",
-        "paused",
-        "waiting_review",
-        "failed",
-        "cancelled",
-        "completed",
-    ],
+    # Round-8 #2: the ten real scheduler states (acp_services.store.records),
+    # not the seven-value subset an older projection published.  Filtering is
+    # exact, so ``status=starting`` used to return an empty list with no hint.
+    "task_state": [status.value for status in JobStatus],
+    "filter_semantics": (
+        "exact match on task_state; use status_group for a family "
+        "(starting/pending/running are all live work)"
+    ),
+    "groups": {
+        "active": [status.value for status in JobStatus if status.is_active],
+        "terminal": [status.value for status in JobStatus if status.is_terminal],
+        "running_now": [
+            JobStatus.STARTING.value,
+            JobStatus.PENDING.value,
+            JobStatus.RUNNING.value,
+        ],
+    },
     "legacy_alias": "status mirrors state for older clients",
 }
 
@@ -66,11 +208,12 @@ _CONFSEARCH_CONSTRAINTS = (
 _BATCH_CONSTRAINTS = (
     "method.batch_roles is authoritative per role: write method/basis and "
     "sp_method/sp_basis inside batch_roles.int and batch_roles.ts",
-    "top-level single_point_method/single_point_basis (and the sp_method/sp_basis "
-    "aliases) may only mirror batch_roles.int.sp_method/sp_method; if that int "
-    "role/field is missing the submission is refused with rule=missing_role_mirror "
-    "(never silently dropped), and a role without sp_* executes its own "
-    "optimization level — ts never inherits int's single-point level",
+    "every top-level optimization_*/single_point_*/sp_* plus temperature/"
+    "pressure/scale_factor only mirrors the int role; a missing role/field or a "
+    "differing value is refused (missing_role_mirror / shadowed_field), never "
+    "silently ignored — ts never inherits int's single-point level",
+    "non-empty input.items requires input.source_type=batch_structures "
+    "(rule=missing_source_type); from_artifact/items_file need no source_type",
     "selected_ids belongs to input, not method",
     "one scheduler task carries one structure (single_flat layout)",
 )
@@ -78,7 +221,7 @@ _BATCH_CONSTRAINTS = (
 _CONFSEARCH_INPUT_PROPERTIES: dict[str, Any] = {
     "source_type": {
         "type": "string",
-        "enum": ["smiles", "xyz_text", "structure_asset"],
+        "enum": sorted(SIMPLE_SOURCE_TYPES),
         "description": "Input encoding; Workbench sends it with source.",
     },
     "source": {"type": "string", "description": "SMILES, XYZ text, or asset path."},
@@ -100,7 +243,15 @@ _BATCH_INPUT_PROPERTIES: dict[str, Any] = {
         "type": "string",
         "description": "Source task reference (stage payloads / selection provenance).",
     },
-    "source_type": {"type": "string", "enum": ["batch_structures"]},
+    "source_type": {
+        "type": "string",
+        "enum": sorted(BATCH_SOURCE_TYPES),
+        "description": (
+            "Required whenever input.items is non-empty (rule=missing_source_type): "
+            "the platform never infers the batch carrier from the items list. "
+            "Omit it for the from_artifact/items_file carriers."
+        ),
+    },
     "items": {
         "type": "array",
         "items": {"type": "object"},
@@ -373,7 +524,7 @@ def _confsearch_block() -> dict[str, Any]:
                     "protocol": "censo-crest",
                     "refinement_policy": "rank1",
                     "levels": {
-                        "dft_opt": {"engine": "orca", "functional": "wB97M-V"},
+                        "dft_opt": {"engine": "orca", "functional": "r2SCAN-3c"},
                         "refinement_sp": {"engine": "orca", "functional": "wB97M-V"},
                     },
                 },
@@ -407,6 +558,11 @@ def _batch_block() -> dict[str, Any]:
             "properties": properties,
             "enums": enums,
             "levels": _level_table("BatchOptimize"),
+            "levels_note": (
+                "level values are type/enum-checked only; preflight publishes the "
+                "effective opt_initial_hessian/opt_recalc_hess per role as "
+                "effective.roles.<role>.hessian_resolution"
+            ),
             "additional_properties": False,
         },
         "resources": {"properties": _RESOURCE_PROPERTIES},
@@ -430,6 +586,21 @@ def _batch_block() -> dict[str, Any]:
                 "workflow": "BatchOptimize",
                 "input": {"items_file": "inputs/items.json"},
                 "method": {"profile": "opt_only"},
+                "resources": {"nproc": 4, "mem": "8GB"},
+            },
+            {
+                # TS-only batch: no top-level mirror at all.  A flat
+                # optimization_* next to a missing/partial int role is refused
+                # (missing_role_mirror), so this is the shape to copy.
+                "workflow": "BatchOptimize",
+                "input": {
+                    "source_type": "batch_structures",
+                    "items": [{"xyz": "2\nTAG: TS\nH 0 0 0\nH 0 0 0.7\n"}],
+                },
+                "method": {
+                    "profile": "opt_freq",
+                    "batch_roles": {"ts": {"role": "ts", "method": "r2SCAN-3c"}},
+                },
                 "resources": {"nproc": 4, "mem": "8GB"},
             },
         ],
@@ -747,7 +918,13 @@ def _example_level(schema_id: str) -> dict[str, Any]:
 
 _IRC_CONSTRAINTS = (
     "the TS source is a formal task-result product; a bare coordinate file is not a TS",
-    "runner requires the verified ts_source provenance (irc_ts_source_v1)",
+    "input.source_job_id + input.source_product_id are the only writable source "
+    "reference: the platform derives the irc_ts_source_v1 provenance from them "
+    "at submit time",
+    "do NOT hand-write input.ts_source: a partial object is refused with "
+    "rule=irc_ts_source_partial; a complete object is accepted only so a replay "
+    "can be compared for equality (the derived provenance wins)",
+    "the CLI --ts-provenance flag is the manual/legacy path, not the MCP path",
     "directions are forward, reverse or both; a single exhausted direction is not "
     "a confirmed connection",
 )
@@ -836,9 +1013,11 @@ def describe_workflow(workflow: str) -> dict[str, Any]:
             {
                 "workflow": "irc",
                 "input": {
+                    # No ts_source: it is server-derived from this pair.  A
+                    # hand-written partial object used to pass preflight and
+                    # then fail the manager's equality check at submit.
                     "source_job_id": "20260101_001_BatchOptimize",
                     "source_product_id": "ts_candidate",
-                    "ts_source": {"schema": "irc_ts_source_v1"},
                     "directions": ["forward", "reverse"],
                 },
                 "method": {"maxpoints": 40},
@@ -858,7 +1037,12 @@ def describe_workflow(workflow: str) -> dict[str, Any]:
             },
             "ts_source": {
                 "type": "object",
-                "description": "Resolved provenance (irc_ts_source_v1).",
+                "description": (
+                    "Server-derived provenance (irc_ts_source_v1). Omit it — the "
+                    "platform fills it from source_job_id/source_product_id. A "
+                    "complete replayed object is only compared for equality; a "
+                    "partial one is refused (rule=irc_ts_source_partial)."
+                ),
             },
             "ts_provenance": {"type": "object", "description": "CLI --ts-provenance-json carrier."},
             "input_role": {"type": "string", "description": "transition_state | intermediate."},
@@ -975,6 +1159,16 @@ def describe_workflow(workflow: str) -> dict[str, Any]:
             ),
             "status_vocabulary": _STATUS_VOCABULARY,
         }
+    shape = SOURCE_SHAPE_BY_WORKFLOW.get(canonical)
+    if shape is not None:
+        # Round-8 #1: project the *real* source shape next to the contract so an
+        # agent stops guessing whether input.source means a SMILES string, an
+        # object, an items list or a job reference.  Projection only — it never
+        # participates in validation.
+        block["source_shape"] = dict(shape)
+        input_block = block.get("input")
+        if isinstance(input_block, dict):
+            input_block["source_shape"] = shape["carrier"]
     guide_id = workflow_guide_map().get(canonical)
     if guide_id is not None:
         block["guide_ref"] = {

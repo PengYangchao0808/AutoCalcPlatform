@@ -62,7 +62,9 @@ def test_step_omission_is_valid() -> None:
 
     validate_workflow_submission(
         "irc",
-        input={"source_job_id": "j", "source_product_id": "p", "ts_source": {"schema": "irc_ts_source_v1"}},
+        # ts_source is server-derived (round-8): omit it; a partial object is
+        # refused at the submit boundary with rule=irc_ts_source_partial.
+        input={"source_job_id": "j", "source_product_id": "p"},
         method={"maxpoints": 40},
         resources=None,
     )

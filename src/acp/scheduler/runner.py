@@ -484,6 +484,30 @@ def _materialize_tsmode_bundle(inp: dict[str, Any], inputs_dir: Path) -> Path | 
     return bundle_path
 
 
+BATCH_ITEMS_SOURCE_TYPE_ERROR = (
+    "BatchOptimize input items were not materialized: set "
+    'input.source_type="batch_structures" (required when input.items is used), '
+    "or provide from_artifact/items_file"
+)
+
+
+def reject_unmaterialized_batch_items(inp: Mapping[str, Any]) -> None:
+    """Fail the dispatch when ``input.items`` cannot be materialized.
+
+    ``materialize_job_input`` expands ``items`` only under
+    ``source_type="batch_structures"``; without that declaration the payload is
+    silently downgraded to a one-structure job (or dies later with a message
+    that names no field).  The submit boundary already refuses this payload, so
+    this guard is defence-in-depth for direct/legacy callers: it names the
+    field and both valid carriers before anything is spawned (round-8 一.1).
+    """
+    if not inp.get("items"):
+        return
+    if str(inp.get("source_type") or "") == "batch_structures":
+        return
+    raise ValueError(BATCH_ITEMS_SOURCE_TYPE_ERROR)
+
+
 def materialize_job_input(
     inp: dict[str, Any],
     inputs_dir: Path,
@@ -1576,6 +1600,7 @@ class JobRunner:
             return cmd
 
         if wf == "BatchOptimize":
+            reject_unmaterialized_batch_items(inp)
             artifact = inp.get("from_artifact")
             items_file = inp.get("items_file")
             if artifact:
@@ -2372,8 +2397,10 @@ class JobRunner:
 
 
 __all__ = [
+    "BATCH_ITEMS_SOURCE_TYPE_ERROR",
     "JobRunner",
     "JobRunnerRemoteProtocol",
     "find_workflow_state",
     "materialize_job_input",
+    "reject_unmaterialized_batch_items",
 ]

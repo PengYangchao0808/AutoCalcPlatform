@@ -387,6 +387,67 @@ def _is_optfreq_removal_line(
     return any("Opt Freq" in d_txt or "optfreq" in d_txt.lower() for _, d_txt in deleted)
 
 
+# ── Amendment V: round-8 ORCA failure reporting (classification + details) ──
+
+# The round-8 wave replaced the four-pattern classifier with a documented
+# pattern block plus a structured ``failure_details`` surface.  Sanctioned
+# scopes: the contiguous module block from ``_SCF_NOT_CONVERGED_PATTERNS``
+# through ``_failure_summary`` (pattern lists, markers, limits, the text
+# classifier and the details/summary helpers) and the ``classify_orca_failure``
+# body.  Nothing else in orca.py may grow.
+
+_AMENDMENT_V_BLOCK_START = "_SCF_NOT_CONVERGED_PATTERNS"
+_AMENDMENT_V_BLOCK_END_FUNC = "_failure_summary"
+_AMENDMENT_V_ORCA_FUNCS = ("classify_orca_failure", "_failure_message")
+
+
+def _amendment_v_block(worktree_src: str) -> tuple[int, int] | None:
+    lines = worktree_src.splitlines()
+    start = None
+    for idx, line in enumerate(lines):
+        if line.startswith(_AMENDMENT_V_BLOCK_START):
+            start = idx + 1
+            break
+    if start is None:
+        return None
+    end_range = _func_ranges(worktree_src).get(_AMENDMENT_V_BLOCK_END_FUNC)
+    if end_range is None:
+        return None
+    return (start, end_range[1])
+
+
+def _is_amendment_v_addition(ln: int, txt: str, worktree_src: str) -> bool:
+    """Allowlisted ``orca.py`` additions for the round-8 failure-report wave."""
+    block = _amendment_v_block(worktree_src)
+    if block is not None and block[0] <= ln <= block[1]:
+        return True
+    ranges = _func_ranges(worktree_src)
+    return any(
+        (rng := ranges.get(name)) is not None and rng[0] <= ln <= rng[1]
+        for name in _AMENDMENT_V_ORCA_FUNCS
+    )
+
+
+def _is_amendment_v_deletion(ln: int, baseline_src: str) -> bool:
+    """Sanctioned ``orca.py`` deletions stay inside the baseline classifier."""
+    ranges = _func_ranges(baseline_src)
+    return any(
+        (rng := ranges.get(name)) is not None and rng[0] <= ln <= rng[1]
+        for name in _AMENDMENT_V_ORCA_FUNCS
+    )
+
+
+def _amendment_v_teeth(worktree: str) -> list[str]:
+    """Teeth: the failure surface exists and host paths are redacted."""
+    issues: list[str] = []
+    for needle in ("_failure_details", "_classify_failure_text", "_failure_summary"):
+        if needle not in worktree:
+            issues.append(f"  Amendment V: orca.py missing {needle}")
+    if "_redact_host_paths" not in worktree:
+        issues.append("  Amendment V: host-path redaction helper missing")
+    return issues
+
+
 # ── Amendment Z: round-5 IRC endpoint evidence + step/initial_hessian guard ──
 
 # The round-5 PR-02/PR-04 changes are narrow: the strict single-frame endpoint
@@ -2800,6 +2861,8 @@ def test_algorithm_body_untouched() -> None:
                     continue
                 if _is_amendment_u_orca_addition(ln, txt, worktree):
                     continue
+                if _is_amendment_v_addition(ln, txt, worktree):
+                    continue
                 if _is_optfreq_removal_line(ln, txt, deleted, build_range):
                     optfreq_added_count += 1
                     continue
@@ -2847,6 +2910,7 @@ def test_algorithm_body_untouched() -> None:
             violations.extend(_amendment_r_orca_teeth(worktree))
             violations.extend(_amendment_s_teeth(worktree))
             violations.extend(_amendment_u_orca_teeth(worktree))
+            violations.extend(_amendment_v_teeth(worktree))
             continue
 
         if fp == "src/cccp/qc/interfaces/censo.py":
@@ -3011,6 +3075,11 @@ def test_deleted_lines_in_target_regions() -> None:
                 (ln, t)
                 for ln, t in bad_entries
                 if not _is_amendment_z_orca_deletion(ln, baseline_src)
+            ]
+            bad_entries = [
+                (ln, t)
+                for ln, t in bad_entries
+                if not _is_amendment_v_deletion(ln, baseline_src)
             ]
             bad_entries = [
                 (ln, t)

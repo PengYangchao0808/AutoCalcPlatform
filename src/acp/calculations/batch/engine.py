@@ -32,7 +32,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Final, Literal, TypeAlias
+from typing import Any, Final, Literal, TypeAlias
 
 from acp.calculations.batch._items import (
     BatchCalculationItem,
@@ -412,6 +412,12 @@ class BatchOptimizeEngine:
         self._active_methods: BatchMethodOptions = methods or BatchMethodOptions()
         self._active_layout_mode: BatchLayoutMode = "batch"
         self._progress_reporter: ProgressReporter | None = progress_reporter
+        #: Per-item thermochemistry resolved once per run (payload, source).
+        self._thermochemistry_cache: dict[
+            str, tuple[Mapping[str, Any] | None, str | None]
+        ] = {}
+        #: Per-item stage facts merged into the structure product metadata.
+        self._item_stage_facts: dict[str, dict[str, object]] = {}
 
     @property
     def batch_root(self) -> Path:
@@ -509,6 +515,10 @@ class BatchOptimizeEngine:
                 "charge": record.charge,
                 "multiplicity": record.multiplicity,
                 "state_id": record.state_id,
+                # Round-8 三.4/三.5(1): only values actually parsed from this
+                # item's own steps — absent fields are omitted, never zeroed.
+                **self._item_thermochemistry_values(record),
+                **self._hessian_facts(item, record=record),
             },
             "code_release": str(platform_version),
         }
@@ -645,6 +655,7 @@ class BatchOptimizeEngine:
         executed_count = 0
         self._provenance_records: list[dict[str, object]] = []
         self._item_stage_facts = {}
+        self._thermochemistry_cache = {}
         self._active_profile = profile
         self._active_workflow = workflow
 
@@ -1070,27 +1081,43 @@ class BatchOptimizeEngine:
             if progress is not None:
                 stage_key = _STEP_STAGE_KEYS[step_kind]
                 progress.reporter.start_stage(stage_key)
-                progress.reporter.set_live_metrics(
-                    [
+                live_metrics = [
+                    LiveMetric(
+                        key="batch_item",
+                        label_key="live.batch_item",
+                        value=f"{progress.item_number} / {progress.item_total}",
+                        kind="count",
+                        priority=100,
+                    ),
+                    LiveMetric(
+                        key="batch_step",
+                        label_key="live.batch_step",
+                        label=stage_label(stage_key),
+                        value=stage_key,
+                        kind="status",
+                        priority=90,
+                    ),
+                ]
+                step_hessian_source = self._step_hessian_source(item, step_kind)
+                if step_hessian_source is not None:
+                    # Round-8 三.5(1): the duplicate numerical Hessian is a
+                    # known cost — show which Hessian this step computes while
+                    # it runs (observation only; ORCA is asked for the same
+                    # work as before).
+                    live_metrics.append(
                         LiveMetric(
-                            key="batch_item",
-                            label_key="live.batch_item",
-                            value=f"{progress.item_number} / {progress.item_total}",
-                            kind="count",
-                            priority=100,
-                        ),
-                        LiveMetric(
-                            key="batch_step",
-                            label_key="live.batch_step",
-                            label=stage_label(stage_key),
-                            value=stage_key,
+                            key="hessian_source",
+                            label="Hessian",
+                            value=step_hessian_source,
                             kind="status",
-                            priority=90,
-                        ),
-                    ]
-                )
-            self._item_stage_facts[item.item_id] = {"stage_id": step_kind.value,
-                "method_fingerprint": resolved_methods.cache_key}
+                            priority=80,
+                        )
+                    )
+                progress.reporter.set_live_metrics(live_metrics)
+            self._item_stage_facts[item.item_id] = {
+                "stage_id": step_kind.value,
+                "method_fingerprint": resolved_methods.cache_key,
+            }
             step_dir = self._step_dir(item, step_kind)
             step_dir.mkdir(parents=True, exist_ok=True)
             step_electronic_state = self._step_state_payload(
@@ -1174,6 +1201,14 @@ class BatchOptimizeEngine:
                             )
                         },
                     }
+                    # Why did the optimization (and every rescue) fail?
+                    # ``failure_details`` comes from the QC layer
+                    # (``cccp.qc.interfaces.orca``) for the terminal attempt;
+                    # it is recorded verbatim so the manifest answers the
+                    # question without a log grep (round-8 三.3).
+                    prov["rescue_failure_details"] = current_result.metadata.get(
+                        "failure_details"
+                    )
                     rescue_meta = current_result.metadata.get("rescue_attempts")
                     if rescue_meta is not None:
                         prov["rescue"] = {
@@ -1220,6 +1255,19 @@ class BatchOptimizeEngine:
                 record.frequency.clear()
                 record.frequency["frequencies"] = frequency_values
                 record.frequency["status"] = "completed"
+                frequency_energy = current_result.energy
+                if isinstance(frequency_energy, (int, float)) and not isinstance(
+                    frequency_energy, bool
+                ):
+                    # Step-printed electronic energy (surfaced on the structure
+                    # product as energy_step="frequency"); never derived.
+                    record.frequency["energy_hartree"] = float(frequency_energy)
+                # Task-root-relative log pointer: thermochemistry is read from
+                # this exact file (never a log grep, never an absolute path).
+                if frequency_log_path is not None and Path(frequency_log_path).is_file():
+                    relative_log = self._task_relative(frequency_log_path)
+                    if relative_log is not None:
+                        record.frequency["log_file"] = relative_log
                 if is_ts:
                     valid, msg = _ts_frequency_judgment(current_result.frequencies)
                     record.frequency["ts_validation"] = "passed" if valid else "failed"
@@ -1583,7 +1631,7 @@ class BatchOptimizeEngine:
         for item in completed:
             self._materialize_optimization_trajectory(item)
             self._materialize_normal_modes(item, result_manifest)
-            self._materialize_thermochemistry(item, result_manifest)
+            thermochemistry_product_id = self._materialize_thermochemistry(item, result_manifest)
             source = self._resolve_output_geometry(item)
             if source is None:
                 logger.warning(
@@ -1619,6 +1667,14 @@ class BatchOptimizeEngine:
                           "stage_status": item.status, "frequency": item.frequency,
                           "failure_reason": item.error, "policy_version": 1,
                           "frequency_status": item.frequency.get("status", "pending"),
+                          # Round-8 三.4: the structure product carries the
+                          # step-printed electronic energy and points at the
+                          # thermochemistry product when one exists.
+                          **self._item_energy_metadata(item),
+                          # Round-8 三.5(1): the duplicated Hessian is visible.
+                          **self._hessian_facts(item),
+                          **({"thermochemistry_product_id": thermochemistry_product_id}
+                             if thermochemistry_product_id else {}),
                           **self._item_stage_facts.get(item.item_id, {})},
             )
         _ = result_manifest.write(self._result_root)
@@ -1703,25 +1759,71 @@ class BatchOptimizeEngine:
 
     def _materialize_thermochemistry(
         self, item: BatchCalculationItem, result_manifest: ResultManifest
-    ) -> None:
+    ) -> str | None:
         """Publish one item's ZPE/H/G/S as ``RESULT/thermochemistry/<id>.json``.
 
-        The values come from the thermochemistry step metadata (Shermo's
-        ``build_metadata`` projection) plus the Shermo sum for the ZPE; the
-        product is registered as ``THERMO_REPORT`` with its unit/source
-        provenance.  Only a successful step with a Gibbs energy registers a
-        product — no thermo step, no thermochemistry (never fake zeros).
-        Never fails the item: everything is logged at debug level.
+        Two sources, in priority order (round-8 三.4):
+
+        1. the thermochemistry step metadata (Shermo's ``build_metadata``
+           projection) plus the Shermo sum for the ZPE — the
+           ``opt_freq_sp_thermo`` profile;
+        2. the ORCA ``THERMOCHEMISTRY`` block of the item's **own frequency
+           log** — so ``opt_freq_sp`` (which has no Shermo step) still
+           publishes a first-class product instead of forcing a log grep.
+
+        An existing Shermo product is never overwritten (it wins), and when
+        neither source carries values **nothing** is registered — no
+        fabricated zeros.  Never fails the item: errors are logged and
+        reported as ``None``.
+
+        Returns the registered product id (``batch_<item>_thermochemistry``
+        for Shermo, ``thermochemistry_<item>`` for the frequency log), or
+        ``None`` when no thermochemistry product exists.
         """
-        if not item.thermochemistry:
-            return
-        try:
-            from acp.results.thermochemistry import (
-                batch_thermochemistry_relative_path,
-                build_batch_thermochemistry,
-                thermochemistry_product_metadata,
-                write_thermochemistry_json,
+        payload, source = self._item_thermochemistry(item)
+        if payload is None or source is None:
+            return None
+        from acp.results.thermochemistry import (
+            batch_thermochemistry_relative_path,
+            publish_if_available,
+        )
+
+        relative = batch_thermochemistry_relative_path(item.item_id)
+        if source == "shermo":
+            return publish_if_available(
+                self._result_root,
+                payload=payload,
+                relative_path=relative,
+                product_id=f"batch_{item.item_id}_thermochemistry",
+                label=f"{item.name} — thermochemistry (ZPE/H/G/S)",
+                metadata={"item_id": item.item_id, "tag": item.tag},
+                manifest=result_manifest,
             )
+        return publish_if_available(
+            self._result_root,
+            payload=payload,
+            relative_path=relative,
+            product_id=f"thermochemistry_{item.item_id}",
+            label=f"{item.name} — thermochemistry from frequency log (ZPE/H/G/S)",
+            metadata={
+                "item_id": item.item_id,
+                "tag": item.tag,
+                "source_step": "frequency",
+            },
+            keep_existing=True,
+            manifest=result_manifest,
+        )
+
+    # ── thermochemistry / energy / Hessian facts (round-8 三.4, 三.5) ─────
+
+    def _shermo_thermochemistry_payload(
+        self, item: BatchCalculationItem
+    ) -> Mapping[str, Any] | None:
+        """Project the item's thermochemistry step metadata (Shermo)."""
+        if not item.thermochemistry:
+            return None
+        try:
+            from acp.results.thermochemistry import build_batch_thermochemistry
 
             is_ts = item.tag == "TS"
             methods = self._active_methods
@@ -1730,7 +1832,7 @@ class BatchOptimizeEngine:
             if methods is not None:
                 method, basis = methods.for_step(StepKind.SINGLEPOINT, is_ts)
                 scale_factor = methods.scale_factor
-            payload = build_batch_thermochemistry(
+            return build_batch_thermochemistry(
                 item.thermochemistry,
                 item_id=item.item_id,
                 tag=item.tag,
@@ -1738,27 +1840,195 @@ class BatchOptimizeEngine:
                 basis=basis or None,
                 zpe_scale_factor=scale_factor,
             )
-            if payload is None:
-                return
-            relative = batch_thermochemistry_relative_path(item.item_id)
-            _ = write_thermochemistry_json(
-                self._result_root, payload, relative_path=relative
-            )
-            _ = result_manifest.add_product(
-                f"batch_{item.item_id}_thermochemistry",
-                f"{item.name} — thermochemistry (ZPE/H/G/S)",
-                relative,
-                ProductKind.THERMO_REPORT,
-                metadata=thermochemistry_product_metadata(
-                    payload, {"item_id": item.item_id, "tag": item.tag}
-                ),
-            )
         except (OSError, ValueError, TypeError, KeyError):
             logger.debug(
-                "batch: could not publish thermochemistry for %s; skipping",
+                "batch: could not build thermochemistry for %s; skipping",
                 item.item_id,
                 exc_info=True,
             )
+            return None
+
+    def _frequency_thermochemistry_payload(
+        self, item: BatchCalculationItem
+    ) -> Mapping[str, Any] | None:
+        """Parse the item's own ORCA frequency log (``None`` when absent)."""
+        if item.status not in {"completed", "skipped"}:
+            return None
+        if item.frequency.get("status") != "completed":
+            return None
+        if item.frequency.get("ts_validation") == "failed":
+            # Not a stationary point of the requested order: its printed
+            # thermochemistry is not the item's science, so nothing is
+            # published (the failure is reported instead).
+            return None
+        log_path = self._resolve_frequency_log(item)
+        if log_path is None:
+            return None
+        try:
+            from acp.results.thermochemistry import build_frequency_thermochemistry
+
+            is_ts = item.tag == "TS"
+            methods = self._active_methods
+            method = basis = None
+            if methods is not None:
+                method, basis = methods.for_step(StepKind.FREQUENCY, is_ts)
+            return build_frequency_thermochemistry(
+                log_path,
+                method=method or None,
+                basis=basis or None,
+            )
+        except (OSError, ValueError, TypeError, KeyError):
+            logger.debug(
+                "batch: could not parse frequency thermochemistry for %s; skipping",
+                item.item_id,
+                exc_info=True,
+            )
+            return None
+
+    def _item_thermochemistry(
+        self, item: BatchCalculationItem
+    ) -> tuple[Mapping[str, Any] | None, str | None]:
+        """Resolve ``(payload, source)`` once per item per run.
+
+        ``source`` is ``"shermo"`` (thermochemistry step) or ``"frequency"``
+        (ORCA frequency log); ``(None, None)`` when neither carries values.
+
+        Only positive resolutions are cached: the engine materializes
+        products once right after the optimization step (no frequency log yet)
+        and again at the end, so a cached "nothing yet" would hide the
+        thermochemistry that the later steps produced.
+        """
+        cached = self._thermochemistry_cache.get(item.item_id)
+        if cached is not None:
+            return cached
+        payload = self._shermo_thermochemistry_payload(item)
+        if payload is not None:
+            resolved: tuple[Mapping[str, Any] | None, str | None] = (payload, "shermo")
+            self._thermochemistry_cache[item.item_id] = resolved
+            return resolved
+        payload = self._frequency_thermochemistry_payload(item)
+        if payload is not None:
+            resolved = (payload, "frequency")
+            self._thermochemistry_cache[item.item_id] = resolved
+            return resolved
+        return None, None
+
+    def _item_thermochemistry_values(self, record: BatchCalculationItem) -> dict[str, object]:
+        """ZPE/H/G values actually parsed for *record* (absent keys omitted).
+
+        Only fields the source really printed are returned — the projection
+        never substitutes 0 for a missing value.
+        """
+        payload, _source = self._item_thermochemistry(record)
+        if payload is None:
+            return {}
+        values: dict[str, object] = {}
+        for key in ("gibbs_hartree", "enthalpy_hartree", "zpe_hartree"):
+            value = payload.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                values[key] = float(value)
+        return values
+
+    def _item_energy_metadata(self, item: BatchCalculationItem) -> dict[str, object]:
+        """``energy_hartree`` / ``energy_source`` / ``energy_step`` for the item.
+
+        The value is the electronic energy a completed step printed: the
+        single-point step when the profile ran one, otherwise the frequency
+        step.  ``energy_source`` marks it as a step value (never a derived or
+        defaulted number) and ``energy_step`` names the step.
+        """
+        sp_energy = item.single_point.get("energy_hartree")
+        if isinstance(sp_energy, (int, float)) and not isinstance(sp_energy, bool):
+            return {
+                "energy_hartree": float(sp_energy),
+                "energy_source": "step",
+                "energy_step": StepKind.SINGLEPOINT.value,
+            }
+        freq_energy = item.frequency.get("energy_hartree")
+        if isinstance(freq_energy, (int, float)) and not isinstance(freq_energy, bool):
+            return {
+                "energy_hartree": float(freq_energy),
+                "energy_source": "step",
+                "energy_step": StepKind.FREQUENCY.value,
+            }
+        return {}
+
+    def _hessian_facts(
+        self,
+        item: BatchCalculationItem,
+        *,
+        record: BatchCalculationItem | None = None,
+        frequency_completed: bool | None = None,
+    ) -> dict[str, object]:
+        """Make the duplicated numerical Hessian cost visible (三.5(1)).
+
+        Observation only — it never changes what ORCA is asked to do.  A
+        completed frequency step always recomputes the full numerical Hessian
+        (ORCA ``NumFreq``) on top of the optimization's initial Hessian, and
+        the TS role's ``opt_initial_hessian="calculate"`` computes one too;
+        the projection names the source so the cost is visible instead of
+        silent.
+        """
+        source = record if record is not None else item
+        if frequency_completed is None:
+            frequency_completed = (
+                source.status in {"completed", "skipped"}
+                and source.frequency.get("status") == "completed"
+            )
+        if frequency_completed:
+            return {"hessian_recomputed": True, "hessian_source": "freq_numfreq"}
+        role_source = self._role_hessian_source(item)
+        if role_source is not None:
+            return {"hessian_recomputed": True, "hessian_source": role_source}
+        return {}
+
+    def _step_hessian_source(
+        self, item: BatchCalculationItem, step_kind: StepKind
+    ) -> str | None:
+        """Which Hessian *step_kind* computes for *item* (live status, 三.5(1))."""
+        if step_kind is StepKind.FREQUENCY:
+            # ORCA ``NumFreq`` always computes a fresh numerical Hessian.
+            return "freq_numfreq"
+        if step_kind is StepKind.OPTIMIZE:
+            return self._role_hessian_source(item)
+        return None
+
+    def _role_hessian_source(self, item: BatchCalculationItem) -> str | None:
+        """``opt_initial`` when the optimization role asks ORCA for a Hessian."""
+        methods = self._active_methods
+        if methods is None:
+            return None
+        try:
+            role_options = methods.resolve_role_options(item.tag == "TS")
+        except (TypeError, ValueError):
+            return None
+        if role_options.get("opt_initial_hessian") == "calculate":
+            return "opt_initial"
+        return None
+
+    def _task_relative(self, path: Path | None) -> str | None:
+        """Task-root-relative POSIX path (``None`` when outside/unknown)."""
+        if path is None:
+            return None
+        try:
+            return Path(path).resolve().relative_to(self.task_root.resolve()).as_posix()
+        except (OSError, ValueError):
+            return None
+
+    def _resolve_frequency_log(self, item: BatchCalculationItem) -> Path | None:
+        """Locate the item's frequency ORCA output without a directory walk."""
+        candidates: list[Path] = []
+        recorded = item.frequency.get("log_file")
+        if isinstance(recorded, str) and recorded:
+            candidates.append(self.task_root / recorded)
+        step_dir = self._step_dir(item, StepKind.FREQUENCY)
+        candidates.append(step_dir / "freq.out")
+        if step_dir.is_dir():
+            candidates.extend(sorted(step_dir.glob("*.out")))
+        for candidate in candidates:
+            if candidate.is_file():
+                return candidate
+        return None
 
     def _resolve_output_geometry(self, item: BatchCalculationItem) -> Path | None:
         """Resolve an item's optimized geometry."""

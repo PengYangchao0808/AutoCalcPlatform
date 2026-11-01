@@ -1,9 +1,16 @@
 """Bounded, read-only artifact discovery for the task status payload.
 
 The manifest (``RESULT/result_manifest.json``) is the product index; it does
-not carry digest/size, so this projection never invents them.  A descriptor is
-*not* a prepared ``ArtifactRef``: ``acp_prepare_artifact`` is still the step
-that produces the frozen reference, and only its answer is readable.
+not carry digest/generation, so this projection never invents them.  A
+descriptor is *not* a prepared ``ArtifactRef``: ``acp_prepare_artifact`` is
+still the step that produces the frozen reference, and only its answer is
+readable.
+
+Round-8: a descriptor is the **pre-prepare view but it is actionable**.  It
+carries the exact next call (``prepare.tool``/``prepare.arguments``) and the
+product's on-disk ``size_bytes`` (a plain ``stat`` of the already-validated
+``RESULT/<relative>`` path, ``None`` on any error).  Building a descriptor is
+still zero-side-effect: no operation row, no prepare, no transfer.
 """
 
 from __future__ import annotations
@@ -51,18 +58,45 @@ def _safe_token(value: object) -> str | None:
     return text if text and is_safe_artifact_token(text) else None
 
 
+def _product_size_bytes(root: Path, relative: str) -> int | None:
+    """On-disk size of ``RESULT/<relative>``, or ``None`` (never invented).
+
+    ``relative`` has already passed :func:`validate_artifact_relative_path`, so
+    this is a bounded ``stat`` under the caller's controlled read root.  Any
+    error (missing file, a directory, a permission problem, a race) means
+    "unknown", never a fabricated zero.
+    """
+    try:
+        return int((root / "RESULT" / relative).stat().st_size)
+    except (OSError, ValueError):
+        return None
+
+
+def _prepare_step(job_id: str | None, resource_id: str) -> dict[str, Any]:
+    """The exact ``acp_prepare_artifact`` call this descriptor points at."""
+    arguments: dict[str, Any] = {"purpose": "artifact", "artifact_id": resource_id}
+    if job_id:
+        arguments = {"job_id": job_id, **arguments}
+    return {"tool": "acp_prepare_artifact", "arguments": arguments}
+
+
 def describe_job_artifacts(
     task_dir: str | Path | None,
     *,
     limit: int = MAX_ARTIFACT_DESCRIPTORS,
     attempt: int | None = None,
+    job_id: str | None = None,
 ) -> tuple[list[dict[str, Any]], bool]:
     """Return ``(descriptors, truncated)`` for one task's manifest products.
 
     * ``task_dir`` is the caller's controlled read root for the **current**
       attempt (never a walk from the run root).
     * Only ``RESULT/``-relative paths and prepare-safe resource ids are
-      published; unknown sizes stay ``None`` and ``prepared`` stays ``False``.
+      published; an unreadable size stays ``None`` and ``prepared`` stays
+      ``False``.
+    * ``job_id`` (round-8) is echoed into ``prepare.arguments`` so the next MCP
+      call needs no lookup; omit it only when the caller genuinely does not know
+      the task (library use) — the key is then left out rather than faked.
     * Iteration stops at ``limit + 1`` products: the manifest's size is not
       allowed to cost more than the bound.
     """
@@ -98,8 +132,9 @@ def describe_job_artifacts(
             "relative_path": f"RESULT/{relative}",
             "kind": _KIND_ALIASES.get(raw_kind_value, raw_kind_value),
             "label": str(getattr(product, "label", "")),
-            "size_bytes": None,
+            "size_bytes": _product_size_bytes(root, relative),
             "prepared": False,
+            "prepare": _prepare_step(job_id, resource_id),
         }
         if attempt is not None:
             descriptor["attempt"] = int(attempt)
