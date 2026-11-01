@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import threading
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -46,10 +47,12 @@ from cccp.qc.interfaces.orca_ts import (
     ts_geom_block,
 )
 from cccp.qc.interfaces.route_render import (
+    AuxiliaryBasisError,
     RouteKeyword,
     orca_gfn_solvent_token,
     orca_keyword_context,
     render_route_line,
+    resolve_route_orbital_basis,
 )
 from cccp.qc.interfaces.xtb_scan import RelaxedScanPoint, RelaxedScanResult
 from cccp.qc.keyword_registry import (
@@ -62,9 +65,14 @@ from cccp.qc.keyword_registry import (
     resolve_implementation,
     scf_rank,
 )
-from cccp.qc.method_meta import method_meta, scf_constraint
+from cccp.qc.method_meta import is_orbital_basis, method_meta, scf_constraint
 from cccp.qc.translation import render_opt_geom_lines
-from cccp.software import SoftwareNotFoundError, orca_runtime_env, resolve_executable
+from cccp.software import (
+    SoftwareNotFoundError,
+    executable_refusal,
+    orca_runtime_env,
+    resolve_executable,
+)
 from cccp.utils import ensure_dir
 from cccp.utils.file_io import read_xyz, read_xyz_multiframe, write_xyz
 from cccp.utils.geometry_tools import LogParser
@@ -720,9 +728,194 @@ def _with_spin_metadata(metadata: dict[str, Any] | None, output_file: Path) -> d
     return merged
 
 
+# ── energy reporting (round-7 #7d) ──────────────────────────────────────
+#
+# A DLPNO-CCSD(T) output carries several energies that differ by hundreds of
+# kcal/mol: ``E(0)`` (the SCF *reference* energy), ``E(TOT)`` (CCSD total),
+# ``E(T)`` (perturbative-triples correction) and the final
+# ``FINAL SINGLE POINT ENERGY`` (the CCSD(T) total).  The result energy is the
+# final single-point energy and nothing else; the three DLPNO numbers are
+# reported as labelled metadata so a reader can audit the decomposition.  The
+# SCF reference can never be parsed as the correlated result.
+
+#: The single ``FINAL SINGLE POINT ENERGY`` line regex (also used by the CASSCF
+#: parser below).
+_FINAL_SINGLE_POINT_ENERGY_RE = re.compile(
+    r"FINAL SINGLE POINT ENERGY\s+([-+]?\d+\.\d+)"
+)
+_DLPNO_ENERGY_LINE_RE = re.compile(
+    r"^\s*(?P<key>E\(0\)|E\(TOT\)|E\(T\))(?=[\s.])[^\d\-+]*"
+    r"(?P<value>[-+]?\d+\.\d+)\s*$",
+    re.MULTILINE,
+)
+
+#: Tolerance used to decide whether the final single-point energy is the SCF
+#: reference (the broken-shape guard) or the correlated total.
+_ENERGY_MATCH_TOL = 1e-6
+
+E0_LABEL = "SCF reference energy (E(0))"
+E_TOT_LABEL = "CCSD total energy (E(TOT))"
+E_T_LABEL = "perturbative triples correction (E(T))"
+
+
+@dataclass(frozen=True)
+class OrcaEnergyReport:
+    """Named ORCA energy decomposition; ``result_hartree`` is the answer.
+
+    Attributes:
+        result_hartree: The reported molecule energy — the final
+            ``FINAL SINGLE POINT ENERGY`` (the DLPNO-CCSD(T)/SCF total).
+        result_source: Which printed field ``result_hartree`` came from:
+            ``final_single_point_energy`` or the explicit
+            ``e_tot_plus_e_t`` guard fallback.
+        result_label: Human-readable label of the reported value.
+        final_single_point_energy_hartree: Raw last
+            ``FINAL SINGLE POINT ENERGY`` (kept even when the guard rejects it).
+        scf_reference_hartree: ``E(0)`` — the SCF reference, never the result.
+        e0_hartree / e_tot_hartree / e_t_hartree: DLPNO numbers as printed.
+        dlpno_detected: Whether a DLPNO energy decomposition was found.
+        consistency: ``"final_matches_scf_reference"`` when the final value is
+            the SCF energy and the guard had to act; ``""`` otherwise.
+    """
+
+    result_hartree: float | None = None
+    result_source: str = "final_single_point_energy"
+    result_label: str = ""
+    final_single_point_energy_hartree: float | None = None
+    scf_reference_hartree: float | None = None
+    e0_hartree: float | None = None
+    e_tot_hartree: float | None = None
+    e_t_hartree: float | None = None
+    dlpno_detected: bool = False
+    consistency: str = ""
+
+    def to_metadata(self) -> dict[str, Any]:
+        """JSON-safe metadata block (labels travel with every number)."""
+        return {
+            "result_energy_hartree": self.result_hartree,
+            "result_energy_label": self.result_label,
+            "result_energy_source": self.result_source,
+            "final_single_point_energy_hartree": (
+                self.final_single_point_energy_hartree
+            ),
+            "scf_reference_hartree": self.scf_reference_hartree,
+            "scf_reference_label": E0_LABEL if self.e0_hartree is not None else None,
+            "e0_hartree": self.e0_hartree,
+            "e0_label": E0_LABEL if self.e0_hartree is not None else None,
+            "e_tot_hartree": self.e_tot_hartree,
+            "e_tot_label": E_TOT_LABEL if self.e_tot_hartree is not None else None,
+            "e_t_hartree": self.e_t_hartree,
+            "e_t_label": E_T_LABEL if self.e_t_hartree is not None else None,
+            "dlpno_detected": self.dlpno_detected,
+            "consistency": self.consistency,
+        }
+
+
+def _is_dlpno_method(method: str | None) -> bool:
+    return "dlpno" in str(method or "").lower()
+
+
+def parse_energy_report(text: str | None, *, method: str | None = None) -> OrcaEnergyReport:
+    """Parse the named energy decomposition out of one ORCA output text.
+
+    The reported result is the *last* ``FINAL SINGLE POINT ENERGY`` — the
+    correlated DLPNO-CCSD(T) total for a DLPNO run, the SCF energy otherwise.
+
+    Broken-shape guard: when a DLPNO decomposition is present but the final
+    single-point energy equals ``E(0)`` (ORCA printed no post-correlation
+    total), reporting it as the DLPNO result would be exactly the "SCF
+    reference labelled as CCSD(T)" defect.  In that case the result falls back
+    to ``E(TOT)+E(T)`` (the CCSD(T) total by definition) with an explicit
+    derived label; with no triples correction available the result is ``None``
+    (the task then fails rather than reporting the wrong energy).
+    """
+    body = text or ""
+    final: float | None = None
+    for match in _FINAL_SINGLE_POINT_ENERGY_RE.finditer(body):
+        final = float(match.group(1))
+
+    dlpno: dict[str, float] = {}
+    for match in _DLPNO_ENERGY_LINE_RE.finditer(body):
+        dlpno[match.group("key")] = float(match.group("value"))
+
+    e0 = dlpno.get("E(0)")
+    e_tot = dlpno.get("E(TOT)")
+    e_t = dlpno.get("E(T)")
+    detected = bool(dlpno)
+
+    def _report(
+        result: float | None,
+        *,
+        source: str,
+        label: str,
+        consistency: str = "",
+    ) -> OrcaEnergyReport:
+        return OrcaEnergyReport(
+            result_hartree=result,
+            result_source=source,
+            result_label=label,
+            final_single_point_energy_hartree=final,
+            scf_reference_hartree=e0,
+            e0_hartree=e0,
+            e_tot_hartree=e_tot,
+            e_t_hartree=e_t,
+            dlpno_detected=detected,
+            consistency=consistency,
+        )
+
+    if final is None:
+        return _report(None, source="final_single_point_energy", label="")
+
+    dlpno_like = detected or _is_dlpno_method(method)
+    if dlpno_like:
+        reference_like = (
+            e0 is not None and abs(final - e0) <= _ENERGY_MATCH_TOL
+        )
+        correlated_present = e_tot is not None and abs(e_tot - final) > _ENERGY_MATCH_TOL
+        if reference_like and correlated_present:
+            if e_t is not None:
+                return _report(
+                    e_tot + e_t,
+                    source="e_tot_plus_e_t",
+                    label=(
+                        "DLPNO-CCSD(T) total (E(TOT)+E(T)); the final single-point "
+                        "energy equals the SCF reference E(0) and is NOT used"
+                    ),
+                    consistency="final_matches_scf_reference",
+                )
+            return _report(
+                None,
+                source="unresolved",
+                label=(
+                    "DLPNO correlation present but FINAL SINGLE POINT ENERGY equals "
+                    "the SCF reference E(0); refusing to report it as CCSD(T)"
+                ),
+                consistency="final_matches_scf_reference",
+            )
+        label = "DLPNO-CCSD(T) total (FINAL SINGLE POINT ENERGY)"
+        if _is_dlpno_method(method) and not detected:
+            label = "DLPNO result (FINAL SINGLE POINT ENERGY)"
+        return _report(final, source="final_single_point_energy", label=label)
+
+    return _report(
+        final,
+        source="final_single_point_energy",
+        label="single-point energy (FINAL SINGLE POINT ENERGY)",
+    )
+
+
+def energy_report_for(output_file: Path | str, *, method: str | None = None) -> OrcaEnergyReport:
+    """Read *output_file* and return its :class:`OrcaEnergyReport` (never raises)."""
+    try:
+        text = Path(output_file).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        text = ""
+    return parse_energy_report(text, method=method)
+
+
 # ── CASSCF / NEVPT2 parsing (design doc §11, §12.1) ─────────────────────
 
-_FINAL_ENERGY_RE = re.compile(r"FINAL SINGLE POINT ENERGY\s+([-+]?\d+\.\d+)")
+_FINAL_ENERGY_RE = _FINAL_SINGLE_POINT_ENERGY_RE
 _NATURAL_OCCUPATION_RE = re.compile(r"^\s*N\[\s*(\d+)\]\s*=\s*([-+]?\d+\.\d+)\s*$", re.MULTILINE)
 _NATURAL_OCCUPATION_HEADER_RE = re.compile(
     r"Natural Orbital Occupation Numbers\s*?:?", re.IGNORECASE
@@ -1264,6 +1457,20 @@ def _read_endpoint_geometry(
     return np.asarray(coordinates, dtype=float).reshape((-1, 3))
 
 
+def _software_error_metadata(error: SoftwareNotFoundError) -> dict[str, Any]:
+    """Structured params for a resolution refusal (``rule=backend_unavailable``).
+
+    ``resolve_executable``/``require_executable`` attach ``.params`` when a
+    candidate exists but is another program (the GNOME Orca screen reader at
+    ``/usr/bin/orca``).  Carrying them into ``QCResult.metadata`` lets the task
+    layer surface the typed reason instead of a generic "ORCA failed" string.
+    """
+    params = getattr(error, "params", None)
+    if isinstance(params, dict) and params:
+        return {"software_unavailable": dict(params)}
+    return {}
+
+
 class ORCAInterface(QCInterfaceBase):
     """
     Interface for ORCA calculations.
@@ -1335,11 +1542,19 @@ class ORCAInterface(QCInterfaceBase):
         self.multiplicity = kwargs.get("multiplicity", 1)
 
     def _require_executable(self) -> str:
-        if self.executable is None:
-            raise SoftwareNotFoundError(
-                "ORCA executable not found. Add 'orca' to PATH or configure executables.orca.path."
-            )
-        return str(self.executable)
+        if self.executable is not None:
+            return str(self.executable)
+        # ``self.executable is None`` is authoritative for this interface: never
+        # re-resolve a runnable path here (that would let a later PATH change
+        # silently swap in a different binary and actually execute it).  Report
+        # the typed refusal when a candidate was rejected (GNOME Orca screen
+        # reader at /usr/bin/orca), otherwise the historical not-found error.
+        refusal = executable_refusal("orca", getattr(self, "exe_path", None))
+        if refusal is not None:
+            raise refusal
+        raise SoftwareNotFoundError(
+            "ORCA executable not found. Add 'orca' to PATH or configure executables.orca.path."
+        )
 
     def is_available(self) -> bool:
         return self.executable is not None
@@ -1463,6 +1678,18 @@ class ORCAInterface(QCInterfaceBase):
         meta = _resolve_method_meta(_method)
         basis_inline = True if meta is None else bool(meta.get("basis_inline", True))
 
+        # Round-7 #3: exactly ONE orbital basis may reach the ``!`` line.
+        # Identical duplicates (method string + basis field, or a duplicated
+        # route_extras token) are collapsed; two DISTINCT bases raise a typed
+        # ``rule=basis_conflict`` error instead of letting ORCA silently keep
+        # the last token.  The dedup set is built from the cleaned extras so a
+        # collapsed duplicate can never suppress the surviving basis token.
+        _route_basis = resolve_route_orbital_basis(
+            _method,
+            _basis if basis_inline else "",
+            _route_extras,
+        )
+        _route_extras = list(_route_basis.extras)
         _extras_upper = {str(x).upper() for x in _route_extras}
 
         _kw_family, _kw_implementation = orca_keyword_context(_method)
@@ -1647,10 +1874,17 @@ class ORCAInterface(QCInterfaceBase):
             # basis is a governed segment (T6): GFN-family values are
             # stripped with a warning by the renderer; an EMPTY basis keeps
             # its historical spacing slot (the `! B3LYP  Opt` double space).
-            _basis_segment: str | RouteKeyword = RouteKeyword("basis", _basis) if _basis else ""
+            # A basis already inlined in the method string is NOT emitted a
+            # second time (#3 duplicate collapse).
+            _basis_segments: list[str | RouteKeyword] = [_method]
+            if _route_basis.emit_field_basis and _basis:
+                _basis_segments.append(RouteKeyword("basis", _basis))
+            elif not _basis:
+                _basis_segments.append("")
+            _basis_segments.extend([route, *_route_segments])
             blocks.append(
                 render_route_line(
-                    [_method, _basis_segment, route, *_route_segments],
+                    _basis_segments,
                     context=(_kw_family, _kw_implementation),
                     seen=_extras_upper,
                 )
@@ -1695,6 +1929,16 @@ class ORCAInterface(QCInterfaceBase):
                         final_aux_j = blk["auxJ"]
                     if "auxC" in blk:
                         final_aux_c = blk["auxC"]
+            for _aux_field, _aux_value in (
+                ("aux_j_basis", final_aux_j),
+                ("aux_c_basis", final_aux_c),
+            ):
+                # An orbital basis name in an aux slot would be silently used
+                # as a fitting basis by ORCA — refuse at construction time.
+                if _aux_value and is_orbital_basis(str(_aux_value)):
+                    raise AuxiliaryBasisError(
+                        field_name=_aux_field, token=str(_aux_value)
+                    )
             if final_aux_j:
                 blocks.append(f'  auxJ  "{final_aux_j}"')
             if final_aux_c:
@@ -2191,6 +2435,7 @@ class ORCAInterface(QCInterfaceBase):
                 error_message=str(exc),
                 output_file=input_file,
                 log_file=output_file,
+                metadata=_software_error_metadata(exc),
             )
 
         if not success:
@@ -2835,14 +3080,22 @@ class ORCAInterface(QCInterfaceBase):
                 log_file=output_file,
             )
 
-        energy = LogParser.extract_energy(output_file, "orca")
+        # #7d: the reported molecule energy is the FINAL SINGLE POINT ENERGY
+        # (the DLPNO-CCSD(T) total for a correlated run); E(0)/E(TOT)/E(T)
+        # travel as labelled metadata and the SCF reference is never the
+        # reported result.
+        _energy_method = method if method is not None else self.method
+        energy_report = energy_report_for(output_file, method=_energy_method)
+        energy = energy_report.result_hartree
+        energy_metadata = {"energy_report": energy_report.to_metadata()}
 
         if energy is None:
             return QCResult(
                 success=False,
-                error_message="Could not extract energy",
+                error_message=energy_report.result_label or "Could not extract energy",
                 output_file=input_file,
                 log_file=output_file,
+                metadata=_with_spin_metadata(energy_metadata, output_file),
             )
 
         return QCResult(
@@ -2853,7 +3106,7 @@ class ORCAInterface(QCInterfaceBase):
             converged=True,
             output_file=input_file,
             log_file=output_file,
-            metadata=_with_spin_metadata(None, output_file),
+            metadata=_with_spin_metadata(energy_metadata, output_file),
         )
 
     def frequency(
@@ -3098,6 +3351,7 @@ class ORCAInterface(QCInterfaceBase):
                 error_message=str(exc),
                 output_file=input_file,
                 log_file=output_file,
+                metadata=_software_error_metadata(exc),
             )
         if not success:
             return QCResult(

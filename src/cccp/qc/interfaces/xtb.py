@@ -21,6 +21,7 @@ from cccp.qc.interfaces.xtb_scan import (
     RelaxedScanPoint,
     RelaxedScanResult,
     plan_from_dict,
+    validate_xcontrol_text,
     xcontrol_constraint_block,
 )
 from cccp.qc.interfaces.xtb_thermo import XTBThermoResult, _xyz_to_coord, run_xtb_enso
@@ -269,10 +270,14 @@ class XTBInterface:
 
         constraint_text = xcontrol_constraint_block(list(constraints))
         opt_block = f"  maxcycle={int(max_steps)}\n" if max_steps is not None else ""
-        xcontrol_path.write_text(
-            f"{constraint_text}\n{extra_control_text}\n$opt\n{opt_block}$end\n",
-            encoding="utf-8",
-        )
+        xcontrol_text = f"{constraint_text}\n{extra_control_text}\n$opt\n{opt_block}$end\n"
+        # Round-7 #7a: xTB only WARNS on a malformed ``$constrain`` directive
+        # and then optimizes unconstrained with exit code 0.  Validate the
+        # composed text (typed constraints + any raw extra control block)
+        # before the process starts so a bad directive is a submit refusal,
+        # never a "completed" unconstrained geometry.
+        validate_xcontrol_text(xcontrol_text)
+        xcontrol_path.write_text(xcontrol_text, encoding="utf-8")
 
         xtb_args = [
             executable,

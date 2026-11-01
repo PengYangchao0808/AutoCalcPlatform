@@ -545,8 +545,11 @@ def validate_scan_submission(
 
     try:
         normalize_scan_points(method_map, payload)
-    except _CoordinateError as error:
-        raise ValueError(str(error)) from error
+    except _CoordinateError:
+        # keep the typed CoordinateError (a ValueError subclass) so the boundary
+        # envelope keeps params{field,rule,fields} — never downgrade to a bare
+        # ValueError, which would make preflight/submit disagree on params.
+        raise
 
 
 # ── xtbmd_censo_energy flag emission (E7: runner ⇄ script_gen parity) ────

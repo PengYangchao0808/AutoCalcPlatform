@@ -203,6 +203,24 @@ class XTBPathInterface:
 
         input_file = output_dir / "path.inp"
         if path_inp_text is not None:
+            # Round-7 P1: an externally authored path.inp may carry $constrain
+            # text that xTB silently ignores (malformed distance directive).
+            # Validate it before spawning so the run fails instead of finishing
+            # "successfully" with the constraint dropped.
+            from cccp.qc.interfaces.xtb_scan import (
+                XtbConstraintSyntaxError,
+                validate_xcontrol_text,
+            )
+
+            try:
+                validate_xcontrol_text(path_inp_text)
+            except XtbConstraintSyntaxError as error:
+                return PathSearchResult(
+                    frame_paths=[],
+                    energies_hartree=[],
+                    success=False,
+                    error_message=f"invalid xTB constraint syntax in path.inp: {error}",
+                )
             input_file.write_text(path_inp_text, encoding="utf-8")
         else:
             input_file.write_text(

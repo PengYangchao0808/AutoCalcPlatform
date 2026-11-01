@@ -1,0 +1,28 @@
+{
+  "part_name": "screening",
+  "settings": {
+    "prog": "orca",
+    "func": "b97-3c",
+    "threshold": 6.0
+  },
+  "data": {
+    "CONF1": {
+      "energy": -154.912345,
+      "gsolv": -0.004521,
+      "grrho": 0.082341,
+      "gtot": -154.834525
+    },
+    "CONF3": {
+      "energy": -154.911876,
+      "gsolv": -0.004612,
+      "grrho": 0.082455,
+      "gtot": -154.834033
+    },
+    "CONF7": {
+      "energy": -154.9105,
+      "gsolv": -0.0047,
+      "grrho": 0.0825,
+      "gtot": -154.8327
+    }
+  }
+}

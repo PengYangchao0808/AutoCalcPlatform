@@ -54,6 +54,7 @@ from cccp.calculation.tasks.conformer_search import (
     execution_provenance,
     resolve_operation,
 )
+from cccp.qc.interfaces.xtb_scan import parse_constraint_evidence
 
 logger = logging.getLogger(__name__)
 
@@ -288,6 +289,12 @@ def run_xtb_constrained_opt(
         )
         opt_wall = time.perf_counter() - t0
     except _BACKEND_FAILURES as error:
+        failure_metadata: dict[str, Any] = {}
+        params = getattr(error, "params", None)
+        if isinstance(params, dict) and params:
+            # Typed refusals (e.g. the #7a $constrain syntax contract) carry
+            # rule/field for the submit-side error envelope.
+            failure_metadata["constraint_evidence"] = dict(params)
         return TaskResult(
             task=TaskKind.XTB_CONSTRAINED_OPT,
             status="failed",
@@ -295,6 +302,7 @@ def run_xtb_constrained_opt(
             error_kind=classify_failure(raised=error),
             errors=(error_text(error),),
             provenance=execution_provenance(backend_label, request),
+            metadata=failure_metadata,
         )
 
     opt_log_path = opt_dir / _OPT_LOG_NAME
@@ -315,6 +323,42 @@ def run_xtb_constrained_opt(
 
     log_text = opt_log_path.read_text(encoding="utf-8", errors="replace")
     opt_evidence = parse_opt_log(log_text)
+
+    # Round-7 #7a: xTB only WARNS when a ``$constrain`` directive is malformed
+    # ("not enough arguments to constrain a distance") and then optimizes
+    # WITHOUT the constraint with exit code 0.  That must be a FAILED task, not
+    # a completed unconstrained geometry.
+    constraint_evidence = parse_constraint_evidence(
+        log_text, requested=len(options.constraints)
+    )
+    if constraint_evidence["rejected"]:
+        dropped = "; ".join(constraint_evidence["rejection_lines"])
+        return TaskResult(
+            task=TaskKind.XTB_CONSTRAINED_OPT,
+            status="failed",
+            complete=False,
+            error_kind=ErrorKind.INVALID_INPUT,
+            errors=(
+                "xTB did not honor the requested constraint(s) — the run would be an "
+                f"UNCONSTRAINED optimization, so it is not reported as completed: {dropped}",
+            ),
+            artifacts=tuple(
+                artifact_ref(opt_dir / name, artifact_type, backend_label)
+                for name, artifact_type in (
+                    (_OPT_LOG_NAME, "log"),
+                    (_XCONTROL_NAME, "input"),
+                )
+                if (opt_dir / name).is_file()
+            ),
+            provenance=execution_provenance(backend_label, request),
+            metadata={
+                "constraint_evidence": constraint_evidence,
+                "opt": dict(opt_evidence),
+                "opt_dir": str(opt_dir),
+                "n_constraints": len(options.constraints),
+                "opt_wall_seconds": opt_wall,
+            },
+        )
 
     final_coords = None
     if (
@@ -416,6 +460,7 @@ def run_xtb_constrained_opt(
         "fix_atoms": list(options.fix_atoms) if options.fix_atoms is not None else None,
         "n_constraints": len(options.constraints),
         "physical_sp": sp_evidence,
+        "constraint_evidence": constraint_evidence,
     }
 
     return TaskResult(

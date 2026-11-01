@@ -58,8 +58,11 @@ GUIDE_FORMAT = "acp.guidance.v1"
 #: PESsearch unit/bond-side vocabulary (DA validation round,
 #: reports/acp2_mcp_guidance_20261030).  1.2.0: method-selection ladder and
 #: artifact-locating topics (agent feedback round 2).  1.3.0: task-level
-#: instructions (goal->chain routing, not per-workflow manuals).
-PACK_VERSION = "1.3.0"
+#: instructions (goal->chain routing, not per-workflow manuals).  1.4.0:
+#: task.find_transition_state states the pure-MCP publish dead end and the
+#: first-class inline role:"ts" path; artifact_locating names both sp.out
+#: layouts (round-7 external-agent feedback).
+PACK_VERSION = "1.4.0"
 
 #: Byte budgets (plan §4.2): UTF-8 bytes, not tokens.  A guide that would
 #: exceed a caller-supplied bound is returned with explicit omissions — never
@@ -123,8 +126,8 @@ _SHARED_EXECUTION = GuideEntry(
     guide_id="shared.execution",
     kind="shared",
     title="通用执行 Prompt（各工作流共用）",
-    version="1.0.0",
-    summary="所有工作流共用的执行约束：契约优先、复用工件、授权内直行、证据分级。",
+    version="1.1.0",
+    summary="所有工作流共用的执行约束：契约优先、复用工件、授权内直行、证据分级、初猜来源。",
     coverage="first_batch",
     sections={
         "body": (
@@ -153,8 +156,13 @@ _SHARED_EXECUTION = GuideEntry(
             "看不到的部分不推断为通过。\n"
             "9. 读取优化/SCF/方法/结构等实际证据。区分 requested、effective 和 executed；模型解释不是执行事实。"
             "缺失验证保留 unknown/inconclusive，证伪保留 refuted。\n"
-            "10. PES/scan 的 TS/INT 选点只产生初猜；初猜必须通过合法发布进入 BatchOptimize，再读取逐候选结果。"
-            "保存成功不是 TS 找到，Batch completed 也不是反应路径验证完成。\n"
+            "10. TS/INT 初猜优先从扫描/路径证据生成：默认 PESsearch 键长扫描（中小体系；同一键长轴多点、"
+            "能量曲线连续）；大体系、多坐标联动、或 PES 曲线分支切换/点稀疏导致 scan 效果不佳时用 scan"
+            "（relaxed/pointwise）逐点优化；已有冻结路径 payload 时用 XtbPathSearch 路径帧。"
+            "不推荐手工摆放结构作为初猜：手摆没有扫描能量/路径证据，平台不禁止，但指南不推荐；"
+            "若用户坚持手摆，必须说明其无证据性质，并靠频率（恰一个虚频/模式方向）与 IRC/端点验证补足，"
+            "不能当成已确认候选。PES/scan 的 TS/INT 选点也只产生初猜，必须通过合法发布进入 BatchOptimize，"
+            "再读取逐候选结果；保存成功不是 TS 找到，Batch completed 也不是反应路径验证完成。\n"
             "11. 资源选择：提交前读 acp_capabilities 的 capacity（准入视角的当前可用配额，"
             "非 OS 空闲），nproc/mem 取 available 之下且不超过 admission.limits 的值；不要凭空猜核心数。\n"
             "12. 只对有依据、在范围内且预算允许的失败项或缺失信息追加计算；限制总候选数与补算轮次。\n"
@@ -240,10 +248,15 @@ _BATCHOPTIMIZE = _workflow_entry(
         "候选；未确认的推荐点不能直接当最终输入。\n"
         "2. 每个 item 的用途角色必须是 wire 级显式，TS 的两种正确表达：①inline item 携带 role/tag 字段"
         '（role:"ts"）；②from_artifact 候选经 review 确认的角色。关键：未标角色的 inline item 默认按 '
-        "INT（最低点优化）执行，method.batch_roles 的 ts 配置不会自动套用到未标角色的 item，当前预检不提示"
-        "该失配——提交前逐 item 自查角色标注。TS 表示尝试过渡态优化的初猜，INT 表示相应最低点优化用途。\n"
+        "INT（最低点优化）执行，method.batch_roles 的 ts 配置不会自动套用到未标角色的 item；预检的 "
+        "submission_analysis.effective.items 会列出每个 inline item 解析出的 role/role_source"
+        "（未标注 → INT），提交前仍须确认角色标注意图。TS 表示尝试过渡态优化的初猜，INT 表示相应最低点"
+        "优化用途。\n"
         "3. 读取 profile 和生效配置；需要频率/单点/热化学时选择包含这些阶段的配置，不把 opt_only 报成 opt_freq。\n"
-        "4. 核对每项电荷/多重度、优化/频率/单点级别、温度与资源；遵守 batch_roles 与平铺参数一致性检查。\n"
+        "4. 核对每项电荷/多重度、优化/频率/单点级别、温度与资源。单点级别写在 batch_roles.<role>."
+        "sp_method/sp_basis（每 role 一份，ts 与 int 各自生效，ts 不会继承 int 的 sp_*）；顶层 "
+        "single_point_method/single_point_basis（或 sp_method/sp_basis 别名）只是 int role 的镜像，"
+        "缺 int role/字段会被 422（rule=missing_role_mirror）而不是静默丢弃。\n"
         "5. 预检、提交与等待；读取逐 item/stage 的成功、失败、跳过及原因。\n"
         "6. 对成功优化结果读取适用频率和模式验证；报告原生判定及缺项。\n"
         "7. 只对可比的物种/方法/能量定义/环境做比较；区分电子能与热化学校正，不重复加校正。\n"
@@ -261,7 +274,7 @@ _BATCHOPTIMIZE = _workflow_entry(
         "topic.method_energy_comparability",
         "topic.partial_failure_recovery",
     ),
-    version="1.2.0",
+    version="1.3.0",
 )
 
 _PESSEARCH = _workflow_entry(
@@ -277,11 +290,16 @@ _PESSEARCH = _workflow_entry(
     (
         "当前工作流：PESsearch。键长势能面扫描优先采用此入口。\n"
         "1. 核对用户给定或确认的反应假设、关键原子及结构映射；缺少关键位点则询问，不假称已运行自动位点识别。\n"
-        "2. 读取当前可执行的扫描模式和请求契约；核对原子索引约定（0-based）、坐标类型/单位（合法 unit："
-        "distance 用 angstrom、angle/dihedral 用 degree；非法值当前要到执行层才失败，提交前自查）、范围/点数；"
+        "2. 读取当前可执行的扫描模式和请求契约；核对原子索引约定（0-based）、坐标类型/单位/范围/点数。"
+        "坐标 kind 与原子数对应：distance（键长，2 原子，unit=angstrom，start/end>0）、"
+        "angle（键角，3 原子，unit=degree，0–180）、dihedral（二面角，4 原子，unit=degree，-360–360）；"
+        "start/end 用十进制字符串（JSON float 会被 canonical digest 拒绝），n_points 3–101。"
+        "多键扫描：把多个坐标放进 coordinates 数组（最多 64 个，同步扫描、保持拓扑不摊平），"
+        "每个坐标独立给出 kind/atoms/unit/start/end/n_points；单坐标用 coordinate（或 coordinates 第一项）。"
         "coordinate 与 coordinates 同时给出时必须完整一致（原子/单位/起止/点数/values），否则提交会被拒绝"
-        "（rule=conflicting_fields）——平台不会静默选用其一；仅给 coordinates 时主坐标为第一项。另有"
-        "及多坐标关系；double_bond_scan 类选择要求扫描原子对为感知键（平台限制），因此从产物侧拉伸已成键对更稳妥；bond_stretch 允许任意两原子（平台不强制感知键），但从反应物侧压缩非键对时曲线中段更易发生分支切换。\n"
+        "（rule=conflicting_fields）——平台不会静默选用其一。double_bond_scan 类选择要求扫描原子对为感知键"
+        "（平台限制），因此从产物侧拉伸已成键对更稳妥；bond_stretch 允许任意两原子（平台不强制感知键），"
+        "但从反应物侧压缩非键对时曲线中段更易发生分支切换。\n"
         "3. 绑定扫描方法与逐帧能量方法、电子态、资源和预算。大体系例外须记录理由，不自行按原子数拍阈值。\n"
         "4. 执行后先读曲线概况和全部点覆盖状态，再读候选区间的完整邻域点表及必要结构；区分扫描能与单点能，"
         "保留失败点、缺点和不收敛标记。\n"
@@ -299,7 +317,7 @@ _PESSEARCH = _workflow_entry(
         "topic.stationary_point_verification",
         "topic.partial_failure_recovery",
     ),
-    version="1.1.0",
+    version="1.2.0",
 )
 
 _SCAN = _workflow_entry(
@@ -316,9 +334,16 @@ _SCAN = _workflow_entry(
     ),
     (
         "当前工作流：scan。执行用户明确选择或确有适用理由的坐标扫描。\n"
-        "1. 对键长扫描先检查是否应使用默认 PESsearch；用户明确选 scan 或有已确认限制时记录原因并继续。\n"
-        "2. 读取 scan 契约，确认坐标类型、原子顺序/索引约定、单位、起止/点数、多坐标耦合、方法和电子态；"
-        "坐标校验要求可确认的原子数（提交显式几何），未开放的维度或后端不猜参数绕过。\n"
+        "1. 对键长扫描先检查是否应使用默认 PESsearch；用户明确选 scan 或有已确认限制时记录原因并继续"
+        "（典型例外：大体系/多坐标联动/单点成本过高，或 PES 曲线分支切换、点稀疏导致 scan 效果不佳；"
+        "scan 点数或范围不足时回到 PES 加密）。不推荐手摆结构当初猜，理由见 topic.selection_supplement。\n"
+        "2. 读取 scan 契约：坐标 kind 与原子数对应——distance（键长，2 原子，unit=angstrom，>0）、"
+        "angle（键角，3 原子，unit=degree，0–180）、dihedral（二面角，4 原子，unit=degree，-360–360）；"
+        "start/end 用十进制字符串，n_points 3–101。多键/多角扫描用 scan_coordinates 数组（多坐标耦合、"
+        "同步扫描、保持拓扑），每个坐标独立 kind/atoms/start/end/n_points；单坐标可用 input.coordinate"
+        "（字符串紧凑格式 atom_i,atom_j[,atom_k[,atom_l]],start,end 或对象）。scan_coordinates 优先读 input"
+        "（input.scan_coordinates/input.coordinate 在 method 之前），不要在 method 里覆盖 input 坐标。"
+        "坐标校验要求可确认的原子数（提交显式几何 xyz_text），未开放的维度或后端不猜参数绕过。\n"
         "3. ScanTS 只在明确选择、授权且平台支持时启用；没有启用时不得暗示内部已优化 TS。\n"
         "4. 预检后执行，逐点检查结构可读性、收敛/失败状态和能量可比性；缺失点不插值成已计算事实。\n"
         "5. 目标只是扫描时提供曲线范围、原始结果与局限；目标包含驻点搜索时按编排指南选初猜、必要时在范围内补算。\n"
@@ -328,6 +353,7 @@ _SCAN = _workflow_entry(
     ),
     coverage="first_batch",
     topics=("topic.selection_supplement",),
+    version="1.2.0",
 )
 
 _SINGLEPOINT = _workflow_entry(
@@ -358,7 +384,9 @@ _OPTIMIZE = _workflow_entry(
         "当前工作流：optimize。\n"
         "1. 确认结构来源、电子态、方法和环境，以及有无约束；属于已发布 PES/scan 初猜的 TS/INT 集合时走 "
         "BatchOptimize 链。\n"
-        "2. 读取允许的优化配置与有效默认值，预检后执行；不用未公开 raw keyword 绕过契约。\n"
+        "2. 读取允许的优化配置与有效默认值，预检后执行；优化方法按体系大小选档（小体系允许 wB97M-V；"
+        "常规 r2SCAN-3c；更大 B97-3c；超大 GFN2-xTB），见 topic.method_selection；不用未公开 raw keyword "
+        "绕过契约。\n"
         "3. 读取实际优化收敛、SCF 质量、最终几何和轨迹；出现组成/目标结构变化时记录并按目标判断。\n"
         "4. 优化收敛不证明局部或全局最低点；需要驻点性质时继续适用 frequency。\n"
         "5. 有约束的结果保留约束说明；解除约束属于新的明确计算选择。\n"
@@ -366,6 +394,7 @@ _OPTIMIZE = _workflow_entry(
         "输出：输入和最终结构引用、实际设置、收敛/变化、驻点验证缺项及下一步。"
     ),
     coverage="documented_partial",
+    version="1.1.0",
 )
 
 _FREQUENCY = _workflow_entry(
@@ -394,7 +423,8 @@ _XTB_OPTIMIZE = _workflow_entry(
     "GFN-xTB 等当前支持配置的优化入口。原生约束请求与可选物理单点由专用 XtbConstrainedOpt 入口处理。",
     (
         "当前工作流：xtb_optimize。\n"
-        "1. 读取支持的方法/环境/资源和电子态表达，确认用户允许 xTB 级别；不因它快就替代已授权的 DFT 目标。\n"
+        "1. 读取支持的方法/环境/资源和电子态表达，确认用户允许 xTB 级别；超大体系（大几百到上千原子）"
+        "的预优化/初筛以 GFN2-xTB 为推荐档（见 topic.method_selection）；不因它快就替代已授权的 DFT 目标。\n"
         "2. 绑定输入结构，使用服务端校验电荷、多重度和所需自旋参数；不为 xTB 硬填 DFT 基组。\n"
         "3. 预检并执行，检查实际收敛、几何变化和能量类型。\n"
         "4. 作为预优化时，将实际最终结构和来源传给后续工作流，保留 xTB 与后续级别的区别。\n"
@@ -403,6 +433,7 @@ _XTB_OPTIMIZE = _workflow_entry(
         "输出：xTB 设置、收敛和结构引用、能量定义、后续用途与限制。"
     ),
     coverage="documented_partial",
+    version="1.1.0",
 )
 
 _IRC = _workflow_entry(
@@ -652,14 +683,18 @@ _TOPIC_SELECTION = GuideEntry(
     guide_id="topic.selection_supplement",
     kind="topic",
     title="选点与补算",
-    version="1.0.0",
-    summary="选点只产生初猜；补算是新点提案，不混同已有帧。",
+    version="1.1.0",
+    summary="选点只产生初猜；初猜优先来自扫描/路径证据（不推荐手摆）；补算是新点提案，不混同已有帧。",
     sections={
         "body": (
             "PES/scan 中选出的 TS/INT 角色表示后续计算用途，不是已验证驻点；允许多个初猜、平坦区间或无可信候选，"
             "不只挑全局最高点。已有帧初猜提案绑定来源 task/attempt、profile digest、帧 ID、用途角色与证据引用；"
             "补算提案针对目标区间/坐标，通过新计划预检与提交后，用真实新帧选择——新点在计算完成前不具有帧身份。"
             "两种提案分开保存，不互相伪装。第一版可复用已有算法推荐作为线索，但推荐不是确认。"
+            "初猜来源优先级：扫描/路径证据优先——PES 适合中小体系（同一键长轴多点、曲线连续）；"
+            "大体系、多坐标联动或 PES 曲线不可信/点稀疏时 scan（逐点优化）更合适；已有冻结路径时用路径帧。"
+            "不推荐手工摆放结构：手摆初猜没有能量/路径证据，只能作为无证据输入，必须在 BatchOptimize/频率/"
+            "IRC 中补足验证，不能直接发布为“已确认候选”。"
         ),
     },
 )
@@ -668,18 +703,28 @@ _TOPIC_METHOD_SELECTION = GuideEntry(
     guide_id="topic.method_selection",
     kind="topic",
     title="方法与精度阶梯（泛函/基组选择）",
-    version="1.0.0",
-    summary="默认 r2SCAN-3c 优化 + wB97X-mV 单点；CCSD(T) 只用于极高精度单点，不做默认。",
+    version="1.3.0",
+    summary=(
+        "按体系大小选优化泛函（小体系 wB97M-V；常规 r2SCAN-3c；更大 B97-3c；超大 GFN2）+ 单点默认 "
+        "wB97M-V；wB97X-D4 不并列；CCSD(T) 仅高精度单点。"
+    ),
     sections={
         "body": (
             "按精度需求选级别，不无脑上高阶方法（高阶方法成本急剧上升且对几何通常无必要）：\n"
             "1. 预筛/构象/初猜：GFN2-xTB（xtb_optimize、Confsearch 纯 xTB 协议、PES scan_optimizer）。\n"
-            "2. 常规 DFT（默认档）：几何优化用 r2SCAN-3c（复合方法，自带基组，不填 basis）；单点用 "
-            "wB97X-mV 或 wB97X-D4 + def2-TZVP(D)。能量比较与频率验证在此档完成即可满足多数研究。\n"
+            "2. 几何优化按体系大小选档（推荐；平台不按原子数强制阈值，跨档升降级要记录理由）：\n"
+            "   · 小体系：允许上 wB97M-V + def2-TZVP（精度更高，成本高于 3c 复合方法；仅在对几何精度确有要求时）。\n"
+            "   · 常规/较大体系：r2SCAN-3c（复合方法，自带基组，不填 basis）——默认档。\n"
+            "   · 更大体系：B97-3c（复合方法，更便宜；几何质量仍高于 xTB 级）。\n"
+            "   · 超大体系（大几百到上千原子）：GFN2-xTB（xtb_optimize；预优化/初筛；不等于 DFT 级）。\n"
+            "   单点默认 wB97M-V + def2-TZVP(D)（小体系可 wB97M-V/def2-TZVP；超大体系单点按可用资源降档）。"
+            "wB97X-D4 只在用户明确要求或历史记录兼容时使用，不作为并列默认（其表现通常不如 wB97M-V）。"
+            "能量比较与频率验证在此档完成即可满足多数研究。\n"
             "3. 高精度档（仅在关键量需要 ~1 kcal/mol 级精度时）：在 DFT 几何上做 DLPNO-CCSD(T) 单点"
             "（必要时配更大基组/外推）；不做 CCSD(T) 优化，不把 CCSD(T) 当默认或『更保险』的选择。\n"
-            "4. 表达：优化级别与单点级别分开填——BatchOptimize 的 batch_roles 中 method=优化方法、"
-            "sp_method=单点方法；singlepoint 工作流只算单点级别。\n"
+            "4. 表达：优化级别与单点级别分开填——BatchOptimize 的 batch_roles.<role> 中 method=优化方法、"
+            "sp_method=单点方法（每 role 一份；顶层 single_point_* 只是 int role 的镜像，缺 int role 会被 "
+            "422 missing_role_mirror）；singlepoint 工作流只算单点级别。\n"
             "5. 同一比较集内级别必须一致；升级级别属于新的科学决定，须记录理由并重新预检。"
         ),
     },
@@ -689,10 +734,10 @@ _TOPIC_ARTIFACT_LOCATING = GuideEntry(
     guide_id="topic.artifact_locating",
     kind="topic",
     title="计算产物定位与读取",
-    version="1.1.0",
+    version="1.3.0",
     summary=(
         "终态 status 自带产物描述符；prepare→read 用五元组；目录名由 molecule_name/task_name "
-        "控制；附「结果字段地图」（频率/相对能量/轨迹在哪个文件）。"
+        "控制；附「结果字段地图」（频率/相对能量/轨迹在哪个文件；singlepoint 与 Batch 的 sp.out 两处布局）。"
     ),
     sections={
         "body": (
@@ -723,6 +768,14 @@ _TOPIC_ARTIFACT_LOCATING = GuideEntry(
             "· IRC：轨迹在 RESULT/irc/irc_<direction>_path.xyz 与 RESULT/trajectories/irc_trajectory.json"
             "（frames/directions）；"
             "formal endpoint 只来自收敛确认的端点文件，last_observed_geometries 仅是诊断证据，不能当端点。\n"
+            "· 单点产物落盘位置（同一个 sp.out 文件名，两条历史布局，都在 job_dir 下）：singlepoint 工作流写 "
+            "<job_dir>/sp.out；BatchOptimize（single_flat 布局）的逐 item 单点写 <job_dir>/WORK/05_SP/sp.out。"
+            "通用解析器两处都要认；读数仍以 RESULT/result_manifest.json 的产品路径为权威，路径只用于人工核对，"
+            "不要按文件名猜。\n"
+            "· 热化学（ZPE/H/G/S）：频率作业走 RESULT/thermochemistry.json，BatchOptimize 每个 item 走 "
+            "RESULT/thermochemistry/<item_id>.json；描述符 kind=thermochemistry，含温度/压力/相校正/来源。"
+            "直接读产品，不要 grep freq.out 的 Final Gibbs free energy；产品只在热化学实际产出时登记"
+            "（无频率/失败则没有该产品）。\n"
             "· 何时走 prepare→read：本地已终态且描述符可用时可直接 read；远端/冷缓存、或需要固定 "
             "digest/generation 复现时先 acp_prepare_artifact 再 acp_read_artifact；read 永不触发 "
             "fetch/prepare。"
@@ -734,8 +787,11 @@ _TASK_FIND_TS = GuideEntry(
     guide_id="task.find_transition_state",
     kind="task",
     title="任务：寻找反应过渡态",
-    version="1.0.0",
-    summary="从结构+反应假设到 TS 候选：扫描/路径 → 选初猜 → 发布 → BatchOptimize(TS) → 频率判定。",
+    version="1.2.0",
+    summary=(
+            "从结构+反应假设到 TS 候选：选初猜来源（PES 默认；大体系/多坐标用 scan；不推荐手摆）→ 扫描 → "
+            "选初猜 →（有授权才 publish，否则 inline role:\"ts\" 一等路径直达）BatchOptimize(TS) → 频率判定。"
+        ),
     coverage="first_batch",
     sections={
         "when_to_use": (
@@ -744,25 +800,47 @@ _TASK_FIND_TS = GuideEntry(
             "③方法/资源授权。缺少反应假设时先询问，不做猜测性位点识别（矩阵位点算法未接入）。"
         ),
         "chain": (
-            "链路 A（键长扫描，通用）：\n"
-            "1. PESsearch（mode=bond_length_scan）——多坐标同步扫描。布局建议（平台不强制）：从产物侧拉伸已成键对更易得到连续曲线；反应物侧压缩非感知键对也可提交（bond_stretch 允许任意两原子），但更易分支切换，读曲线按连续段取点；"
+            "0. 初猜生成方式（先决定，不要跳过）：默认 PESsearch 键长扫描（中小体系；同一键长轴多点扫描、"
+            "能量曲线连续、单点成本可控）。大体系、需要多坐标联动/耦合、或 PES 曲线分支切换/点稀疏导致"
+            "scan 效果不佳时，改用 scan（relaxed/pointwise）逐点优化；scan 的点数/范围不足以支撑判断时"
+            "回到 PES 加密扫描。已有冻结路径 payload 时用 XtbPathSearch 路径帧（链路 C）。"
+            "不推荐手工摆放结构作为初猜：手摆没有扫描能量/路径证据，平台不禁止，但指南不推荐；"
+            "若用户坚持手摆，必须说明其无证据性质，并靠频率（恰一个虚频、模式方向）与 IRC/端点验证补足，"
+            "不能当成已确认候选发布。\n"
+            "链路 A（扫描，通用）：\n"
+            "1. PESsearch（mode=bond_length_scan）——多坐标同步扫描；多键扫描用 input.coordinates 数组"
+            "（最多 64 个，同步扫描），键角/二面角用 kind=angle（3 原子）/dihedral（4 原子）、unit=degree、"
+            "范围 0–180 / -360–360。布局建议（平台不强制）：从产物侧拉伸已成键对更易得到连续曲线；"
+            "反应物侧压缩非感知键对也可提交（bond_stretch 允许任意两原子），但更易分支切换，读曲线按连续段取点；"
             "协议见 workflow.PESsearch。\n"
             "2. 读曲线概况+点覆盖；极大点邻域取候选，关注分支切换（连续段内取点），见 topic.selection_supplement。\n"
-            "3. 选点发布：\n"
-            "   · 人工确认走 Workbench / REST review（selector=manual）；MCP 的 acp_publish_pes_review "
-            "恒为受限 Agent 路径（服务端固定 selector=agent），纯 MCP 会话不能替人做 manual 发布。\n"
-            "   · Agent 自动发布需先由管理员铸造有界授权：POST /api/v1/selection-authorizations"
-            "（local-single 的 operator 身份；body 至少含 source_job_id、allowed_attempts、valid_until、"
-            "limits:{max_candidates>=1,...}；owner 与 authorization_id 由服务端生成，不能自授权）→ "
-            "拿 authorization_id 调 acp_publish_pes_review → 发布后得到 candidate_id。\n"
+            "3. 选点怎么进 Batch（先自查发布授权，再选路径；两条路径都是合法的）：\n"
+            "   · 纯 MCP 会话（没有管理员预铸的有界授权）：acp_publish_pes_review 一定会被拒绝——它要求 "
+            "authorization_id，且服务端固定 selector=agent，不会退化成 manual。此时的 supported 路径是"
+            "把选中的初猜直接内联进 BatchOptimize：input.items 里每个结构显式写 role:\"ts\"（与 xyz 并列），"
+            "沿用 batch_roles.ts 配置。inline 路径是一等路径，不是兜底：发布只给候选一个 review revision，"
+            "不是进入 Batch 的前提。不要用 probe/自造 authorization_id 试探——工具只回 typed 拒绝"
+            "（authorization_not_found：id 未知或跨项目；access_denied：权限/授权被拒），平台不会自动铸造授权。\n"
+            "   · 已有合法发布的选择（人工已在 Workbench/REST review 确认，或管理员授权下已发布）：直接 "
+            "input.from_artifact 指向该 RESULT/result_manifest.json + selected_ids，消费已确认候选及其角色。\n"
+            "   · 管理员已铸造有界授权时，PES → publish → BatchOptimize 完整链可用：POST "
+            "/api/v1/selection-authorizations（local-single 的 operator 身份；body 至少含 source_job_id、"
+            "allowed_attempts、valid_until、limits:{max_candidates>=1,...}；owner 与 authorization_id 由"
+            "服务端生成，不能自授权）→ 带 authorization_id 调 acp_publish_pes_review → 发布后得到 "
+            "candidate_id。授权是否可用只以调用结果为准（typed 拒绝即无可用授权），不要假称授权存在。\n"
+            "   · 人工确认仍走 Workbench / REST review（selector=manual）；MCP 的 acp_publish_pes_review "
+            "恒为受限 Agent 路径，纯 MCP 会话不能替人做 manual 发布。\n"
             "4. BatchOptimize（profile=opt_freq，item 显式 role:\"ts\"）——role 的 wire 语法见 workflow.BatchOptimize；"
             "每任务一个结构（single_flat）。\n"
             "5. 读逐 item 频率：恰一个显著虚频 + 模式对应成键/断键方向 → 见 topic.stationary_point_verification。\n"
-            "链路 B（上游冻结 payload 已存在时）：XtbPathSearch 路径帧 → 同第 3 步起。"
+            "链路 B（PES/scan 不可用或效果不佳、且用户显式选择时）：scan（relaxed/pointwise）逐点扫描，"
+            "多键/多角用 input.scan_coordinates 数组（多坐标耦合），kind=distance/angle/dihedral 分别对应 "
+            "2/3/4 原子与 angstrom/degree 单位；按 workflow.scan 的契约与限制；链路 C（上游冻结路径 payload 已存在时）：XtbPathSearch 路径帧 → 同第 3 步起。"
         ),
         "decisions": (
             "决策点：①扫描坐标与初始键距（来源结构决定）；②TS/INT 角色（TS=尝试过渡态优化）；③profile 必须含频率；"
-            "④方法级别按 topic.method_selection 的阶梯，不无脑上高阶。"
+            "④方法级别按 topic.method_selection 的阶梯，不无脑上高阶；⑤进 Batch 的方式（有界授权已就绪走 publish，"
+            "否则 inline role:\"ts\" 直达；两条都不跳过 Batch 频率/端点验证）。"
         ),
         "completion": (
             "完成定义：OptTS 收敛 + 恰一个虚频 + 模式方向一致 = TS 驻点 supported；"
@@ -774,7 +852,8 @@ _TASK_FIND_TS = GuideEntry(
             "不通过改角色、改输入或删模式来\"成功\"。"
         ),
         "not_supported": (
-            "当前不支持：矩阵反应位点自动识别（待接入，不冒充）；扫描自动发布（需 review 确认）；"
+            "当前不支持：矩阵反应位点自动识别（待接入，不冒充）；无管理员有界授权的自动发布"
+            "（纯 MCP 会话走 inline role:\"ts\" 直达 BatchOptimize，人工确认走 Workbench/REST review）；"
             "irc 提交键未契约化（fallback 见 workflow_contracts 索引）。"
         ),
     },
@@ -852,7 +931,7 @@ _TASK_BARRIER = GuideEntry(
     guide_id="task.barrier_high_accuracy",
     kind="task",
     title="任务：反应能垒与高精度单点",
-    version="1.0.0",
+    version="1.2.0",
     summary="端点几何/频率确认 → 默认级别单点 → 需要 ~1 kcal/mol 时 DLPNO-CCSD(T) 单点。",
     coverage="documented_partial",
     sections={
@@ -861,8 +940,11 @@ _TASK_BARRIER = GuideEntry(
             "必需输入：端点与 TS 几何及其电子态、方法授权、比较条件（化学计量/标准态/温度）。"
         ),
         "chain": (
-            "1. 端点优化与频率：r2SCAN-3c 几何优化 + 频率（优化收敛不证明最小值，频率确认；见 workflow.optimize/frequency）。\n"
-            "2. 默认单点：wB97X-mV 或 wB97X-D4 + def2-TZVP(D)（singlepoint；复合方法不填 basis，见 topic.method_selection）。\n"
+            "1. 端点优化与频率：几何优化按体系大小选档（小体系允许 wB97M-V；常规 r2SCAN-3c；更大 B97-3c；"
+            "超大 GFN2-xTB，见 topic.method_selection）+ 频率（优化收敛不证明最小值，频率确认；见 "
+            "workflow.optimize/frequency）。\n"
+            "2. 默认单点：wB97M-V + def2-TZVP(D)（singlepoint；复合方法不填 basis；wB97X-D4 仅在用户"
+            "明确要求或历史记录兼容时使用，见 topic.method_selection）。\n"
             "3. 仅当关键量需要 ~1 kcal/mol 级精度：DLPNO-CCSD(T) 单点（在 DFT 几何上；不做 CCSD(T) 优化）。\n"
             "4. 能垒组合：TS−反应物（电子能）；需要热化学校正时按实际生成的相位校正规则明确引用，不重复加。"
         ),

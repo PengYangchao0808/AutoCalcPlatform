@@ -15,7 +15,7 @@ accepts either style and normalises to the internal representation.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Final
 
 from typing_extensions import assert_never
@@ -323,6 +323,8 @@ def migrate_legacy_method_dict(d: dict[str, Any]) -> dict[str, Any]:
 
 def _build_opts_from_batch_roles(
     batch_roles: dict[str, dict[str, Any]],
+    *,
+    preserve_common_single_point: bool = False,
 ) -> BatchMethodOptions:
     """Construct :class:`BatchMethodOptions` from per-role config dicts.
 
@@ -345,6 +347,15 @@ def _build_opts_from_batch_roles(
         return defaults.get(key)
 
     kwargs: dict[str, Any] = {}
+    #: The per-role SP level is authoritative here: an explicit role value is
+    #: the only thing that applies to that role.  The common
+    #: ``single_point_*`` fields stay reserved for the legacy flat payload
+    #: (no ``batch_roles``) so a role without ``sp_method`` falls back to its
+    #: **own** optimization level, never to another role's SP level.
+    int_sp_method = _get(int_raw, int_defaults, "sp_method")
+    int_sp_basis = _get(int_raw, int_defaults, "sp_basis")
+    ts_sp_method = _get(ts_raw, ts_defaults, "sp_method")
+    ts_sp_basis = _get(ts_raw, ts_defaults, "sp_basis")
 
     # Common method / basis: use INT as the base
     int_method = _get(int_raw, int_defaults, "method") or ""
@@ -358,11 +369,18 @@ def _build_opts_from_batch_roles(
     kwargs["transition_state_method"] = ts_method
     kwargs["transition_state_basis"] = ts_basis
 
-    # SP (per-role)
-    sp_method = _get(int_raw, int_defaults, "sp_method")
-    sp_basis = _get(int_raw, int_defaults, "sp_basis")
-    kwargs["single_point_method"] = sp_method or ""
-    kwargs["single_point_basis"] = sp_basis or ""
+    # SP (per-role): the role dicts are the authority; the dataclass keeps a
+    # dedicated pair per role and leaves the legacy global pair empty so no
+    # single value is silently applied to both roles.
+    kwargs["minimum_sp_method"] = int_sp_method or None
+    kwargs["minimum_sp_basis"] = int_sp_basis or None
+    kwargs["transition_state_sp_method"] = ts_sp_method or None
+    kwargs["transition_state_sp_basis"] = ts_sp_basis or None
+    # Only the migrated legacy payload keeps the historical common pair (the
+    # old flat ``single_point_*`` shown by ``effective_config.json``); a
+    # ``batch_roles`` payload never has a global SP value to inherit.
+    kwargs["single_point_method"] = (int_sp_method or "") if preserve_common_single_point else ""
+    kwargs["single_point_basis"] = (int_sp_basis or "") if preserve_common_single_point else ""
 
     # Thermo (per-role — use INT values as common base)
     kwargs["temperature"] = float(_get(int_raw, int_defaults, "temperature"))
@@ -481,6 +499,19 @@ class BatchMethodOptions:
     transition_state_opt_rescue_policy: str | None = None
     transition_state_opt_max_rescue: int | None = None
 
+    # ── per-role single-point level (round-7 #2) ─────────────────────────
+    # ``None``/``""`` = inherit (role SP > legacy common SP > role method).
+    # Declared last so the historical positional field order is unchanged.
+    minimum_sp_method: str | None = None
+    minimum_sp_basis: str | None = None
+    transition_state_sp_method: str | None = None
+    transition_state_sp_basis: str | None = None
+
+    #: ``"per_role"`` for ``batch_roles`` payloads, ``"global"`` for the legacy
+    #: flat payload (where one ``single_point_*`` pair applies to both roles).
+    #: Provenance only — never part of the scientific cache key.
+    single_point_scope: str = "global"
+
     # ── single entry point ───────────────────────────────────────────────
 
     @classmethod
@@ -491,9 +522,13 @@ class BatchMethodOptions:
         Otherwise → migrate the legacy flat dict then parse.
         """
         if "batch_roles" in d:
-            return _build_opts_from_batch_roles(d["batch_roles"])
+            opts = _build_opts_from_batch_roles(d["batch_roles"])
+            # Per-role payload: every value comes from its own role (round-7 #2).
+            return replace(opts, single_point_scope="per_role")
         migrated = migrate_legacy_method_dict(d)
-        return _build_opts_from_batch_roles(migrated["batch_roles"])
+        return _build_opts_from_batch_roles(
+            migrated["batch_roles"], preserve_common_single_point=True
+        )
 
     def for_role(self, is_transition_state: bool) -> tuple[str, str]:
         """Return the method and basis selected for one item role.
@@ -512,6 +547,51 @@ class BatchMethodOptions:
             basis = self.minimum_basis or self.optimization_basis
         return method, basis
 
+    def role_sp_fields(self, is_transition_state: bool) -> tuple[str | None, str | None]:
+        """Return the *declared* per-role SP pair (no fallback applied)."""
+        prefix = _ROLE_PREFIX["ts" if is_transition_state else "int"]
+        method = getattr(self, f"{prefix}sp_method") or None
+        basis = getattr(self, f"{prefix}sp_basis") or None
+        return method, basis  # type: ignore[return-value]
+
+    def sp_for_role(self, is_transition_state: bool) -> tuple[str, str]:
+        """Resolve the single-point method/basis for one item role (round-7 #2).
+
+        Priority: ``role SP`` > legacy common ``single_point_*`` > the role's
+        own optimization level.  A role that carries no ``sp_method`` never
+        inherits another role's SP level — the old global single value is only
+        the legacy (no ``batch_roles``) fallback.
+        """
+        role_method, role_basis = self.for_role(is_transition_state)
+        role_sp_method, role_sp_basis = self.role_sp_fields(is_transition_state)
+        sp_method = role_sp_method or self.single_point_method or role_method
+        sp_basis = role_sp_basis or self.single_point_basis or role_basis
+        return sp_method, sp_basis
+
+    def sp_provenance(self, is_transition_state: bool) -> dict[str, str]:
+        """Explain where each resolved SP value came from (per field).
+
+        ``role`` = the role's own ``sp_method``/``sp_basis`` (``batch_roles``
+        payload), ``flat_single_point`` = a legacy flat ``single_point_*``
+        value frozen into the role during migration, ``single_point_method`` =
+        a directly-constructed common field, ``role_method``/``role_basis`` =
+        no SP override (the role's optimization level is executed).
+        """
+        role_sp_method, role_sp_basis = self.role_sp_fields(is_transition_state)
+        legacy_flat = self.single_point_scope == "global"
+
+        def _source(role_value: str | None, common_value: str, role_key: str) -> str:
+            if role_value:
+                return "flat_single_point" if legacy_flat else "role"
+            if common_value:
+                return role_key
+            return "role_method" if role_key == "single_point_method" else "role_basis"
+
+        return {
+            "method": _source(role_sp_method, self.single_point_method, "single_point_method"),
+            "basis": _source(role_sp_basis, self.single_point_basis, "single_point_basis"),
+        }
+
     def for_step(self, step: StepKind, is_transition_state: bool) -> tuple[str, str]:
         role_method, role_basis = self.for_role(is_transition_state)
         match step:
@@ -520,10 +600,9 @@ class BatchMethodOptions:
                 # settings as optimization for a given role.
                 return role_method, role_basis
             case StepKind.SINGLEPOINT:
-                return (
-                    self.single_point_method or role_method,
-                    self.single_point_basis or role_basis,
-                )
+                # Per-role SP level: role SP > legacy common SP > role method.
+                sp_method, sp_basis = self.sp_for_role(is_transition_state)
+                return sp_method or role_method, sp_basis or role_basis
             case StepKind.OPTIMIZE | StepKind.SCAN | StepKind.THERMOCHEMISTRY | StepKind.CASSCF:
                 return role_method, role_basis
             case unreachable:
@@ -639,15 +718,11 @@ class BatchMethodOptions:
                 )
 
             case StepKind.SINGLEPOINT:
-                # Per-role SP method/basis falling back to role method/basis
-                sp_method = getattr(self, f"{prefix}sp_method", None) or None
-                sp_basis = getattr(self, f"{prefix}sp_basis", None) or None
-                if sp_method is None:
-                    sp_method = self.single_point_method or role_method
-                if sp_basis is None:
-                    sp_basis = self.single_point_basis or role_basis
-                result["method"] = sp_method
-                result["basis"] = sp_basis
+                # Per-role SP method/basis (round-7 #2) — the ONE resolution
+                # used by for_step/effective-config/engine request builders.
+                sp_method, sp_basis = self.sp_for_role(is_transition_state)
+                result["method"] = sp_method or role_method
+                result["basis"] = sp_basis or role_basis
                 # SCF trio (per-role)
                 scf_maxiter = role_opts.get("scf_max_iter")
                 result["scf_maxiter"] = (
@@ -717,6 +792,10 @@ class BatchMethodOptions:
         # Add role-override fields by looping to prevent future omissions.
         for prefix_str in _ROLE_PREFIX.values():
             for name in _ROLE_OVERRIDE_FIELDS:
+                parts[f"{prefix_str}{name}"] = getattr(self, f"{prefix_str}{name}")
+            # Per-role SP level (round-7 #2): a role SP change must invalidate
+            # cached item results exactly like an optimization-level change.
+            for name in ("sp_method", "sp_basis"):
                 parts[f"{prefix_str}{name}"] = getattr(self, f"{prefix_str}{name}")
         return json.dumps(parts, sort_keys=True, separators=(",", ":"))
 

@@ -1583,6 +1583,7 @@ class BatchOptimizeEngine:
         for item in completed:
             self._materialize_optimization_trajectory(item)
             self._materialize_normal_modes(item, result_manifest)
+            self._materialize_thermochemistry(item, result_manifest)
             source = self._resolve_output_geometry(item)
             if source is None:
                 logger.warning(
@@ -1699,6 +1700,65 @@ class BatchOptimizeEngine:
             ProductKind.FREQUENCY_MODES,
             metadata={"geometry_product_id": f"batch_{item.item_id}"},
         )
+
+    def _materialize_thermochemistry(
+        self, item: BatchCalculationItem, result_manifest: ResultManifest
+    ) -> None:
+        """Publish one item's ZPE/H/G/S as ``RESULT/thermochemistry/<id>.json``.
+
+        The values come from the thermochemistry step metadata (Shermo's
+        ``build_metadata`` projection) plus the Shermo sum for the ZPE; the
+        product is registered as ``THERMO_REPORT`` with its unit/source
+        provenance.  Only a successful step with a Gibbs energy registers a
+        product — no thermo step, no thermochemistry (never fake zeros).
+        Never fails the item: everything is logged at debug level.
+        """
+        if not item.thermochemistry:
+            return
+        try:
+            from acp.results.thermochemistry import (
+                batch_thermochemistry_relative_path,
+                build_batch_thermochemistry,
+                thermochemistry_product_metadata,
+                write_thermochemistry_json,
+            )
+
+            is_ts = item.tag == "TS"
+            methods = self._active_methods
+            method = basis = ""
+            scale_factor = None
+            if methods is not None:
+                method, basis = methods.for_step(StepKind.SINGLEPOINT, is_ts)
+                scale_factor = methods.scale_factor
+            payload = build_batch_thermochemistry(
+                item.thermochemistry,
+                item_id=item.item_id,
+                tag=item.tag,
+                method=method or None,
+                basis=basis or None,
+                zpe_scale_factor=scale_factor,
+            )
+            if payload is None:
+                return
+            relative = batch_thermochemistry_relative_path(item.item_id)
+            _ = write_thermochemistry_json(
+                self._result_root, payload, relative_path=relative
+            )
+            _ = result_manifest.add_product(
+                f"batch_{item.item_id}_thermochemistry",
+                f"{item.name} — thermochemistry (ZPE/H/G/S)",
+                relative,
+                ProductKind.THERMO_REPORT,
+                metadata=thermochemistry_product_metadata(
+                    payload, {"item_id": item.item_id, "tag": item.tag}
+                ),
+            )
+        except (OSError, ValueError, TypeError, KeyError):
+            logger.debug(
+                "batch: could not publish thermochemistry for %s; skipping",
+                item.item_id,
+                exc_info=True,
+            )
 
     def _resolve_output_geometry(self, item: BatchCalculationItem) -> Path | None:
         """Resolve an item's optimized geometry."""
