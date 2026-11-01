@@ -94,6 +94,11 @@ _TOOL_ERROR_CODES: dict[str, str] = {
     "idempotency_in_progress": mo.ErrorCode.REVISION_CONFLICT,
     "admission_denied": mo.ErrorCode.ACCESS_DENIED,
     "access_denied": mo.ErrorCode.ACCESS_DENIED,
+    # Round-7: a missing/expired/revoked selection authorization must not fall
+    # back to backend_failure at the MCP surface.
+    "authorization_not_found": mo.ErrorCode.ACCESS_DENIED,
+    "authorization_revoked": mo.ErrorCode.ACCESS_DENIED,
+    "authorization_expired": mo.ErrorCode.ACCESS_DENIED,
     # B15 identity denials: a revoked/expired/unknown credential answers one
     # uniform 401 (``unauthenticated``) and must stay a typed access denial at
     # the MCP surface (M0-05 per-call revalidation).

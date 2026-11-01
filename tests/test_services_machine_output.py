@@ -83,6 +83,34 @@ def _install_execution_spies(monkeypatch: pytest.MonkeyPatch) -> tuple[_RunSpy, 
     return handler, workflow, task
 
 
+_MISSING = object()
+
+
+@pytest.fixture(autouse=True)
+def _restore_execution_hooks():
+    """Force-restore the execution hooks after each test.
+
+    ``_install_execution_spies`` patches ``cccp.calculation.run_singlepoint``
+    (and the task-module symbol).  Depending on teardown order a later test can
+    observe the spy, which breaks unrelated batch tests when this file runs
+    first; restoring the saved originals here makes the order independent.
+    """
+    import cccp.calculation as cccp_calculation
+    import cccp.calculation.tasks.singlepoint as task_module
+
+    saved_cccp = getattr(cccp_calculation, "run_singlepoint", _MISSING)
+    saved_task = task_module.run_singlepoint
+    yield
+    task_module.run_singlepoint = saved_task
+    if saved_cccp is _MISSING:
+        try:
+            delattr(cccp_calculation, "run_singlepoint")
+        except AttributeError:
+            pass
+    else:
+        cccp_calculation.run_singlepoint = saved_cccp
+
+
 def _write_xyz(tmp_path: Path) -> Path:
     path = tmp_path / "water.xyz"
     path.write_text(_XYZ_TEXT, encoding="utf-8")
@@ -542,3 +570,80 @@ def test_cli_text_logging_stays_off_stdout() -> None:
             root.removeHandler(handler)
         for handler in saved:
             root.addHandler(handler)
+
+
+# --------------------------------------------------------------------------- #
+# 7. Round-7 wire-shape fixes (#7b idempotency key, #7e bounded cancel ack)
+# --------------------------------------------------------------------------- #
+
+
+def test_widened_idempotency_pattern_is_a_machine_readable_param() -> None:
+    """#7b: a chemistry-shaped key is accepted; a refusal stays actionable.
+
+    The pattern is part of the error envelope (a client corrects the value
+    without prose parsing), it survives the secret/path net unchanged, and the
+    malformed value itself is never echoed back.
+    """
+    from acp_services.entrypoints.application_params import (
+        IDEMPOTENCY_KEY_PATTERN,
+        ApplicationParamError,
+        normalize_submit,
+    )
+
+    accepted = "exp:sp-ccsd(t)-ts:[v2]0001"
+    assert (
+        normalize_submit(
+            {"workflow": "singlepoint", "input": {"source": "CCO"}, "idempotency_key": accepted}
+        )["idempotency_key"]
+        == accepted
+    )
+
+    with pytest.raises(ApplicationParamError) as excinfo:
+        normalize_submit(
+            {"workflow": "singlepoint", "input": {"source": "CCO"}, "idempotency_key": "not a key"}
+        )
+    params = dict(excinfo.value.params)
+    assert excinfo.value.code == mo.ErrorCode.INPUT_INVALID
+    assert params == {
+        "field": "idempotency_key",
+        "rule": "pattern",
+        "pattern": IDEMPOTENCY_KEY_PATTERN,
+    }
+    envelope = mo.error_object(excinfo.value.code, excinfo.value.message, params=params)
+    assert envelope.to_dict()["params"]["pattern"] == IDEMPOTENCY_KEY_PATTERN
+    assert "not a key" not in json.dumps(envelope.to_dict())
+    # The published pattern and a legal key are not secrets: redaction keeps them.
+    assert mo.redact_value({"pattern": IDEMPOTENCY_KEY_PATTERN}) == {
+        "pattern": IDEMPOTENCY_KEY_PATTERN
+    }
+    assert mo.redact_value({"idempotency_key": accepted}) == {"idempotency_key": accepted}
+
+
+def test_cancel_acknowledgement_envelope_is_bounded_and_spec_free() -> None:
+    """#7e: the MCP cancel result never ships the Controller's spec body."""
+    from acp_services.entrypoints.mcp import _cancel_acknowledgement
+
+    job_id = "20261101_004_singlepoint"
+    record = {
+        "id": job_id,
+        "status": "cancelled",
+        "attempt": 3,
+        "updated_at": "2026-11-01T04:10:00Z",
+        "spec": {
+            "workflow": "singlepoint",
+            "input": {"source": {"xyz_text": "3\nwater\nO 0 0 0\n" * 4000}},
+        },
+        "admission": {"limits": {"cores": 8}},
+        "provenance": {"release_id": "release-" + "r" * 4000},
+        "artifacts": [{"artifact_id": f"artifact-{i}"} for i in range(100)],
+    }
+    data = _cancel_acknowledgement(record, job_id)
+    envelope = mo.MachineResult(operation="acp_cancel", status="ok", data=data).to_dict()
+    serialized = json.dumps(envelope, ensure_ascii=False)
+    assert len(serialized) < 4096
+    for withheld in ("spec", "xyz_text", "admission", "provenance", "artifacts"):
+        assert withheld not in serialized
+    assert envelope["data"]["job_id"] == job_id
+    assert envelope["data"]["attempt"] == 3
+    assert envelope["data"]["cancelled"] is True
+    assert mo.redact_value(data) == data

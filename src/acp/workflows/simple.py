@@ -564,6 +564,7 @@ def _execute(
         if progress_reporter is not None:
             progress_reporter.fail_stage(stage_name, str(error) or type(error).__name__)
         raise
+    _publish_frequency_thermochemistry(plan, execution, calc_dir)
     result = _workflow_result(execution, calc_dir)
     if progress_reporter is not None:
         if result.status == "completed":
@@ -571,6 +572,90 @@ def _execute(
         else:
             progress_reporter.fail_stage(stage_name, result.error or f"{stage_name} failed")
     return result
+
+
+def _frequency_log_path(execution: Any) -> Path | None:
+    """Return the frequency log a completed FREQUENCY step produced."""
+    for step_state in getattr(execution, "step_states", ()):
+        if step_state.kind is not StepKind.FREQUENCY or step_state.result is None:
+            continue
+        # A failed step's partial log must not publish a thermochemistry product.
+        if getattr(step_state, "status", "completed") != "completed":
+            continue
+        for artifact in step_state.result.artifacts:
+            if artifact.type not in ("frequency_log", "log", "output"):
+                continue
+            path = Path(artifact.path)
+            if path.is_file():
+                return path
+    return None
+
+
+def _frequency_step_spec(plan: CalculationPlan) -> Mapping[str, Any]:
+    """Method/basis actually passed to the FREQUENCY step (requested facts)."""
+    for step in plan.steps:
+        spec = step.spec if isinstance(step, CalculationStep) else step
+        if not isinstance(spec, Mapping):
+            continue
+        kind = step.kind if isinstance(step, CalculationStep) else spec.get("kind")
+        if kind == StepKind.FREQUENCY:
+            return spec
+    return {}
+
+
+def _publish_frequency_thermochemistry(
+    plan: CalculationPlan,
+    execution: Any,
+    calc_dir: Path,
+) -> None:
+    """Publish ZPE/H/G/S as a RESULT product for a completed frequency run (#4).
+
+    The values are read from the QC output that was actually written (the ORCA
+    ``THERMOCHEMISTRY`` block); a log without that block registers nothing —
+    never fake zeros.  Publication never fails the workflow.
+    """
+    if plan.workflow != "frequency":
+        return
+    result_dir = calc_dir / "RESULT"
+    if not (result_dir / "result_manifest.json").is_file():
+        return
+    freq_log = _frequency_log_path(execution)
+    if freq_log is None:
+        return
+    try:
+        from acp.results.thermochemistry import (
+            PRODUCT_RELATIVE_PATH,
+            build_frequency_thermochemistry,
+            publish_thermochemistry,
+        )
+        from acp.services_publication_bootstrap import (
+            build_publication_data_port,
+            manifest_publisher,
+        )
+
+        spec = _frequency_step_spec(plan)
+        payload = build_frequency_thermochemistry(
+            freq_log,
+            method=str(spec.get("method") or "") or None,
+            basis=str(spec.get("basis") or "") or None,
+        )
+        if payload is None:
+            return
+        publish_thermochemistry(
+            result_dir,
+            payload,
+            relative_path=PRODUCT_RELATIVE_PATH,
+            product_id="thermochemistry",
+            label="Thermochemistry (ZPE/H/G/S)",
+            metadata={"step_kind": "frequency"},
+            publisher=manifest_publisher(build_publication_data_port()),
+        )
+    except (OSError, ValueError, TypeError, KeyError):
+        logger.warning(
+            "frequency: thermochemistry product publication skipped for %s",
+            result_dir,
+            exc_info=True,
+        )
 
 
 def run_singlepoint(

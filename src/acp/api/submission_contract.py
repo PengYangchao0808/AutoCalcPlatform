@@ -338,6 +338,18 @@ _ROLE_FLAT_ALIASES: dict[str, str] = {
     "sp_basis": "single_point_basis",
 }
 
+#: Top-level single-point mirrors and the role field each one must land in.
+#: ``sp_method``/``sp_basis`` are accepted as aliases **only** when
+#: ``batch_roles`` is present (see ``_validate_method``); there is no flat CLI
+#: consumer for those spellings, so accepting them without a role would drop
+#: the value silently.
+_SP_ROLE_MIRRORS: dict[str, tuple[str, str]] = {
+    "single_point_method": ("int", "sp_method"),
+    "single_point_basis": ("int", "sp_basis"),
+    "sp_method": ("int", "sp_method"),
+    "sp_basis": ("int", "sp_basis"),
+}
+
 _WORKBENCH_MIRROR_DEFAULTS: dict[str, tuple[float, ...]] = {
     "temperature": (298.15,),
     "pressure": (1.0,),
@@ -372,7 +384,9 @@ def _flat_mirror_source(key: str) -> tuple[str, str]:
     BatchMethodOptions builds the shared settings from the INT role and only
     the ``transition_state_*`` family from TS (see
     ``acp/calculations/batch/options.py``); a flat value matching *another*
-    role is not a mirror of the executed value.
+    role is not a mirror of the executed value.  The single-point level is
+    per-role (round-7 #2): the flat ``single_point_*``/``sp_*`` spellings
+    mirror the INT role only.
     """
     if key.startswith("transition_state_"):
         return "ts", key[len("transition_state_") :]
@@ -382,6 +396,8 @@ def _flat_mirror_source(key: str) -> tuple[str, str]:
         return "int", key[len("optimization_") :]
     if key.startswith("single_point_"):
         return "int", f"sp_{key[len('single_point_') :]}"
+    if key in _SP_ROLE_MIRRORS:
+        return _SP_ROLE_MIRRORS[key]
     return "int", key
 _BATCH_LEVELS: dict[str, frozenset[str]] = _level_fields("batch_optimize")
 
@@ -685,13 +701,28 @@ def _reject_irc_step(method: Mapping[str, Any]) -> None:
 
 
 def _validate_method(workflow: str, method: Mapping[str, Any], contract: WorkflowContract) -> None:
-    unknown = sorted(str(key) for key in method if str(key) not in contract.method_keys)
+    #: ``sp_method``/``sp_basis`` are accepted ONLY as ``batch_roles``
+    #: mirrors (round-7 #2); the legacy flat payload keeps the documented
+    #: ``single_point_*`` spelling, which has a real CLI consumer.
+    conditional = (
+        frozenset({"sp_method", "sp_basis"})
+        if workflow == "BatchOptimize" and isinstance(method.get("batch_roles"), Mapping)
+        else frozenset()
+    )
+    allowed_keys = contract.method_keys | conditional
+    unknown = sorted(str(key) for key in method if str(key) not in allowed_keys)
     if unknown:
+        hint = ""
+        if unknown[0] in _SP_ROLE_MIRRORS:
+            hint = (
+                " (sp_method/sp_basis are only accepted as batch_roles mirrors; "
+                "the flat form is method.single_point_method/single_point_basis)"
+            )
         raise SubmissionContractError(
-            f"{workflow} method has an undeclared field {unknown[0]!r}",
+            f"{workflow} method has an undeclared field {unknown[0]!r}{hint}",
             field_name=f"method.{unknown[0]}",
             rule="unknown_field",
-            allowed=tuple(sorted(contract.method_keys)),
+            allowed=tuple(sorted(allowed_keys)),
         )
     if workflow == "irc":
         _reject_irc_step(method)
@@ -780,9 +811,46 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
                 field_name=f"method.{unsupported[0]}",
                 rule="shadowed_field",
             )
+        # Round-7 #2: the single-point level is PER ROLE.  A top-level SP
+        # mirror must land in its role — a missing role (or a role without
+        # the mirrored field) would make the flat value inert, so refuse it
+        # instead of dropping it silently.  (The role value, when present, is
+        # compared by the mirror loop below.)
+        for flat_key, (role_id, role_field) in sorted(_SP_ROLE_MIRRORS.items()):
+            if flat_key not in method:
+                continue
+            flat_value = method[flat_key]
+            if flat_value is None or flat_value == "":
+                continue
+            role_value = roles.get(role_id)
+            role_field_value = (
+                role_value.get(role_field) if isinstance(role_value, Mapping) else None
+            )
+            if not isinstance(role_value, Mapping) or role_field_value in (None, ""):
+                has_role = isinstance(role_value, Mapping)
+                target_state = (
+                    f"batch_roles.{role_id} does not set {role_field}"
+                    if has_role
+                    else f"batch_roles has no {role_id!r} entry"
+                )
+                raise SubmissionContractError(
+                    f"method.{flat_key} has no matching batch_roles target "
+                    f"({target_state}); the flat single-point setting would be "
+                    f"dropped. Write method.batch_roles.{role_id}.{role_field} = "
+                    f"{flat_value!r} (one value per role) or remove method.{flat_key}",
+                    field_name=f"method.{flat_key}",
+                    rule="missing_role_mirror",
+                    details={
+                        "role": f"batch_roles.{role_id}.{role_field}",
+                        "role_field": role_field,
+                        "role_present": has_role,
+                        "flat_value": flat_value,
+                    },
+                )
         # A Workbench mirror that carries a *different* value than the role the
         # engine executes is a silent swallow; the role value wins downstream.
-        for flat_key in sorted(_WORKBENCH_FLAT_MIRRORS & set(method)):
+        mirror_keys = (_WORKBENCH_FLAT_MIRRORS | frozenset(_SP_ROLE_MIRRORS)) & set(method)
+        for flat_key in sorted(mirror_keys):
             role_id, role_field = _flat_mirror_source(flat_key)
             role_value = roles.get(role_id)
             if not isinstance(role_value, Mapping) or role_field not in role_value:

@@ -155,14 +155,55 @@ class _FakeStatus:
 
 
 class _FakeCancel:
-    def __init__(self, store: _JobStore) -> None:
+    """Returns the Controller's *full* cancel row (round-7 #7e baseline).
+
+    The HTTP route answers ``POST /jobs/{id}/cancel`` with the whole
+    ``V1JobRecordModel``: ``spec.input.source.xyz_text`` is repeated to ~50 KB
+    here so a regression that echoes the row again is visible as a payload
+    bound, not a formatting nit.  Like the real route it carries ``status``
+    (not ``state``); the MCP projection derives both aliases.  The default
+    answer is ``cancelled``: the Controller moves a queued job straight to the
+    terminal state (a running job would answer ``cancelling``).
+    """
+
+    def __init__(self, store: _JobStore, status: str = "cancelled") -> None:
         self.store = store
+        self.status = status
         self.calls: list[str] = []
 
     def cancel(self, reference: str, *, workspace_id: str) -> dict[str, Any]:
         self.calls.append(reference)
-        self.store.put(reference, {"state": "cancelled", "reference": reference})
-        return {"state": "cancelled", "reference": reference}
+        self.store.put(reference, {"state": self.status, "reference": reference})
+        return {
+            "id": reference,
+            "status": self.status,
+            "attempt": 2,
+            "updated_at": "2026-11-01T04:10:00Z",
+            "spec": {
+                "workflow": "singlepoint",
+                "input": {"source": {"xyz_text": "3\nwater\nO 0 0 0\nH 1 0 0\nH 0 1 0\n" * 1500}},
+                "method": {"levels": {"single_point": {"functional": "wB97M-V"}}},
+            },
+            "admission": {"limits": {"cores": 4}, "decision": "admitted"},
+            "provenance": {"release_id": "release-" + "r" * 2000},
+            "artifacts": [{"artifact_id": f"artifact-{i}"} for i in range(50)],
+            # A reference is passed through only as a name; a mapping under one
+            # of these keys is dropped rather than re-opening the spec leak.
+            "trace_ref": "trace:9f2a1b9c8d7e6f5a4b3c2d1e0f9a8b7c",
+            "spec_ref": {"workflow": "singlepoint", "xyz_text": "x" * 5000},
+        }
+
+
+class _RefusingCancel:
+    """Mirrors the Controller port: an unknown reference is a typed refusal."""
+
+    def cancel(self, reference: str, *, workspace_id: str) -> dict[str, Any]:
+        raise mcp.McpToolError(
+            mo.ErrorCode.RESOURCE_NOT_READY,
+            "operation/job reference not found",
+            params={"reference": reference},
+            retryable=True,
+        )
 
 
 class _FakeArtifacts:
@@ -728,6 +769,87 @@ def test_cancel_calls_backend() -> None:
     assert result["isError"] is False
     assert result["structuredContent"]["data"]["state"] == "cancelled"
     assert fakes.cancel.calls == ["job-1"]
+
+
+def test_cancel_returns_a_bounded_acknowledgement() -> None:
+    """Round-7 #7e: the ~50 KB Controller row is not echoed by ``acp_cancel``.
+
+    The acknowledgement keeps identity/state facts only; the spec body (xyz
+    text), admission, provenance and artifact descriptors stay on the HTTP
+    route and are reachable through ``acp_status``.
+    """
+    fakes = _Fakes()
+    result = _call_tool(_server(fakes=fakes), mcp.McpTool.CANCEL, {"reference": "job-1"})
+    assert result["isError"] is False
+    data = result["structuredContent"]["data"]
+
+    assert data["job_id"] == "job-1"
+    assert data["attempt"] == 2
+    # The real Controller row carries ``status``; the projection derives both.
+    assert data["state"] == data["status"] == "cancelled"
+    assert data["reference"] == "job-1"
+    assert data["updated_at"] == "2026-11-01T04:10:00Z"
+    # A string reference rides along; a mapping under the same key is dropped.
+    assert data["trace_ref"] == "trace:9f2a1b9c8d7e6f5a4b3c2d1e0f9a8b7c"
+    assert "spec_ref" not in data
+    # A cancelled answer is the requested intent satisfied — not "already
+    # finished" (that marker is for completed/failed rows, tested below).
+    assert data["cancelled"] is True
+    assert data["cancel_requested"] is True
+    assert "already_terminal" not in data
+    assert set(data) <= set(mcp._CANCEL_ENVELOPE_FIELDS) | {
+        "reference",
+        "cancelled",
+        "already_terminal",
+        "terminal_state",
+        "cancel_requested",
+    }
+
+    serialized = json.dumps(result, ensure_ascii=False)
+    for withheld in ("spec", "xyz_text", "admission", "provenance", "artifacts"):
+        assert withheld not in serialized
+    assert len(serialized) < 4096
+
+
+def test_cancel_already_terminal_marker_survives_the_projection() -> None:
+    """Round-2 semantics are kept: a finished job says so in the compact ack."""
+    fakes = _Fakes()
+    fakes.cancel = _FakeCancel(fakes.store, status="completed")  # type: ignore[assignment]
+    result = _call_tool(_server(fakes=fakes), mcp.McpTool.CANCEL, {"reference": "job-done"})
+    data = result["structuredContent"]["data"]
+    assert data["state"] == "completed"
+    assert data["cancelled"] is False
+    assert data["already_terminal"] is True
+    assert data["terminal_state"] == "completed"
+    assert data["cancel_requested"] is True
+
+
+def test_cancel_unknown_job_keeps_the_typed_error() -> None:
+    """A missing job is still the port's typed refusal, never a fake ack."""
+    fakes = _Fakes()
+    fakes.cancel = _RefusingCancel()  # type: ignore[assignment]
+    result = _call_tool(_server(fakes=fakes), mcp.McpTool.CANCEL, {"reference": "job-nope"})
+    assert result["isError"] is True
+    error = result["structuredContent"]["error"]
+    assert error["code"] == mo.ErrorCode.RESOURCE_NOT_READY
+    assert error["retryable"] is True
+    assert error["params"]["reference"] == "job-nope"
+    # No acknowledgement is fabricated for the missing job.
+    assert "data" not in result["structuredContent"] or not result["structuredContent"]["data"]
+
+
+def test_submit_forwards_a_chemistry_shaped_idempotency_key() -> None:
+    """Round-7 #7b: ``ccsd(t)`` in the key reaches the ledger verbatim."""
+    fakes = _Fakes()
+    key = "exp:sp-ccsd(t)-ts:[v2]0001"
+    result = _call_tool(
+        _server(fakes=fakes), mcp.McpTool.SUBMIT, {**_SUBMIT_BODY, "idempotency_key": key}
+    )
+    assert result["isError"] is False
+    assert fakes.submit.calls[-1][1] == key
+    data = result["structuredContent"]["data"]
+    assert data["idempotency_key"] == key
+    assert data["idempotency_key_origin"] == mcp.IDEMPOTENCY_KEY_ORIGIN_CLIENT
 
 
 # --------------------------------------------------------------------------- #

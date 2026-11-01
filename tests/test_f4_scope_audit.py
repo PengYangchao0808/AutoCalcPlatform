@@ -126,6 +126,24 @@ Amendments (plan-sanctioned, wave-2 backend wiring):
        ``-T`` threading line remains, three ``-P`` lines present, the
        xcontrol write must insert ``extra_control_text``, and the
        constraint writer must emit the block-level force constant.
+    U. round-7 wave (2026-11, MCP guidance feedback): route-basis invariant
+       (``route_render.py`` refuses two distinct orbital bases on one ``!``
+       line; ``orca.py`` consumes ``resolve_route_orbital_basis`` /
+       ``AuxiliaryBasisError`` and the method-meta ``is_orbital_basis``
+       predicate), named ORCA energy report (``OrcaEnergyReport`` /
+       ``parse_energy_report`` / ``energy_report_for``), typed executable
+       refusal (``_require_executable`` + ``_software_error_metadata``),
+       and the xTB constraint syntax contract (``xtb_scan.py`` typed
+       ``$constrain`` parsers + pre-spawn validation in ``xtb.py`` /
+       ``xtb_path.py``).  Sanctioned scopes: the exact round-7 import lines,
+       the contiguous energy-report module block, the two refusal helpers,
+       the existing renderer/method ranges that carry the resolver call
+       sites, the reformatted ``constrained_optimize`` write block deletion,
+       the ``xtb_scan`` syntax-contract block, and the two modules the wave
+       made auditable — ``route_render.py`` / ``xtb_path.py`` are registered
+       whole-module (additions only, zero baseline deletions).  Teeth: the
+       energy-report symbols, resolver/refusal imports, pre-spawn xcontrol
+       validation and syntax-contract exports must all exist.
 """
 
 from __future__ import annotations
@@ -138,6 +156,7 @@ import subprocess
 import sys
 import tempfile
 from collections.abc import Iterable, Mapping
+from functools import lru_cache
 from pathlib import Path
 
 import pytest
@@ -161,6 +180,11 @@ ALLOWED_PY = frozenset(
         "src/cccp/qc/interfaces/censo.py",
         "src/cccp/qc/interfaces/xtb.py",
         "src/cccp/qc/interfaces/xtb_scan.py",
+        # Amendment U: round-7 modules made auditable as whole-module
+        # registrations — the route renderer (single-orbital-basis invariant)
+        # and the xTB path interface (path.inp constraint validation).
+        "src/cccp/qc/interfaces/route_render.py",
+        "src/cccp/qc/interfaces/xtb_path.py",
         "src/acp/backends/orca.py",
     }
 )
@@ -179,17 +203,19 @@ def _git(*args: str) -> str:
     ).stdout
 
 
+_AUDIT_SCOPE = ("src/cccp/qc/interfaces/", "src/acp/backends/orca.py")
+
+
 def _changed_files() -> set[str]:
-    """Files changed between *BASELINE* and worktree in the audited scope."""
-    out = _git(
-        "diff",
-        "--name-only",
-        BASELINE,
-        "--",
-        "src/cccp/qc/interfaces/",
-        "src/acp/backends/orca.py",
-    )
-    return set(out.strip().splitlines()) if out.strip() else set()
+    """Files changed between *BASELINE* and worktree in the audited scope.
+
+    Untracked modules are included (same rule as the migration audit): a newly
+    smuggled ``.py`` file must fail the allowlist even before it is staged.
+    """
+    out = _git("diff", "--name-only", BASELINE, "--", *_AUDIT_SCOPE)
+    untracked = _git("ls-files", "--others", "--exclude-standard", "--", *_AUDIT_SCOPE)
+    combined = "\n".join(part for part in (out, untracked) if part.strip())
+    return {line for line in combined.splitlines() if line}
 
 
 def _diff_hunks(
@@ -241,6 +267,10 @@ def _worktree_content(path: str) -> str:
     return (ROOT / path).read_text()
 
 
+#: The per-source AST parses are pure; memoising them keeps the audit (which
+#: re-checks hundreds of diff lines per amendment) fast without changing any
+#: predicate semantics.  Callers treat the returned mappings as read-only.
+@lru_cache(maxsize=256)
 def _func_ranges(src: str) -> dict[str, tuple[int, int]]:
     """Parse AST and return ``{name: (start_line, end_line)}``."""
     out: dict[str, tuple[int, int]] = {}
@@ -250,6 +280,7 @@ def _func_ranges(src: str) -> dict[str, tuple[int, int]]:
     return out
 
 
+@lru_cache(maxsize=256)
 def _func_range(src: str, func_name: str, cls_name: str | None = None) -> tuple[int, int] | None:
     """Return ``(start, end)`` lines for *func_name* inside *cls_name*.
 
@@ -770,10 +801,34 @@ def _amendment_h_orca_teeth(worktree: str) -> list[str]:
 # worktree ranges).
 
 
+def _module_import_aliases(src: str) -> list[tuple[int, str, str]]:
+    """Module-level ``from module import name`` edges as ``(line, module, name)``.
+
+    Uses the alias line number where the interpreter provides one (Python ≥3.10
+    AST), so multi-line parenthesised imports are matched per name instead of
+    per statement.
+    """
+    edges: list[tuple[int, str, str]] = []
+    for node in ast.parse(src).body:
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            for alias in node.names:
+                edges.append((getattr(alias, "lineno", node.lineno), module, alias.name))
+    return edges
+
+
 def _is_amendment_i_addition(ln: int, txt: str, worktree_src: str) -> bool:
-    """Allowlisted ``orca.py`` additions for the METHOD_META relocation."""
-    stripped = txt.strip()
-    if stripped == "from cccp.qc.method_meta import method_meta":
+    """Allowlisted ``orca.py`` additions for the METHOD_META relocation.
+
+    The import line was later extended by Amendments R/U (``scf_constraint`` /
+    ``is_orbital_basis`` added to the same statement), so the predicate matches
+    the module-level ``method_meta`` import by AST instead of the stale
+    pre-extension literal.
+    """
+    if any(
+        line == ln and module == "cccp.qc.method_meta" and name == "method_meta"
+        for line, module, name in _module_import_aliases(worktree_src)
+    ):
         return True
     meta_range = _func_ranges(worktree_src).get("_resolve_method_meta")
     return meta_range is not None and meta_range[0] <= ln <= meta_range[1]
@@ -788,7 +843,10 @@ def _is_amendment_i_deletion(ln: int, baseline_src: str) -> bool:
 def _amendment_i_orca_teeth(worktree: str) -> list[str]:
     """Teeth: the meta lookup comes from cccp and the acp import is gone."""
     issues: list[str] = []
-    if "from cccp.qc.method_meta import method_meta" not in worktree:
+    if not any(
+        module == "cccp.qc.method_meta" and name == "method_meta"
+        for _, module, name in _module_import_aliases(worktree)
+    ):
         issues.append("  Amendment I: direct cccp.qc.method_meta import missing")
     meta_range = _func_ranges(worktree).get("_resolve_method_meta")
     if meta_range is None:
@@ -823,7 +881,9 @@ def test_amendment_i_predicates_confined_and_negatives() -> None:
     )
     issues = _amendment_i_orca_teeth(injected)
     assert any("still reaches for acp" in issue for issue in issues)
-    stripped = worktree.replace("from cccp.qc.method_meta import method_meta, scf_constraint\n", "")
+    stripped = worktree.replace(
+        "from cccp.qc.method_meta import is_orbital_basis, method_meta, scf_constraint\n", ""
+    )
     issues = _amendment_i_orca_teeth(stripped)
     assert any("direct cccp.qc.method_meta import missing" in issue for issue in issues)
 
@@ -1612,7 +1672,9 @@ _AMENDMENT_R_ORCA_IMPORTS = frozenset(
         "canonical_token,",
         "canonical_tokens,",
         "scf_rank,",
-        "from cccp.qc.method_meta import method_meta, scf_constraint",
+        # Re-formatted by the round-7 route-basis wave (Amendment U added the
+        # ``is_orbital_basis`` name); the SCF-floor names are unchanged.
+        "from cccp.qc.method_meta import is_orbital_basis, method_meta, scf_constraint",
     }
 )
 _AMENDMENT_R_ORCA_TS_IMPORTS = frozenset(
@@ -1954,6 +2016,533 @@ def test_amendment_t_predicates_confined_and_negatives() -> None:
     assert _amendment_t_teeth(xtb_src=xtb.replace('"-P", str(self.nproc),', '"-P", "1",'))
 
 
+# ── Amendment U: round-7 wave (route-basis invariant / xTB constraint syntax /
+#    ORCA executable probe + named energy report) ─────────────────────────────
+#
+# Round-7 closed three classes of silently-wrong results:
+#
+# * route-basis invariant — ``route_render.py`` refuses any ``!`` line that
+#   would carry two DISTINCT orbital bases (ORCA keeps the last token, so a
+#   normal-terminated job would use the wrong wavefunction).  ``orca.py``
+#   imports ``AuxiliaryBasisError`` / ``resolve_route_orbital_basis`` (plus the
+#   method-meta ``is_orbital_basis`` predicate) and the rendering call sites
+#   inside ``_build_input_blocks`` / ``single_point`` consume the shared
+#   resolver; ``xtb_path.py`` validates externally authored ``path.inp``
+#   constraint text before it spawns xTB.
+# * xTB constraint syntax contract — ``xtb_scan.py`` gains the typed
+#   ``$constrain`` parsers/rejection evidence (xTB only warns, then optimizes
+#   unconstrained and exits 0) and ``xtb.py`` validates the composed xcontrol
+#   text before the process starts; the ``constrained_optimize`` write block
+#   was re-flowed to a single ``write_text(text, encoding=...)`` call.
+# * ORCA probe + energy report — ``_require_executable`` reports the typed
+#   resolution refusal (``executable_refusal``), ``_software_error_metadata``
+#   carries its ``.params`` into ``QCResult.metadata``, and the ORCA energy
+#   decomposition is parsed once into the labelled ``OrcaEnergyReport`` (the
+#   SCF reference can never be reported as the correlated result).
+#
+# Sanctioned scopes: the exact round-7 import tokens (only inside their own
+# module-level import statement), the contiguous energy-report block, the two
+# refusal helpers, and the existing renderer/method ranges that carry the
+# resolver call sites.  ``route_render.py`` / ``xtb_path.py`` are registered as
+# whole-module "new sanctioned modules": every added line belongs to the wave
+# and there are zero baseline deletions — while a new unregistered ``.py``
+# file still fails ``test_diff_only_allowed_py_files``.  Teeth below keep the
+# registration from outliving the features.
+
+_ROUND7_NEW_MODULES: dict[str, tuple[str, ...]] = {
+    "src/cccp/qc/interfaces/route_render.py": (
+        "resolve_route_orbital_basis",
+        "AuxiliaryBasisError",
+        "RouteBasisConflictError",
+        "RouteBasisResolution",
+        "_assert_single_orbital_basis",
+    ),
+    "src/cccp/qc/interfaces/xtb_path.py": (
+        "XTBPathInterface",
+        "path_search",
+    ),
+}
+
+_AMENDMENT_U_ORCA_IMPORT_MODULES = frozenset(
+    {
+        "dataclasses",
+        "cccp.qc.interfaces.route_render",
+        # ``orca.py`` closes this import with the ``)`` that git's diff pairs
+        # with the re-flowed ``cccp.software`` block (an Amendment U artifact),
+        # so the statement is sanctioned but only for the exact tokens below.
+        "cccp.qc.keyword_registry",
+        "cccp.software",
+    }
+)
+_AMENDMENT_U_ORCA_IMPORTS = frozenset(
+    {
+        "from dataclasses import dataclass",
+        "AuxiliaryBasisError,",
+        "resolve_route_orbital_basis,",
+        "from cccp.software import (",
+        "SoftwareNotFoundError,",
+        "executable_refusal,",
+        "orca_runtime_env,",
+        "resolve_executable,",
+        ")",
+    }
+)
+_AMENDMENT_U_ORCA_FUNC_SCOPES = (
+    # round-7 helpers
+    "_software_error_metadata",
+    "_require_executable",
+    # existing renderer/method ranges that carry the resolver call sites
+    "_build_input_blocks",
+    "single_point",
+)
+
+_AMENDMENT_U_XTB_SCAN_MODULE = "cccp.qc.interfaces.xtb_scan"
+_AMENDMENT_U_XTB_IMPORTS = frozenset({"validate_xcontrol_text,"})
+_AMENDMENT_U_XTB_OLD_WRITE_BLOCK = (
+    "xcontrol_path.write_text(",
+    'f"{constraint_text}\\n$opt\\n{opt_block}$end\\n",',
+    'encoding="utf-8",',
+    ")",
+)
+_AMENDMENT_U_XTB_SCAN_IMPORTS = frozenset({"import math", "import re"})
+_AMENDMENT_U_XTB_SCAN_FUNCS = (
+    "parse_xcontrol_constraints",
+    "validate_xcontrol_text",
+    "detect_constraint_rejection",
+    "parse_constraint_evidence",
+    "_constraint_kind",
+)
+_AMENDMENT_U_XTB_SCAN_EXPORTS = (
+    "XtbConstraintSyntaxError",
+    "detect_constraint_rejection",
+    "parse_constraint_evidence",
+    "parse_xcontrol_constraints",
+    "validate_xcontrol_text",
+)
+
+
+def _module_import_spans(src: str, modules: Iterable[str]) -> list[tuple[int, int]]:
+    """``(first, last)`` line span of module-level ``from module import ...``."""
+    return [
+        (node.lineno, node.end_lineno or node.lineno)
+        for node in ast.parse(src).body
+        if isinstance(node, ast.ImportFrom) and node.module in modules
+    ]
+
+
+def _module_docstring_span(src: str) -> tuple[int, int] | None:
+    tree = ast.parse(src)
+    if (
+        tree.body
+        and isinstance(tree.body[0], ast.Expr)
+        and isinstance(tree.body[0].value, ast.Constant)
+        and isinstance(tree.body[0].value.value, str)
+    ):
+        node = tree.body[0]
+        return (node.lineno, node.end_lineno or node.lineno)
+    return None
+
+
+def _module_exports(src: str) -> set[str]:
+    for node in ast.parse(src).body:
+        if (
+            isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "__all__" for target in node.targets
+            )
+            and isinstance(node.value, (ast.List, ast.Tuple))
+        ):
+            return {
+                element.value
+                for element in node.value.elts
+                if isinstance(element, ast.Constant) and isinstance(element.value, str)
+            }
+    return set()
+
+
+def _amendment_u_energy_block(src: str) -> tuple[int, int] | None:
+    """Contiguous round-7 energy-report block: heading comment .. ``energy_report_for``."""
+    start_offset = src.find("# ── energy reporting")
+    end_range = _func_ranges(src).get("energy_report_for")
+    if start_offset < 0 or end_range is None:
+        return None
+    return (src.count("\n", 0, start_offset) + 1, end_range[1])
+
+
+def _is_amendment_u_orca_addition(ln: int, txt: str, worktree_src: str) -> bool:
+    """Allowlisted ``orca.py`` additions for the round-7 wave."""
+    if txt.strip() in _AMENDMENT_U_ORCA_IMPORTS and any(
+        start <= ln <= end
+        for start, end in _module_import_spans(worktree_src, _AMENDMENT_U_ORCA_IMPORT_MODULES)
+    ):
+        return True
+    block = _amendment_u_energy_block(worktree_src)
+    if block is not None and block[0] <= ln <= block[1]:
+        return True
+    ranges = _func_ranges(worktree_src)
+    return any(
+        (span := ranges.get(name)) is not None and span[0] <= ln <= span[1]
+        for name in _AMENDMENT_U_ORCA_FUNC_SCOPES
+    )
+
+
+def _is_amendment_u_orca_deletion(ln: int, txt: str, baseline_src: str) -> bool:
+    """Sanctioned ``orca.py`` deletions: the re-flowed import + refusal body."""
+    if txt.strip() == (
+        "from cccp.software import SoftwareNotFoundError, orca_runtime_env, resolve_executable"
+    ):
+        return any(
+            line == ln and module == "cccp.software"
+            for line, module, _ in _module_import_aliases(baseline_src)
+        )
+    ranges = _func_ranges(baseline_src)
+    return any(
+        (span := ranges.get(name)) is not None and span[0] <= ln <= span[1]
+        for name in _AMENDMENT_U_ORCA_FUNC_SCOPES
+    )
+
+
+def _amendment_u_orca_teeth(worktree: str) -> list[str]:
+    """Teeth: the round-7 ORCA probe / energy-report / basis wiring must land."""
+    issues: list[str] = []
+    for needle, label in (
+        ("class OrcaEnergyReport", "energy-report dataclass"),
+        ("def parse_energy_report", "energy-report parser"),
+        ("def energy_report_for", "energy-report file reader"),
+        ("def _software_error_metadata", "software-refusal metadata helper"),
+        ("executable_refusal(", "typed executable refusal"),
+        ("resolve_route_orbital_basis(", "shared route-basis resolver"),
+        ("is_orbital_basis", "method-meta orbital-basis predicate"),
+    ):
+        if needle not in worktree:
+            issues.append(f"  Amendment U: orca.py missing {label}")
+    return issues
+
+
+def _is_amendment_u_xtb_addition(ln: int, txt: str, worktree_src: str) -> bool:
+    """Allowlisted ``xtb.py`` addition: the pre-spawn validator import."""
+    if txt.strip() not in _AMENDMENT_U_XTB_IMPORTS:
+        return False
+    return any(
+        start <= ln <= end
+        for start, end in _module_import_spans(worktree_src, (_AMENDMENT_U_XTB_SCAN_MODULE,))
+    )
+
+
+def _amendment_u_xtb_old_write_block(baseline_src: str) -> tuple[int, int] | None:
+    """The baseline 4-line ``xcontrol_path.write_text(...)`` statement."""
+    lines = baseline_src.splitlines()
+    fn = _func_range(baseline_src, "constrained_optimize", "XTBInterface")
+    if fn is None:
+        return None
+    for idx in range(fn[0], fn[1] + 1):
+        if lines[idx - 1].strip() != _AMENDMENT_U_XTB_OLD_WRITE_BLOCK[0]:
+            continue
+        actual = tuple(line.strip() for line in lines[idx - 1 : idx + 3])
+        if actual == _AMENDMENT_U_XTB_OLD_WRITE_BLOCK:
+            return (idx, idx + 3)
+    return None
+
+
+def _is_amendment_u_xtb_deletion(ln: int, txt: str, baseline_src: str) -> bool:
+    """Sanctioned ``xtb.py`` deletion: the re-flowed xcontrol write block."""
+    block = _amendment_u_xtb_old_write_block(baseline_src)
+    return block is not None and block[0] <= ln <= block[1]
+
+
+def _amendment_u_xtb_teeth(xtb_src: str) -> list[str]:
+    """Teeth: the composed xcontrol text is validated before it is written."""
+    rng = _func_range(xtb_src, "constrained_optimize", "XTBInterface")
+    if rng is None:
+        return ["  Amendment U: XTBInterface.constrained_optimize missing"]
+    body = "\n".join(xtb_src.splitlines()[rng[0] - 1 : rng[1]])
+    validated = body.find("validate_xcontrol_text(")
+    written = body.find("xcontrol_path.write_text(")
+    issues: list[str] = []
+    if validated < 0:
+        issues.append("  Amendment U: constrained_optimize must validate the xcontrol text")
+    elif written >= 0 and validated > written:
+        issues.append("  Amendment U: xcontrol validation must run before the write")
+    return issues
+
+
+def _amendment_u_xtb_scan_block(src: str) -> tuple[int, int] | None:
+    """Contiguous ``$constrain`` syntax-contract block: constant .. evidence record."""
+    start = None
+    for idx, line in enumerate(src.splitlines(), start=1):
+        if line.startswith("_CONSTRAINT_ATOM_COUNTS"):
+            start = idx
+            break
+    end_range = _func_ranges(src).get("parse_constraint_evidence")
+    if start is None or end_range is None:
+        return None
+    return (start, end_range[1])
+
+
+def _amendment_u_xtb_scan_export_spans(src: str) -> list[tuple[int, int]]:
+    """``__all__`` assignment spans (export membership is round-7 scoped)."""
+    spans: list[tuple[int, int]] = []
+    for node in ast.parse(src).body:
+        if (
+            isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "__all__" for target in node.targets
+            )
+            and isinstance(node.value, (ast.List, ast.Tuple))
+        ):
+            spans.append((node.lineno, node.end_lineno or node.lineno))
+    return spans
+
+
+def _is_amendment_u_xtb_scan_addition(ln: int, txt: str, worktree_src: str) -> bool:
+    """Allowlisted ``xtb_scan.py`` additions for the round-7 syntax contract."""
+    stripped = txt.strip()
+    if stripped in _AMENDMENT_U_XTB_SCAN_IMPORTS:
+        return any(
+            isinstance(node, ast.Import) and node.lineno == ln
+            for node in ast.parse(worktree_src).body
+        )
+    doc = _module_docstring_span(worktree_src)
+    if doc is not None and doc[0] <= ln <= doc[1]:
+        return True
+    if any(start <= ln <= end for start, end in _amendment_u_xtb_scan_export_spans(worktree_src)):
+        return True
+    block = _amendment_u_xtb_scan_block(worktree_src)
+    if block is not None and block[0] <= ln <= block[1]:
+        return True
+    kind_range = _func_ranges(worktree_src).get("_constraint_kind")
+    return kind_range is not None and kind_range[0] <= ln <= kind_range[1]
+
+
+def _is_amendment_u_xtb_scan_deletion(ln: int, txt: str, baseline_src: str) -> bool:
+    """Sanctioned ``xtb_scan.py`` deletion: the pre-round-7 module docstring line."""
+    doc = _module_docstring_span(baseline_src)
+    return doc is not None and doc[0] <= ln <= doc[1]
+
+
+def _amendment_u_xtb_scan_teeth(scan_src: str) -> list[str]:
+    """Teeth: the typed ``$constrain`` syntax contract must actually land."""
+    issues: list[str] = []
+    ranges = _func_ranges(scan_src)
+    for name in _AMENDMENT_U_XTB_SCAN_FUNCS:
+        if name not in ranges:
+            issues.append(f"  Amendment U: xtb_scan.py missing {name}")
+    if "class XtbConstraintSyntaxError" not in scan_src:
+        issues.append("  Amendment U: xtb_scan.py missing XtbConstraintSyntaxError")
+    block = _amendment_u_xtb_scan_block(scan_src)
+    if block is None:
+        issues.append("  Amendment U: xtb_scan.py syntax-contract block missing")
+    else:
+        body = "\n".join(scan_src.splitlines()[block[0] - 1 : block[1]])
+        for needle, label in (
+            ("_CONSTRAINT_ATOM_COUNTS", "required constraint atom counts"),
+            ("not enough arguments to constrain", "xTB refusal wording"),
+            ("constraint_syntax_invalid", "typed refusal rule"),
+        ):
+            if needle not in body:
+                issues.append(f"  Amendment U: syntax contract missing {label}")
+    exports = _module_exports(scan_src)
+    missing = [name for name in _AMENDMENT_U_XTB_SCAN_EXPORTS if name not in exports]
+    if missing:
+        issues.append(f"  Amendment U: xtb_scan.py __all__ missing {missing}")
+    return issues
+
+
+def _amendment_u_new_module_teeth(fp: str, worktree: str) -> list[str]:
+    """Teeth for the two whole-module registrations (Amendment U)."""
+    issues: list[str] = []
+    ranges = _func_ranges(worktree)
+    for symbol in _ROUND7_NEW_MODULES[fp]:
+        if symbol not in ranges and f"class {symbol}" not in worktree:
+            issues.append(f"  Amendment U: {fp} missing {symbol}")
+    if "from acp" in worktree or "import acp" in worktree:
+        issues.append(f"  Amendment U: {fp} must not import acp")
+    _, deleted = _diff_hunks(fp)
+    if deleted:
+        issues.append(f"  {fp}: registered new module gained baseline deletions")
+    if fp.endswith("route_render.py"):
+        if "_assert_single_orbital_basis(tokens)" not in worktree:
+            issues.append(
+                "  Amendment U: route_render must enforce the single-orbital-basis invariant"
+            )
+    if fp.endswith("xtb_path.py") and "validate_xcontrol_text(path_inp_text)" not in worktree:
+        issues.append("  Amendment U: xtb_path must validate path.inp constraint text")
+    return issues
+
+
+def test_amendment_u_predicates_confined_and_negatives() -> None:
+    """Amendment U is confined to the round-7 scopes — negative injections."""
+    orca_fp = "src/cccp/qc/interfaces/orca.py"
+    orca = _worktree_content(orca_fp)
+    baseline_orca = _baseline_content(orca_fp)
+    added_orca, deleted_orca = _diff_hunks(orca_fp)
+
+    u_orca = [(ln, txt) for ln, txt in added_orca if _is_amendment_u_orca_addition(ln, txt, orca)]
+    u_texts = {txt.strip() for _, txt in u_orca}
+    assert {
+        "from dataclasses import dataclass",
+        "AuxiliaryBasisError,",
+        "resolve_route_orbital_basis,",
+        "from cccp.software import (",
+        "SoftwareNotFoundError,",
+        "executable_refusal,",
+        "orca_runtime_env,",
+        "resolve_executable,",
+    } <= u_texts
+
+    # The energy-report block and both refusal helpers are fully sanctioned.
+    def covered(span: tuple[int, int]) -> list[tuple[int, str]]:
+        return [
+            (ln, txt)
+            for ln, txt in added_orca
+            if span[0] <= ln <= span[1] and txt.strip() and not txt.strip().startswith("#")
+        ]
+
+    energy = _amendment_u_energy_block(orca)
+    assert energy is not None
+    assert covered(energy)
+    assert all(_is_amendment_u_orca_addition(ln, txt, orca) for ln, txt in covered(energy))
+    for name in ("_software_error_metadata", "_require_executable"):
+        span = _func_ranges(orca).get(name)
+        assert span is not None, name
+        assert covered(span), name
+        assert all(_is_amendment_u_orca_addition(ln, txt, orca) for ln, txt in covered(span))
+
+    # Confinement: the same shapes outside the sanctioned scopes stay rejected.
+    run_orca = _func_range(orca, "_run_orca", "ORCAInterface")
+    assert run_orca is not None
+    assert not _is_amendment_u_orca_addition(run_orca[0], "    blocked = True", orca)
+    assert not _is_amendment_u_orca_addition(energy[1] + 2, "x = 1", orca)
+    assert not _is_amendment_u_orca_addition(1, "from cccp.software import os", orca)
+    assert not _is_amendment_u_orca_addition(1, ")", orca)
+
+    u_deleted = [
+        (ln, txt)
+        for ln, txt in deleted_orca
+        if _is_amendment_u_orca_deletion(ln, txt, baseline_orca)
+    ]
+    # The round-7-only deletions are the re-flowed software import and the
+    # baseline ``_require_executable`` body; every other U-sanctioned deletion
+    # must already be an Amendment E renderer/method deletion.
+    software_import = next(
+        (
+            line
+            for line, module, _ in _module_import_aliases(baseline_orca)
+            if module == "cccp.software"
+        ),
+        None,
+    )
+    require_executable = _func_range(baseline_orca, "_require_executable", "ORCAInterface")
+    assert software_import is not None
+    assert require_executable is not None
+    round7 = {software_import, *range(require_executable[0], require_executable[1] + 1)}
+    deleted_lines = {ln for ln, _ in deleted_orca}
+    expected_round7 = {ln for ln in round7 if ln in deleted_lines}
+    assert {ln for ln, _ in u_deleted} >= expected_round7, u_deleted
+    beyond = [
+        (ln, txt)
+        for ln, txt in u_deleted
+        if ln not in round7 and not _is_amendment_e_deletion(ln, baseline_orca)
+    ]
+    assert not beyond, f"Amendment U sanctions deletions beyond its round-7 scope: {beyond}"
+    base_run_orca = _func_range(baseline_orca, "_run_orca", "ORCAInterface")
+    assert base_run_orca is not None
+    assert not _is_amendment_u_orca_deletion(base_run_orca[0], "", baseline_orca)
+    assert not _is_amendment_u_orca_deletion(1, u_deleted[0][1], baseline_orca)
+
+    assert not _amendment_u_orca_teeth(orca)
+    issues = _amendment_u_orca_teeth(orca.replace("class OrcaEnergyReport", "class _RenamedReport"))
+    assert any("energy-report dataclass" in issue for issue in issues)
+    issues = _amendment_u_orca_teeth(orca.replace("executable_refusal(", "unrefused("))
+    assert any("typed executable refusal" in issue for issue in issues)
+
+    # ── xtb.py: the pre-spawn validator import + re-flowed write block ──────
+    xtb_fp = "src/cccp/qc/interfaces/xtb.py"
+    xtb = _worktree_content(xtb_fp)
+    baseline_xtb = _baseline_content(xtb_fp)
+    added_xtb, deleted_xtb = _diff_hunks(xtb_fp)
+    u_xtb = [(ln, txt) for ln, txt in added_xtb if _is_amendment_u_xtb_addition(ln, txt, xtb)]
+    assert {txt.strip() for _, txt in u_xtb} == {"validate_xcontrol_text,"}
+    write_block = _amendment_u_xtb_old_write_block(baseline_xtb)
+    assert write_block is not None
+    u_xtb_deleted = [
+        (ln, txt) for ln, txt in deleted_xtb if _is_amendment_u_xtb_deletion(ln, txt, baseline_xtb)
+    ]
+    assert [ln for ln, _ in u_xtb_deleted] == list(range(write_block[0], write_block[1] + 1))
+    assert not _is_amendment_u_xtb_addition(1, "validate_xcontrol_text,", xtb)
+    assert not _is_amendment_u_xtb_deletion(write_block[1] + 1, "", baseline_xtb)
+    assert not _amendment_u_xtb_teeth(xtb)
+    issues = _amendment_u_xtb_teeth(
+        xtb.replace("        validate_xcontrol_text(xcontrol_text)\n", "")
+    )
+    assert any("must validate the xcontrol text" in issue for issue in issues)
+
+    # ── xtb_scan.py: the typed $constrain syntax contract ───────────────────
+    scan_fp = "src/cccp/qc/interfaces/xtb_scan.py"
+    scan = _worktree_content(scan_fp)
+    baseline_scan = _baseline_content(scan_fp)
+    added_scan, deleted_scan = _diff_hunks(scan_fp)
+    u_scan = [
+        (ln, txt) for ln, txt in added_scan if _is_amendment_u_xtb_scan_addition(ln, txt, scan)
+    ]
+    u_scan_texts = {txt.strip() for _, txt in u_scan}
+    assert {
+        "import math",
+        "import re",
+        '_CONSTRAINT_ATOM_COUNTS: dict[str, int] = {"distance": 2, "angle": 3, "dihedral": 4}',
+        "def parse_xcontrol_constraints(text: str) -> dict[str, Any]:",
+        "def validate_xcontrol_text(text: str) -> dict[str, Any]:",
+        "def detect_constraint_rejection(log_text: str, *, limit: int = 5) -> tuple[str, ...]:",
+        "def parse_constraint_evidence(log_text: str, *, requested: int) -> dict[str, Any]:",
+        "def _constraint_kind(constraint: CoordinateConstraint) -> str:",
+    } <= u_scan_texts
+    # The module-docstring / __all__ additions ride their own spans.
+    assert "xTB convention), the ``$constrain`` syntax contract (typed refusals for" in u_scan_texts
+    assert '"XtbConstraintSyntaxError",' in u_scan_texts
+
+    plan_range = _func_ranges(scan).get("plan_from_dict")
+    assert plan_range is not None
+    assert not _is_amendment_u_xtb_scan_addition(plan_range[0] + 1, "smuggled = 1", scan)
+
+    u_scan_deleted = [
+        (ln, txt)
+        for ln, txt in deleted_scan
+        if _is_amendment_u_xtb_scan_deletion(ln, txt, baseline_scan)
+    ]
+    assert len(u_scan_deleted) == 1, (
+        f"expected 1 sanctioned docstring deletion, got {u_scan_deleted}"
+    )
+    assert not _is_amendment_u_xtb_scan_deletion(plan_range[0], "x = 1", baseline_scan)
+
+    assert not _amendment_u_xtb_scan_teeth(scan)
+    issues = _amendment_u_xtb_scan_teeth(
+        scan.replace("class XtbConstraintSyntaxError", "class _RenamedSyntaxError")
+    )
+    assert any("XtbConstraintSyntaxError" in issue for issue in issues)
+    issues = _amendment_u_xtb_scan_teeth(scan.replace('"validate_xcontrol_text",\n', ""))
+    assert any("__all__" in issue for issue in issues)
+
+    # ── the two whole-module registrations ─────────────────────────────────
+    for fp in _ROUND7_NEW_MODULES:
+        assert fp in ALLOWED_PY
+        assert not _amendment_u_new_module_teeth(fp, _worktree_content(fp)), fp
+    rogue = "src/cccp/qc/interfaces/round7_rogue.py"
+    assert rogue not in ALLOWED_PY
+    assert ({rogue} - ALLOWED_PY) == {rogue}
+    route_render_fp = "src/cccp/qc/interfaces/route_render.py"
+    route_render = _worktree_content(route_render_fp)
+    issues = _amendment_u_new_module_teeth(
+        route_render_fp, route_render.replace("_assert_single_orbital_basis(tokens)", "guard(x)")
+    )
+    assert any("single-orbital-basis" in issue for issue in issues)
+    xtb_path_fp = "src/cccp/qc/interfaces/xtb_path.py"
+    issues = _amendment_u_new_module_teeth(
+        xtb_path_fp,
+        _worktree_content(xtb_path_fp).replace("validate_xcontrol_text(path_inp_text)", "noop(x)"),
+    )
+    assert any("path.inp" in issue for issue in issues)
+
+
 # ── ① AST function-scope audit ──────────────────────────────────────────────
 
 # The F4 refactor wave closed in 2026-05; these scope audits whitelist the
@@ -1970,7 +2559,6 @@ def test_diff_only_allowed_py_files() -> None:
     """① Only ``.py`` files in the allowed set appear in the diff."""
     py = {f for f in _changed_files() if f.endswith(".py")}
     assert not (py - ALLOWED_PY), f"Unexpected .py files changed: {py - ALLOWED_PY}"
-
 
 
 # ── Amendment X — CENSO execution evidence (MCP UX P4, 2026-10-29) ──────────
@@ -2067,6 +2655,15 @@ def test_algorithm_body_untouched() -> None:
 
     for fp in ALLOWED_PY:
         added, deleted = _diff_hunks(fp)
+
+        # ── route_render.py / xtb_path.py: Amendment U new modules ───────
+        # Whole-module registrations: every added line belongs to the round-7
+        # wave and the teeth below require zero baseline deletions (a future
+        # edit must register its own amendment).
+        if fp in _ROUND7_NEW_MODULES:
+            worktree = _worktree_content(fp)
+            violations.extend(_amendment_u_new_module_teeth(fp, worktree))
+            continue
 
         # ── censo.py: Amendment S (memory) + X (execution evidence) ───────
         if fp == "src/cccp/qc/interfaces/censo.py":
@@ -2201,6 +2798,8 @@ def test_algorithm_body_untouched() -> None:
                     continue
                 if _is_amendment_z_orca_addition(ln, txt, worktree):
                     continue
+                if _is_amendment_u_orca_addition(ln, txt, worktree):
+                    continue
                 if _is_optfreq_removal_line(ln, txt, deleted, build_range):
                     optfreq_added_count += 1
                     continue
@@ -2247,6 +2846,7 @@ def test_algorithm_body_untouched() -> None:
             violations.extend(_amendment_q_orca_teeth(worktree))
             violations.extend(_amendment_r_orca_teeth(worktree))
             violations.extend(_amendment_s_teeth(worktree))
+            violations.extend(_amendment_u_orca_teeth(worktree))
             continue
 
         if fp == "src/cccp/qc/interfaces/censo.py":
@@ -2296,25 +2896,40 @@ def test_algorithm_body_untouched() -> None:
             violations.extend(_amendment_o_crest_teeth(worktree))
             continue
 
-        # ── xtb.py + xtb_scan.py: Amendment T (XtbConstrainedOpt wave) ───
+        # ── xtb.py + xtb_scan.py: Amendment T (XtbConstrainedOpt wave)
+        #    + Amendment U (round-7 constraint syntax contract) ────────────
         if fp in (
             "src/cccp/qc/interfaces/xtb.py",
             "src/cccp/qc/interfaces/xtb_scan.py",
         ):
             worktree = _worktree_content(fp)
+            is_xtb = fp == "src/cccp/qc/interfaces/xtb.py"
             predicate = (
-                _is_amendment_t_xtb_addition
-                if fp.endswith("xtb.py")
-                else _is_amendment_t_xtb_scan_addition
+                _is_amendment_t_xtb_addition if is_xtb else _is_amendment_t_xtb_scan_addition
             )
+            round7 = _is_amendment_u_xtb_addition if is_xtb else _is_amendment_u_xtb_scan_addition
             for ln, txt in added:
                 stripped = txt.strip()
                 if not stripped or stripped.startswith("#"):
                     continue
                 if predicate(ln, txt, worktree):
                     continue
+                if round7(ln, txt, worktree):
+                    continue
                 violations.append(f"  {fp}:{ln}: {txt!r}")
             violations.extend(_amendment_t_teeth())
+            violations.extend(
+                _amendment_u_xtb_teeth(
+                    worktree if is_xtb else _worktree_content("src/cccp/qc/interfaces/xtb.py")
+                )
+            )
+            violations.extend(
+                _amendment_u_xtb_scan_teeth(
+                    worktree
+                    if not is_xtb
+                    else _worktree_content("src/cccp/qc/interfaces/xtb_scan.py")
+                )
+            )
             continue
 
     assert not violations, "Non-comment added lines detected:\n" + "\n".join(violations)
@@ -2397,6 +3012,11 @@ def test_deleted_lines_in_target_regions() -> None:
                 for ln, t in bad_entries
                 if not _is_amendment_z_orca_deletion(ln, baseline_src)
             ]
+            bad_entries = [
+                (ln, t)
+                for ln, t in bad_entries
+                if not _is_amendment_u_orca_deletion(ln, t, baseline_src)
+            ]
         elif fp == "src/acp/backends/orca.py":
             if _is_pure_reexport_shim(_worktree_content(fp)):
                 # Amendment J: the legacy body moved verbatim to
@@ -2435,15 +3055,27 @@ def test_constraints_deletions_in_amendment_d_regions() -> None:
 
 
 def test_xtb_amendment_t_deletions_confined() -> None:
-    """① ``xtb.py`` / ``xtb_scan.py`` deletions stay inside Amendment T."""
-    for fp, predicate in (
-        ("src/cccp/qc/interfaces/xtb.py", _is_amendment_t_xtb_deletion),
-        ("src/cccp/qc/interfaces/xtb_scan.py", _is_amendment_t_xtb_scan_deletion),
+    """① ``xtb.py`` / ``xtb_scan.py`` deletions stay inside Amendment T/U."""
+    for fp, predicate, round7 in (
+        (
+            "src/cccp/qc/interfaces/xtb.py",
+            _is_amendment_t_xtb_deletion,
+            _is_amendment_u_xtb_deletion,
+        ),
+        (
+            "src/cccp/qc/interfaces/xtb_scan.py",
+            _is_amendment_t_xtb_scan_deletion,
+            _is_amendment_u_xtb_scan_deletion,
+        ),
     ):
         baseline_src = _baseline_content(fp)
         _, deleted = _diff_hunks(fp)
-        bad = [f"  {fp}:{ln}: {t!r}" for ln, t in deleted if not predicate(ln, t, baseline_src)]
-        assert not bad, f"Deleted lines outside Amendment T regions ({fp}):\n" + "\n".join(bad)
+        bad = [
+            f"  {fp}:{ln}: {t!r}"
+            for ln, t in deleted
+            if not predicate(ln, t, baseline_src) and not round7(ln, t, baseline_src)
+        ]
+        assert not bad, f"Deleted lines outside Amendment T/U regions ({fp}):\n" + "\n".join(bad)
 
 
 def test_worktree_opt_freq_absent() -> None:
@@ -2755,6 +3387,10 @@ MIGRATION_STATION_PREFIXES = (
     # product tier + catalog projection through the shared probe.
     "src/acp/results/vibration_projection.py",
     "src/acp/results/structure_viewer.py",
+    # round-7 #7d: the named ORCA energy decomposition (OrcaEnergyReport) is
+    # projected onto the single thermochemistry result station.  Exact file
+    # only — never widen this to ``src/acp/results/``.
+    "src/acp/results/thermochemistry.py",
     "src/acp/confsearch/report.py",
     # Amendment 2026-10-17 (docs reorg): docstring-only doc-path updates
     # (docs/… → docs/archive|reference/…) in confsearch root files — no
@@ -2964,6 +3600,9 @@ def test_migration_scope_audit_reaches_migration_files() -> None:
         "src/cccp/backends/orca.py",
         "src/acp/calculations/contracts.py",
         "src/acp/calculations/result_publication.py",
+        # round-7 #7d: the energy-report projection stays inside the registered
+        # thermochemistry station (exact file, not the whole results package).
+        "src/acp/results/thermochemistry.py",
     }
     assert expected <= changed, f"migration audit scope lost files: {sorted(expected - changed)}"
     post_baseline = {path for path in expected if not _in_baseline(path)}
@@ -2980,6 +3619,11 @@ def test_migration_scope_catches_unaudited_change() -> None:
     unregistered = _migration_audit_issues(["src/acp/scheduler_utils/rogue.py"])
     assert unregistered, "unregistered path under a migration prefix was not detected"
     assert "unaudited" in unregistered[0]
+    # The round-7 thermochemistry registration is an exact file: its
+    # siblings/neighbours in ``src/acp/results/`` stay unaudited.
+    near_miss = _migration_audit_issues(["src/acp/results/thermochemistry_helpers.py"])
+    assert near_miss, "unregistered neighbour of an exact-file station was not detected"
+    assert "unaudited" in near_miss[0]
 
 
 def test_migration_scope_catches_workflow_backend_direct() -> None:

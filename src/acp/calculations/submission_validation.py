@@ -7,16 +7,20 @@ and edit-recalculate can never disagree on what a request means.  It performs
 no I/O, never touches sources, snapshots, approvals or the store; source
 verification stays in the API layer's authorized read-only checks.
 
-Judged here (first batch: PESsearch / scan / irc / tsmode):
+Judged here:
 
 * PES coordinate normalization (PR-01) and the effective protocol/execution mode
 * the scan coordinate/point aliases (PR-01)
 * IRC step/initial_hessian rejection and the maxpoints mirrors
 * tsmode source references
+* BatchOptimize / singlepoint effective level projection (round-7 #6):
+  per-role method+basis and per-role single-point level (round-7 #2), the
+  optimization level as rendered, and route/basis conflicts.
 """
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -28,12 +32,16 @@ from acp.calculations.pes.normalization import (
     normalize_scan_points,
 )
 
+logger = logging.getLogger(__name__)
+
 __all__ = [
     "ParameterEffect",
     "SubmissionAnalysis",
+    "analyze_batch_submission",
     "analyze_irc_submission",
     "analyze_pes_submission",
     "analyze_scan_submission",
+    "analyze_singlepoint_submission",
     "analyze_tsmode_submission",
     "analysis_for",
 ]
@@ -437,11 +445,393 @@ def analyze_tsmode_submission(
     )
 
 
+# ── route / basis checks (round-7 #3/#6) ────────────────────────────────
+#
+# The single classification authority is
+# :func:`cccp.qc.interfaces.route_render.detect_basis_conflicts` (built on the
+# route-token classifier in :mod:`cccp.qc.method_meta`).  Its reasons are
+# forwarded verbatim, with the level-relative ``field`` prefixed; nothing here
+# re-implements or second-guesses the classification.  ``_minimal_route_conflicts``
+# is a degraded-checkout fallback only (it logs a warning and is never reached
+# while the QC classifier is importable).
+#
+# Cross-batch boundary (round-7): the *execution* path enforces the same
+# invariant inside the ORCA renderer; this module only refuses early at
+# preflight.  It never rewrites a basis, never reads a file and never runs QC.
+
+
+class SubmissionAnalysisError(ValueError):
+    """A statically detectable semantic error with an application envelope.
+
+    ``params`` is a plain dict (not a method) on purpose: the preflight route
+    forwards it verbatim as ``input_invalid.params`` — same shape as
+    :class:`acp.api.submission_contract.SubmissionContractError`.
+    """
+
+    def __init__(self, message: str, *, params: dict[str, Any]) -> None:
+        super().__init__(message)
+        self.params = dict(params)
+
+
+def _orbital_basis_tokens(text: object) -> list[str]:
+    """Orbital-basis tokens in a method string (QC classifier, single authority)."""
+    from cccp.qc.method_meta import orbital_basis_tokens
+
+    return list(orbital_basis_tokens(str(text or "")))
+
+
+def _basis_source(method: object, basis: object) -> str:
+    """Where the effective orbital basis would come from (display provenance)."""
+    if _orbital_basis_tokens(method):
+        return "method_inline"
+    if str(basis or "").strip():
+        return "explicit_basis"
+    return "profile_or_engine_default"
+
+
+def _minimal_route_conflicts(
+    method: object, basis: object, *, field_prefix: str
+) -> list[dict[str, Any]]:
+    """Fallback when the QC classifier is unavailable (older checkout only).
+
+    Deliberately minimal and never a second authority in normal operation:
+    logs a warning and keeps the preflight refusal instead of silently
+    accepting an ambiguous basis.
+    """
+    method_text = str(method or "").strip()
+    basis_text = str(basis or "").strip()
+    inline = _orbital_basis_tokens(method_text)
+    if len({token.lower() for token in inline}) > 1:
+        return [
+            {
+                "rule": "basis_conflict",
+                "field": f"{field_prefix}.method",
+                "message": (
+                    "the method string carries more than one orbital basis "
+                    f"({inline}); ORCA keeps only the last '!' token"
+                ),
+                "tokens": inline,
+            }
+        ]
+    if inline and basis_text and inline[0].strip().lower() != basis_text.lower():
+        return [
+            {
+                "rule": "basis_conflict",
+                "field": f"{field_prefix}.basis",
+                "message": (
+                    f"method-inline basis {inline[0]!r} conflicts with the explicit "
+                    f"basis {basis_text!r}; ORCA keeps only one orbital basis"
+                ),
+                "inline": inline[0],
+                "basis": basis_text,
+            }
+        ]
+    return []
+
+
+def _route_conflicts(
+    method: object,
+    basis: object,
+    *,
+    field_prefix: str,
+    aux_j: object = None,
+    aux_c: object = None,
+) -> list[dict[str, Any]]:
+    """Basis/aux conflicts for one level, from the single QC classifier.
+
+    Round-7 #3/#6: the classifier is
+    :func:`cccp.qc.interfaces.route_render.detect_basis_conflicts` (the
+    A+C agent's pure helper, which also drives the renderer invariant).  The
+    returned ``field`` is level-relative, so it is prefixed here; the rest of
+    the dict (``rule``/``message``/details) is forwarded verbatim.
+    """
+    try:
+        from cccp.qc.interfaces.route_render import detect_basis_conflicts
+    except (ImportError, AttributeError):  # pragma: no cover - degraded checkout
+        logger.warning(
+            "round-7 basis classifier unavailable; using the minimal preflight check"
+        )
+        return _minimal_route_conflicts(method, basis, field_prefix=field_prefix)
+    conflicts: list[dict[str, Any]] = []
+    for reason in detect_basis_conflicts(
+        method=str(method or "") or None,
+        basis=str(basis or "") or None,
+        aux_j_basis=str(aux_j) if aux_j not in (None, "") else None,
+        aux_c_basis=str(aux_c) if aux_c not in (None, "") else None,
+    ):
+        conflict = dict(reason)
+        relative = str(conflict.get("field") or "").strip()
+        conflict["field"] = f"{field_prefix}.{relative}" if relative else field_prefix
+        conflicts.append(conflict)
+    return conflicts
+
+
+def _raise_on_route_conflicts(conflicts: list[dict[str, Any]]) -> None:
+    """Refuse the request when any level carries a basis conflict."""
+    if not conflicts:
+        return
+    first = conflicts[0]
+    raise SubmissionAnalysisError(
+        str(first.get("message") or "conflicting basis settings"),
+        params={
+            "field": str(first.get("field") or "method"),
+            "rule": str(first.get("rule") or "basis_conflict"),
+            "conflicts": conflicts,
+        },
+    )
+
+
+def _batch_item_roles(input_data: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Project the role each inline batch item will execute under.
+
+    Pure and same-authority as the loader: an explicit ``role``/``tag`` wins,
+    then the XYZ ``TAG:`` comment, then the documented INT default.  No item is
+    invented when the input carries no inline list.
+    """
+    from acp.calculations.batch._tag import normalize_tag, parse_tag_comment, role_for_tag
+
+    items = input_data.get("items")
+    if not isinstance(items, (list, tuple)) or not items:
+        return []
+    projected: list[dict[str, Any]] = []
+    for index, entry in enumerate(items):
+        if not isinstance(entry, Mapping):
+            continue
+        raw_declared = entry.get("role") or entry.get("tag")
+        tag = normalize_tag(raw_declared) if isinstance(raw_declared, str) else None
+        role_source = "declared"
+        if tag is None:
+            xyz = entry.get("xyz")
+            if isinstance(xyz, str):
+                lines = xyz.splitlines()
+                tag = parse_tag_comment(lines[1] if len(lines) > 1 else "").get("tag")
+                role_source = "xyz_tag" if tag else "default"
+            else:
+                role_source = "default"
+        tag = tag or "INT"
+        projected.append(
+            {
+                "index": index,
+                "tag": tag,
+                "role": "ts" if tag == "TS" else "int",
+                "role_source": role_source,
+                "role_value": role_for_tag(tag),
+            }
+        )
+    return projected
+
+
+def analyze_batch_submission(
+    input_map: Mapping[str, Any] | None, method_map: Mapping[str, Any] | None
+) -> SubmissionAnalysis:
+    """Project the effective BatchOptimize levels per role (read-only).
+
+    The single authority is :meth:`BatchMethodOptions.from_method_dict` — the
+    same entry the engine consumes — so the preflight projection cannot drift
+    from execution.  Per-role ``sp_method``/``sp_basis`` is part of the
+    projection (round-7 #2): a role without its own single-point level shows a
+    fallback to its **own** optimization level, never another role's SP level.
+    """
+    from acp.calculations.batch.effective_config import (
+        build_effective_role,
+        build_orca_summary,
+    )
+    from acp.calculations.batch.options import BatchMethodOptions
+
+    method_data = dict(method_map or {})
+    input_data = dict(input_map or {})
+    batch_roles = method_data.get("batch_roles")
+    if batch_roles is not None and not isinstance(batch_roles, Mapping):
+        raise SubmissionAnalysisError(
+            "method.batch_roles must be an object",
+            params={"field": "method.batch_roles", "rule": "invalid_type"},
+        )
+    try:
+        opts = BatchMethodOptions.from_method_dict(method_data)
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise SubmissionAnalysisError(
+            f"BatchOptimize method payload is not resolvable: {exc}",
+            params={"field": "method", "rule": "invalid_parameter"},
+        ) from exc
+
+    effects: list[ParameterEffect] = []
+    conflicts: list[dict[str, Any]] = []
+    roles: dict[str, dict[str, Any]] = {}
+    per_role_roles = batch_roles if isinstance(batch_roles, Mapping) else {}
+    for is_ts, role_key in ((False, "int"), (True, "ts")):
+        role_method, role_basis = opts.for_role(is_ts)
+        sp_method, sp_basis = opts.sp_for_role(is_ts)
+        effective_role = build_effective_role(opts, is_ts)
+        role_cfg = per_role_roles.get(role_key)
+        optimization_conflicts = _route_conflicts(
+            role_method, role_basis, field_prefix=f"batch_roles.{role_key}"
+        )
+        single_point_conflicts = _route_conflicts(
+            sp_method, sp_basis, field_prefix=f"batch_roles.{role_key}.sp"
+        )
+        aux_slot_conflicts: list[dict[str, Any]] = []
+        if isinstance(role_cfg, Mapping):
+            # Aux slots are not part of the batch level schema; a role that
+            # carries one would have it ignored by the engine — flag a real
+            # conflict, and record the inert value below.
+            aux_slot_conflicts = _route_conflicts(
+                "",
+                "",
+                field_prefix=f"batch_roles.{role_key}",
+                aux_j=role_cfg.get("aux_j_basis"),
+                aux_c=role_cfg.get("aux_c_basis"),
+            )
+            if not aux_slot_conflicts:
+                for aux_key in ("aux_j_basis", "aux_c_basis"):
+                    if role_cfg.get(aux_key) in (None, ""):
+                        continue
+                    effects.append(
+                        ParameterEffect(
+                            f"batch_roles.{role_key}.{aux_key}",
+                            "not_applicable",
+                            "BatchOptimize has no per-role auxiliary-basis slot; "
+                            "the value is not consumed",
+                        )
+                    )
+        level_conflicts = [
+            {**conflict, "role": role_key, "level": "optimization"}
+            for conflict in optimization_conflicts
+        ] + [
+            {**conflict, "role": role_key, "level": "role_aux"}
+            for conflict in aux_slot_conflicts
+        ] + [
+            {**conflict, "role": role_key, "level": "single_point"}
+            for conflict in single_point_conflicts
+        ]
+        roles[role_key] = {
+            "optimization_method": role_method,
+            "optimization_basis": role_basis,
+            "optimization_level": effective_role.get("opt_level"),
+            "single_point_method": sp_method,
+            "single_point_basis": sp_basis,
+            "single_point_source": opts.sp_provenance(is_ts),
+            "basis_source": {
+                "optimization": _basis_source(role_method, role_basis),
+                "single_point": _basis_source(sp_method, sp_basis),
+            },
+            "orca_summary": build_orca_summary(effective_role),
+            "route_conflicts": level_conflicts,
+        }
+        conflicts.extend(level_conflicts)
+        method_source = "batch_roles" if isinstance(role_cfg, Mapping) else "legacy_flat"
+        effects.append(
+            ParameterEffect(
+                f"role.{role_key}.optimization_level",
+                "consumed",
+                f"source={method_source}; the optimization method/basis executed for "
+                f"{role_key.upper()} items",
+            )
+        )
+        sp_provenance = opts.sp_provenance(is_ts)
+        if sp_provenance["method"] == "role":
+            sp_detail = f"the {role_key} role's own sp_method/sp_basis"
+        elif sp_provenance["method"] == "single_point_method":
+            sp_detail = "method.single_point_method (directly-constructed common field)"
+        elif sp_provenance["method"] == "flat_single_point":
+            sp_detail = "method.single_point_method/single_point_basis (legacy flat payload)"
+        else:
+            sp_detail = f"the {role_key} optimization level (no SP override)"
+        effects.append(
+            ParameterEffect(f"role.{role_key}.single_point_method", "consumed", sp_detail)
+        )
+    _raise_on_route_conflicts(conflicts)
+
+    profile = method_data.get("profile") or method_data.get("profile_id")
+    effective: dict[str, Any] = {
+        "single_point_scope": opts.single_point_scope,
+        "roles": roles,
+        "items": _batch_item_roles(input_data),
+        "profile": str(profile) if profile is not None else None,
+    }
+    return SubmissionAnalysis(
+        workflow="BatchOptimize",
+        validated_scope=("method", "batch_roles", "effective_levels", "route_basis"),
+        effects=tuple(effects),
+        normalized_method=dict(method_data),
+        effective=effective,
+    )
+
+
+def analyze_singlepoint_submission(
+    input_map: Mapping[str, Any] | None, method_map: Mapping[str, Any] | None
+) -> SubmissionAnalysis:
+    """Project the effective singlepoint level (read-only, method+basis+aux).
+
+    The API normalization moves a legacy ``method.method`` into
+    ``levels.single_point.functional``; the direct spelling is still accepted
+    when this analyzer is called on its own.  An empty level is reported as
+    unresolved (``profile_or_engine_default``) instead of inventing defaults.
+    """
+    method_data = dict(method_map or {})
+    levels = method_data.get("levels")
+    level = levels.get("single_point") if isinstance(levels, Mapping) else None
+    level_mapping: Mapping[str, Any] = level if isinstance(level, Mapping) else {}
+    direct = method_data.get("method")
+    functional = str(level_mapping.get("functional") or direct or "").strip()
+    basis = str(level_mapping.get("basis") or "").strip()
+    aux_j = level_mapping.get("aux_j_basis")
+    aux_c = level_mapping.get("aux_c_basis")
+
+    conflicts = _route_conflicts(
+        functional,
+        basis,
+        field_prefix="levels.single_point",
+        aux_j=aux_j,
+        aux_c=aux_c,
+    )
+    _raise_on_route_conflicts(conflicts)
+
+    effective: dict[str, Any] = {
+        "level_id": "single_point",
+        "method": functional or None,
+        "basis": basis or None,
+        "basis_source": _basis_source(functional, basis),
+        "dispersion": level_mapping.get("dispersion"),
+        "solvent_model": level_mapping.get("solvent_model"),
+        "solvent": level_mapping.get("solvent"),
+        "scf_convergence": level_mapping.get("scf_convergence"),
+        "route_conflicts": [],
+    }
+    if aux_j not in (None, ""):
+        effective["aux_j_basis"] = str(aux_j)
+    if aux_c not in (None, ""):
+        effective["aux_c_basis"] = str(aux_c)
+    unverified: list[str] = []
+    if not functional:
+        # Nothing in the payload pins the level; the profile/engine default is
+        # only resolved at execution — never claim it here.
+        unverified.append("default_level_resolution")
+    effects = [
+        ParameterEffect(
+            "levels.single_point.functional",
+            "consumed" if functional else "metadata_only",
+            "executed level functional" if functional else "unset: execution default applies",
+        ),
+    ]
+    if basis:
+        effects.append(ParameterEffect("levels.single_point.basis", "consumed"))
+    return SubmissionAnalysis(
+        workflow="singlepoint",
+        validated_scope=("single_point_level", "route_basis"),
+        unverified_checks=tuple(unverified),
+        effects=tuple(effects),
+        normalized_method=dict(method_data),
+        effective=effective,
+    )
+
+
 _ANALYZERS = {
     "PESsearch": analyze_pes_submission,
     "scan": analyze_scan_submission,
     "irc": analyze_irc_submission,
     "tsmode": analyze_tsmode_submission,
+    "BatchOptimize": analyze_batch_submission,
+    "singlepoint": analyze_singlepoint_submission,
 }
 
 

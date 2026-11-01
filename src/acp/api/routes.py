@@ -362,6 +362,25 @@ def _workflow_contract_index() -> dict[str, Any]:
     return index
 
 
+def _bounded_task_instruction_index() -> list[dict[str, Any]]:
+    """Compact task cards for the bounded summary scope.
+
+    The summary projection must stay under its byte budget while the full scope
+    keeps the 60-char cue; the full recipe remains one acp_get_guidance away.
+    """
+    cards = _task_instruction_index()
+    bounded: list[dict[str, Any]] = []
+    for card in cards:
+        summary = str(card.get("summary") or "")
+        bounded.append(
+            {
+                **card,
+                "summary": summary[:52] + ("…" if len(summary) > 52 else ""),
+            }
+        )
+    return bounded
+
+
 def _task_instruction_index() -> list[dict[str, Any]]:
     """Goal -> chain routing entries (task.* guidance cards)."""
     from acp.api.guidance_pack import guidance_index
@@ -672,7 +691,7 @@ def _capabilities_payload(
             ],
             "workflows": _active_workflows(),
             "workflow_contracts": _workflow_contract_index(),
-            "task_instructions": _task_instruction_index(),
+            "task_instructions": _bounded_task_instruction_index(),
             "capacity": capacity_block,
             "capability_index": _capability_index(request),
             "limits": _capability_limits(request),

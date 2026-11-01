@@ -42,10 +42,13 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import logging
 import os
 import secrets
+import shlex
 import shutil
 import socket
+import sys
 import tempfile
 import uuid
 from collections.abc import Mapping, Sequence
@@ -102,6 +105,8 @@ from acp_services.worker_bootstrap import (
 from cccp.analysis.identity import identity_fingerprint
 from cccp.calculation.requests import TaskKind, TaskRequest
 
+logger = logging.getLogger(__name__)
+
 __all__ = [
     "COMPLETE_MARKER",
     "DEFAULT_RELEASE_SCHEMA",
@@ -113,16 +118,20 @@ __all__ = [
     "ReleaseIdentity",
     "ReleaseIdentityError",
     "StaleReleaseError",
+    "StaleReleaseRefreshError",
     "BOUNDED_RECIPE_WORKFLOW",
     "FREEZE_BUILDERS",
     "RECIPE_INPUT_KEY",
     "build_bounded_recipe_freeze_spec",
     "build_freeze_spec",
+    "current_release_identity",
     "dag_recipe_id",
     "build_local_release",
     "build_singlepoint_freeze_spec",
     "freeze_singlepoint_attempt",
+    "local_release_admin_command",
     "local_release_identity",
+    "refresh_local_release",
 ]
 
 # ── release identity ───────────────────────────────────────────────────────
@@ -575,6 +584,108 @@ def _write_json(path: Path, payload: Mapping[str, Any]) -> None:
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise
+
+
+# ── stale-release recovery seam (#round7) ──────────────────────────────────
+
+
+def current_release_identity(project_root: Path | str) -> ReleaseIdentity | None:
+    """Best-effort live identity of *project_root* (``None`` when unhashable).
+
+    Used only to *report* both digests in :class:`StaleReleaseRefreshError`;
+    the enforcement path never depends on this soft lookup.
+    """
+    try:
+        return local_release_identity(project_root)
+    except ReleaseIdentityError:
+        return None
+
+
+def local_release_admin_command(project_root: Path | str, run_root: Path | str) -> str:
+    """The exact, runnable administrator command that rebuilds the release.
+
+    The runner refreshes a stale cached release automatically once per
+    attempt; when even that fails the operator needs one copy-pasteable
+    command (never a documented-but-nonexistent CLI flag).
+    """
+    project = str(Path(project_root).resolve())
+    runs = str(Path(run_root).resolve())
+    code = (
+        "from acp.calculations.attempt_freeze import refresh_local_release; "
+        f"print(refresh_local_release({project!r}, {runs!r}).release_id)"
+    )
+    return f"{sys.executable} -c {shlex.quote(code)}"
+
+
+class StaleReleaseRefreshError(ReleaseIdentityError):
+    """A stale cached release stayed stale after the single automatic rebuild.
+
+    The freeze path discards a cached :class:`LocalRelease` whose digest no
+    longer matches the live tree and rebuilds the identity exactly once.  This
+    error means the retry failed as well (the tree changed mid-freeze, the
+    release directory is corrupt, or the new release cannot be materialised):
+    the attempt is refused with a typed ``rule="stale_release"`` payload that
+    carries both digests and the exact administrator command.  The digest
+    check is never skipped and no release directory is ever modified.
+    """
+
+    rule: Final = "stale_release"
+
+    def __init__(
+        self,
+        *,
+        stale: ReleaseIdentity,
+        live: ReleaseIdentity | None,
+        project_root: Path | str,
+        run_root: Path | str,
+        reason: str = "",
+    ) -> None:
+        self.stale_release_id = stale.release_id
+        self.stale_release_digest = stale.release_digest
+        self.live_release_id = live.release_id if live is not None else ""
+        self.live_release_digest = live.release_digest if live is not None else ""
+        self.project_root = Path(project_root).resolve()
+        self.run_root = Path(run_root).resolve()
+        self.admin_command = local_release_admin_command(self.project_root, self.run_root)
+        self.params: dict[str, Any] = {
+            "rule": self.rule,
+            "field": "release",
+            "stale_release_id": self.stale_release_id,
+            "stale_release_digest": self.stale_release_digest,
+            "live_release_id": self.live_release_id,
+            "live_release_digest": self.live_release_digest,
+            "admin_command": self.admin_command,
+        }
+        detail = f" ({reason})" if reason else ""
+        super().__init__(
+            "local release is stale after one automatic rebuild"
+            f"{detail}: frozen release {self.stale_release_id} "
+            f"(digest {self.stale_release_digest or '<unversioned>'}) != live release "
+            f"{self.live_release_id or '<unknown>'} "
+            f"(digest {self.live_release_digest or '<unknown>'}); "
+            "the digest check was not skipped and no release directory was modified. "
+            f"Rebuild it from the live tree with: {self.admin_command}"
+        )
+
+
+def refresh_local_release(project_root: Path | str, run_root: Path | str) -> LocalRelease:
+    """Re-materialise/verify the immutable local release from the live tree.
+
+    The explicit seam used when a cached :class:`LocalRelease` no longer
+    matches the live source tree (a long-lived service kept the identity it
+    built before the checkout changed).  It is a thin, logged wrapper over
+    :func:`build_local_release`: an existing release directory is re-verified
+    member-by-member and a mismatch remains a typed
+    :class:`ReleaseIdentityError` — never repaired or overwritten in place.
+    """
+    release = build_local_release(project_root, run_root)
+    logger.warning(
+        "Refreshed local release from the live tree: id=%s digest=%s root=%s",
+        release.release_id,
+        release.release_digest or "<unversioned>",
+        release.root,
+    )
+    return release
 
 
 # ── singlepoint freeze spec ────────────────────────────────────────────────

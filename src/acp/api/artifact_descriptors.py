@@ -8,7 +8,7 @@ that produces the frozen reference, and only its answer is readable.
 
 from __future__ import annotations
 
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
 
 from acp.results.manifest import MANIFEST_FILENAME, load_result_manifest
@@ -25,6 +25,11 @@ MAX_ARTIFACT_DESCRIPTORS = 50
 
 #: A status poll may not pay for an arbitrarily large manifest.
 MAX_MANIFEST_BYTES = 2 * 1024 * 1024
+
+#: MCP-facing ``kind`` aliases for manifest product kinds whose wire name would
+#: bury the payload.  The manifest enum (``ProductKind``) is NOT changed —
+#: only the descriptor an agent sees (round-7 #4: thermochemistry).
+_KIND_ALIASES: dict[str, str] = {"thermo_report": "thermochemistry"}
 
 
 def _safe_relative(path: str) -> str | None:
@@ -86,10 +91,12 @@ def describe_job_artifacts(
         resource_id = _safe_token(getattr(product, "id", ""))
         if relative is None or resource_id is None:
             continue
+        raw_kind = getattr(product, "kind", "")
+        raw_kind_value = getattr(raw_kind, "value", str(raw_kind))
         descriptor: dict[str, Any] = {
             "resource_id": resource_id,
             "relative_path": f"RESULT/{relative}",
-            "kind": getattr(product.kind, "value", str(product.kind)),
+            "kind": _KIND_ALIASES.get(raw_kind_value, raw_kind_value),
             "label": str(getattr(product, "label", "")),
             "size_bytes": None,
             "prepared": False,

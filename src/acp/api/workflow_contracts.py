@@ -64,7 +64,13 @@ _CONFSEARCH_CONSTRAINTS = (
 )
 
 _BATCH_CONSTRAINTS = (
-    "when method.batch_roles is present, top-level flat settings must mirror it",
+    "method.batch_roles is authoritative per role: write method/basis and "
+    "sp_method/sp_basis inside batch_roles.int and batch_roles.ts",
+    "top-level single_point_method/single_point_basis (and the sp_method/sp_basis "
+    "aliases) may only mirror batch_roles.int.sp_method/sp_method; if that int "
+    "role/field is missing the submission is refused with rule=missing_role_mirror "
+    "(never silently dropped), and a role without sp_* executes its own "
+    "optimization level — ts never inherits int's single-point level",
     "selected_ids belongs to input, not method",
     "one scheduler task carries one structure (single_flat layout)",
 )
@@ -367,8 +373,8 @@ def _confsearch_block() -> dict[str, Any]:
                     "protocol": "censo-crest",
                     "refinement_policy": "rank1",
                     "levels": {
-                        "dft_opt": {"engine": "orca", "functional": "wB97X-D4"},
-                        "refinement_sp": {"engine": "orca", "functional": "wB97X-D4"},
+                        "dft_opt": {"engine": "orca", "functional": "wB97M-V"},
+                        "refinement_sp": {"engine": "orca", "functional": "wB97M-V"},
                     },
                 },
                 "resources": {"nproc": 4, "mem": "8GB"},
@@ -386,8 +392,11 @@ def _batch_block() -> dict[str, Any]:
         "workflow": "BatchOptimize",
         "coverage": "partial",
         "gaps": [
-            "value-level batch_roles mirror equivalence is enforced only when the "
-            "role field is explicitly present; engine fallbacks stay unverified",
+            "batch_roles single-point level is resolved per role and shown in preflight "
+            "effective.roles.<role>.single_point_{method,basis} (+ single_point_source); "
+            "top-level SP aliases are int-role mirrors only and a missing int role/field "
+            "is refused (missing_role_mirror); a role without sp_* falls back to its own "
+            "optimization level; engine defaults beyond the resolved levels stay unverified",
         ],
         "input": {
             "required_any": list(contract.required_input_any),
@@ -727,7 +736,7 @@ def _level_ids(schema_id: str) -> list[str]:
 
 def _example_level(schema_id: str) -> dict[str, Any]:
     kind = {
-        "dft_singlepoint": {"functional": "wB97X-D4", "basis": "def2-TZVP"},
+        "dft_singlepoint": {"functional": "wB97M-V", "basis": "def2-TZVP"},
         "dft_optimize": {"functional": "r2SCAN-3c"},
         "dft_frequency": {"functional": "B97-3c"},
         "xtb_optimize": {"gfn": 2, "opt_level": "normal"},

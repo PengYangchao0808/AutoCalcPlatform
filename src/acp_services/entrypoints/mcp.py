@@ -360,6 +360,91 @@ _TERMINAL_STATES: frozenset[str] = frozenset(
     {"failed", "cancelled", "completed", "canceled"}
 )
 
+#: Terminal spellings the cancel *intent* already produced (a queued job is
+#: moved to CANCELLED synchronously).  These keep ``cancelled=True`` instead of
+#: being reported as "was already finished" (round-7 #7e).
+_CANCELLED_STATES: frozenset[str] = frozenset({"cancelled", "canceled"})
+
+#: Fields the cancel acknowledgement keeps (round 7, #7e).  The Controller's
+#: cancel route answers with the whole job row -- spec.xyz, admission,
+#: provenance, artifacts, live status -- which serialised to ~50 KB for a
+#: control intent that only needs identity/state facts.  This is a bounded
+#: projection, not a second authority: a caller that needs the full row queries
+#: ``acp_status``.  ``spec_ref``/``trace_ref`` are passed through only when the
+#: Controller row already carries them; the spec body is never echoed and no
+#: reference is invented.
+_CANCEL_ENVELOPE_FIELDS: tuple[str, ...] = (
+    "state",
+    "status",
+    "job_id",
+    "attempt",
+    "updated_at",
+    "spec_ref",
+    "trace_ref",
+)
+
+
+def _cancel_acknowledgement(record: Any, reference: str) -> dict[str, Any]:
+    """Project one cancel result onto the bounded status envelope (#7e).
+
+    The Controller answers ``POST /api/v1/jobs/{id}/cancel`` with the full
+    ``V1JobRecordModel`` (spec body included).  Echoing it through MCP made one
+    control acknowledgement ~50 KB, so only identity/state facts survive here:
+    ``job_id``/``attempt``/``reference``/``state``/``status``/``updated_at``/
+    ``cancelled``/``already_terminal`` (+ ``terminal_state`` when the observed
+    state is terminal, and ``cancel_requested`` kept for older clients).
+    ``spec_ref``/``trace_ref`` ride along only when the Controller row itself
+    carries them -- this projection never reads the spec object and never
+    invents a reference.  A non-mapping record degrades to identity-only facts
+    (same policy as :func:`_reference_from`).  An unknown job never reaches this
+    function: the backend port raises the existing typed error first.
+    """
+    row: Mapping[str, Any] = record if isinstance(record, Mapping) else {}
+    job_id = ""
+    for key in ("job_id", "task_id", "id"):
+        value = row.get(key)
+        if isinstance(value, str) and value:
+            job_id = value
+            break
+    if not job_id:
+        task_ref = row.get("task_ref")
+        if isinstance(task_ref, Mapping):
+            value = task_ref.get("task_id") or task_ref.get("job_id")
+            if isinstance(value, str):
+                job_id = value
+    acknowledgement: dict[str, Any] = {"job_id": job_id or reference}
+    state = row.get("state") or row.get("status")
+    if isinstance(state, str) and state:
+        acknowledgement["state"] = state
+        acknowledgement["status"] = str(row.get("status") or state)
+    for key in _CANCEL_ENVELOPE_FIELDS:
+        if key in {"state", "status", "job_id"}:
+            continue
+        value = row.get(key)
+        if key == "attempt" and (isinstance(value, bool) or not isinstance(value, int)):
+            continue
+        if key in {"spec_ref", "trace_ref"} and not isinstance(value, str):
+            # A reference is a name, never a payload: a mapping under either key
+            # would reopen the spec-body leak this projection exists to close.
+            continue
+        if value is not None and value != "":
+            acknowledgement[key] = value
+    acknowledgement["reference"] = row.get("reference") or reference
+    # Round-2 compatibility: cancelling an already-terminal job must say so
+    # explicitly instead of returning a bare "completed" next to the intent.
+    # A *cancelled* answer is the intent being satisfied (a queued job is moved
+    # to CANCELLED synchronously by the Controller), so the "already finished"
+    # marker is reserved for the terminal states the call did not produce.
+    observed = state.lower() if isinstance(state, str) else ""
+    if observed in _TERMINAL_STATES and observed not in _CANCELLED_STATES:
+        acknowledgement["cancelled"] = False
+        acknowledgement["already_terminal"] = True
+        acknowledgement["terminal_state"] = state
+    else:
+        acknowledgement["cancelled"] = True
+    acknowledgement["cancel_requested"] = True
+    return acknowledgement
+
 
 class McpTool(str):
     """The closed set of MCP tools exposed by this adapter.
@@ -1601,7 +1686,11 @@ def _tool_specs() -> tuple[dict[str, Any], ...]:
         ),
         _tool_spec(
             McpTool.CANCEL,
-            "Request cancellation of an operation/job reference.",
+            (
+                "Request cancellation of an operation/job reference. Returns a bounded "
+                "acknowledgement (job_id/attempt/reference/state/status/cancelled/"
+                "already_terminal); query acp_status for the full job row."
+            ),
             _CANCEL_SCHEMA,
         ),
         _tool_spec(
@@ -3328,29 +3417,23 @@ class McpServer:
     def _tool_cancel(
         self, arguments: Mapping[str, Any], context: WorkspaceContext
     ) -> mo.MachineResult:
+        """Request one cancellation and return a bounded acknowledgement (#7e).
+
+        The Controller route keeps its full ``V1JobRecordModel`` response (HTTP
+        is untouched); this MCP result is projected to identity/state facts so a
+        control intent no longer ships the spec body/xyz/artifacts.  An unknown
+        job still fails inside the port with the existing typed error -- no
+        projection is built from a missing record.
+        """
         reference = _require_reference(arguments)
         record = self._backends.cancel.cancel(reference, workspace_id=context.workspace_id)
         if self._budget is not None:
             self._budget.release(context.workspace_id)
-        projection = record if isinstance(record, Mapping) else {"result": record}
-        projection = dict(projection)
-        projection.setdefault("reference", reference)
-        projection.setdefault("cancel_requested", True)
-        # Agent feedback round 2: cancelling an already-terminal job must say
-        # so explicitly — a bare "completed" next to cancel_requested read as
-        # an error.  The marker separates "cancelled by this call" from "was
-        # already finished".
-        terminal_state = projection.get("state") or projection.get("status")
-        if isinstance(terminal_state, str) and str(terminal_state).lower() in _TERMINAL_STATES:
-            projection["cancelled"] = False
-            projection["already_terminal"] = True
-            projection["terminal_state"] = str(terminal_state)
-        else:
-            projection.setdefault("cancelled", True)
+        acknowledgement = _cancel_acknowledgement(record, reference)
         return mo.MachineResult(
             operation=McpTool.CANCEL,
             status="ok",
-            data=projection,
+            data=acknowledgement,
             operation_identity=context.workspace_id,
         )
 

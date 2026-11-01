@@ -190,17 +190,65 @@ def test_wire_syntax_guidance_present_v1_1_0() -> None:
     prompt-side gap (reports/acp2_mcp_guidance_20261030).
     """
     batch = read_guide("workflow.BatchOptimize")
-    assert batch["version"] == "1.2.0"  # single_flat/idempotency guidance (PR-08)
+    assert batch["version"] == "1.3.0"  # per-role SP + mirror rule (round-7)
     steps = batch["sections"]["steps"]
     assert 'role:"ts"' in steps
     assert "默认按 INT" in steps
     assert "from_artifact" in steps and "selected_ids" in steps
     assert "不会自动套用到未标角色的 item" in steps
     pes = read_guide("workflow.PESsearch")
-    assert pes["version"] == "1.1.0"
+    assert pes["version"] == "1.2.0"  # multi-bond/angle/dihedral vocabulary
     pes_steps = pes["sections"]["steps"]
     assert "angstrom" in pes_steps and "degree" in pes_steps
     assert "产物侧拉伸已成键" in pes_steps
+
+
+def test_round7_pure_mcp_ts_chain_is_explicit_not_trial_and_error() -> None:
+    """Round-7 #5: a pure MCP session must learn the publish dead end up front.
+
+    The old text let ``acp_publish_pes_review`` look like the normal entry and
+    the inline ``role:"ts"`` item read like a footnote, so an agent without a
+    pre-minted bounded authorization discovered the refusal by trying.  The
+    published guide now states the dead end, names the typed refusals, and
+    labels the inline path as a first-class route (not a fallback).
+    """
+    from acp.api.guidance_pack import get_guide
+
+    task = get_guide("task.find_transition_state")
+    assert task.version == "1.2.0"
+    chain = task.sections["chain"]
+    # The dead end is stated for the pure-MCP session…
+    assert "纯 MCP 会话" in chain
+    assert "一定会被拒绝" in chain
+    assert "authorization_id" in chain and "selector=agent" in chain
+    # …with the typed refusals instead of a probe-id workaround.
+    assert "authorization_not_found" in chain
+    assert "access_denied" in chain
+    assert "probe" in chain and "不会自动铸造授权" in chain
+    # The inline item path is first class, and from_artifact stays available.
+    assert 'role:"ts"' in chain
+    assert "inline 路径是一等路径" in chain
+    assert "不是进入 Batch 的前提" in chain
+    assert "from_artifact" in chain and "selected_ids" in chain
+    # The admin-minted authorization path is still documented for sessions that
+    # do have one, and the decision point + not_supported section agree.
+    assert "selection-authorizations" in chain
+    assert "⑤进 Batch 的方式" in task.sections["decisions"]
+    assert "无管理员有界授权的自动发布" in task.sections["not_supported"]
+
+
+def test_round7_singlepoint_sp_out_layouts_are_both_named() -> None:
+    """Round-7 #7f: a generic parser must know both ``sp.out`` locations."""
+    from acp.api.guidance_pack import get_guide
+
+    topic = get_guide("topic.artifact_locating")
+    assert topic.version == "1.3.0"
+    fields = topic.sections["result_fields"]
+    assert "<job_dir>/sp.out" in fields
+    assert "<job_dir>/WORK/05_SP/sp.out" in fields
+    # The manifest stays the reading authority; the paths are for cross-checks.
+    assert "result_manifest.json" in fields
+    assert "不要按文件名猜" in fields
 
 
 def test_task_instructions_are_complete_and_routable() -> None:

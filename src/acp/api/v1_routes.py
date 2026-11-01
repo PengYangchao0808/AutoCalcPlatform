@@ -2779,13 +2779,22 @@ def _validate_scan_submission(workflow: str, method: dict[str, Any], inp: dict[s
             },
         ) from exc
     except ValueError as exc:
+        params = getattr(exc, "params", None)
         raise HTTPException(
             status_code=422,
-            detail={"code": "input_invalid", "message": str(exc)},
+            detail={
+                "code": "input_invalid",
+                "message": str(exc),
+                **({"params": dict(params)} if isinstance(params, dict) and params else {}),
+            },
         ) from exc
 
 
 def _submit_idempotency_key(request: Request, req: V1JobCreateRequest) -> str | None:
+    import re
+
+    from acp_services.entrypoints.application_params import IDEMPOTENCY_KEY_PATTERN
+
     header_key = (request.headers.get("Idempotency-Key") or "").strip()
     body_key = (req.idempotency_key or "").strip()
     if header_key and body_key and header_key != body_key:
@@ -2797,6 +2806,23 @@ def _submit_idempotency_key(request: Request, req: V1JobCreateRequest) -> str | 
                 "params": {"field": "idempotency_key"},
             },
         )
+    for key in (header_key, body_key):
+        if key and re.fullmatch(IDEMPOTENCY_KEY_PATTERN, key) is None:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "input_invalid",
+                    "message": (
+                        "idempotency_key is malformed; use 8-128 chars of "
+                        "A-Za-z0-9._:()[]-"
+                    ),
+                    "params": {
+                        "field": "idempotency_key",
+                        "rule": "pattern",
+                        "pattern": IDEMPOTENCY_KEY_PATTERN,
+                    },
+                },
+            )
     return header_key or body_key or None
 
 
@@ -2847,6 +2873,24 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         )
     except SubmissionContractError as exc:
         raise _command_error(422, "input_invalid", str(exc), params=exc.params()) from exc
+    # Round-7 P1: submit runs the SAME read-only semantic analyzer as preflight so
+    # static refusals (basis_conflict / aux_basis_invalid / missing_role_mirror)
+    # agree on code/field/rule instead of only failing during rendering.
+    if req.workflow in ("BatchOptimize", "singlepoint"):
+        # Round-7: only the newly covered workflows need the submit-side
+        # analyzer for preflight parity; the older workflows keep their
+        # established submit envelopes (e.g. tsmode target_mode_invalid).
+        try:
+            from acp.calculations.submission_validation import analysis_for
+
+            analysis_for(req.workflow, raw_input or {}, req.method or {})
+        except ValueError as exc:
+            params = (
+                exc.params
+                if hasattr(exc, "params") and isinstance(getattr(exc, "params"), dict)
+                else {"field": "input", "rule": "invalid_parameter"}
+            )
+            raise _command_error(422, "input_invalid", str(exc), params=params) from exc
     try:
         validate_resource_request(req.resources or {})
     except ValueError as exc:
@@ -10062,8 +10106,11 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
             "method": dict(req.method or {}),
         }
         submission_analysis["executed"] = None
+        # Source advisories and the analyzer's own unverified checks share one
+        # list (round-7 #6): neither may overwrite the other.
         submission_analysis["unverified_checks"] = [
-            str(item.get("id")) for item in _source_advisories if item.get("id")
+            *submission_analysis.get("unverified_checks", []),
+            *(str(item.get("id")) for item in _source_advisories if item.get("id")),
         ]
     return {
         "schema_version": 1,

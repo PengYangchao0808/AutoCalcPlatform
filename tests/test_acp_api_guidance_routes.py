@@ -65,7 +65,7 @@ def test_guide_read_is_versioned_and_sliceable(client: TestClient) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert set(payload["sections"]) == {"purpose", "steps"}
-    assert payload["version"] == "1.1.0"  # v1.1.0: role wire-syntax + unit vocabulary
+    assert payload["version"] == "1.2.0"  # v1.2.0: multi-bond/angle/dihedral vocabulary
 
     section = client.get(_READ.format(guide_id="workflow.PESsearch"), params={"section": "purpose"})
     assert section.status_code == 200
@@ -103,7 +103,7 @@ def test_stale_cached_version_is_a_typed_409(client: TestClient) -> None:
     assert response.status_code == 409
     detail = response.json()["detail"]
     assert detail["code"] == "revision_conflict"
-    assert detail["params"]["current_version"] == "1.1.0"
+    assert detail["params"]["current_version"] == "1.2.0"
     # the matching version reads normally
-    ok = client.get(_READ.format(guide_id="workflow.PESsearch"), params={"version": "1.1.0"})
+    ok = client.get(_READ.format(guide_id="workflow.PESsearch"), params={"version": "1.2.0"})
     assert ok.status_code == 200
