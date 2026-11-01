@@ -88,9 +88,11 @@ def test_pes_profile_and_recommendations_explain_disabled_policy(tmp_path: Path)
 
 
 def _batch_body(items: list[dict]) -> dict:
+    # Round-8: non-empty items require the explicit batch carrier; the helper
+    # keeps every cardinality test focused on the layout gate.
     return {
         "workflow": "BatchOptimize",
-        "input": {"items": items},
+        "input": {"source_type": "batch_structures", "items": items},
         "method": {},
     }
 

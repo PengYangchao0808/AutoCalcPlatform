@@ -84,11 +84,17 @@ def test_workflow_scope_returns_one_contract_only(client: TestClient) -> None:
     body = client.get("/api/capabilities", params={"workflow": "PESsearch"}).json()
     assert body["workflow_contract"]["workflow"] == "PESsearch"
     assert body["workflow_contract"]["coverage"] == "partial"
-    # public refs stay; the heavy blocks never ride along
-    for key in ("workflow_contract", "workflows", "tools", "protocol_version"):
+    # public refs stay; the heavy blocks never ride along.
+    # Round-8 三.6: tools/extensions are handshake facts and are deliberately
+    # omitted here (the top-level ``next`` says where to read them); the
+    # contract block carries the navigation for its own sections.
+    for key in ("workflow_contract", "workflows", "backends", "protocol_version"):
         assert key in body, key
     for key in ("admission", "capability_descriptors", "task_instructions", "capacity"):
         assert key not in body, key
+    assert "tools" not in body and "extensions" not in body
+    assert body["next"]["tool"] == "acp_capabilities"
+    assert "sections_available" in body["workflow_contract"]
     assert _bytes(body) < 10_000
 
 

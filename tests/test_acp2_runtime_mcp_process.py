@@ -721,7 +721,12 @@ def test_status_is_a_real_read_only_controller_call(controller: Any, tmp_path: P
             {"name": "acp_status", "arguments": {"reference": "missing-job"}},
         )
         assert missing["result"]["isError"] is True
-        assert missing["result"]["structuredContent"]["error"]["code"] == "resource_not_ready"
+        # Round-8 K6: an unknown reference is NOT_FOUND (non-retryable), never
+        # ``resource_not_ready`` (which implied "retry, it will become ready").
+        missing_error = missing["result"]["structuredContent"]["error"]
+        assert missing_error["code"] == "not_found"
+        assert missing_error["retryable"] is False
+        assert "acp_list_jobs" in missing_error["message"]
         process.close_stdin()
         assert process.wait() == 0
     assert state.submit_posts == 0
@@ -775,10 +780,11 @@ def test_status_reference_object_and_stringified_json_are_distinct(
             },
         )
         assert as_json_text["result"]["isError"] is True
-        assert (
-            as_json_text["result"]["structuredContent"]["error"]["code"]
-            == "resource_not_ready"
-        )
+        # Round-8 K6: a JSON string is not a task id, so it resolves to an
+        # unknown reference (non-retryable) rather than a retryable not-ready.
+        as_json_error = as_json_text["result"]["structuredContent"]["error"]
+        assert as_json_error["code"] == "not_found"
+        assert as_json_error["retryable"] is False
 
         process.close_stdin()
         assert process.wait() == 0

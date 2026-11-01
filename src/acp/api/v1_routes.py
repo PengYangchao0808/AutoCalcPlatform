@@ -17,7 +17,7 @@ import re
 import sqlite3
 import threading
 import urllib.parse
-from collections import Counter, OrderedDict
+from collections import OrderedDict
 from collections.abc import Callable, Mapping
 from copy import deepcopy
 from dataclasses import replace
@@ -274,6 +274,7 @@ from acp.scheduler.structure_sources import StructureSourceService
 from acp.scheduler.tasks import resolve_task_names
 from acp.storage.layout import runtime_file
 from acp_services.contracts.access import AccessAction as _AccessAction
+from acp_services.entrypoints.mcp import STATUS_GROUPS, TASK_STATE_VOCABULARY
 from acp_services.runtime.idempotency import (
     IdempotencyConflictError,
     IdempotencyInProgressError,
@@ -1113,8 +1114,87 @@ def _model_payload(model: Any) -> dict[str, Any]:
     return model.dict(exclude_none=True)
 
 
+#: A project-scoped count pass reads at most this many rows (no unbounded scan).
+_COUNTS_SCAN_LIMIT = 5000
+
+
 def _counts_for_records(records: list[JobRecord]) -> dict[str, int]:
-    return dict(Counter(record.status.value for record in records))
+    """Count *records* by state, always returning the full ten-key vocabulary."""
+    counts = {state: 0 for state in TASK_STATE_VOCABULARY}
+    for record in records:
+        state = record.status.value
+        counts[state] = counts.get(state, 0) + 1
+    return counts
+
+
+def _scoped_counts(store: Any, project_id: str | None) -> dict[str, int]:
+    """Pre-filter task counts for one scope (round-8 K5).
+
+    Computed **before** the ``status``/``status_group`` filter so an empty page
+    still explains the whole scope ("0 running of 12").  The unscoped case uses
+    the store's exact ``counts()``; a project scope uses one bounded read (the
+    store has no project-scoped count helper) rather than a per-status query.
+    """
+    if project_id is None:
+        counts = dict(store.counts())
+    else:
+        counts = _counts_for_records(store.list(project_id=project_id, limit=_COUNTS_SCAN_LIMIT))
+    for state in TASK_STATE_VOCABULARY:
+        counts.setdefault(state, 0)
+    return counts
+
+
+def _validate_job_status_query(
+    status: str | None, status_group: str | None
+) -> tuple[str | None, str | None]:
+    """Validate the exact-state and family filters (typed 422 with ``allowed``)."""
+    if status is not None and status not in TASK_STATE_VOCABULARY:
+        raise _command_error(
+            422,
+            "input_invalid",
+            f"unknown task state {status!r}",
+            params={
+                "field": "status",
+                "rule": "invalid_enum",
+                "allowed": list(TASK_STATE_VOCABULARY),
+                "hint": "use status_group for a family (active/terminal/running_now)",
+            },
+        )
+    if status_group is not None and status_group not in STATUS_GROUPS:
+        raise _command_error(
+            422,
+            "input_invalid",
+            f"unknown status_group {status_group!r}",
+            params={
+                "field": "status_group",
+                "rule": "invalid_enum",
+                "allowed": list(STATUS_GROUPS),
+            },
+        )
+    if status is not None and status_group is not None:
+        raise _command_error(
+            422,
+            "input_invalid",
+            "status and status_group are mutually exclusive",
+            params={
+                "field": "status_group",
+                "rule": "mutually_exclusive",
+                "conflicts_with": "status",
+            },
+        )
+    return status, status_group
+
+
+def _match_job_filter(
+    record: JobRecord, status: str | None, status_group: str | None
+) -> bool:
+    """One in-memory filter for both the exact state and its family."""
+    state = record.status.value
+    if status is not None:
+        return state == status
+    if status_group is not None:
+        return state in STATUS_GROUPS[status_group]
+    return True
 
 
 def _utc_now_iso() -> str:
@@ -1564,19 +1644,24 @@ def list_project_jobs(
     project_id: str,
     request: Request,
     status: str | None = Query(default=None),
+    status_group: str | None = Query(default=None),
     limit: int = Query(default=200, ge=1, le=1000),
 ) -> V1JobListResponse:
+    """List one project's tasks (same K5 filter/count semantics as ``/jobs``)."""
     _require_project_scope(request, project_id)
     manager = _manager(request)
     project = manager.projects.get_project(project_id)
     if project is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    status, status_group = _validate_job_status_query(status, status_group)
     records = manager.list_jobs_by_project(project_id, limit=limit)
-    if status is not None:
-        records = [record for record in records if record.status.value == status]
+    counts = _counts_for_records(records)
+    records = [
+        record for record in records if _match_job_filter(record, status, status_group)
+    ]
     return V1JobListResponse(
         jobs=[_record_to_v1_model(record) for record in records],
-        counts=_counts_for_records(records),
+        counts=counts,
     )
 
 
@@ -3147,19 +3232,39 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
 def list_jobs(
     request: Request,
     status: str | None = Query(default=None),
+    status_group: str | None = Query(default=None),
     workflow: str | None = Query(default=None),
     project_id: str | None = Query(default=None),
     limit: int = Query(default=200, ge=1, le=1000),
 ) -> V1JobListResponse:
+    """List tasks in scope.
+
+    Round-8 K5: ``status`` is the exact ten-value vocabulary (an unknown value
+    is 422 with ``allowed``), ``status_group`` (``active|terminal|running_now``)
+    is the mutually-exclusive family filter, and ``counts`` is computed
+    **before** either filter and always carries all ten state keys.
+    """
     store = _job_store(request)
     manager = _manager(request)
     project_id = _scoped_read_project(request, project_id)
+    status, status_group = _validate_job_status_query(status, status_group)
+    counts = _scoped_counts(store, project_id)
     if project_id:
         enriched = store.list_enriched(limit=limit, project_id=project_id)
-        if status is not None:
-            enriched = [item for item in enriched if item["record"].status.value == status]
     else:
+        # The exact-state filter stays in SQL (so LIMIT counts matching rows,
+        # not newest rows); only the family filter needs the in-memory pass.
         enriched = store.list_enriched(status=status, limit=limit)
+    if status_group is not None or project_id:
+        enriched = [
+            item
+            for item in enriched
+            if _match_job_filter(
+                item["record"],
+                status if project_id else None,
+                status_group,
+            )
+        ]
     if workflow:
         enriched = [item for item in enriched if item["record"].spec.workflow == workflow]
     jobs = []
@@ -3175,10 +3280,7 @@ def list_jobs(
         model = _enrich_job_snapshot(item["record"], model, include_event=False)
         model = _enrich_v1_with_names(model, name_map.get(item["record"].id))
         jobs.append(model)
-    return V1JobListResponse(
-        jobs=jobs,
-        counts=_counts_for_records([item["record"] for item in enriched]),
-    )
+    return V1JobListResponse(jobs=jobs, counts=counts)
 
 
 @router.get("/mechanism-studies", response_model=list[MechanismStudySummary])
@@ -5929,6 +6031,76 @@ def get_sampling_frame(
     )
 
 
+#: Canonical task-id shape (authority: ``acp_services/store/naming.py::_JOB_ID_RE``,
+#: re-derived here because this module only needs the *shape* check to decide
+#: whether a run-root probe can possibly match — never to name a task).
+_TASK_ID_SHAPE_RE = re.compile(r"^\d{8}_\d{6}_\d{3}_.+$")
+
+#: A 404 diagnostic probe is bounded: it never walks an unbounded run root.
+_RUN_ROOT_PROBE_MAX_TASKS = 2000
+
+
+def _run_root_task_found(request: Request, job_id: str) -> bool:
+    """Read-only probe: does some ``task.json`` declare this ``task_id``?
+
+    Round-8 三.2: a 404 for a job id may mean "the DB row is missing but the
+    task directory exists" (a second truth source the caller should be told
+    about).  This probe **only reads** — it never adopts the task, never writes
+    ``task.json`` and never creates a second state store.  Any error (missing
+    root, unreadable JSON, a runaway scan) answers ``False``.
+    """
+    if _TASK_ID_SHAPE_RE.fullmatch(str(job_id or "")) is None:
+        return False
+    try:
+        run_root = Path(_manager(request).run_root)
+    except (AttributeError, KeyError, TypeError):
+        return False
+    if not run_root.is_dir():
+        return False
+    scanned = 0
+    try:
+        project_dirs = [entry for entry in run_root.iterdir() if entry.is_dir()]
+    except OSError:
+        return False
+    for project_dir in project_dirs:
+        try:
+            task_files = list(project_dir.glob("*/task.json"))
+        except OSError:
+            continue
+        for task_json in task_files:
+            scanned += 1
+            if scanned > _RUN_ROOT_PROBE_MAX_TASKS:
+                return False
+            try:
+                data = json.loads(task_json.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if isinstance(data, dict) and str(data.get("task_id") or "") == job_id:
+                return True
+    return False
+
+
+def _job_not_found_detail(request: Request, job_id: str) -> dict[str, Any]:
+    """Structured 404 detail for an unknown task id (round-8 三.2).
+
+    ``run_root_task_found`` is the read-only diagnostic: ``true`` means a task
+    directory claims this id while the job row is missing (do not adopt it —
+    report it), ``false`` means the id is simply unknown to this Controller.
+    """
+    return {
+        "code": "job_row_missing",
+        "message": f"Job not found: {job_id}",
+        "params": {
+            "job_id": job_id,
+            "run_root_task_found": _run_root_task_found(request, job_id),
+        },
+        "hint": (
+            "use acp_list_jobs (or task.json.task_id) to resolve the id; a job_id "
+            "and an operation_id are different ids"
+        ),
+    }
+
+
 def _descriptor_read_root(
     request: Request, record: JobRecord
 ) -> tuple[Path, str | None]:
@@ -5944,13 +6116,21 @@ def _with_artifact_descriptors(
     read_root: Path | None,
     attempt: int,
     unknown_reason: str | None = None,
+    *,
+    job_id: str | None = None,
 ) -> V1JobRecordModel:
-    """Attach the bounded manifest projection from the controlled read root."""
+    """Attach the bounded manifest projection from the controlled read root.
+
+    Round-8: an empty projection is never silent.  ``artifacts_unknown_reason``
+    distinguishes "this task published no manifest" (``no_manifest``) from the
+    remote cache case (``remote_cache_only``), so an agent does not read an
+    empty list as "no products" when the truth is "cannot see them".
+    """
     from acp.api.artifact_descriptors import describe_job_artifacts
 
-    descriptors, truncated = describe_job_artifacts(read_root, attempt=attempt)
-    if not descriptors and not truncated and unknown_reason is None:
-        return model
+    descriptors, truncated = describe_job_artifacts(read_root, attempt=attempt, job_id=job_id)
+    if not descriptors and not truncated:
+        unknown_reason = unknown_reason or "no_manifest"
     return model.model_copy(
         update={
             "artifacts": descriptors,
@@ -5965,14 +6145,16 @@ def get_job(job_id: str, request: Request) -> V1JobRecordModel:
     manager = _manager(request)
     record = manager.get(job_id)
     if record is None:
-        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+        raise HTTPException(status_code=404, detail=_job_not_found_detail(request, job_id))
     model = _record_to_v1_model(record, include_release_facts=True)
     model = _enrich_job_snapshot(record, model, include_event=False)
     task_row = manager.tasks.get(job_id)
     if task_row is not None:
         model = _enrich_v1_with_names(model, resolve_task_names(task_row))
     read_root, unknown_reason = _descriptor_read_root(request, record)
-    return _with_artifact_descriptors(model, read_root, record.attempt, unknown_reason)
+    return _with_artifact_descriptors(
+        model, read_root, record.attempt, unknown_reason, job_id=record.id
+    )
 
 
 @router.get("/jobs/{job_id}/summary", response_model=V1JobRecordModel)
@@ -5980,14 +6162,16 @@ def get_job_summary(job_id: str, request: Request) -> V1JobRecordModel:
     manager = _manager(request)
     record = manager.get(job_id)
     if record is None:
-        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+        raise HTTPException(status_code=404, detail=_job_not_found_detail(request, job_id))
     model = _record_to_v1_model(record, include_release_facts=True)
     model = _enrich_job_snapshot(record, model, include_event=True)
     task_row = manager.tasks.get(job_id)
     if task_row is not None:
         model = _enrich_v1_with_names(model, resolve_task_names(task_row))
     read_root, unknown_reason = _descriptor_read_root(request, record)
-    return _with_artifact_descriptors(model, read_root, record.attempt, unknown_reason)
+    return _with_artifact_descriptors(
+        model, read_root, record.attempt, unknown_reason, job_id=record.id
+    )
 
 
 # ---------------------------------------------------------------------- #
@@ -9954,6 +10138,152 @@ def _preflight_source_facts(
     return reasons, advisories
 
 
+#: Hard byte bound for the ``submission_analysis.requested`` echo (round-8 三.6).
+#: A preflight receipt is a *receipt*, not a second copy of the submission.
+_REQUESTED_ECHO_MAX_BYTES = 2048
+
+#: Keys whose value is a structural payload (XYZ text) rather than a scalar.
+_STRUCTURAL_TEXT_KEYS = ("xyz_text", "xyz")
+#: Carrier keys that hold XYZ text only for some workflows.
+_STRUCTURAL_CARRIER_KEYS = ("source", "input")
+#: A branch smaller than this is never collapsed: the placeholder would cost more.
+_ECHO_COLLAPSE_MIN_BYTES = 128
+
+
+def _looks_like_xyz(value: str) -> bool:
+    """True when *value* is multi-line text whose first line is an atom count."""
+    text = value.strip()
+    if "\n" not in text:
+        return False
+    return text.splitlines()[0].strip().isdigit()
+
+
+def _xyz_atom_count(value: str) -> int | None:
+    """Atom count of an XYZ block (declared count, else non-header lines)."""
+    lines = [line for line in value.strip().splitlines() if line.strip()]
+    if not lines:
+        return None
+    try:
+        return int(lines[0].strip())
+    except ValueError:
+        return max(0, len(lines) - 2)
+
+
+def _json_bytes(value: Any) -> int:
+    return len(json.dumps(value, ensure_ascii=False, default=str).encode("utf-8"))
+
+
+def _structural_placeholder(value: str) -> dict[str, Any]:
+    """The bounded stand-in for an omitted structural payload."""
+    raw = value.encode("utf-8")
+    return {
+        "omitted": True,
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "atoms": _xyz_atom_count(value),
+        "bytes": len(raw),
+    }
+
+
+def _bounded_input_echo(value: Any, *, key: str | None = None) -> Any:
+    """Replace XYZ-bearing payloads with ``{"omitted", "sha256", "atoms", "bytes"}``.
+
+    Scalars are kept verbatim; only structural text is omitted, so the receipt
+    still shows ``source_type``/``charge``/``items[].role`` regardless of how
+    large the geometry was.
+    """
+    if isinstance(value, str):
+        if key in _STRUCTURAL_TEXT_KEYS:
+            return _structural_placeholder(value)
+        if key in _STRUCTURAL_CARRIER_KEYS and _looks_like_xyz(value):
+            return _structural_placeholder(value)
+        return value
+    if isinstance(value, Mapping):
+        return {
+            str(name): _bounded_input_echo(item, key=str(name))
+            for name, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [_bounded_input_echo(item) for item in value]
+    return value
+
+
+def _collect_echo_branches(
+    value: Any, *, prefix: tuple[Any, ...] = ()
+) -> list[tuple[tuple[Any, ...], int]]:
+    """Finest-grained collapsible containers in *value* (with their sizes).
+
+    A branch is collapsible when it is large but its own children are all small
+    (or scalar): collapsing at that depth removes bulk while keeping the
+    surrounding structure — e.g. ``method.levels`` goes before all of
+    ``method``.
+    """
+    if isinstance(value, Mapping):
+        items: list[tuple[Any, Any]] = list(value.items())
+    elif isinstance(value, (list, tuple)):
+        items = list(enumerate(value))
+    else:
+        return []
+    branches: list[tuple[tuple[Any, ...], int]] = []
+    for key, item in items:
+        if not isinstance(item, (Mapping, list, tuple)):
+            continue
+        if isinstance(item, Mapping) and item.get("omitted") is True:
+            continue
+        size = _json_bytes(item)
+        if size < _ECHO_COLLAPSE_MIN_BYTES:
+            continue
+        path = prefix + (key,)
+        children = _collect_echo_branches(item, prefix=path)
+        if children:
+            branches.extend(children)
+        else:
+            branches.append((path, size))
+    return branches
+
+
+def _largest_echo_branch(value: Any) -> tuple[tuple[Any, ...], int] | None:
+    """The largest finest-grained collapsible branch (deterministic order)."""
+    best: tuple[tuple[Any, ...], int] | None = None
+    for path, size in _collect_echo_branches(value):
+        if best is None or size > best[1]:
+            best = (path, size)
+    return best
+
+
+def _bounded_requested_echo(raw_input: Any, method: Any) -> dict[str, Any]:
+    """Bounded ``requested`` projection (round-8 三.6).
+
+    Structural payloads are replaced first, then the largest remaining nested
+    branch is collapsed until the JSON fits :data:`_REQUESTED_ECHO_MAX_BYTES`;
+    ``truncated`` says a collapse happened.  The **plan digest is computed
+    separately from the full payload** — this function never feeds the digest.
+    """
+    echo: dict[str, Any] = {
+        "input": _bounded_input_echo(raw_input or {}),
+        "method": _bounded_input_echo(method or {}),
+    }
+    truncated = False
+    while _json_bytes(echo) > _REQUESTED_ECHO_MAX_BYTES:
+        found = _largest_echo_branch(echo)
+        if found is None:
+            break
+        path, size = found
+        target: Any = echo
+        for key in path[:-1]:
+            target = target[key]
+        branch = target[path[-1]]
+        if isinstance(branch, Mapping):
+            target[path[-1]] = {"omitted": True, "keys": len(branch), "bytes": size}
+        elif isinstance(branch, (list, tuple)):
+            target[path[-1]] = {"omitted": True, "items": len(branch), "bytes": size}
+        else:  # pragma: no cover - the walker only returns containers
+            break
+        truncated = True
+    if truncated:
+        echo["truncated"] = True
+    return echo
+
+
 def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str, Any]:
     """Build the zero-side-effect preflight projection.
 
@@ -10101,10 +10431,7 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
         raise _command_error(422, "input_invalid", str(exc), params=params) from exc
     if analysis is not None:
         submission_analysis = analysis.to_dict()
-        submission_analysis["requested"] = {
-            "input": dict(raw_input or {}),
-            "method": dict(req.method or {}),
-        }
+        submission_analysis["requested"] = _bounded_requested_echo(raw_input, req.method)
         submission_analysis["executed"] = None
         # Source advisories and the analyzer's own unverified checks share one
         # list (round-7 #6): neither may overwrite the other.

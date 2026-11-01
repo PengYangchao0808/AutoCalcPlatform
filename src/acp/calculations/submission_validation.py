@@ -11,11 +11,13 @@ Judged here:
 
 * PES coordinate normalization (PR-01) and the effective protocol/execution mode
 * the scan coordinate/point aliases (PR-01)
-* IRC step/initial_hessian rejection and the maxpoints mirrors
+* IRC step/initial_hessian rejection and the maxpoints mirrors, plus the
+  server-derived ``source_reference`` projection (round-8)
 * tsmode source references
 * BatchOptimize / singlepoint effective level projection (round-7 #6):
   per-role method+basis and per-role single-point level (round-7 #2), the
-  optimization level as rendered, and route/basis conflicts.
+  optimization level as rendered, the resolved Hessian policy (round-8 #5) and
+  the executed input carrier (round-8 K2), route/basis conflicts.
 """
 
 from __future__ import annotations
@@ -352,6 +354,41 @@ def analyze_scan_submission(
     )
 
 
+def _authored_ts_source_state(input_data: Mapping[str, Any]) -> str:
+    """Classify a client-carried ``ts_source`` (absent|complete|partial).
+
+    The field list is the submit contract's single declaration
+    (:data:`acp.api.submission_contract.IRC_TS_SOURCE_LOCKED_FIELDS`); this
+    projection never compares values and never reads the source job.
+    """
+    from acp.api.submission_contract import IRC_TS_SOURCE_LOCKED_FIELDS
+
+    ts_source = input_data.get("ts_source")
+    if ts_source is None:
+        return "absent"
+    if not isinstance(ts_source, Mapping):
+        return "partial"
+    if any(field not in ts_source for field in IRC_TS_SOURCE_LOCKED_FIELDS):
+        return "partial"
+    return "complete"
+
+
+def _irc_source_reference(input_data: Mapping[str, Any]) -> dict[str, Any]:
+    """Project how the TS source reference will be resolved (read-only).
+
+    IRC always resolves its provenance at submit time from
+    ``source_job_id``/``source_product_id`` (``resolve_verified_ts_source``);
+    the analyzer deliberately does not open the source job, so the projection
+    states the resolution rule instead of a verified fact.
+    """
+    return {
+        "source_job_id": input_data.get("source_job_id"),
+        "source_product_id": input_data.get("source_product_id"),
+        "authored_ts_source": _authored_ts_source_state(input_data),
+        "resolution": "runtime_derived",
+    }
+
+
 def analyze_irc_submission(
     input_map: Mapping[str, Any] | None, method_map: Mapping[str, Any] | None
 ) -> SubmissionAnalysis:
@@ -395,10 +432,26 @@ def analyze_irc_submission(
         )
     if input_data:
         validated_scope.append("source_reference")
+    # Round-8: the source reference resolves at submit, not here.  The advisory
+    # is a check id (the preflight route folds it into ``unverified_checks``);
+    # the human-readable sentence rides in the parameter effect.
+    unverified = ["irc_ts_source_runtime_verification"]
+    effects.append(
+        ParameterEffect(
+            "input.source_reference",
+            "consumed",
+            "resolved at submit from source_job_id/source_product_id "
+            "(resolve_verified_ts_source: source completed + exactly one "
+            "imaginary frequency + Batch TS item evidence); the analyzer is "
+            "read-only and does not open the source job",
+        )
+    )
     effective = {"maxpoints": maxpoints} if maxpoints is not None else {}
+    effective["source_reference"] = _irc_source_reference(input_data)
     return SubmissionAnalysis(
         workflow="irc",
         validated_scope=tuple(validated_scope),
+        unverified_checks=tuple(unverified),
         effects=tuple(effects),
         normalized_input=dict(input_data),
         normalized_method=dict(method_data),
@@ -621,6 +674,155 @@ def _batch_item_roles(input_data: Mapping[str, Any]) -> list[dict[str, Any]]:
     return projected
 
 
+def _batch_item_symbols(input_data: Mapping[str, Any]) -> list[str] | None:
+    """Element symbols of the inline batch items (read-only, never raises).
+
+    Reuses the same pure XYZ parser the batch loader consumes and projects only
+    element identities: the graded Hessian policy depends on *which* elements
+    occur, not on counts or coordinates.  Items that cannot be parsed are
+    skipped; no inline item list (``from_artifact``/``items_file`` carriers)
+    returns ``None`` so the caller can say ``symbols_required`` instead of
+    guessing an interval.
+    """
+    from cccp.analysis.structure.embedding import count_elements_from_xyz
+    from cccp.analysis.structure.parsers import parse_xyz_text
+
+    items = input_data.get("items")
+    if not isinstance(items, (list, tuple)) or not items:
+        return None
+    symbols: set[str] = set()
+    for entry in items:
+        if not isinstance(entry, Mapping):
+            continue
+        xyz = entry.get("xyz")
+        if not isinstance(xyz, str) or not xyz.strip():
+            continue
+        try:
+            parsed = parse_xyz_text(xyz)
+        except (TypeError, ValueError, IndexError):
+            continue
+        for structure in parsed.structures:
+            if not structure.xyz:
+                continue
+            try:
+                symbols.update(count_elements_from_xyz(structure.xyz))
+            except (TypeError, ValueError):
+                continue
+    return sorted(symbols) if symbols else None
+
+
+def _hessian_resolution(
+    opts: Any, is_ts: bool, symbols: list[str] | None
+) -> dict[str, Any]:
+    """Project one role's Hessian policy (pure; never raises without symbols).
+
+    ``opt_recalc_hess="auto"`` is resolved by the same graded-default helper the
+    ORCA renderer calls with ``configured="auto"`` (the execution default), so
+    ``effective.roles.<role>.hessian_resolution`` answers the round-8 "what does
+    5 vs auto mean" question from the payload alone.  Without inline geometry
+    there is nothing to classify: the projection reports ``symbols_required``
+    instead of inventing an interval.
+    """
+    from cccp.qc.hessian_policy import resolve_recalc_hess
+
+    resolved = opts.resolve_role_options(is_ts)
+    initial = resolved.get("opt_initial_hessian")
+    explicit_recalc = resolved.get("opt_recalc_hess")
+    # The ORCA writer's configured default is ``"auto"``
+    # (``cccp/qc/interfaces/orca`` reads ``optimization_control.recalc_hess``
+    # with an ``"auto"`` fallback), so a role with no resolved value still
+    # requests element-graded inference.  Report that as ``requested`` while
+    # keeping the helper's own provenance (``source``) truthful.
+    requested_recalc = explicit_recalc if explicit_recalc is not None else "auto"
+    recalc: dict[str, Any] = {
+        "requested": requested_recalc,
+        "resolved_interval": None,
+        "reason": "symbols_required",
+        "source": None,
+    }
+    if symbols or requested_recalc != "auto":
+        resolution = resolve_recalc_hess(
+            explicit=explicit_recalc, configured="auto", symbols=symbols
+        )
+        recalc.update(
+            resolved_interval=resolution.interval,
+            reason=resolution.reason,
+            source=resolution.source,
+            heavy_elements=resolution.heavy_elements,
+            triggering_elements=resolution.triggering_elements,
+        )
+    return {
+        "initial": {
+            "requested": initial,
+            "source": "role_resolved" if initial is not None else "engine_default",
+        },
+        "recalc": recalc,
+    }
+
+
+def _declared(value: Any) -> bool:
+    """A carrier counts as declared when it is a non-empty scalar or a list."""
+    if value is None or value == "":
+        return False
+    if isinstance(value, Mapping):
+        return bool(value)
+    return True
+
+
+def _batch_input_source(input_data: Mapping[str, Any]) -> dict[str, Any]:
+    """Project which carrier the runner will materialize, in its own order.
+
+    ``runner._command_for`` decides in this order: ``from_artifact`` →
+    ``items_file`` → materialized ``batch_structures`` items → single staged
+    structure.  Mirroring it here makes ``effective.input_source.mode`` name the
+    executed carrier.  A non-empty ``items`` list without
+    ``source_type="batch_structures"`` is refused with the same rule the submit
+    contract uses (the runtime never infers the carrier from the list).
+    """
+    from acp.api.submission_contract import BATCH_SOURCE_TYPES
+
+    items = input_data.get("items")
+    items_count = len(items) if isinstance(items, (list, tuple)) else 0
+    if items_count and input_data.get("source_type") not in BATCH_SOURCE_TYPES:
+        raise SubmissionAnalysisError(
+            'input.items requires input.source_type="batch_structures"; the '
+            "platform never infers the batch carrier from the items list "
+            "(omit input.items to use from_artifact/items_file)",
+            params={
+                "field": "input.source_type",
+                "rule": "missing_source_type",
+                "items_count": items_count,
+            },
+        )
+    if _declared(input_data.get("from_artifact")):
+        mode = "from_artifact"
+    elif _declared(input_data.get("items_file")):
+        mode = "items_file"
+    elif items_count:
+        mode = "batch_structures"
+    elif _declared(input_data.get("input")) or _declared(input_data.get("source")):
+        mode = "inline_input"
+    else:
+        mode = "none"
+    source_type = input_data.get("source_type")
+    carriers = [
+        key
+        for key in ("from_artifact", "items_file")
+        if _declared(input_data.get(key))
+    ]
+    if items_count:
+        carriers.append("items")
+    carriers.extend(
+        key for key in ("input", "source") if _declared(input_data.get(key))
+    )
+    return {
+        "mode": mode,
+        "source_type": source_type if isinstance(source_type, str) else None,
+        "items_count": items_count,
+        "carriers": carriers,
+    }
+
+
 def analyze_batch_submission(
     input_map: Mapping[str, Any] | None, method_map: Mapping[str, Any] | None
 ) -> SubmissionAnalysis:
@@ -640,6 +842,10 @@ def analyze_batch_submission(
 
     method_data = dict(method_map or {})
     input_data = dict(input_map or {})
+    # K2: the carrier must be declared whenever inline items are present (same
+    # rule the submit contract raises); this projection also names the carrier
+    # the runner will materialize.
+    input_source = _batch_input_source(input_data)
     batch_roles = method_data.get("batch_roles")
     if batch_roles is not None and not isinstance(batch_roles, Mapping):
         raise SubmissionAnalysisError(
@@ -658,6 +864,9 @@ def analyze_batch_submission(
     conflicts: list[dict[str, Any]] = []
     roles: dict[str, dict[str, Any]] = {}
     per_role_roles = batch_roles if isinstance(batch_roles, Mapping) else {}
+    # Round-8: element identity of the inline items is the only input the graded
+    # Hessian default needs; no inline geometry → ``symbols_required``.
+    symbols = _batch_item_symbols(input_data)
     for is_ts, role_key in ((False, "int"), (True, "ts")):
         role_method, role_basis = opts.for_role(is_ts)
         sp_method, sp_basis = opts.sp_for_role(is_ts)
@@ -715,6 +924,7 @@ def analyze_batch_submission(
                 "single_point": _basis_source(sp_method, sp_basis),
             },
             "orca_summary": build_orca_summary(effective_role),
+            "hessian_resolution": _hessian_resolution(opts, is_ts, symbols),
             "route_conflicts": level_conflicts,
         }
         conflicts.extend(level_conflicts)
@@ -746,11 +956,18 @@ def analyze_batch_submission(
         "single_point_scope": opts.single_point_scope,
         "roles": roles,
         "items": _batch_item_roles(input_data),
+        "input_source": input_source,
         "profile": str(profile) if profile is not None else None,
     }
     return SubmissionAnalysis(
         workflow="BatchOptimize",
-        validated_scope=("method", "batch_roles", "effective_levels", "route_basis"),
+        validated_scope=(
+            "method",
+            "batch_roles",
+            "effective_levels",
+            "route_basis",
+            "input_source",
+        ),
         effects=tuple(effects),
         normalized_method=dict(method_data),
         effective=effective,

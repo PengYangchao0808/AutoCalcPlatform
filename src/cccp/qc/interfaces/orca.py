@@ -94,6 +94,14 @@ _SCF_FAILURE_PATTERNS = [
     "DIIS convergence not achieved",
     "ERROR: SCF convergence",
 ]
+#: SCF non-convergence phrased differently (checked after the legacy patterns so
+#: the long-standing ``scf_failure`` class keeps its exact behaviour).
+_SCF_NOT_CONVERGED_PATTERNS = [
+    "scf did not converge",
+    "scf convergence failure",
+    "scf has not converged",
+    "scf not converged",
+]
 _GEOMETRY_NOT_CONVERGED_PATTERNS = [
     "THE OPTIMIZATION HAS NOT CONVERGED",
     "OPTIMIZATION DID NOT CONVERGE",
@@ -106,26 +114,119 @@ _MEMORY_FAILURE_PATTERNS = [
     "memory allocation failed",
     "std::bad_alloc",
 ]
+#: ORCA's Hessian-positive-definiteness wording (the classic OptTS failure:
+#: the surface is not a genuine first-order saddle).  Checked after the
+#: geometry/max-iteration families so an early Hessian *warning* cannot mask a
+#: terminal "has not converged" message.
+_HESSIAN_NOT_POSITIVE_DEFINITE_PATTERNS = [
+    "hessian is not positive definite",
+    "not positive definite",
+    "positive definite",
+]
+#: Explicit iteration-cap wording.  ORCA prints these *instead of* "the
+#: optimization has not converged" when it stops at ``MaxIter``/``MaxCycles``.
+_OPT_MAXITER_PATTERNS = [
+    "too many iterations",
+    "maximum number of optimization cycles",
+    "maximum number of iterations reached",
+    "number of optimization cycles exceeded",
+]
+#: Generic convergence-failure wording.  Deliberately checked AFTER the SCF and
+#: geometry families (and after the SCF-iterations heuristic) so the existing
+#: classes keep their meaning; "SCF NOT CONVERGED" therefore stays
+#: ``scf_failure`` even though it also reads as "not converged".
+_GENERIC_CONVERGENCE_PATTERNS = [
+    "convergence failure",
+    "did not converge",
+    "not converged",
+    "aborting the optimization",
+    "aborting the run",
+]
+#: Terminal markers ORCA prints at the very end of the run.
+_ERROR_TERMINATION_MARKERS = ("error termination",)
+_NORMAL_TERMINATION_MARKERS = ("terminated normally",)
+_ABORTED_MARKERS = ("aborting",)
+
+#: Characters of the output tail that failure details are read from.
+_FAILURE_TAIL_CHARS = 80_000
+#: A failure summary lists at most this many printed reason lines.
+_REASON_LINE_LIMIT = 5
+_REASON_LINE_MAX_CHARS = 200
+#: ``error_message`` summary bound (plan 三.3: "≤200 chars, no absolute paths").
+_FAILURE_SUMMARY_MAX_CHARS = 200
+
+#: Printed lines that describe *why* a run failed (case-insensitive).
+_REASON_LINE_KEYWORDS: tuple[str, ...] = (
+    "error",
+    "fail",
+    "not converg",
+    "did not converg",
+    "convergence failure",
+    "positive definite",
+    "too many iteration",
+    "maximum number",
+    "cycle limit",
+    "abort",
+    "terminat",
+    "timelimit",
+    "time limit",
+    "cannot",
+    "unable",
+    "invalid",
+    "not found",
+)
+
+#: Short, class-owned phrases used when no printed reason line survives the
+#: message-safety filter.  Each is written so the legacy downstream
+#: ``derive_failure_type`` token scan (``src/cccp/calculation/tasks/optimize.py``)
+#: cannot misroute the rescue chain (no bare "scf"/"imaginary"/"timeout").
+_CLASS_SUMMARY: dict[str, str] = {
+    "scf_failure": "SCF did not converge",
+    "scf_not_converged": "SCF did not converge",
+    "geometry_not_converged": "geometry not converged",
+    "hessian_not_positive_definite": "Hessian is not positive definite",
+    "opt_maxiter": "optimization reached its cycle limit",
+    "memory_failure": "ORCA could not allocate memory",
+    "crash_timeout": "ORCA process crashed or timed out",
+    "error_termination": "ORCA terminated with an error; see failure_details.reason_lines",
+}
+#: Substrings that must not leak into ``error_message`` unless the class owns
+#: them: the downstream rescue classifier scans the message text for these.
+_MESSAGE_UNSAFE_SUBSTRINGS: tuple[str, ...] = (
+    "scf",
+    "imaginary",
+    "no negative",
+    "timeout",
+    "timed out",
+    "time out",
+    "collapsed",
+    "higher order",
+    "multiple imaginary",
+)
+
+#: An absolute POSIX path token (not preceded by a word/dot so "and/or",
+#: "E/D" and "0.0/1.0" survive).  Host paths never reach an agent-facing
+#: message: only the basename is kept.
+_ABS_PATH_TOKEN_RE = re.compile(r"(?<![\w.~])/(?:[\w.+-]+/)*[\w.+-]+")
+_HOME_PATH_TOKEN_RE = re.compile(r"~[/\\](?:[\w.+-]+[/\\])*[\w.+-]+")
+_WINDOWS_PATH_TOKEN_RE = re.compile(r"\b[A-Za-z]:\\(?:[^\s\\]+\\)*[^\s\\]+")
 
 
-def classify_orca_failure(output_path: Path) -> str:
-    """Classify an ORCA failure mode from the output file.
-
-    Reads the tail of *output_path* and returns one of:
-    ``"scf_failure"``, ``"geometry_not_converged"``, ``"memory_failure"``,
-    ``"crash_timeout"``, or ``"unknown"``.
-    """
+def _read_failure_tail(output_path: Path) -> str | None:
+    """Return the tail of an ORCA output file, or ``None`` when unreadable."""
     try:
-        output_path = Path(output_path)
-        if not output_path.is_file():
-            return "unknown"
-        text = output_path.read_text(encoding="utf-8", errors="replace")
-        tail_lines = text[-80_000:].splitlines()
+        path = Path(output_path)
+        if not path.is_file():
+            return None
+        text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
-        return "unknown"
+        return None
+    return text[-_FAILURE_TAIL_CHARS:]
 
-    tail_text = "\n".join(tail_lines)
-    tail_lower = tail_text.lower()
+
+def _classify_failure_text(tail: str) -> str:
+    """Classify one ORCA output *tail* (already truncated by the caller)."""
+    tail_lower = tail.lower()
 
     for pat in _MEMORY_FAILURE_PATTERNS:
         if pat in tail_lower:
@@ -135,6 +236,10 @@ def classify_orca_failure(output_path: Path) -> str:
         if pat.lower() in tail_lower:
             return "geometry_not_converged"
 
+    for pat in _OPT_MAXITER_PATTERNS:
+        if pat in tail_lower:
+            return "opt_maxiter"
+
     for pat in _SCF_FAILURE_PATTERNS:
         if pat.lower() in tail_lower:
             return "scf_failure"
@@ -142,7 +247,218 @@ def classify_orca_failure(output_path: Path) -> str:
     if "scf iterations" in tail_lower and "scf converged" not in tail_lower:
         return "scf_failure"
 
+    for pat in _SCF_NOT_CONVERGED_PATTERNS:
+        if pat in tail_lower:
+            return "scf_not_converged"
+
+    for pat in _HESSIAN_NOT_POSITIVE_DEFINITE_PATTERNS:
+        if pat in tail_lower:
+            return "hessian_not_positive_definite"
+
+    for pat in _GENERIC_CONVERGENCE_PATTERNS:
+        if pat in tail_lower:
+            return "geometry_not_converged"
+
+    for marker in _ERROR_TERMINATION_MARKERS:
+        if marker in tail_lower:
+            return "error_termination"
+
     return "unknown"
+
+
+def classify_orca_failure(output_path: Path) -> str:
+    """Classify an ORCA failure mode from the output file.
+
+    Reads the tail of *output_path* and returns one of:
+    ``"scf_failure"`` / ``"scf_not_converged"`` (the legacy SCF wording keeps
+    the historical token), ``"geometry_not_converged"``, ``"opt_maxiter"``,
+    ``"hessian_not_positive_definite"``, ``"memory_failure"``,
+    ``"error_termination"`` or ``"unknown"``.
+
+    The vocabulary is additive: every previously returned class keeps its
+    meaning, and ``"unknown"`` is still reported when the tail carries no
+    recognizable ORCA wording (an honest unknown is better than a guess).
+    """
+    tail = _read_failure_tail(output_path)
+    if tail is None:
+        return "unknown"
+    return _classify_failure_text(tail)
+
+
+def _redact_host_paths(text: str) -> str:
+    """Replace absolute POSIX/Windows/home path tokens with their basename."""
+
+    def _basename(match: re.Match[str]) -> str:
+        raw = match.group(0).replace("\\", "/").rstrip("/")
+        name = raw.rsplit("/", 1)[-1]
+        return name or "<path>"
+
+    for pattern in (_WINDOWS_PATH_TOKEN_RE, _HOME_PATH_TOKEN_RE, _ABS_PATH_TOKEN_RE):
+        text = pattern.sub(_basename, text)
+    return text
+
+
+def _reason_lines(tail: str) -> list[str]:
+    """Return up to :data:`_REASON_LINE_LIMIT` printed failure lines (redacted)."""
+    lines: list[str] = []
+    for raw in reversed(tail.splitlines()):
+        line = raw.strip()
+        if not line or set(line) <= {"-", "*", "=", "_", " "}:
+            continue
+        lowered = line.lower()
+        if not any(keyword in lowered for keyword in _REASON_LINE_KEYWORDS):
+            continue
+        cleaned = _redact_host_paths(line)
+        if len(cleaned) > _REASON_LINE_MAX_CHARS:
+            cleaned = cleaned[: _REASON_LINE_MAX_CHARS - 1].rstrip() + "…"
+        lines.append(cleaned)
+        if len(lines) >= _REASON_LINE_LIMIT:
+            break
+    lines.reverse()
+    return lines
+
+
+_SCF_CYCLES_RE = re.compile(
+    r"SCF\s+(?:NOT\s+)?CONVERGED\s+AFTER\s+(\d+)\s+(?:CYCLES|ITERATIONS)", re.IGNORECASE
+)
+_OPT_CYCLE_RE = re.compile(r"(?:GEOMETRY\s+)?OPTIMIZATION\s+CYCLE\s+(\d+)", re.IGNORECASE)
+_IMAGINARY_MODE_RE = re.compile(r"\*+\s*imaginary mode", re.IGNORECASE)
+_IMAGINARY_COUNT_RE = re.compile(
+    r"(\d+)\s+(?:negative eigenvalues?|imaginary frequencies?)", re.IGNORECASE
+)
+_VIBRATIONAL_HEADER = "VIBRATIONAL FREQUENCIES"
+
+
+def _scf_cycle_count(tail: str) -> int | None:
+    """SCF cycles ORCA printed for its last SCF block (``None`` when absent)."""
+    matches = _SCF_CYCLES_RE.findall(tail)
+    return int(matches[-1]) if matches else None
+
+
+def _opt_cycle_count(tail: str) -> int | None:
+    """Highest ``GEOMETRY OPTIMIZATION CYCLE n`` printed (``None`` when absent)."""
+    cycles = [int(match) for match in _OPT_CYCLE_RE.findall(tail)]
+    return max(cycles) if cycles else None
+
+
+def _imaginary_mode_count(tail: str) -> int | None:
+    """Imaginary modes in the *last* printed vibrational block.
+
+    Counts ORCA's ``***imaginary mode***`` markers so a real 0 is reported as
+    0; when the log carries no vibrational block the count is unknown
+    (``None``), never defaulted.
+    """
+    index = tail.upper().rfind(_VIBRATIONAL_HEADER)
+    if index >= 0:
+        return len(_IMAGINARY_MODE_RE.findall(tail[index:]))
+    match = _IMAGINARY_COUNT_RE.search(tail)
+    return int(match.group(1)) if match else None
+
+
+def _terminal_state(tail_lower: str) -> str | None:
+    """ORCA's terminal marker: ``error_termination`` / ``aborted`` / ``normal``."""
+    if any(marker in tail_lower for marker in _ERROR_TERMINATION_MARKERS):
+        return "error_termination"
+    if any(marker in tail_lower for marker in _ABORTED_MARKERS):
+        return "aborted"
+    if any(marker in tail_lower for marker in _NORMAL_TERMINATION_MARKERS):
+        return "normal"
+    return None
+
+
+def _failure_details(output_text: str) -> dict[str, Any]:
+    """Extract actionable failure facts from an ORCA output tail.
+
+    Returns the structure published as ``metadata["failure_details"]`` so an
+    agent can answer "what failed" without grepping the log:
+
+    * ``reason_lines`` — up to five printed lines that state the failure,
+      host paths reduced to basenames;
+    * ``scf_cycles`` / ``opt_cycles`` — printed cycle counters (``None`` when
+      the output never printed them);
+    * ``imaginary_count`` — imaginary modes in the last vibrational block
+      (``None`` when no block was printed; 0 is a real value);
+    * ``terminal`` — ``"error_termination"`` / ``"aborted"`` / ``"normal"`` /
+      ``None`` when no terminal marker was printed.
+
+    Nothing is inferred: a missing counter stays ``None``.
+    """
+    tail = str(output_text or "")[-_FAILURE_TAIL_CHARS:]
+    return {
+        "reason_lines": _reason_lines(tail),
+        "scf_cycles": _scf_cycle_count(tail),
+        "opt_cycles": _opt_cycle_count(tail),
+        "imaginary_count": _imaginary_mode_count(tail),
+        "terminal": _terminal_state(tail.lower()),
+    }
+
+
+def _failure_details_from_output(output_path: Path) -> dict[str, Any]:
+    """``_failure_details`` over a file's tail (empty facts when unreadable)."""
+    tail = _read_failure_tail(output_path)
+    if tail is None:
+        return {
+            "reason_lines": [],
+            "scf_cycles": None,
+            "opt_cycles": None,
+            "imaginary_count": None,
+            "terminal": None,
+        }
+    return _failure_details(tail)
+
+
+def _message_reason_lines(failure_class: str, details: dict[str, Any]) -> list[str]:
+    """Printed reason lines safe to put in ``error_message``.
+
+    ``src/cccp/calculation/tasks/optimize.py`` derives the rescue chain from
+    the message token scan, so a line carrying a token owned by another
+    failure family (e.g. ``SCF`` in a Hessian failure) would misroute the
+    rescue plan.  Unsafe lines stay in ``failure_details.reason_lines``.
+    """
+    kept: list[str] = []
+    for line in details.get("reason_lines") or []:
+        lowered = line.lower()
+        unsafe = False
+        for token in _MESSAGE_UNSAFE_SUBSTRINGS:
+            if token not in lowered:
+                continue
+            if token == "scf" and failure_class.startswith("scf"):
+                continue
+            unsafe = True
+            break
+        if not unsafe:
+            kept.append(line)
+    return kept
+
+
+def _failure_summary(failure_class: str, details: dict[str, Any]) -> str:
+    """Build the ``≤200 chars`` summary appended to a failure message."""
+    parts = list(_message_reason_lines(failure_class, details)[-2:])
+    if not parts:
+        curated = _CLASS_SUMMARY.get(failure_class)
+        if curated:
+            parts.append(curated)
+    if details.get("terminal"):
+        parts.append(f"terminal={details['terminal']}")
+    if details.get("opt_cycles") is not None:
+        parts.append(f"opt_cycles={details['opt_cycles']}")
+    if details.get("imaginary_count") is not None:
+        # Deliberately NOT the word "imaginary": the downstream rescue
+        # classifier maps that token to a different failure family.
+        parts.append(f"nimag={details['imaginary_count']}")
+    if failure_class.startswith("scf") and details.get("scf_cycles") is not None:
+        parts.append(f"scf_cycles={details['scf_cycles']}")
+    summary = "; ".join(part.strip() for part in parts if part and part.strip())
+    if len(summary) > _FAILURE_SUMMARY_MAX_CHARS:
+        summary = summary[: _FAILURE_SUMMARY_MAX_CHARS - 1].rstrip() + "…"
+    return summary
+
+
+def _failure_message(prefix: str, failure_class: str, details: dict[str, Any]) -> str:
+    """``<prefix> [<class>]: <summary>`` — no suffix when there is nothing to say."""
+    message = f"{prefix} [{failure_class}]"
+    summary = _failure_summary(failure_class, details)
+    return f"{message}: {summary}" if summary else message
 
 
 def _resolve_method_meta(method: str | None) -> dict[str, Any] | None:
@@ -2347,11 +2663,15 @@ class ORCAInterface(QCInterfaceBase):
 
         if not success:
             failure_class = classify_orca_failure(output_file)
+            failure_details = _failure_details_from_output(output_file)
             return QCResult(
                 success=False,
-                error_message=f"ORCA optimization failed [{failure_class}]",
+                error_message=_failure_message(
+                    "ORCA optimization failed", failure_class, failure_details
+                ),
                 output_file=input_file,
                 log_file=output_file,
+                metadata=_with_spin_metadata({"failure_details": failure_details}, output_file),
             )
 
         coords, syms, error = LogParser.extract_last_converged_coords(output_file, "orca")
@@ -2363,6 +2683,9 @@ class ORCAInterface(QCInterfaceBase):
                 error_message=error or "Could not extract coordinates",
                 output_file=input_file,
                 log_file=output_file,
+                metadata=_with_spin_metadata(
+                    {"failure_details": _failure_details_from_output(output_file)}, output_file
+                ),
             )
 
         return QCResult(
@@ -2440,13 +2763,15 @@ class ORCAInterface(QCInterfaceBase):
 
         if not success:
             failure_class = classify_orca_failure(output_file)
+            failure_details = _failure_details_from_output(output_file)
             return QCResult(
                 success=False,
-                error_message=(
-                    f"ORCA constrained optimization failed [{failure_class}]"
+                error_message=_failure_message(
+                    "ORCA constrained optimization failed", failure_class, failure_details
                 ),
                 output_file=input_file,
                 log_file=output_file,
+                metadata=_with_spin_metadata({"failure_details": failure_details}, output_file),
             )
 
         coords, syms, error = LogParser.extract_last_converged_coords(output_file, "orca")
@@ -2454,11 +2779,15 @@ class ORCAInterface(QCInterfaceBase):
 
         if coords is None:
             failure_class = classify_orca_failure(output_file)
+            failure_details = _failure_details_from_output(output_file)
             return QCResult(
                 success=False,
-                error_message=f"{error or 'Could not extract coordinates'} [{failure_class}]",
+                error_message=_failure_message(
+                    error or "Could not extract coordinates", failure_class, failure_details
+                ),
                 output_file=input_file,
                 log_file=output_file,
+                metadata=_with_spin_metadata({"failure_details": failure_details}, output_file),
             )
 
         return QCResult(
@@ -3677,11 +4006,15 @@ class ORCAInterface(QCInterfaceBase):
 
         if not success:
             failure_class = classify_orca_failure(output_file)
+            failure_details = _failure_details_from_output(output_file)
             return TsOptResult(
                 success=False,
-                error_message=f"ORCA transition-state optimization failed [{failure_class}]",
+                error_message=_failure_message(
+                    "ORCA transition-state optimization failed", failure_class, failure_details
+                ),
                 output_file=input_file,
                 log_file=output_file,
+                metadata=_with_spin_metadata({"failure_details": failure_details}, output_file),
             )
 
         output_text = output_file.read_text(encoding="utf-8", errors="replace")
@@ -3700,6 +4033,25 @@ class ORCAInterface(QCInterfaceBase):
         if negative_pairs:
             most_negative_mode_index, _ = min(negative_pairs, key=lambda item: item[1])
             mode_vector = mode_vectors.get(most_negative_mode_index)
+
+        if coords is None:
+            # ORCA exited normally but printed no converged geometry: say what
+            # the log does carry instead of returning an empty error message.
+            failure_class = classify_orca_failure(output_file)
+            failure_details = _failure_details(output_text)
+            return TsOptResult(
+                success=False,
+                error_message=_failure_message(
+                    "ORCA transition-state optimization failed", failure_class, failure_details
+                ),
+                energy_hartree=energy,
+                output_file=input_file,
+                log_file=output_file,
+                metadata={
+                    "failure_details": failure_details,
+                    "frequency_validation": calculate_frequencies,
+                },
+            )
 
         return TsOptResult(
             success=coords is not None,

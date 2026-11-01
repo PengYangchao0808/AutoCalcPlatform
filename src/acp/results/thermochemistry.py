@@ -1,6 +1,6 @@
 """Thermochemistry projection — ZPE/H/G/S as a publishable RESULT product.
 
-Two entry points:
+Three entry points:
 
 * :func:`build_thermo_report` — the legacy viewer projection over the
   ``thermo.json`` producer format (design doc §11.3); unchanged.
@@ -10,6 +10,12 @@ Two entry points:
   the values the QC output actually printed (ORCA ``THERMOCHEMISTRY AT <T>K``
   block, or the Shermo ``*.sum`` used by the BatchOptimize thermochemistry
   step) as an ``acp_thermochemistry_v1`` payload.
+* :func:`publish_if_available` — the shared "publish only what the output
+  really printed" gate used by both the ``frequency`` workflow and the
+  BatchOptimize item materializer (round-8 三.4).  A log without ORCA's
+  thermochemistry block publishes nothing (never fabricated zeros) and a
+  thermochemistry product already registered on the same path can be kept
+  instead of overwritten.
 
 The projection never invents a value: a field is present only when the source
 text/metadata contains it, and derived fields are named as such.  Units are
@@ -45,6 +51,7 @@ __all__ = [
     "build_thermo_report",
     "parse_orca_thermochemistry",
     "parse_shermo_zpe_au",
+    "publish_if_available",
     "publish_thermochemistry",
     "thermochemistry_descriptor",
     "thermochemistry_product_metadata",
@@ -476,3 +483,109 @@ def publish_thermochemistry(
     )
     register_result_manifest(root, manifest, publisher=publisher)
     return target
+
+
+def _registered_thermochemistry_product(
+    result_dir: Path,
+    relative_path: str,
+    manifest: Any | None,
+) -> str | None:
+    """Id of an already-registered thermochemistry product on *relative_path*."""
+    from acp.storage.manifest import ProductKind, ResultManifest
+
+    source = manifest
+    if source is None:
+        try:
+            source = ResultManifest.read(result_dir)
+        except (OSError, ValueError):
+            return None
+    products = getattr(source, "products", None)
+    if not isinstance(products, list):
+        return None
+    for product in products:
+        if getattr(product, "path", None) != relative_path:
+            continue
+        if getattr(product, "kind", None) != ProductKind.THERMO_REPORT:
+            continue
+        product_id = getattr(product, "id", None)
+        return str(product_id) if product_id else None
+    return None
+
+
+def publish_if_available(
+    result_dir: Path | str,
+    *,
+    relative_path: str,
+    product_id: str,
+    label: str,
+    log_path: Path | str | None = None,
+    payload: Mapping[str, Any] | None = None,
+    method: str | None = None,
+    basis: str | None = None,
+    metadata: Mapping[str, Any] | None = None,
+    keep_existing: bool = False,
+    manifest: Any | None = None,
+    publisher: Callable[[Path, Any], Path] | None = None,
+) -> str | None:
+    """Publish thermochemistry when the source data really exists.
+
+    Exactly one source is used: a ready *payload* (BatchOptimize's Shermo
+    projection) wins over *log_path* (an ORCA frequency output parsed by
+    :func:`build_frequency_thermochemistry`).  When neither yields values —
+    including an ORCA log without its ``THERMOCHEMISTRY`` block — **nothing**
+    is written or registered: the caller can never publish fabricated zeros.
+
+    *keep_existing* keeps an already-registered ``THERMO_REPORT`` product on
+    the same *relative_path* (the BatchOptimize "prefer the Shermo product,
+    never overwrite it" rule) and returns its id.
+
+    *manifest* lets an in-memory manifest owner (the batch engine, which
+    writes one manifest for the whole run) register the product without a
+    second disk write; when omitted the single manifest writer
+    (:func:`publish_thermochemistry`) persists it through *publisher*.
+
+    Returns the registered product id, or ``None`` when nothing was
+    published.  Publication never raises: a failure is logged and reported as
+    ``None`` (a thermochemistry product must never fail the workflow).
+    """
+    try:
+        root = Path(result_dir)
+        if keep_existing:
+            existing = _registered_thermochemistry_product(root, relative_path, manifest)
+            if existing is not None:
+                return existing
+        if payload is None:
+            if log_path is None:
+                return None
+            payload = build_frequency_thermochemistry(log_path, method=method, basis=basis)
+            if payload is None:
+                return None
+        if manifest is not None:
+            from acp.storage.manifest import ProductKind
+
+            _ = write_thermochemistry_json(root, payload, relative_path=relative_path)
+            manifest.add_product(
+                id=product_id,
+                label=label,
+                path=relative_path,
+                kind=ProductKind.THERMO_REPORT,
+                metadata=thermochemistry_product_metadata(payload, metadata),
+            )
+            return product_id
+        _ = publish_thermochemistry(
+            root,
+            payload,
+            relative_path=relative_path,
+            product_id=product_id,
+            label=label,
+            metadata=metadata,
+            publisher=publisher,
+        )
+        return product_id
+    except (OSError, ValueError, TypeError, KeyError):
+        logger.warning(
+            "thermochemistry: could not publish %s; skipping",
+            relative_path,
+            exc_info=True,
+        )
+        return None

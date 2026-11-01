@@ -813,7 +813,7 @@
       "status": "CLOSED"
     }
   ],
-  "coverage_sha256": "cfb2622811e3bffba0305c896c02155179331b716e1effc0278c74e77ba66da6",
+  "coverage_sha256": "3e12a6ca415e09152a636a90b333c8b20463d7587d2daad47ecacc943a3674c8",
   "deferred_rows": [
     {
       "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
@@ -2410,7 +2410,7 @@
       "notes": "MCP idempotency now routes through CommandIdentity; prepare key v2 and lookup-only auto_ keys are covered by the process/backends tests. Revocation is re-tested on the remote path by M4-03.",
       "owner": "B + C-RPH",
       "receipt": "tests/test_acp2_runtime_mcp_process.py",
-      "receipt_sha256": "027e22a5cdd9a48c21ee943fa69be3c9390af83bcfa1c893c165a99b827de241",
+      "receipt_sha256": "f3f3161b2fe63de47e50d84dc501ec4c3aac359f16dcd3165e989862212c0def",
       "required_observations": {
         "auto_lookup_only": "present",
         "mcp_idempotency": "present",

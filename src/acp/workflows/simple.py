@@ -516,6 +516,12 @@ def _workflow_result(execution: Any, calc_dir: Path) -> WorkflowResult:
         elif step_state.kind is StepKind.FREQUENCY:
             metadata["n_frequencies"] = len(result.frequencies)
             metadata["has_frequencies"] = bool(result.frequencies)
+            if getattr(step_state, "status", "completed") == "completed":
+                # ORCA ``NumFreq`` always computes a fresh numerical Hessian;
+                # name the cost so a repeated Hessian is visible, not silent
+                # (round-8 三.5(1) — observation only, never a policy change).
+                metadata["hessian_recomputed"] = True
+                metadata["hessian_source"] = "freq_numfreq"
         elif step_state.kind is StepKind.SINGLEPOINT:
             # Canonical summary key is "energy" (matches OPTIMIZE/CASSCF and the CLI
             # summary read); "sp_energy" kept for legacy results/readers.
@@ -564,8 +570,12 @@ def _execute(
         if progress_reporter is not None:
             progress_reporter.fail_stage(stage_name, str(error) or type(error).__name__)
         raise
-    _publish_frequency_thermochemistry(plan, execution, calc_dir)
+    thermochemistry_product_id = _publish_frequency_thermochemistry(plan, execution, calc_dir)
     result = _workflow_result(execution, calc_dir)
+    if thermochemistry_product_id:
+        # Pointer to the RESULT product (round-8 三.4): values live there,
+        # never in a QC log the agent would have to grep.
+        result.metadata["thermochemistry_product_id"] = thermochemistry_product_id
     if progress_reporter is not None:
         if result.status == "completed":
             progress_reporter.complete_stage(stage_name)
@@ -607,55 +617,43 @@ def _publish_frequency_thermochemistry(
     plan: CalculationPlan,
     execution: Any,
     calc_dir: Path,
-) -> None:
+) -> str | None:
     """Publish ZPE/H/G/S as a RESULT product for a completed frequency run (#4).
 
     The values are read from the QC output that was actually written (the ORCA
-    ``THERMOCHEMISTRY`` block); a log without that block registers nothing —
-    never fake zeros.  Publication never fails the workflow.
+    ``THERMOCHEMISTRY`` block) through the shared
+    :func:`acp.results.thermochemistry.publish_if_available` gate; a log
+    without that block registers nothing — never fake zeros.  Publication
+    never fails the workflow.
+
+    Returns the registered product id (``"thermochemistry"``) or ``None``.
     """
     if plan.workflow != "frequency":
-        return
+        return None
     result_dir = calc_dir / "RESULT"
     if not (result_dir / "result_manifest.json").is_file():
-        return
+        return None
     freq_log = _frequency_log_path(execution)
     if freq_log is None:
-        return
-    try:
-        from acp.results.thermochemistry import (
-            PRODUCT_RELATIVE_PATH,
-            build_frequency_thermochemistry,
-            publish_thermochemistry,
-        )
-        from acp.services_publication_bootstrap import (
-            build_publication_data_port,
-            manifest_publisher,
-        )
+        return None
+    from acp.results.thermochemistry import PRODUCT_RELATIVE_PATH, publish_if_available
+    from acp.services_publication_bootstrap import (
+        build_publication_data_port,
+        manifest_publisher,
+    )
 
-        spec = _frequency_step_spec(plan)
-        payload = build_frequency_thermochemistry(
-            freq_log,
-            method=str(spec.get("method") or "") or None,
-            basis=str(spec.get("basis") or "") or None,
-        )
-        if payload is None:
-            return
-        publish_thermochemistry(
-            result_dir,
-            payload,
-            relative_path=PRODUCT_RELATIVE_PATH,
-            product_id="thermochemistry",
-            label="Thermochemistry (ZPE/H/G/S)",
-            metadata={"step_kind": "frequency"},
-            publisher=manifest_publisher(build_publication_data_port()),
-        )
-    except (OSError, ValueError, TypeError, KeyError):
-        logger.warning(
-            "frequency: thermochemistry product publication skipped for %s",
-            result_dir,
-            exc_info=True,
-        )
+    spec = _frequency_step_spec(plan)
+    return publish_if_available(
+        result_dir,
+        log_path=freq_log,
+        relative_path=PRODUCT_RELATIVE_PATH,
+        product_id="thermochemistry",
+        label="Thermochemistry (ZPE/H/G/S)",
+        method=str(spec.get("method") or "") or None,
+        basis=str(spec.get("basis") or "") or None,
+        metadata={"step_kind": "frequency"},
+        publisher=manifest_publisher(build_publication_data_port()),
+    )
 
 
 def run_singlepoint(

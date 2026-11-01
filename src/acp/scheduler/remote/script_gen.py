@@ -41,6 +41,7 @@ from acp.scheduler.jobs import (
 )
 from acp.scheduler.remote.config import RemoteNode
 from acp.scheduler.resources import resolve_job_resources, with_job_resources
+from acp.scheduler.runner import reject_unmaterialized_batch_items
 from acp_services.runtime.execution_chain import (
     EXECUTION_ENTRY_ENVELOPE,
     ExecutionLaunch,
@@ -205,6 +206,9 @@ def build_remote_cli_command(
 
     source = ""
     if wf == "BatchOptimize":
+        # Round-8 一.1: the local dispatcher raises the same message; a remote
+        # node must not silently run one structure when ``items`` was intended.
+        reject_unmaterialized_batch_items(inp)
         artifact = inp.get("from_artifact")
         items_file = inp.get("items_file")
         if artifact:

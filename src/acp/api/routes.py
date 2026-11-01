@@ -519,6 +519,231 @@ def _discovery_navigation() -> dict[str, Any]:
     }
 
 
+#: Sections of one published workflow contract that can be read on their own
+#: (round-8 三.6).  ``full`` is the historical whole block; ``method.levels`` is
+#: the nested 40-key level table that dominated the payload.
+_WORKFLOW_CONTRACT_SECTIONS: tuple[str, ...] = (
+    "input",
+    "method",
+    "method.levels",
+    "resources",
+    "examples",
+    "constraints",
+    "gaps",
+    "full",
+)
+
+
+def _contract_digest(block: Mapping[str, Any]) -> str:
+    """Stable sha256 of the **full** contract block (cache/"unchanged" proof)."""
+    canonical = json.dumps(block, ensure_ascii=False, sort_keys=True, default=str)
+    return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _parse_contract_sections(raw: str | None) -> tuple[str, ...] | None:
+    """Parse ``contract_sections`` (comma-separated); ``None`` means CORE.
+
+    ``full`` may not be combined with a section (it already is all of them);
+    an unknown name is a typed 422 with the allowed list.
+    """
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    if not text:
+        return None
+    tokens = [token.strip() for token in text.split(",") if token.strip()]
+    unknown = [token for token in tokens if token not in _WORKFLOW_CONTRACT_SECTIONS]
+    if unknown:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "input_invalid",
+                "message": f"unknown contract section {unknown[0]!r}",
+                "params": {
+                    "field": "contract_sections",
+                    "rule": "invalid_enum",
+                    "allowed": list(_WORKFLOW_CONTRACT_SECTIONS),
+                    "unknown": unknown,
+                },
+            },
+        )
+    if "full" in tokens and len(tokens) > 1:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "input_invalid",
+                "message": "contract_sections='full' cannot be combined with a section",
+                "params": {
+                    "field": "contract_sections",
+                    "rule": "mutually_exclusive",
+                    "conflicts_with": "full",
+                },
+            },
+        )
+    return tuple(tokens)
+
+
+def _compact_properties(
+    properties: Any, *, enum_keys: frozenset[str] = frozenset()
+) -> dict[str, Any]:
+    """Name-level property index for the CORE view.
+
+    The agent needs three things to write a field: its **name**, its **type**
+    and (for an enum) the **allowed values**.  Prose descriptions are the bulk
+    of a contract and are fetched on demand with ``contract_sections``.
+
+    Shape: ``property_types`` groups names by JSON type (``any`` = the
+    permissive multi-type union, ``enum`` = values in a sibling ``enums``
+    table); ``property_enums`` carries inline allowed values (e.g.
+    ``source_type``).  Grouping keeps every field *name* discoverable while
+    writing the type once per group instead of once per field.
+    """
+    if not isinstance(properties, Mapping):
+        return {"property_types": {}, "property_enums": {}}
+    typed: dict[str, list[str]] = {}
+    inline_enums: dict[str, list[Any]] = {}
+    for name, spec in properties.items():
+        if not isinstance(spec, Mapping):
+            typed.setdefault("any", []).append(str(name))
+            continue
+        values = spec.get("enum")
+        if isinstance(values, list) and values:
+            inline_enums[str(name)] = list(values)
+            continue
+        if name in enum_keys:
+            typed.setdefault("enum", []).append(str(name))
+            continue
+        raw_type = spec.get("type")
+        if isinstance(raw_type, list) or not isinstance(raw_type, str):
+            kind = "any"
+        else:
+            kind = raw_type
+        typed.setdefault(kind, []).append(str(name))
+    return {"property_types": typed, "property_enums": inline_enums}
+
+
+def _project_workflow_contract(
+    block: Mapping[str, Any], sections: tuple[str, ...] | None
+) -> dict[str, Any]:
+    """Project one contract block onto the requested sections.
+
+    ``None`` is the CORE view: field names/types/enums, gaps, constraints and
+    the task-state vocabulary — but not the nested 40-key ``levels`` table, not
+    ``examples`` and not the prose descriptions, all of which remain readable
+    through ``contract_sections``.  A section request returns only that section
+    (always with ``workflow``/``coverage`` so an answer is never anonymous).
+    Nothing is recomputed — this is a projection of
+    :func:`acp.api.workflow_contracts.describe_workflow`.
+    """
+    base = {
+        key: block[key] for key in ("workflow", "coverage", "partial_scope") if key in block
+    }
+    if sections is None:
+        projected: dict[str, Any] = dict(base)
+        for key in ("guide_ref", "source_shape", "gaps", "constraints", "reason"):
+            if key in block:
+                projected[key] = block[key]
+        input_block = block.get("input")
+        if isinstance(input_block, Mapping):
+            projected["input"] = {
+                name: value
+                for name, value in input_block.items()
+                if name != "properties"
+            }
+            projected["input"].update(
+                _compact_properties(input_block.get("properties"))
+            )
+        method_block = block.get("method")
+        if isinstance(method_block, Mapping):
+            method_enums = method_block.get("enums")
+            enum_keys = (
+                frozenset(method_enums) if isinstance(method_enums, Mapping) else frozenset()
+            )
+            projected["method"] = {
+                name: value
+                for name, value in method_block.items()
+                if name not in {"properties", "levels"}
+            }
+            compact = _compact_properties(
+                method_block.get("properties"), enum_keys=enum_keys
+            )
+            if compact["property_enums"] == dict(method_enums or {}):
+                # The sibling ``enums`` table already carries these values.
+                compact.pop("property_enums")
+            projected["method"].update(compact)
+        resources_block = block.get("resources")
+        if isinstance(resources_block, Mapping):
+            projected["resources"] = {
+                name: value for name, value in resources_block.items() if name != "properties"
+            }
+            projected["resources"].update(
+                _compact_properties(resources_block.get("properties"))
+            )
+        return projected
+    if "full" in sections:
+        return dict(block)
+    projected = dict(base)
+    if "input" in sections and "input" in block:
+        projected["input"] = block["input"]
+    if "method" in sections or "method.levels" in sections:
+        method = block.get("method") if isinstance(block.get("method"), Mapping) else {}
+        wanted = {"method.levels"} & set(sections)
+        if "method" in sections:
+            projected["method"] = dict(method)
+        elif wanted:
+            projected["method"] = {"levels": method.get("levels", {})}
+    for key in ("resources", "constraints", "gaps", "examples"):
+        if key in sections and key in block:
+            projected[key] = block[key]
+    return projected
+
+
+def _task_states_projection() -> dict[str, Any]:
+    """The ten-value task-state vocabulary + families (round-8 K5).
+
+    Derived from the single wire definition in
+    :mod:`acp_services.entrypoints.mcp` (itself derived from the store enum), so
+    discovery, the HTTP filter and the MCP tool can never drift.
+    """
+    from acp_services.entrypoints.mcp import STATUS_GROUPS, TASK_STATE_VOCABULARY
+
+    return {
+        "vocabulary": list(TASK_STATE_VOCABULARY),
+        "groups": {name: list(states) for name, states in STATUS_GROUPS.items()},
+        "filter_semantics": "exact match; use status_group for families",
+        "query_tool": "acp_list_jobs",
+        "counts_semantics": "pre-filter, ten keys",
+    }
+
+
+def _workflow_contract_view(
+    block: Mapping[str, Any], sections: tuple[str, ...] | None
+) -> dict[str, Any]:
+    """One workflow-scoped contract response fragment (round-8 三.6)."""
+    view = _project_workflow_contract(block, sections)
+    view["sections_available"] = list(_WORKFLOW_CONTRACT_SECTIONS)
+    # Point at what this view omitted, so the agent never guesses a section id.
+    if sections is None:
+        view["next"] = {
+            "tool": "acp_capabilities",
+            "arguments": {
+                "workflow": block.get("workflow"),
+                "contract_sections": "method.levels",
+            },
+            "note": "nested level table; contract_sections=full returns the whole block",
+        }
+    elif "full" not in sections:
+        view["next"] = {
+            "tool": "acp_capabilities",
+            "arguments": {
+                "workflow": block.get("workflow"),
+                "contract_sections": "full",
+            },
+            "note": "the whole contract",
+        }
+    return view
+
+
 def _capabilities_payload(
     request: Request,
     *,
@@ -527,6 +752,7 @@ def _capabilities_payload(
     client: Mapping[str, Any] | None = None,
     workflow: str | None = None,
     detail: str | None = None,
+    contract_sections: str | None = None,
 ) -> dict[str, Any]:
     """Build the discovery payload and answer the extension handshake.
 
@@ -560,6 +786,7 @@ def _capabilities_payload(
     from acp.mcp_extension import RESEARCH_EXTENSION_SPEC
     from acp_services.entrypoints.mcp import (
         RESEARCH_TOOL_NAMES,
+        McpTool,
         negotiate_research_extension,
         normalize_extension_request,
     )
@@ -654,14 +881,30 @@ def _capabilities_payload(
             )
         # Bounded single-workflow read: only the target contract + the small
         # public refs an agent needs to address the next call.
+        #
+        # Round-8 三.6: the default is the CORE view (no 40-key ``levels``, no
+        # ``examples``) so one contract read stays small; ``contract_sections``
+        # fetches any section, ``full`` keeps the historical whole block.
+        # ``tools``/``extensions`` are deliberately absent — they are handshake
+        # facts (`initialize` + `detail=summary`), not workflow facts.
+        section_list = _parse_contract_sections(contract_sections)
+        block = describe_workflow(canonical)
         return {
             "schema_version": 1,
             "protocol_version": _MCP_PROTOCOL_VERSION,
             "workflows": _active_workflows(),
             "backends": _backend_capability_summary(),
-            "tools": _visible_tools,
-            "extensions": [dict(entry) for entry in handshake.entries],
-            "workflow_contract": describe_workflow(canonical),
+            "workflow_contract": _workflow_contract_view(block, section_list),
+            "task_states": _task_states_projection(),
+            "contract_digest": _contract_digest(block),
+            "contract_sections": (
+                "core" if section_list is None else ",".join(section_list)
+            ),
+            "next": {
+                "tool": McpTool.CAPABILITIES,
+                "arguments": {"detail": "summary"},
+                "note": "tools/extensions come from the handshake",
+            },
         }
     if detail == "summary":
         capacity_block = _capacity_block(request)
@@ -802,12 +1045,17 @@ def get_capabilities(
     client: str | None = Query(default=None),
     workflow: str | None = Query(default=None),
     detail: str | None = Query(default=None),
+    contract_sections: str | None = Query(default=None),
 ) -> dict[str, Any]:
     """Read-only discovery (``capabilities`` application command).
 
     Credential-free by design.  The optional query parameters are the flat
     spelling of the ``POST`` body surface: ``research_extension=id@version``,
     ``project_id`` and ``client`` (``name/version``), all audit-only.
+    ``contract_sections`` (round-8 三.6) picks a section of a
+    ``workflow=<id>`` contract: ``input``, ``method``, ``method.levels``,
+    ``resources``, ``examples``, ``constraints``, ``gaps`` or ``full``; omitted
+    means the bounded CORE view.
     """
     client_facts: dict[str, Any] | None = None
     if client:
@@ -820,6 +1068,7 @@ def get_capabilities(
         client=client_facts,
         workflow=workflow,
         detail=detail,
+        contract_sections=contract_sections,
     )
 
 
@@ -849,6 +1098,7 @@ async def post_capabilities(request: Request) -> dict[str, Any]:
         "client",
         "workflow",
         "detail",
+        "contract_sections",
     }
     unknown = set(body) - allowed_fields
     if unknown:
@@ -884,6 +1134,15 @@ async def post_capabilities(request: Request) -> dict[str, Any]:
             status_code=422,
             detail={"code": "input_invalid", "message": "workflow must be a string"},
         )
+    contract_sections = body.get("contract_sections")
+    if contract_sections is not None and not isinstance(contract_sections, str):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "input_invalid",
+                "message": "contract_sections must be a string",
+            },
+        )
     return _capabilities_payload(
         request,
         research_extension=research,
@@ -891,6 +1150,7 @@ async def post_capabilities(request: Request) -> dict[str, Any]:
         client=client,
         workflow=workflow,
         detail=body.get("detail"),
+        contract_sections=contract_sections,
     )
 
 

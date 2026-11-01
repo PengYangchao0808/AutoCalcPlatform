@@ -197,6 +197,91 @@ def _parse_iso_ts(value: object) -> float | None:
     return parsed.timestamp()
 
 
+#: Claim binding written by :meth:`JobManager._write_claim_binding`.  It is the
+#: only entry a cleanup of this flow's own directory may ignore when deciding
+#: whether the directory is "empty".
+_CLAIM_BINDING_NAME: Final = ".claim_binding"
+#: Job event emitted when an unadopted task directory is KEPT because it holds
+#: files this flow did not create (round-8 三.1).  An event, never a new marker
+#: file — ``_SCHEDULER_MARKERS`` stays the complete root-write set (ANTI #11).
+_DIR_ADOPTION_FAILED_EVENT: Final = "task.dir_adoption_failed_leftover"
+
+#: Bounded list length for leftover diagnostics (paths/entries may be long).
+_LEFTOVER_REPORT_LIMIT: Final = 20
+
+#: Locked provenance fields of ``irc_ts_source_v1`` (round-8 一.3(4)).  One
+#: tuple answers both questions in ``JobManager._verified_irc_spec``: "is the
+#: submitted payload a complete provenance?" and "does that complete payload
+#: still match the evidence derived from the source job?".  The submit boundary
+#: (``acp.api.submission_contract.IRC_TS_SOURCE_LOCKED_FIELDS``) restates the
+#: same fields for its 422; scheduler may not import the API layer, so the
+#: drift between the two tuples is pinned by
+#: ``tests/test_acp_round8_irc_ts_source_errors.py``.
+_IRC_TS_SOURCE_LOCKED_FIELDS: Final[tuple[str, ...]] = (
+    "job_id",
+    "product_id",
+    "geometry_sha256",
+    "method",
+    "basis",
+    "charge",
+    "multiplicity",
+    "imaginary_frequency_cm1",
+    "frequency_evidence_sha256",
+    "source_completed_at",
+)
+
+
+def _task_json_task_id(work_dir: Path) -> str | None:
+    """Return ``task.json.task_id`` for *work_dir*, or ``None`` when absent/unreadable."""
+    try:
+        payload = json.loads((work_dir / "task.json").read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    value = payload.get("task_id")
+    return str(value) if value else None
+
+
+def _foreign_task_dir_entries(work_dir: Path, *, ignore: tuple[str, ...] = ()) -> list[str] | None:
+    """Sorted entry names in *work_dir* apart from *ignore*; ``None`` if unreadable.
+
+    Used to prove a directory is empty of everything except the bindings this
+    flow itself wrote before any ``rmtree``/``rmdir`` is allowed to touch it.
+    """
+    try:
+        return sorted(entry.name for entry in work_dir.iterdir() if entry.name not in ignore)
+    except OSError:
+        return None
+
+
+def _release_task_dir(work_dir: Path, *, ignore: tuple[str, ...] = ()) -> bool:
+    """Remove *work_dir* only when nothing outside *ignore* lives in it.
+
+    *ignore* names entries this flow itself wrote (the claim binding); they are
+    unlinked so that a provably empty directory can be removed without ever
+    ``rmtree``-ing a non-empty tree.  Returns ``True`` when the directory is
+    gone, ``False`` when foreign entries (or the filesystem) kept it.  Callers
+    report why (round-8 三.1: deleting foreign evidence is how a later job ends
+    up reusing a leaf that history still points at).
+    """
+    leftovers = _foreign_task_dir_entries(work_dir, ignore=ignore)
+    if leftovers is None or leftovers:
+        return False
+    try:
+        for name in ignore:
+            entry = work_dir / name
+            if entry.is_dir():
+                shutil.rmtree(entry)
+            else:
+                entry.unlink(missing_ok=True)
+        work_dir.rmdir()
+    except OSError:
+        logger.warning("could not remove empty task dir %s", work_dir, exc_info=True)
+        return False
+    return True
+
+
 def _needs_submission_reconcile(record: JobRecord) -> bool:
     """Category ① of the reconcile loop: STARTING with a pending submission."""
     if record.status != JobStatus.STARTING:
@@ -1227,7 +1312,7 @@ class JobManager:
             if self.store.get(claim.task_id or "") is None:
                 shutil.rmtree(staging, ignore_errors=True)
                 if final_dir is not None and self._binding_matches(final_dir, claim):
-                    shutil.rmtree(final_dir, ignore_errors=True)
+                    self._abandon_adoption(final_dir, claim=claim, job_id=job_id)
             raise
 
         self._fault_point("idempotency.before_dispatch")
@@ -1276,7 +1361,7 @@ class JobManager:
         return self.run_root / ".staging" / str(claim_id)
 
     def _write_claim_binding(self, work_dir: Path, claim: Any) -> None:
-        path = work_dir / ".claim_binding"
+        path = work_dir / _CLAIM_BINDING_NAME
         payload = {
             "claim_id": claim.claim_id,
             "attempt": 1,
@@ -1295,7 +1380,7 @@ class JobManager:
         for candidate in project_root.iterdir():
             if not candidate.is_dir():
                 continue
-            binding = candidate / ".claim_binding"
+            binding = candidate / _CLAIM_BINDING_NAME
             if not binding.is_file():
                 continue
             try:
@@ -1307,7 +1392,7 @@ class JobManager:
         return None
 
     def _binding_matches(self, work_dir: Path, claim: Any) -> bool:
-        path = work_dir / ".claim_binding"
+        path = work_dir / _CLAIM_BINDING_NAME
         if not path.is_file():
             return False
         try:
@@ -1362,6 +1447,49 @@ class JobManager:
         staging = self._staging_dir(claim.claim_id)
         self._adopt_staging_dir(staging, work_dir, record, claim)
 
+    def _abandon_adoption(self, final_dir: Path, *, claim: Any, job_id: str) -> None:
+        """Release a task dir whose adoption failed, without destroying evidence.
+
+        Round-8 三.1: the pre-round-8 handler ``rmtree``'d ``final_dir``
+        unconditionally.  A bound directory may already hold files from an
+        earlier crashed attempt of the same claim, so deleting it is how a
+        later job ends up legally allocating a leaf that history still points
+        at.  Only a directory holding nothing but this claim's binding is
+        removed; anything else is kept, logged and recorded as a job event
+        (never a new marker file — ANTI #11).
+        """
+        if _release_task_dir(final_dir, ignore=(_CLAIM_BINDING_NAME,)):
+            return
+        leftovers = _foreign_task_dir_entries(final_dir, ignore=(_CLAIM_BINDING_NAME,))
+        names = (leftovers or [])[:_LEFTOVER_REPORT_LIMIT]
+        if leftovers is None:
+            detail = "unreadable"
+        elif leftovers:
+            detail = ", ".join(names)
+        else:
+            detail = "only this flow's binding (the filesystem refused removal)"
+        logger.error(
+            "task dir adoption failed for job %s; kept %s (leftover entries: %s)",
+            job_id,
+            final_dir,
+            detail,
+        )
+        try:
+            JobEventLog(runtime_file(final_dir, "events.jsonl")).append(
+                _DIR_ADOPTION_FAILED_EVENT,
+                job_id=job_id,
+                claim_id=str(getattr(claim, "claim_id", "") or ""),
+                work_dir=str(final_dir),
+                leftover=names,
+            )
+        except OSError:
+            logger.error(
+                "could not record %s for job %s",
+                _DIR_ADOPTION_FAILED_EVENT,
+                job_id,
+                exc_info=True,
+            )
+
     def _idempotency_adoption_pending(self, record: JobRecord) -> bool:
         claim = self.store.get_idempotency_claim_for_task(record.id)
         if claim is None or not claim.is_committed:
@@ -1406,20 +1534,21 @@ class JobManager:
             source_record, product_id, getattr(self, "_remote_fetcher", None)
         )
         previous = inp.get("ts_source")
-        if isinstance(previous, dict):
+        if previous is not None:
+            # One tuple, two questions (round-8 一.3(4)): the same locked-field
+            # set decides whether a submitted payload is a COMPLETE provenance
+            # and whether that complete provenance still matches the derived
+            # evidence.  A partial payload is not "changed" — it must simply be
+            # omitted (the platform derives it from source_job_id/product_id).
+            locked_fields = _IRC_TS_SOURCE_LOCKED_FIELDS
+            if not isinstance(previous, dict) or any(
+                key not in previous or previous.get(key) is None for key in locked_fields
+            ):
+                raise ValueError(
+                    "input.ts_source is partial; omit it — the platform derives provenance "
+                    "from source_job_id/source_product_id"
+                )
             current = source.provenance()
-            locked_fields = (
-                "job_id",
-                "product_id",
-                "geometry_sha256",
-                "method",
-                "basis",
-                "charge",
-                "multiplicity",
-                "imaginary_frequency_cm1",
-                "frequency_evidence_sha256",
-                "source_completed_at",
-            )
             if any(previous.get(key) != current[key] for key in locked_fields):
                 raise ValueError("IRC source evidence changed since the previous submission")
         requested = dict(spec.method)
@@ -3471,14 +3600,31 @@ class JobManager:
         is also used by project moves. New submissions must additionally claim
         the selected leaf with ``exist_ok=False`` so concurrent batch submits
         cannot both persist the same task directory.
+
+        The claimed leaf is probed for ``task.json`` ownership before it is
+        returned (round-8 三.1): a directory carrying another job's
+        ``task.json`` is never reused, even if a racing writer produced it
+        between resolution and ``mkdir``.  The normal path (fresh directory)
+        is unchanged.
         """
         candidate = self._resolve_work_dir(spec, job_id)
         for _ in range(100_000):
             try:
                 candidate.mkdir(parents=True, exist_ok=False)
-                return candidate
             except FileExistsError:
                 candidate = self._dedupe_task_dir(candidate)
+                continue
+            owner = _task_json_task_id(candidate)
+            if owner is None or owner == job_id:
+                return candidate
+            logger.error(
+                "task dir %s already carries task.json for job %s; allocating the next "
+                "leaf instead of reusing another job's directory (foreign files are kept)",
+                candidate,
+                owner,
+            )
+            _release_task_dir(candidate)
+            candidate = self._dedupe_task_dir(candidate)
         raise RuntimeError(f"Failed to atomically allocate task dir for {candidate}")
 
     def _resolve_work_dir(self, spec: JobSpec, job_id: str) -> Path:

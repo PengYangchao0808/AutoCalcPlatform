@@ -727,10 +727,14 @@ def test_submit_returns_reference_immediately_and_status_queries_it() -> None:
     assert later["structuredContent"]["data"]["state"] == "completed"
 
 
-def test_unknown_reference_reports_not_ready() -> None:
+def test_unknown_reference_reports_not_found() -> None:
+    """Round-8 K6: an unknown reference is a usage error, not a retryable wait."""
     result = _call_tool(_server(), mcp.McpTool.STATUS, {"reference": "missing"})
     assert result["isError"] is True
-    assert result["structuredContent"]["error"]["code"] == mo.ErrorCode.RESOURCE_NOT_READY
+    error = result["structuredContent"]["error"]
+    assert error["code"] == mo.ErrorCode.NOT_FOUND
+    assert error["retryable"] is False
+    assert "acp_list_jobs" in error["message"]
 
 
 def test_disconnect_does_not_affect_operation() -> None:
