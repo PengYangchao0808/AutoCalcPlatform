@@ -76,6 +76,7 @@ __all__ = [
     "ENTRY_MCP",
     "FIELD_POLICY",
     "FieldPolicy",
+    "IDEMPOTENCY_KEY_PATTERN",
     "LEGACY_REQUEST_FIELD_ALLOWLIST",
     "MAX_READ_BYTES",
     "NODE_TAGS_MAX_COUNT",
@@ -102,7 +103,17 @@ __all__ = [
 APPLICATION_SCHEMA_VERSION = 1
 
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
-_IDEMPOTENCY = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
+
+#: Shape of the client retry key (``idempotency_key``).  Round-7 agent
+#: feedback: chemistry names legitimately contain parentheses/brackets
+#: (``ccsd(t)``, ``exp:[t1]``), so the class accepts ``()``/``[]`` as well as the
+#: original ``A-Za-z0-9._:-``.  This stays wire-safe because the key only feeds
+#: the Controller's idempotency ledger (a TEXT column), logs and the canonical
+#: request digest -- it is never turned into a path or a shell token.  The
+#: length bound and the rejection of whitespace, slashes, quotes and control
+#: characters are unchanged.
+IDEMPOTENCY_KEY_PATTERN = r"^[A-Za-z0-9._:()\[\]-]{8,128}$"
+_IDEMPOTENCY = re.compile(IDEMPOTENCY_KEY_PATTERN)
 _BUDGET_UNITS = frozenset({"task_count", "core_hours", "walltime_s"})
 
 #: Application entries the field policy is frozen for.  ``legacy-http`` (the
@@ -827,7 +838,7 @@ def _optional_idempotency(payload: Mapping[str, Any]) -> str | None:
             params={
                 "field": "idempotency_key",
                 "rule": "pattern",
-                "pattern": "^[A-Za-z0-9._:-]{8,128}$",
+                "pattern": IDEMPOTENCY_KEY_PATTERN,
             },
         )
     return value

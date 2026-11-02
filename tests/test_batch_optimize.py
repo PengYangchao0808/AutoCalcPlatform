@@ -2134,10 +2134,13 @@ class TestEnginePerRoleSpThermo:
         ts_sp = engine._build_sp_request(
             result, ts_item, 0, 1, tmp_path / "sp_ts", ["H", "H"], methods,
         )
+        # Round-7 #2: the single-point level is PER ROLE.  The INT role's
+        # sp_method never bleeds into the TS role; a role without its own SP
+        # level executes its own optimization level.
         assert int_sp.method == "wB97M-V"
         assert int_sp.resources.get("basis") == "def2-TZVPP"
-        assert ts_sp.method == "wB97M-V"
-        assert ts_sp.resources.get("basis") == "def2-TZVPP"
+        assert ts_sp.method == "wB97X-D4"
+        assert ts_sp.resources.get("basis") == "def2-TZVP"
 
     def test_per_role_thermo_temperature_reaches_calc(
         self, tmp_path: Path, fake_backend: object,

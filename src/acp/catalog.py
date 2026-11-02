@@ -569,8 +569,8 @@ FIELD_DEFINITIONS: dict[str, Any] = {
                 "PBE0",
                 "M062X",
                 "mPW1PW91",
-                "wB97X-D4",
                 "wB97M-V",
+                "wB97X-D4",
                 "PWPB95",
                 "revDSD-PBEP86",
                 "DLPNO-CCSD(T)",
@@ -610,8 +610,8 @@ FIELD_DEFINITIONS: dict[str, Any] = {
                 "PBE0",
                 "M062X",
                 "mPW1PW91",
-                "wB97X-D4",
                 "wB97M-V",
+                "wB97X-D4",
                 "PWPB95",
                 "revDSD-PBEP86",
                 "DLPNO-CCSD(T)",
@@ -1470,7 +1470,7 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "advanced": True,
         "label": "Minimum Method Override",
         "label_zh": "最低点方法覆盖",
-        "per_backend": {"orca": ["r2SCAN-3c", "B3LYP", "PBE0", "M062X", "wB97X-D4", "wB97M-V"]},
+        "per_backend": {"orca": ["r2SCAN-3c", "wB97M-V", "B3LYP", "PBE0", "M062X", "wB97X-D4"]},
         "default": {"*": ""},
     },
     "minimum_basis": {
@@ -1487,7 +1487,7 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "advanced": True,
         "label": "Transition-State Method Override",
         "label_zh": "过渡态方法覆盖",
-        "per_backend": {"orca": ["r2SCAN-3c", "B3LYP", "PBE0", "M062X", "wB97X-D4", "wB97M-V"]},
+        "per_backend": {"orca": ["r2SCAN-3c", "wB97M-V", "B3LYP", "PBE0", "M062X", "wB97X-D4"]},
         "default": {"*": ""},
     },
     "transition_state_basis": {
@@ -2489,9 +2489,11 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                 "summary": "IRC at the verified source TS calculation level",
                 "levels": {
                     "irc": {
+                        # No step: ORCA IRC has no validated step mapping; the
+                        # profile must not fabricate a control the executor
+                        # refuses (round-5).
                         "engine": "orca",
                         "maxpoints": 100,
-                        "step": 0.1,
                     }
                 },
             }

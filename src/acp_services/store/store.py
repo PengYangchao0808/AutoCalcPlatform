@@ -1084,6 +1084,70 @@ class JobStore:
             for row in rows
         ]
 
+    # ── round-5 PR-05: persistent selection publication intents ───────────
+
+    def load_selection_publication(self, job_id: str) -> dict[str, Any] | None:
+        """Return the task's current publication intent (None before any save)."""
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM selection_publications WHERE job_id = ?", (job_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "schema": "pes_publication_intent_v1",
+            "job_id": row["job_id"],
+            "idempotency_key": row["idempotency_key"],
+            "payload_digest": row["payload_digest"],
+            "expected_revision": row["expected_revision"],
+            "target_revision": int(row["target_revision"]),
+            "stages": json.loads(row["stages_json"] or "[]"),
+            "completed_stages": json.loads(row["completed_json"] or "[]"),
+            "status": row["status"],
+            "owner_id": row["owner_id"],
+            "lease_until": row["lease_until"],
+            "error": row["error"],
+            "updated_at": row["updated_at"],
+        }
+
+    def save_selection_publication(self, job_id: str, payload: Mapping[str, Any]) -> None:
+        """Upsert the task's publication intent (one row per task)."""
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """INSERT INTO selection_publications (
+                       job_id, idempotency_key, payload_digest, expected_revision,
+                       target_revision, stages_json, completed_json, status,
+                       owner_id, lease_until, error, updated_at
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(job_id) DO UPDATE SET
+                       idempotency_key=excluded.idempotency_key,
+                       payload_digest=excluded.payload_digest,
+                       expected_revision=excluded.expected_revision,
+                       target_revision=excluded.target_revision,
+                       stages_json=excluded.stages_json,
+                       completed_json=excluded.completed_json,
+                       status=excluded.status,
+                       owner_id=excluded.owner_id,
+                       lease_until=excluded.lease_until,
+                       error=excluded.error,
+                       updated_at=excluded.updated_at""",
+                (
+                    job_id,
+                    payload.get("idempotency_key"),
+                    str(payload.get("payload_digest") or ""),
+                    payload.get("expected_revision"),
+                    int(payload.get("target_revision") or 0),
+                    json.dumps(list(payload.get("stages") or []), ensure_ascii=False),
+                    json.dumps(list(payload.get("completed_stages") or []), ensure_ascii=False),
+                    str(payload.get("status") or ""),
+                    str(payload.get("owner_id") or ""),
+                    payload.get("lease_until"),
+                    payload.get("error"),
+                    str(payload.get("updated_at") or ""),
+                ),
+            )
+            conn.commit()
+
     def claim_idempotency(
         self,
         scope_id: str,

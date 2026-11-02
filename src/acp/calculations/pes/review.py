@@ -52,6 +52,17 @@ from acp.calculations.pes.outputs import (
 from acp.storage.manifest import ProductKind, ResultManifest
 
 PES_REVIEW_RELATIVE_PATH = "RESULT/pes_search/pes_review.json"
+from acp.calculations.pes.publication import (
+    PUBLICATION_INTENT_RELATIVE_PATH,
+    PublicationConflictError,
+    PublicationInProgressError,
+    PublicationRecoveryError,
+    acquire_publication_lock,
+    publication_digest,
+    release_publication_lock,
+    run_publication,
+)
+
 PES_REVIEW_SCHEMA = "pes_review_v1"
 PES_REVIEW_BACKUP_TEMPLATE = "pes_review_backup_{n:03d}.json"
 PES_REVIEW_PRODUCT_PREFIX = "pes_candidate_"
@@ -420,14 +431,24 @@ def _update_result_manifest(
     source: _FrameSource,
     validated: list[_ValidatedCandidate],
     entries: list[dict[str, str]],
+    *,
+    publication: Mapping[str, Any] | None = None,
+    selector: str = "manual",
+    authorization: Mapping[str, Any] | None = None,
 ) -> Path:
-    """Replace PES structure products so only confirmed candidates remain."""
+    """Replace PES structure products so only confirmed candidates remain.
+
+    The ``publication`` marker records the group revision/status: readers must
+    refuse a ``pending`` group (round-5 PR-05 invariant 7).
+    """
     try:
         manifest = ResultManifest.read(result_dir)
     except (FileNotFoundError, OSError, json.JSONDecodeError, ValueError, TypeError, KeyError):
         manifest = ResultManifest()
     manifest.task_id = manifest.task_id or task_id
     manifest.workflow = manifest.workflow or "PESsearch"
+    if publication is not None:
+        manifest.publication = dict(publication)
     # Drop previous PES structure references (recommendations + earlier saves);
     # recommendation data stays in pes_profile.json for audit.
     manifest.products = [
@@ -446,11 +467,33 @@ def _update_result_manifest(
                 "role": candidate.role,
                 "frame_index": candidate.frame_index,
                 "source": "PESsearch",
-                "selection_source": "manual",
+                "selection_source": selector,
                 "task_status": source.task_status,
                 "scan_complete": source.scan_complete,
                 "frame_converged": candidate.frame_converged,
                 "data_source": source.data_source,
+                **(
+                    {
+                        "publication_revision": int(publication.get("revision") or 0),
+                        "publication_digest": str(publication.get("digest") or ""),
+                    }
+                    if isinstance(publication, Mapping)
+                    else {}
+                ),
+                **(
+                    {
+                        "authorization_id": str(authorization.get("authorization_id") or ""),
+                        "authorization_revision": int(
+                            authorization.get("authorization_revision") or 0
+                        ),
+                        "authorization_digest": str(
+                            authorization.get("authorization_digest") or ""
+                        ),
+                        "selector": "agent",
+                    }
+                    if selector == "agent" and isinstance(authorization, Mapping)
+                    else {}
+                ),
             },
         )
     return manifest.write(result_dir)
@@ -466,8 +509,22 @@ def save_pes_review(
     now: datetime | None = None,
     restored_from: int | None = None,
     source_task_status: str = "COMPLETED",
+    idempotency_key: str | None = None,
+    intent_store: Any | None = None,
+    selector: str = "manual",
+    actor: str | None = None,
+    authorization: Mapping[str, Any] | None = None,
+    source_binding: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Validate and persist a manual PES review (all-or-nothing).
+    """Validate and persist a PES review as one recoverable publication.
+
+    ``selector`` separates the historical manual path from an *authorized agent*
+    publication: an agent request must carry the authorization decision receipt
+    and the source binding; the runtime authorization itself is validated by the
+    Services layer before this writer runs.
+
+    ``intent_store`` is the Services-backed publication intent (production API
+    path); it defaults to the local file store for CLI/no-store callers.
 
     Frame lookup accepts the final ``pes_profile.json`` (successful scans) or
     the live partial frames (interrupted scans of FAILED/CANCELLED tasks);
@@ -499,62 +556,192 @@ def save_pes_review(
         PesReviewError: Any candidate failed validation; nothing is written.
         RevisionConflictError: ``expected_revision`` does not match the stored one.
     """
+    selector = str(selector or "manual")
+    if selector == "agent":
+        if not isinstance(authorization, Mapping) or not (
+            authorization.get("authorization_id") and authorization.get("authorization_digest")
+        ):
+            raise PesReviewError(
+                "agent selection publication requires an authorization decision receipt"
+            )
+        if not isinstance(source_binding, Mapping) or not source_binding.get("job_id"):
+            raise PesReviewError(
+                "agent selection publication requires a source binding (job/attempt/profile)"
+            )
+    elif selector not in {"manual", "manual_frame"}:
+        raise PesReviewError(f"unsupported selection selector {selector!r}")
     root = Path(task_root).expanduser().resolve()
     task_status = re.sub(r"[^A-Za-z0-9_]", "_", str(source_task_status or "UNKNOWN")).upper()
     source = _resolve_frame_source(root, task_status=task_status)
 
-    existing = load_pes_review(root)
-    current_revision = int(existing.get("revision", 0)) if existing else 0
-    if expected_revision is not None and int(expected_revision) != current_revision:
-        raise RevisionConflictError(
-            f"review revision conflict: stored={current_revision}, expected={expected_revision}"
+    lock_handle = acquire_publication_lock(root)
+    try:
+        existing = load_pes_review(root)
+        current_revision = int(existing.get("revision", 0)) if existing else 0
+        if expected_revision is not None and int(expected_revision) != current_revision:
+            raise RevisionConflictError(
+                f"review revision conflict: stored={current_revision}, expected={expected_revision}"
+            )
+
+        validated = _validate_candidates(root, source, candidates)
+
+        # A source rerun between validation and commit must fail closed
+        # (plan §9.3 invariant 9: re-verify the frame source under the lock,
+        # after validation read it and before anything is written).
+        latest_source = _resolve_frame_source(root, task_status=task_status)
+        if latest_source.data_sha256 != source.data_sha256:
+            raise PesReviewError(
+                "frame source changed while publishing; re-read the task and retry"
+            )
+
+        result_dir = root / "RESULT"
+        structures_dir = result_dir / "structures"
+        entries = [
+            {
+                "candidate_id": candidate.candidate_id,
+                "role": candidate.role,
+                "name": candidate.name,
+                "structure_path": f"structures/{candidate.candidate_id}.xyz",
+            }
+            for candidate in validated
+        ]
+        confirmed_at = (now or datetime.now().astimezone()).isoformat(timespec="seconds")
+        selected = [
+            {
+                "candidate_id": entry["candidate_id"],
+                "frame_index": candidate.frame_index,
+                "role": candidate.role,
+                "name": candidate.name,
+                "selection_source": "manual" if selector == "manual" else selector,
+                "structure_path": entry["structure_path"],
+                "frame_converged": candidate.frame_converged,
+            }
+            for entry, candidate in zip(entries, validated)
+        ]
+        payload: dict[str, Any] = {
+            "schema_version": PES_REVIEW_SCHEMA,
+            "job_id": job_id,
+            "status": "confirmed",
+            "confirmed_at": confirmed_at,
+            "revision": current_revision + 1,
+            "attempt": current_revision + 1,
+            "profile_sha256": source.data_sha256 if source.kind == "final_profile" else "",
+            "source": {
+                "task_status": source.task_status,
+                "frame_source": source.kind,
+                "scan_complete": source.scan_complete,
+                "data_source": source.data_source,
+                "data_sha256": source.data_sha256,
+            },
+            "note": str(note or ""),
+            "selected": selected,
+        }
+        if restored_from is not None:
+            payload["restored_from"] = int(restored_from)
+        if selector == "agent":
+            payload["selector"] = "agent"
+            payload["actor"] = actor or ""
+            payload["authorization"] = dict(authorization or {})
+            payload["source_binding"] = dict(source_binding or {})
+
+        digest = publication_digest(
+            job_id=job_id,
+            candidates=candidates,
+            note=str(note or ""),
+            restored_from=restored_from,
+            expected_revision=expected_revision,
+            source_digest=source.data_sha256,
+            source_task_status=source.task_status,
+            frame_source=source.kind,
+            selector=selector,
+            authorization_digest=(
+                str(authorization.get("authorization_digest") or "")
+                if isinstance(authorization, Mapping)
+                else ""
+            ),
         )
 
-    validated = _validate_candidates(root, source, candidates)
+        def backup_step() -> None:
+            if existing and current_revision >= 1:
+                _rotate_backup(root, existing, current_revision)
 
-    result_dir = root / "RESULT"
-    structures_dir = result_dir / "structures"
-    if existing and current_revision >= 1:
-        _rotate_backup(root, existing, current_revision)
-    entries = _materialise_structures(structures_dir, validated)
-    manifest_path = _update_result_manifest(result_dir, job_id, source, validated, entries)
+        def structures_step() -> None:
+            _materialise_structures(structures_dir, validated)
 
-    confirmed_at = (now or datetime.now().astimezone()).isoformat(timespec="seconds")
-    selected = [
-        {
-            "candidate_id": entry["candidate_id"],
-            "frame_index": candidate.frame_index,
-            "role": candidate.role,
-            "name": candidate.name,
-            "selection_source": "manual",
-            "structure_path": entry["structure_path"],
-            "frame_converged": candidate.frame_converged,
+        def manifest_pending_step() -> None:
+            _update_result_manifest(
+                result_dir,
+                job_id,
+                source,
+                validated,
+                entries,
+                publication={
+                    "revision": current_revision + 1,
+                    "status": "pending",
+                    "digest": digest,
+                },
+                selector=selector,
+                authorization=authorization,
+            )
+
+        def manifest_commit_step() -> None:
+            _update_result_manifest(
+                result_dir,
+                job_id,
+                source,
+                validated,
+                entries,
+                publication={
+                    "revision": current_revision + 1,
+                    "status": "committed",
+                    "digest": digest,
+                },
+                selector=selector,
+                authorization=authorization,
+            )
+
+        def review_step() -> dict[str, Any]:
+            _write_json_atomic(root / PES_REVIEW_RELATIVE_PATH, payload)
+            return payload
+
+        _, replayed, intent = run_publication(
+            root,
+            job_id=job_id,
+            key=idempotency_key,
+            digest=digest,
+            expected_revision=expected_revision,
+            current_revision=current_revision,
+            stages=(
+                ("backup", backup_step),
+                ("structures", structures_step),
+                ("manifest_pending", manifest_pending_step),
+                ("review", review_step),
+                ("manifest_commit", manifest_commit_step),
+            ),
+            intent_store=intent_store,
+        )
+        publication_block = {
+            "intent_path": PUBLICATION_INTENT_RELATIVE_PATH,
+            "status": intent.get("status"),
+            "completed_stages": list(intent.get("completed_stages") or []),
+            "replayed": replayed,
         }
-        for entry, candidate in zip(entries, validated)
-    ]
-    payload: dict[str, Any] = {
-        "schema_version": PES_REVIEW_SCHEMA,
-        "job_id": job_id,
-        "status": "confirmed",
-        "confirmed_at": confirmed_at,
-        "revision": current_revision + 1,
-        "attempt": current_revision + 1,
-        "profile_sha256": source.data_sha256 if source.kind == "final_profile" else "",
-        "source": {
-            "task_status": source.task_status,
-            "frame_source": source.kind,
-            "scan_complete": source.scan_complete,
-            "data_source": source.data_source,
-            "data_sha256": source.data_sha256,
-        },
-        "note": str(note or ""),
-        "selected": selected,
-    }
-    if restored_from is not None:
-        payload["restored_from"] = int(restored_from)
-    _write_json_atomic(root / PES_REVIEW_RELATIVE_PATH, payload)
-    payload["result_manifest_path"] = str(manifest_path)
-    return payload
+        if replayed:
+            stored = load_pes_review(root)
+            if stored is None:
+                raise PublicationRecoveryError(
+                    "publication was recorded as published but the review file is missing",
+                    intent=intent,
+                    completed=list(intent.get("completed_stages") or []),
+                )
+            stored["result_manifest_path"] = str(result_dir / "result_manifest.json")
+            stored["publication"] = publication_block
+            return stored
+        payload["result_manifest_path"] = str(result_dir / "result_manifest.json")
+        payload["publication"] = publication_block
+        return payload
+    finally:
+        release_publication_lock(lock_handle)
 
 
 def _rotate_backup(root: Path, existing: dict[str, Any], revision: int) -> Path:
@@ -604,6 +791,8 @@ def restore_pes_review(
     expected_revision: int | None = None,
     now: datetime | None = None,
     source_task_status: str = "COMPLETED",
+    idempotency_key: str | None = None,
+    intent_store: Any | None = None,
 ) -> dict[str, Any]:
     """Re-activate backup *backup_n* as the current review (rotation-aware).
 
@@ -646,6 +835,8 @@ def restore_pes_review(
         now=now,
         restored_from=int(backup_n),
         source_task_status=source_task_status,
+        idempotency_key=idempotency_key,
+        intent_store=intent_store,
     )
     payload["restored_from"] = int(backup_n)
     return payload

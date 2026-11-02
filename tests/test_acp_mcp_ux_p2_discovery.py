@@ -22,7 +22,10 @@ def client(tmp_path: Path) -> Generator[TestClient, None, None]:
 
 
 def test_workflow_selector_returns_complete_contract(client: TestClient) -> None:
-    payload = client.get("/api/capabilities", params={"workflow": "Confsearch"}).json()
+    payload = client.get(
+        "/api/capabilities",
+        params={"workflow": "Confsearch", "contract_sections": "full"},
+    ).json()
     block = payload["workflow_contract"]
     assert block["workflow"] == "Confsearch"
     assert block["coverage"] == "partial"
@@ -63,8 +66,14 @@ def test_unknown_workflow_reports_allowed_and_suggestion(client: TestClient) -> 
 
 
 def test_post_body_and_query_are_equivalent(client: TestClient) -> None:
-    query = client.get("/api/capabilities", params={"workflow": "BatchOptimize"}).json()
-    body = client.post("/api/capabilities", json={"workflow": "BatchOptimize"}).json()
+    query = client.get(
+        "/api/capabilities",
+        params={"workflow": "BatchOptimize", "contract_sections": "full"},
+    ).json()
+    body = client.post(
+        "/api/capabilities",
+        json={"workflow": "BatchOptimize", "contract_sections": "full"},
+    ).json()
     assert query["workflow_contract"] == body["workflow_contract"]
     for example in body["workflow_contract"]["examples"]:
         validate_workflow_submission(

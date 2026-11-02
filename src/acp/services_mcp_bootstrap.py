@@ -86,6 +86,9 @@ _TOOL_ERROR_CODES: dict[str, str] = {
     "backend_unavailable": mo.ErrorCode.BACKEND_UNAVAILABLE,
     "resource_unavailable": mo.ErrorCode.RESOURCE_UNAVAILABLE,
     "resource_not_ready": mo.ErrorCode.RESOURCE_NOT_READY,
+    # Round-8 K6: an unknown reference is a usage error, never a retryable
+    # "not prepared yet" (that misclassification hid a missing job row).
+    "not_found": mo.ErrorCode.NOT_FOUND,
     "revision_conflict": mo.ErrorCode.REVISION_CONFLICT,
     # P3 (round 3): "preflight fingerprint does not match the submitted plan"
     # is a caller-side input error, never backend_failure.
@@ -94,6 +97,11 @@ _TOOL_ERROR_CODES: dict[str, str] = {
     "idempotency_in_progress": mo.ErrorCode.REVISION_CONFLICT,
     "admission_denied": mo.ErrorCode.ACCESS_DENIED,
     "access_denied": mo.ErrorCode.ACCESS_DENIED,
+    # Round-7: a missing/expired/revoked selection authorization must not fall
+    # back to backend_failure at the MCP surface.
+    "authorization_not_found": mo.ErrorCode.ACCESS_DENIED,
+    "authorization_revoked": mo.ErrorCode.ACCESS_DENIED,
+    "authorization_expired": mo.ErrorCode.ACCESS_DENIED,
     # B15 identity denials: a revoked/expired/unknown credential answers one
     # uniform 401 (``unauthenticated``) and must stay a typed access denial at
     # the MCP surface (M0-05 per-call revalidation).
@@ -266,11 +274,22 @@ class _ControllerStatus:
         return value if value.startswith("op_") else ""
 
     def list_tasks(
-        self, *, status: str | None = None, limit: int = 50, workspace_id: str = ""
+        self,
+        *,
+        status: str | None = None,
+        status_group: str | None = None,
+        limit: int = 50,
+        workspace_id: str = "",
     ) -> dict[str, Any]:
         del workspace_id
         try:
-            return dict(self._client.list_tasks(status=status, limit=limit))
+            # Round-8 K5: forward the family filter so the Controller applies it
+            # (one authority) instead of filtering a page after the fact.
+            return dict(
+                self._client.list_tasks(
+                    status=status, status_group=status_group, limit=limit
+                )
+            )
         except ControllerClientError as exc:
             raise _tool_error("list_tasks", exc) from None
 
@@ -374,6 +393,41 @@ class _ControllerAnalysis:
             raise _tool_error("analyze", exc) from None
 
 
+class _ControllerSelection:
+    """PES selection read/publish forward (round-5 PR-07).
+
+    The read is the cache-only status route; the publish is the authorized
+    agent path.  The actor/authorization live server-side: this port only
+    forwards, so the MCP tool cannot widen them.
+    """
+
+    def __init__(self, client: ControllerClient) -> None:
+        self._client = client
+
+    def get_review_status(self, job_id: str, *, workspace_id: str) -> Any:
+        del workspace_id
+        try:
+            return self._client.get_pes_review_status(job_id)
+        except NotPreparedError as exc:
+            # An unknown task / uncached selection is a typed not-ready outcome
+            # (the whole point of the cache-only read), never an internal error.
+            error = _tool_error("selection.status", exc)
+            error.params.setdefault("field", "job_id")
+            error.params.setdefault("rule", "not_found")
+            raise error from None
+        except ControllerClientError as exc:
+            raise _tool_error("selection.status", exc) from None
+
+    def publish_review(
+        self, job_id: str, request: Mapping[str, Any], *, workspace_id: str
+    ) -> Any:
+        del workspace_id
+        try:
+            return self._client.publish_pes_review(job_id, dict(request))
+        except ControllerClientError as exc:
+            raise _tool_error("selection.publish", exc) from None
+
+
 class _ControllerGuidance:
     """Read-only guidance forward (plan 2026-10-30 §5: 指南读取).
 
@@ -389,12 +443,15 @@ class _ControllerGuidance:
         del workspace_id
         guide_id = str(request.get("guide_id") or "").strip()
         if not guide_id:
-            raise mcp.McpToolError(
-                mo.ErrorCode.INPUT_INVALID,
-                "guidance read requires a non-empty guide_id",
-                params={"field": "guide_id", "rule": "missing_required_field"},
-                retryable=False,
-            )
+            # No id = discovery list; the index was otherwise only reachable
+            # through the capabilities projection.
+            try:
+                return self._client.guidance_index()
+            except ControllerClientError as exc:
+                raise _tool_error("guidance.index", exc) from None
+        return self._guidance_body(guide_id, request)
+
+    def _guidance_body(self, guide_id: str, request: Mapping[str, Any]) -> Any:
         section = request.get("section")
         version = request.get("version")
         max_bytes = request.get("max_bytes")
@@ -472,6 +529,7 @@ def build_mcp_runtime(
         artifacts=_ControllerArtifacts(client),
         analysis=_ControllerAnalysis(client),
         guidance=_ControllerGuidance(client),
+        selection=_ControllerSelection(client),
         # M2-01c: the ten research tools reach the Controller application service
         # through the one transport; the adapter holds no research store.
         research=ControllerResearchPort(client),

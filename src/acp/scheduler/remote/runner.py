@@ -1404,8 +1404,11 @@ class RemoteJobRunner:
             UNVERSIONED_RELEASE_ID,
             LocalRelease,
             ReleaseIdentity,
+            StaleReleaseError,
+            StaleReleaseRefreshError,
             build_freeze_spec,
             build_local_release,
+            current_release_identity,
         )
         from acp_services.runtime.attempt_freeze import write_frozen_attempt
 
@@ -1430,9 +1433,46 @@ class RemoteJobRunner:
                     f"verified remote release {code_release!r} != local release "
                     f"{release.release_id!r}; refusing to freeze a mismatched tree"
                 )
+        run_root = work_dir.parent.parent
         try:
             spec = build_freeze_spec(record, work_dir, input_path, release)
             group = write_frozen_attempt(work_dir, spec)
+        except StaleReleaseError:
+            # The live tree changed between materialising the release and the
+            # freeze digest check (or the release was re-used across a source
+            # change). Rebuild the identity ONCE from the live tree — the
+            # remote release must still match it — and retry the freeze once.
+            # The digest check is never skipped.
+            if release.unversioned:
+                raise
+            try:
+                release = build_local_release(project_root, run_root)
+            except Exception as exc:
+                raise RemoteSubmissionRejected(
+                    f"could not rebuild the stale local release for attempt "
+                    f"{record.attempt} of {workflow}: {exc}"
+                ) from exc
+            if release.release_id != code_release:
+                raise RemoteSubmissionRejected(
+                    f"verified remote release {code_release!r} != rebuilt local release "
+                    f"{release.release_id!r}; refusing to freeze a mismatched tree"
+                )
+            try:
+                spec = build_freeze_spec(record, work_dir, input_path, release)
+                group = write_frozen_attempt(work_dir, spec)
+            except StaleReleaseError as again:
+                raise StaleReleaseRefreshError(
+                    stale=release.identity,
+                    live=current_release_identity(project_root),
+                    project_root=project_root,
+                    run_root=run_root,
+                    reason=str(again),
+                ) from again
+            except Exception as exc:
+                raise RemoteSubmissionRejected(
+                    f"could not freeze attempt {record.attempt} of {workflow} after "
+                    f"refreshing the release: {exc}"
+                ) from exc
         except Exception as exc:
             raise RemoteSubmissionRejected(
                 f"could not freeze attempt {record.attempt} of {workflow}: {exc}"

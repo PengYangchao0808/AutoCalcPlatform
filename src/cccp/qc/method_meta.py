@@ -22,6 +22,7 @@ the ORCA route renderer goldens.  Values must not drift.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from cccp.qc.keyword_registry import (
@@ -100,6 +101,95 @@ COMPOSITE_BASIS_SETS = _COMPOSITE_BASIS_SETS
 BASIS_CATALOG_REF = _BASIS_CATALOG_REF
 AUX_J_BASIS_FALLBACK = _AUX_J_BASIS_FALLBACK
 AUX_C_BASIS_FALLBACK = _AUX_C_BASIS_FALLBACK
+
+# ── Route-token basis classification (round-7 #3) ────────────────────────
+# ONE classification authority for "is this ORCA route token an orbital
+# basis, an auxiliary/fitting basis, or a plain keyword?".  It is consumed by
+# the route renderer's single-orbital-basis invariant
+# (``cccp.qc.interfaces.route_render``), by the submit/preflight conflict
+# detector and by the parameter resolver's aux clamp.  Value semantics of
+# :data:`BASIS_CATALOG` / :data:`METHOD_META` are unchanged — this is only a
+# classifier.
+#
+# Auxiliary/fitting tokens carry an explicit ``/J`` or ``/C`` suffix (also the
+# ``/JK`` ``/JKFIT`` fitting variants) or are the ``AutoAux`` placeholder.
+# They must never be emitted as a bare second orbital basis.
+
+_AUX_BASIS_TOKEN_RE = re.compile(r"/(?:J|C|JK|JKFIT)(?=$|[^A-Za-z])", re.IGNORECASE)
+_AUTOAUX_TOKEN = "autoaux"
+
+#: Basis-name families accepted on the ORCA ``!`` line beyond the catalog
+#: (Pople-style/ECP/segmented sets crafted by hand or through a custom method
+#: string).  Matched case-insensitively as prefixes.
+_ORBITAL_BASIS_PREFIXES: tuple[str, ...] = (
+    "def2-",
+    "ma-def2-",
+    "cc-p",
+    "aug-cc-p",
+    "6-31",
+    "3-21g",
+    "sto-3g",
+    "lanl2",
+    "sdd",
+    "pcseg-",
+    "jorge-",
+    "x2c-",
+    "iglo-",
+    "ano-",
+)
+
+_ORBITAL_BASIS_NAMES: frozenset[str] = frozenset(name.lower() for name in BASIS_CATALOG)
+
+
+def classify_basis_token(token: str | None) -> str:
+    """Classify one ORCA route token.
+
+    Args:
+        token: One whitespace-free route token (method / basis / keyword).
+
+    Returns:
+        ``"aux_basis"`` for auxiliary/fitting tokens (``def2/J``,
+        ``def2-TZVP/C``, ``AutoAux``, ``def2/JK`` ...), ``"orbital_basis"``
+        for orbital basis names (catalog entries and the declared name
+        families), otherwise ``"keyword"``.  Empty/blank input is a keyword.
+    """
+    text = str(token or "").strip()
+    if not text:
+        return "keyword"
+    lowered = text.lower()
+    if lowered == _AUTOAUX_TOKEN or _AUX_BASIS_TOKEN_RE.search(text):
+        return "aux_basis"
+    if lowered in _ORBITAL_BASIS_NAMES or lowered.startswith(_ORBITAL_BASIS_PREFIXES):
+        return "orbital_basis"
+    return "keyword"
+
+
+def is_orbital_basis(token: str | None) -> bool:
+    """True when *token* is an orbital (wavefunction) basis name."""
+    return classify_basis_token(token) == "orbital_basis"
+
+
+def is_aux_basis(token: str | None) -> bool:
+    """True when *token* is an auxiliary/fitting basis token."""
+    return classify_basis_token(token) == "aux_basis"
+
+
+def orbital_basis_tokens(text: str | None) -> tuple[str, ...]:
+    """Every orbital-basis token in *text* (whitespace-split), in order.
+
+    Duplicates are preserved: callers that need the *distinct* values use
+    equality checks / dict keys.  The method string and a basis field both
+    flow through this helper so the route-line invariant sees one inventory.
+    """
+    return tuple(
+        token for token in str(text or "").split() if is_orbital_basis(token)
+    )
+
+
+def aux_basis_tokens(text: str | None) -> tuple[str, ...]:
+    """Every auxiliary/fitting token in *text* (whitespace-split), in order."""
+    return tuple(token for token in str(text or "").split() if is_aux_basis(token))
+
 
 # Aux fitting-basis field defaults — SINGLE source shared with
 # ``acp.catalog.FIELD_DEFINITIONS`` (which references these constants) and

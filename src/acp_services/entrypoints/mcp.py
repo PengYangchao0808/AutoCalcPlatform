@@ -136,6 +136,7 @@ from acp_services.runtime.analysis_capabilities import (
     AnalysisCapabilityRegistry,
     capability_projection,
 )
+from acp_services.store.records import JobStatus
 from acp_services.workspace.boundary import evaluate_tier_request
 from acp_services.workspace.command_identity import (
     CommandIdentity,
@@ -321,6 +322,26 @@ _SUMMARY_JOB_FIELDS: tuple[str, ...] = (
     "error",
 )
 
+#: The ten real task states, derived from the single store enum (round-8 K5).
+#: Never a second copy: a state added to ``JobStatus`` is accepted here, on the
+#: Controller route and in ``store.counts()`` in the same change.
+TASK_STATE_VOCABULARY: tuple[str, ...] = tuple(status.value for status in JobStatus)
+
+#: State families for the mutually-exclusive ``status_group`` filter.  Derived
+#: from the enum's own predicates (``is_active``/``is_terminal``) so the family
+#: and the exact-match filter can never disagree about a state.
+STATUS_GROUPS: dict[str, tuple[str, ...]] = {
+    "active": tuple(status.value for status in JobStatus if status.is_active),
+    "terminal": tuple(status.value for status in JobStatus if status.is_terminal),
+    # "running now" = the three states in which work is progressing right now;
+    # queued/paused/waiting_review are active but not running.
+    "running_now": (
+        JobStatus.STARTING.value,
+        JobStatus.PENDING.value,
+        JobStatus.RUNNING.value,
+    ),
+}
+
 
 def _summarize_job_listing(payload: Mapping[str, Any]) -> dict[str, Any]:
     """Project a Controller job listing onto compact summary rows."""
@@ -360,6 +381,91 @@ _TERMINAL_STATES: frozenset[str] = frozenset(
     {"failed", "cancelled", "completed", "canceled"}
 )
 
+#: Terminal spellings the cancel *intent* already produced (a queued job is
+#: moved to CANCELLED synchronously).  These keep ``cancelled=True`` instead of
+#: being reported as "was already finished" (round-7 #7e).
+_CANCELLED_STATES: frozenset[str] = frozenset({"cancelled", "canceled"})
+
+#: Fields the cancel acknowledgement keeps (round 7, #7e).  The Controller's
+#: cancel route answers with the whole job row -- spec.xyz, admission,
+#: provenance, artifacts, live status -- which serialised to ~50 KB for a
+#: control intent that only needs identity/state facts.  This is a bounded
+#: projection, not a second authority: a caller that needs the full row queries
+#: ``acp_status``.  ``spec_ref``/``trace_ref`` are passed through only when the
+#: Controller row already carries them; the spec body is never echoed and no
+#: reference is invented.
+_CANCEL_ENVELOPE_FIELDS: tuple[str, ...] = (
+    "state",
+    "status",
+    "job_id",
+    "attempt",
+    "updated_at",
+    "spec_ref",
+    "trace_ref",
+)
+
+
+def _cancel_acknowledgement(record: Any, reference: str) -> dict[str, Any]:
+    """Project one cancel result onto the bounded status envelope (#7e).
+
+    The Controller answers ``POST /api/v1/jobs/{id}/cancel`` with the full
+    ``V1JobRecordModel`` (spec body included).  Echoing it through MCP made one
+    control acknowledgement ~50 KB, so only identity/state facts survive here:
+    ``job_id``/``attempt``/``reference``/``state``/``status``/``updated_at``/
+    ``cancelled``/``already_terminal`` (+ ``terminal_state`` when the observed
+    state is terminal, and ``cancel_requested`` kept for older clients).
+    ``spec_ref``/``trace_ref`` ride along only when the Controller row itself
+    carries them -- this projection never reads the spec object and never
+    invents a reference.  A non-mapping record degrades to identity-only facts
+    (same policy as :func:`_reference_from`).  An unknown job never reaches this
+    function: the backend port raises the existing typed error first.
+    """
+    row: Mapping[str, Any] = record if isinstance(record, Mapping) else {}
+    job_id = ""
+    for key in ("job_id", "task_id", "id"):
+        value = row.get(key)
+        if isinstance(value, str) and value:
+            job_id = value
+            break
+    if not job_id:
+        task_ref = row.get("task_ref")
+        if isinstance(task_ref, Mapping):
+            value = task_ref.get("task_id") or task_ref.get("job_id")
+            if isinstance(value, str):
+                job_id = value
+    acknowledgement: dict[str, Any] = {"job_id": job_id or reference}
+    state = row.get("state") or row.get("status")
+    if isinstance(state, str) and state:
+        acknowledgement["state"] = state
+        acknowledgement["status"] = str(row.get("status") or state)
+    for key in _CANCEL_ENVELOPE_FIELDS:
+        if key in {"state", "status", "job_id"}:
+            continue
+        value = row.get(key)
+        if key == "attempt" and (isinstance(value, bool) or not isinstance(value, int)):
+            continue
+        if key in {"spec_ref", "trace_ref"} and not isinstance(value, str):
+            # A reference is a name, never a payload: a mapping under either key
+            # would reopen the spec-body leak this projection exists to close.
+            continue
+        if value is not None and value != "":
+            acknowledgement[key] = value
+    acknowledgement["reference"] = row.get("reference") or reference
+    # Round-2 compatibility: cancelling an already-terminal job must say so
+    # explicitly instead of returning a bare "completed" next to the intent.
+    # A *cancelled* answer is the intent being satisfied (a queued job is moved
+    # to CANCELLED synchronously by the Controller), so the "already finished"
+    # marker is reserved for the terminal states the call did not produce.
+    observed = state.lower() if isinstance(state, str) else ""
+    if observed in _TERMINAL_STATES and observed not in _CANCELLED_STATES:
+        acknowledgement["cancelled"] = False
+        acknowledgement["already_terminal"] = True
+        acknowledgement["terminal_state"] = state
+    else:
+        acknowledgement["cancelled"] = True
+    acknowledgement["cancel_requested"] = True
+    return acknowledgement
+
 
 class McpTool(str):
     """The closed set of MCP tools exposed by this adapter.
@@ -379,6 +485,9 @@ class McpTool(str):
     ANALYZE = "acp_analyze"
     GUIDANCE = "acp_get_guidance"
     LIST_JOBS = "acp_list_jobs"
+    #: Round-5 PR-07 selection tools: cache-only status and authorized publish.
+    GET_PES_REVIEW = "acp_get_pes_review"
+    PUBLISH_PES_REVIEW = "acp_publish_pes_review"
 
     ALL = frozenset(
         {
@@ -392,6 +501,8 @@ class McpTool(str):
             ANALYZE,
             GUIDANCE,
             LIST_JOBS,
+            GET_PES_REVIEW,
+            PUBLISH_PES_REVIEW,
         }
     )
 
@@ -408,6 +519,8 @@ TOOL_FAMILIES: dict[str, str] = {
     McpTool.ANALYZE: "explicit_analysis",
     McpTool.GUIDANCE: "guidance_discovery_read",
     McpTool.LIST_JOBS: "task_lookup",
+    McpTool.GET_PES_REVIEW: "selection_read",
+    McpTool.PUBLISH_PES_REVIEW: "selection_publish",
 }
 
 #: Access action each tool requires; enforced against the resolved scope.
@@ -422,7 +535,15 @@ TOOL_REQUIRED_ACTION: dict[str, str] = {
     McpTool.ANALYZE: AccessAction.WRITE,
     McpTool.GUIDANCE: AccessAction.READ,
     McpTool.LIST_JOBS: AccessAction.READ,
+    McpTool.GET_PES_REVIEW: AccessAction.READ,
+    McpTool.PUBLISH_PES_REVIEW: AccessAction.WRITE,
 }
+
+#: Selection tools are visible only when the selection port is assembled.
+_SELECTION_TOOL_NAMES: tuple[str, ...] = (
+    McpTool.GET_PES_REVIEW,
+    McpTool.PUBLISH_PES_REVIEW,
+)
 
 #: The frozen allowlist — the only tool names ``tools/list`` advertises and
 #: ``tools/call`` accepts.
@@ -771,6 +892,15 @@ _CAPABILITIES_SCHEMA: dict[str, Any] = {
                 "suggestion."
             ),
         },
+        "contract_sections": {
+            "type": "string",
+            "description": (
+                "Workflow-scoped only: request named parts of the contract instead of "
+                "the bounded CORE view. One of input|method|method.levels|resources|"
+                "examples|constraints|gaps, comma-separated, or 'full'. The CORE view's "
+                "`next.arguments` points here; 'full' cannot be combined with a section."
+            ),
+        },
         "detail": {
             "type": "string",
             "enum": ["summary", "full"],
@@ -791,10 +921,11 @@ _GUIDANCE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "description": (
         "Read one versioned guidance document (shared prompt, workflow guide, "
-        "orchestration guide or topic). The response carries the entry version, "
-        "a stable sha256 digest for caching and explicit omissions when a byte "
-        "bound degrades the body to section names. Discover ids through "
-        "acp_capabilities(workflow=...), which returns each workflow's guide_ref."
+        "orchestration guide or topic). Call it with no guide_id to get the full "
+        "discovery index (all ids, titles, versions, coverage) instead of scanning "
+        "the capabilities index. The response carries the entry version, a stable "
+        "sha256 digest for caching and explicit omissions when a byte bound "
+        "degrades the body to section names."
     ),
     "properties": {
         "schema_version": {"type": "integer", "enum": [1], "default": 1},
@@ -825,7 +956,6 @@ _GUIDANCE_SCHEMA: dict[str, Any] = {
             ),
         },
     },
-    "required": ["guide_id"],
     "additionalProperties": False,
 }
 
@@ -1108,9 +1238,12 @@ _PREPARE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "description": (
         "Explicit prepare request, identical to POST /api/v1/jobs/{job_id}/prepare. "
-        "purpose is required; artifact_id is required when purpose=artifact. The "
-        "Controller derives resource_id from artifact_id, never from the caller. A "
-        "prepare never starts science and is never implied by a read or a status query."
+        "purpose is required; artifact_id is required when purpose=artifact. "
+        "A status descriptor already names the next call: copy "
+        "descriptor.prepare.arguments (descriptor.resource_id -> artifact_id, the "
+        "job id from the status call) instead of guessing. The Controller derives "
+        "resource_id from artifact_id, never from the caller. A prepare never "
+        "starts science and is never implied by a read or a status query."
     ),
     "properties": {
         "schema_version": {"type": "integer", "enum": [1], "default": 1},
@@ -1198,16 +1331,22 @@ _LIST_JOBS_SCHEMA: dict[str, Any] = {
         "schema_version": {"type": "integer", "enum": [1], "default": 1},
         "status": {
             "type": "string",
-            "enum": [
-                "queued",
-                "running",
-                "paused",
-                "waiting_review",
-                "failed",
-                "cancelled",
-                "completed",
-            ],
-            "description": "Optional state filter.",
+            "enum": list(TASK_STATE_VOCABULARY),
+            "description": (
+                "Optional exact-match state filter. The vocabulary is the ten real "
+                "task states; a value outside it is refused with the allowed list "
+                "(it never silently returns an empty page)."
+            ),
+        },
+        "status_group": {
+            "type": "string",
+            "enum": list(STATUS_GROUPS),
+            "description": (
+                "Optional state family, mutually exclusive with status: "
+                f"active={list(STATUS_GROUPS['active'])}, "
+                f"terminal={list(STATUS_GROUPS['terminal'])}, "
+                f"running_now={list(STATUS_GROUPS['running_now'])}."
+            ),
         },
         "limit": {
             "type": "integer",
@@ -1229,6 +1368,58 @@ _LIST_JOBS_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 
+_GET_PES_REVIEW_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "description": (
+        "Cache-only selection status for a PESsearch task: current revision, "
+        "selector/actor/authorization, source task/attempt, selected summaries, "
+        "backup summaries and the persistent publication receipt. Never fetches "
+        "the compute node; an uncached remote selection returns not_prepared "
+        "with the prepare endpoint."
+    ),
+    "properties": {
+        "schema_version": {"type": "integer", "enum": [1], "default": 1},
+        "job_id": {"type": "string", "description": "PESsearch task id."},
+    },
+    "required": ["job_id"],
+    "additionalProperties": False,
+}
+
+_PUBLISH_PES_REVIEW_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "description": (
+        "Publish a PES selection inside a bounded authorization (agent path). "
+        "Requires the authorization id, the candidates and a source binding; the "
+        "server supplies the actor/principal from the verified identity. Send a "
+        "stable idempotency_key so a lost response replays the same revision."
+    ),
+    "properties": {
+        "schema_version": {"type": "integer", "enum": [1], "default": 1},
+        "job_id": {"type": "string"},
+        "candidates": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "frame_index": {"type": "integer", "minimum": 0},
+                    "role": {"type": "string", "enum": ["TS", "INT"]},
+                    "candidate_id": {"type": "string"},
+                    "name": {"type": "string"},
+                },
+                "required": ["frame_index", "role"],
+                "additionalProperties": False,
+            },
+        },
+        "authorization_id": {"type": "string"},
+        "source_binding": {"type": "object"},
+        "idempotency_key": {"type": "string"},
+        "expected_revision": {"type": "integer", "minimum": 0},
+        "note": {"type": "string"},
+    },
+    "required": ["job_id", "authorization_id", "candidates"],
+    "additionalProperties": False,
+}
+
 _ARGUMENT_SCHEMAS: dict[str, dict[str, Any]] = {
     McpTool.PREFLIGHT: _PREFLIGHT_SCHEMA,
     McpTool.SUBMIT: _SUBMIT_SCHEMA,
@@ -1238,6 +1429,8 @@ _ARGUMENT_SCHEMAS: dict[str, dict[str, Any]] = {
     McpTool.ANALYZE: _ANALYZE_SCHEMA,
     McpTool.GUIDANCE: _GUIDANCE_SCHEMA,
     McpTool.LIST_JOBS: _LIST_JOBS_SCHEMA,
+    McpTool.GET_PES_REVIEW: _GET_PES_REVIEW_SCHEMA,
+    McpTool.PUBLISH_PES_REVIEW: _PUBLISH_PES_REVIEW_SCHEMA,
 }
 
 
@@ -1532,7 +1725,11 @@ def _tool_specs() -> tuple[dict[str, Any], ...]:
         ),
         _tool_spec(
             McpTool.CANCEL,
-            "Request cancellation of an operation/job reference.",
+            (
+                "Request cancellation of an operation/job reference. Returns a bounded "
+                "acknowledgement (job_id/attempt/reference/state/status/cancelled/"
+                "already_terminal); query acp_status for the full job row."
+            ),
             _CANCEL_SCHEMA,
         ),
         _tool_spec(
@@ -1567,6 +1764,23 @@ def _tool_specs() -> tuple[dict[str, Any], ...]:
                 "scanning."
             ),
             _LIST_JOBS_SCHEMA,
+        ),
+        _tool_spec(
+            McpTool.GET_PES_REVIEW,
+            (
+                "Cache-only PES selection status (revision/source/authorization/"
+                "publication receipt); never fetches the compute node."
+            ),
+            _GET_PES_REVIEW_SCHEMA,
+        ),
+        _tool_spec(
+            McpTool.PUBLISH_PES_REVIEW,
+            (
+                "Publish a PES selection inside a bounded authorization; the actor "
+                "comes from the verified identity and a lost response replays with "
+                "the same idempotency key."
+            ),
+            _PUBLISH_PES_REVIEW_SCHEMA,
         ),
         *_research_tool_specs(),
         *(
@@ -1823,6 +2037,27 @@ class GuidancePort(Protocol):
 
 
 @runtime_checkable
+class SelectionPort(Protocol):
+    """PES selection read/publish (round-5 PR-07).
+
+    The read is cache-only and never fetches the compute node; the publish is
+    the authorized agent path (the Controller validates the identity/authorization
+    and the publication group).  Absent port = tool not visible and a direct call
+    is an ``unsupported_capability`` refusal.
+    """
+
+    def get_review_status(self, job_id: str, *, workspace_id: str) -> Any:
+        """Cache-only selection status (revision/source/publication receipt)."""
+        ...
+
+    def publish_review(
+        self, job_id: str, request: Mapping[str, Any], *, workspace_id: str
+    ) -> Any:
+        """Publish a selection inside a bounded authorization."""
+        ...
+
+
+@runtime_checkable
 class ResearchPort(Protocol):
     """The ten P2 research operations (M2-01c), one method per operation.
 
@@ -1892,6 +2127,9 @@ class McpBackends:
     guidance: GuidancePort | None = None
     research: ResearchPort | None = None
     consumption: ConsumptionPort | None = None
+    #: Round-5 PR-07: selection read/publish port; absent means the two tools are
+    #: not visible and a direct call is refused as unsupported_capability.
+    selection: SelectionPort | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -2519,6 +2757,8 @@ class McpServer:
             McpTool.ANALYZE: self._tool_analyze,
             McpTool.GUIDANCE: self._tool_guidance,
             McpTool.LIST_JOBS: self._tool_list_jobs,
+            McpTool.GET_PES_REVIEW: self._tool_get_pes_review,
+            McpTool.PUBLISH_PES_REVIEW: self._tool_publish_pes_review,
         }
         for tool_name in RESEARCH_TOOL_NAMES:
             self._tool_dispatch[tool_name] = self._research_handler(tool_name)
@@ -2542,6 +2782,67 @@ class McpServer:
 
         return handle
 
+    def _tool_get_pes_review(
+        self, arguments: Mapping[str, Any], context: WorkspaceContext
+    ) -> mo.MachineResult:
+        port = self._backends.selection
+        if port is None:
+            raise McpToolError(
+                mo.ErrorCode.UNSUPPORTED_CAPABILITY,
+                "selection tools are not assembled on this Controller",
+                params={"code": "selection_unavailable"},
+            )
+        job_id = str(arguments.get("job_id") or "")
+        data = port.get_review_status(job_id, workspace_id=context.workspace_id)
+        payload = dict(data) if isinstance(data, Mapping) else {"result": data}
+        return mo.MachineResult(
+            operation=McpTool.GET_PES_REVIEW,
+            status="ok",
+            data=payload,
+            operation_identity=context.workspace_id,
+        )
+
+    def _tool_publish_pes_review(
+        self, arguments: Mapping[str, Any], context: WorkspaceContext
+    ) -> mo.MachineResult:
+        port = self._backends.selection
+        if port is None:
+            raise McpToolError(
+                mo.ErrorCode.UNSUPPORTED_CAPABILITY,
+                "selection tools are not assembled on this Controller",
+                params={"code": "selection_unavailable"},
+            )
+        job_id = str(arguments.get("job_id") or "")
+        request = {
+            key: arguments[key]
+            for key in (
+                "candidates",
+                "authorization_id",
+                "source_binding",
+                "idempotency_key",
+                "expected_revision",
+                "note",
+            )
+            if key in arguments
+        }
+        # This tool *is* the authorized agent publication path (round-6): the
+        # selector is server-owned so the authorization cannot be bypassed by a
+        # client that omits it and silently lands on the manual path.
+        request["selector"] = "agent"
+        data = port.publish_review(job_id, request, workspace_id=context.workspace_id)
+        payload = dict(data) if isinstance(data, Mapping) else {"result": data}
+        revision = payload.get("revision")
+        payload.setdefault(
+            "selection_ref",
+            f"pes-selection:{job_id}:r{revision}" if revision is not None else f"pes-selection:{job_id}",
+        )
+        return mo.MachineResult(
+            operation=McpTool.PUBLISH_PES_REVIEW,
+            status="ok",
+            data=payload,
+            operation_identity=context.workspace_id,
+        )
+
     def _research_handler(self, tool_name: str) -> _ToolHandler:
         """Bind one dispatch entry to a research tool name (no client input)."""
 
@@ -2559,7 +2860,12 @@ class McpServer:
 
     def visible_tool_names(self) -> tuple[str, ...]:
         """The tools ``tools/list`` advertises right now (P1 + negotiated P2)."""
-        names = sorted(TOOL_ALLOWLIST)
+        selection_available = self._backends.selection is not None
+        names = [
+            name
+            for name in sorted(TOOL_ALLOWLIST)
+            if selection_available or name not in _SELECTION_TOOL_NAMES
+        ]
         if self._research_negotiated:
             names.extend(sorted(RESEARCH_TOOL_SET))
             if self._backends.consumption is not None:
@@ -2784,14 +3090,40 @@ class McpServer:
             )
         return self._result_payload(result)
 
-    @staticmethod
-    def _result_payload(result: mo.MachineResult) -> dict[str, Any]:
-        payload = result.to_dict()
+    def _result_payload(self, result: mo.MachineResult) -> dict[str, Any]:
+        """Serialize one tool result at the **single** MCP response exit.
+
+        Round-8 K4: this is the only place the opt-in local-single reveal is
+        built.  It is enabled when *and only when* the process is running the
+        single-user ``local-single`` tier with **no bound credential** (a
+        multi-user/API-key launch always redacts).  The allowlist is
+        :data:`~acp_services.entrypoints.machine_output.LOCAL_SINGLE_REVEAL_FIELDS`
+        — never the whole payload, never an error message, never an
+        ``api_key``-shaped field.  ``structuredContent`` and the text frame use
+        the same policy so they can never diverge.
+        """
+        reveal = self._reveal_policy()
+        fields = mo.LOCAL_SINGLE_REVEAL_FIELDS if reveal else frozenset()
+        payload = result.to_dict(reveal_paths=reveal, reveal_fields=fields)
         return {
-            "content": [{"type": "text", "text": result.to_json()}],
+            "content": [
+                {
+                    "type": "text",
+                    "text": result.to_json(reveal_paths=reveal, reveal_fields=fields),
+                }
+            ],
             "structuredContent": payload,
             "isError": result.status == "error",
         }
+
+    def _reveal_policy(self) -> bool:
+        """True only for a local-single, unbound (single-user) MCP session."""
+        if str(self._tier) != str(DeploymentTier.LOCAL_SINGLE):
+            return False
+        # A bound credential means a multi-user Controller resolved a principal
+        # for this stdio session: the tier label alone must never unlock the
+        # local convenience.
+        return not self._identity.bound
 
     # -- authorization -----------------------------------------------------
 
@@ -2843,14 +3175,64 @@ class McpServer:
                 "detail must be 'summary' or 'full'",
                 params={"field": "detail", "rule": "invalid_enum", "allowed": ["summary", "full"]},
             )
-        if workflow is None and detail is None:
+        contract_sections = arguments.get("contract_sections")
+        if contract_sections is not None:
+            allowed_sections = {
+                "input",
+                "method",
+                "method.levels",
+                "resources",
+                "examples",
+                "constraints",
+                "gaps",
+                "full",
+            }
+            requested = {
+                part.strip() for part in str(contract_sections).split(",") if part.strip()
+            }
+            if not requested or requested - allowed_sections:
+                raise McpToolError(
+                    mo.ErrorCode.INPUT_INVALID,
+                    f"unsupported contract_sections {contract_sections!r}",
+                    params={
+                        "field": "contract_sections",
+                        "rule": "invalid_enum",
+                        "allowed": sorted(allowed_sections),
+                    },
+                )
+            if "full" in requested and len(requested) > 1:
+                raise McpToolError(
+                    mo.ErrorCode.INPUT_INVALID,
+                    "contract_sections='full' cannot be combined with a section",
+                    params={
+                        "field": "contract_sections",
+                        "rule": "mutually_exclusive",
+                        "conflicts_with": "full",
+                    },
+                )
+            contract_sections = ",".join(sorted(requested))
+        if workflow is None and detail is None and contract_sections is None:
             data = dict(self._backends.capabilities.capabilities())
         else:
-            data = dict(
-                self._backends.capabilities.capabilities(
-                    workflow=workflow, detail=detail
-                )
-            )
+            kwargs: dict[str, Any] = {"workflow": workflow, "detail": detail}
+            if contract_sections is not None:
+                if not _port_accepts(
+                    self._backends.capabilities,
+                    "contract_sections",
+                    method="capabilities",
+                ):
+                    raise McpToolError(
+                        mo.ErrorCode.UNSUPPORTED_CAPABILITY,
+                        "this Controller adapter cannot serve contract_sections",
+                        params={
+                            "field": "contract_sections",
+                            "rule": "capability_not_wired",
+                            "tool": McpTool.CAPABILITIES,
+                        },
+                        retryable=False,
+                    )
+                kwargs["contract_sections"] = contract_sections
+            data = dict(self._backends.capabilities.capabilities(**kwargs))
         data.setdefault("protocol_version", MCP_PROTOCOL_VERSION)
         # M1-01b/M2-02: the frozen three-state analysis-capability projection.  A
         # descriptor is never "available": registered/executable/unavailable are
@@ -3126,14 +3508,32 @@ class McpServer:
     def _tool_status(
         self, arguments: Mapping[str, Any], context: WorkspaceContext
     ) -> mo.MachineResult:
+        """Return one task/operation status snapshot (read-only).
+
+        Round-8 K6: an unresolved reference is ``NOT_FOUND`` (non-retryable, exit
+        2) — never ``RESOURCE_NOT_READY``, which promised a retry that can never
+        succeed.  The message names the two recovery surfaces so an agent does
+        not fall back to walking the run root.
+        """
         reference = _require_reference(arguments)
-        record = self._backends.status.get(reference, workspace_id=context.workspace_id)
+        try:
+            record = self._backends.status.get(reference, workspace_id=context.workspace_id)
+        except McpToolError as exc:
+            if str(exc.code) != mo.ErrorCode.NOT_FOUND:
+                raise
+            record = None
         if record is None:
             raise McpToolError(
-                mo.ErrorCode.RESOURCE_NOT_READY,
-                "operation/job reference not found",
-                params={"reference": reference},
-                retryable=True,
+                mo.ErrorCode.NOT_FOUND,
+                _unknown_reference_message(reference),
+                params={
+                    "reference": reference,
+                    "rule": "unknown_reference",
+                    "note": "job_id != operation_id",
+                    "suggested_tools": [McpTool.LIST_JOBS],
+                    "job_id_shape": "YYYYMMDD_HHMMSS_NNN_<name>",
+                },
+                retryable=False,
             )
         projection = record if isinstance(record, Mapping) else {"result": record}
         projection = dict(projection)
@@ -3150,29 +3550,23 @@ class McpServer:
     def _tool_cancel(
         self, arguments: Mapping[str, Any], context: WorkspaceContext
     ) -> mo.MachineResult:
+        """Request one cancellation and return a bounded acknowledgement (#7e).
+
+        The Controller route keeps its full ``V1JobRecordModel`` response (HTTP
+        is untouched); this MCP result is projected to identity/state facts so a
+        control intent no longer ships the spec body/xyz/artifacts.  An unknown
+        job still fails inside the port with the existing typed error -- no
+        projection is built from a missing record.
+        """
         reference = _require_reference(arguments)
         record = self._backends.cancel.cancel(reference, workspace_id=context.workspace_id)
         if self._budget is not None:
             self._budget.release(context.workspace_id)
-        projection = record if isinstance(record, Mapping) else {"result": record}
-        projection = dict(projection)
-        projection.setdefault("reference", reference)
-        projection.setdefault("cancel_requested", True)
-        # Agent feedback round 2: cancelling an already-terminal job must say
-        # so explicitly — a bare "completed" next to cancel_requested read as
-        # an error.  The marker separates "cancelled by this call" from "was
-        # already finished".
-        terminal_state = projection.get("state") or projection.get("status")
-        if isinstance(terminal_state, str) and str(terminal_state).lower() in _TERMINAL_STATES:
-            projection["cancelled"] = False
-            projection["already_terminal"] = True
-            projection["terminal_state"] = str(terminal_state)
-        else:
-            projection.setdefault("cancelled", True)
+        acknowledgement = _cancel_acknowledgement(record, reference)
         return mo.MachineResult(
             operation=McpTool.CANCEL,
             status="ok",
-            data=projection,
+            data=acknowledgement,
             operation_identity=context.workspace_id,
         )
 
@@ -3211,6 +3605,17 @@ class McpServer:
         payload["idempotency_key"] = resolution.key or None
         payload["idempotency_key_origin"] = resolution.origin
         payload["idempotency"] = resolution.to_dict()
+        # Round-8: one prepare answer must already be the read request.  The
+        # frozen prepare projection spells the identity as (job_id,
+        # resource_id); the read wire contract spells it as (task_id,
+        # artifact_id).  Project it here instead of making the agent rename
+        # fields — omitted when the digest/generation are not committed yet.
+        read_ref = _read_ref_from_prepare(payload)
+        if read_ref is not None:
+            payload["read"] = {
+                "tool": McpTool.READ_ARTIFACT,
+                "arguments": {"artifact_ref": read_ref},
+            }
         payload.setdefault("query_tool", McpTool.STATUS)
         return mo.MachineResult(
             operation=McpTool.PREPARE_ARTIFACT,
@@ -3342,13 +3747,62 @@ class McpServer:
     def _tool_list_jobs(
         self, arguments: Mapping[str, Any], context: WorkspaceContext
     ) -> mo.MachineResult:
-        """Bounded task listing (read-only; U08 first slice)."""
+        """Bounded task listing (read-only; U08 first slice).
+
+        Round-8 K5: ``status`` is the exact ten-value vocabulary (an unknown
+        value is a typed ``input_invalid`` with ``allowed`` — never a silent
+        empty page), ``status_group`` names a family and is mutually exclusive
+        with ``status``, and the response echoes the applied filter plus the
+        pre-filter ``counts`` (all ten keys) so a caller can see "0 running out
+        of 12" instead of an empty list with no context.
+        """
         status = arguments.get("status")
         if status is not None and (not isinstance(status, str) or not status.strip()):
             raise McpToolError(
                 mo.ErrorCode.INPUT_INVALID,
                 "status must be a non-empty string when present",
                 params={"field": "status", "rule": "invalid_type"},
+            )
+        status = str(status).strip() if status else None
+        if status is not None and status not in TASK_STATE_VOCABULARY:
+            raise McpToolError(
+                mo.ErrorCode.INPUT_INVALID,
+                f"unknown task state {status!r}",
+                params={
+                    "field": "status",
+                    "rule": "invalid_enum",
+                    "allowed": list(TASK_STATE_VOCABULARY),
+                    "hint": "use status_group for a family (active/terminal/running_now)",
+                },
+            )
+        status_group = arguments.get("status_group")
+        if status_group is not None:
+            if not isinstance(status_group, str) or not status_group.strip():
+                raise McpToolError(
+                    mo.ErrorCode.INPUT_INVALID,
+                    "status_group must be a non-empty string when present",
+                    params={"field": "status_group", "rule": "invalid_type"},
+                )
+            status_group = str(status_group).strip()
+            if status_group not in STATUS_GROUPS:
+                raise McpToolError(
+                    mo.ErrorCode.INPUT_INVALID,
+                    f"unknown status_group {status_group!r}",
+                    params={
+                        "field": "status_group",
+                        "rule": "invalid_enum",
+                        "allowed": list(STATUS_GROUPS),
+                    },
+                )
+        if status is not None and status_group is not None:
+            raise McpToolError(
+                mo.ErrorCode.INPUT_INVALID,
+                "status and status_group are mutually exclusive",
+                params={
+                    "field": "status_group",
+                    "rule": "mutually_exclusive",
+                    "conflicts_with": "status",
+                },
             )
         raw_limit = arguments.get("limit", 50)
         try:
@@ -3366,14 +3820,38 @@ class McpServer:
                 "fields must be 'summary' or 'full'",
                 params={"field": "fields", "rule": "invalid_enum", "allowed": ["summary", "full"]},
             )
-        payload = self._backends.status.list_tasks(
-            status=str(status).strip() if status else None,
-            limit=limit,
-            workspace_id=context.workspace_id,
+        query: dict[str, Any] = {"limit": limit, "workspace_id": context.workspace_id}
+        if status is not None:
+            query["status"] = status
+        port_forwards_group = status_group is not None and _port_accepts(
+            self._backends.status, "status_group"
         )
+        if port_forwards_group:
+            query["status_group"] = status_group
+        payload = self._backends.status.list_tasks(**query)
         data = dict(payload) if isinstance(payload, Mapping) else {"jobs": payload}
+        if status_group is not None and not port_forwards_group:
+            # The stdio Controller adapter does not yet forward status_group
+            # (it is a one-line pass-through on its side).  Filtering the page
+            # the Controller already permission-scoped keeps the answer honest:
+            # the applied mode is echoed, nothing outside the page is invented.
+            rows = data.get("jobs")
+            states = set(STATUS_GROUPS[status_group])
+            if isinstance(rows, (list, tuple)):
+                data["jobs"] = [row for row in rows if _row_state(row) in states]
         if fields == "summary":
             data = _summarize_job_listing(data)
+        data.setdefault("counts", {state: 0 for state in TASK_STATE_VOCABULARY})
+        data["filter"] = {
+            "status": status,
+            "status_group": status_group,
+            "states": (
+                list(STATUS_GROUPS[status_group]) if status_group else ([status] if status else [])
+            ),
+            "applied_by": (
+                "controller" if port_forwards_group else ("mcp-page" if status_group else None)
+            ),
+        }
         data.setdefault("query_tool", McpTool.STATUS)
         return mo.MachineResult(
             operation=McpTool.LIST_JOBS,
@@ -3474,6 +3952,108 @@ def _reference_from(record: Any, *, kind: str) -> dict[str, Any]:
                 return merged
             return {"kind": kind, "id": str(value)}
     return {"kind": kind, "id": str(record)}
+
+
+def _port_accepts(port: Any, keyword: str, *, method: str = "list_tasks") -> bool:
+    """True when *port*'s *method* (or its ``**kwargs``) can take *keyword*.
+
+    The method is selected by an explicit allowlist mapping (never by an
+    arbitrary ``getattr``), so this probe cannot become a dispatch seam.
+    """
+    import inspect
+
+    if method == "list_tasks":
+        try:
+            target = port.list_tasks
+        except AttributeError:
+            return False
+    elif method == "capabilities":
+        try:
+            target = port.capabilities
+        except AttributeError:
+            return False
+    else:
+        return False
+    try:
+        parameters = inspect.signature(target).parameters
+    except (TypeError, ValueError):
+        return False
+    if keyword in parameters:
+        return True
+    return any(
+        parameter.kind is inspect.Parameter.VAR_KEYWORD
+        for parameter in parameters.values()
+    )
+
+
+def _row_state(row: Any) -> str | None:
+    """The one state spelling of a listing row (``state`` then ``status``)."""
+    if not isinstance(row, Mapping):
+        return None
+    value = row.get("state") or row.get("status")
+    return str(value) if value is not None else None
+
+
+def _unknown_reference_message(reference: Any) -> str:
+    """One actionable sentence for an id the Controller does not know (K6)."""
+    shown = reference
+    if isinstance(reference, Mapping):
+        shown = reference.get("id") or reference.get("task_id") or reference
+    return (
+        f"unknown reference {shown!r}: no task or operation has this id. "
+        f"Use {McpTool.LIST_JOBS} to resolve it, or read task.json.task_id inside "
+        "the task directory. A job_id (YYYYMMDD_HHMMSS_NNN_<name>) and an "
+        "operation_id are different ids: acp_submit returns both."
+    )
+
+
+def _read_ref_from_prepare(payload: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Project a prepare projection onto the frozen read identity tuple.
+
+    ``acp_read_artifact`` requires exactly ``task_id``/``attempt``/
+    ``artifact_id``/``generation``/``digest`` (``normalize_artifact_ref``).  The
+    Controller's prepare projection names the same facts ``job_id``/
+    ``resource_id``; this is the single documented rename.  Returns ``None``
+    when a fact is not committed yet — never a partial or invented reference.
+    """
+    source = payload.get("artifact_ref")
+    if not isinstance(source, Mapping):
+        return None
+    job_id = str(source.get("job_id") or payload.get("job_id") or "").strip()
+    artifact_id = str(
+        source.get("resource_id") or source.get("artifact_id") or payload.get("artifact_id") or ""
+    ).strip()
+    digest = str(source.get("digest") or payload.get("digest") or "").strip()
+    attempt = source.get("attempt", payload.get("attempt"))
+    generation = source.get("generation", payload.get("generation"))
+    if isinstance(attempt, bool) or not isinstance(attempt, int) or attempt < 1:
+        return None
+    if isinstance(generation, bool) or not isinstance(generation, int) or generation < 1:
+        return None
+    if not job_id or not artifact_id:
+        return None
+    ref: dict[str, Any] = {
+        "task_id": job_id,
+        "attempt": attempt,
+        "artifact_id": artifact_id,
+        "generation": generation,
+        "digest": digest,
+    }
+    size_bytes = source.get("size_bytes")
+    if isinstance(size_bytes, int) and not isinstance(size_bytes, bool) and size_bytes >= 0:
+        ref["size_bytes"] = size_bytes
+    relative_path = source.get("relative_path")
+    if isinstance(relative_path, str) and relative_path:
+        ref["relative_path"] = relative_path
+    media_type = source.get("media_type")
+    if isinstance(media_type, str) and media_type:
+        ref["media_type"] = media_type
+    try:
+        # The read contract's own validator is the authority: a projected ref is
+        # only published when the very next tool call accepts it verbatim.
+        return normalize_artifact_ref(ref)
+    except ApplicationParamError:
+        return None
 
 
 def _require_reference(arguments: Mapping[str, Any]) -> str:

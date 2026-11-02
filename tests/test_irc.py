@@ -502,7 +502,6 @@ class TestIrcWorkflowAdapter:
             output_dir=output_root,
             method="r2SCAN-3c",
             maxpoints=25,
-            step=0.1,
         )
 
         # Then: the adapter returns a completed one-stage workflow result.
@@ -623,7 +622,7 @@ def test_irc_scheduler_commands_forward_request_options(tmp_path: Path) -> None:
             "charge": 0, "multiplicity": 1,
             "ts_source": {"schema": "irc_ts_source_v1", "method": "M062X", "basis": "def2-SVP"},
         },
-        method={"method": "M062X", "basis": "def2-SVP", "maxpoints": 33, "step": 0.2},
+        method={"method": "M062X", "basis": "def2-SVP", "maxpoints": 33},
         resources={"nproc": 4, "mem": "2GB"},
     )
 
@@ -641,7 +640,7 @@ def test_irc_scheduler_commands_forward_request_options(tmp_path: Path) -> None:
         assert command[command.index("--method") + 1] == "M062X"
         assert command[command.index("--basis") + 1] == "def2-SVP"
         assert command[command.index("--maxpoints") + 1] == "33"
-        assert command[command.index("--step") + 1] == "0.2"
+        assert "--step" not in command
 
 
 def test_irc_scheduler_commands_preserve_both_directions(tmp_path: Path) -> None:

@@ -66,6 +66,7 @@ __all__ = [
     "MachineResult",
     "ERROR_CATALOG",
     "PASSTHROUGH_FIELD_VALUES",
+    "LOCAL_SINGLE_REVEAL_FIELDS",
     "error_object",
     "error_from_exception",
     "exit_code_for",
@@ -73,6 +74,7 @@ __all__ = [
     "default_error_for_exit",
     "dry_run_result",
     "is_opaque_wait_cursor",
+    "is_secret_field_name",
     "redact",
     "redact_value",
 ]
@@ -180,6 +182,11 @@ class ErrorCode(str):
     INPUT_INVALID = "input_invalid"
     USAGE_ERROR = "usage_error"
     UNSUPPORTED_CAPABILITY = "unsupported_capability"
+    #: The referenced task/operation id does not exist at all (round-8 K6).
+    #: Distinct from ``resource_not_ready`` (which is *retryable*: the artifact
+    #: or cache exists in principle but is not prepared): an unknown reference
+    #: must never be retried with the same id.
+    NOT_FOUND = "not_found"
     BACKEND_UNAVAILABLE = "backend_unavailable"
     RESOURCE_UNAVAILABLE = "resource_unavailable"
     RESOURCE_NOT_READY = "resource_not_ready"
@@ -200,6 +207,7 @@ class ErrorCode(str):
             INPUT_INVALID,
             USAGE_ERROR,
             UNSUPPORTED_CAPABILITY,
+            NOT_FOUND,
             BACKEND_UNAVAILABLE,
             RESOURCE_UNAVAILABLE,
             RESOURCE_NOT_READY,
@@ -247,6 +255,10 @@ ERROR_CATALOG: dict[str, ErrorSpec] = {
     ErrorCode.INPUT_INVALID: _spec(ErrorCode.INPUT_INVALID, ErrorCategory.USAGE),
     ErrorCode.USAGE_ERROR: _spec(ErrorCode.USAGE_ERROR, ErrorCategory.USAGE),
     ErrorCode.UNSUPPORTED_CAPABILITY: _spec(ErrorCode.UNSUPPORTED_CAPABILITY, ErrorCategory.USAGE),
+    # Round-8 K6: an unknown task/operation reference is a caller-side identity
+    # error (exit 2, like a bad field), never a transient prerequisite — so it
+    # is USAGE, not UNAVAILABLE, and it is never retryable.
+    ErrorCode.NOT_FOUND: _spec(ErrorCode.NOT_FOUND, ErrorCategory.USAGE),
     # unavailable / not-ready — retryable (transient prerequisite)
     ErrorCode.BACKEND_UNAVAILABLE: _spec(
         ErrorCode.BACKEND_UNAVAILABLE, ErrorCategory.UNAVAILABLE, True
@@ -293,6 +305,7 @@ _EXCEPTION_CODE_BY_NAME: dict[str, str] = {
     "KeyboardInterrupt": ErrorCode.INTERRUPTED,
     "BackendUnavailableError": ErrorCode.BACKEND_UNAVAILABLE,
     "UnsupportedCapabilityError": ErrorCode.UNSUPPORTED_CAPABILITY,
+    "NotFoundError": ErrorCode.NOT_FOUND,
     "TaskInputError": ErrorCode.INPUT_INVALID,
     "FileNotFoundError": ErrorCode.INPUT_INVALID,
     "NotADirectoryError": ErrorCode.INPUT_INVALID,
@@ -446,25 +459,77 @@ PASSTHROUGH_FIELD_VALUES: Mapping[str, Callable[[str], bool]] = {
     "cursor": is_opaque_wait_cursor,
 }
 
+#: Opt-in reveal allowlist for the **local-single** MCP exit (round-8 K4).
+#:
+#: Why this exists: ``local-single`` is the single-user, same-machine operator
+#: entry — the caller already owns the run root, so a redacted ``work_dir`` or
+#: ``idempotency_key`` only forces an agent to ``ls`` the run root (the exact
+#: bypass MCP is meant to remove).  The exception is deliberately bounded:
+#:
+#: * **only** this declared field allowlist is revealed;
+#: * **only** the MCP response exit may request it (see
+#:   ``acp_services.entrypoints.mcp``), never ``redact``/``redact_value`` by
+#:   default and never an HTTP route;
+#: * **only** for ``DeploymentTier.LOCAL_SINGLE`` with no bound credential —
+#:   ``API_KEY``/multi-tenant sessions stay byte-identically redacted;
+#: * a field name that smells like a secret (``api_key``, ``token``...) is
+#:   refused even when a caller lists it: secrets are never revealed, not even
+#:   locally.
+LOCAL_SINGLE_REVEAL_FIELDS: frozenset[str] = frozenset(
+    {
+        "work_dir",
+        "directory_name",
+        "name",
+        "task_name",
+        "molecule_name",
+        "idempotency_key",
+        "spec_ref",
+        "source_ref",
+    }
+)
 
-def _redact_secrets(text: str) -> str:
+#: Field names that carry a credential, regardless of the reveal allowlist.
+_SECRET_FIELD_NAME_RE = re.compile(
+    r"(?i)(password|passwd|passphrase|token|secret|api[_-]?key|access[_-]?key|"
+    r"private[_-]?key|client[_-]?secret|authorization|credential)"
+)
+
+
+def is_secret_field_name(name: object) -> bool:
+    """True when *name* looks like a credential field (never revealable)."""
+    return isinstance(name, str) and _SECRET_FIELD_NAME_RE.search(name) is not None
+
+
+def _redact_secrets(text: str, *, identifiers: bool = True) -> str:
     value = str(text)
     value = _PEM_RE.sub(REDACTED_SECRET, value)
     value = _URL_USERINFO_RE.sub(r"\1" + REDACTED_SECRET + "@", value)
     value = _BEARER_RE.sub("Bearer " + REDACTED_SECRET, value)
     value = _URL_SECRET_RE.sub(r"\1" + REDACTED_SECRET, value)
     value = _SECRET_ASSIGN_RE.sub(lambda m: f"{m.group(1)}{m.group(2)}{REDACTED_SECRET}", value)
-    value = _OPAQUE_RE.sub(
-        lambda m: (
-            m.group(0)
-            if _WIRE_IDENTIFIER_RE.match(m.group(0))
-            or _RULE_IDENTIFIER_RE.match(m.group(0))
-            or _PUBLIC_IDENTIFIER_RE.match(m.group(0))
-            else REDACTED_SECRET
-        ),
-        value,
-    )
+    if identifiers:
+        value = _OPAQUE_RE.sub(
+            lambda m: (
+                m.group(0)
+                if _WIRE_IDENTIFIER_RE.match(m.group(0))
+                or _RULE_IDENTIFIER_RE.match(m.group(0))
+                or _PUBLIC_IDENTIFIER_RE.match(m.group(0))
+                else REDACTED_SECRET
+            ),
+            value,
+        )
     return value
+
+
+def _redact_revealed(text: str) -> str:
+    """Secret redaction only, for a caller-declared local-single reveal.
+
+    Host paths and the opaque-identifier net are skipped (that is the point of
+    the reveal); PEM blocks, secret assignments, bearer tokens, URL secrets and
+    userinfo are still replaced.  Only :func:`redact_value` calls this, and only
+    for a declared :data:`LOCAL_SINGLE_REVEAL_FIELDS` member.
+    """
+    return _redact_secrets(text, identifiers=False)
 
 
 def redact(text: str) -> str:
@@ -478,7 +543,12 @@ def redact(text: str) -> str:
     return _ABSOLUTE_PATH_RE.sub(REDACTED_PATH, _redact_secrets(text))
 
 
-def redact_value(value: Any) -> Any:
+def redact_value(
+    value: Any,
+    *,
+    reveal_paths: bool = False,
+    reveal_fields: frozenset[str] = frozenset(),
+) -> Any:
     """Recursively redact every string in *value* (mappings/sequences preserved).
 
     Mapping **keys** are left untouched — they are our own structured parameter
@@ -489,20 +559,40 @@ def redact_value(value: Any) -> Any:
     predicate is carried through verbatim: a server-issued opaque handle (the
     bounded-wait ``cursor``) is not a secret and the client must be able to send
     it back (F8).
+
+    ``reveal_paths``/``reveal_fields`` are the **opt-in** local-single exception
+    (see :data:`LOCAL_SINGLE_REVEAL_FIELDS`).  The defaults reproduce
+    :func:`redact` byte-for-byte; when enabled, a *string* value under a
+    declared field is secret-redacted but no longer path/identifier-redacted,
+    and a credential-shaped field name is refused even if it was declared.
     """
     if isinstance(value, str):
         return redact(value)
     if isinstance(value, Mapping):
         cleaned: dict[Any, Any] = {}
         for key, item in value.items():
+            if (
+                reveal_paths
+                and isinstance(key, str)
+                and key in reveal_fields
+                and not is_secret_field_name(key)
+                and isinstance(item, str)
+            ):
+                cleaned[key] = _redact_revealed(item)
+                continue
             rule = PASSTHROUGH_FIELD_VALUES.get(key) if isinstance(key, str) else None
             if rule is not None and isinstance(item, str) and rule(item):
                 cleaned[key] = item
             else:
-                cleaned[key] = redact_value(item)
+                cleaned[key] = redact_value(
+                    item, reveal_paths=reveal_paths, reveal_fields=reveal_fields
+                )
         return cleaned
     if isinstance(value, (list, tuple)):
-        return [redact_value(item) for item in value]
+        return [
+            redact_value(item, reveal_paths=reveal_paths, reveal_fields=reveal_fields)
+            for item in value
+        ]
     return value
 
 
@@ -658,12 +748,26 @@ class MachineResult:
         if self.status == "error" and self.error is None:
             raise ValueError("a failed result must carry an error object")
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(
+        self,
+        *,
+        reveal_paths: bool = False,
+        reveal_fields: frozenset[str] = frozenset(),
+    ) -> dict[str, Any]:
+        """Serialize the envelope; redaction is the default, reveal is opt-in.
+
+        ``reveal_paths``/``reveal_fields`` are forwarded to
+        :func:`redact_value` for ``data`` only — an error object stays redacted
+        even when a caller reveals data fields (round-8 K4 boundary: the
+        exception is for the local-single MCP data plane, never for messages).
+        """
         data: dict[str, Any] | None = None
         if self.data is not None:
             cleaned = dict(self.data)
             body = cleaned.pop("body", None) if self.passthrough_body else None
-            data = redact_value(cleaned)
+            data = redact_value(
+                cleaned, reveal_paths=reveal_paths, reveal_fields=reveal_fields
+            )
             if self.passthrough_body and isinstance(body, str):
                 data["body"] = body
         return {
@@ -678,9 +782,19 @@ class MachineResult:
             "error": self.error.to_dict() if self.error is not None else None,
         }
 
-    def to_json(self, *, indent: int | None = None) -> str:
+    def to_json(
+        self,
+        *,
+        indent: int | None = None,
+        reveal_paths: bool = False,
+        reveal_fields: frozenset[str] = frozenset(),
+    ) -> str:
         """Serialize with a stable key order and ``ensure_ascii=False``."""
-        return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
+        return json.dumps(
+            self.to_dict(reveal_paths=reveal_paths, reveal_fields=reveal_fields),
+            ensure_ascii=False,
+            indent=indent,
+        )
 
 
 def dry_run_result(

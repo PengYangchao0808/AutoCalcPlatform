@@ -129,11 +129,24 @@ def build_live_status(state_data: Mapping[str, Any]) -> JobLiveStatus | None:
     if stage_display is None and not metrics:
         return None
 
+    observed_at = _first_text(
+        state_data, ("updated_at", "last_observed_at", "observed_at")
+    )
+    source = _first_text(state_data, ("live_source", "source"))
     return JobLiveStatus(
         stage_label=stage_display,
         stage_index=_stage_number(state_data.get("stage_index")),
         stage_total=_stage_number(state_data.get("stage_total")),
         metrics=metrics,
+        observed_at=observed_at,
+        source=source,
+        unknown_reason=(
+            "stage_unknown"
+            if stage_display is None and metrics
+            else "metrics_unavailable"
+            if not metrics
+            else None
+        ),
     )
 
 

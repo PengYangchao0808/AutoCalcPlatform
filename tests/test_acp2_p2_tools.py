@@ -300,8 +300,13 @@ def test_tools_list_hides_research_tools_until_the_session_negotiates() -> None:
     entry = data["extensions"][0]
     assert (entry["implemented"], entry["negotiated"]) == (True, True)
     after = _tools_list(server)
+    # this server has no selection port, so the two PR-07 tools stay invisible
+    selection_tools = {
+        mcp.McpTool.GET_PES_REVIEW,
+        mcp.McpTool.PUBLISH_PES_REVIEW,
+    }
     assert len(after) == 20
-    assert set(after) == set(mcp.TOOL_ALLOWLIST) | mcp.RESEARCH_TOOL_SET
+    assert set(after) == (set(mcp.TOOL_ALLOWLIST) - selection_tools) | mcp.RESEARCH_TOOL_SET
 
 
 @pytest.mark.parametrize("tool", mcp.RESEARCH_TOOL_NAMES)

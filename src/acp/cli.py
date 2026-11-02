@@ -71,7 +71,9 @@ def setup_logging(level: str = "INFO", *, structured: bool | None = None) -> Non
     logging.basicConfig(
         level=numeric_level,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)],
+        # Machine-readable command output owns stdout; logs belong on stderr so
+        # `acp task query --json | jq` / json.load never sees log lines.
+        handlers=[logging.StreamHandler(sys.stderr)],
     )
 
 
@@ -236,10 +238,10 @@ def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
     p.add_argument(
         "--step",
         type=float,
-        default=0.1,
+        default=None,
         help=(
-            "Accepted for compatibility only: never reaches the ORCA %%irc block "
-            "(no effect on the run; an unused-kwarg warning is logged)"
+            "Explicit values are refused: ORCA IRC has no validated step mapping "
+            "(omit it; maxpoints controls the iteration cap)"
         ),
     )
     p.add_argument("--charge", type=int, default=None)

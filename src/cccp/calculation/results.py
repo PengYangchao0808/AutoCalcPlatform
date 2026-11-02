@@ -502,6 +502,13 @@ class IrcDirectionResult:
     steps: int | None = None
     success: bool = True
     trajectory_ref: ArtifactRef | None = None
+    #: Round-5 PR-04 per-direction evidence (all optional; historical reads stay valid)
+    endpoint_discovery: str | None = None  # found | missing | invalid
+    convergence: str | None = None  # converged | not_converged | unknown
+    convergence_evidence: str | None = None  # e.g. "iteration_limit", "direction_status=..."
+    endpoint_source: str | None = None  # relative path of the formal endpoint
+    frame_identity: str | None = None  # e.g. "forward:frame_0012"
+    last_observed_geometry: JsonObject | None = None  # never a formal endpoint
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "direction", IrcDirection(self.direction))
@@ -527,6 +534,18 @@ class IrcDirectionResult:
             payload["steps"] = self.steps
         if self.trajectory_ref is not None:
             payload["trajectory_ref"] = _artifact_to_dict(self.trajectory_ref)
+        for key in (
+            "endpoint_discovery",
+            "convergence",
+            "convergence_evidence",
+            "endpoint_source",
+            "frame_identity",
+        ):
+            value = getattr(self, key)
+            if value is not None:
+                payload[key] = value
+        if self.last_observed_geometry is not None:
+            payload["last_observed_geometry"] = dict(self.last_observed_geometry)
         return payload
 
     @classmethod
@@ -557,6 +576,16 @@ class IrcDirectionResult:
             message = "payload.directions[].trajectory_ref must be a mapping"
             raise TaskInputError(message)
         success = parse_bool_strict(payload, "success")
+        raw_last_observed = payload.get("last_observed_geometry")
+        last_observed: JsonObject | None = None
+        if raw_last_observed is not None:
+            if not isinstance(raw_last_observed, Mapping):
+                message = "payload.directions[].last_observed_geometry must be a mapping"
+                raise TaskInputError(message)
+            last_observed = {str(key): item for key, item in raw_last_observed.items()}
+        def _optional_text(key: str) -> str | None:
+            value = payload.get(key)
+            return None if value is None else str(value)
         return cls(
             direction=direction,  # type: ignore[arg-type]
             energy_hartree=parse_float_strict(payload, "energy_hartree"),
@@ -570,6 +599,12 @@ class IrcDirectionResult:
             steps=parse_int_strict(payload, "steps"),
             success=True if success is None else success,
             trajectory_ref=_artifact_from_dict(raw_ref),
+            endpoint_discovery=_optional_text("endpoint_discovery"),
+            convergence=_optional_text("convergence"),
+            convergence_evidence=_optional_text("convergence_evidence"),
+            endpoint_source=_optional_text("endpoint_source"),
+            frame_identity=_optional_text("frame_identity"),
+            last_observed_geometry=last_observed,
         )
 
 

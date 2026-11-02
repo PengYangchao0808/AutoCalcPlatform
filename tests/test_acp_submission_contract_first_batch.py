@@ -278,7 +278,8 @@ def test_frozen_payload_entries_reject_undeclared_top_level_keys() -> None:
             {
                 "source_job_id": "20260101_001_BatchOptimize",
                 "source_product_id": "ts_candidate",
-                "ts_source": {"schema": "irc_ts_source_v1"},
+                # ts_source is server-derived (round-8): the documented shape
+                # omits it; a partial object is refused (irc_ts_source_partial).
                 "directions": ["forward", "reverse"],
             },
             {"maxpoints": 40},

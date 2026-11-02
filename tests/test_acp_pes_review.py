@@ -116,17 +116,19 @@ class TestSavePesReview:
             "pes_candidate_pes_ts_frame_001",
             "pes_candidate_pes_int_frame_002",
         ]
-        assert structures[0].metadata == {
-            "candidate_id": "pes_ts_frame_001",
-            "role": "TS",
-            "frame_index": 1,
-            "source": "PESsearch",
-            "selection_source": "manual",
-            "task_status": "COMPLETED",
-            "scan_complete": True,
-            "frame_converged": True,
-            "data_source": "RESULT/pes_search/pes_profile.json",
-        }
+        metadata = structures[0].metadata
+        assert metadata["candidate_id"] == "pes_ts_frame_001"
+        assert metadata["role"] == "TS"
+        assert metadata["frame_index"] == 1
+        assert metadata["source"] == "PESsearch"
+        assert metadata["selection_source"] == "manual"
+        assert metadata["task_status"] == "COMPLETED"
+        assert metadata["scan_complete"] is True
+        assert metadata["frame_converged"] is True
+        assert metadata["data_source"] == "RESULT/pes_search/pes_profile.json"
+        # round-5 PR-06: products carry the publication lineage for consumers
+        assert metadata["publication_revision"] == 1
+        assert metadata["publication_digest"]
 
     def test_resave_is_idempotent(self, pes_task: Path) -> None:
         selection = [{"frame_index": 1, "role": "TS"}]

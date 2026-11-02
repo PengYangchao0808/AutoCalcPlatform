@@ -389,6 +389,30 @@ CREATE INDEX IF NOT EXISTS idx_approval_proposal
         ),
         "sql": "-- handled in Python for SQLite ALTER TABLE compatibility",
     },
+    {
+        "id": "028",
+        "description": (
+            "round-5 PR-05: one persistent PES selection-publication intent per "
+            "task (idempotency key/payload digest/revision/step progress/status) "
+            "with an owner lease so a stale publisher cannot commit"
+        ),
+        "sql": """
+CREATE TABLE IF NOT EXISTS selection_publications (
+    job_id TEXT PRIMARY KEY,
+    idempotency_key TEXT,
+    payload_digest TEXT NOT NULL,
+    expected_revision INTEGER,
+    target_revision INTEGER NOT NULL,
+    stages_json TEXT NOT NULL DEFAULT '[]',
+    completed_json TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL,
+    owner_id TEXT NOT NULL DEFAULT '',
+    lease_until TEXT,
+    error TEXT,
+    updated_at TEXT NOT NULL
+);
+""",
+    },
 ]
 
 

@@ -27,6 +27,8 @@ _PREFLIGHT_KEYS = {
     # C1 (round-4): additive advisory list; an empty list is the default and
     # old clients ignore the extra key.
     "advisories",
+    # PR-03 (round-5): read-only analysis receipt (None for uncovered workflows).
+    "submission_analysis",
     "plan_digest",
     "plan_summary",
     "estimate",

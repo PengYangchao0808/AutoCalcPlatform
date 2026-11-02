@@ -1,3 +1,4 @@
+IRC --step: explicit values are refused (the ORCA IRC interface has no validated step mapping); omit --step and use --maxpoints for the iteration cap. Historical records that carry a step stay readable, but a new run no longer injects or forwards it.
 
 
 ACP 简单工作流 — 开发文档

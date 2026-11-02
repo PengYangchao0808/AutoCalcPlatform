@@ -475,8 +475,8 @@ def test_science_capabilities_tools_match_frontend_allowlist(
     tools = document["tools"]
 
     assert tools == sorted(tools)
-    assert len(tools) == 10
     assert set(tools) == set(_acp_tools_from_frontend_contract())
+    assert len(tools) == len(_acp_tools_from_frontend_contract())
 
 
 # ===========================================================================

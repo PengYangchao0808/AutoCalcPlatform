@@ -39,6 +39,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from typing import Any
 
 from cccp.qc.keyword_registry import (
     IMPL_ORCA_DFT,
@@ -48,16 +49,31 @@ from cccp.qc.keyword_registry import (
     resolve,
     resolve_implementation,
 )
+from cccp.qc.method_meta import (
+    classify_basis_token,
+    is_orbital_basis,
+    orbital_basis_tokens,
+)
 from cccp.utils.solvent_map import orca_smd_solvent
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "AuxiliaryBasisError",
+    "RouteBasisConflictError",
+    "RouteBasisResolution",
     "RouteKeyword",
+    "classify_route_token",
+    "detect_basis_conflicts",
     "orca_gfn_solvent_token",
     "orca_keyword_context",
     "render_route_line",
+    "resolve_route_orbital_basis",
 ]
+
+#: The single authority for route-token classification lives in
+#: :mod:`cccp.qc.method_meta`; this alias is the renderer/preflight entry name.
+classify_route_token = classify_basis_token
 
 
 def orca_keyword_context(method: str | None) -> tuple[str, str]:
@@ -163,6 +179,8 @@ def render_route_line(
     Raises:
         KeywordValueError: Unknown enum value in a :class:`RouteKeyword`
             (fail-fast — nothing is silently passed through).
+        RouteBasisConflictError: The rendered line would carry two DISTINCT
+            orbital bases (ORCA would silently keep the last one).
     """
     if context is None:
         context = orca_keyword_context(method)
@@ -184,7 +202,31 @@ def render_route_line(
         literal = str(segment)
         tokens.append(literal)
         seen.add(literal.upper())
+    _assert_single_orbital_basis(tokens)
     return "! " + " ".join(tokens)
+
+
+def _assert_single_orbital_basis(tokens: Sequence[str]) -> str | None:
+    """Enforce the ONE-orbital-basis invariant on a rendered route line.
+
+    Distinct orbital-basis names on one ``!`` line mean ORCA would silently
+    override every token but the last.  Identical repeats are harmless (the
+    basis renders twice with the same value) and are left to the call sites
+    that collapse them.  Every assembly point funnels through
+    :func:`render_route_line`, so this is the final guard for casscf / NMR /
+    TS / IRC routes that bypass ``_build_input_blocks``.
+
+    Returns:
+        The single distinct orbital basis (or ``None``).
+    """
+    found: dict[str, str] = {}
+    for token in tokens:
+        for word in str(token).split():
+            if is_orbital_basis(word):
+                found.setdefault(word.lower(), word)
+    if len(found) > 1:
+        raise RouteBasisConflictError(list(found.values()))
+    return next(iter(found.values()), None)
 
 
 def _render_governed(
@@ -314,3 +356,228 @@ def orca_gfn_solvent_token(
     if not solvent:
         return None
     return f"ALPB({orca_smd_solvent(solvent)})"
+
+
+# ── single-orbital-basis invariant (round-7 #3) ─────────────────────────────
+#
+# ORCA accepts exactly one orbital basis on the ``!`` line.  When two appear
+# (``! wB97X-D4 def2-TZVP ma-def2-SVP Opt``) it silently keeps the LAST one —
+# a normal-terminated job with the wrong wavefunction.  The renderer therefore
+# refuses any input that would place two *distinct* orbital bases on the route
+# line; auxiliary bases must be ``/J``-``/C``-suffixed tokens rendered in the
+# ``%basis`` block (or an ``AutoAux`` placeholder), never a bare second basis.
+
+
+class RouteBasisConflictError(ValueError):
+    """Two distinct orbital bases would be emitted on ONE ORCA ``!`` line.
+
+    Typed ``rule="basis_conflict"`` refusal: the renderer never picks a winner
+    and never silently rewrites the user's basis.  ``params`` is shaped like
+    the application error envelope so the submit/preflight layer can forward
+    it verbatim.
+    """
+
+    rule: str = "basis_conflict"
+
+    def __init__(
+        self,
+        tokens: Sequence[str],
+        *,
+        sources: dict[str, str] | None = None,
+        field_name: str = "basis",
+    ) -> None:
+        self.tokens: tuple[str, ...] = tuple(str(token) for token in tokens)
+        self.field_name = field_name
+        self.sources: dict[str, str] = dict(sources or {})
+        self.params: dict[str, Any] = {
+            "rule": self.rule,
+            "field": self.field_name,
+            "tokens": list(self.tokens),
+            # ORCA's own precedence: the last token on the line wins.
+            "effective_if_emitted": self.tokens[-1] if self.tokens else "",
+        }
+        if self.sources:
+            self.params["sources"] = dict(self.sources)
+        described = ", ".join(
+            f"{token!r} ({self.sources.get(token, 'route')})" for token in self.tokens
+        )
+        super().__init__(
+            f"ORCA accepts exactly one orbital basis on the '!' line, but this input "
+            f"would emit {len(self.tokens)}: {described}. ORCA silently keeps the LAST "
+            "token, so every earlier basis would be overridden without a warning. "
+            "Keep exactly one orbital basis (drop the extra method-string token or set "
+            "the basis field to it) and express auxiliary bases as '/J' or '/C' suffixed "
+            "tokens in aux_j_basis/aux_c_basis."
+        )
+
+
+class AuxiliaryBasisError(ValueError):
+    """An orbital basis name was supplied as an auxiliary/fitting basis."""
+
+    rule: str = "aux_basis_invalid"
+
+    def __init__(self, *, field_name: str, token: str) -> None:
+        self.field_name = field_name
+        self.token = str(token)
+        self.params: dict[str, Any] = {
+            "rule": self.rule,
+            "field": self.field_name,
+            "token": self.token,
+            "allowed": ["AutoAux", "def2/J", "def2-<basis>/C"],
+        }
+        super().__init__(
+            f"{field_name}={token!r} is an ORBITAL basis, not an auxiliary/fitting "
+            "basis; ORCA would silently consume it as a fitting basis. Use a "
+            "'/J' or '/C' suffixed token (e.g. 'def2/J', 'def2-TZVP/C') or 'AutoAux'."
+        )
+
+
+@dataclass(frozen=True)
+class RouteBasisResolution:
+    """Outcome of the route-line orbital-basis resolution.
+
+    Attributes:
+        method_basis: Orbital basis found in the method string (or ``None``).
+        field_basis: Orbital basis found in the ``basis`` field (or ``None``).
+        orbital_basis: The single distinct orbital basis that will be emitted.
+        emit_field_basis: Whether the ``basis`` field value still needs its
+            own route segment (``False`` when the method string already emits
+            the identical basis).
+        extras: ``route_extras`` entries with duplicated orbital-basis tokens
+            removed (identical duplicates only — distinct values raise).
+    """
+
+    method_basis: str | None
+    field_basis: str | None
+    orbital_basis: str | None
+    emit_field_basis: bool
+    extras: tuple[str, ...] = ()
+
+
+def resolve_route_orbital_basis(
+    method: str | None,
+    basis: str | None,
+    extras: Sequence[str] = (),
+) -> RouteBasisResolution:
+    """Resolve the ONE orbital basis a ``!`` line may carry.
+
+    Rules (never silently rewrite the requested basis):
+
+    * no orbital basis anywhere → no token (composite/GFN-shaped routes);
+    * one source → that token (unchanged historical rendering);
+    * method + basis field carry the *identical* token → emitted once;
+    * duplicated *identical* token inside ``route_extras`` → deduplicated;
+    * two *distinct* tokens → :class:`RouteBasisConflictError`.
+
+    Args:
+        method: Effective method string (may inline a basis).
+        basis: Effective ``basis`` field (may be empty).
+        extras: Free-form ``route_extras`` literals.
+
+    Returns:
+        A :class:`RouteBasisResolution`.
+
+    Raises:
+        RouteBasisConflictError: More than one distinct orbital basis.
+    """
+    method_tokens = orbital_basis_tokens(method)
+    field_tokens = orbital_basis_tokens(basis)
+
+    def _raise(tokens: Sequence[str], sources: dict[str, str]) -> None:
+        ordered: list[str] = []
+        for token in tokens:
+            if token not in ordered:
+                ordered.append(token)
+        raise RouteBasisConflictError(ordered, sources=sources)
+
+    if len({token.lower() for token in method_tokens}) > 1:
+        _raise(method_tokens, {token: "method" for token in method_tokens})
+    if len({token.lower() for token in field_tokens}) > 1:
+        _raise(field_tokens, {token: "basis" for token in field_tokens})
+
+    method_basis = method_tokens[0] if method_tokens else None
+    field_basis = field_tokens[0] if field_tokens else None
+
+    registered: dict[str, str] = {}  # lower-case token -> spelling
+    sources: dict[str, str] = {}
+    if method_basis is not None:
+        registered[method_basis.lower()] = method_basis
+        sources[method_basis] = "method"
+    if field_basis is not None:
+        key = field_basis.lower()
+        if registered and key not in registered:
+            # A distinct orbital basis in the basis field would override the
+            # method-string basis (ORCA keeps the last token) — refuse.
+            sources.setdefault(field_basis, "basis")
+            _raise([*registered.values(), field_basis], sources)
+        registered.setdefault(key, field_basis)
+        sources.setdefault(field_basis, "basis")
+
+    cleaned_extras: list[str] = []
+    for entry in extras:
+        words = str(entry).split()
+        if not words:
+            cleaned_extras.append(str(entry))
+            continue
+        kept: list[str] = []
+        for word in words:
+            if not is_orbital_basis(word):
+                kept.append(word)
+                continue
+            key = word.lower()
+            if key in registered:
+                # Identical duplicate: drop it (the basis is emitted once).
+                continue
+            if registered:
+                _raise([*registered.values(), word], {**sources, word: "route_extras"})
+            registered[key] = word
+            sources[word] = "route_extras"
+            kept.append(word)
+        if kept:
+            cleaned_extras.append(" ".join(kept))
+
+    orbital_basis = next(iter(registered.values()), None)
+    emit_field_basis = bool(str(basis or "").strip()) and not (
+        field_basis is not None and method_basis is not None
+    )
+    return RouteBasisResolution(
+        method_basis=method_basis,
+        field_basis=field_basis,
+        orbital_basis=orbital_basis,
+        emit_field_basis=emit_field_basis,
+        extras=tuple(cleaned_extras),
+    )
+
+
+def detect_basis_conflicts(
+    *,
+    method: str | None,
+    basis: str | None = None,
+    route_extras: Sequence[str] = (),
+    aux_j_basis: str | None = None,
+    aux_c_basis: str | None = None,
+) -> tuple[dict[str, Any], ...]:
+    """Pure, submit/preflight-shaped detection of basis conflicts.
+
+    Zero I/O and zero side effects: the caller (preflight/submit validation)
+    forwards each returned dict as an error ``reason``.  An empty tuple means
+    the requested method/basis/aux combination renders a legal route line.
+
+    Returns:
+        One dict per violation, each with ``rule``/``field``/``message`` plus
+        rule-specific details (``tokens``/``effective_if_emitted`` for
+        ``basis_conflict``, ``token``/``allowed`` for ``aux_basis_invalid``).
+    """
+    reasons: list[dict[str, Any]] = []
+    try:
+        resolve_route_orbital_basis(method, basis, route_extras)
+    except RouteBasisConflictError as exc:
+        reasons.append({**exc.params, "message": str(exc)})
+
+    for field_name, value in (("aux_j_basis", aux_j_basis), ("aux_c_basis", aux_c_basis)):
+        if not value:
+            continue
+        if is_orbital_basis(str(value)):
+            error = AuxiliaryBasisError(field_name=field_name, token=str(value))
+            reasons.append({**error.params, "message": str(error)})
+    return tuple(reasons)

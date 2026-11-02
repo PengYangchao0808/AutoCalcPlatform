@@ -37,7 +37,7 @@ from acp.calculations.primitives._common import (
     capability_kwargs,
     output_dir,
 )
-from acp.calculations.progress import ProgressReporter
+from acp.calculations.progress import LiveMetric, ProgressReporter
 from acp.calculations.result_publication import ManifestPublisher, register_result_manifest
 from acp.storage.manifest import ProductKind, ResultManifest
 from cccp import calculation as _cccp_calculation
@@ -356,3 +356,34 @@ class _IrcReporterSink:
                 self._current,
                 f"正向 {self._forward_count} 点 · 反向 {self._reverse_count} 点",
             )
+        self._publish_live_metrics()
+
+    def _publish_live_metrics(self) -> None:
+        """Expose captured point counts through live_status.metrics.
+
+        The stage detail alone forced clients to poll the filesystem for
+        progress; the aggregate is a read-only observation, never a settlement.
+        """
+        metrics: list[LiveMetric] = []
+        if self._forward_count:
+            metrics.append(
+                LiveMetric(
+                    key="irc_forward_points",
+                    label="Forward points",
+                    value=str(self._forward_count),
+                    kind="count",
+                    priority=90,
+                )
+            )
+        if self._reverse_count:
+            metrics.append(
+                LiveMetric(
+                    key="irc_reverse_points",
+                    label="Reverse points",
+                    value=str(self._reverse_count),
+                    kind="count",
+                    priority=80,
+                )
+            )
+        if metrics:
+            self._reporter.update_live_metrics(metrics)

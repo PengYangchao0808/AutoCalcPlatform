@@ -50,10 +50,45 @@ from acp.scheduler.jobs import (
 )
 
 __all__ = [
+    "BATCH_SOURCE_TYPES",
+    "IRC_TS_SOURCE_LOCKED_FIELDS",
+    "SIMPLE_SOURCE_TYPES",
     "SubmissionContractError",
     "WORKFLOW_CONTRACTS",
     "validate_workflow_submission",
 ]
+
+#: Source encodings the simple/scan workflows accept under ``input.source_type``
+#: (the Workbench chemistry envelope).  The published contract
+#: (:mod:`acp.api.workflow_contracts`) imports this set instead of restating the
+#: enum, so a fourth spelling cannot appear in one surface only.
+SIMPLE_SOURCE_TYPES: frozenset[str] = frozenset({"smiles", "xyz_text", "structure_asset"})
+
+#: The only ``input.source_type`` that makes ``input.items`` executable
+#: (``runner.materialize_job_input`` expands items for this spelling only).
+#: There is deliberately no "items imply batch" inference at runtime: one
+#: field keeps one meaning, and a submission that carries items without the
+#: carrier is refused before preflight can show it as feasible.
+BATCH_SOURCE_TYPES: frozenset[str] = frozenset({"batch_structures"})
+
+#: The ten ``irc_ts_source_v1`` provenance fields the scheduler locks when a
+#: replayed ``input.ts_source`` is compared with the server-derived provenance
+#: (``JobManager._verified_irc_spec``).  A hand-written object that misses any
+#: of them can never match the derived values, so the submit boundary refuses
+#: it instead of letting preflight pass and the run fail later with a
+#: misleading "source evidence changed" error.
+IRC_TS_SOURCE_LOCKED_FIELDS: tuple[str, ...] = (
+    "job_id",
+    "product_id",
+    "geometry_sha256",
+    "method",
+    "basis",
+    "charge",
+    "multiplicity",
+    "imaginary_frequency_cm1",
+    "frequency_evidence_sha256",
+    "source_completed_at",
+)
 
 
 class SubmissionContractError(ValueError):
@@ -213,8 +248,9 @@ _XTB_OPTIMIZE_METHOD_KEYS: frozenset[str] = frozenset(
 #: (source_job_id/source_product_id/source_id/source_ref) and requires the
 #: verified ``ts_source`` provenance (runner).  The public source reference, the
 #: internal ``ts_source`` and the CLI ``--ts-provenance-json`` carrier are
-#: distinct surfaces — they are accepted but never documented as one writable
-#: table (astra round-4 review).
+#: distinct surfaces: ``ts_source`` is **server-derived** from the source
+#: reference, so it is accepted only as a complete replay (see
+#: ``_validate_irc_ts_source``), never as a hand-written partial object.
 _IRC_INPUT_KEYS: frozenset[str] = frozenset(
     {
         "source_job_id",
@@ -338,6 +374,18 @@ _ROLE_FLAT_ALIASES: dict[str, str] = {
     "sp_basis": "single_point_basis",
 }
 
+#: Top-level single-point mirrors and the role field each one must land in.
+#: ``sp_method``/``sp_basis`` are accepted as aliases **only** when
+#: ``batch_roles`` is present (see ``_validate_method``); there is no flat CLI
+#: consumer for those spellings, so accepting them without a role would drop
+#: the value silently.
+_SP_ROLE_MIRRORS: dict[str, tuple[str, str]] = {
+    "single_point_method": ("int", "sp_method"),
+    "single_point_basis": ("int", "sp_basis"),
+    "sp_method": ("int", "sp_method"),
+    "sp_basis": ("int", "sp_basis"),
+}
+
 _WORKBENCH_MIRROR_DEFAULTS: dict[str, tuple[float, ...]] = {
     "temperature": (298.15,),
     "pressure": (1.0,),
@@ -372,7 +420,9 @@ def _flat_mirror_source(key: str) -> tuple[str, str]:
     BatchMethodOptions builds the shared settings from the INT role and only
     the ``transition_state_*`` family from TS (see
     ``acp/calculations/batch/options.py``); a flat value matching *another*
-    role is not a mirror of the executed value.
+    role is not a mirror of the executed value.  The single-point level is
+    per-role (round-7 #2): the flat ``single_point_*``/``sp_*`` spellings
+    mirror the INT role only.
     """
     if key.startswith("transition_state_"):
         return "ts", key[len("transition_state_") :]
@@ -382,6 +432,8 @@ def _flat_mirror_source(key: str) -> tuple[str, str]:
         return "int", key[len("optimization_") :]
     if key.startswith("single_point_"):
         return "int", f"sp_{key[len('single_point_') :]}"
+    if key in _SP_ROLE_MIRRORS:
+        return _SP_ROLE_MIRRORS[key]
     return "int", key
 _BATCH_LEVELS: dict[str, frozenset[str]] = _level_fields("batch_optimize")
 
@@ -468,6 +520,9 @@ WORKFLOW_CONTRACTS: dict[str, WorkflowContract] = {
                 "coordinate_plan",
                 "product",
                 "ts_guess",
+                # prepared carrier (edit/replay); normalized and compared against
+                # the expanded coordinate/protocol fields
+                "scan_request",
             }
         ),
         required_input_any=(
@@ -654,15 +709,59 @@ def _levels_for_method(
     return contract.levels
 
 
-def _validate_method(workflow: str, method: Mapping[str, Any], contract: WorkflowContract) -> None:
-    unknown = sorted(str(key) for key in method if str(key) not in contract.method_keys)
-    if unknown:
+def _reject_irc_step(method: Mapping[str, Any]) -> None:
+    """IRC step is accepted by old payloads but has no executable consumer.
+
+    Round-5 P0: the contract advertised ``step`` and the CLI accepted it while the
+    ORCA IRC interface never consumed it (an "unused kwargs" warning), so an
+    agent could believe it controlled the IRC step size.  New executions refuse
+    it with a typed error; historical payloads stay readable.
+    """
+    if method.get("step") is not None:
         raise SubmissionContractError(
-            f"{workflow} method has an undeclared field {unknown[0]!r}",
+            "irc method.step is not executable (no validated ORCA IRC step "
+            "mapping); omit it — maxpoints controls the iteration cap",
+            field_name="method.step",
+            rule="unsupported_parameter",
+        )
+    levels = method.get("levels")
+    if isinstance(levels, Mapping):
+        irc_level = levels.get("irc")
+        if isinstance(irc_level, Mapping) and irc_level.get("step") is not None:
+            raise SubmissionContractError(
+                "irc method.levels.irc.step is not executable (no validated ORCA "
+                "IRC step mapping); omit it",
+                field_name="method.levels.irc.step",
+                rule="unsupported_parameter",
+            )
+
+
+def _validate_method(workflow: str, method: Mapping[str, Any], contract: WorkflowContract) -> None:
+    #: ``sp_method``/``sp_basis`` are accepted ONLY as ``batch_roles``
+    #: mirrors (round-7 #2); the legacy flat payload keeps the documented
+    #: ``single_point_*`` spelling, which has a real CLI consumer.
+    conditional = (
+        frozenset({"sp_method", "sp_basis"})
+        if workflow == "BatchOptimize" and isinstance(method.get("batch_roles"), Mapping)
+        else frozenset()
+    )
+    allowed_keys = contract.method_keys | conditional
+    unknown = sorted(str(key) for key in method if str(key) not in allowed_keys)
+    if unknown:
+        hint = ""
+        if unknown[0] in _SP_ROLE_MIRRORS:
+            hint = (
+                " (sp_method/sp_basis are only accepted as batch_roles mirrors; "
+                "the flat form is method.single_point_method/single_point_basis)"
+            )
+        raise SubmissionContractError(
+            f"{workflow} method has an undeclared field {unknown[0]!r}{hint}",
             field_name=f"method.{unknown[0]}",
             rule="unknown_field",
-            allowed=tuple(sorted(contract.method_keys)),
+            allowed=tuple(sorted(allowed_keys)),
         )
+    if workflow == "irc":
+        _reject_irc_step(method)
     # The schema/workflow consistency is independent of the levels container:
     # a wrong schema_id must be refused even when levels is omitted.
     schema_id = method.get("schema_id")
@@ -748,9 +847,53 @@ def _validate_method(workflow: str, method: Mapping[str, Any], contract: Workflo
                 field_name=f"method.{unsupported[0]}",
                 rule="shadowed_field",
             )
+        # Round-7 #2 / round-8 #4: every published Workbench mirror (per-role SP
+        # aliases plus the flat optimization_*/single_point_*/thermo keys) must
+        # land in the role the engine executes.  A missing role (or a role
+        # without the mirrored field) would make the flat value inert, so it is
+        # refused instead of dropped silently.  ``temperature``/``pressure``/
+        # ``scale_factor`` only count as mirrors when they are not the Workbench
+        # default (the UI keeps the default next to a user-set role value).
+        # The value-mismatch branch below stays a separate rule (shadowed_field).
+        mirror_candidates = _WORKBENCH_FLAT_MIRRORS | frozenset(_SP_ROLE_MIRRORS)
+        for flat_key in sorted(mirror_candidates):
+            if flat_key not in method:
+                continue
+            flat_value = method[flat_key]
+            if flat_value is None or flat_value == "":
+                continue
+            if _is_workbench_default(flat_key, flat_value):
+                continue
+            role_id, role_field = _flat_mirror_source(flat_key)
+            role_value = roles.get(role_id)
+            role_field_value = (
+                role_value.get(role_field) if isinstance(role_value, Mapping) else None
+            )
+            if not isinstance(role_value, Mapping) or role_field_value in (None, ""):
+                has_role = isinstance(role_value, Mapping)
+                target_state = (
+                    f"batch_roles.{role_id} does not set {role_field}"
+                    if has_role
+                    else f"batch_roles has no {role_id!r} entry"
+                )
+                raise SubmissionContractError(
+                    f"method.{flat_key} has no matching batch_roles target "
+                    f"({target_state}); the flat mirror would be dropped. "
+                    f"Write method.batch_roles.{role_id}.{role_field} = "
+                    f"{flat_value!r} or remove method.{flat_key}",
+                    field_name=f"method.{flat_key}",
+                    rule="missing_role_mirror",
+                    details={
+                        "role": f"batch_roles.{role_id}.{role_field}",
+                        "role_field": role_field,
+                        "role_present": has_role,
+                        "flat_value": flat_value,
+                    },
+                )
         # A Workbench mirror that carries a *different* value than the role the
         # engine executes is a silent swallow; the role value wins downstream.
-        for flat_key in sorted(_WORKBENCH_FLAT_MIRRORS & set(method)):
+        mirror_keys = (_WORKBENCH_FLAT_MIRRORS | frozenset(_SP_ROLE_MIRRORS)) & set(method)
+        for flat_key in sorted(mirror_keys):
             role_id, role_field = _flat_mirror_source(flat_key)
             role_value = roles.get(role_id)
             if not isinstance(role_value, Mapping) or role_field not in role_value:
@@ -821,11 +964,40 @@ def _validate_input(
     # the legacy API accepts an empty list at create time (create-now-fail-later),
     # so the contract must not turn that into a 422.
     #
+    # Round 8 K2: ``items`` is executable only when the carrier is declared.
+    # ``runner.materialize_job_input`` switches on ``input.source_type`` alone,
+    # so a non-empty ``items`` list without ``source_type="batch_structures"``
+    # used to pass preflight and fail at dispatch with a generic "requires a
+    # batch artifact" error.  Refuse it here instead of inferring the carrier
+    # at runtime (one field, one meaning); an *empty* list stays a declared
+    # source (the legacy create-now-fail-later shape) and the artifact/items
+    # file carriers keep working without a ``source_type``.
+    #
     # Round 3: the scheduler pins ``--layout-mode single_flat`` for every
     # BatchOptimize dispatch (runner), so >1 inline item fails 30 s later
     # inside the engine.  This is statically knowable — refuse it here.
     if contract.batch_structures_only:
         items = payload.get("items")
+        if isinstance(items, (list, tuple)) and len(items) > 0:
+            source_type = payload.get("source_type")
+            if not isinstance(source_type, str) or source_type not in BATCH_SOURCE_TYPES:
+                raise SubmissionContractError(
+                    'input.items requires input.source_type="batch_structures"; '
+                    "the platform never infers the batch carrier from the items "
+                    "list (omit input.items to use from_artifact/items_file)",
+                    field_name="input.source_type",
+                    rule="missing_source_type",
+                    allowed=tuple(sorted(BATCH_SOURCE_TYPES)),
+                    details={
+                        "items_count": len(items),
+                        "source_type": source_type if isinstance(source_type, str) else None,
+                        "hint": (
+                            'set input.source_type="batch_structures" next to '
+                            "input.items, or provide input.from_artifact/"
+                            "input.items_file instead of inline items"
+                        ),
+                    },
+                )
         if isinstance(items, (list, tuple)) and len(items) > 1:
             raise SubmissionContractError(
                 "BatchOptimize runs one structure per task (single_flat layout); "
@@ -834,6 +1006,82 @@ def _validate_input(
                 rule="layout_limit",
                 details={"limit": 1, "received": len(items)},
             )
+
+
+def _validate_irc_ts_source(input_mapping: Mapping[str, Any]) -> None:
+    """Refuse a hand-written *partial* ``input.ts_source`` (round-8 P0).
+
+    The platform derives the complete ``irc_ts_source_v1`` provenance from
+    ``source_job_id``/``source_product_id`` (``resolve_verified_ts_source``) and
+    overwrites the spec with it.  The client object is only compared for source
+    stability against the derived values (``JobManager._verified_irc_spec``
+    locks :data:`IRC_TS_SOURCE_LOCKED_FIELDS`), so a partial object (e.g. the
+    old published example ``{"schema": "irc_ts_source_v1"}``) can never match:
+    it used to pass preflight and fail at submit with the misleading "IRC source
+    evidence changed since the previous submission" message.
+
+    A *complete* object stays accepted (idempotent replay / CLI compatibility);
+    equality with the derived provenance is still the manager's decision.
+    """
+    ts_source = input_mapping.get("ts_source")
+    if ts_source is None:
+        return
+    if not isinstance(ts_source, Mapping):
+        raise SubmissionContractError(
+            "input.ts_source must be an object; omit it — the platform derives "
+            "the complete irc_ts_source_v1 provenance from "
+            "source_job_id/source_product_id",
+            field_name="input.ts_source",
+            rule="invalid_type",
+        )
+    # A present-but-null field is not evidence: treat it as missing so the answer
+    # is "partial (omit it)" rather than the misleading "changed" at the manager.
+    missing = [
+        field
+        for field in IRC_TS_SOURCE_LOCKED_FIELDS
+        if field not in ts_source or ts_source.get(field) is None
+    ]
+    if not missing:
+        return
+    raise SubmissionContractError(
+        "input.ts_source is partial (missing "
+        + ", ".join(missing)
+        + "); omit input.ts_source — the platform derives the complete "
+        "irc_ts_source_v1 provenance from source_job_id/source_product_id",
+        field_name="input.ts_source",
+        rule="irc_ts_source_partial",
+        details={
+            "missing": missing,
+            "locked_fields": list(IRC_TS_SOURCE_LOCKED_FIELDS),
+            "hint": (
+                "remove input.ts_source; source_job_id + source_product_id are "
+                "sufficient and the platform fills the provenance at submit"
+            ),
+        },
+    )
+
+
+def _validate_pes_coordinates(input_mapping: Mapping[str, Any]) -> None:
+    """Shared PES coordinate normalization (round-5 P0).
+
+    Runs the same normalization the executor uses, so a submission carrying
+    both ``coordinate`` and a disagreeing ``coordinates[0]`` is refused at the
+    boundary instead of silently scanning one of them.
+    """
+    from acp.calculations.pes.normalization import (
+        CoordinateError,
+        normalize_pes_coordinates,
+    )
+
+    try:
+        normalize_pes_coordinates(input_mapping, field_prefix="input")
+    except CoordinateError as exc:
+        raise SubmissionContractError(
+            str(exc),
+            field_name=exc.field,
+            rule=exc.rule,
+            allowed=tuple(exc.params.get("allowed") or ()),
+        ) from exc
 
 
 def validate_workflow_submission(
@@ -864,3 +1112,13 @@ def validate_workflow_submission(
     _validate_input(
         workflow, input_mapping, contract, require_sources=input is not None
     )
+    if workflow == "irc":
+        # Round-8 P0: ``ts_source`` is server-derived; only a complete replay is
+        # accepted (the manager still compares it with the derived provenance).
+        _validate_irc_ts_source(input_mapping)
+    if workflow == "PESsearch" and any(
+        key in input_mapping for key in ("coordinate", "coordinates", "scan_request")
+    ):
+        # manifest-path submissions carry no scan coordinate at all; only the
+        # coordinate-bearing branch is normalized here
+        _validate_pes_coordinates(input_mapping)

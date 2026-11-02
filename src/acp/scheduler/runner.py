@@ -484,6 +484,30 @@ def _materialize_tsmode_bundle(inp: dict[str, Any], inputs_dir: Path) -> Path | 
     return bundle_path
 
 
+BATCH_ITEMS_SOURCE_TYPE_ERROR = (
+    "BatchOptimize input items were not materialized: set "
+    'input.source_type="batch_structures" (required when input.items is used), '
+    "or provide from_artifact/items_file"
+)
+
+
+def reject_unmaterialized_batch_items(inp: Mapping[str, Any]) -> None:
+    """Fail the dispatch when ``input.items`` cannot be materialized.
+
+    ``materialize_job_input`` expands ``items`` only under
+    ``source_type="batch_structures"``; without that declaration the payload is
+    silently downgraded to a one-structure job (or dies later with a message
+    that names no field).  The submit boundary already refuses this payload, so
+    this guard is defence-in-depth for direct/legacy callers: it names the
+    field and both valid carriers before anything is spawned (round-8 一.1).
+    """
+    if not inp.get("items"):
+        return
+    if str(inp.get("source_type") or "") == "batch_structures":
+        return
+    raise ValueError(BATCH_ITEMS_SOURCE_TYPE_ERROR)
+
+
 def materialize_job_input(
     inp: dict[str, Any],
     inputs_dir: Path,
@@ -1360,20 +1384,9 @@ class JobRunner:
             # is a typed conflict in the builder, never silently overwritten.
             pass
 
-        if self.freeze_release is not None:
-            release = self.freeze_release
-        elif self._default_release is not None:
-            release = self._default_release
-        else:
-            from acp.calculations.attempt_freeze import build_local_release
-
-            release = build_local_release(self._repo_root, work_dir.parent.parent)
-            self._default_release = release
-
-        from acp.calculations.attempt_freeze import build_freeze_spec
         from acp_services.runtime.attempt_freeze import write_frozen_attempt
 
-        spec = build_freeze_spec(record, work_dir, input_path, release)
+        spec, _release, refreshed = self._freeze_default_attempt(record, work_dir, input_path)
         group = write_frozen_attempt(work_dir, spec)
         event_log.append(
             "attempt.frozen",
@@ -1382,7 +1395,78 @@ class JobRunner:
             attempt=record.attempt,
             release_id=group.manifest.release_id,
             release_digest=group.manifest.release_digest,
+            **({"release_refreshed": True} if refreshed else {}),
         )
+
+    def _freeze_default_attempt(
+        self,
+        record: JobRecord,
+        work_dir: Path,
+        input_path: str,
+    ) -> tuple[Any, Any, bool]:
+        """Build the freeze spec, refreshing a stale cached release once.
+
+        A long-lived runner caches the first :class:`LocalRelease` it built
+        (:attr:`_default_release`).  When the live checkout changes afterwards
+        (merge, deploy, uncommitted edit) that cached identity no longer
+        matches the tree and :meth:`ReleaseIdentity.assert_current` fails
+        closed.  The self-healing action is to DISCARD the cache, rebuild the
+        identity ONCE from the live tree through the normal
+        ``build_local_release`` path (stage-verify-publish; an existing
+        directory is re-verified, never overwritten) and retry the freeze
+        ONCE.  Nothing is adopted, skipped or weakened: a second failure
+        raises :class:`StaleReleaseRefreshError` carrying both digests and
+        the exact administrator rebuild command.
+
+        An explicitly injected :attr:`freeze_release` is never swapped — an
+        operator/test pin stays authoritative (a stale pin fails loudly).
+
+        Returns:
+            ``(spec, release, refreshed)`` where *refreshed* reports whether
+            the cached release had to be rebuilt before this freeze.
+        """
+        from acp.calculations.attempt_freeze import (
+            ReleaseIdentityError,
+            StaleReleaseError,
+            StaleReleaseRefreshError,
+            build_freeze_spec,
+            build_local_release,
+            current_release_identity,
+            refresh_local_release,
+        )
+
+        run_root = work_dir.parent.parent
+        injected = self.freeze_release is not None
+        release = self.freeze_release if injected else self._default_release
+        if release is None:
+            release = build_local_release(self._repo_root, run_root)
+            self._default_release = release
+        try:
+            return build_freeze_spec(record, work_dir, input_path, release), release, False
+        except StaleReleaseError:
+            if injected:
+                # An explicit pin is authoritative; silently replacing it
+                # would hide a deliberate pin behind a source-tree change.
+                raise
+
+        def _refresh_failed(reason: str) -> StaleReleaseRefreshError:
+            return StaleReleaseRefreshError(
+                stale=release.identity,
+                live=current_release_identity(self._repo_root),
+                project_root=self._repo_root,
+                run_root=run_root,
+                reason=reason,
+            )
+
+        try:
+            refreshed = refresh_local_release(self._repo_root, run_root)
+        except ReleaseIdentityError as exc:
+            raise _refresh_failed(str(exc)) from exc
+        self._default_release = refreshed
+        try:
+            return build_freeze_spec(record, work_dir, input_path, refreshed), refreshed, True
+        except StaleReleaseError as again:
+            raise _refresh_failed(str(again)) from again
 
     def _resolve_attempt_choice(
         self, record: JobRecord, work_dir: Path, *, remote: bool = False
@@ -1516,6 +1600,7 @@ class JobRunner:
             return cmd
 
         if wf == "BatchOptimize":
+            reject_unmaterialized_batch_items(inp)
             artifact = inp.get("from_artifact")
             items_file = inp.get("items_file")
             if artifact:
@@ -1697,9 +1782,11 @@ class JobRunner:
             maxpoints = method.get("maxpoints") or irc_level.get("maxpoints")
             if maxpoints is not None:
                 cmd += ["--maxpoints", str(maxpoints)]
-            irc_step = method.get("step") or irc_level.get("step")
-            if irc_step is not None:
-                cmd += ["--step", str(irc_step)]
+            if method.get("step") is not None or irc_level.get("step") is not None:
+                raise ValueError(
+                    "IRC step is not executable (no validated ORCA IRC step "
+                    "mapping); remove method.step / levels.irc.step"
+                )
         elif wf == "xtb_optimize":
             cmd += ["--input", str(source), "--output", cli_work_dir]
             if spec.name:
@@ -2310,8 +2397,10 @@ class JobRunner:
 
 
 __all__ = [
+    "BATCH_ITEMS_SOURCE_TYPE_ERROR",
     "JobRunner",
     "JobRunnerRemoteProtocol",
     "find_workflow_state",
     "materialize_job_input",
+    "reject_unmaterialized_batch_items",
 ]

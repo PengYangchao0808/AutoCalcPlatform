@@ -866,6 +866,9 @@ class TestExecutionModes:
             {"kind": "distance", "atoms": [0, 2], "start": 1.0, "end": 2.0, "n_points": 5},
             {"kind": "distance", "atoms": [1, 4], "start": 1.0, "end": 2.0, "n_points": 5},
         ]
+        # round-5: the primary must be the first synchronized coordinate when
+        # both fields are present (never silently replaced by coordinates[0])
+        request["coordinate"] = dict(request["coordinates"][0])
         result = run_pes_scan(request=request, output_dir=tmp_path)
         assert result["execution_mode"] == "pointwise"
 

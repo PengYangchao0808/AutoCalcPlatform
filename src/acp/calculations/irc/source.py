@@ -40,12 +40,13 @@ class VerifiedTsSource:
     source_completed_at: str
     source_workflow: str
 
-    def method_payload(self, *, maxpoints: int = 100, step: float = 0.1) -> dict[str, Any]:
+    def method_payload(self, *, maxpoints: int = 100) -> dict[str, Any]:
+        # No default step: ORCA IRC has no validated step mapping (round-5), so
+        # the platform must not fabricate one into the submitted method.
         return {
             "method": self.method,
             "basis": self.basis,
             "maxpoints": maxpoints,
-            "step": step,
         }
 
     def provenance(self) -> dict[str, Any]:

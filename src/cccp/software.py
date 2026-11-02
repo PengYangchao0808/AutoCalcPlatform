@@ -8,7 +8,7 @@ Grimme CENSO / MolSSI QCEngine / autodE model:
 
     explicit config
         -> CONFSEARCH_*_PATH env
-        -> shutil.which() over PATH + current Python env
+        -> every executable hit on PATH + current Python env
         -> tiny legacy fallback list
         -> unique executable in bounded conventional install layouts
         -> None
@@ -135,9 +135,68 @@ _SEMVER_RE = re.compile(r"\d+(?:\.\d+)+")
 #: (monotonic timestamp, normalized version) keyed by resolved absolute path.
 _VERSION_CACHE: dict[str, tuple[float, str]] = {}
 
+#: TTL (seconds) for the executable identity probe cache (never a version
+#: cache: this one answers "is this really the QC program?").
+EXECUTABLE_PROBE_TTL = 300.0
+
+#: (monotonic timestamp, rejection reason or ``None``) keyed by resolved path.
+_EXECUTABLE_PROBE_CACHE: dict[str, tuple[float, str | None]] = {}
+
+#: Text markers that identify the GNOME Orca *screen reader* (a Python
+#: application that owns ``/usr/bin/orca`` on desktop Linux) instead of the
+#: ORCA quantum-chemistry driver.
+_ORCA_SCREEN_READER_MARKERS: tuple[str, ...] = (
+    "screen reader",
+    "pyatspi",
+    "at-spi",
+    "atspi",
+    "gnome orca",
+)
+
+#: A bare version line (``40.3``) is how the GNOME screen reader answers
+#: ``--version``; the QC driver always prints a ``Program Version`` banner.
+#: Major versions below 30 cannot collide with GNOME's 3x/4x/5x scheme and are
+#: left alone so an unusual ORCA build is never rejected by shape alone.
+_ORCA_BARE_VERSION_RE = re.compile(r"^v?(?P<major>\d{1,2})\.\d+(?:\.\d+)?$")
+
+#: Bare-version majors at/above this are treated as the GNOME screen reader.
+_ORCA_SCREEN_READER_MIN_MAJOR = 30
+
 
 class SoftwareNotFoundError(RuntimeError):
     """Raised when a required QC binary cannot be resolved."""
+
+
+class SoftwareUnavailableError(SoftwareNotFoundError):
+    """A resolved candidate exists but is not the requested QC program.
+
+    The canonical case is ``/usr/bin/orca`` on a desktop Linux host: it is the
+    GNOME Orca *screen reader*, not the ORCA quantum-chemistry driver.  Running
+    it would launch an accessibility application instead of a calculation, so
+    resolution refuses it at the boundary and this typed error carries the
+    ``rule="backend_unavailable"`` params consumed by preflight /
+    ``acp doctor``: the operator must pin the real executable.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        name: str,
+        executable: Path | None,
+        reason: str,
+    ) -> None:
+        super().__init__(message)
+        self.name = name
+        self.executable = executable
+        self.reason = reason
+        self.params: dict[str, Any] = {
+            "rule": "backend_unavailable",
+            "field": f"executables.{name}.path",
+            "software": name,
+            "path": str(executable) if executable is not None else "",
+            "reason": reason,
+        }
 
 
 @dataclass(frozen=True)
@@ -190,40 +249,150 @@ def _search_path() -> str:
     )
 
 
-def _resolve(name: str, configured_path: str | Path | None) -> tuple[Path | None, str | None]:
-    """Resolution core — returns (path, source); first hit wins."""
+def _orca_screen_reader_reason(sample: str) -> str | None:
+    """Return why *sample* (``orca --version`` output) is the GNOME reader.
+
+    Two independent signatures, both text-only (no version guessing for the
+    QC driver):
+
+    * an explicit accessibility marker (``Screen Reader`` / ``pyatspi`` /
+      ``at-spi`` / ``gnome orca``);
+    * a bare version line whose major is in GNOME's range (the screen reader
+      answers ``40.3``; the QC driver prints a ``Program Version`` banner).
+
+    The QC driver is never rejected on ambiguous output: probe failures and
+    unrecognised banners stay "unknown", not a rejection.
+    """
+    lowered = sample.lower()
+    for marker in _ORCA_SCREEN_READER_MARKERS:
+        if marker in lowered:
+            return f"GNOME Orca screen reader output contains {marker!r}"
+    match = _ORCA_BARE_VERSION_RE.match(sample.strip())
+    if match is not None and int(match["major"]) >= _ORCA_SCREEN_READER_MIN_MAJOR:
+        return f"GNOME Orca screen reader answers --version with a bare {sample.strip()!r}"
+    return None
+
+
+def _probe_orca_executable(executable: Path) -> str | None:
+    """Spawn ``<executable> --version`` once and classify the output."""
+    try:
+        result = subprocess.run(
+            [str(executable), "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            env={**os.environ, "OMP_NUM_THREADS": "1"},
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        logger.debug("Executable identity probe failed for %s", executable)
+        return None
+    sample = " ".join(
+        part
+        for part in (getattr(result, "stdout", ""), getattr(result, "stderr", ""))
+        if isinstance(part, str)
+    )
+    return _orca_screen_reader_reason(sample)
+
+
+def probe_executable(name: str, executable: Path | None) -> str | None:
+    """Return a rejection reason for a mis-identified *executable*, else None.
+
+    Validation happens at the resolution boundary so an accessibility
+    application named ``orca`` can never be handed to the QC layer.  Probe
+    errors (timeout / nonzero exit / unusual banner) are *unknown*, not a
+    rejection — a working ORCA build must keep resolving.  Verdicts are cached
+    per resolved path for :data:`EXECUTABLE_PROBE_TTL` seconds so repeated
+    submissions never re-spawn the probe.
+    """
+    if executable is None or name != "orca":
+        return None
+    try:
+        stat = executable.stat()
+        key = f"{executable}|{stat.st_mtime_ns}|{stat.st_size}"
+    except OSError:
+        key = str(executable)
+    now = time.monotonic()
+    cached = _EXECUTABLE_PROBE_CACHE.get(key)
+    if cached is not None and now - cached[0] < EXECUTABLE_PROBE_TTL:
+        return cached[1]
+    reason = _probe_orca_executable(executable)
+    _EXECUTABLE_PROBE_CACHE[key] = (now, reason)
+    if reason is not None:
+        logger.warning("Refusing 'orca' executable %s: %s", executable, reason)
+    return reason
+
+
+@dataclass(frozen=True)
+class _ResolutionAttempt:
+    """One full resolution pass: winner plus every rejected candidate."""
+
+    path: Path | None
+    source: str | None
+    rejections: tuple[tuple[Path, str], ...] = ()
+
+
+def _resolve_detailed(name: str, configured_path: str | Path | None) -> _ResolutionAttempt:
+    """Resolution core with candidate validation — first *valid* hit wins."""
+    rejections: list[tuple[Path, str]] = []
+    rejected: set[Path] = set()
+
+    def _accept(candidate: str | Path | None, source: str) -> tuple[Path, str] | None:
+        path = _valid_executable(candidate)
+        if path is None:
+            return None
+        reason = probe_executable(name, path)
+        if reason is None:
+            return path, source
+        if path not in rejected:
+            rejected.add(path)
+            rejections.append((path, reason))
+        return None
+
     # 1. Explicit configuration (absolute file path)
-    path = _valid_executable(configured_path)
-    if path:
-        return path, "config"
+    hit = _accept(configured_path, "config")
+    if hit is not None:
+        return _ResolutionAttempt(hit[0], hit[1], tuple(rejections))
 
     # 2. Environment override
     env_var = ENV_VARS.get(name)
     if env_var:
-        path = _valid_executable(os.environ.get(env_var))
-        if path:
-            return path, "env"
+        hit = _accept(os.environ.get(env_var), "env")
+        if hit is not None:
+            return _ResolutionAttempt(hit[0], hit[1], tuple(rejections))
 
-    # 3. PATH + current Python environment directory
+    # 3. PATH + current Python environment directory.  Every hit is a
+    # candidate: a rejected one (e.g. the GNOME screen reader) is skipped so
+    # a later real install still wins without reordering the lookup.
     search_path = _search_path()
     for binary in EXECUTABLES.get(name, [name]):
-        found = shutil.which(binary, path=search_path)
-        if found:
-            return Path(found).resolve(), "path"
+        for found in _which_all(binary, search_path):
+            hit = _accept(found, "path")
+            if hit is not None:
+                return _ResolutionAttempt(hit[0], hit[1], tuple(rejections))
 
     # 4. Legacy fallbacks
     for candidate in FALLBACKS.get(name, []):
-        path = _valid_executable(candidate)
-        if path:
-            return path, "fallback"
+        hit = _accept(candidate, "fallback")
+        if hit is not None:
+            return _ResolutionAttempt(hit[0], hit[1], tuple(rejections))
 
     # 5. Conventional install directories: never choose arbitrarily among
     # multiple distinct versions.  An explicit pin remains the way to select.
-    scanned = set(_scan_candidates(name))
-    if len(scanned) == 1:
-        return scanned.pop(), "scan"
+    valid: list[Path] = []
+    for scanned in sorted(set(_scan_candidates(name))):
+        hit = _accept(scanned, "scan")
+        if hit is not None:
+            valid.append(hit[0])
+    if len(valid) == 1:
+        return _ResolutionAttempt(valid[0], "scan", tuple(rejections))
 
-    return None, None
+    return _ResolutionAttempt(None, None, tuple(rejections))
+
+
+def _resolve(name: str, configured_path: str | Path | None) -> tuple[Path | None, str | None]:
+    """Resolution core — returns (path, source); first valid hit wins."""
+    attempt = _resolve_detailed(name, configured_path)
+    return attempt.path, attempt.source
 
 
 def resolve_executable(
@@ -237,9 +406,11 @@ def resolve_executable(
     1. **Explicit configuration** — ``configured_path`` (an absolute file
        path or, when it is a bare name, skipped so PATH handles it).
     2. **Environment override** — ``CONFSEARCH_<NAME>_PATH``.
-    3. **PATH + current Python environment** — :func:`shutil.which` over
+    3. **PATH + current Python environment** — every executable hit on
        the process PATH plus the directory of ``sys.executable``, so
-       conda/venv installs are found without extra machinery.
+       conda/venv installs are found without extra machinery (a rejected
+       candidate such as the GNOME Orca screen reader is skipped, not
+       reordered).
     4. **Legacy fallbacks** — the small :data:`FALLBACKS` list.
     5. **Bounded scan** — one unambiguous executable in a conventional
        install directory.
@@ -267,25 +438,65 @@ def resolve_executable_with_source(
     return _resolve(name, configured_path)
 
 
+def _unavailable_error(name: str, executable: Path, reason: str) -> SoftwareUnavailableError:
+    """Build the typed ``backend_unavailable`` refusal for one rejected binary."""
+    display = name.upper()
+    env_var = ENV_VARS.get(name)
+    env_phrase = f" or set {env_var}" if env_var else ""
+    return SoftwareUnavailableError(
+        f"{display} executable not found: the '{name}' candidate at {executable} is "
+        f"not {display} ({reason}). Set executables.{name}.path{env_phrase} to the "
+        f"real {display} driver (or put it first on PATH); refusing to run the wrong "
+        "executable.",
+        name=name,
+        executable=executable,
+        reason=reason,
+    )
+
+
+def executable_refusal(
+    name: str,
+    configured_path: str | Path | None = None,
+) -> SoftwareUnavailableError | None:
+    """Typed refusal for the first candidate the identity probe rejected.
+
+    Returns ``None`` when nothing was rejected (a plain not-found, or a
+    resolvable binary).  Never returns a path: a caller that already holds
+    ``None`` for its executable keeps that state and must not silently
+    re-resolve a later-discovered binary (no execution side effects here).
+    """
+    attempt = _resolve_detailed(name, configured_path)
+    if not attempt.rejections:
+        return None
+    executable, reason = attempt.rejections[0]
+    return _unavailable_error(name, executable, reason)
+
+
 def require_executable(
     name: str,
     configured_path: str | Path | None = None,
 ) -> Path:
-    """Resolve *name* or raise :class:`SoftwareNotFoundError`.
+    """Resolve *name* or raise a user-actionable typed error.
 
-    The raised error carries a user-actionable message (add to PATH, set
-    the env var, or configure ``executables.<name>.path``).
+    A candidate that exists but is a different program (the GNOME Orca screen
+    reader answering ``/usr/bin/orca``) raises
+    :class:`SoftwareUnavailableError` (``rule="backend_unavailable"``) instead
+    of being returned for execution; a genuinely missing binary raises
+    :class:`SoftwareNotFoundError`.
     """
-    path = resolve_executable(name, configured_path=configured_path)
-    if path is None:
-        env_hint = f" set {ENV_VARS.get(name)}," if ENV_VARS.get(name) else ""
-        message = (
-            f"Executable '{name}' was not found. "
-            f"Add '{EXECUTABLES.get(name, [name])[0]}' to PATH,{env_hint} or "
-            f"configure executables.{name}.path."
-        )
-        raise SoftwareNotFoundError(message)
-    return path
+    attempt = _resolve_detailed(name, configured_path)
+    if attempt.path is not None:
+        return attempt.path
+    if attempt.rejections:
+        executable, reason = attempt.rejections[0]
+        raise _unavailable_error(name, executable, reason)
+    env_hint = f" set {ENV_VARS.get(name)}," if ENV_VARS.get(name) else ""
+    message = (
+        f"Executable '{name}' was not found. "
+        f"Add '{EXECUTABLES.get(name, [name])[0]}' to PATH,{env_hint} or "
+        f"configure executables.{name}.path."
+    )
+    raise SoftwareNotFoundError(message)
 
 
 def get_configured_path(config: dict[str, Any] | None, name: str) -> str | Path | None:
@@ -310,13 +521,21 @@ def discover_all(config: dict[str, Any] | None = None) -> dict[str, Path | None]
 
 
 def _which_all(binary: str, search_path: str) -> list[Path]:
-    """Every executable hit for *binary* along *search_path*, in order."""
+    """Every executable hit for *binary* along *search_path*, in order.
+
+    Uses :func:`shutil.which` per PATH entry (the historical lookup) so
+    executable/extension checks stay in one place; the resolved path is then
+    re-validated into an absolute file.
+    """
     seen: set[Path] = set()
     hits: list[Path] = []
     for directory in search_path.split(os.pathsep):
         if not directory:
             continue
-        path = _valid_executable(Path(directory) / binary)
+        found = shutil.which(binary, path=directory)
+        if found is None:
+            continue
+        path = _valid_executable(found)
         if path is not None and path not in seen:
             seen.add(path)
             hits.append(path)
@@ -346,7 +565,9 @@ def discover_candidates(
     ``sys.executable``-dir + PATH search path, in PATH order),
     ``fallback`` (:data:`FALLBACKS` hits), then ``scan`` (:data:`SCAN_PATTERNS`
     glob hits, only for software with declared patterns).  The resolver
-    accepts a scan hit only when there is one distinct executable.
+    accepts a scan hit only when there is one distinct executable.  A
+    candidate rejected by the identity probe (the GNOME Orca screen reader at
+    ``/usr/bin/orca``) is not offered as a usable install.
     """
     candidates: list[SoftwareCandidate] = []
     seen: set[Path] = set()
@@ -354,6 +575,8 @@ def discover_candidates(
     def _add(path: Path | None, source: str) -> None:
         if path is not None and path not in seen:
             seen.add(path)
+            if probe_executable(name, path) is not None:
+                return
             candidates.append(SoftwareCandidate(path=path, source=source))
 
     _add(_valid_executable(configured_path), "config")

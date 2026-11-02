@@ -13,6 +13,7 @@ PESsearch 键长扫描 → 选点确认 → BatchOptimize OptTS + 频率验证�
 | `codex_code_review.md` | 分支代码评审结论（gpt-6-astra，1×P1 + 4×P2，全部在本仓 `a588132d` 修复并带行为测试） |
 | `proposal_round4.md` | 第 4 轮改进提案（基于 Cope 测试会话分析，含时间线澄清） |
 | `astra_round4_review.md` | 第 4 轮提案的 external 评审（gpt-6-astra：有界发现须版本化、单坐标阈值不得冒充科学判据、B 类先冻结测量定义） |
+| `astra_round5_review.md` | 第 5 轮吐槽评审（gpt-6-astra：坐标 P0、step 止损 P0、preflight 共享校验、PES 发布拆两工具、推荐实为 manual-only、IRC 首帧冒充与 review CAS 风险） |
 
 ## 登记的缺陷（后续批次）
 

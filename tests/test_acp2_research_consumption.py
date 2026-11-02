@@ -64,16 +64,35 @@ def server_with_consumer(consumer: RecordingConsumer, **kwargs: Any) -> mcp.McpS
 def test_consumer_surface_is_additive_and_hidden_before_negotiation() -> None:
     consumer = RecordingConsumer()
     server = server_with_consumer(consumer)
-    assert len(mcp.TOOL_ALLOWLIST) == 10
+    base_tools = {
+        "acp_capabilities",
+        "acp_preflight",
+        "acp_submit",
+        "acp_status",
+        "acp_cancel",
+        "acp_prepare_artifact",
+        "acp_read_artifact",
+        "acp_analyze",
+        "acp_get_guidance",
+        "acp_list_jobs",
+    }
+    selection_tools = {
+        mcp.McpTool.GET_PES_REVIEW,
+        mcp.McpTool.PUBLISH_PES_REVIEW,
+    }
+    assert base_tools <= set(mcp.TOOL_ALLOWLIST)
+    assert selection_tools <= set(mcp.TOOL_ALLOWLIST)
     assert len(mcp.RESEARCH_TOOL_NAMES) == 10
     assert len(CONSUMPTION_TOOL_NAMES) == 11
-    assert set(_tools_list(server)) == mcp.TOOL_ALLOWLIST
+    assert set(_tools_list(server)) == base_tools
     tool = "acp_research_model_statement_v1"
     assert _call(server, tool, {})["isError"] is True
     assert consumer.calls == []
     _negotiate(server)
     assert set(_tools_list(server)) == (
-        mcp.TOOL_ALLOWLIST | mcp.RESEARCH_TOOL_SET | set(CONSUMPTION_TOOL_NAMES)
+        (set(mcp.TOOL_ALLOWLIST) - selection_tools)
+        | mcp.RESEARCH_TOOL_SET
+        | set(CONSUMPTION_TOOL_NAMES)
     )
     assert _call(server, tool, {})["isError"] is False
     assert consumer.calls == [(tool, {})]

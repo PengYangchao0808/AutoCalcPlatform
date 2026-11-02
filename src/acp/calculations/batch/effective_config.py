@@ -50,11 +50,17 @@ def build_effective_role(
 
     Role-resolved values (trust/hessian/recalc/iterations/convergence/SCF/
     rescue) take priority; keys without a role resolution fall back to the
-    shared common value (engine constants where ``None``).
+    shared common value (engine constants where ``None``).  The single-point
+    level is resolved **per role** (round-7 #2): a role without its own
+    ``sp_method`` falls back to its own optimization level, never to another
+    role's SP level, so ``effective_config.json`` can prove what each role
+    actually executes.
     """
     from acp.calculations.batch.options import _ROLE_OVERRIDE_FIELDS
 
     role_opts = opts.resolve_role_options(is_ts)
+    role_method, role_basis = opts.for_role(is_ts)
+    sp_method, sp_basis = opts.sp_for_role(is_ts)
     effective: dict[str, Any] = {}
     for name in _ROLE_OVERRIDE_FIELDS:
         if name in role_opts:
@@ -73,6 +79,12 @@ def build_effective_role(
     effective["rescue_policy"] = role_opts.get("opt_rescue_policy") or opts.opt_rescue_policy
     max_rescue = role_opts.get("opt_max_rescue")
     effective["max_rescue"] = int(max_rescue) if max_rescue is not None else opts.opt_max_rescue
+    # Optimization level + single-point level as executed for this role.
+    effective["method"] = role_method
+    effective["basis"] = role_basis
+    effective["single_point_method"] = sp_method
+    effective["single_point_basis"] = sp_basis
+    effective["single_point_source"] = opts.sp_provenance(is_ts)
     return effective
 
 
@@ -117,6 +129,9 @@ def build_batch_effective_config(opts: BatchMethodOptions) -> dict[str, Any]:
             "optimization_basis": opts.optimization_basis,
             "single_point_method": opts.single_point_method,
             "single_point_basis": opts.single_point_basis,
+            # "per_role" = a batch_roles payload (roles are authoritative);
+            # "global" = the legacy flat payload (one SP pair for both roles).
+            "single_point_scope": opts.single_point_scope,
             "temperature": opts.temperature,
             "pressure": opts.pressure,
             "scale_factor": opts.scale_factor,

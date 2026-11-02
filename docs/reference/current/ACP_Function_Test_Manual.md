@@ -306,7 +306,7 @@ acp run frequency --input water.xyz --method r2SCAN-3c --output /tmp/acp_mt/freq
 ```
 
 - **预期产物**：`RESULT/result_manifest.json`（`frequency_modes` 产品）；`WORK/04_FREQ/<step>/normal_modes.json`；`RESULT/frequencies/normal_modes.json`。
-- **判定**：exit 0；`normal_modes_v1` 含 `frequencies` / `modes[].frequency_cm1`；水分子应 0 个虚频。TS 场景恰好 1 个负频（`imaginary:true`）。
+- **判定**：exit 0；`normal_modes_v1` 的频率在 `modes[].frequency_cm1`（**没有**顶层 `frequencies` 数组）；水分子应 0 个虚频。TS 场景恰好 1 个负频（`imaginary:true`）。
 - **自动化**：`tests/test_acp_frequency_modes.py`、`tests/test_acp_structure_viewer.py`（normal_modes_v1）。
 
 ### 3.4 MT-SCAN — Relaxed Coordinate Scan

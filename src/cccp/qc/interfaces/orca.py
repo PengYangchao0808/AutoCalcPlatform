@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import threading
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -46,10 +47,12 @@ from cccp.qc.interfaces.orca_ts import (
     ts_geom_block,
 )
 from cccp.qc.interfaces.route_render import (
+    AuxiliaryBasisError,
     RouteKeyword,
     orca_gfn_solvent_token,
     orca_keyword_context,
     render_route_line,
+    resolve_route_orbital_basis,
 )
 from cccp.qc.interfaces.xtb_scan import RelaxedScanPoint, RelaxedScanResult
 from cccp.qc.keyword_registry import (
@@ -62,9 +65,14 @@ from cccp.qc.keyword_registry import (
     resolve_implementation,
     scf_rank,
 )
-from cccp.qc.method_meta import method_meta, scf_constraint
+from cccp.qc.method_meta import is_orbital_basis, method_meta, scf_constraint
 from cccp.qc.translation import render_opt_geom_lines
-from cccp.software import SoftwareNotFoundError, orca_runtime_env, resolve_executable
+from cccp.software import (
+    SoftwareNotFoundError,
+    executable_refusal,
+    orca_runtime_env,
+    resolve_executable,
+)
 from cccp.utils import ensure_dir
 from cccp.utils.file_io import read_xyz, read_xyz_multiframe, write_xyz
 from cccp.utils.geometry_tools import LogParser
@@ -86,6 +94,14 @@ _SCF_FAILURE_PATTERNS = [
     "DIIS convergence not achieved",
     "ERROR: SCF convergence",
 ]
+#: SCF non-convergence phrased differently (checked after the legacy patterns so
+#: the long-standing ``scf_failure`` class keeps its exact behaviour).
+_SCF_NOT_CONVERGED_PATTERNS = [
+    "scf did not converge",
+    "scf convergence failure",
+    "scf has not converged",
+    "scf not converged",
+]
 _GEOMETRY_NOT_CONVERGED_PATTERNS = [
     "THE OPTIMIZATION HAS NOT CONVERGED",
     "OPTIMIZATION DID NOT CONVERGE",
@@ -98,26 +114,119 @@ _MEMORY_FAILURE_PATTERNS = [
     "memory allocation failed",
     "std::bad_alloc",
 ]
+#: ORCA's Hessian-positive-definiteness wording (the classic OptTS failure:
+#: the surface is not a genuine first-order saddle).  Checked after the
+#: geometry/max-iteration families so an early Hessian *warning* cannot mask a
+#: terminal "has not converged" message.
+_HESSIAN_NOT_POSITIVE_DEFINITE_PATTERNS = [
+    "hessian is not positive definite",
+    "not positive definite",
+    "positive definite",
+]
+#: Explicit iteration-cap wording.  ORCA prints these *instead of* "the
+#: optimization has not converged" when it stops at ``MaxIter``/``MaxCycles``.
+_OPT_MAXITER_PATTERNS = [
+    "too many iterations",
+    "maximum number of optimization cycles",
+    "maximum number of iterations reached",
+    "number of optimization cycles exceeded",
+]
+#: Generic convergence-failure wording.  Deliberately checked AFTER the SCF and
+#: geometry families (and after the SCF-iterations heuristic) so the existing
+#: classes keep their meaning; "SCF NOT CONVERGED" therefore stays
+#: ``scf_failure`` even though it also reads as "not converged".
+_GENERIC_CONVERGENCE_PATTERNS = [
+    "convergence failure",
+    "did not converge",
+    "not converged",
+    "aborting the optimization",
+    "aborting the run",
+]
+#: Terminal markers ORCA prints at the very end of the run.
+_ERROR_TERMINATION_MARKERS = ("error termination",)
+_NORMAL_TERMINATION_MARKERS = ("terminated normally",)
+_ABORTED_MARKERS = ("aborting",)
+
+#: Characters of the output tail that failure details are read from.
+_FAILURE_TAIL_CHARS = 80_000
+#: A failure summary lists at most this many printed reason lines.
+_REASON_LINE_LIMIT = 5
+_REASON_LINE_MAX_CHARS = 200
+#: ``error_message`` summary bound (plan 三.3: "≤200 chars, no absolute paths").
+_FAILURE_SUMMARY_MAX_CHARS = 200
+
+#: Printed lines that describe *why* a run failed (case-insensitive).
+_REASON_LINE_KEYWORDS: tuple[str, ...] = (
+    "error",
+    "fail",
+    "not converg",
+    "did not converg",
+    "convergence failure",
+    "positive definite",
+    "too many iteration",
+    "maximum number",
+    "cycle limit",
+    "abort",
+    "terminat",
+    "timelimit",
+    "time limit",
+    "cannot",
+    "unable",
+    "invalid",
+    "not found",
+)
+
+#: Short, class-owned phrases used when no printed reason line survives the
+#: message-safety filter.  Each is written so the legacy downstream
+#: ``derive_failure_type`` token scan (``src/cccp/calculation/tasks/optimize.py``)
+#: cannot misroute the rescue chain (no bare "scf"/"imaginary"/"timeout").
+_CLASS_SUMMARY: dict[str, str] = {
+    "scf_failure": "SCF did not converge",
+    "scf_not_converged": "SCF did not converge",
+    "geometry_not_converged": "geometry not converged",
+    "hessian_not_positive_definite": "Hessian is not positive definite",
+    "opt_maxiter": "optimization reached its cycle limit",
+    "memory_failure": "ORCA could not allocate memory",
+    "crash_timeout": "ORCA process crashed or timed out",
+    "error_termination": "ORCA terminated with an error; see failure_details.reason_lines",
+}
+#: Substrings that must not leak into ``error_message`` unless the class owns
+#: them: the downstream rescue classifier scans the message text for these.
+_MESSAGE_UNSAFE_SUBSTRINGS: tuple[str, ...] = (
+    "scf",
+    "imaginary",
+    "no negative",
+    "timeout",
+    "timed out",
+    "time out",
+    "collapsed",
+    "higher order",
+    "multiple imaginary",
+)
+
+#: An absolute POSIX path token (not preceded by a word/dot so "and/or",
+#: "E/D" and "0.0/1.0" survive).  Host paths never reach an agent-facing
+#: message: only the basename is kept.
+_ABS_PATH_TOKEN_RE = re.compile(r"(?<![\w.~])/(?:[\w.+-]+/)*[\w.+-]+")
+_HOME_PATH_TOKEN_RE = re.compile(r"~[/\\](?:[\w.+-]+[/\\])*[\w.+-]+")
+_WINDOWS_PATH_TOKEN_RE = re.compile(r"\b[A-Za-z]:\\(?:[^\s\\]+\\)*[^\s\\]+")
 
 
-def classify_orca_failure(output_path: Path) -> str:
-    """Classify an ORCA failure mode from the output file.
-
-    Reads the tail of *output_path* and returns one of:
-    ``"scf_failure"``, ``"geometry_not_converged"``, ``"memory_failure"``,
-    ``"crash_timeout"``, or ``"unknown"``.
-    """
+def _read_failure_tail(output_path: Path) -> str | None:
+    """Return the tail of an ORCA output file, or ``None`` when unreadable."""
     try:
-        output_path = Path(output_path)
-        if not output_path.is_file():
-            return "unknown"
-        text = output_path.read_text(encoding="utf-8", errors="replace")
-        tail_lines = text[-80_000:].splitlines()
+        path = Path(output_path)
+        if not path.is_file():
+            return None
+        text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
-        return "unknown"
+        return None
+    return text[-_FAILURE_TAIL_CHARS:]
 
-    tail_text = "\n".join(tail_lines)
-    tail_lower = tail_text.lower()
+
+def _classify_failure_text(tail: str) -> str:
+    """Classify one ORCA output *tail* (already truncated by the caller)."""
+    tail_lower = tail.lower()
 
     for pat in _MEMORY_FAILURE_PATTERNS:
         if pat in tail_lower:
@@ -127,6 +236,10 @@ def classify_orca_failure(output_path: Path) -> str:
         if pat.lower() in tail_lower:
             return "geometry_not_converged"
 
+    for pat in _OPT_MAXITER_PATTERNS:
+        if pat in tail_lower:
+            return "opt_maxiter"
+
     for pat in _SCF_FAILURE_PATTERNS:
         if pat.lower() in tail_lower:
             return "scf_failure"
@@ -134,7 +247,218 @@ def classify_orca_failure(output_path: Path) -> str:
     if "scf iterations" in tail_lower and "scf converged" not in tail_lower:
         return "scf_failure"
 
+    for pat in _SCF_NOT_CONVERGED_PATTERNS:
+        if pat in tail_lower:
+            return "scf_not_converged"
+
+    for pat in _HESSIAN_NOT_POSITIVE_DEFINITE_PATTERNS:
+        if pat in tail_lower:
+            return "hessian_not_positive_definite"
+
+    for pat in _GENERIC_CONVERGENCE_PATTERNS:
+        if pat in tail_lower:
+            return "geometry_not_converged"
+
+    for marker in _ERROR_TERMINATION_MARKERS:
+        if marker in tail_lower:
+            return "error_termination"
+
     return "unknown"
+
+
+def classify_orca_failure(output_path: Path) -> str:
+    """Classify an ORCA failure mode from the output file.
+
+    Reads the tail of *output_path* and returns one of:
+    ``"scf_failure"`` / ``"scf_not_converged"`` (the legacy SCF wording keeps
+    the historical token), ``"geometry_not_converged"``, ``"opt_maxiter"``,
+    ``"hessian_not_positive_definite"``, ``"memory_failure"``,
+    ``"error_termination"`` or ``"unknown"``.
+
+    The vocabulary is additive: every previously returned class keeps its
+    meaning, and ``"unknown"`` is still reported when the tail carries no
+    recognizable ORCA wording (an honest unknown is better than a guess).
+    """
+    tail = _read_failure_tail(output_path)
+    if tail is None:
+        return "unknown"
+    return _classify_failure_text(tail)
+
+
+def _redact_host_paths(text: str) -> str:
+    """Replace absolute POSIX/Windows/home path tokens with their basename."""
+
+    def _basename(match: re.Match[str]) -> str:
+        raw = match.group(0).replace("\\", "/").rstrip("/")
+        name = raw.rsplit("/", 1)[-1]
+        return name or "<path>"
+
+    for pattern in (_WINDOWS_PATH_TOKEN_RE, _HOME_PATH_TOKEN_RE, _ABS_PATH_TOKEN_RE):
+        text = pattern.sub(_basename, text)
+    return text
+
+
+def _reason_lines(tail: str) -> list[str]:
+    """Return up to :data:`_REASON_LINE_LIMIT` printed failure lines (redacted)."""
+    lines: list[str] = []
+    for raw in reversed(tail.splitlines()):
+        line = raw.strip()
+        if not line or set(line) <= {"-", "*", "=", "_", " "}:
+            continue
+        lowered = line.lower()
+        if not any(keyword in lowered for keyword in _REASON_LINE_KEYWORDS):
+            continue
+        cleaned = _redact_host_paths(line)
+        if len(cleaned) > _REASON_LINE_MAX_CHARS:
+            cleaned = cleaned[: _REASON_LINE_MAX_CHARS - 1].rstrip() + "…"
+        lines.append(cleaned)
+        if len(lines) >= _REASON_LINE_LIMIT:
+            break
+    lines.reverse()
+    return lines
+
+
+_SCF_CYCLES_RE = re.compile(
+    r"SCF\s+(?:NOT\s+)?CONVERGED\s+AFTER\s+(\d+)\s+(?:CYCLES|ITERATIONS)", re.IGNORECASE
+)
+_OPT_CYCLE_RE = re.compile(r"(?:GEOMETRY\s+)?OPTIMIZATION\s+CYCLE\s+(\d+)", re.IGNORECASE)
+_IMAGINARY_MODE_RE = re.compile(r"\*+\s*imaginary mode", re.IGNORECASE)
+_IMAGINARY_COUNT_RE = re.compile(
+    r"(\d+)\s+(?:negative eigenvalues?|imaginary frequencies?)", re.IGNORECASE
+)
+_VIBRATIONAL_HEADER = "VIBRATIONAL FREQUENCIES"
+
+
+def _scf_cycle_count(tail: str) -> int | None:
+    """SCF cycles ORCA printed for its last SCF block (``None`` when absent)."""
+    matches = _SCF_CYCLES_RE.findall(tail)
+    return int(matches[-1]) if matches else None
+
+
+def _opt_cycle_count(tail: str) -> int | None:
+    """Highest ``GEOMETRY OPTIMIZATION CYCLE n`` printed (``None`` when absent)."""
+    cycles = [int(match) for match in _OPT_CYCLE_RE.findall(tail)]
+    return max(cycles) if cycles else None
+
+
+def _imaginary_mode_count(tail: str) -> int | None:
+    """Imaginary modes in the *last* printed vibrational block.
+
+    Counts ORCA's ``***imaginary mode***`` markers so a real 0 is reported as
+    0; when the log carries no vibrational block the count is unknown
+    (``None``), never defaulted.
+    """
+    index = tail.upper().rfind(_VIBRATIONAL_HEADER)
+    if index >= 0:
+        return len(_IMAGINARY_MODE_RE.findall(tail[index:]))
+    match = _IMAGINARY_COUNT_RE.search(tail)
+    return int(match.group(1)) if match else None
+
+
+def _terminal_state(tail_lower: str) -> str | None:
+    """ORCA's terminal marker: ``error_termination`` / ``aborted`` / ``normal``."""
+    if any(marker in tail_lower for marker in _ERROR_TERMINATION_MARKERS):
+        return "error_termination"
+    if any(marker in tail_lower for marker in _ABORTED_MARKERS):
+        return "aborted"
+    if any(marker in tail_lower for marker in _NORMAL_TERMINATION_MARKERS):
+        return "normal"
+    return None
+
+
+def _failure_details(output_text: str) -> dict[str, Any]:
+    """Extract actionable failure facts from an ORCA output tail.
+
+    Returns the structure published as ``metadata["failure_details"]`` so an
+    agent can answer "what failed" without grepping the log:
+
+    * ``reason_lines`` — up to five printed lines that state the failure,
+      host paths reduced to basenames;
+    * ``scf_cycles`` / ``opt_cycles`` — printed cycle counters (``None`` when
+      the output never printed them);
+    * ``imaginary_count`` — imaginary modes in the last vibrational block
+      (``None`` when no block was printed; 0 is a real value);
+    * ``terminal`` — ``"error_termination"`` / ``"aborted"`` / ``"normal"`` /
+      ``None`` when no terminal marker was printed.
+
+    Nothing is inferred: a missing counter stays ``None``.
+    """
+    tail = str(output_text or "")[-_FAILURE_TAIL_CHARS:]
+    return {
+        "reason_lines": _reason_lines(tail),
+        "scf_cycles": _scf_cycle_count(tail),
+        "opt_cycles": _opt_cycle_count(tail),
+        "imaginary_count": _imaginary_mode_count(tail),
+        "terminal": _terminal_state(tail.lower()),
+    }
+
+
+def _failure_details_from_output(output_path: Path) -> dict[str, Any]:
+    """``_failure_details`` over a file's tail (empty facts when unreadable)."""
+    tail = _read_failure_tail(output_path)
+    if tail is None:
+        return {
+            "reason_lines": [],
+            "scf_cycles": None,
+            "opt_cycles": None,
+            "imaginary_count": None,
+            "terminal": None,
+        }
+    return _failure_details(tail)
+
+
+def _message_reason_lines(failure_class: str, details: dict[str, Any]) -> list[str]:
+    """Printed reason lines safe to put in ``error_message``.
+
+    ``src/cccp/calculation/tasks/optimize.py`` derives the rescue chain from
+    the message token scan, so a line carrying a token owned by another
+    failure family (e.g. ``SCF`` in a Hessian failure) would misroute the
+    rescue plan.  Unsafe lines stay in ``failure_details.reason_lines``.
+    """
+    kept: list[str] = []
+    for line in details.get("reason_lines") or []:
+        lowered = line.lower()
+        unsafe = False
+        for token in _MESSAGE_UNSAFE_SUBSTRINGS:
+            if token not in lowered:
+                continue
+            if token == "scf" and failure_class.startswith("scf"):
+                continue
+            unsafe = True
+            break
+        if not unsafe:
+            kept.append(line)
+    return kept
+
+
+def _failure_summary(failure_class: str, details: dict[str, Any]) -> str:
+    """Build the ``≤200 chars`` summary appended to a failure message."""
+    parts = list(_message_reason_lines(failure_class, details)[-2:])
+    if not parts:
+        curated = _CLASS_SUMMARY.get(failure_class)
+        if curated:
+            parts.append(curated)
+    if details.get("terminal"):
+        parts.append(f"terminal={details['terminal']}")
+    if details.get("opt_cycles") is not None:
+        parts.append(f"opt_cycles={details['opt_cycles']}")
+    if details.get("imaginary_count") is not None:
+        # Deliberately NOT the word "imaginary": the downstream rescue
+        # classifier maps that token to a different failure family.
+        parts.append(f"nimag={details['imaginary_count']}")
+    if failure_class.startswith("scf") and details.get("scf_cycles") is not None:
+        parts.append(f"scf_cycles={details['scf_cycles']}")
+    summary = "; ".join(part.strip() for part in parts if part and part.strip())
+    if len(summary) > _FAILURE_SUMMARY_MAX_CHARS:
+        summary = summary[: _FAILURE_SUMMARY_MAX_CHARS - 1].rstrip() + "…"
+    return summary
+
+
+def _failure_message(prefix: str, failure_class: str, details: dict[str, Any]) -> str:
+    """``<prefix> [<class>]: <summary>`` — no suffix when there is nothing to say."""
+    message = f"{prefix} [{failure_class}]"
+    summary = _failure_summary(failure_class, details)
+    return f"{message}: {summary}" if summary else message
 
 
 def _resolve_method_meta(method: str | None) -> dict[str, Any] | None:
@@ -720,9 +1044,194 @@ def _with_spin_metadata(metadata: dict[str, Any] | None, output_file: Path) -> d
     return merged
 
 
+# ── energy reporting (round-7 #7d) ──────────────────────────────────────
+#
+# A DLPNO-CCSD(T) output carries several energies that differ by hundreds of
+# kcal/mol: ``E(0)`` (the SCF *reference* energy), ``E(TOT)`` (CCSD total),
+# ``E(T)`` (perturbative-triples correction) and the final
+# ``FINAL SINGLE POINT ENERGY`` (the CCSD(T) total).  The result energy is the
+# final single-point energy and nothing else; the three DLPNO numbers are
+# reported as labelled metadata so a reader can audit the decomposition.  The
+# SCF reference can never be parsed as the correlated result.
+
+#: The single ``FINAL SINGLE POINT ENERGY`` line regex (also used by the CASSCF
+#: parser below).
+_FINAL_SINGLE_POINT_ENERGY_RE = re.compile(
+    r"FINAL SINGLE POINT ENERGY\s+([-+]?\d+\.\d+)"
+)
+_DLPNO_ENERGY_LINE_RE = re.compile(
+    r"^\s*(?P<key>E\(0\)|E\(TOT\)|E\(T\))(?=[\s.])[^\d\-+]*"
+    r"(?P<value>[-+]?\d+\.\d+)\s*$",
+    re.MULTILINE,
+)
+
+#: Tolerance used to decide whether the final single-point energy is the SCF
+#: reference (the broken-shape guard) or the correlated total.
+_ENERGY_MATCH_TOL = 1e-6
+
+E0_LABEL = "SCF reference energy (E(0))"
+E_TOT_LABEL = "CCSD total energy (E(TOT))"
+E_T_LABEL = "perturbative triples correction (E(T))"
+
+
+@dataclass(frozen=True)
+class OrcaEnergyReport:
+    """Named ORCA energy decomposition; ``result_hartree`` is the answer.
+
+    Attributes:
+        result_hartree: The reported molecule energy — the final
+            ``FINAL SINGLE POINT ENERGY`` (the DLPNO-CCSD(T)/SCF total).
+        result_source: Which printed field ``result_hartree`` came from:
+            ``final_single_point_energy`` or the explicit
+            ``e_tot_plus_e_t`` guard fallback.
+        result_label: Human-readable label of the reported value.
+        final_single_point_energy_hartree: Raw last
+            ``FINAL SINGLE POINT ENERGY`` (kept even when the guard rejects it).
+        scf_reference_hartree: ``E(0)`` — the SCF reference, never the result.
+        e0_hartree / e_tot_hartree / e_t_hartree: DLPNO numbers as printed.
+        dlpno_detected: Whether a DLPNO energy decomposition was found.
+        consistency: ``"final_matches_scf_reference"`` when the final value is
+            the SCF energy and the guard had to act; ``""`` otherwise.
+    """
+
+    result_hartree: float | None = None
+    result_source: str = "final_single_point_energy"
+    result_label: str = ""
+    final_single_point_energy_hartree: float | None = None
+    scf_reference_hartree: float | None = None
+    e0_hartree: float | None = None
+    e_tot_hartree: float | None = None
+    e_t_hartree: float | None = None
+    dlpno_detected: bool = False
+    consistency: str = ""
+
+    def to_metadata(self) -> dict[str, Any]:
+        """JSON-safe metadata block (labels travel with every number)."""
+        return {
+            "result_energy_hartree": self.result_hartree,
+            "result_energy_label": self.result_label,
+            "result_energy_source": self.result_source,
+            "final_single_point_energy_hartree": (
+                self.final_single_point_energy_hartree
+            ),
+            "scf_reference_hartree": self.scf_reference_hartree,
+            "scf_reference_label": E0_LABEL if self.e0_hartree is not None else None,
+            "e0_hartree": self.e0_hartree,
+            "e0_label": E0_LABEL if self.e0_hartree is not None else None,
+            "e_tot_hartree": self.e_tot_hartree,
+            "e_tot_label": E_TOT_LABEL if self.e_tot_hartree is not None else None,
+            "e_t_hartree": self.e_t_hartree,
+            "e_t_label": E_T_LABEL if self.e_t_hartree is not None else None,
+            "dlpno_detected": self.dlpno_detected,
+            "consistency": self.consistency,
+        }
+
+
+def _is_dlpno_method(method: str | None) -> bool:
+    return "dlpno" in str(method or "").lower()
+
+
+def parse_energy_report(text: str | None, *, method: str | None = None) -> OrcaEnergyReport:
+    """Parse the named energy decomposition out of one ORCA output text.
+
+    The reported result is the *last* ``FINAL SINGLE POINT ENERGY`` — the
+    correlated DLPNO-CCSD(T) total for a DLPNO run, the SCF energy otherwise.
+
+    Broken-shape guard: when a DLPNO decomposition is present but the final
+    single-point energy equals ``E(0)`` (ORCA printed no post-correlation
+    total), reporting it as the DLPNO result would be exactly the "SCF
+    reference labelled as CCSD(T)" defect.  In that case the result falls back
+    to ``E(TOT)+E(T)`` (the CCSD(T) total by definition) with an explicit
+    derived label; with no triples correction available the result is ``None``
+    (the task then fails rather than reporting the wrong energy).
+    """
+    body = text or ""
+    final: float | None = None
+    for match in _FINAL_SINGLE_POINT_ENERGY_RE.finditer(body):
+        final = float(match.group(1))
+
+    dlpno: dict[str, float] = {}
+    for match in _DLPNO_ENERGY_LINE_RE.finditer(body):
+        dlpno[match.group("key")] = float(match.group("value"))
+
+    e0 = dlpno.get("E(0)")
+    e_tot = dlpno.get("E(TOT)")
+    e_t = dlpno.get("E(T)")
+    detected = bool(dlpno)
+
+    def _report(
+        result: float | None,
+        *,
+        source: str,
+        label: str,
+        consistency: str = "",
+    ) -> OrcaEnergyReport:
+        return OrcaEnergyReport(
+            result_hartree=result,
+            result_source=source,
+            result_label=label,
+            final_single_point_energy_hartree=final,
+            scf_reference_hartree=e0,
+            e0_hartree=e0,
+            e_tot_hartree=e_tot,
+            e_t_hartree=e_t,
+            dlpno_detected=detected,
+            consistency=consistency,
+        )
+
+    if final is None:
+        return _report(None, source="final_single_point_energy", label="")
+
+    dlpno_like = detected or _is_dlpno_method(method)
+    if dlpno_like:
+        reference_like = (
+            e0 is not None and abs(final - e0) <= _ENERGY_MATCH_TOL
+        )
+        correlated_present = e_tot is not None and abs(e_tot - final) > _ENERGY_MATCH_TOL
+        if reference_like and correlated_present:
+            if e_t is not None:
+                return _report(
+                    e_tot + e_t,
+                    source="e_tot_plus_e_t",
+                    label=(
+                        "DLPNO-CCSD(T) total (E(TOT)+E(T)); the final single-point "
+                        "energy equals the SCF reference E(0) and is NOT used"
+                    ),
+                    consistency="final_matches_scf_reference",
+                )
+            return _report(
+                None,
+                source="unresolved",
+                label=(
+                    "DLPNO correlation present but FINAL SINGLE POINT ENERGY equals "
+                    "the SCF reference E(0); refusing to report it as CCSD(T)"
+                ),
+                consistency="final_matches_scf_reference",
+            )
+        label = "DLPNO-CCSD(T) total (FINAL SINGLE POINT ENERGY)"
+        if _is_dlpno_method(method) and not detected:
+            label = "DLPNO result (FINAL SINGLE POINT ENERGY)"
+        return _report(final, source="final_single_point_energy", label=label)
+
+    return _report(
+        final,
+        source="final_single_point_energy",
+        label="single-point energy (FINAL SINGLE POINT ENERGY)",
+    )
+
+
+def energy_report_for(output_file: Path | str, *, method: str | None = None) -> OrcaEnergyReport:
+    """Read *output_file* and return its :class:`OrcaEnergyReport` (never raises)."""
+    try:
+        text = Path(output_file).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        text = ""
+    return parse_energy_report(text, method=method)
+
+
 # ── CASSCF / NEVPT2 parsing (design doc §11, §12.1) ─────────────────────
 
-_FINAL_ENERGY_RE = re.compile(r"FINAL SINGLE POINT ENERGY\s+([-+]?\d+\.\d+)")
+_FINAL_ENERGY_RE = _FINAL_SINGLE_POINT_ENERGY_RE
 _NATURAL_OCCUPATION_RE = re.compile(r"^\s*N\[\s*(\d+)\]\s*=\s*([-+]?\d+\.\d+)\s*$", re.MULTILINE)
 _NATURAL_OCCUPATION_HEADER_RE = re.compile(
     r"Natural Orbital Occupation Numbers\s*?:?", re.IGNORECASE
@@ -1228,11 +1737,19 @@ def _read_endpoint_geometry(
     endpoint_file: Path,
     expected_symbols: list[str],
 ) -> NDArray[np.float64] | None:
-    """Read an IRC endpoint XYZ and validate its atom ordering."""
+    """Read an IRC endpoint XYZ and validate it is exactly one finite frame.
+
+    Round-5 PR-02: the generic ``read_xyz`` reads the first frame of any file,
+    so a trajectory or a concatenated file could be reduced to its first frame
+    and then published as a formal endpoint.  Endpoint evidence requires the
+    strict single-frame reader; anything else is refused (never repaired).
+    """
+    from cccp.io.xyz_validation import SingleFrameXyzError, read_single_frame_xyz
+
     try:
-        coordinates, parsed_symbols = read_xyz(endpoint_file)
-    except OSError as e:
-        logger.warning("Failed to read IRC endpoint %s: %s", endpoint_file, e)
+        coordinates, parsed_symbols = read_single_frame_xyz(endpoint_file)
+    except (OSError, SingleFrameXyzError) as e:
+        logger.warning("Refusing IRC endpoint %s: %s", endpoint_file, e)
         return None
 
     if len(parsed_symbols) != len(expected_symbols):
@@ -1254,6 +1771,20 @@ def _read_endpoint_geometry(
         )
         return None
     return np.asarray(coordinates, dtype=float).reshape((-1, 3))
+
+
+def _software_error_metadata(error: SoftwareNotFoundError) -> dict[str, Any]:
+    """Structured params for a resolution refusal (``rule=backend_unavailable``).
+
+    ``resolve_executable``/``require_executable`` attach ``.params`` when a
+    candidate exists but is another program (the GNOME Orca screen reader at
+    ``/usr/bin/orca``).  Carrying them into ``QCResult.metadata`` lets the task
+    layer surface the typed reason instead of a generic "ORCA failed" string.
+    """
+    params = getattr(error, "params", None)
+    if isinstance(params, dict) and params:
+        return {"software_unavailable": dict(params)}
+    return {}
 
 
 class ORCAInterface(QCInterfaceBase):
@@ -1327,11 +1858,19 @@ class ORCAInterface(QCInterfaceBase):
         self.multiplicity = kwargs.get("multiplicity", 1)
 
     def _require_executable(self) -> str:
-        if self.executable is None:
-            raise SoftwareNotFoundError(
-                "ORCA executable not found. Add 'orca' to PATH or configure executables.orca.path."
-            )
-        return str(self.executable)
+        if self.executable is not None:
+            return str(self.executable)
+        # ``self.executable is None`` is authoritative for this interface: never
+        # re-resolve a runnable path here (that would let a later PATH change
+        # silently swap in a different binary and actually execute it).  Report
+        # the typed refusal when a candidate was rejected (GNOME Orca screen
+        # reader at /usr/bin/orca), otherwise the historical not-found error.
+        refusal = executable_refusal("orca", getattr(self, "exe_path", None))
+        if refusal is not None:
+            raise refusal
+        raise SoftwareNotFoundError(
+            "ORCA executable not found. Add 'orca' to PATH or configure executables.orca.path."
+        )
 
     def is_available(self) -> bool:
         return self.executable is not None
@@ -1455,6 +1994,18 @@ class ORCAInterface(QCInterfaceBase):
         meta = _resolve_method_meta(_method)
         basis_inline = True if meta is None else bool(meta.get("basis_inline", True))
 
+        # Round-7 #3: exactly ONE orbital basis may reach the ``!`` line.
+        # Identical duplicates (method string + basis field, or a duplicated
+        # route_extras token) are collapsed; two DISTINCT bases raise a typed
+        # ``rule=basis_conflict`` error instead of letting ORCA silently keep
+        # the last token.  The dedup set is built from the cleaned extras so a
+        # collapsed duplicate can never suppress the surviving basis token.
+        _route_basis = resolve_route_orbital_basis(
+            _method,
+            _basis if basis_inline else "",
+            _route_extras,
+        )
+        _route_extras = list(_route_basis.extras)
         _extras_upper = {str(x).upper() for x in _route_extras}
 
         _kw_family, _kw_implementation = orca_keyword_context(_method)
@@ -1639,10 +2190,17 @@ class ORCAInterface(QCInterfaceBase):
             # basis is a governed segment (T6): GFN-family values are
             # stripped with a warning by the renderer; an EMPTY basis keeps
             # its historical spacing slot (the `! B3LYP  Opt` double space).
-            _basis_segment: str | RouteKeyword = RouteKeyword("basis", _basis) if _basis else ""
+            # A basis already inlined in the method string is NOT emitted a
+            # second time (#3 duplicate collapse).
+            _basis_segments: list[str | RouteKeyword] = [_method]
+            if _route_basis.emit_field_basis and _basis:
+                _basis_segments.append(RouteKeyword("basis", _basis))
+            elif not _basis:
+                _basis_segments.append("")
+            _basis_segments.extend([route, *_route_segments])
             blocks.append(
                 render_route_line(
-                    [_method, _basis_segment, route, *_route_segments],
+                    _basis_segments,
                     context=(_kw_family, _kw_implementation),
                     seen=_extras_upper,
                 )
@@ -1687,6 +2245,16 @@ class ORCAInterface(QCInterfaceBase):
                         final_aux_j = blk["auxJ"]
                     if "auxC" in blk:
                         final_aux_c = blk["auxC"]
+            for _aux_field, _aux_value in (
+                ("aux_j_basis", final_aux_j),
+                ("aux_c_basis", final_aux_c),
+            ):
+                # An orbital basis name in an aux slot would be silently used
+                # as a fitting basis by ORCA — refuse at construction time.
+                if _aux_value and is_orbital_basis(str(_aux_value)):
+                    raise AuxiliaryBasisError(
+                        field_name=_aux_field, token=str(_aux_value)
+                    )
             if final_aux_j:
                 blocks.append(f'  auxJ  "{final_aux_j}"')
             if final_aux_c:
@@ -2095,11 +2663,15 @@ class ORCAInterface(QCInterfaceBase):
 
         if not success:
             failure_class = classify_orca_failure(output_file)
+            failure_details = _failure_details_from_output(output_file)
             return QCResult(
                 success=False,
-                error_message=f"ORCA optimization failed [{failure_class}]",
+                error_message=_failure_message(
+                    "ORCA optimization failed", failure_class, failure_details
+                ),
                 output_file=input_file,
                 log_file=output_file,
+                metadata=_with_spin_metadata({"failure_details": failure_details}, output_file),
             )
 
         coords, syms, error = LogParser.extract_last_converged_coords(output_file, "orca")
@@ -2111,6 +2683,9 @@ class ORCAInterface(QCInterfaceBase):
                 error_message=error or "Could not extract coordinates",
                 output_file=input_file,
                 log_file=output_file,
+                metadata=_with_spin_metadata(
+                    {"failure_details": _failure_details_from_output(output_file)}, output_file
+                ),
             )
 
         return QCResult(
@@ -2183,17 +2758,20 @@ class ORCAInterface(QCInterfaceBase):
                 error_message=str(exc),
                 output_file=input_file,
                 log_file=output_file,
+                metadata=_software_error_metadata(exc),
             )
 
         if not success:
             failure_class = classify_orca_failure(output_file)
+            failure_details = _failure_details_from_output(output_file)
             return QCResult(
                 success=False,
-                error_message=(
-                    f"ORCA constrained optimization failed [{failure_class}]"
+                error_message=_failure_message(
+                    "ORCA constrained optimization failed", failure_class, failure_details
                 ),
                 output_file=input_file,
                 log_file=output_file,
+                metadata=_with_spin_metadata({"failure_details": failure_details}, output_file),
             )
 
         coords, syms, error = LogParser.extract_last_converged_coords(output_file, "orca")
@@ -2201,11 +2779,15 @@ class ORCAInterface(QCInterfaceBase):
 
         if coords is None:
             failure_class = classify_orca_failure(output_file)
+            failure_details = _failure_details_from_output(output_file)
             return QCResult(
                 success=False,
-                error_message=f"{error or 'Could not extract coordinates'} [{failure_class}]",
+                error_message=_failure_message(
+                    error or "Could not extract coordinates", failure_class, failure_details
+                ),
                 output_file=input_file,
                 log_file=output_file,
+                metadata=_with_spin_metadata({"failure_details": failure_details}, output_file),
             )
 
         return QCResult(
@@ -2827,14 +3409,22 @@ class ORCAInterface(QCInterfaceBase):
                 log_file=output_file,
             )
 
-        energy = LogParser.extract_energy(output_file, "orca")
+        # #7d: the reported molecule energy is the FINAL SINGLE POINT ENERGY
+        # (the DLPNO-CCSD(T) total for a correlated run); E(0)/E(TOT)/E(T)
+        # travel as labelled metadata and the SCF reference is never the
+        # reported result.
+        _energy_method = method if method is not None else self.method
+        energy_report = energy_report_for(output_file, method=_energy_method)
+        energy = energy_report.result_hartree
+        energy_metadata = {"energy_report": energy_report.to_metadata()}
 
         if energy is None:
             return QCResult(
                 success=False,
-                error_message="Could not extract energy",
+                error_message=energy_report.result_label or "Could not extract energy",
                 output_file=input_file,
                 log_file=output_file,
+                metadata=_with_spin_metadata(energy_metadata, output_file),
             )
 
         return QCResult(
@@ -2845,7 +3435,7 @@ class ORCAInterface(QCInterfaceBase):
             converged=True,
             output_file=input_file,
             log_file=output_file,
-            metadata=_with_spin_metadata(None, output_file),
+            metadata=_with_spin_metadata(energy_metadata, output_file),
         )
 
     def frequency(
@@ -3090,6 +3680,7 @@ class ORCAInterface(QCInterfaceBase):
                 error_message=str(exc),
                 output_file=input_file,
                 log_file=output_file,
+                metadata=_software_error_metadata(exc),
             )
         if not success:
             return QCResult(
@@ -3415,11 +4006,15 @@ class ORCAInterface(QCInterfaceBase):
 
         if not success:
             failure_class = classify_orca_failure(output_file)
+            failure_details = _failure_details_from_output(output_file)
             return TsOptResult(
                 success=False,
-                error_message=f"ORCA transition-state optimization failed [{failure_class}]",
+                error_message=_failure_message(
+                    "ORCA transition-state optimization failed", failure_class, failure_details
+                ),
                 output_file=input_file,
                 log_file=output_file,
+                metadata=_with_spin_metadata({"failure_details": failure_details}, output_file),
             )
 
         output_text = output_file.read_text(encoding="utf-8", errors="replace")
@@ -3438,6 +4033,25 @@ class ORCAInterface(QCInterfaceBase):
         if negative_pairs:
             most_negative_mode_index, _ = min(negative_pairs, key=lambda item: item[1])
             mode_vector = mode_vectors.get(most_negative_mode_index)
+
+        if coords is None:
+            # ORCA exited normally but printed no converged geometry: say what
+            # the log does carry instead of returning an empty error message.
+            failure_class = classify_orca_failure(output_file)
+            failure_details = _failure_details(output_text)
+            return TsOptResult(
+                success=False,
+                error_message=_failure_message(
+                    "ORCA transition-state optimization failed", failure_class, failure_details
+                ),
+                energy_hartree=energy,
+                output_file=input_file,
+                log_file=output_file,
+                metadata={
+                    "failure_details": failure_details,
+                    "frequency_validation": calculate_frequencies,
+                },
+            )
 
         return TsOptResult(
             success=coords is not None,
@@ -3492,6 +4106,12 @@ class ORCAInterface(QCInterfaceBase):
             :class:`IrcResult` with endpoint paths and step counts.
         """
         output_dir = Path(output_dir) if output_dir else Path.cwd()
+        for unsupported in ("step", "initial_hessian"):
+            if unsupported in kwargs:
+                raise ValueError(
+                    f"ORCA IRC does not support the legacy '{unsupported}' control "
+                    "(no validated mapping); remove it before running"
+                )
         ensure_dir(output_dir)
 
         input_file = output_dir / f"{output_name}.inp"

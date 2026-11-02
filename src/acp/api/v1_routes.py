@@ -17,7 +17,7 @@ import re
 import sqlite3
 import threading
 import urllib.parse
-from collections import Counter, OrderedDict
+from collections import OrderedDict
 from collections.abc import Callable, Mapping
 from copy import deepcopy
 from dataclasses import replace
@@ -126,6 +126,7 @@ from acp.api.v1_schemas import (
     PesReviewBackupSummary,
     PesReviewCandidate,
     PesReviewRequest,
+    SelectionAuthorizationCreateRequest,
     PesReviewResponse,
     PesReviewRestoreRequest,
     PesReviewRestoreResponse,
@@ -273,6 +274,7 @@ from acp.scheduler.structure_sources import StructureSourceService
 from acp.scheduler.tasks import resolve_task_names
 from acp.storage.layout import runtime_file
 from acp_services.contracts.access import AccessAction as _AccessAction
+from acp_services.entrypoints.mcp import STATUS_GROUPS, TASK_STATE_VOCABULARY
 from acp_services.runtime.idempotency import (
     IdempotencyConflictError,
     IdempotencyInProgressError,
@@ -1112,8 +1114,87 @@ def _model_payload(model: Any) -> dict[str, Any]:
     return model.dict(exclude_none=True)
 
 
+#: A project-scoped count pass reads at most this many rows (no unbounded scan).
+_COUNTS_SCAN_LIMIT = 5000
+
+
 def _counts_for_records(records: list[JobRecord]) -> dict[str, int]:
-    return dict(Counter(record.status.value for record in records))
+    """Count *records* by state, always returning the full ten-key vocabulary."""
+    counts = {state: 0 for state in TASK_STATE_VOCABULARY}
+    for record in records:
+        state = record.status.value
+        counts[state] = counts.get(state, 0) + 1
+    return counts
+
+
+def _scoped_counts(store: Any, project_id: str | None) -> dict[str, int]:
+    """Pre-filter task counts for one scope (round-8 K5).
+
+    Computed **before** the ``status``/``status_group`` filter so an empty page
+    still explains the whole scope ("0 running of 12").  The unscoped case uses
+    the store's exact ``counts()``; a project scope uses one bounded read (the
+    store has no project-scoped count helper) rather than a per-status query.
+    """
+    if project_id is None:
+        counts = dict(store.counts())
+    else:
+        counts = _counts_for_records(store.list(project_id=project_id, limit=_COUNTS_SCAN_LIMIT))
+    for state in TASK_STATE_VOCABULARY:
+        counts.setdefault(state, 0)
+    return counts
+
+
+def _validate_job_status_query(
+    status: str | None, status_group: str | None
+) -> tuple[str | None, str | None]:
+    """Validate the exact-state and family filters (typed 422 with ``allowed``)."""
+    if status is not None and status not in TASK_STATE_VOCABULARY:
+        raise _command_error(
+            422,
+            "input_invalid",
+            f"unknown task state {status!r}",
+            params={
+                "field": "status",
+                "rule": "invalid_enum",
+                "allowed": list(TASK_STATE_VOCABULARY),
+                "hint": "use status_group for a family (active/terminal/running_now)",
+            },
+        )
+    if status_group is not None and status_group not in STATUS_GROUPS:
+        raise _command_error(
+            422,
+            "input_invalid",
+            f"unknown status_group {status_group!r}",
+            params={
+                "field": "status_group",
+                "rule": "invalid_enum",
+                "allowed": list(STATUS_GROUPS),
+            },
+        )
+    if status is not None and status_group is not None:
+        raise _command_error(
+            422,
+            "input_invalid",
+            "status and status_group are mutually exclusive",
+            params={
+                "field": "status_group",
+                "rule": "mutually_exclusive",
+                "conflicts_with": "status",
+            },
+        )
+    return status, status_group
+
+
+def _match_job_filter(
+    record: JobRecord, status: str | None, status_group: str | None
+) -> bool:
+    """One in-memory filter for both the exact state and its family."""
+    state = record.status.value
+    if status is not None:
+        return state == status
+    if status_group is not None:
+        return state in STATUS_GROUPS[status_group]
+    return True
 
 
 def _utc_now_iso() -> str:
@@ -1563,19 +1644,24 @@ def list_project_jobs(
     project_id: str,
     request: Request,
     status: str | None = Query(default=None),
+    status_group: str | None = Query(default=None),
     limit: int = Query(default=200, ge=1, le=1000),
 ) -> V1JobListResponse:
+    """List one project's tasks (same K5 filter/count semantics as ``/jobs``)."""
     _require_project_scope(request, project_id)
     manager = _manager(request)
     project = manager.projects.get_project(project_id)
     if project is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    status, status_group = _validate_job_status_query(status, status_group)
     records = manager.list_jobs_by_project(project_id, limit=limit)
-    if status is not None:
-        records = [record for record in records if record.status.value == status]
+    counts = _counts_for_records(records)
+    records = [
+        record for record in records if _match_job_filter(record, status, status_group)
+    ]
     return V1JobListResponse(
         jobs=[_record_to_v1_model(record) for record in records],
-        counts=_counts_for_records(records),
+        counts=counts,
     )
 
 
@@ -1781,9 +1867,21 @@ def _prepare_bond_scan_input(
     selection = inp.get("selection")
     protocol = inp.get("protocol")
     if not isinstance(coordinate, dict) or not coordinate.get("atoms"):
-        raise HTTPException(
-            status_code=422, detail="bond_length_scan requires coordinate with atoms"
-        )
+        # coordinates-only submissions are allowed (round-5); the shared
+        # normalization already verified coordinate == coordinates[0] when both
+        # are present, so the primary is simply coordinates[0].
+        if (
+            isinstance(coordinates, list)
+            and coordinates
+            and isinstance(coordinates[0], dict)
+            and coordinates[0].get("atoms")
+        ):
+            coordinate = coordinates[0]
+        else:
+            raise HTTPException(
+                status_code=422,
+                detail="bond_length_scan requires coordinate (or coordinates) with atoms",
+            )
     if not isinstance(protocol, dict):
         scan_request = inp.get("scan_request")
         inherited = scan_request.get("protocol") if isinstance(scan_request, dict) else None
@@ -1854,6 +1952,113 @@ def _persist_method_warning_event(
         )
     except Exception:
         logger.debug("method_validation_warning event append failed", exc_info=True)
+
+
+def _validate_batch_cardinality(inp: dict[str, Any]) -> None:
+    """Refuse a multi-structure Batch submission before any side effect (PR-08).
+
+    The single_flat layout is one scheduler task per selected structure; the old
+    behaviour only surfaced the split after submit.  *actual* is the count after
+    source resolution (inline items or a manifest expansion), never the
+    pre-expansion request shape.
+    """
+    actual: int | None = None
+    items = inp.get("items")
+    if isinstance(items, list) and items:
+        actual = len(items)
+    else:
+        manifest = inp.get("from") or inp.get("manifest_path")
+        if not (isinstance(manifest, str) and manifest):
+            # The Batch field policy names the manifest source ``from_artifact``.
+            # Only an absolute path is resolved here; a relative path is resolved
+            # against the source job's work dir by the loader later, so this
+            # static check must not guess it (round-6 audit).
+            artifact = inp.get("from_artifact")
+            if isinstance(artifact, str) and artifact:
+                candidate = Path(artifact)
+                if candidate.is_absolute() and candidate.name == "result_manifest.json":
+                    manifest = str(candidate)
+        if not (isinstance(manifest, str) and manifest):
+            items_file = inp.get("items_file")
+            if isinstance(items_file, str) and items_file:
+                try:
+                    document = json.loads(Path(items_file).read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    document = None
+                entries = (
+                    document.get("items") or document.get("entries")
+                    if isinstance(document, dict)
+                    else None
+                )
+                if isinstance(entries, list):
+                    actual = len(entries)
+        if isinstance(manifest, str) and manifest:
+            manifest_path = Path(manifest)
+            if (
+                manifest_path.name == "result_manifest.json"
+                and manifest_path.parent.name == "RESULT"
+            ):
+                if not manifest_path.is_file():
+                    raise HTTPException(
+                        status_code=422,
+                        detail={
+                            "code": "input_invalid",
+                            "message": f"batch source manifest does not exist: {manifest}",
+                            "params": {
+                                "field": "input.from_artifact",
+                                "rule": "source_not_ready",
+                            },
+                        },
+                    )
+                root = manifest_path.parent.parent
+            else:
+                root = manifest_path
+            try:
+                from acp.calculations.batch.loaders import load_items_from_result_manifest
+
+                actual = len(load_items_from_result_manifest(root))
+            except (ValueError, OSError) as exc:
+                # An unresolved source (unconfirmed selection / unsettled
+                # publication) is a static refusal: preflight must not pass a
+                # manifest whose item count it cannot even resolve.
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "input_invalid",
+                        "message": str(exc),
+                        "params": {
+                            "field": "input.from_artifact",
+                            "rule": "source_not_ready",
+                        },
+                    },
+                ) from exc
+    if actual is None or actual == 1:
+        return
+    if actual == 0:
+        # An empty inline/items_file list is not a split; from_job or the
+        # normal resolution path decides the structure.  Only a confirmed
+        # multi-structure request is refused here.
+        return
+    raise HTTPException(
+        status_code=422,
+        detail={
+            "code": "input_invalid",
+            "message": (
+                "BatchOptimize accepts exactly one selected structure per scheduler "
+                "task (single_flat); split the request into one task per structure"
+            ),
+            "params": {
+                "field": "input.items",
+                "rule": "layout_limit",
+                "limit": 1,
+                "received": int(actual),
+                "hint": (
+                    "submit one BatchOptimize task per selected structure and keep "
+                    "the candidate source revision/role on each item"
+                ),
+            },
+        },
+    )
 
 
 def _resolve_batch_structures_input(
@@ -2637,15 +2842,44 @@ def _validate_scan_submission(workflow: str, method: dict[str, Any], inp: dict[s
     check for v1 and v2 (indices/finite range/points).  No-op for other
     workflows.
     """
-    if workflow != "scan":
+    if workflow not in ("scan", "PESsearch"):
         return
+    from acp.calculations.pes.normalization import (
+        CoordinateError,
+        normalize_pes_coordinates,
+    )
+
     try:
-        validate_scan_submission(workflow, method, inp)
+        if workflow == "PESsearch":
+            normalize_pes_coordinates(inp or {}, field_prefix="input")
+        else:
+            validate_scan_submission(workflow, method, inp)
+    except CoordinateError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "input_invalid",
+                "message": str(exc),
+                "params": exc.params,
+            },
+        ) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        params = getattr(exc, "params", None)
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "input_invalid",
+                "message": str(exc),
+                **({"params": dict(params)} if isinstance(params, dict) and params else {}),
+            },
+        ) from exc
 
 
 def _submit_idempotency_key(request: Request, req: V1JobCreateRequest) -> str | None:
+    import re
+
+    from acp_services.entrypoints.application_params import IDEMPOTENCY_KEY_PATTERN
+
     header_key = (request.headers.get("Idempotency-Key") or "").strip()
     body_key = (req.idempotency_key or "").strip()
     if header_key and body_key and header_key != body_key:
@@ -2657,6 +2891,23 @@ def _submit_idempotency_key(request: Request, req: V1JobCreateRequest) -> str | 
                 "params": {"field": "idempotency_key"},
             },
         )
+    for key in (header_key, body_key):
+        if key and re.fullmatch(IDEMPOTENCY_KEY_PATTERN, key) is None:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "input_invalid",
+                    "message": (
+                        "idempotency_key is malformed; use 8-128 chars of "
+                        "A-Za-z0-9._:()[]-"
+                    ),
+                    "params": {
+                        "field": "idempotency_key",
+                        "rule": "pattern",
+                        "pattern": IDEMPOTENCY_KEY_PATTERN,
+                    },
+                },
+            )
     return header_key or body_key or None
 
 
@@ -2707,6 +2958,24 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         )
     except SubmissionContractError as exc:
         raise _command_error(422, "input_invalid", str(exc), params=exc.params()) from exc
+    # Round-7 P1: submit runs the SAME read-only semantic analyzer as preflight so
+    # static refusals (basis_conflict / aux_basis_invalid / missing_role_mirror)
+    # agree on code/field/rule instead of only failing during rendering.
+    if req.workflow in ("BatchOptimize", "singlepoint"):
+        # Round-7: only the newly covered workflows need the submit-side
+        # analyzer for preflight parity; the older workflows keep their
+        # established submit envelopes (e.g. tsmode target_mode_invalid).
+        try:
+            from acp.calculations.submission_validation import analysis_for
+
+            analysis_for(req.workflow, raw_input or {}, req.method or {})
+        except ValueError as exc:
+            params = (
+                exc.params
+                if hasattr(exc, "params") and isinstance(getattr(exc, "params"), dict)
+                else {"field": "input", "rule": "invalid_parameter"}
+            )
+            raise _command_error(422, "input_invalid", str(exc), params=params) from exc
     try:
         validate_resource_request(req.resources or {})
     except ValueError as exc:
@@ -2769,6 +3038,7 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
     elif req.workflow == "BatchOptimize":
         req.input, resolved_batch_snapshots = _resolve_batch_structures_input(req.input, request)
         batch_snapshots.extend(resolved_batch_snapshots)
+        _validate_batch_cardinality(req.input)
     elif req.workflow == "tsmode":
         req.input = _prepare_tsmode_input(req.input, manager)
         bundle_level = req.input.pop("_bundle_level", None)
@@ -2962,19 +3232,39 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
 def list_jobs(
     request: Request,
     status: str | None = Query(default=None),
+    status_group: str | None = Query(default=None),
     workflow: str | None = Query(default=None),
     project_id: str | None = Query(default=None),
     limit: int = Query(default=200, ge=1, le=1000),
 ) -> V1JobListResponse:
+    """List tasks in scope.
+
+    Round-8 K5: ``status`` is the exact ten-value vocabulary (an unknown value
+    is 422 with ``allowed``), ``status_group`` (``active|terminal|running_now``)
+    is the mutually-exclusive family filter, and ``counts`` is computed
+    **before** either filter and always carries all ten state keys.
+    """
     store = _job_store(request)
     manager = _manager(request)
     project_id = _scoped_read_project(request, project_id)
+    status, status_group = _validate_job_status_query(status, status_group)
+    counts = _scoped_counts(store, project_id)
     if project_id:
         enriched = store.list_enriched(limit=limit, project_id=project_id)
-        if status is not None:
-            enriched = [item for item in enriched if item["record"].status.value == status]
     else:
+        # The exact-state filter stays in SQL (so LIMIT counts matching rows,
+        # not newest rows); only the family filter needs the in-memory pass.
         enriched = store.list_enriched(status=status, limit=limit)
+    if status_group is not None or project_id:
+        enriched = [
+            item
+            for item in enriched
+            if _match_job_filter(
+                item["record"],
+                status if project_id else None,
+                status_group,
+            )
+        ]
     if workflow:
         enriched = [item for item in enriched if item["record"].spec.workflow == workflow]
     jobs = []
@@ -2990,10 +3280,7 @@ def list_jobs(
         model = _enrich_job_snapshot(item["record"], model, include_event=False)
         model = _enrich_v1_with_names(model, name_map.get(item["record"].id))
         jobs.append(model)
-    return V1JobListResponse(
-        jobs=jobs,
-        counts=_counts_for_records([item["record"] for item in enriched]),
-    )
+    return V1JobListResponse(jobs=jobs, counts=counts)
 
 
 @router.get("/mechanism-studies", response_model=list[MechanismStudySummary])
@@ -3962,6 +4249,106 @@ def _stage_remote_review_backups(request: Request, job_id: str) -> None:
     )
 
 
+@router.get("/jobs/{job_id}/pes/review/status")
+def get_pes_review_status(job_id: str, request: Request) -> dict[str, Any]:
+    """Cache-only selection status (round-5 PR-07).
+
+    Never fetches the compute node, never prepares and never writes: a remote
+    job with nothing in the cache reports ``not_prepared`` plus the prepare
+    endpoint instead of a hidden fetch.  This is the read surface the MCP
+    ``acp_get_pes_review`` tool forwards to.
+    """
+    from acp.calculations.pes.publication import PUBLICATION_INTENT_RELATIVE_PATH
+    from acp.calculations.pes.review import load_pes_review, load_pes_review_backups
+
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    if str(record.spec.workflow or "") != "PESsearch":
+        raise HTTPException(status_code=400, detail=f"Not a PESsearch job: {job_id}")
+    remote = _is_remote_job(record)
+    if remote:
+        cache = _remote_structure_cache(request)
+        work_dir = Path(cache.job_root(record.id))
+    else:
+        work_dir = Path(record.work_dir)
+    payload: dict[str, Any] = {
+        "schema_version": "acp2.pes.selection-status.v1",
+        "job_id": job_id,
+        "workflow": "PESsearch",
+        "cache_only": True,
+        "remote": remote,
+        "capability": {
+            "autopublish": _selection_autopublish_enabled(),
+            "publish_endpoint": f"/api/v1/jobs/{job_id}/pes/review",
+            "prepare_endpoint": f"/api/v1/jobs/{job_id}/prepare",
+        },
+    }
+    review = load_pes_review(work_dir) if work_dir.is_dir() else None
+    intent = None
+    try:
+        store = getattr(request.app.state, "job_manager", None)
+        store = getattr(store, "store", None)
+        if store is not None and hasattr(store, "load_selection_publication"):
+            intent = store.load_selection_publication(job_id)
+    except Exception:  # a status read never fails on an optional receipt
+        intent = None
+    if review is None:
+        payload.update(
+            {
+                "status": "not_prepared" if remote else "pending",
+                "reason": (
+                    "selection artifacts are not in the local cache; prepare them"
+                    if remote
+                    else "no confirmed selection yet"
+                ),
+                "review": {},
+                "backups": [],
+                "publication": intent,
+            }
+        )
+        return payload
+    selected = review.get("selected") or []
+    payload.update(
+        {
+            "status": str(review.get("status") or "confirmed"),
+            "revision": int(review.get("revision") or 0),
+            "confirmed_at": review.get("confirmed_at"),
+            "selector": review.get("selector") or "manual",
+            "actor": review.get("actor"),
+            "authorization": review.get("authorization"),
+            "source": {
+                **(review.get("source") or {}),
+                "attempt": int(getattr(record, "attempt", 1) or 1),
+            },
+            "review": review,
+            "selected": [
+                {
+                    "candidate_id": row.get("candidate_id"),
+                    "role": row.get("role"),
+                    "frame_index": row.get("frame_index"),
+                    "structure_path": row.get("structure_path"),
+                    "selection_source": row.get("selection_source"),
+                }
+                for row in selected
+                if isinstance(row, dict)
+            ],
+            "backups": [
+                {
+                    "n": int(row.get("n") or 0),
+                    "confirmed_at": row.get("confirmed_at"),
+                    "selected_count": int(row.get("selected_count") or 0),
+                }
+                for row in load_pes_review_backups(work_dir)
+            ],
+            "publication": intent,
+            "publication_intent_path": f"RESULT/pes_search/{Path(PUBLICATION_INTENT_RELATIVE_PATH).name}",
+        }
+    )
+    return payload
+
+
 @router.get("/jobs/{job_id}/pes/review", response_model=PesReviewStateResponse)
 def get_pes_review(job_id: str, request: Request) -> PesReviewStateResponse:
     """Return the saved manual-review state plus backup rounds (``pending`` when never saved)."""
@@ -3983,6 +4370,225 @@ def get_pes_review(job_id: str, request: Request) -> PesReviewStateResponse:
     if review is None:
         return PesReviewStateResponse(job_id=job_id, status="pending", review={}, backups=backups)
     return PesReviewStateResponse(job_id=job_id, status="confirmed", review=review, backups=backups)
+
+
+def _selection_autopublish_enabled() -> bool:
+    """Whether the authorized-agent publication capability is enabled."""
+    import os
+
+    raw = str(os.environ.get("ACP_SELECTION_AUTOPUBLISH", "1")).strip().lower()
+    return raw not in {"0", "false", "off", "no"}
+
+
+def _server_source_digests(record: Any, candidates: list[dict[str, Any]]) -> tuple[str, str]:
+    """Profile/geometry digests computed from the task's own artifacts (PR-06)."""
+    import hashlib
+
+    from acp.calculations.pes.review import _resolve_frame_source
+
+    root = Path(str(getattr(record, "work_dir", "") or ""))
+    if not root.is_dir():
+        return "", ""
+    status_value = str(
+        getattr(getattr(record, "status", ""), "value", getattr(record, "status", ""))
+    ).upper()
+    try:
+        frame_source = _resolve_frame_source(root, task_status=status_value)
+    except Exception:  # an unreadable source is reported by the publish path
+        return "", ""
+    profile_digest = str(frame_source.data_sha256 or "")
+    geometry_parts: list[str] = []
+    for item in candidates:
+        try:
+            index = int(item.get("frame_index"))
+        except (TypeError, ValueError):
+            continue
+        frame = frame_source.frames_by_index.get(index)
+        if not isinstance(frame, Mapping):
+            continue
+        relative = str(frame.get(frame_source.geometry_key) or "")
+        if not relative:
+            continue
+        geometry_path = root / frame_source.geometry_base / relative
+        if geometry_path.is_file():
+            geometry_parts.append(hashlib.sha256(geometry_path.read_bytes()).hexdigest())
+    geometry_digest = (
+        hashlib.sha256("".join(sorted(geometry_parts)).encode()).hexdigest()
+        if geometry_parts
+        else ""
+    )
+    return profile_digest, geometry_digest
+
+
+def _authorize_agent_selection(
+    request: Request,
+    job_id: str,
+    req: Any,
+) -> Any:
+    """Validate and pre-consume one agent publication; returns the decision.
+
+    The actor/project come from the verified server identity (never the body).
+    """
+    import hashlib
+    import json as _json
+
+    from acp_services.contracts.selection import (
+        SelectionPublicationRequest,
+        SelectionSourceBinding,
+    )
+    from acp_services.runtime.selection_authorization import (
+        SelectionAuthorizationError,
+        SelectionAuthorizationService,
+    )
+
+    if not _selection_autopublish_enabled():
+        raise HTTPException(
+            status_code=403,
+            detail="authorized agent publication is disabled on this deployment",
+        )
+    if not req.authorization_id:
+        raise HTTPException(
+            status_code=422, detail="agent publication requires authorization_id"
+        )
+    store = getattr(request.app.state, "research_resources", None)
+    if store is None:
+        raise HTTPException(
+            status_code=503, detail="selection authorization store is not configured"
+        )
+    identity = _command_identity(request)
+    principal_id = str(getattr(identity, "principal_id", "") or "")
+    project_id = str(getattr(identity, "project_id", None) or "uncategorized")
+    record = _manager(request).get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"job {job_id} not found")
+    attempt = int(getattr(record, "attempt", 1) or 1)
+    spec = getattr(record, "spec", None)
+    method_block = getattr(spec, "method", None) or {}
+    method = str(method_block.get("method") or method_block.get("functional") or "")
+    resources = getattr(spec, "resources", None) or {}
+    nproc = int(resources.get("nproc") or 0)
+    source_binding = dict(req.source_binding or {})
+    candidates = tuple(item.model_dump(exclude_none=True) for item in req.candidates)
+    requested_profile = str(source_binding.get("profile_digest") or "")
+    requested_geometry = str(source_binding.get("geometry_digest") or "")
+    server_profile, server_geometry = _server_source_digests(record, list(candidates))
+    if requested_profile and server_profile and requested_profile != server_profile:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "stale_source",
+                "message": (
+                    "the selection source profile changed; re-read the task and "
+                    "re-publish against the current attempt"
+                ),
+                "params": {
+                    "field": "source_binding.profile_digest",
+                    "rule": "stale_source",
+                },
+            },
+        )
+    if requested_geometry and server_geometry and requested_geometry != server_geometry:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "stale_source",
+                "message": (
+                    "the selected frame geometry changed; re-read the task and "
+                    "re-publish against the current attempt"
+                ),
+                "params": {
+                    "field": "source_binding.geometry_digest",
+                    "rule": "stale_source",
+                },
+            },
+        )
+    selection_request = SelectionPublicationRequest(
+        authorization_id=str(req.authorization_id),
+        selector="agent",
+        actor_principal_id=principal_id,
+        project_id=project_id,
+        source=SelectionSourceBinding(
+            job_id=job_id,
+            attempt=attempt,
+            # the server-computed digests are authoritative; a client claim was
+            # only accepted after it matched (otherwise stale_source above)
+            profile_digest=server_profile or requested_profile,
+            geometry_digest=server_geometry or requested_geometry,
+        ),
+        workflow="PESsearch",
+        candidates=candidates,
+        method=method,
+        nproc=nproc,
+        idempotency_key=req.idempotency_key,
+        expected_revision=req.expected_revision,
+    )
+    action_digest = hashlib.sha256(
+        _json.dumps(
+            {
+                "job_id": job_id,
+                "attempt": attempt,
+                "expected_revision": req.expected_revision,
+                "candidates": candidates,
+                "note": req.note or "",
+                "authorization_id": str(req.authorization_id),
+            },
+            sort_keys=True,
+            default=str,
+        ).encode("utf-8")
+    ).hexdigest()
+    service = getattr(request.app.state, "selection_authorizations", None)
+    if service is None:
+        service = SelectionAuthorizationService(store)
+        request.app.state.selection_authorizations = service
+    try:
+        decision = service.validate(
+            selection_request,
+            latest_attempt=attempt,
+            action_digest=action_digest,
+        )
+        service.consume(selection_request, decision, action_digest=action_digest)
+    except SelectionAuthorizationError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": exc.code, "message": str(exc), "details": exc.details},
+        ) from exc
+    decision_payload = decision.to_dict()
+    decision_payload["action_digest"] = action_digest
+    decision_payload["actor"] = principal_id
+    return decision_payload
+
+
+def _publication_intent_store(request: Request, job_id: str) -> Any:
+    """The Services-backed publication intent store for the API path."""
+    from acp.calculations.pes.publication import StoreIntentStore
+
+    manager = getattr(request.app.state, "job_manager", None)
+    if manager is None or getattr(manager, "store", None) is None:
+        return None
+    return StoreIntentStore(manager.store, job_id)
+
+
+def _publication_http_error(exc: Exception) -> HTTPException:
+    """Map publication-group failures to typed HTTP errors (retry/recovery info)."""
+    from acp.calculations.pes.publication import (
+        PublicationConflictError,
+        PublicationInProgressError,
+        PublicationRecoveryError,
+    )
+
+    if isinstance(exc, PublicationRecoveryError):
+        return HTTPException(
+            status_code=409,
+            detail={
+                "code": "publication_recovering",
+                "message": str(exc),
+                "publication": exc.intent,
+                "completed_stages": list(exc.completed),
+            },
+        )
+    if isinstance(exc, (PublicationConflictError, PublicationInProgressError)):
+        return HTTPException(status_code=409, detail=str(exc))
+    return HTTPException(status_code=409, detail=str(exc))
 
 
 def _notify_structure_sources_updated(request: Request, job_id: str) -> None:
@@ -4028,6 +4634,7 @@ def restore_pes_review_endpoint(
         backup_rel=(f"RESULT/pes_search/{PES_REVIEW_BACKUP_TEMPLATE.format(n=int(req.backup))}"),
     )
 
+    from acp.calculations.pes.publication import PublicationConflictError, PublicationInProgressError, PublicationRecoveryError
     from acp.calculations.pes.review import PesReviewError, RevisionConflictError
     from acp.calculations.pes.review import restore_pes_review as restore_pes_review_state
 
@@ -4037,9 +4644,13 @@ def restore_pes_review_endpoint(
             int(req.backup),
             expected_revision=req.expected_revision,
             source_task_status=task_status,
+            idempotency_key=req.idempotency_key,
+            intent_store=_publication_intent_store(request, job_id),
         )
     except RevisionConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (PublicationConflictError, PublicationInProgressError, PublicationRecoveryError) as exc:
+        raise _publication_http_error(exc) from exc
     except PesReviewError as exc:
         message = str(exc)
         status_code = 404 if "not found" in message else 422
@@ -4047,7 +4658,26 @@ def restore_pes_review_endpoint(
 
     source_block = payload.get("source") or {}
     if remote_ctx is not None:
-        _remote_review_write_back(remote_ctx[0], remote_ctx[1], payload)
+        try:
+            _remote_review_write_back(remote_ctx[0], remote_ctx[1], payload)
+            write_back = "written"
+        except HTTPException as exc:
+            logger.warning("PES restore write-back failed for %s: %s", job_id, exc.detail)
+            publication = dict(payload.get("publication") or {})
+            publication["write_back"] = "failed"
+            publication["write_back_error"] = str(exc.detail)
+            payload["publication"] = publication
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "审阅写回计算节点失败（远端可能部分更新；发布意图可对账）: "
+                    f"{exc.detail}; publication={json.dumps(publication, ensure_ascii=False, default=str)}"
+                ),
+            ) from exc
+    if isinstance(payload.get("publication"), dict):
+        payload["publication"].setdefault(
+            "write_back", "written" if remote_ctx is not None else "local"
+        )
 
     _notify_structure_sources_updated(request, job_id)
 
@@ -4070,7 +4700,107 @@ def restore_pes_review_endpoint(
             )
             for row in payload.get("selected") or []
         ],
+        publication=payload.get("publication"),
     )
+
+
+@router.post("/selection-authorizations", status_code=201)
+def create_selection_authorization(
+    req: SelectionAuthorizationCreateRequest, request: Request
+) -> Any:
+    """Admin-only: mint one bounded authorization an agent may publish with.
+
+    Round-6 P0: ``SelectionAuthorizationService.create`` had no production
+    caller, so strict agent validation would have made every MCP publication a
+    permanent 403.  The owner and id are server-owned; an agent can never mint
+    its own authorization (no self-grant), it only consumes a bounded one.
+    """
+    import uuid
+
+    from acp_services.contracts.selection import SelectionAuthorization, SelectionLimits
+    from acp_services.runtime.selection_authorization import (
+        SelectionAuthorizationError,
+        SelectionAuthorizationService,
+    )
+
+    identity = _command_identity(request)
+    is_operator = str(getattr(identity, "subject_kind", "")) == "operator"
+    if not is_operator:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "access_denied",
+                "message": "only the local operator may create a selection authorization",
+                "params": {"field": "authorization", "rule": "admin_required"},
+            },
+        )
+    store = getattr(request.app.state, "research_resources", None)
+    if store is None:
+        raise HTTPException(
+            status_code=503,
+            detail="selection authorization store is not configured",
+        )
+    principal_id = str(getattr(identity, "principal_id", "") or "")
+    project_id = str(getattr(identity, "project_id", None) or "uncategorized")
+    try:
+        limits = SelectionLimits(**{key: int(value) for key, value in req.limits.items()})
+    except TypeError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "input_invalid",
+                "message": f"unsupported selection limit field: {exc}",
+                "params": {"field": "limits", "rule": "unknown_field"},
+            },
+        ) from exc
+    if limits.max_candidates < 1:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "input_invalid",
+                "message": "a selection authorization needs limits.max_candidates >= 1",
+                "params": {
+                    "field": "limits.max_candidates",
+                    "rule": "positive_required",
+                },
+            },
+        )
+    authorization = SelectionAuthorization(
+        authorization_id=f"auth-{uuid.uuid4().hex}",
+        owner_principal_id=principal_id,
+        owner_project_id=project_id,
+        policy_revision=req.policy_revision,
+        valid_until=req.valid_until,
+        actions=tuple(req.actions),
+        source_job_id=req.source_job_id,
+        allowed_attempts=tuple(req.allowed_attempts),
+        workflow=req.workflow,
+        roles=tuple(req.roles),
+        methods=tuple(req.methods),
+        nproc_max=req.nproc_max,
+        limits=limits,
+    )
+    try:
+        document = SelectionAuthorizationService(store).create(
+            authorization,
+            is_admin=True,
+            principal_id=principal_id,
+            project_id=project_id,
+        )
+    except SelectionAuthorizationError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": exc.code,
+                "message": str(exc),
+                "params": dict(getattr(exc, "details", {}) or {}),
+            },
+        ) from exc
+    return {
+        "authorization_id": document.get("authorization_id")
+        or authorization.authorization_id,
+        "authorization": document,
+    }
 
 
 @router.post("/jobs/{job_id}/pes/review", response_model=PesReviewResponse)
@@ -4087,9 +4817,48 @@ def save_pes_review_endpoint(
         frame_indexes={int(item.frame_index) for item in req.candidates},
     )
 
+    from acp.calculations.pes.publication import PublicationConflictError, PublicationInProgressError, PublicationRecoveryError
     from acp.calculations.pes.review import PesReviewError, RevisionConflictError
     from acp.calculations.pes.review import save_pes_review as persist_pes_review
 
+    selector = str(req.selector or "manual")
+    if selector not in {"manual", "manual_frame", "agent"}:
+        raise HTTPException(status_code=422, detail=f"unsupported selection selector {selector!r}")
+    if req.authorization_id and selector != "agent":
+        # A supplied authorization must never be silently ignored by the manual
+        # path (the round-5 safety gate looked present but did nothing).
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "input_invalid",
+                "message": (
+                    "authorization_id only applies to selector=agent; send "
+                    "selector=agent for an authorized publication or omit it"
+                ),
+                "params": {
+                    "field": "authorization_id",
+                    "rule": "inconsistent_selector",
+                },
+            },
+        )
+    if selector == "agent" and req.actor:
+        # the actor is server-owned; accepting a body value would be a
+        # misleading "forged but ignored" field (PR-06 criterion 2).
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "input_invalid",
+                "message": "actor is server-owned for agent publications; omit it",
+                "params": {"field": "actor", "rule": "server_identity_owned"},
+            },
+        )
+    agent_authorization: dict | None = None
+    agent_source_binding: dict | None = None
+    agent_actor: str | None = None
+    if selector == "agent":
+        agent_authorization = _authorize_agent_selection(request, job_id, req)
+        agent_source_binding = dict(req.source_binding or {})
+        agent_actor = str(agent_authorization.get("actor") or "")
     try:
         payload = persist_pes_review(
             work_dir,
@@ -4098,15 +4867,45 @@ def save_pes_review_endpoint(
             note=req.note or "",
             expected_revision=req.expected_revision,
             source_task_status=task_status,
+            idempotency_key=req.idempotency_key,
+            intent_store=_publication_intent_store(request, job_id),
+            selector=selector,
+            actor=agent_actor,
+            authorization=agent_authorization,
+            source_binding=agent_source_binding,
         )
     except RevisionConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (PublicationConflictError, PublicationInProgressError, PublicationRecoveryError) as exc:
+        raise _publication_http_error(exc) from exc
     except PesReviewError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     source_block = payload.get("source") or {}
     if remote_ctx is not None:
-        _remote_review_write_back(remote_ctx[0], remote_ctx[1], payload)
+        try:
+            _remote_review_write_back(remote_ctx[0], remote_ctx[1], payload)
+            write_back = "written"
+        except HTTPException as exc:
+            # The local publication is complete, but the remote copy is not:
+            # fail loudly AND expose the publication intent for reconciliation
+            # (the new selection must not be advertised as published remotely).
+            logger.warning("PES review write-back failed for %s: %s", job_id, exc.detail)
+            publication = dict(payload.get("publication") or {})
+            publication["write_back"] = "failed"
+            publication["write_back_error"] = str(exc.detail)
+            payload["publication"] = publication
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "审阅写回计算节点失败（远端可能部分更新；发布意图可对账）: "
+                    f"{exc.detail}; publication={json.dumps(publication, ensure_ascii=False, default=str)}"
+                ),
+            ) from exc
+    if isinstance(payload.get("publication"), dict):
+        payload["publication"].setdefault(
+            "write_back", "written" if remote_ctx is not None else "local"
+        )
 
     _notify_structure_sources_updated(request, job_id)
 
@@ -4164,6 +4963,7 @@ def save_pes_review_endpoint(
         frame_source=str(source_block.get("frame_source") or ""),
         candidates=selected_rows,
         initial_guess_status=guess_status,
+        publication=payload.get("publication"),
     )
 
 
@@ -5231,6 +6031,76 @@ def get_sampling_frame(
     )
 
 
+#: Canonical task-id shape (authority: ``acp_services/store/naming.py::_JOB_ID_RE``,
+#: re-derived here because this module only needs the *shape* check to decide
+#: whether a run-root probe can possibly match — never to name a task).
+_TASK_ID_SHAPE_RE = re.compile(r"^\d{8}_\d{6}_\d{3}_.+$")
+
+#: A 404 diagnostic probe is bounded: it never walks an unbounded run root.
+_RUN_ROOT_PROBE_MAX_TASKS = 2000
+
+
+def _run_root_task_found(request: Request, job_id: str) -> bool:
+    """Read-only probe: does some ``task.json`` declare this ``task_id``?
+
+    Round-8 三.2: a 404 for a job id may mean "the DB row is missing but the
+    task directory exists" (a second truth source the caller should be told
+    about).  This probe **only reads** — it never adopts the task, never writes
+    ``task.json`` and never creates a second state store.  Any error (missing
+    root, unreadable JSON, a runaway scan) answers ``False``.
+    """
+    if _TASK_ID_SHAPE_RE.fullmatch(str(job_id or "")) is None:
+        return False
+    try:
+        run_root = Path(_manager(request).run_root)
+    except (AttributeError, KeyError, TypeError):
+        return False
+    if not run_root.is_dir():
+        return False
+    scanned = 0
+    try:
+        project_dirs = [entry for entry in run_root.iterdir() if entry.is_dir()]
+    except OSError:
+        return False
+    for project_dir in project_dirs:
+        try:
+            task_files = list(project_dir.glob("*/task.json"))
+        except OSError:
+            continue
+        for task_json in task_files:
+            scanned += 1
+            if scanned > _RUN_ROOT_PROBE_MAX_TASKS:
+                return False
+            try:
+                data = json.loads(task_json.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if isinstance(data, dict) and str(data.get("task_id") or "") == job_id:
+                return True
+    return False
+
+
+def _job_not_found_detail(request: Request, job_id: str) -> dict[str, Any]:
+    """Structured 404 detail for an unknown task id (round-8 三.2).
+
+    ``run_root_task_found`` is the read-only diagnostic: ``true`` means a task
+    directory claims this id while the job row is missing (do not adopt it —
+    report it), ``false`` means the id is simply unknown to this Controller.
+    """
+    return {
+        "code": "job_row_missing",
+        "message": f"Job not found: {job_id}",
+        "params": {
+            "job_id": job_id,
+            "run_root_task_found": _run_root_task_found(request, job_id),
+        },
+        "hint": (
+            "use acp_list_jobs (or task.json.task_id) to resolve the id; a job_id "
+            "and an operation_id are different ids"
+        ),
+    }
+
+
 def _descriptor_read_root(
     request: Request, record: JobRecord
 ) -> tuple[Path, str | None]:
@@ -5246,13 +6116,21 @@ def _with_artifact_descriptors(
     read_root: Path | None,
     attempt: int,
     unknown_reason: str | None = None,
+    *,
+    job_id: str | None = None,
 ) -> V1JobRecordModel:
-    """Attach the bounded manifest projection from the controlled read root."""
+    """Attach the bounded manifest projection from the controlled read root.
+
+    Round-8: an empty projection is never silent.  ``artifacts_unknown_reason``
+    distinguishes "this task published no manifest" (``no_manifest``) from the
+    remote cache case (``remote_cache_only``), so an agent does not read an
+    empty list as "no products" when the truth is "cannot see them".
+    """
     from acp.api.artifact_descriptors import describe_job_artifacts
 
-    descriptors, truncated = describe_job_artifacts(read_root, attempt=attempt)
-    if not descriptors and not truncated and unknown_reason is None:
-        return model
+    descriptors, truncated = describe_job_artifacts(read_root, attempt=attempt, job_id=job_id)
+    if not descriptors and not truncated:
+        unknown_reason = unknown_reason or "no_manifest"
     return model.model_copy(
         update={
             "artifacts": descriptors,
@@ -5267,14 +6145,16 @@ def get_job(job_id: str, request: Request) -> V1JobRecordModel:
     manager = _manager(request)
     record = manager.get(job_id)
     if record is None:
-        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+        raise HTTPException(status_code=404, detail=_job_not_found_detail(request, job_id))
     model = _record_to_v1_model(record, include_release_facts=True)
     model = _enrich_job_snapshot(record, model, include_event=False)
     task_row = manager.tasks.get(job_id)
     if task_row is not None:
         model = _enrich_v1_with_names(model, resolve_task_names(task_row))
     read_root, unknown_reason = _descriptor_read_root(request, record)
-    return _with_artifact_descriptors(model, read_root, record.attempt, unknown_reason)
+    return _with_artifact_descriptors(
+        model, read_root, record.attempt, unknown_reason, job_id=record.id
+    )
 
 
 @router.get("/jobs/{job_id}/summary", response_model=V1JobRecordModel)
@@ -5282,14 +6162,16 @@ def get_job_summary(job_id: str, request: Request) -> V1JobRecordModel:
     manager = _manager(request)
     record = manager.get(job_id)
     if record is None:
-        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+        raise HTTPException(status_code=404, detail=_job_not_found_detail(request, job_id))
     model = _record_to_v1_model(record, include_release_facts=True)
     model = _enrich_job_snapshot(record, model, include_event=True)
     task_row = manager.tasks.get(job_id)
     if task_row is not None:
         model = _enrich_v1_with_names(model, resolve_task_names(task_row))
     read_root, unknown_reason = _descriptor_read_root(request, record)
-    return _with_artifact_descriptors(model, read_root, record.attempt, unknown_reason)
+    return _with_artifact_descriptors(
+        model, read_root, record.attempt, unknown_reason, job_id=record.id
+    )
 
 
 # ---------------------------------------------------------------------- #
@@ -9256,6 +10138,152 @@ def _preflight_source_facts(
     return reasons, advisories
 
 
+#: Hard byte bound for the ``submission_analysis.requested`` echo (round-8 三.6).
+#: A preflight receipt is a *receipt*, not a second copy of the submission.
+_REQUESTED_ECHO_MAX_BYTES = 2048
+
+#: Keys whose value is a structural payload (XYZ text) rather than a scalar.
+_STRUCTURAL_TEXT_KEYS = ("xyz_text", "xyz")
+#: Carrier keys that hold XYZ text only for some workflows.
+_STRUCTURAL_CARRIER_KEYS = ("source", "input")
+#: A branch smaller than this is never collapsed: the placeholder would cost more.
+_ECHO_COLLAPSE_MIN_BYTES = 128
+
+
+def _looks_like_xyz(value: str) -> bool:
+    """True when *value* is multi-line text whose first line is an atom count."""
+    text = value.strip()
+    if "\n" not in text:
+        return False
+    return text.splitlines()[0].strip().isdigit()
+
+
+def _xyz_atom_count(value: str) -> int | None:
+    """Atom count of an XYZ block (declared count, else non-header lines)."""
+    lines = [line for line in value.strip().splitlines() if line.strip()]
+    if not lines:
+        return None
+    try:
+        return int(lines[0].strip())
+    except ValueError:
+        return max(0, len(lines) - 2)
+
+
+def _json_bytes(value: Any) -> int:
+    return len(json.dumps(value, ensure_ascii=False, default=str).encode("utf-8"))
+
+
+def _structural_placeholder(value: str) -> dict[str, Any]:
+    """The bounded stand-in for an omitted structural payload."""
+    raw = value.encode("utf-8")
+    return {
+        "omitted": True,
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "atoms": _xyz_atom_count(value),
+        "bytes": len(raw),
+    }
+
+
+def _bounded_input_echo(value: Any, *, key: str | None = None) -> Any:
+    """Replace XYZ-bearing payloads with ``{"omitted", "sha256", "atoms", "bytes"}``.
+
+    Scalars are kept verbatim; only structural text is omitted, so the receipt
+    still shows ``source_type``/``charge``/``items[].role`` regardless of how
+    large the geometry was.
+    """
+    if isinstance(value, str):
+        if key in _STRUCTURAL_TEXT_KEYS:
+            return _structural_placeholder(value)
+        if key in _STRUCTURAL_CARRIER_KEYS and _looks_like_xyz(value):
+            return _structural_placeholder(value)
+        return value
+    if isinstance(value, Mapping):
+        return {
+            str(name): _bounded_input_echo(item, key=str(name))
+            for name, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [_bounded_input_echo(item) for item in value]
+    return value
+
+
+def _collect_echo_branches(
+    value: Any, *, prefix: tuple[Any, ...] = ()
+) -> list[tuple[tuple[Any, ...], int]]:
+    """Finest-grained collapsible containers in *value* (with their sizes).
+
+    A branch is collapsible when it is large but its own children are all small
+    (or scalar): collapsing at that depth removes bulk while keeping the
+    surrounding structure — e.g. ``method.levels`` goes before all of
+    ``method``.
+    """
+    if isinstance(value, Mapping):
+        items: list[tuple[Any, Any]] = list(value.items())
+    elif isinstance(value, (list, tuple)):
+        items = list(enumerate(value))
+    else:
+        return []
+    branches: list[tuple[tuple[Any, ...], int]] = []
+    for key, item in items:
+        if not isinstance(item, (Mapping, list, tuple)):
+            continue
+        if isinstance(item, Mapping) and item.get("omitted") is True:
+            continue
+        size = _json_bytes(item)
+        if size < _ECHO_COLLAPSE_MIN_BYTES:
+            continue
+        path = prefix + (key,)
+        children = _collect_echo_branches(item, prefix=path)
+        if children:
+            branches.extend(children)
+        else:
+            branches.append((path, size))
+    return branches
+
+
+def _largest_echo_branch(value: Any) -> tuple[tuple[Any, ...], int] | None:
+    """The largest finest-grained collapsible branch (deterministic order)."""
+    best: tuple[tuple[Any, ...], int] | None = None
+    for path, size in _collect_echo_branches(value):
+        if best is None or size > best[1]:
+            best = (path, size)
+    return best
+
+
+def _bounded_requested_echo(raw_input: Any, method: Any) -> dict[str, Any]:
+    """Bounded ``requested`` projection (round-8 三.6).
+
+    Structural payloads are replaced first, then the largest remaining nested
+    branch is collapsed until the JSON fits :data:`_REQUESTED_ECHO_MAX_BYTES`;
+    ``truncated`` says a collapse happened.  The **plan digest is computed
+    separately from the full payload** — this function never feeds the digest.
+    """
+    echo: dict[str, Any] = {
+        "input": _bounded_input_echo(raw_input or {}),
+        "method": _bounded_input_echo(method or {}),
+    }
+    truncated = False
+    while _json_bytes(echo) > _REQUESTED_ECHO_MAX_BYTES:
+        found = _largest_echo_branch(echo)
+        if found is None:
+            break
+        path, size = found
+        target: Any = echo
+        for key in path[:-1]:
+            target = target[key]
+        branch = target[path[-1]]
+        if isinstance(branch, Mapping):
+            target[path[-1]] = {"omitted": True, "keys": len(branch), "bytes": size}
+        elif isinstance(branch, (list, tuple)):
+            target[path[-1]] = {"omitted": True, "items": len(branch), "bytes": size}
+        else:  # pragma: no cover - the walker only returns containers
+            break
+        truncated = True
+    if truncated:
+        echo["truncated"] = True
+    return echo
+
+
 def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str, Any]:
     """Build the zero-side-effect preflight projection.
 
@@ -9297,6 +10325,10 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
     try:
         _validate_simple_method_cli(req.workflow, req.method)
         _validate_scan_submission(req.workflow, req.method, req.input)
+        if req.workflow == "BatchOptimize":
+            # the single_flat cardinality gate belongs to preflight too: a
+            # two-structure manifest must fail here, not after a submit.
+            _validate_batch_cardinality(dict(raw_input or {}))
     except HTTPException as exc:
         detail = exc.detail if isinstance(exc.detail, dict) else {"message": str(exc.detail)}
         raise _command_error(
@@ -9383,11 +10415,36 @@ def _preflight_projection(req: V1PreflightRequest, request: Request) -> dict[str
         *_scan_geometry_advisories(req.workflow, raw_input or {}, req.method or {}),
         *_source_advisories,
     ]
+    # Round-5 PR-03: one read-only analysis shared with submit/edit; the
+    # requested/effective/executed receipt never claims an execution fact.
+    submission_analysis: dict[str, Any] | None = None
+    try:
+        from acp.calculations.submission_validation import analysis_for
+
+        analysis = analysis_for(req.workflow, raw_input or {}, req.method or {})
+    except ValueError as exc:
+        params = (
+            exc.params
+            if hasattr(exc, "params") and isinstance(getattr(exc, "params"), dict)
+            else {"field": "input", "rule": "invalid_parameter"}
+        )
+        raise _command_error(422, "input_invalid", str(exc), params=params) from exc
+    if analysis is not None:
+        submission_analysis = analysis.to_dict()
+        submission_analysis["requested"] = _bounded_requested_echo(raw_input, req.method)
+        submission_analysis["executed"] = None
+        # Source advisories and the analyzer's own unverified checks share one
+        # list (round-7 #6): neither may overwrite the other.
+        submission_analysis["unverified_checks"] = [
+            *submission_analysis.get("unverified_checks", []),
+            *(str(item.get("id")) for item in _source_advisories if item.get("id")),
+        ]
     return {
         "schema_version": 1,
         "feasible": feasible,
         "reasons": reasons,
         "advisories": advisories,
+        "submission_analysis": submission_analysis,
         "plan_digest": digest,
         "plan_summary": {
             "workflow": req.workflow,
@@ -9499,6 +10556,112 @@ def _operation_response(
                 "relative_path": payload.get("relative_path") or None,
             }
     return response
+
+
+def _fast_path_artifact_ref(
+    manager: Any, job_id: str, artifact_id: str, attempt: int
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    """Project an already-published prepare operation onto a readable ref.
+
+    Round-6 P1: the fast path returned ``ready`` without a five-tuple, so a
+    second ``prepare`` could never feed ``read``.  Digest/generation come from
+    the authoritative prepare row + artifact store, never computed here.
+    """
+    from acp_services.data.artifacts import ArtifactStore, operation_to_artifact_ref
+    from acp_services.data.operations import PrepareState
+
+    service = getattr(manager, "_prepare_operations", None)
+    if service is None:
+        return None
+    existing = service.find(
+        job_id=job_id,
+        resource_id=artifact_id,
+        attempt=attempt,
+        permission_scope="local-single",
+    )
+    if existing is None or existing.state is not PrepareState.SUCCEEDED:
+        return None
+    store = ArtifactStore(manager.run_root / "artifact-store")
+    published = store.lookup(
+        job_id=job_id,
+        attempt=existing.attempt,
+        resource_id=artifact_id,
+        generation=existing.resource_generation,
+        digest="sha256:" + str(existing.sha256 or ""),
+    )
+    if published is None:
+        return None
+    artifact = operation_to_artifact_ref(existing)
+    if artifact is None:
+        return None
+    return artifact.to_dict(), {"kind": "operation", "id": existing.operation_id}
+
+
+def _prepare_fast_path(
+    request: Request,
+    record: Any,
+    job_id: str,
+    *,
+    purpose: str,
+    artifact_id: str,
+    relative_path: str,
+    attempt: int,
+    expected_revision: int,
+) -> dict[str, Any] | None:
+    """Return a ready receipt for an already-prepared local artifact (PR-09).
+
+    Uses the existing cache-only Data reader (validation + prepared index), never
+    an ad-hoc ``exists()`` check; a remote or unprepared artifact falls through
+    to the durable operation path unchanged.
+    """
+    if purpose != "artifact":
+        return None
+    if _is_remote_job(record):
+        return None
+    status_value = str(getattr(getattr(record, "status", ""), "value", getattr(record, "status", "")))
+    if status_value not in {"completed", "failed", "cancelled"}:
+        # only a terminal attempt can have verified, already-published products
+        return None
+    try:
+        reader = _cache_only_resource_reader(request)
+        snapshot = reader.availability(
+            "artifact",
+            job_id=job_id,
+            workflow=str(record.spec.workflow or ""),
+            relative_path=relative_path,
+            expected_revision=expected_revision,
+            attempt=attempt,
+        )
+    except Exception:  # an unavailable reader is not a fast-path failure
+        return None
+    if not snapshot.is_readable():
+        return None
+    freshness = str(getattr(snapshot.freshness, "value", snapshot.freshness))
+    if freshness == "stale":
+        return None
+    receipt: dict[str, Any] = {
+        "schema_version": "acp2.prepare.v1",
+        "status": "ready",
+        "fast_path": True,
+        "job_id": job_id,
+        "attempt": attempt,
+        "artifact_id": artifact_id,
+        "availability": snapshot.to_dict(),
+        "read": f"/api/v1/jobs/{job_id}/prepared/artifact?artifact_id={artifact_id}",
+        "reused_prepared": True,
+    }
+    try:
+        manager = _manager(request)
+    except (AttributeError, KeyError, RuntimeError):
+        # No resolvable manager: never hand out a ready receipt without a
+        # readable five-tuple; let the durable prepare path rebuild it.
+        return None
+    ref = _fast_path_artifact_ref(manager, job_id, artifact_id, attempt)
+    if ref is None:
+        # readable but no authoritative published ref: rebuild via prepare.
+        return None
+    receipt["artifact_ref"], receipt["operation_ref"] = ref
+    return receipt
 
 
 @router.post("/jobs/{job_id}/prepare")
@@ -9624,6 +10787,18 @@ def prepare_artifact(
     else:
         resource_id = f"structure-input:{relative_path or 'input.xyz'}"
         resource_kind = ResourceKind.INPUT
+    fast_ready = _prepare_fast_path(
+        request,
+        record,
+        job_id,
+        purpose=purpose,
+        artifact_id=artifact_id,
+        relative_path=relative_path,
+        attempt=attempt,
+        expected_revision=int(normalized.get("expected_revision") or 0),
+    )
+    if fast_ready is not None:
+        return fast_ready
     identity = f"{job_id}\x1f{attempt}\x1f{resource_id}".encode()
     resource_digest = expected_digest or ("sha256:" + hashlib.sha256(identity).hexdigest())
     service = getattr(manager, "_prepare_operations", None)

@@ -94,6 +94,9 @@ class ResultManifest:
     status: str = "pending"
     version: int = 2
     products: list[Product] = field(default_factory=list)
+    #: Round-5 PR-05 publication group marker: readers refuse a ``pending``
+    #: group so a half-published selection is never consumable.
+    publication: dict[str, Any] | None = None
 
     def add_product(
         self,
@@ -123,6 +126,11 @@ class ResultManifest:
             "workflow": self.workflow,
             "status": self.status,
             "products": [p.to_dict() for p in self.products],
+            **(
+                {"publication": dict(self.publication)}
+                if self.publication is not None
+                else {}
+            ),
         }
 
     @classmethod
@@ -134,6 +142,11 @@ class ResultManifest:
             status=str(payload.get("status", "pending")),
             version=int(payload.get("version", 2)),
             products=[Product.from_dict(p) for p in payload.get("products", [])],
+            publication=(
+                dict(payload["publication"])
+                if isinstance(payload.get("publication"), Mapping)
+                else None
+            ),
         )
 
     def write(self, result_dir: Path | str) -> Path:

@@ -153,7 +153,7 @@ WF_HELP_CASES = {
         "--ts-provenance-json",
         "--input-role",
         "--maxpoints",
-        "compatibility",  # --step is documented as a no-op compat flag
+        "refused",  # round-5 PR-02: explicit --step values are refused
     ],
     "nmr": [
         "--spectrum",

@@ -40,6 +40,7 @@ from cccp.qc.method_meta import (
     aux_basis_default,
     aux_basis_options,
     functional_options,
+    is_orbital_basis,
     method_meta,
     scf_constraint,
 )
@@ -100,6 +101,10 @@ CONFLICT_RULES: dict[str, str] = {
     "empty_allowed_set": "clamp",
     "ri_support_forced_clear": "clamp",
     "aux_outside_allowed_set": "clamp",
+    # An orbital basis name placed in an aux field is never used as one: it
+    # clamps to the method/basis-derived fitting default (the route renderer
+    # additionally refuses it at construction time).
+    "aux_basis_invalid": "clamp",
     "scf_below_method_minimum": "clamp",
     # reject family — cccp.qc.keyword_registry raises KeywordValueError
     "unknown_enum_value": "reject",
@@ -315,7 +320,9 @@ def resolve_calculation_spec(
       ``none``/``""`` (``ri_support_forced_clear``).
     * ``aux_j_basis`` / ``aux_c_basis`` for user-RI methods: a value outside
       the derived option set (case-SENSITIVE membership) is replaced by the
-      derived default (``aux_outside_allowed_set``).
+      derived default (``aux_outside_allowed_set``); an *orbital* basis name
+      in an aux field is reported as ``aux_basis_invalid`` instead — it is
+      never silently used as a fitting basis.
     * ``scf_convergence``: a value resolving weaker than the method floor
       (METHOD_META ``scf_convergence`` allowed set — DLPNO-CCSD(T) requires
       ``tight``) is promoted to the floor (``scf_below_method_minimum``);
@@ -444,6 +451,11 @@ def _clamp_aux(
     replacement = method_field_default(field_name, method, basis)
     if replacement is None:
         replacement = AUX_J_BASIS_DEFAULT if field_name == "aux_j_basis" else AUX_C_BASIS_DEFAULT
+    if is_orbital_basis(str(requested)):
+        # An orbital basis name in an aux field would be silently consumed as
+        # a fitting basis by ORCA; report the distinct rule (and clamp to the
+        # derived fitting default, never to the requested orbital basis).
+        return replacement, "aux_basis_invalid"
     return replacement, "aux_outside_allowed_set"
 
 
