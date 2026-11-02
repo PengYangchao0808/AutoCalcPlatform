@@ -26,7 +26,7 @@ from acp.scheduler.remote.node_manager import (
     detect_node_python,
     doctor_node,
 )
-from acp.scheduler.remote.ssh import SSHExecutionError
+from acp.scheduler.remote.ssh import SSHConnectionError, SSHExecutionError
 
 
 def _node(
@@ -430,6 +430,21 @@ def test_detect_python_surfaces_ssh_failure_when_nothing_executed() -> None:
     pool.execute.side_effect = SSHExecutionError("connection refused")
     with pytest.raises(SSHExecutionError, match="connection refused"):
         detect_node_python(pool, node)
+
+
+def test_detect_python_aborts_on_connection_error() -> None:
+    """A node-level connection failure must stop after ONE candidate probe.
+
+    Connection errors (host key / auth / unreachable) are identical for
+    every interpreter candidate; walking all 11 candidates multiplied the
+    connect timeout (the ``acp init`` bootstrap hang regression).
+    """
+    node = _node()
+    pool = MagicMock()
+    pool.execute.side_effect = SSHConnectionError("cannot connect to node")
+    with pytest.raises(SSHConnectionError, match="cannot connect"):
+        detect_node_python(pool, node)
+    assert pool.execute.call_count == 1
 
 
 def test_detect_python_skips_unrunnable_then_finds_conda() -> None:

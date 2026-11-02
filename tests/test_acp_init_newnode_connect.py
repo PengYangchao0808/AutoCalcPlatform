@@ -385,6 +385,75 @@ def test_acceptance_d_bootstrap_error_retry_then_give_up(capsys: Any) -> None:
     assert cfg.nodes[0] is node
 
 
+def test_bootstrap_stage_never_raises_on_manager_exception(capsys: Any) -> None:
+    """REGRESSION: an exception from bootstrap_node becomes the D18a menu.
+
+    The known_hosts rejection used to escape as a traceback during
+    ``acp init``; the wizard contract is failure menu + actionable hint.
+    """
+    node = _make_node()
+    prompts = _FakePrompts(menu_choices=[2])
+    with mock.patch("acp.scheduler.remote.node_manager.NodeManager") as nm_cls:
+        nm_cls.return_value.bootstrap_node.side_effect = paramiko.SSHException(
+            "Server '10.16.5.157' not found in known_hosts"
+        )
+        outcome = run_bootstrap_stage(mock.MagicMock(), node, prompts.bundle())
+
+    assert isinstance(outcome, BootstrapOutcome)
+    assert outcome.ok is False
+    assert "known_hosts" in (outcome.error or "")
+    assert prompts.menu_calls[0][1] == ["重试 bootstrap", "放弃（节点不保存）"]
+    out = capsys.readouterr().out
+    assert "known_hosts" in out
+    assert "主机密钥" in out  # actionable hint, not a bare exception name
+
+
+def test_bootstrap_stage_changed_host_key_hint(capsys: Any) -> None:
+    """A changed host key gets the ssh-keygen -R guidance, not auto_add advice."""
+    node = _make_node()
+    prompts = _FakePrompts(menu_choices=[2])
+    with mock.patch("acp.scheduler.remote.node_manager.NodeManager") as nm_cls:
+        nm_cls.return_value.bootstrap_node.side_effect = paramiko.SSHException(
+            "Host key for server '10.16.5.157' does not match: got AAAA, expected BBBB"
+        )
+        outcome = run_bootstrap_stage(mock.MagicMock(), node, prompts.bundle())
+
+    assert outcome.ok is False
+    out = capsys.readouterr().out
+    assert "不一致" in out
+    assert "ssh-keygen -R" in out
+    assert "不要直接用 auto_add" in out  # never suggest bypassing a changed key
+
+
+def test_bootstrap_stage_retry_after_exception_then_success() -> None:
+    """REGRESSION: an exception does not kill the wizard; 重试 re-runs bootstrap."""
+    node = _make_node()
+    prompts = _FakePrompts(menu_choices=[1])
+    with mock.patch("acp.scheduler.remote.node_manager.NodeManager") as nm_cls:
+        manager = nm_cls.return_value
+        manager.bootstrap_node.side_effect = [
+            paramiko.SSHException("Server '10.16.5.157' not found in known_hosts"),
+            BootstrapResult(node="n1", reachable=True, exit_code=0, python_executable="python3.12"),
+        ]
+        outcome = run_bootstrap_stage(mock.MagicMock(), node, prompts.bundle())
+
+    assert outcome.ok is True
+    assert outcome.python_executable == "python3.12"
+    assert manager.bootstrap_node.call_count == 2
+
+
+def test_bootstrap_stage_propagates_wizard_abort() -> None:
+    """WizardAborted/InitAbort must NOT be swallowed by the D18a guard."""
+    from acp.init_wizard.prompts import WizardAborted
+
+    node = _make_node()
+    prompts = _FakePrompts()
+    with mock.patch("acp.scheduler.remote.node_manager.NodeManager") as nm_cls:
+        nm_cls.return_value.bootstrap_node.side_effect = WizardAborted()
+        with pytest.raises(WizardAborted):
+            run_bootstrap_stage(mock.MagicMock(), node, prompts.bundle())
+
+
 def test_acceptance_d2_in_memory_config_identity() -> None:
     """(d2) dedicated: ctor config carries exactly the in-memory node."""
     node = _make_node()

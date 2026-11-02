@@ -180,13 +180,29 @@ acp init --log-level DEBUG
 
 1. 集群类型：`LSF` 或 `Openlava`；当前这个向导没有 Slurm 选项。
 2. 主机地址、节点名称、SSH 端口（默认 `22`）、用户名和密码/SSH 私钥路径。私钥路径是 ACP 管理机上的路径。
-3. 连接测试；未知主机会显示指纹并询问是否接受，已知主机密钥发生变化会中止。
+3. 连接测试；默认要求节点主机密钥已在当前用户的 `~/.ssh/known_hosts` 中（支持 hashed 条目和 `[主机]:端口` 形式）。未知主机会显示指纹并询问是否接受；已知主机密钥发生变化会中止。接受未知主机后，该节点会保存为 `host_key_policy: auto_add`（仅本次连接内存接受，不会写入 `known_hosts`）。
 4. 远端代码目录（默认 `~/acp_code`）、远端任务目录（默认 `~/acp_jobs`）、最大并发任务数（默认 `5`）、LSF 队列（默认 `normal`，请改为实际队列）。
 5. Bootstrap：同步代码并安装节点运行依赖。找不到可用 Python 时，可在重试中填写远端 Conda 环境的解释器绝对路径，例如 `/home/alice/miniforge3/envs/acp/bin/python`。
 6. 软件检测：缺失时填写**远端机器上**的可执行文件路径，可回车跳过。补填会更新远端用户的 `~/.cccp.yaml`，并可选择创建 `~/bin` 符号链接；这些操作会修改远端文件。
 7. 凭据保存与执行模式：密码默认不写 YAML，按提示通过 `ACP_REMOTE_PASSWORD_<节点名规范化值>` 环境变量提供；如果希望经该集群执行，选择“设为 remote”。
 
 Bootstrap 失败可重试或放弃，放弃时节点不保存；已经同步的远端文件或已安装依赖仍可能存在。新增完成会返回资源菜单，可继续添加节点或按 `q` 进入组件选择。配置完成后执行 `acp doctor --node <节点名称>` 检查实际节点。
+
+#### SSH 主机密钥（known_hosts）与 bootstrap 失败处理
+
+远程节点通过 `host_key_policy` 选择 SSH 主机密钥校验方式，默认 `reject`：
+
+- `reject`（默认，最安全）：连接前读取**运行 ACP 的那个用户**的 `~/.ssh/known_hosts`；主机密钥必须已登记且一致，否则拒绝（报错 `not found in known_hosts` 表示该主机未登记）。支持 OpenSSH 的明文条目和 hashed 条目（`|1|...`）；非默认端口的主机需登记为 `[主机]:端口`。ACP 只读取该用户的 `~/.ssh/known_hosts`，不读取系统级 `/etc/ssh/ssh_known_hosts`。
+- `auto_add` / `warn`：只放行 `known_hosts` 中**没有**的主机，并且只在本次连接的内存中接受，**不会写回 `known_hosts`**（`warn` 会额外记录警告日志）。向导中“接受并记住”写入的是节点的 `host_key_policy: auto_add`，并不会把主机密钥写入 `known_hosts`。
+- 无论哪种策略，只要 `known_hosts` 中已有该主机条目但密钥**已变化**，连接一律以 `BadHostKeyException` 拒绝。请先通过带外渠道核对新指纹，再用 `ssh-keygen -R <主机>`（非默认端口用 `ssh-keygen -R "[主机]:端口"`）删除旧条目并重新登记。
+
+`known_hosts` 属于当前用户，因此 **`acp init`、CLI 与 ACP 服务必须使用同一个用户、同一个 HOME**。若服务以 `scripts/install_systemd.sh --user <服务用户>` 指定的用户运行，就应把节点密钥登记到该用户的 `~/.ssh/known_hosts`，例如（先核对指纹）：
+
+```bash
+sudo -u <服务用户> sh -c 'ssh-keyscan -H -p <端口> <主机> >> ~/.ssh/known_hosts'
+```
+
+bootstrap 失败会回到“重试 bootstrap / 放弃（节点不保存）”菜单，不会抛出 traceback。若提示主机密钥未登记，可先 `ssh -p <端口> <用户>@<主机>` 验证登录，再按上面的方式登记；`ssh-keyscan` 本身不验证主机身份，请先通过带外渠道核对指纹。也可将节点设为 `host_key_policy: auto_add` 以接受未知主机，但这会降低防护，只建议在可信内网临时使用。若 `~/.ssh/known_hosts` 中存在无法解析的损坏行，ACP 会告警并继续，但可能表现为部分主机“未登记”，请先检查文件完整性。
 
 ### 连接已有 ACP 服务
 
@@ -296,6 +312,7 @@ acp run serve --host 127.0.0.1 --port 8765
 | 软件路径校验失败 | 填可执行文件而非目录，检查存在性与执行权限；远端软件要填远端路径 |
 | Lab 被拒绝或能力未验证 | 核对 `web-ui`、`authentication`、`isolation` 和数据库资源引用，并阅读 Lab 报告；个人部署从 Standalone 开始 |
 | SSH 成功但节点 bootstrap 失败 | 核对远端 Python 版本、pip 依赖源、目录写权限和报错尾部；必要时固定 Conda 环境解释器路径 |
+| bootstrap 报 `not found in known_hosts` 或“主机密钥校验失败” | 该节点密钥不在运行 ACP 用户的 `~/.ssh/known_hosts`；用 `ssh-keyscan -H <主机> >> ~/.ssh/known_hosts` 登记后重试，或在确认可信后为该节点设 `host_key_policy: auto_add`。节点换过密钥先 `ssh-keygen -R <主机>`。`acp init` 需与服务使用同一用户/HOME |
 
 ---
 
