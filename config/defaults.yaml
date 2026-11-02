@@ -359,6 +359,9 @@ cluster:
   #     username: acp
   #     remote_work_dir: /scratch/acp/acp_jobs
   #     remote_code_dir: /home/acp/acp_code
+  #     host_key_policy: reject  # optional: reject (default; verify the node
+  #                              # key against the invoking user's
+  #                              # ~/.ssh/known_hosts), auto_add, warn
   #     python_executable: /opt/anaconda3/bin/python
   #     bin_symlinks:
   #       orca: /opt/orca611/orca

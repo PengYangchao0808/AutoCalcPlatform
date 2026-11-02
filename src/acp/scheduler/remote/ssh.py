@@ -28,7 +28,7 @@ from acp.scheduler.remote.config import RemoteNode
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["SSHConnectionPool", "SSHExecutionError"]
+__all__ = ["SSHConnectionError", "SSHConnectionPool", "SSHExecutionError"]
 
 _MAX_RETRIES = 2
 _DEFAULT_TIMEOUT = 30
@@ -42,8 +42,25 @@ class SSHExecutionError(RuntimeError):
     """Raised when a remote command cannot be executed after retries."""
 
 
+class SSHConnectionError(SSHExecutionError):
+    """Raised when the SSH transport itself cannot be established.
+
+    Connection-phase failures (host-key rejection, authentication failure,
+    DNS/TCP errors) are deterministic in practice; this subclass keeps them
+    catchable by existing ``except SSHExecutionError`` callers while letting
+    callers such as :func:`acp.scheduler.remote.node_manager.detect_node_python`
+    abort immediately instead of re-probing every interpreter candidate.
+    """
+
+
 class _WarnThenAddPolicy(paramiko.MissingHostKeyPolicy):
-    """Log a warning for an unknown host key, then accept it (AutoAdd-style)."""
+    """Log a warning for an unknown host key, then accept it (AutoAdd-style).
+
+    The accepted key is kept in the client's in-memory trust store only —
+    nothing is written back to ``~/.ssh/known_hosts``.  A key that IS known
+    but has changed never reaches a missing-host policy at all (paramiko
+    raises ``BadHostKeyException`` before consulting it).
+    """
 
     def missing_host_key(self, client, hostname, key):  # type: ignore[override]
         logger.warning(
@@ -77,9 +94,39 @@ def _redact_node(node: RemoteNode) -> dict[str, Any]:
     }
 
 
+def _load_known_hosts(client: paramiko.SSHClient) -> None:
+    """Best-effort load of the invoking user's known-hosts trust store.
+
+    ``SSHClient.load_system_host_keys()`` reads ``~/.ssh/known_hosts`` (only
+    the user file — /etc/ssh/ssh_known_hosts is not consulted by paramiko).
+    A corrupt line raises ``paramiko.hostkeys.InvalidHostKey``, which is NOT
+    an ``SSHException`` subclass and is not masked by paramiko; swallowing it
+    here is deliberate — a broken local file must degrade to a warning, not
+    disable every remote node.
+    """
+    try:
+        client.load_system_host_keys()
+    except Exception as exc:  # noqa: BLE001 — a broken local trust store must not block every node
+        logger.warning("Could not load ~/.ssh/known_hosts (%s); continuing", exc)
+    else:
+        logger.debug("Loaded the SSH known-hosts trust store from ~/.ssh/known_hosts")
+
+
 def _create_client(node: RemoteNode, timeout: int = _DEFAULT_TIMEOUT) -> paramiko.SSHClient:
-    """Create and connect a fresh ``SSHClient`` for *node*."""
+    """Create and connect a fresh ``SSHClient`` for *node*.
+
+    The invoking user's ``~/.ssh/known_hosts`` is loaded BEFORE a policy is
+    installed.  A bare ``paramiko.SSHClient`` starts with an EMPTY trust
+    store, so the default ``reject`` policy would otherwise refuse every host
+    as "not found in known_hosts" — even a host whose key the ``acp init``
+    probe already verified against that same file.
+
+    A failed ``connect`` always closes the freshly created client so retries
+    do not leak transports; the exception itself is re-raised unchanged for
+    the pool to classify.
+    """
     client = paramiko.SSHClient()
+    _load_known_hosts(client)
     client.set_missing_host_key_policy(_host_key_policy(node.host_key_policy))
 
     password = node.resolved_password()
@@ -95,7 +142,13 @@ def _create_client(node: RemoteNode, timeout: int = _DEFAULT_TIMEOUT) -> paramik
         connect_kwargs["key_filename"] = node.key_file
 
     logger.debug("Connecting SSH to node %s", _redact_node(node))
-    client.connect(**connect_kwargs)
+    try:
+        client.connect(**connect_kwargs)
+    except BaseException:
+        # Cleanup only — the (possibly BaseException) failure is re-raised
+        # unchanged so the caller keeps full diagnostic context.
+        _safe_close(client)
+        raise
     # Keep the transport warm so idle pooled connections survive sshd /
     # firewall idle reaping (otherwise the pool churns through thousands
     # of reconnects under the per-job 15s poll loop).
@@ -253,12 +306,24 @@ class SSHConnectionPool:
     ) -> tuple[int, str, str]:
         """Run *command* on *node* and return ``(exit_code, stdout, stderr)``.
 
-        Retries up to :data:`_MAX_RETRIES` times with a fresh connection on
-        failure.
+        Command failures are retried up to :data:`_MAX_RETRIES` times with a
+        fresh connection.  Connection-establishment failures (host-key
+        rejection, authentication, unreachable node) are **not** retried:
+        they are deterministic and every retry would pay the full connect
+        timeout again — inside the interpreter-candidate loop that turned
+        one unreachable node into minutes of waiting.  They surface as
+        :class:`SSHConnectionError` (an :class:`SSHExecutionError`), never as
+        a raw paramiko exception.
         """
         last_exc: Exception | None = None
         for attempt in range(_MAX_RETRIES + 1):
-            client = self.borrow(node)
+            try:
+                client = self.borrow(node)
+            except Exception as exc:
+                raise SSHConnectionError(
+                    f"Failed to connect to node {node.name!r} ({node.host}:{node.port}): {exc}"
+                ) from exc
+
             broken = False
             try:
                 _stdin, stdout, stderr = client.exec_command(command, timeout=timeout)
@@ -293,8 +358,16 @@ class SSHConnectionPool:
 
             with pool.sftp_session(node) as sftp:
                 sftp.put("local.txt", "/remote/path.txt")
+
+        Connection-stage failures surface as :class:`SSHConnectionError` (an
+        :class:`SSHExecutionError`), matching :meth:`execute`.
         """
-        client = self.borrow(node)
+        try:
+            client = self.borrow(node)
+        except Exception as exc:
+            raise SSHConnectionError(
+                f"Cannot open SFTP session on node {node.name!r} ({node.host}:{node.port}): {exc}"
+            ) from exc
         broken = False
         try:
             sftp = client.open_sftp()

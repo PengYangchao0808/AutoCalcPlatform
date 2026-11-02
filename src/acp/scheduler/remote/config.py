@@ -102,10 +102,13 @@ class RemoteNode:
         max_concurrent_jobs: Maximum simultaneous LSF jobs allowed on this
             node; also governs the SSH connection-pool size.
         enabled: Whether this node is eligible for job dispatch.
-        host_key_policy: SSH host-key verification policy. One of
-            ``"reject"`` (default — refuse unknown hosts, safest),
-            ``"auto_add"`` (accept and record new hosts, for trusted
-            internal networks), ``"warn"`` (log a warning but accept).
+        host_key_policy: SSH host-key verification policy. ``"reject"``
+            (default, safest) verifies every host against the invoking
+            user's ``~/.ssh/known_hosts`` and refuses unknown keys;
+            ``"auto_add"`` accepts *unknown* hosts in memory (nothing is
+            written back to ``known_hosts``); ``"warn"`` logs and accepts
+            them.  A host that IS known but whose key changed always raises
+            ``BadHostKeyException``, whatever the policy.
         queue: Per-node LSF queue override (``#BSUB -q``). ``None`` (default)
             falls back to :attr:`RemoteExecutionConfig.queue` at submission
             time. Purely a submission attribute — never a filtering axis.

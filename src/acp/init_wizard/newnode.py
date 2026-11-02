@@ -433,6 +433,36 @@ class BootstrapOutcome:
     stderr_tail: str = ""
 
 
+def _bootstrap_failure_hint(error: str) -> str | None:
+    """Return an actionable hint for a recognizable bootstrap SSH failure.
+
+    Text matching only (no paramiko import — D7): the messages come from
+    paramiko (``not found in known_hosts``, ``Authentication failed``) or
+    from the pool's :class:`~acp.scheduler.remote.ssh.SSHConnectionError`.
+    """
+    lowered = error.lower()
+    if "host key for server" in lowered or "does not match" in lowered:
+        return (
+            "提示：节点主机密钥与本地记录不一致"
+            "（节点可能重装或更换过 SSH 密钥，也可能存在中间人攻击）。"
+            "请先通过带外渠道核对新指纹；确认无误后执行 ssh-keygen -R <主机>"
+            '（非默认端口用 ssh-keygen -R "[主机]:端口"）删除旧条目，再重新执行 acp init。'
+            "不要直接用 auto_add 跳过密钥变更校验。"
+        )
+    if "known_hosts" in lowered or "badhostkey" in lowered or "主机密钥" in error:
+        return (
+            "提示：SSH 主机密钥校验失败。请把该节点的主机密钥登记到当前用户的 "
+            "~/.ssh/known_hosts（例如 ssh-keyscan -H <主机> >> ~/.ssh/known_hosts）后重试；"
+            "或在节点配置中设置 host_key_policy: auto_add（会接受未知主机，请谨慎）。"
+        )
+    if "authentication" in lowered or "认证" in error:
+        return (
+            "提示：SSH 认证失败。请检查密码、ACP_REMOTE_PASSWORD_<节点名> 环境变量"
+            "或 key_file 配置后重试。"
+        )
+    return None
+
+
 def run_bootstrap_stage(pool: Any, node: Any, prompts: PromptBundle) -> BootstrapOutcome:
     """Bootstrap *node* via ``NodeManager.bootstrap_node`` (D18a menu).
 
@@ -444,7 +474,11 @@ def run_bootstrap_stage(pool: Any, node: Any, prompts: PromptBundle) -> Bootstra
 
     Failure menu is EXACTLY 重试 bootstrap / 放弃（节点不保存）; on a
     python-probe failure the 重试 branch additionally offers a python-path
-    prompt (empty = keep the built-in candidate list).
+    prompt (empty = keep the built-in candidate list).  An unexpected
+    exception from ``bootstrap_node`` is converted into a failed
+    ``BootstrapResult`` so the menu owns recovery — the wizard never
+    surfaces a traceback (D18a).  ``WizardAborted``/``InitAbort`` still
+    propagate (user abort / fatal config error).
 
     Args:
         pool: Live SSH connection pool owned by the caller (T7 flow).
@@ -455,13 +489,23 @@ def run_bootstrap_stage(pool: Any, node: Any, prompts: PromptBundle) -> Bootstra
         :class:`BootstrapOutcome` — 放弃 returns ``ok=False`` immediately.
     """
     from acp.scheduler.remote.config import RemoteExecutionConfig
-    from acp.scheduler.remote.node_manager import NodeManager
+    from acp.scheduler.remote.node_manager import BootstrapResult, NodeManager
 
     config = RemoteExecutionConfig(execution_mode="remote", nodes=[node])
     manager = NodeManager(config, pool)
 
     while True:
-        result = manager.bootstrap_node(node.name)
+        try:
+            result = manager.bootstrap_node(node.name)
+        except (WizardAborted, InitAbort):
+            raise
+        except Exception as exc:  # noqa: BLE001 — D18a: the failure menu owns recovery, never a traceback
+            logger.debug("bootstrap_node raised unexpectedly on %s", node.name, exc_info=True)
+            result = BootstrapResult(
+                node=node.name,
+                reachable=False,
+                error=str(exc) or exc.__class__.__name__,
+            )
         tail_parts = [result.stderr[-_STDERR_TAIL_CHARS:].strip(), *result.sync_errors]
         tail = "\n".join(part for part in tail_parts if part)
         if result.ok:
@@ -474,6 +518,9 @@ def run_bootstrap_stage(pool: Any, node: Any, prompts: PromptBundle) -> Bootstra
 
         error = result.error or f"bootstrap failed (exit={result.exit_code})"
         print(f"节点初始化失败：{error}")
+        hint = _bootstrap_failure_hint(error)
+        if hint:
+            print(hint)
         if tail:
             print(tail)
         choice = prompts.menu(
