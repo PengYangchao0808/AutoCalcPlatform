@@ -1,12 +1,12 @@
 {
   "counts": {
-    "bytes": 4018914,
-    "css": 18,
-    "files": 107,
+    "bytes": 6612321,
+    "css": 32,
+    "files": 157,
     "html": 4,
-    "js": 80
+    "js": 100
   },
-  "digest": "b1797515b08647a58dab2307452d71699c2e9484953d248f2dddb6e1d1375cf0",
+  "digest": "814b5f24da83d1f2bddead372094285662cca807b19e12d525d5385d8bfb5d48",
   "digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\"",
   "entry_points": {
     "index": "ACP_Workbench_v2.html",
@@ -34,39 +34,117 @@
     },
     {
       "media_type": "text/css",
+      "path": "css/modules/approval-card.css",
+      "sha256": "b3b884c15823e77eea9eb78049958aba9c8f9804d3ebe252dd9d8565e644a379",
+      "size_bytes": 6901
+    },
+    {
+      "media_type": "text/css",
+      "path": "css/modules/capability-form.css",
+      "sha256": "402283953e9576eee3c95966d90b0b0e8cb46afa5a3e934f551e45fbb94e75ce",
+      "size_bytes": 7155
+    },
+    {
+      "media_type": "text/css",
+      "path": "css/modules/energy-profile.css",
+      "sha256": "98f6c5d7a62f163e38a908f3a5ead0baa23f6f0b7fd1214ec3e8693ac87e2a9c",
+      "size_bytes": 9594
+    },
+    {
+      "media_type": "text/css",
       "path": "css/modules/exec-detail.css",
-      "sha256": "a3829b9e0c17a3f3ab8e5005bbfd8d35b1f20906403c3c57801f443efd64ddf8",
-      "size_bytes": 3688
+      "sha256": "8ed27ff9f4dcd71251f27e75aa6f3492a311d6af9ea184d060e894c998eaad6c",
+      "size_bytes": 12263
+    },
+    {
+      "media_type": "text/css",
+      "path": "css/modules/job-edit.css",
+      "sha256": "f421116974f4b8a3cc958e5d6d3638db4b4a9f26e7681cb0f52c364d4a4ff02d",
+      "size_bytes": 9065
+    },
+    {
+      "media_type": "text/css",
+      "path": "css/modules/mechanism-plan.css",
+      "sha256": "43d2083498dc0583f6506e1ad2c18a2741eef97fee6abca72d524e6b1e6c0229",
+      "size_bytes": 12871
     },
     {
       "media_type": "text/css",
       "path": "css/modules/molecule-viewer.css",
-      "sha256": "0c4e7e84def2ad187dc5a169600bb09218ce5ce99190f377f38f40854cff7efa",
-      "size_bytes": 1819
+      "sha256": "8b117deb649308c2774ee908e066ef012cf956e0fae57edad4188b74729dc6b8",
+      "size_bytes": 25369
+    },
+    {
+      "media_type": "text/css",
+      "path": "css/modules/nmr-report.css",
+      "sha256": "22771cfb5420286df3bcaf14413276d142dda18a891a7d0309b7140822ff4751",
+      "size_bytes": 13099
+    },
+    {
+      "media_type": "text/css",
+      "path": "css/modules/node-status.css",
+      "sha256": "1b0dd30be0686b605d9e402360af5fe0976ef210bb336a822c17d3848c2ded8f",
+      "size_bytes": 9526
+    },
+    {
+      "media_type": "text/css",
+      "path": "css/modules/path-view.css",
+      "sha256": "4c55134785f1ee555b5ec72ef26c9938188755e9b6ddf42796f355aa32c8259f",
+      "size_bytes": 8470
+    },
+    {
+      "media_type": "text/css",
+      "path": "css/modules/pes-handoff.css",
+      "sha256": "e13446852c98998fcfde6595808051ac57966d697275ec9837e836ced44304a4",
+      "size_bytes": 8731
     },
     {
       "media_type": "text/css",
       "path": "css/modules/reaction-network.css",
-      "sha256": "2193516107104faec4a2cdf5a8d616a9a427eb883484cd328c17338cb72e5733",
-      "size_bytes": 3283
+      "sha256": "d8c3dd351c81994fc97b0e30e1a0398144590008c9cc5e100bacb101e295d7b1",
+      "size_bytes": 3764
+    },
+    {
+      "media_type": "text/css",
+      "path": "css/modules/research-record.css",
+      "sha256": "2fb3d74222078ec05ef30eab9ea3597b3cbdf2e5aacc03fc3ceeefa0c82d3d57",
+      "size_bytes": 12247
+    },
+    {
+      "media_type": "text/css",
+      "path": "css/modules/s2-scan.css",
+      "sha256": "15b93ab47508de85eef04ef967f4b01d164f82601c6d18baefe95fc2ea355954",
+      "size_bytes": 9197
     },
     {
       "media_type": "text/css",
       "path": "css/modules/task-config.css",
-      "sha256": "3a32c66c61f51bf5eb8a9f89777ccdc8e7fc7f7877345b282d11f487498811da",
-      "size_bytes": 6512
+      "sha256": "bf4c2c69e9bade965e49b468c9617d63076d118ba1def5e515a4d0e94c3449c9",
+      "size_bytes": 11261
     },
     {
       "media_type": "text/css",
       "path": "css/modules/task-explorer.css",
-      "sha256": "8bdba6a171422b3364a4b59e4fe2cb814f27d3e4b8787e9a7039e8bae84ff3af",
-      "size_bytes": 8814
+      "sha256": "683b2519b9b85106f7153b2a332527d625ace29a49f5ab1148e59a52d3ddf77b",
+      "size_bytes": 24848
+    },
+    {
+      "media_type": "text/css",
+      "path": "css/modules/task-wizard.css",
+      "sha256": "d7e6a2a6eb9f2036e1c915b4cceae87d6cd81d669bbe7f821cf3b7bf0a12db15",
+      "size_bytes": 19786
+    },
+    {
+      "media_type": "text/css",
+      "path": "css/modules/tsmode-editor.css",
+      "sha256": "d9700b94dbcf1473843311d54d4ba7aa9ac15afa6848ac1ba797b810167a97b0",
+      "size_bytes": 10239
     },
     {
       "media_type": "text/css",
       "path": "css/modules/workspace-details.css",
-      "sha256": "72c0265c9d14a29d5beb63dbea2b7d1c2b356ad056dd44228373faa1389a1045",
-      "size_bytes": 686
+      "sha256": "b35abaf78a946e1c213e799aaaef58071c873fcfd4b27437e902fba56583555a",
+      "size_bytes": 951
     },
     {
       "media_type": "text/css",
@@ -77,8 +155,14 @@
     {
       "media_type": "text/css",
       "path": "css/shell/shell.css",
-      "sha256": "e011cb32918d4801f9ddb57e0f0c630682e25ee02e2e7982a2f1f73738f8e855",
-      "size_bytes": 21518
+      "sha256": "4e6e9f2e4936bf992b81469b4fba6e4666edca5776367c10edd79ed10c9b5073",
+      "size_bytes": 24556
+    },
+    {
+      "media_type": "text/css",
+      "path": "css/shell/tool-drawer.css",
+      "sha256": "9376641c0dea2584fa26977df2466605e2ad2da226dbc8fe1f25393bfecd52bb",
+      "size_bytes": 2772
     },
     {
       "media_type": "text/css",
@@ -107,8 +191,8 @@
     {
       "media_type": "text/css",
       "path": "css/workbench/base.css",
-      "sha256": "b8b785db58c9510eb34ac6edd0483286da2314bd1fcc301087c8f9bcb90d66fc",
-      "size_bytes": 2092
+      "sha256": "0ef45c5a02e8f56cbcf3c8dd5cc6bc6dc45a60c7ba73db1a59f365a34fe53e85",
+      "size_bytes": 2805
     },
     {
       "media_type": "text/css",
@@ -157,6 +241,12 @@
       "path": "js/client/event-stream.js",
       "sha256": "a297d292991be62ee4560450bbb2bd7c7110d35a3992534697f12510b61b2a1a",
       "size_bytes": 7537
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/client/frame-candidates.js",
+      "sha256": "0f0737dc2a795dd5afb754b7098bc0d320a94b51f2153a4164385e189d68b462",
+      "size_bytes": 2117
     },
     {
       "media_type": "text/javascript",
@@ -255,28 +345,172 @@
       "size_bytes": 44502
     },
     {
+      "media_type": "text/markdown",
+      "path": "js/modules/approval-card/README.md",
+      "sha256": "4c6eb8a6773e4294eee2eff40a4e7cc8db97b44976fc85f56708bf6cb32cdb75",
+      "size_bytes": 12484
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/modules/approval-card/module.js",
+      "sha256": "ee673d3956016013d9f780ca35ff45efdc1b6b9d40310e27652fdea555d852bf",
+      "size_bytes": 51830
+    },
+    {
+      "media_type": "text/markdown",
+      "path": "js/modules/capability-form/README.md",
+      "sha256": "c06840119a97746d2f0c324bddb68d143d80dd9cb4d07405bee64f0f507b36a0",
+      "size_bytes": 19242
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/modules/capability-form/module.js",
+      "sha256": "53cf8a78b5835c48a5a6265cd814aab647a7e533d163c8755b0de2956f6334f1",
+      "size_bytes": 90172
+    },
+    {
+      "media_type": "text/markdown",
+      "path": "js/modules/energy-profile/README.md",
+      "sha256": "4bfee5c6c796c6af254f2ab95e246993a652855bb928e643ffb1c0bdf7f51370",
+      "size_bytes": 3841
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/modules/energy-profile/module.js",
+      "sha256": "245529216c4c73d37ba4d868e8dd0f49e7ae6c04590132a8fa32de000924e96a",
+      "size_bytes": 47715
+    },
+    {
+      "media_type": "text/markdown",
+      "path": "js/modules/exec-detail/README.md",
+      "sha256": "059ff2a745fdb067e9aa1e62c06df806c37b364b40deccef15f3225f8d7c61ce",
+      "size_bytes": 15318
+    },
+    {
       "media_type": "text/javascript",
       "path": "js/modules/exec-detail/module.js",
-      "sha256": "ed97079e6a1352fce7616003d3d97a293794eaab07dbb994b9b2040fc960226c",
-      "size_bytes": 18785
+      "sha256": "17abd7f48c4b4fb8a6fed5b0df5ad5fed71658c125e13ca4b016c2b8831e0605",
+      "size_bytes": 81520
+    },
+    {
+      "media_type": "text/markdown",
+      "path": "js/modules/job-edit/README.md",
+      "sha256": "fad96bf148dd2ff41cdb527a60294fe53919e8286dc0e8db7866583b9ad0110b",
+      "size_bytes": 30489
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/modules/job-edit/module.js",
+      "sha256": "0b2144a65beb494e7654d04bff02fafe384d68ceecf235ef9d26478dcb9fde82",
+      "size_bytes": 98808
+    },
+    {
+      "media_type": "text/markdown",
+      "path": "js/modules/mechanism-plan/README.md",
+      "sha256": "9bcc04e3eb8808a4ef0de6c29c25cb6ffe0f527449d6b7972d446142cf2b4332",
+      "size_bytes": 31450
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/modules/mechanism-plan/module.js",
+      "sha256": "aa19bca21fb824378ac1ab946201878526a1ffaa7772f6e955a2ac94494f165e",
+      "size_bytes": 105905
     },
     {
       "media_type": "text/markdown",
       "path": "js/modules/molecule-viewer/README.md",
-      "sha256": "9b44302b0a32de56f56f6a79748b026ba8786b1a10b3d9875307128d3a824028",
-      "size_bytes": 7919
+      "sha256": "17143b972b26ded8bd6e302b704041c504ec8e069f58af7664cbc910e4e5f58a",
+      "size_bytes": 28328
     },
     {
       "media_type": "text/javascript",
       "path": "js/modules/molecule-viewer/module.js",
-      "sha256": "a5f7924c09a1a32cb98588be7920fd3f1aa37b0d244df3db1fe2aa181adbe77e",
-      "size_bytes": 22631
+      "sha256": "00419d74b6ff495ff228d1ce7c747a9c9bb6c76fcaa9929794e46f4d1c23b7bd",
+      "size_bytes": 175805
+    },
+    {
+      "media_type": "text/markdown",
+      "path": "js/modules/nmr-report/README.md",
+      "sha256": "ab7402957fac6ff5d6c837b950ba0d6c62cb1576ccc8e64a5a508ab1416cb39a",
+      "size_bytes": 16110
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/modules/nmr-report/module.js",
+      "sha256": "7c0afe37f9f8a07aed03aacd6237d9866c58ed3f2d044b3a3aa1a08205d48543",
+      "size_bytes": 113209
+    },
+    {
+      "media_type": "text/markdown",
+      "path": "js/modules/node-status/README.md",
+      "sha256": "aecc5e66b4ca0ff82668a28be78ff763c7b8085ae36d403028a4ef493cff7a47",
+      "size_bytes": 14533
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/modules/node-status/module.js",
+      "sha256": "70401e961d55e17d7014a3f086e5d9cd817c01824b47c5a7486df2fdc2cf35dc",
+      "size_bytes": 55553
+    },
+    {
+      "media_type": "text/markdown",
+      "path": "js/modules/path-view/README.md",
+      "sha256": "ad153a3017a971aca66e3a303e3749be02fd31f268876e5292849d06c7efb2ce",
+      "size_bytes": 21117
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/modules/path-view/module.js",
+      "sha256": "0b167a561bcd65bd4e2b90b08debdcc50cce6a44237cfbbb4c9d90a41e5f50cf",
+      "size_bytes": 76967
+    },
+    {
+      "media_type": "text/markdown",
+      "path": "js/modules/pes-handoff/README.md",
+      "sha256": "826a7f7758fe9cc3b2fbaef9a73efc77459173286d414da8cd2c022cc7e1a05c",
+      "size_bytes": 26386
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/modules/pes-handoff/module.js",
+      "sha256": "6df7a1844ef89da60b77a0c4b793f20b2a5028ae284a1ced553135df822462d8",
+      "size_bytes": 95924
     },
     {
       "media_type": "text/javascript",
       "path": "js/modules/reaction-network/module.js",
       "sha256": "b031f7c9a37cdae14d1a2f53544eaafbd7eab61f34e67cb814440fa2352c7dab",
       "size_bytes": 23916
+    },
+    {
+      "media_type": "text/markdown",
+      "path": "js/modules/research-record/README.md",
+      "sha256": "8804d4e40be5e3e3f32d095406f382fc0aa24e18c42239c71a9ba9f6bc557fdb",
+      "size_bytes": 20159
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/modules/research-record/module.js",
+      "sha256": "b112a4807290501c76c24d6de6fd139bdbc3aabbabea84e78faf928791eb0313",
+      "size_bytes": 99725
+    },
+    {
+      "media_type": "text/markdown",
+      "path": "js/modules/s2-scan/README.md",
+      "sha256": "d1f09c9f9494af012e0d7d91dbc5a35b341d50bfc0d6ea0ae137a733ab064056",
+      "size_bytes": 22595
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/modules/s2-scan/module.js",
+      "sha256": "555b1c648cffc6b26e21c8cb4523388d88894563a07868443f8d59a7a6e2e43b",
+      "size_bytes": 81510
+    },
+    {
+      "media_type": "text/markdown",
+      "path": "js/modules/task-config/README.md",
+      "sha256": "c6bfbb5585ab8221bf313a415a319f0c2d717e20e4ac7cb2cb6c7aba3b24ab0b",
+      "size_bytes": 8810
     },
     {
       "media_type": "text/javascript",
@@ -287,26 +521,50 @@
     {
       "media_type": "text/javascript",
       "path": "js/modules/task-config/module.js",
-      "sha256": "3572c7c757fc56d2a14febb247dd52941c87bea81b8b1a7e0d6b3d7261f6fa70",
-      "size_bytes": 67775
+      "sha256": "e2e5db82c76d1ecfaf3a9ddf739915e2c3f998d76280c8a4f0d28621b3de5e6e",
+      "size_bytes": 106856
     },
     {
       "media_type": "text/markdown",
       "path": "js/modules/task-explorer/README.md",
-      "sha256": "69320e0cd03b11decbab966b95e831858e48b887145e2fdacd692e5095279819",
-      "size_bytes": 8130
+      "sha256": "5f9b1adf210dd396bf62611f6e75ceb3fea9be67b1ae87f5b35e94de1714d101",
+      "size_bytes": 40694
     },
     {
       "media_type": "text/javascript",
       "path": "js/modules/task-explorer/module.js",
-      "sha256": "7eb7c0b0323f5375b648c5ea5885a53b22ea1c689f08eea492eb338178e780d1",
-      "size_bytes": 33924
+      "sha256": "6227ae8624354dc902829208ef9bec333590bb6933eb33b0537fff3d3a09364d",
+      "size_bytes": 164188
+    },
+    {
+      "media_type": "text/markdown",
+      "path": "js/modules/task-wizard/README.md",
+      "sha256": "ce72b0be781f473d870d7bfdb739ac7f3f525658170656329572506f4f40e456",
+      "size_bytes": 66880
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/modules/task-wizard/module.js",
+      "sha256": "b4dbbe392fdd8f52952b43b708e3f21e57b118b1c6f1f457a13c4660bda9aae5",
+      "size_bytes": 285539
+    },
+    {
+      "media_type": "text/markdown",
+      "path": "js/modules/tsmode-editor/README.md",
+      "sha256": "2b94d3233599d4bd59ff7ccf50fb5e77b4fd6226c6fcbea8a6362848418b19df",
+      "size_bytes": 28231
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/modules/tsmode-editor/module.js",
+      "sha256": "3bd4bb7c0583fa0d32ff021ffa9814bed26631e4d81a9503fe0b6db9a93cf4ff",
+      "size_bytes": 82862
     },
     {
       "media_type": "text/javascript",
       "path": "js/shell/bootstrap.js",
-      "sha256": "3170f592aebeafa0fc2ce81709a7d826a885dc7ad6cc71b48a4fb1debc6f3131",
-      "size_bytes": 6562
+      "sha256": "8da8007acf91de686baac117ae6d8a085b14e83bfef84be2f37888bbbeb3c6e9",
+      "size_bytes": 7355
     },
     {
       "media_type": "text/javascript",
@@ -317,26 +575,26 @@
     {
       "media_type": "text/javascript",
       "path": "js/shell/i18n.js",
-      "sha256": "8e675e992d1a2a3aa4297c233d511405457f148707eee4ce50c0a73d355d1ff9",
-      "size_bytes": 30811
+      "sha256": "3f26c6cecc24bc0626b528f906f0c5fb32b89ca448d74b91d8f1ec41824eb08d",
+      "size_bytes": 263655
     },
     {
       "media_type": "text/javascript",
       "path": "js/shell/layout-editor.js",
-      "sha256": "bc46c0e30030d2914c3a5cecd1c5c5d9abb0dab5df6be30decc4cc4c37bb1f0c",
-      "size_bytes": 5289
+      "sha256": "6036b710511af92ce58753370be395b87b97e871c6a483747c89532e6deadcc3",
+      "size_bytes": 10073
     },
     {
       "media_type": "text/javascript",
       "path": "js/shell/layout-manager.js",
-      "sha256": "f815e30c63aa5f8a27f3161bbee64f6a8cd76b388e3879f764232a2ad604c575",
-      "size_bytes": 38636
+      "sha256": "4aa79a6d38120fcbae3eff2636ac85425be506293df7bc425970db24ad3e1dda",
+      "size_bytes": 52851
     },
     {
       "media_type": "text/javascript",
       "path": "js/shell/layout-preferences.js",
-      "sha256": "0afd8cfa38b2ccc048510105d190ca644d621b56ff43dfaa7e45358142003558",
-      "size_bytes": 4128
+      "sha256": "19e31b85c31533f7f4980d611d4c56b8900be9fd03589fd48c22623e1cd49e60",
+      "size_bytes": 6414
     },
     {
       "media_type": "text/javascript",
@@ -365,8 +623,14 @@
     {
       "media_type": "text/javascript",
       "path": "js/shell/recipes.js",
-      "sha256": "ce7cd8b9f3dafbbf7e4be658a775f238110927134fcce9e6f13324d7fbc023b3",
-      "size_bytes": 5219
+      "sha256": "b228af6838b5cd5e2a9f4261e8992f12484913e3d1b205d52a35356283efa139",
+      "size_bytes": 5454
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/shell/tool-drawer.js",
+      "sha256": "5d7eec3aaee8eec0430e1eb36d1d4933c0ad3cd6b6f8b45a35d6240b3124f937",
+      "size_bytes": 7988
     },
     {
       "media_type": "text/javascript",
@@ -429,10 +693,34 @@
       "size_bytes": 76254
     },
     {
+      "media_type": "text/markdown",
+      "path": "js/visualization/VIEW_ADAPTER.md",
+      "sha256": "a5d054b20dc4cfbf2ce997ac7c2bcec9ac5212be254e3e2c5012aaf3e62ba682",
+      "size_bytes": 3889
+    },
+    {
       "media_type": "text/javascript",
       "path": "js/visualization/energy_chart_renderer.js",
       "sha256": "d7d5626128014b54b997eed03d349c9c104c1e6461947593928ef3fa604b8b8c",
       "size_bytes": 56240
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/visualization/fixtures/views/catalog.js",
+      "sha256": "a379ecf017f720906c53540ee29e02949b5bb656fcafd54c58f96f323049f656",
+      "size_bytes": 2125
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/visualization/fixtures/views/energy.js",
+      "sha256": "e667f3e877d9200d633e8c863dd6177d97ac6ba7dd83df8e8a6969e5216faa5c",
+      "size_bytes": 2029
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/visualization/fixtures/views/structure.js",
+      "sha256": "6d8641f15626f5d03ba6aeeb299197bcefb172639ac8a5d85fb0391ec3667121",
+      "size_bytes": 1304
     },
     {
       "media_type": "text/javascript",
@@ -451,6 +739,18 @@
       "path": "js/visualization/scene_instance.js",
       "sha256": "d2156ddd940d70bd804c6557857d32e7537ef7f02a20b2311b810b2d4c7e60d4",
       "size_bytes": 28299
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/visualization/view_model.js",
+      "sha256": "db5ce96d75cfafed1890f648e5089dccc81d078d991ab9f7a7438f1e70d594b4",
+      "size_bytes": 27595
+    },
+    {
+      "media_type": "text/javascript",
+      "path": "js/visualization/view_source.js",
+      "sha256": "36ffd8a2d0b115e67b6f0da6e79668be0e1fe1ec27059b9142e9fdeba6a8278f",
+      "size_bytes": 27797
     },
     {
       "media_type": "text/javascript",
@@ -653,8 +953,8 @@
     {
       "media_type": "text/html",
       "path": "next/index.html",
-      "sha256": "de4734e6a7a19b795ea10d246f8844ebf8be0b1acf138ede16eb164a6290ce0a",
-      "size_bytes": 13585
+      "sha256": "de900b8134a03a47b5ed57ead2eaa327c562efce1c9a774dfbe1f3c780c1819f",
+      "size_bytes": 18342
     }
   ],
   "package_version": "0.3.0",
