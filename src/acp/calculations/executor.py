@@ -483,10 +483,93 @@ def _extract_method(step_spec: OptimizationSpec | dict[str, JsonValue] | None, d
     return default
 
 
+def _method_text(value: JsonValue) -> str | None:
+    """Return a non-empty stripped method string, or ``None``.
+
+    An empty string is never a method identity: it reads as "a method exists
+    and its name is blank", which is a false fact (round-9 M12).
+    """
+    if not isinstance(value, str):
+        return None
+    return value.strip() or None
+
+
+def _method_from_levels(levels: JsonValue) -> str | None:
+    """Return the first nested method-level entry's method/functional."""
+    if not isinstance(levels, Mapping):
+        return None
+    for raw in levels.values():
+        entry = raw if isinstance(raw, Mapping) else None
+        if entry is None:
+            continue
+        for key in ("method", "functional"):
+            method = _method_text(entry.get(key))
+            if method is not None:
+                return method
+    return None
+
+
+def _method_identity_from_resources(
+    resources: Mapping[str, JsonValue],
+) -> tuple[str | None, str | None]:
+    """Resolve ``(method, source)`` from a step/job spec without inventing one.
+
+    Order (round-9 M12): explicit ``method`` → ``functional`` → the first
+    nested ``levels`` entry.  The step spec is the executor's frozen view of
+    the job request, so a resolved value is labelled ``job_spec``.
+    """
+    for key in ("method", "functional"):
+        method = _method_text(resources.get(key))
+        if method is not None:
+            return method, "job_spec"
+    level_method = _method_from_levels(resources.get("levels"))
+    if level_method is not None:
+        return level_method, "job_spec_levels"
+    return None, None
+
+
+def _resolve_energy_method(
+    plan: CalculationPlan, index: int
+) -> tuple[str | None, str | None, str | None]:
+    """Resolve ``(method, basis, source)`` for one step's energy product.
+
+    The plan's step spec carries the requested level; ``plan.profile`` is the
+    last resort only when it names a real level (``"default"`` is a container,
+    not a method).  Nothing is defaulted here: an unresolved method stays
+    ``None`` and the caller records ``method_unknown_reason``.
+    """
+    spec: Mapping[str, JsonValue] = {}
+    if index < len(plan.steps):
+        spec = _step_resources(_normalise_step(plan.steps[index]))
+
+    method, source = _method_identity_from_resources(spec)
+    basis = _method_text(spec.get("basis"))
+    if basis is None:
+        levels = spec.get("levels")
+        if isinstance(levels, Mapping):
+            for raw in levels.values():
+                entry = raw if isinstance(raw, Mapping) else None
+                if entry is None:
+                    continue
+                basis = _method_text(entry.get("basis"))
+                if basis is not None:
+                    break
+    if method is None:
+        profile = _method_text(plan.profile)
+        if profile is not None and profile not in {"default", "custom"}:
+            method, source = profile, "plan_profile"
+    return method, basis, source
+
+
 def _extract_method_from_resources(resources: dict[str, JsonValue], default: str) -> str:
-    """Extract method from merged step resources, falling back to *default*."""
-    method = resources.get("method")
-    return str(method) if isinstance(method, str) and method else default
+    """Extract method from merged step resources, falling back to *default*.
+
+    The job spec may carry the level as ``method``, ``functional`` or a nested
+    ``levels`` entry (round-9 M12); the caller's *default* applies only when
+    none of them resolves.
+    """
+    method, _ = _method_identity_from_resources(resources)
+    return method if method is not None else default
 
 
 def _ensure_artifact(item: StructureArtifact | Mapping[str, JsonValue]) -> StructureArtifact:
@@ -1980,39 +2063,39 @@ class CalculationPlanExecutor:
 
             # Publish energy as a real RESULT/energy file (plan D6/T11).
             if state.result.energy is not None:
+                from acp.results.energy_product import (
+                    ENERGY_METHOD_UNKNOWN_REASON,
+                    build_energy_product_payload,
+                )
                 from acp.results.frame_candidate_store import atomic_write_text
 
                 energy_hartree = float(state.result.energy)
-                method = plan.profile or ""
-                if state.index < len(plan.steps):
-                    method = _extract_method_from_resources(
-                        _step_resources(_normalise_step(plan.steps[state.index])), method
-                    )
+                method, basis, method_source = _resolve_energy_method(plan, state.index)
                 rel = f"energy/{product_id}.json"
+                payload = build_energy_product_payload(
+                    step_id=product_id,
+                    step_kind=state.kind.value,
+                    energy_hartree=energy_hartree,
+                    method=method,
+                )
                 atomic_write_text(
                     result_dir / rel,
-                    json.dumps(
-                        {
-                            "schema_version": "acp_energy_product_v1",
-                            "step_id": product_id,
-                            "step_kind": state.kind.value,
-                            "energy": energy_hartree,
-                            "energy_hartree": energy_hartree,
-                            "unit": "hartree",
-                            "method": method,
-                            "source": "scientific_result.json",
-                        },
-                        indent=2,
-                        sort_keys=True,
-                    )
-                    + "\n",
+                    json.dumps(payload, indent=2, sort_keys=True) + "\n",
                 )
+                energy_metadata: dict[str, object] = {"energy_hartree": energy_hartree}
+                if basis is not None:
+                    energy_metadata["basis"] = basis
+                if method_source is not None:
+                    energy_metadata["method_source"] = method_source
+                if method is None:
+                    # No level was resolvable: say so instead of writing "".
+                    energy_metadata["method_unknown_reason"] = ENERGY_METHOD_UNKNOWN_REASON
                 manifest.add_product(
                     id=f"{product_id}_energy",
                     label=f"{label} — energy",
                     path=rel,
                     kind=ProductKind.ENERGY_REPORT,
-                    metadata=_diagnostic_metadata({"energy_hartree": energy_hartree}, diagnostic),
+                    metadata=_diagnostic_metadata(energy_metadata, diagnostic),
                 )
 
         if publisher is None:

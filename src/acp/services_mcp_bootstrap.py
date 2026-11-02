@@ -140,6 +140,45 @@ def _terminal_failure(command: str, exc: Exception) -> mcp.McpToolError:
     )
 
 
+#: The two body rules that mean "this artifact has no verified presentation".
+#: Round-9 M1 made a path/secret-bearing body *readable* (masked), so the only
+#: remaining body refusal is a body that cannot be verified at all (binary).
+_READ_BODY_REFUSAL_RULES = frozenset({"artifact_body_unverifiable", "artifact_body_redacted"})
+
+
+def _read_error(exc: ControllerClientError) -> mcp.McpToolError:
+    """Map one artifact-read refusal onto the MCP read vocabulary.
+
+    A body with no verifiable presentation (non-UTF-8/binary) is an
+    ``unsupported_capability`` at this surface — the same code the adapter's own
+    body verifier raises for that rule — never ``input_invalid``: the request was
+    well formed and the artifact simply cannot be shown as text.
+    """
+    params = {"command": "read", **dict(exc.params)}
+    if str(params.get("rule") or "") in _READ_BODY_REFUSAL_RULES:
+        return mcp.McpToolError(
+            mo.ErrorCode.UNSUPPORTED_CAPABILITY,
+            exc.message,
+            params=params,
+            retryable=False,
+        )
+    return _tool_error("read", exc)
+
+
+def _operation_reference(operation_ref: Any) -> dict[str, Any]:
+    """Project one prepare operation reference onto ``{kind, id}`` (round-9 M10).
+
+    The Controller answers ``operation_ref`` as a mapping; it must be passed
+    through as a mapping.  ``str()``-ing it produced the Python ``dict`` repr,
+    which then became the ``id`` an agent could not send back.
+    """
+    if isinstance(operation_ref, Mapping):
+        reference = dict(operation_ref)
+        reference.setdefault("kind", "operation")
+        return reference
+    return {"kind": "operation", "id": str(operation_ref)}
+
+
 def _job_reference(record: Mapping[str, Any]) -> dict[str, Any]:
     task_ref = record.get("task_ref")
     if isinstance(task_ref, Mapping):
@@ -168,13 +207,24 @@ class _ControllerCapabilities:
         self._client = client
 
     def capabilities(
-        self, *, workflow: str | None = None, detail: str | None = None
+        self,
+        *,
+        workflow: str | None = None,
+        detail: str | None = None,
+        contract_sections: str | None = None,
     ) -> dict[str, Any]:
+        """Forward the discovery arguments to the Controller's capability route.
+
+        Round-9 M8: ``contract_sections`` is forwarded only when the caller asked
+        for it (the default response is unchanged), so the MCP port gate in
+        :mod:`acp_services.entrypoints.mcp` sees the keyword and the CORE view's
+        ``next.arguments`` actually work instead of failing ``capability_not_wired``.
+        A no-argument call still uses the plain ``GET /api/capabilities`` read.
+        """
         try:
-            if workflow is None and detail is None:
-                snapshot = self._client.capabilities()
-            else:
-                snapshot = self._client.capabilities(workflow=workflow, detail=detail)
+            snapshot = self._client.capabilities(
+                workflow=workflow, detail=detail, contract_sections=contract_sections
+            )
         except ControllerClientError as exc:
             raise _tool_error("capabilities", exc) from None
         data = dict(snapshot.raw)
@@ -361,10 +411,7 @@ class _ControllerArtifacts:
         operation_ref = record.get("operation_ref") or record.get("operation_id") or ""
         payload_out = dict(record)
         payload_out["operation_ref"] = operation_ref
-        payload_out.setdefault(
-            "reference",
-            {"kind": "operation", "id": str(operation_ref)},
-        )
+        payload_out.setdefault("reference", _operation_reference(operation_ref))
         return payload_out
 
     def read(self, request: Mapping[str, Any], *, workspace_id: str) -> Any:
@@ -375,7 +422,7 @@ class _ControllerArtifacts:
         except ApplicationParamError as exc:
             raise _param_error("read", exc) from None
         except ControllerClientError as exc:
-            raise _tool_error("read", exc) from None
+            raise _read_error(exc) from None
 
 
 class _ControllerAnalysis:

@@ -50,6 +50,7 @@ Author: ACP Services (B lane, todo 42).
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import re
 from collections.abc import Callable, Mapping, Sequence
@@ -75,6 +76,9 @@ __all__ = [
     "dry_run_result",
     "is_opaque_wait_cursor",
     "is_secret_field_name",
+    "ARTIFACT_BODY_REDACTION",
+    "mask_body_text",
+    "masked_body_digest",
     "redact",
     "redact_value",
 ]
@@ -541,6 +545,36 @@ def redact(text: str) -> str:
     readable while the value is dropped.
     """
     return _ABSOLUTE_PATH_RE.sub(REDACTED_PATH, _redact_secrets(text))
+
+
+#: The one artifact-body masking policy id (round-9 M1).  A body that carries a
+#: host path or a secret is returned with those values **masked**, and the read
+#: response names this policy so a consumer never mistakes the returned text for
+#: the stored bytes (``digest`` covers the artifact, ``masked_digest`` the text).
+ARTIFACT_BODY_REDACTION = "paths+secrets"
+
+
+def mask_body_text(text: str) -> str:
+    """Mask one artifact **body** text with the shared redactor.
+
+    The single body-masking implementation: it delegates to :func:`redact`
+    verbatim, so a masked body and a redacted message can never drift apart.
+    Round-9 M1 replaced the artifact layer's whole-body *refusal* with this
+    presentation, never with a second policy.  Deterministic and idempotent; it
+    removes every host path/secret the shared redactor matches and has no reveal
+    path (nothing is put back).
+    """
+    return redact(text)
+
+
+def masked_body_digest(body: bytes) -> str:
+    """``sha256:`` digest of the *masked* bytes a read returns.
+
+    ``digest`` always covers the **stored** artifact; this covers the returned
+    (possibly truncated) masked slice, so a consumer can verify exactly what it
+    received without re-deriving the masking.
+    """
+    return "sha256:" + hashlib.sha256(body).hexdigest()
 
 
 def redact_value(

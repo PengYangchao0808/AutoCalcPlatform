@@ -890,6 +890,7 @@ def _enrich_job_snapshot(
         events_mtime_ns = events_path.stat().st_mtime_ns
     except OSError:
         events_mtime_ns = None
+    state_mtime = state_stat.st_mtime if state_stat is not None else None
     cache_key = (record.id, state_mtime_ns, events_mtime_ns, include_event)
     with _ENRICHMENT_CACHE_LOCK:
         cached = _ENRICHMENT_CACHE.get(cache_key)
@@ -921,7 +922,9 @@ def _enrich_job_snapshot(
             val = data.get(key)
             if val is not None:
                 updates[key] = val
-    live = build_live_status(data)
+    # Round-9 M13: hand the projection the state-file mtime so a stale
+    # timestamp is detectable (the writer keeps observed_at == updated_at).
+    live = build_live_status(data, source_mtime=state_mtime)
     if live is not None:
         updates["live_status"] = live
     updates["display_method"] = resolve_display_method(
@@ -4420,6 +4423,58 @@ def _server_source_digests(record: Any, candidates: list[dict[str, Any]]) -> tup
     return profile_digest, geometry_digest
 
 
+def _self_signed_publication_allowed(request: Request, identity: Any) -> bool:
+    """Whether this entry may self-sign a selection authorization (round-9 M3).
+
+    Only the trusted ``local-single`` operator entry qualifies: the Controller
+    process itself (``operator`` subject + ``local-single`` permission scope) on
+    a ``local-single`` deployment tier.  An authenticated API-key principal —
+    and any ``lab``/``hosted`` tier that mandates one — never does, and no
+    request body/header field can change this answer.
+    """
+    from acp_services.contracts.access import DeploymentTier
+    from acp_services.workspace.command_identity import PermissionScope, SubjectKind
+
+    if str(getattr(identity, "subject_kind", "")) != SubjectKind.OPERATOR:
+        return False
+    if str(getattr(identity, "permission_scope", "")) != PermissionScope.LOCAL_SINGLE:
+        return False
+    principal = getattr(_server_identity(request), "principal", None)
+    return str(getattr(principal, "deployment_tier", "")) == DeploymentTier.LOCAL_SINGLE
+
+
+def _record_selection_self_signed_event(
+    request: Request,
+    job_id: str,
+    *,
+    authorization_id: str,
+    attempt: int,
+    candidates: tuple[Mapping[str, Any], ...],
+) -> None:
+    """Append the ``selection.self_signed`` audit event to the job's stream.
+
+    The minted record in the Data store is the durable grant; this job event is
+    the audit trail read next to the task.  It is written only after the record
+    was minted **and** consumed, so a refused publication never looks like a
+    granted authority.
+    """
+    manager = _manager(request)
+    event_log = getattr(manager, "event_log", None)
+    log = event_log(job_id) if callable(event_log) else None
+    if log is None:
+        logger.warning(
+            "selection.self_signed audit event has no job event log for %s", job_id
+        )
+        return
+    log.append(
+        "selection.self_signed",
+        job_id=job_id,
+        authorization_id=authorization_id,
+        attempt=int(attempt),
+        candidates=[dict(item) for item in candidates],
+    )
+
+
 def _authorize_agent_selection(
     request: Request,
     job_id: str,
@@ -4428,6 +4483,10 @@ def _authorize_agent_selection(
     """Validate and pre-consume one agent publication; returns the decision.
 
     The actor/project come from the verified server identity (never the body).
+    Round-9 M3: when no ``authorization_id`` is supplied, the trusted
+    ``local-single`` operator entry gets a bounded ``agent-self`` record minted
+    by the Controller; a supplied id always takes the normal validated path and
+    is never silently replaced.
     """
     import hashlib
     import json as _json
@@ -4445,10 +4504,6 @@ def _authorize_agent_selection(
         raise HTTPException(
             status_code=403,
             detail="authorized agent publication is disabled on this deployment",
-        )
-    if not req.authorization_id:
-        raise HTTPException(
-            status_code=422, detail="agent publication requires authorization_id"
         )
     store = getattr(request.app.state, "research_resources", None)
     if store is None:
@@ -4502,8 +4557,54 @@ def _authorize_agent_selection(
                 },
             },
         )
+    service = getattr(request.app.state, "selection_authorizations", None)
+    if service is None:
+        service = SelectionAuthorizationService(store)
+        request.app.state.selection_authorizations = service
+    authorization_id = str(req.authorization_id or "")
+    self_signed = False
+    if not authorization_id:
+        # No caller-supplied id: only the local-single operator entry may ask
+        # the Controller to mint one.  A supplied id (even a wrong one) never
+        # reaches this branch, so it is never silently replaced.
+        if not _self_signed_publication_allowed(request, identity):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "access_denied",
+                    "message": (
+                        "agent publication needs an authorization_id outside the "
+                        "local-single operator entry; mint one with POST "
+                        "/api/v1/selection-authorizations or publish manually "
+                        "with selector=manual"
+                    ),
+                    "params": {
+                        "field": "authorization_id",
+                        "rule": "authorization_required",
+                    },
+                },
+            )
+        try:
+            document = service.mint_self_signed(
+                source_job_id=job_id,
+                attempt=attempt,
+                principal_id=principal_id,
+                project_id=project_id,
+                candidate_count=len(candidates),
+            )
+        except SelectionAuthorizationError as exc:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": exc.code,
+                    "message": str(exc),
+                    "details": exc.details,
+                },
+            ) from exc
+        authorization_id = str(document.get("authorization_id") or "")
+        self_signed = True
     selection_request = SelectionPublicationRequest(
-        authorization_id=str(req.authorization_id),
+        authorization_id=authorization_id,
         selector="agent",
         actor_principal_id=principal_id,
         project_id=project_id,
@@ -4530,16 +4631,12 @@ def _authorize_agent_selection(
                 "expected_revision": req.expected_revision,
                 "candidates": candidates,
                 "note": req.note or "",
-                "authorization_id": str(req.authorization_id),
+                "authorization_id": authorization_id,
             },
             sort_keys=True,
             default=str,
         ).encode("utf-8")
     ).hexdigest()
-    service = getattr(request.app.state, "selection_authorizations", None)
-    if service is None:
-        service = SelectionAuthorizationService(store)
-        request.app.state.selection_authorizations = service
     try:
         decision = service.validate(
             selection_request,
@@ -4552,6 +4649,14 @@ def _authorize_agent_selection(
             status_code=403,
             detail={"code": exc.code, "message": str(exc), "details": exc.details},
         ) from exc
+    if self_signed:
+        _record_selection_self_signed_event(
+            request,
+            job_id,
+            authorization_id=authorization_id,
+            attempt=attempt,
+            candidates=candidates,
+        )
     decision_payload = decision.to_dict()
     decision_payload["action_digest"] = action_digest
     decision_payload["actor"] = principal_id
@@ -4906,6 +5011,21 @@ def save_pes_review_endpoint(
         payload["publication"].setdefault(
             "write_back", "written" if remote_ctx is not None else "local"
         )
+        # Round-9 M3: the receipt says where the consumed authority came from
+        # ("agent-self" = bounded local-single self-sign).  A replayed
+        # publication reports the origin recorded with the stored review, not
+        # the origin of a fresh grant minted for the retry.
+        stored_authorization = payload.get("authorization")
+        stored_origin = (
+            str(stored_authorization.get("authorization_origin") or "")
+            if isinstance(stored_authorization, Mapping)
+            else ""
+        )
+        origin = stored_origin or str(
+            (agent_authorization or {}).get("authorization_origin") or ""
+        )
+        if origin:
+            payload["publication"]["authorization_origin"] = origin
 
     _notify_structure_sources_updated(request, job_id)
 
@@ -6118,6 +6238,8 @@ def _with_artifact_descriptors(
     unknown_reason: str | None = None,
     *,
     job_id: str | None = None,
+    prepare_service: Any = None,
+    artifact_kind: str | None = None,
 ) -> V1JobRecordModel:
     """Attach the bounded manifest projection from the controlled read root.
 
@@ -6128,7 +6250,16 @@ def _with_artifact_descriptors(
     """
     from acp.api.artifact_descriptors import describe_job_artifacts
 
-    descriptors, truncated = describe_job_artifacts(read_root, attempt=attempt, job_id=job_id)
+    descriptors, truncated = describe_job_artifacts(
+        read_root,
+        attempt=attempt,
+        job_id=job_id,
+        # Round-9 M15: the descriptor's ``prepared`` flag reads the same
+        # durable prepare-operation row the API exposes (read-only, no second
+        # store).  Without the service it stays false + an explicit reason.
+        prepare_service=prepare_service,
+        kind=artifact_kind,
+    )
     if not descriptors and not truncated:
         unknown_reason = unknown_reason or "no_manifest"
     return model.model_copy(
@@ -6141,7 +6272,7 @@ def _with_artifact_descriptors(
 
 
 @router.get("/jobs/{job_id}", response_model=V1JobRecordModel)
-def get_job(job_id: str, request: Request) -> V1JobRecordModel:
+def get_job(job_id: str, request: Request, artifact_kind: str | None = None) -> V1JobRecordModel:
     manager = _manager(request)
     record = manager.get(job_id)
     if record is None:
@@ -6153,12 +6284,18 @@ def get_job(job_id: str, request: Request) -> V1JobRecordModel:
         model = _enrich_v1_with_names(model, resolve_task_names(task_row))
     read_root, unknown_reason = _descriptor_read_root(request, record)
     return _with_artifact_descriptors(
-        model, read_root, record.attempt, unknown_reason, job_id=record.id
+        model,
+        read_root,
+        record.attempt,
+        unknown_reason,
+        job_id=record.id,
+        prepare_service=getattr(manager, "_prepare_operations", None),
+        artifact_kind=artifact_kind,
     )
 
 
 @router.get("/jobs/{job_id}/summary", response_model=V1JobRecordModel)
-def get_job_summary(job_id: str, request: Request) -> V1JobRecordModel:
+def get_job_summary(job_id: str, request: Request, artifact_kind: str | None = None) -> V1JobRecordModel:
     manager = _manager(request)
     record = manager.get(job_id)
     if record is None:
@@ -6170,7 +6307,13 @@ def get_job_summary(job_id: str, request: Request) -> V1JobRecordModel:
         model = _enrich_v1_with_names(model, resolve_task_names(task_row))
     read_root, unknown_reason = _descriptor_read_root(request, record)
     return _with_artifact_descriptors(
-        model, read_root, record.attempt, unknown_reason, job_id=record.id
+        model,
+        read_root,
+        record.attempt,
+        unknown_reason,
+        job_id=record.id,
+        prepare_service=getattr(manager, "_prepare_operations", None),
+        artifact_kind=artifact_kind,
     )
 
 
@@ -10771,6 +10914,69 @@ def prepare_artifact(
                     str(exc),
                     params={"field": "relative_path", "rule": "path_traversal"},
                 ) from exc
+            # Round-9 M6: when a readable manifest names this artifact, the
+            # client path must be the same product (a mismatch is a conflict,
+            # not a silent override).  No readable manifest / unknown id keeps
+            # the historical explicit-path behaviour so pre-manifest jobs work.
+            from acp.api.artifact_descriptors import (
+                PrepareTargetRefusedError,
+                resolve_prepare_target,
+            )
+
+            read_root, _read_root_reason = _descriptor_read_root(request, record)
+            try:
+                target = resolve_prepare_target(
+                    read_root, artifact_id=artifact_id, relative_path=relative_path
+                )
+            except PrepareTargetRefusedError as exc:
+                rule = str((exc.params or {}).get("rule") or "")
+                if not exc.retryable and rule not in {"unknown_artifact"}:
+                    raise _command_error(
+                        409 if exc.retryable else 400,
+                        "resource_not_ready" if exc.retryable else "input_invalid",
+                        str(exc),
+                        params=dict(exc.params),
+                        retryable=exc.retryable,
+                    ) from exc
+            else:
+                relative_path = target.relative_path
+        elif not relative_path and evidence_report is None:
+            # Round-9 M6/M7: the status template (and older clients) may omit
+            # relative_path.  Derive it from the ONE manifest product whose id
+            # equals artifact_id — a client path can never override that truth.
+            # A not-yet-materialized product is a retryable race, distinct from
+            # an unknown id, and both carry params.field/rule.
+            from acp.api.artifact_descriptors import (
+                PrepareTargetRefusedError,
+                resolve_prepare_target,
+            )
+
+            read_root, _read_root_reason = _descriptor_read_root(request, record)
+            target = None
+            try:
+                target = resolve_prepare_target(read_root, artifact_id=artifact_id)
+            except PrepareTargetRefusedError as exc:
+                params = dict(exc.params or {})
+                rule = str(params.get("rule") or "")
+                # No readable manifest, or an id the manifest does not publish:
+                # keep the historical "prepare by artifact_id alone" behaviour
+                # (pre-manifest jobs and non-product artifacts still work).  A
+                # product that exists but is not materialized yet stays the
+                # retryable race, and every other refusal is a real error.
+                if "manifest_reason" in params or rule == "unknown_artifact":
+                    pass
+                else:
+                    raise _command_error(
+                        409 if exc.retryable else 400,
+                        "resource_not_ready" if exc.retryable else "input_invalid",
+                        str(exc),
+                        params=params,
+                        retryable=exc.retryable,
+                    ) from exc
+            else:
+                relative_path = target.relative_path
+                if target.media_type and not normalized.get("media_type"):
+                    normalized["media_type"] = target.media_type
         try:
             expected_digest = normalize_artifact_digest(
                 str(normalized.get("expected_digest") or normalized.get("content_digest") or "")

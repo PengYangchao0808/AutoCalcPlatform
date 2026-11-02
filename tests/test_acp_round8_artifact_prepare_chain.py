@@ -90,6 +90,9 @@ def test_descriptor_has_a_real_size_and_the_prepare_step(tmp_path: Path) -> None
             "job_id": _JOB_ID,
             "purpose": "artifact",
             "artifact_id": "normal_modes",
+            # Round-9 M6: the template is complete — copy-paste needs no path.
+            "relative_path": "RESULT/frequencies/normal_modes.json",
+            "media_type": "application/json",
         },
     }
     # The descriptor's own actionable id is the artifact_id prepare expects.
@@ -102,6 +105,8 @@ def test_descriptor_job_id_is_omitted_rather_than_invented(tmp_path: Path) -> No
     assert items[0]["prepare"]["arguments"] == {
         "purpose": "artifact",
         "artifact_id": "normal_modes",
+        "relative_path": "RESULT/frequencies/normal_modes.json",
+        "media_type": "application/json",
     }
 
 

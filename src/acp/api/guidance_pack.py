@@ -62,7 +62,7 @@ GUIDE_FORMAT = "acp.guidance.v1"
 #: task.find_transition_state states the pure-MCP publish dead end and the
 #: first-class inline role:"ts" path; artifact_locating names both sp.out
 #: layouts (round-7 external-agent feedback).
-PACK_VERSION = "1.5.0"
+PACK_VERSION = "1.6.0"
 
 #: Byte budgets (plan §4.2): UTF-8 bytes, not tokens.  A guide that would
 #: exceed a caller-supplied bound is returned with explicit omissions — never
@@ -266,7 +266,10 @@ _BATCHOPTIMIZE = _workflow_entry(
         "sp_method/sp_basis（每 role 一份，ts 与 int 各自生效，ts 不会继承 int 的 sp_*）；顶层 "
         "single_point_method/single_point_basis（或 sp_method/sp_basis 别名）只是 int role 的镜像，"
         "缺 int role/字段会被 422（rule=missing_role_mirror）而不是静默丢弃。\n"
-        "5. 预检、提交与等待；读取逐 item/stage 的成功、失败、跳过及原因。\n"
+        "5. 预检、提交与等待；读取逐 item/stage 的成功、失败、跳过及原因。每个 item 还会发布能量产品"
+        "（RESULT/energy/<item>_<step>.json，kind=energy_report，键集与 optimize 的 step 能量一致；"
+        "method 是实际方法，无法判定时为 null+method_unknown_reason），做能垒/相对能量时优先读它，"
+        "不要为拿一个单点能再补作业。\n"
         "6. 对成功优化结果读取适用频率和模式验证；报告原生判定及缺项。\n"
         "7. 只对可比的物种/方法/能量定义/环境做比较；区分电子能与热化学校正，不重复加校正。\n"
         "8. 失败项先判断可修复原因，再在剩余范围与预算内补算；复用已完成阶段的身份校验机制。\n"
@@ -314,9 +317,18 @@ _PESSEARCH = _workflow_entry(
         "保留失败点、缺点和不收敛标记。\n"
         "5. 结合目标结构变化、局部曲线和质量信息选择多个有理由的 TS/INT 初猜或明确不选；不得只挑全局最高点。\n"
         "6. 信息不足时提出有限补算区间/坐标与预算，和已有帧初猜提案分开；新点在真实计算完成前不具有帧身份。\n"
-        "7. 按真实来源保存提案；全自动授权有效时自动发布，交互模式交由用户审查；缺少自动发布能力时报告未开放，"
-        "不借 manual 来源绕过。\n"
+        "7. 按真实来源保存提案；全自动授权有效时自动发布，交互模式交由用户审查。**local-single 自签发布**："
+        "服务端身份是 operator、权限域/部署层都是 local-single 且 ACP_SELECTION_AUTOPUBLISH 开启时，"
+        "acp_publish_pes_review 可以省略 authorization_id——Controller 会铸一条 origin=\"agent-self\" 的"
+        "有界授权（policy acp2.selection.self-signed.v1、TTL 1h、最多 8 个候选、仅本 attempt），走既有"
+        " validate/consume 并写审计事件 selection.self_signed；响应 publication.authorization_origin 说明来源。"
+        "多租户/API-key 或未开启时仍必须带服务端预铸的 authorization_id，不得伪称已发布。\n"
         "8. 发布后将初猜连同角色和来源绑定送入 BatchOptimize；保存成功而 Batch 未运行时只报告初猜已保存/待计算。\n"
+        "8.5 产物：扫描结束会发布 RESULT/result_manifest.json，并为每帧登记一个 structure 产品"
+        "（RESULT/structures/frame_NNN.xyz，metadata 带 frame_index/role=\"scan_frame\"/selection_source=\"scan\"/"
+        "scan_coordinate/energy_hartree 等；超过 200 帧时保留两端+候选邻域，pes_profile 记 frames_total/"
+        "frames_published/truncated）。因此 input.from_artifact 可以指向上游 result_manifest.json；"
+        "但未确认的原始帧仍受「先发布再消费」约束，不能绕过选点直接喂 Batch。\n"
         "9. 读取 Batch 逐项结果，按适用规则继续模式与端点验证，或保留失败、不确定与停止原因。\n\n"
         "输出：坐标/方法/覆盖、所选初猜与证据、补算记录、发布 revision、Batch 引用及验证进展。"
     ),
@@ -326,7 +338,7 @@ _PESSEARCH = _workflow_entry(
         "topic.stationary_point_verification",
         "topic.partial_failure_recovery",
     ),
-    version="1.2.0",
+    version="1.3.0",
 )
 
 _SCAN = _workflow_entry(
@@ -774,10 +786,10 @@ _TOPIC_ARTIFACT_LOCATING = GuideEntry(
     guide_id="topic.artifact_locating",
     kind="topic",
     title="计算产物定位与读取",
-    version="1.4.0",
+    version="1.5.0",
     summary=(
         "status 的 artifacts 是「描述符」（不是 ArtifactRef）；读文件必须 prepare→read（五元组来自 prepare 回包）；"
-        "附结果字段地图、任务/目录定位与状态过滤口径。"
+        "正文含路径时**打码返回**而不是拒绝，模板可直接照抄；附结果字段地图、任务/目录定位与状态过滤口径。"
     ),
     sections={
         "body": (
@@ -788,61 +800,76 @@ _TOPIC_ARTIFACT_LOCATING = GuideEntry(
             "   · acp_read_artifact 要的是**ArtifactRef 五元组**（task_id、attempt、artifact_id、generation、"
             "digest）。它只能来自 acp_prepare_artifact 的回包（artifact_ref 字段），或来自提交/prepare 的"
             "操作回执——不要自己拼。\n"
-            "   标准三步：acp_status 取描述符 → acp_prepare_artifact({job_id, purpose:\"artifact\", "
-            "artifact_id: <描述符.resource_id>}) 等到 status=ready → acp_read_artifact({artifact_ref, "
-            "max_bytes?, encoding?})。descriptor.resource_id 就是 prepare 的 artifact_id；"
-            "read 永不触发 prepare/fetch，prepare 永不启动科学计算。\n"
-            "2. 目录与目录名：submit 的 molecule_name / task_name 决定 run_root 下的目录名（不传则 "
-            "mol_<Workflow>__<序号>）。**目录名不是唯一标识**：失败作业的目录可能被清理后由后续作业重新分配，"
-            "同名目录可以属于不同任务。一律用 task_id（= <job_dir>/task.json 的 task_id）交叉验证；status 回包"
-            "若给出 directory_owner_task_id 与本作业不一致，以 task_id 为准并视为目录冲突。\n"
+            "   标准三步：acp_status 取描述符 → 把描述符的 prepare.arguments **原样**传给 "
+            "acp_prepare_artifact（含 job_id/purpose/artifact_id/relative_path/media_type），等到 status=ready → "
+            "acp_read_artifact({artifact_ref, max_bytes?, encoding?})。descriptor.resource_id 就是 prepare 的 "
+            "artifact_id；read 永不触发 prepare/fetch，prepare 永不启动科学计算。\n"
+            "   · relative_path 可以省略：服务端按 artifact_id 从 manifest 派生（客户端给的路径不能覆盖 manifest）。"
+            "prepare 报错一律带 params.field/params.rule：not_ready_yet 是可重试竞态（稍后再试），"
+            "invalid_parameter 才是参数要改。\n"
+            "   · prepared 会真实翻转：成功 prepare 后描述符给 prepared=true 并带 prepared_state/"
+            "prepared_generation/prepared_digest/prepared_at；拿不到 prepare 服务时是 prepared=false + "
+            "prepared_unknown_reason（不是「没准备过」的断言）。\n"
+            "2. 目录名不是唯一标识（失败作业的目录可能被重新分配）：一律用 task.json 的 task_id 交叉验证；"
+            "status 的 directory_owner_task_id 与本作业不一致时以 task_id 为准并视为目录冲突。\n"
             "3. 多作业定位：acp_list_jobs 按状态过滤/分页。状态是**精确匹配**，且活动态不止 running："
             "starting/pending 也是尚未 running 的活动态；status_group=active|terminal|running_now 用来按族过滤。"
             "回包 counts 是**过滤前**的全量计数（10 个状态键恒定），jobs 才是过滤结果——空 jobs 不等于没有作业。"
+            "容量口径：limits.max_running 现在是 {value, source, legacy_env, legacy_in_effect} 单一投影"
+            "（与 capacity.concurrency.max_running 同源），没有 legacy_noop 之类的第二状态；"
+            "ACP_MAX_RUNNING 只是历史环境变量，legacy_in_effect=false 表示它不再影响容量。"
             "job_id（YYYYMMDD_HHMMSS_NNN_<name>）与 operation_id 不是同一个 id，acp_status 只认 job_id；"
             "未知 id 会返回 NOT_FOUND（不可重试），先用 acp_list_jobs 或 task.json.task_id 核对。\n"
-            "4. 结构帧类产物（PES profile/帧、Batch 结构/频率）优先经描述符读取；MCP 面不暴露宿主绝对路径，"
-            "需要落到文件时由用户/客户端在 read 后自行保存。\n"
+            "4. 结构帧类产物（PES profile/帧、Batch 结构/频率）优先经描述符读取。**正文含宿主路径不会被拒绝**："
+            "read 返回打码后的文本并标记 body_masked=true，同时给 masked_digest（返回片段的 sha256）与 "
+            "redaction=\"paths+secrets\"；digest 始终是**存储体**的摘要（digest_scope=artifact），所以掩码文本"
+            "不能拿 digest 去比对。只有非 UTF-8/二进制正文才会拒绝（artifact_body_unverifiable）。\n"
+            "   · 帧很多时用 GET /api/v1/jobs/{id}?artifact_kind=structure 分页（描述符上限 50，"
+            "artifacts_truncated=true 表示还有）；resource_id 形如 frame_005，可直接 prepare。\n"
             "5. 工作脚本与中间几何放持久工作区（如仓库工作目录），不要放 /tmp——会话环境可能被清理。\n"
             "6. 可见性：local-single（单用户本机）的 MCP 响应会给出 work_dir、directory_name、name、"
-            "idempotency_key 原文，便于日志关联；API-key/多租户模式仍然打码，不要假设两者一样。"
+            "idempotency_key 原文，便于日志关联；API-key/多租户模式仍然打码，不要假设两者一样。\n"
+            "7. acp_cancel 支持可选 reason（≤200 字符，仅审计：回执回显 cancel_reason）。"
         ),
         "result_fields": (
             "结果字段地图（路径相对 RESULT/；先读 acp_status 的 artifacts 描述符，不要猜路径）：\n"
             "· 频率（frequency 工作流）：RESULT/frequencies/normal_modes.json，schema normal_modes_v1，"
             "频率在 modes[].frequency_cm1（没有顶层 frequencies 数组）；result_manifest.json 的 "
             "frequency_modes 产品是同一数据的简写。\n"
-            "· 频率（BatchOptimize）：每个 item 的 RESULT/result_manifest.json → structure 产品的 "
-            "metadata.frequency.frequencies（cm^-1 列表）与 frequency_status；逐模细节在 "
-            "RESULT/frequencies/<item>__normal_modes.json 的 modes[].frequency_cm1。\n"
-            "· step_result.json：内部/恢复用的 step 级数组，不是规范读数面。\n"
+            "   · 频率（BatchOptimize）：structure 产品 metadata.frequency.frequencies（cm^-1）与 "
+            "frequency_status；逐模细节在 RESULT/frequencies/<item>__normal_modes.json 的 "
+            "modes[].frequency_cm1。step_result.json 是内部数组，不是规范读数面。\n"
+            "· 单点能量产物：singlepoint 工作流写 RESULT/energy/singlepoint_energy.json，BatchOptimize 每个 item "
+            "写 RESULT/energy/<item>_<step>.json（kind=energy_report，键集与 optimize 一致，method 为实际方法或 "
+            "null+method_unknown_reason，不会是空字符串）。\n"
             "· 相对能量：PES 曲线读 RESULT/pes_search/pes_profile.json 的 "
             "energy_profile.relative_energies_kcal_mol（相对该曲线最优点）；Batch/优化只存逐 item "
             "原始 energy_hartree，相对能量按同一 method/profile 在读取时计算，不要手拼不同级别能量。\n"
-            "· IRC：轨迹在 RESULT/irc/irc_<direction>_path.xyz 与 RESULT/trajectories/irc_trajectory.json"
-            "（frames/directions）；"
-            "formal endpoint 只来自收敛确认的端点文件，last_observed_geometries 仅是诊断证据，不能当端点。\n"
-            "· 单点产物落盘位置（同一个 sp.out 文件名，两条历史布局，都在 job_dir 下）：singlepoint 工作流写 "
-            "<job_dir>/sp.out；BatchOptimize（single_flat 布局）的逐 item 单点写 <job_dir>/WORK/05_SP/sp.out。"
-            "通用解析器两处都要认；读数仍以 RESULT/result_manifest.json 的产品路径为权威，路径只用于人工核对，"
-            "不要按文件名猜。\n"
+            "· IRC：轨迹在 RESULT/irc/irc_<direction>_path.xyz 与 RESULT/trajectories/irc_trajectory.json；"
+            "formal endpoint 只来自收敛确认的端点文件，last_observed_geometries 仅是诊断证据。\n"
+            "· 单点落盘：singlepoint 写 <job_dir>/sp.out，BatchOptimize 逐 item 写 "
+            "<job_dir>/WORK/05_SP/sp.out（历史双布局）；读数仍以 manifest 产品路径为权威，不要按文件名猜。\n"
             "· 热化学（ZPE/H/G/S）：频率作业走 RESULT/thermochemistry.json，BatchOptimize 每个 item 走 "
             "RESULT/thermochemistry/<item_id>.json；描述符 kind=thermochemistry，含温度/压力/相校正/来源。"
-            "**opt_freq_sp 这类「优化+频率+单点」profile 只要频率步成功就会登记该产品**（不要求 Shermo 热化学步）；"
-            "直接读产品，不要 grep freq.out 的 Final Gibbs free energy。产品只在热化学实际产出时登记"
-            "（无频率/失败/旧作业则没有该产品，此时才需要看频率步的 log，且仍是最后一条 "
-            "FINAL SINGLE POINT ENERGY）。\n"
+            "**opt_freq_sp 只要频率步成功就登记该产品**（不要求 Shermo 步）；直接读产品，不要 grep freq.out。产品只在热化学实际产出时存在，缺失时才回落到频率步 log 的最后一条 FINAL SINGLE POINT ENERGY。\n"
             "· 失败原因：TS/优化失败的消息形如 failed [<class>]: <summary>（class 如 "
             "hessian_not_positive_definite / opt_maxiter / geometry_not_converged / error_termination；"
             "SCF 类为 scf_failure（旧写法）或 scf_not_converged），摘要 ≤200 字符且不含宿主绝对路径；"
             "完整结构在 metadata.failure_details（reason_lines/scf_cycles/opt_cycles/imaginary_count/"
-            "terminal）。Batch 逐 item 的 rescue 细节在 RESULT/batch_provenance.json 的 "
+            "terminal），另加 diagnostic_message：**未被截断的完整诊断**（≤4000 字符，宿主路径已降为 basename）。"
+            "摘要被截断时结尾会带 \"… full text in failure_details.diagnostic_message\"，照此去读全文，"
+            "不要因为摘要断在句中就断定信息丢失。Batch 逐 item 的 rescue 细节在 RESULT/batch_provenance.json 的 "
             "rescue_failure_details（该文件不是 manifest 产品，不在 artifacts 里）；agent 可见的失败文案是"
             "structure 产品的 failure_reason 与 job error。unknown 表示确实未识别，不是平台故障。\n"
-            "· Hessian 成本可见性：hessian_recomputed / hessian_source（opt_initial = 优化开头算的，"
-            "freq_numfreq = 频率步重新算的）出现在 item 的 step_result.json metadata、structure 产品 "
-            "metadata，以及运行期 live_status.metrics（key=hessian_source）；当前频率步默认重算，"
-            "这是已知成本，不要误以为平台漏算了。\n"
+            "· 运行期新鲜度：live_status 现在带 observed_age_seconds（从 observed_at 到本次投影的秒数）与 "
+            "stale（超过 90s 或状态文件 mtime 明显新于记录时刻即为 true），以及 source_mtime。stale=true 时"
+            "不要把它当实时进度，重新取一次 status；字段缺失说明该 job 没有 state.json，不是「进度为 0」。\n"
+            "· 频率分析通道：acp_analyze(analysis_id=\"vibration.analyze\") 同时接受 orca-output 与 "
+            "normal_modes_v1（按 prepared 内容探测，可用 parameters.format 覆盖）：mode_vectors 来自 manifest "
+            "登记的 frequency_modes 产品，虚频数与模式方向用它判定，不必自己解析日志。能力视图里状态只有 "
+            "registered/executable/unavailable；适配层拿不到投影时会显式说 status=unknown 并让你 detail=full，"
+            "**不会**伪称 unavailable。\n"
+            "· Hessian 成本：hessian_recomputed / hessian_source（opt_initial=优化开头算的，freq_numfreq=频率步重算）在 step_result.json metadata、structure 产品 metadata 与运行期 live_status.metrics；频率步默认重算，不要误以为平台漏算。\n"
             "· 何时走 prepare→read：任何 read 都要先 prepare（五元组只能来自 prepare 回包）；本地已 prepare "
             "过的产物会走快速路径直接回 ready + artifact_ref，远端/冷缓存则排队 prepare；read 永不触发 "
             "fetch/prepare。"
@@ -854,10 +881,11 @@ _TASK_FIND_TS = GuideEntry(
     guide_id="task.find_transition_state",
     kind="task",
     title="任务：寻找反应过渡态",
-    version="1.2.0",
+    version="1.3.0",
     summary=(
             "从结构+反应假设到 TS 候选：选初猜来源（PES 默认；大体系/多坐标用 scan；不推荐手摆）→ 扫描 → "
-            "选初猜 →（有授权才 publish，否则 inline role:\"ts\" 一等路径直达）BatchOptimize(TS) → 频率判定。"
+            "选初猜 →（local-single 可自签发布或带预铸 authorization_id；否则 inline role:\"ts\" 一等路径直达）"
+            "BatchOptimize(TS) → 频率判定。"
         ),
     coverage="first_batch",
     sections={
@@ -882,12 +910,16 @@ _TASK_FIND_TS = GuideEntry(
             "协议见 workflow.PESsearch。\n"
             "2. 读曲线概况+点覆盖；极大点邻域取候选，关注分支切换（连续段内取点），见 topic.selection_supplement。\n"
             "3. 选点怎么进 Batch（先自查发布授权，再选路径；两条路径都是合法的）：\n"
-            "   · 纯 MCP 会话（没有管理员预铸的有界授权）：acp_publish_pes_review 一定会被拒绝——它要求 "
-            "authorization_id，且服务端固定 selector=agent，不会退化成 manual。此时的 supported 路径是"
-            "把选中的初猜直接内联进 BatchOptimize：input.items 里每个结构显式写 role:\"ts\"（与 xyz 并列），"
-            "沿用 batch_roles.ts 配置。inline 路径是一等路径，不是兜底：发布只给候选一个 review revision，"
-            "不是进入 Batch 的前提。不要用 probe/自造 authorization_id 试探——工具只回 typed 拒绝"
-            "（authorization_not_found：id 未知或跨项目；access_denied：权限/授权被拒），平台不会自动铸造授权。\n"
+            "   · 纯 MCP 会话（local-single）：当服务端身份是 operator、权限域与部署层都是 local-single、"
+            "且 ACP_SELECTION_AUTOPUBLISH 开启时，acp_publish_pes_review 可以**省略 authorization_id**——"
+            "Controller 会铸一条 origin=\"agent-self\" 的有界授权（policy acp2.selection.self-signed.v1、"
+            "TTL 1h、候选 ≤8、仅当前 attempt），走既有 validate/consume 并写审计事件 selection.self_signed；"
+            "响应带 publication.authorization_origin 与 candidate_id，可直接用于 Batch 的 selected_ids。"
+            "多租户/API-key 或未开启自签时仍必须带预铸 authorization_id；不要自造 id 试探——只会得到 typed 拒绝"
+            "（authorization_not_found / access_denied）。\n"
+            "   · 没有可用发布路径时（含服务端拒绝自签），supported 路径是把选中的初猜直接内联进 "
+            "BatchOptimize：input.items 里每个结构显式写 role:\"ts\"（与 xyz 并列），沿用 batch_roles.ts 配置。"
+            "inline 路径是一等路径，不是兜底：发布只给候选一个 review revision，不是进入 Batch 的前提。\n"
             "   · 已有合法发布的选择（人工已在 Workbench/REST review 确认，或管理员授权下已发布）：直接 "
             "input.from_artifact 指向该 RESULT/result_manifest.json + selected_ids，消费已确认候选及其角色。\n"
             "   · 管理员已铸造有界授权时，PES → publish → BatchOptimize 完整链可用：POST "

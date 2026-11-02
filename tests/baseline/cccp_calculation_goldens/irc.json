@@ -73,7 +73,10 @@
         "forward"
       ],
       "endpoint_count": 0,
-      "filtered_endpoint_count": 0
+      "filtered_endpoint_count": 0,
+      "failure_details": {
+        "diagnostic_message": "IRC forward direction failed to converge"
+      }
     },
     "status": "failed"
   }

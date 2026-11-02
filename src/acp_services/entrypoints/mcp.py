@@ -133,8 +133,8 @@ from acp_services.entrypoints.research_consumption import (
     ConsumptionPort,
 )
 from acp_services.runtime.analysis_capabilities import (
-    AnalysisCapabilityRegistry,
-    capability_projection,
+    ANALYSIS_CAPABILITY_IDS,
+    ANALYSIS_CAPABILITY_STATES,
 )
 from acp_services.store.records import JobStatus
 from acp_services.workspace.boundary import evaluate_tier_request
@@ -405,7 +405,9 @@ _CANCEL_ENVELOPE_FIELDS: tuple[str, ...] = (
 )
 
 
-def _cancel_acknowledgement(record: Any, reference: str) -> dict[str, Any]:
+def _cancel_acknowledgement(
+    record: Any, reference: Any, *, reason: str | None = None
+) -> dict[str, Any]:
     """Project one cancel result onto the bounded status envelope (#7e).
 
     The Controller answers ``POST /api/v1/jobs/{id}/cancel`` with the full
@@ -419,6 +421,12 @@ def _cancel_acknowledgement(record: Any, reference: str) -> dict[str, Any]:
     invents a reference.  A non-mapping record degrades to identity-only facts
     (same policy as :func:`_reference_from`).  An unknown job never reaches this
     function: the backend port raises the existing typed error first.
+
+    Round-9 M9: an optional audit-only ``reason`` is echoed back as
+    ``cancel_reason``; it is never part of the control path (the Controller route
+    does not accept it and the intent is the reference alone).  Round-9 M10: the
+    echoed ``reference`` is normalised, so a mapping handed back as a ``dict``
+    repr string never becomes the id.
     """
     row: Mapping[str, Any] = record if isinstance(record, Mapping) else {}
     job_id = ""
@@ -450,7 +458,7 @@ def _cancel_acknowledgement(record: Any, reference: str) -> dict[str, Any]:
             continue
         if value is not None and value != "":
             acknowledgement[key] = value
-    acknowledgement["reference"] = row.get("reference") or reference
+    acknowledgement["reference"] = _normalise_reference(row.get("reference") or reference)
     # Round-2 compatibility: cancelling an already-terminal job must say so
     # explicitly instead of returning a bare "completed" next to the intent.
     # A *cancelled* answer is the intent being satisfied (a queued job is moved
@@ -464,6 +472,10 @@ def _cancel_acknowledgement(record: Any, reference: str) -> dict[str, Any]:
     else:
         acknowledgement["cancelled"] = True
     acknowledgement["cancel_requested"] = True
+    if reason:
+        # Audit-only: recorded here, never sent to the Controller and never
+        # allowed to change the cancel semantics above (round-9 M9).
+        acknowledgement["cancel_reason"] = reason
     return acknowledgement
 
 
@@ -1123,7 +1135,13 @@ _READ_SCHEMA: dict[str, Any] = {
         "Bounded read of an already-prepared artifact. artifact_ref is required; a miss is "
         "resource_not_ready and a read never fetches, prepares or starts computation "
         "max_bytes above the frozen max_read_bytes bound is refused "
-        "(input_invalid, rule=max_read_bytes_exceeded) instead of served."
+        "(input_invalid, rule=max_read_bytes_exceeded) instead of served. A body that "
+        "carries host paths or secrets is returned MASKED, never refused: the response "
+        "sets body_masked=true, masked_digest (sha256 of the returned masked slice, which "
+        "may be truncated by max_bytes) and redaction='paths+secrets', while digest always "
+        "covers the stored artifact (digest_scope='artifact'). Only a body that cannot be "
+        "verified at all (non-UTF-8/binary) is refused, with "
+        "unsupported_capability/rule=artifact_body_unverifiable."
     ),
     "properties": {
         "schema_version": {"type": "integer", "enum": [1], "default": 1},
@@ -1214,7 +1232,9 @@ _STATUS_SCHEMA: dict[str, Any] = {
 }
 
 #: Cancel writes one control intent, so it follows the execution-field policy U1:
-#: exactly ``reference`` (+ an optional CAS guard).
+#: exactly ``reference`` (+ an optional CAS guard and an audit-only ``reason``).
+#: ``reason`` never reaches the Controller route (which does not accept it) and
+#: never changes the control path: it is echoed back as ``cancel_reason`` only.
 _CANCEL_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -1223,6 +1243,16 @@ _CANCEL_SCHEMA: dict[str, Any] = {
             "oneOf": [{"type": "string"}, {"type": "object"}],
         },
         "expected_revision": {"type": "integer", "minimum": 0},
+        "reason": {
+            "type": "string",
+            "maxLength": 200,
+            "description": (
+                "Optional audit-only note for why the cancellation is requested (<= 200 "
+                "characters). It is recorded in the acknowledgement as cancel_reason and "
+                "is never forwarded to the Controller nor used to decide anything: the "
+                "cancel intent is the reference alone."
+            ),
+        },
     },
     "required": ["reference"],
     "additionalProperties": False,
@@ -1410,13 +1440,22 @@ _PUBLISH_PES_REVIEW_SCHEMA: dict[str, Any] = {
                 "additionalProperties": False,
             },
         },
-        "authorization_id": {"type": "string"},
+        "authorization_id": {
+            "type": "string",
+            "description": (
+                "Optional on a local-single Controller with self-signed agent "
+                "publication enabled: omit it and the Controller mints a bounded, "
+                "recorded agent-self authorization (origin and audit event are in "
+                "the response). On every other deployment the id is required and an "
+                "absent id is refused with access_denied."
+            ),
+        },
         "source_binding": {"type": "object"},
         "idempotency_key": {"type": "string"},
         "expected_revision": {"type": "integer", "minimum": 0},
         "note": {"type": "string"},
     },
-    "required": ["job_id", "authorization_id", "candidates"],
+    "required": ["job_id", "candidates"],
     "additionalProperties": False,
 }
 
@@ -1643,6 +1682,10 @@ def _validate_arguments(tool: str, arguments: Mapping[str, Any]) -> None:
                 "field": unknown[0],
                 "rule": "unknown_field",
                 "fields": unknown,
+                # Round-9 M9: name the legal surface so a caller can self-correct
+                # instead of guessing (the cancel schema grew an audit-only
+                # ``reason``; this is the table that proves it).
+                "allowed": sorted(str(name) for name in declared),
                 "tool": tool,
             },
             retryable=False,
@@ -3234,25 +3277,21 @@ class McpServer:
                 kwargs["contract_sections"] = contract_sections
             data = dict(self._backends.capabilities.capabilities(**kwargs))
         data.setdefault("protocol_version", MCP_PROTOCOL_VERSION)
-        # M1-01b/M2-02: the frozen three-state analysis-capability projection.  A
-        # descriptor is never "available": registered/executable/unavailable are
-        # the only states, and analyze refuses anything that is not executable.
-        # The Controller's composition root injects the application registry, so a
-        # payload that already carries the projection is forwarded verbatim; the
-        # fallback is an explicitly empty table, never the process-global default
-        # registry (that module-level object is not a production authority).
-        analysis_rows = list(capability_projection(AnalysisCapabilityRegistry()))
-        if data.get("detail") == "summary":
-            # bounded scope: the full projection lives in detail="full"
-            data.setdefault(
-                "analysis_capabilities",
-                {
-                    "count": len(analysis_rows),
-                    "detail": {"tool": "acp_capabilities", "arguments": {"detail": "full"}},
-                },
-            )
-        else:
-            data.setdefault("analysis_capabilities", analysis_rows)
+        # M1-01b/M2-02: the frozen three-state analysis-capability projection
+        # (registered/executable/unavailable; nothing is "available", and analyze
+        # refuses anything that is not executable).  The Controller's composition
+        # root injects the application registry, so a payload that carries the
+        # projection is forwarded verbatim.
+        #
+        # Round-9 M4a: this adapter cannot read the Controller's registry, so an
+        # absent projection is answered with an explicit **unknown** — never with
+        # an empty registry projected as ``unavailable``/``registered: false``,
+        # which would claim a negative this layer cannot know and contradicted
+        # ``detail=full`` (which forwards the real projection).
+        data["analysis_capabilities"] = _analysis_capability_view(
+            data.get("analysis_capabilities"),
+            summary=data.get("detail") == "summary" or detail == "summary",
+        )
 
         raw_extension = arguments.get("research_extension")
         if raw_extension is not None and not isinstance(raw_extension, Mapping):
@@ -3489,9 +3528,14 @@ class McpServer:
         # Full response passthrough: every field the Controller returned is part
         # of the replay contract (task_ref/attempt/state/identity/admission...).
         payload: dict[str, Any] = dict(record) if isinstance(record, Mapping) else {}
-        payload["reference"] = payload.get("reference") or reference
+        payload["reference"] = _normalise_reference(payload.get("reference") or reference)
         if not isinstance(payload.get("task_ref"), Mapping):
-            task_id = str(payload["reference"].get("id") or "")
+            reference_value = payload["reference"]
+            task_id = (
+                str(reference_value.get("id") or "")
+                if isinstance(reference_value, Mapping)
+                else str(reference_value or "")
+            )
             payload["task_ref"] = {"task_id": task_id, "job_id": task_id}
         payload["idempotency_key"] = resolution.key or None
         payload["idempotency_key_origin"] = resolution.origin
@@ -3557,12 +3601,18 @@ class McpServer:
         control intent no longer ships the spec body/xyz/artifacts.  An unknown
         job still fails inside the port with the existing typed error -- no
         projection is built from a missing record.
+
+        Round-9 M9: ``reason`` is accepted as **audit metadata only**.  It is
+        validated here, echoed back as ``cancel_reason`` and never forwarded to
+        the Controller (whose cancel route does not accept it), so the control
+        path, its idempotency and its CAS semantics are unchanged.
         """
         reference = _require_reference(arguments)
+        reason = _cancel_reason(arguments)
         record = self._backends.cancel.cancel(reference, workspace_id=context.workspace_id)
         if self._budget is not None:
             self._budget.release(context.workspace_id)
-        acknowledgement = _cancel_acknowledgement(record, reference)
+        acknowledgement = _cancel_acknowledgement(record, reference, reason=reason)
         return mo.MachineResult(
             operation=McpTool.CANCEL,
             status="ok",
@@ -3640,11 +3690,24 @@ class McpServer:
 
     @staticmethod
     def _verify_artifact_body(data: Mapping[str, Any]) -> None:
-        """Refuse reads whose body was altered after the digest was computed.
+        """Verify one read body against the digest scope it declares.
 
-        MachineResult redacts on serialization, so a path inside the body would
-        otherwise be returned under the original digest.  A truncated slice is
-        exempt: its digest applies to the whole artifact, not the slice.
+        Round-9 M1 replaced the whole-body refusal with an explicit **masking**
+        presentation (the artifact layer masks before it slices and declares
+        ``body_masked``/``masked_digest``/``redaction``).  Two shapes exist:
+
+        * **masked** — the returned body is the masked text: this method verifies
+          ``masked_digest`` against exactly those bytes, requires that the masked
+          text no longer carries a redactable path/secret, and keeps
+          ``digest_scope="artifact"`` (``digest`` names the stored artifact);
+        * **unmasked** — the body claims to be the stored bytes, so it must be
+          byte-identical to them: a redactable pattern is still refused and the
+          full body is checked against ``digest`` (a truncated slice is exempt
+          from that check — its digest applies to the whole artifact).
+
+        No branch skips the integrity check: masking is verified, never trusted,
+        and a non-UTF-8 body stays refused because no presentation of it can be
+        verified this round.
         """
         body = data.get("body")
         if not isinstance(body, str):
@@ -3654,7 +3717,7 @@ class McpServer:
         import binascii
         import hashlib
 
-        from acp_services.entrypoints.machine_output import redact
+        from acp_services.entrypoints.machine_output import mask_body_text, masked_body_digest
 
         if encoding == "base64":
             try:
@@ -3675,9 +3738,8 @@ class McpServer:
                 params={"field": "encoding", "rule": "artifact_encoding_invalid"},
                 retryable=False,
             )
-        # One content policy for both encodings: a decoded path/secret is
-        # refused, never smuggled through base64.  Undecodable bytes decode with
-        # surrogate escapes so ASCII path fragments are still visible.
+        # One content policy for both encodings: a decoded path/secret is never
+        # smuggled through base64.  Undecodable bytes cannot be verified.
         try:
             decoded = raw.decode("utf-8")
         except UnicodeDecodeError:
@@ -3686,10 +3748,41 @@ class McpServer:
             raise McpToolError(
                 mo.ErrorCode.UNSUPPORTED_CAPABILITY,
                 "non-UTF-8 artifact body cannot be verified",
-                params={"field": "body", "rule": "artifact_body_unverifiable"},
+                params={
+                    "field": "body",
+                    "rule": "artifact_body_unverifiable",
+                    "allowed_formats": ["utf-8 text"],
+                },
                 retryable=False,
             ) from None
-        if redact(decoded) != decoded:
+        if data.get("body_masked") is True:
+            expected_masked = data.get("masked_digest")
+            if not isinstance(expected_masked, str) or not expected_masked:
+                raise McpToolError(
+                    mo.ErrorCode.UNSUPPORTED_CAPABILITY,
+                    "a masked artifact body must declare masked_digest",
+                    params={"field": "masked_digest", "rule": "artifact_masked_digest_missing"},
+                    retryable=False,
+                )
+            if masked_body_digest(raw) != expected_masked:
+                raise McpToolError(
+                    mo.ErrorCode.UNSUPPORTED_CAPABILITY,
+                    "the returned masked body does not match masked_digest",
+                    params={"field": "body", "rule": "artifact_masked_digest_mismatch"},
+                    retryable=False,
+                )
+            if mask_body_text(decoded) != decoded:
+                # A body that still contains a redactable path/secret is not a
+                # masked body: refuse rather than return a partial mask.
+                raise McpToolError(
+                    mo.ErrorCode.UNSUPPORTED_CAPABILITY,
+                    "artifact body claims masking but still carries a redacted pattern",
+                    params={"field": "body", "rule": "artifact_body_redacted"},
+                    retryable=False,
+                )
+            data.setdefault("digest_scope", "artifact")
+            return
+        if mask_body_text(decoded) != decoded:
             raise McpToolError(
                 mo.ErrorCode.UNSUPPORTED_CAPABILITY,
                 "artifact body contains a redacted pattern; the bytes cannot be "
@@ -3932,12 +4025,59 @@ class McpServer:
 
 _ID_KEYS = ("reference", "job_id", "jobId", "id", "operation_id", "operationId", "task_id")
 
+#: Longest string this adapter will try to parse as a reference mapping.  A
+#: reference is a name, so a longer string is kept verbatim instead of parsed.
+_REFERENCE_STRING_MAX = 512
+
+
+def _parse_reference_mapping(value: Any) -> dict[str, Any] | None:
+    """Parse a Mapping that was handed back as a ``dict`` repr/JSON string.
+
+    Round-9 M10: an upstream adapter occasionally serialised a
+    ``{"kind": "operation", "id": "op_..."}`` reference with ``str()``, so the
+    Python ``dict`` repr (single quotes) arrived where an id was expected.  This
+    parses such a string defensively — ``ast.literal_eval`` only (never
+    ``eval``), bounded length, ``{``/``}``-shaped only — and returns ``None``
+    for anything else so the caller keeps the original string.
+    """
+    import ast
+
+    if not isinstance(value, str):
+        return None
+    candidate = value.strip()
+    if not candidate.startswith("{") or not candidate.endswith("}"):
+        return None
+    if len(candidate) > _REFERENCE_STRING_MAX:
+        return None
+    try:
+        parsed = ast.literal_eval(candidate)
+    except (ValueError, SyntaxError, TypeError, MemoryError, RecursionError):
+        return None
+    if isinstance(parsed, Mapping):
+        return dict(parsed)
+    return None
+
+
+def _normalise_reference(value: Any) -> Any:
+    """Return a reference value that is safe to hand back to a caller.
+
+    A Mapping passes through as a mapping (never ``str()``-ed); a string that is
+    a serialised mapping is parsed into one; every other value is unchanged.
+    """
+    parsed = _parse_reference_mapping(value)
+    if parsed is not None:
+        return parsed
+    return value
+
 
 def _reference_from(record: Any, *, kind: str) -> dict[str, Any]:
     """Normalise a backend record into a stable ``{kind, id}`` reference.
 
     Ports return a mapping (the adapter is thin and never reflects attributes);
     a non-mapping record degrades to a string id rather than dynamic lookup.
+    Round-9 M10: a nested Mapping is passed through as a mapping and a
+    serialised mapping is parsed with :func:`_normalise_reference`, so an id is
+    never the Python ``dict`` repr that could not be sent back.
     """
     if record is None:
         return {"kind": kind, "id": ""}
@@ -3946,12 +4086,19 @@ def _reference_from(record: Any, *, kind: str) -> dict[str, Any]:
             value = record.get(key)
             if value is None:
                 continue
-            if isinstance(value, Mapping):
-                merged = dict(value)
+            normalised = _normalise_reference(value)
+            if isinstance(normalised, Mapping):
+                merged = dict(normalised)
                 merged.setdefault("kind", kind)
                 return merged
-            return {"kind": kind, "id": str(value)}
-    return {"kind": kind, "id": str(record)}
+            return {"kind": kind, "id": str(normalised)}
+        return {"kind": kind, "id": ""}
+    normalised = _normalise_reference(record)
+    if isinstance(normalised, Mapping):
+        merged = dict(normalised)
+        merged.setdefault("kind", kind)
+        return merged
+    return {"kind": kind, "id": str(normalised)}
 
 
 def _port_accepts(port: Any, keyword: str, *, method: str = "list_tasks") -> bool:
@@ -4057,6 +4204,13 @@ def _read_ref_from_prepare(payload: Mapping[str, Any]) -> dict[str, Any] | None:
 
 
 def _require_reference(arguments: Mapping[str, Any]) -> str:
+    """Return the id string behind a ``reference`` argument.
+
+    Round-8 K6: a ``{kind, id}`` object is unwrapped to its id, but a *string* is
+    forwarded as the opaque id it is — a stringified JSON blob is never decoded
+    into a real task here (the round-9 M10 fix is that this adapter no longer
+    *produces* such a string, not that inputs are reinterpreted).
+    """
     raw = arguments.get("reference")
     if isinstance(raw, Mapping):
         raw = raw.get("id")
@@ -4067,6 +4221,113 @@ def _require_reference(arguments: Mapping[str, Any]) -> str:
             params={"field": "reference"},
         )
     return raw
+
+
+#: Fields of one analysis-capability row kept by ``detail="summary"``.  They are
+#: exactly the decision fields, so summary and full can never disagree on the
+#: state of one id (round-9 M4a).
+_ANALYSIS_SUMMARY_FIELDS: tuple[str, ...] = (
+    "analysis_id",
+    "state",
+    "registered",
+    "executable",
+)
+
+
+def _analysis_capability_view(value: Any, *, summary: bool) -> Any:
+    """Shape the analysis-capability projection without inventing a state.
+
+    The Controller owns the application registry; this adapter only forwards what
+    it was handed.  A payload that carries rows is forwarded unchanged (``full``)
+    or trimmed to :data:`_ANALYSIS_SUMMARY_FIELDS` (``summary``) so both details
+    agree.  A payload that does not carry the projection is answered with
+    ``status: "unknown"``: the adapter cannot know whether a capability is
+    registered or executable, and reporting ``unavailable``/``registered: false``
+    would be a fabricated negative that also contradicted ``detail=full``
+    (round-9 M4a).
+    """
+    if isinstance(value, (list, tuple)):
+        rows = [dict(row) for row in value if isinstance(row, Mapping)]
+        if summary:
+            return [{key: row.get(key) for key in _ANALYSIS_SUMMARY_FIELDS} for row in rows]
+        return rows
+    if isinstance(value, Mapping) and value.get("status"):
+        # A declared status projection is forwarded, never re-derived.
+        return dict(value)
+    if isinstance(value, Mapping) and value and all(
+        isinstance(item, str) for item in value.values()
+    ):
+        # Round-9 M4a: the Controller's summary publishes a compact
+        # {analysis_id: state} table.  It is a known projection, so forward it
+        # (annotated) instead of claiming the adapter cannot see it.
+        states = {
+            str(key): str(value[key])
+            for key in value
+            if str(value[key]) in ANALYSIS_CAPABILITY_STATES
+        }
+        if states:
+            return {
+                "summary_states": states,
+                "source": "controller_capabilities",
+                "detail_tool": {
+                    "tool": McpTool.CAPABILITIES,
+                    "arguments": {"detail": "full"},
+                },
+            }
+    return {
+        "status": "unknown",
+        "source": "controller_capabilities",
+        "unknown_reason": "controller_projection_missing",
+        # The frozen id vocabulary is a local fact (not a registry read), so an
+        # agent still learns which ids exist while their state stays unknown.
+        "capability_ids": list(ANALYSIS_CAPABILITY_IDS),
+        "detail_tool": {
+            "tool": McpTool.CAPABILITIES,
+            "arguments": {"detail": "full"},
+        },
+    }
+
+
+#: Longest audit-only cancel note accepted (round-9 M9).  The controller does
+#: not accept a reason, so this bound is purely the MCP acknowledgement's.
+_CANCEL_REASON_MAX_LENGTH = 200
+
+
+def _cancel_reason(arguments: Mapping[str, Any]) -> str | None:
+    """Validate the optional audit-only cancel ``reason`` (never a control input).
+
+    Raises:
+        McpToolError: ``input_invalid`` with ``params.field="reason"`` and
+            ``rule`` ``invalid_type`` / ``max_length``.
+    """
+    raw = arguments.get("reason")
+    if raw is None:
+        return None
+    if not isinstance(raw, str):
+        raise McpToolError(
+            mo.ErrorCode.INPUT_INVALID,
+            "reason must be a string",
+            params={
+                "field": "reason",
+                "rule": "invalid_type",
+                "received_type": type(raw).__name__,
+            },
+            retryable=False,
+        )
+    reason = raw.strip()
+    if len(reason) > _CANCEL_REASON_MAX_LENGTH:
+        raise McpToolError(
+            mo.ErrorCode.INPUT_INVALID,
+            f"reason exceeds {_CANCEL_REASON_MAX_LENGTH} characters",
+            params={
+                "field": "reason",
+                "rule": "max_length",
+                "max_length": _CANCEL_REASON_MAX_LENGTH,
+                "length": len(reason),
+            },
+            retryable=False,
+        )
+    return reason or None
 
 
 def _requested_cores(arguments: Mapping[str, Any]) -> int:

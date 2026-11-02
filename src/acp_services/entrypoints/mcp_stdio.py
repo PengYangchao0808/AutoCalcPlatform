@@ -34,8 +34,11 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import signal
 import sys
+import threading
+import time
 from collections.abc import Mapping
 from types import FrameType
 from typing import IO, Any
@@ -62,8 +65,15 @@ _PRE_INIT_METHODS = frozenset({"initialize", "ping", "server/discover"})
 logger = logging.getLogger(__name__)
 
 
-class _ShutdownRequestedError(Exception):
-    """Raised inside a signal handler to leave the blocking read promptly."""
+class _ShutdownRequestedError(BaseException):
+    """Raised inside a signal handler to leave the blocking read promptly.
+
+    Deliberately a :class:`BaseException` (like ``KeyboardInterrupt``): the JSON-RPC
+    dispatcher converts ``Exception`` into a protocol error response, so an
+    ``Exception`` subclass raised by the handler could be swallowed mid-request
+    and the transport would block forever waiting for the next frame — the
+    intermittent "signal shutdown timed out" the process suite caught.
+    """
 
 
 def configure_stdio_logging(level: str = "INFO") -> None:
@@ -119,6 +129,12 @@ class JsonRpcLineTransport:
         self._log_level = log_level
         self._initialized = False
         self._previous_handlers: dict[int, Any] = {}
+        # Watchdog: the handler records the signal here before raising, so a
+        # broad ``except Exception`` in some request path cannot leave the
+        # process blocked in ``readline`` forever (the intermittent "signal
+        # shutdown timed out" the process suite caught).
+        self._shutdown_signal: int | None = None
+        self._finished = False
 
     def serve_forever(self) -> int:
         """Serve until EOF or a shutdown signal; returns the process exit code."""
@@ -128,6 +144,7 @@ class JsonRpcLineTransport:
             "mcp stdio transport ready (max_frame_bytes=%d)",
             self._max_frame_bytes,
         )
+        self._start_shutdown_watchdog()
         try:
             while True:
                 frame = self._read_frame()
@@ -156,7 +173,34 @@ class JsonRpcLineTransport:
             logger.info("client closed stdout; closing stdio transport")
             return 0
         finally:
+            self._finished = True
             self._restore_signal_handlers()
+
+    def _start_shutdown_watchdog(self) -> None:
+        """Force a clean exit if a recorded shutdown signal never takes effect.
+
+        The normal path raises from the handler and is logged by the loop above.
+        If that exception is swallowed, the process would otherwise wait in
+        ``readline`` until the caller's timeout; this daemon thread logs the
+        same line and exits after a short grace period.
+        """
+
+        def _watch() -> None:
+            while not self._finished:
+                if self._shutdown_signal is None:
+                    time.sleep(0.2)
+                    continue
+                deadline = time.monotonic() + 5.0
+                while time.monotonic() < deadline and not self._finished:
+                    time.sleep(0.05)
+                if not self._finished:
+                    logger.info(
+                        "shutdown signal %s; closing stdio transport",
+                        self._shutdown_signal,
+                    )
+                    os._exit(0)
+
+        threading.Thread(target=_watch, name="mcp-shutdown-watchdog", daemon=True).start()
 
     def _read_frame(self) -> tuple[str, bool] | None:
         """Return ``(text, oversized)`` or ``None`` on EOF."""
@@ -277,6 +321,7 @@ class JsonRpcLineTransport:
         self._previous_handlers.clear()
 
     def _on_signal(self, signum: int, _frame: FrameType | None) -> None:
+        self._shutdown_signal = signum
         raise _ShutdownRequestedError(signum)
 
 

@@ -9,17 +9,28 @@ inside its scope; they can never create, widen or renew one.
 Every actual action appends a digest + decision reference to the authorization
 record through the existing Data research-resource CAS store, so replayed
 actions do not re-consume the limits and usage survives a restart.
+
+Round-9 M3 adds one explicit, bounded mint: on a ``local-single`` deployment the
+Controller may create an ``origin="agent-self"`` record for its own trusted
+operator entry (see :meth:`SelectionAuthorizationService.mint_self_signed`).
+That path goes through the same store and the same admin creation gate, and the
+publication still validates/consumes it on the normal path.
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
 from acp_services.contracts.selection import (
     SELECTION_ACTIONS,
     SELECTION_AUTHORIZATION_SCHEMA,
     SELECTION_CONTRACT_VERSION,
+    SELECTION_SELF_SIGNED_MAX_CANDIDATES,
+    SELECTION_SELF_SIGNED_ORIGIN,
+    SELECTION_SELF_SIGNED_POLICY_REVISION,
+    SELECTION_SELF_SIGNED_TTL_SECONDS,
     SelectionAuthorization,
     SelectionDecision,
     SelectionLimits,
@@ -91,6 +102,78 @@ class SelectionAuthorizationService:
             _resource_request(authorization, principal_id=principal_id, project_id=project_id)
         )
         return record.document
+
+    def mint_self_signed(
+        self,
+        *,
+        source_job_id: str,
+        attempt: int,
+        principal_id: str,
+        project_id: str,
+        candidate_count: int,
+        workflow: str = "PESsearch",
+        authorization_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Mint one bounded ``agent-self`` authorization for a local-single entry.
+
+        Round-9 M3: the Controller calls this only after it has verified that the
+        entry is the trusted ``local-single`` operator (no request body field can
+        reach it, and an authenticated API-key principal never qualifies).  The
+        record is deliberately narrow: one source job/attempt, the
+        ``publish_pes_selection`` action only, at most
+        :data:`~acp_services.contracts.selection.SELECTION_SELF_SIGNED_MAX_CANDIDATES`
+        candidates and
+        :data:`~acp_services.contracts.selection.SELECTION_SELF_SIGNED_TTL_SECONDS`
+        seconds of validity.  It is marked ``origin="agent-self"`` and uses its
+        own policy revision so it can never be mistaken for (or upgraded into)
+        an operator grant.
+
+        The record is persisted through :meth:`create` — the one admin creation
+        path and the one store — and the caller still runs
+        :meth:`validate`/:meth:`consume`, so self-signing never skips a check.
+        """
+        if not str(source_job_id or "").strip():
+            raise SelectionAuthorizationError(
+                "a self-signed authorization needs a source job",
+                code="invalid_self_signed_scope",
+                details={"field": "source_job_id"},
+            )
+        if int(attempt) < 1:
+            raise SelectionAuthorizationError(
+                "a self-signed authorization needs a positive attempt",
+                code="invalid_self_signed_scope",
+                details={"field": "attempt"},
+            )
+        bounded_candidates = min(
+            max(int(candidate_count), 1), SELECTION_SELF_SIGNED_MAX_CANDIDATES
+        )
+        valid_until = (
+            self._clock() + timedelta(seconds=SELECTION_SELF_SIGNED_TTL_SECONDS)
+        ).isoformat(timespec="seconds")
+        authorization = SelectionAuthorization(
+            authorization_id=authorization_id or f"self-{uuid.uuid4().hex}",
+            owner_principal_id=principal_id,
+            owner_project_id=project_id,
+            policy_revision=SELECTION_SELF_SIGNED_POLICY_REVISION,
+            valid_until=valid_until,
+            actions=("publish_pes_selection",),
+            source_job_id=str(source_job_id),
+            allowed_attempts=(int(attempt),),
+            workflow=workflow,
+            roles=("TS", "INT"),
+            # no method/nproc ceiling is invented here: the record is bounded by
+            # the job/attempt/action/candidate/TTL scope above.
+            methods=(),
+            nproc_max=0,
+            limits=SelectionLimits(max_candidates=bounded_candidates),
+            origin=SELECTION_SELF_SIGNED_ORIGIN,
+        )
+        return self.create(
+            authorization,
+            is_admin=True,
+            principal_id=principal_id,
+            project_id=project_id,
+        )
 
     # ── agent use ────────────────────────────────────────────────────────
 
@@ -212,6 +295,7 @@ class SelectionAuthorizationService:
             authorization_digest=digest,
             policy_revision=authorization.policy_revision,
             remaining=authorization.limits.remaining(action),
+            authorization_origin=authorization.origin,
         )
 
     def consume(

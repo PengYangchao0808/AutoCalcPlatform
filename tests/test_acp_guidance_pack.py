@@ -197,7 +197,7 @@ def test_wire_syntax_guidance_present_v1_1_0() -> None:
     assert "from_artifact" in steps and "selected_ids" in steps
     assert "不会自动套用到未标角色的 item" in steps
     pes = read_guide("workflow.PESsearch")
-    assert pes["version"] == "1.2.0"  # multi-bond/angle/dihedral vocabulary
+    assert pes["version"] == "1.3.0"  # round-9: frames + manifest + self-signed publish
     pes_steps = pes["sections"]["steps"]
     assert "angstrom" in pes_steps and "degree" in pes_steps
     assert "产物侧拉伸已成键" in pes_steps
@@ -215,16 +215,17 @@ def test_round7_pure_mcp_ts_chain_is_explicit_not_trial_and_error() -> None:
     from acp.api.guidance_pack import get_guide
 
     task = get_guide("task.find_transition_state")
-    assert task.version == "1.2.0"
+    assert task.version == "1.3.0"  # round-9: self-signed publish
     chain = task.sections["chain"]
-    # The dead end is stated for the pure-MCP session…
+    # Round-9: a local-single session may self-sign (bounded, recorded)…
     assert "纯 MCP 会话" in chain
-    assert "一定会被拒绝" in chain
-    assert "authorization_id" in chain and "selector=agent" in chain
-    # …with the typed refusals instead of a probe-id workaround.
+    assert "自签" in chain and "agent-self" in chain
+    assert "ACP_SELECTION_AUTOPUBLISH" in chain
+    assert "authorization_id" in chain
+    # …while every other tier still needs a pre-minted id and gets typed refusals.
     assert "authorization_not_found" in chain
     assert "access_denied" in chain
-    assert "probe" in chain and "不会自动铸造授权" in chain
+    assert "不要自造 id 试探" in chain
     # The inline item path is first class, and from_artifact stays available.
     assert 'role:"ts"' in chain
     assert "inline 路径是一等路径" in chain
@@ -242,7 +243,7 @@ def test_round7_singlepoint_sp_out_layouts_are_both_named() -> None:
     from acp.api.guidance_pack import get_guide
 
     topic = get_guide("topic.artifact_locating")
-    assert topic.version == "1.4.0"
+    assert topic.version == "1.5.0"  # round-9: masking/pager
     fields = topic.sections["result_fields"]
     assert "<job_dir>/sp.out" in fields
     assert "<job_dir>/WORK/05_SP/sp.out" in fields

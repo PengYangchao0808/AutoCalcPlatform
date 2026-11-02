@@ -21,7 +21,7 @@ def _body(guide_id: str) -> str:
 
 
 def test_pack_version_is_current() -> None:
-    assert PACK_VERSION == "1.5.0"
+    assert PACK_VERSION == "1.6.0"
     for card in guidance_index()["guides"]:
         assert card["size_bytes"] <= MAX_GUIDE_BYTES, card["guide_id"]
 
@@ -87,7 +87,10 @@ def test_batch_guide_covers_ts_only_and_levels() -> None:
 def test_find_transition_state_summary_does_not_claim_publish_is_mandatory() -> None:
     summary = _GUIDES["task.find_transition_state"].summary
     body = _body("task.find_transition_state")
-    assert "有授权才 publish" in summary
+    # Round-9: local-single may self-sign, so "only with a pre-minted grant" is
+    # no longer true; publishing still must never be described as mandatory.
+    assert "inline" in summary
+    assert "自签" in summary
     assert "inline role" in summary or "inline" in body
     assert "必经" not in summary
 
