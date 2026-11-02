@@ -229,7 +229,7 @@
       "owner": "B",
       "parent": "M1-01",
       "receipt": "tests/test_acp2_runtime_contracts.py",
-      "receipt_sha256": "496fb56751f8b7fb2dbb987c951dff4e757a68ac893476f8f4bd45af6a88e707",
+      "receipt_sha256": "5844cc2be8ca7e4bdb26e5078d316a2300a597ff2027cba9654b09b3ebddb0ee",
       "required_observations": {
         "negotiation": "present",
         "version_axis": "present"
@@ -254,7 +254,7 @@
       "owner": "B",
       "parent": "M1-01",
       "receipt": "tests/test_acp2_runtime_contracts.py",
-      "receipt_sha256": "496fb56751f8b7fb2dbb987c951dff4e757a68ac893476f8f4bd45af6a88e707",
+      "receipt_sha256": "5844cc2be8ca7e4bdb26e5078d316a2300a597ff2027cba9654b09b3ebddb0ee",
       "required_observations": {
         "artifact_schema": "present",
         "operation_schema": "present"
@@ -813,7 +813,7 @@
       "status": "CLOSED"
     }
   ],
-  "coverage_sha256": "3e12a6ca415e09152a636a90b333c8b20463d7587d2daad47ecacc943a3674c8",
+  "coverage_sha256": "7fa216f32e09459475f68bc1cecb4b700ea8fe09657663893db9f9f1645216f5",
   "deferred_rows": [
     {
       "candidate": "5f3b867e49dcaee32c58b6d0266f5fdbb0360bc5",
@@ -2443,7 +2443,7 @@
       "notes": "Exhaustive v1 field policy and cross-entry JobSpec equivalence with digest v2; the HTTP prepare route is the single prepare-field authority (M0-06 followup 927d92f).",
       "owner": "B",
       "receipt": "tests/test_acp2_runtime_contracts.py",
-      "receipt_sha256": "496fb56751f8b7fb2dbb987c951dff4e757a68ac893476f8f4bd45af6a88e707",
+      "receipt_sha256": "5844cc2be8ca7e4bdb26e5078d316a2300a597ff2027cba9654b09b3ebddb0ee",
       "required_observations": {
         "digest_v2": "present",
         "jobspec_equivalence": "present",
@@ -2709,7 +2709,7 @@
       "notes": "Application/MCP/artifact/analysis contract unification and the reviewed wire-id allowlist (M1-01a/b/c). Later additive contract versions are registered in the manifest.",
       "owner": "B，A/C 消费确认",
       "receipt": "tests/test_acp2_runtime_contracts.py",
-      "receipt_sha256": "496fb56751f8b7fb2dbb987c951dff4e757a68ac893476f8f4bd45af6a88e707",
+      "receipt_sha256": "5844cc2be8ca7e4bdb26e5078d316a2300a597ff2027cba9654b09b3ebddb0ee",
       "required_observations": {
         "application_api": "present",
         "operation_schema": "present",

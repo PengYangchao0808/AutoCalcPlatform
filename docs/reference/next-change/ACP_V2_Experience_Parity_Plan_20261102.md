@@ -333,6 +333,15 @@ for stat_code, mapped in _LSF_STATE_MAP.items():
 
 **E1—E5 状态**：全部 `NOT_VERIFIED`。理由：无双后端回放对拍 harness；真机集群链路本机不可得；W-01b 未切换前 locality 泄漏仍存在（台账 §9.2）。
 
+### 9.5 冻结契约与静态资源的同步（W-05/W-06 合入面）
+
+W-05/W-06 会命中两个冻结面，已按仓库既有 re-anchor 流程处理：
+
+- **前端静态资源**：`experience/static-assets.manifest.json` 由 `acp.api.static_assets.build_manifest` 从 `frontend/` 重新生成（107 文件；`module_tests/` 按既有规则排除），`experience/release-manifest.json` 的 `static_assets` 摘要同步更新。`test_committed_static_manifest_equals_a_fresh_frontend_build` 通过。
+- **MCP launch 契约**：`runtime/mcp-launch.schema.json` 的 `$defs.tool_inputs` 与 `runtime/mcp-launch.template.json` 的每个 `inputSchema` 和 runtime `tools/list` 保持 1:1；`acp_status` 增加 `job_ids`（版本 2）、`acp_read_artifact` 增加 `artifact_refs`（版本 3），单参调用仍合法。
+- **摘要重算**：`acp2-contracts/manifest.json`（delivered 契约 sha + `contract_digest` + self digest）、`release/bom.current.json`（`contract_digest` + `coverage_sha256` + 自身 sha 注册）、`release/evidence-coverage.current.json`（receipt sha + `coverage_sha256`）已重算。`scripts/acceptance/validate_acp2_contracts.py` 与 `validate_acp2_gap_coverage.py` 均 **VALID**；`test_acp2_gap_coverage` / `test_acp2_m502_coverage_signoff` 全绿。
+- **环境说明**：本机 integration venv 的旧 editable 元数据曾让 `acp --version` 报 0.2.0；`pip install -e . --no-deps` 刷新后为 0.3.0，版本门通过。非代码问题，CI 的干净安装不受影响。
+
 ### 9.5 对原文的事实更正（P2）
 
 - `services_data_bootstrap.py` 的锚点是 `_ReadRootAdapter:1788`、`build_read_only_reader:2263`、`build_read_root_resolver:2315`；原文 `:2295/:2319` 是函数体内的行，不能作锚点。

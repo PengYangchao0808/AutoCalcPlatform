@@ -83,10 +83,10 @@
   "schema": "acp2.experience.release-manifest.v1",
   "schema_version": "1.0.0",
   "static_assets": {
-    "bytes": 4018914,
-    "digest": "b1797515b08647a58dab2307452d71699c2e9484953d248f2dddb6e1d1375cf0",
+    "bytes": 4019596,
+    "digest": "fb4a4a780b7ddb24176800c9a0b2c2997425494a84190ce4d743f37797884d06",
     "files": 107,
-    "note": "regenerated after the round-5 frontend contract update; module_tests are Node-only doubles and are excluded from shipped assets",
+    "note": "regenerated after the W-05 locality-neutral frontend copy update; module_tests are Node-only doubles and are excluded from shipped assets",
     "release_id": "acp2-experience-0.3.0"
   },
   "task_id": "M5-01",
