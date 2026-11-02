@@ -6,6 +6,9 @@ Monitors remote LSF (OpenLAVA) jobs via SSH ``bjobs`` queries, SFTP
 log tailing, and optional ``state.json`` polling for fine-grained progress.
 Status detection relies on ``bjobs`` state codes, the ``.exit_code``
 sentinel file written by the LSF script, and the workflow ``state.json``.
+Many jobs of one node are batch-queried with :meth:`RemoteJobMonitor.get_lsf_status_many`
+(strict row matching, never a whole-output code scan) and served to the
+per-job poll path through a one-shot :meth:`RemoteJobMonitor.prefetch_statuses` cache.
 
 LSF state mapping follows :class:`LSFClusterAdapter.get_status`:
 
@@ -22,6 +25,9 @@ import json
 import logging
 import posixpath
 import shlex
+import threading
+import time
+from collections.abc import Iterable
 from typing import Final
 
 from acp.scheduler.remote.config import RemoteNode
@@ -58,6 +64,55 @@ _LSF_STATE_MAP: dict[str, str] = {
 # Terminal LSF states (job will not change further).
 _TERMINAL_LSF_STATUSES = frozenset({STATUS_DONE, STATUS_FAILED, STATUS_NOT_FOUND})
 
+# One batch ``bjobs`` query carries at most this many job ids — same order of
+# magnitude as ``sftp.py::_SHA256_BATCH`` and far below any argv limit.
+_BJOB_STATUS_BATCH_SIZE: Final[int] = 96
+
+# One-shot cache lifetime for pre-fetched statuses.  It only has to bridge the
+# gap between the poll-loop prefetch and the per-job poll in the same round;
+# keeping it near the poll interval also bounds how stale a cached value can be
+# if a consumer (e.g. cancel/deadline confirmation) reads it late.
+_STATUS_CACHE_TTL_SECONDS: Final[float] = 30.0
+
+# Explicit "the job is not in the queue" reports.  These are text verdicts from
+# ``bjobs`` itself — never inferred from a missing row (a missing row alone is
+# ``STATUS_UNKNOWN``: unknown beats guessing).
+_NOT_FOUND_PHRASES: Final[tuple[str, ...]] = ("not found", "not submitted", "no unfinished")
+# Phrases that answer the *whole* query ("no unfinished job found"), so every
+# unmatched id in the batch is legitimately not found.
+_GLOBAL_NOT_FOUND_PHRASES: Final[tuple[str, ...]] = ("no unfinished",)
+# Phrases that name a specific job id ("Job <123> is not found").
+_PER_JOB_NOT_FOUND_PHRASES: Final[tuple[str, ...]] = ("not found", "not submitted")
+
+
+def _bjobs_row_statuses(raw: str) -> dict[str, str]:
+    """Map LSF job id -> normalised status from a full ``bjobs`` table.
+
+    Strict by design: only a row whose **first column** is the job id selects
+    a status, so one job's ``DONE`` can never be attributed to another id.
+    A row whose STAT column is unrecognised maps to ``STATUS_UNKNOWN`` rather
+    than being silently dropped.
+    """
+    rows: dict[str, str] = {}
+    for line in raw.splitlines():
+        parts = line.split()
+        if len(parts) < 3 or parts[0].upper() == "JOBID":
+            continue
+        rows[parts[0]] = _LSF_STATE_MAP.get(parts[2].upper(), STATUS_UNKNOWN)
+    return rows
+
+
+def _explicit_not_found_ids(raw: str, requested: set[str]) -> set[str]:
+    """Ids named by an explicit per-job "not found"/"not submitted" line."""
+    missing: set[str] = set()
+    for line in raw.splitlines():
+        lower = line.lower()
+        if not any(phrase in lower for phrase in _PER_JOB_NOT_FOUND_PHRASES):
+            continue
+        tokens = line.replace("<", " ").replace(">", " ").replace(",", " ").replace(".", " ")
+        missing.update(token for token in tokens.split() if token in requested)
+    return missing
+
 
 class RemoteJobMonitor:
     """SSH/SFTP-based monitor for remote LSF jobs.
@@ -67,9 +122,21 @@ class RemoteJobMonitor:
     share across worker threads.
     """
 
-    def __init__(self, ssh_pool: SSHConnectionPool, stager: FileStager) -> None:
+    def __init__(
+        self,
+        ssh_pool: SSHConnectionPool,
+        stager: FileStager,
+        *,
+        status_cache_ttl: float = _STATUS_CACHE_TTL_SECONDS,
+    ) -> None:
         self._ssh = ssh_pool
         self._stager = stager
+        self._status_cache_ttl = status_cache_ttl
+        # (node name, lsf job id) -> (normalised status, monotonic timestamp).
+        # One-shot: ``get_lsf_status`` pops the entry, so a confirmed status is
+        # never re-served to a later cancel/deadline confirmation loop.
+        self._status_cache: dict[tuple[str, str], tuple[str, float]] = {}
+        self._status_cache_lock = threading.Lock()
 
     # ------------------------------------------------------------------ #
     # LSF status
@@ -86,43 +153,142 @@ class RemoteJobMonitor:
 
         Uses plain ``bjobs <id>`` for compatibility with both IBM LSF and
         OpenLAVA 2.0 (which does not support ``-o`` / ``-noheader``).
+        A freshly prefetched status is consumed once (see
+        :meth:`prefetch_statuses`); otherwise the node is queried directly.
         """
-        cmd = f"bjobs {shlex.quote(lsf_job_id)} 2>&1"
-        try:
-            _code, out, _err = self._ssh.execute(node, cmd, timeout=timeout)
-        except SSHExecutionError:
-            logger.warning("bjobs query failed for job %s on %s", lsf_job_id, node.name)
+        cached = self._pop_cached_status(node.name, lsf_job_id)
+        if cached is not None:
+            return cached
+        raw = self._run_bjobs_status(node, [str(lsf_job_id)], timeout=timeout)
+        if raw is None:
             return STATUS_UNKNOWN
+        return self._parse_single_status(raw, str(lsf_job_id))
 
-        raw = out.strip()
-        if not raw:
+    def get_lsf_status_many(
+        self,
+        node: RemoteNode,
+        lsf_job_ids: Iterable[str],
+        *,
+        timeout: float = 30.0,
+    ) -> dict[str, str]:
+        """Query several LSF jobs of one node in as few ``bjobs`` calls as possible.
+
+        Ids are deduplicated and sent in chunks of at most
+        :data:`_BJOB_STATUS_BATCH_SIZE`; each chunk is ONE ``bjobs <ids...>``
+        invocation whose full table is parsed strictly **by row** (first column
+        equals the job id).  Every requested id always gets a value:
+
+        * the row's STAT when a matching row exists,
+        * :data:`STATUS_NOT_FOUND` only on an explicit "not found" /
+          "not submitted" / "no unfinished" report from LSF,
+        * :data:`STATUS_UNKNOWN` otherwise — a missing row is never enough to
+          borrow another job's status code.
+        """
+        requested = list(dict.fromkeys(str(job_id) for job_id in lsf_job_ids if job_id))
+        statuses: dict[str, str] = {}
+        for start in range(0, len(requested), _BJOB_STATUS_BATCH_SIZE):
+            chunk = requested[start : start + _BJOB_STATUS_BATCH_SIZE]
+            raw = self._run_bjobs_status(node, chunk, timeout=timeout)
+            if raw is None:
+                statuses.update(dict.fromkeys(chunk, STATUS_UNKNOWN))
+                continue
+            statuses.update(self._resolve_batch_statuses(raw, chunk))
+        return statuses
+
+    def prefetch_statuses(self, node: RemoteNode, lsf_job_ids: Iterable[str]) -> dict[str, str]:
+        """Batch-query *lsf_job_ids* and cache the results for one poll round.
+
+        Each status is stored with ``time.monotonic()`` and consumed by the
+        next :meth:`get_lsf_status` for that (node, id) — once.  The TTL only
+        bounds staleness; a popped entry is gone even if still fresh.
+        """
+        statuses = self.get_lsf_status_many(node, lsf_job_ids)
+        now = time.monotonic()
+        with self._status_cache_lock:
+            self._prune_status_cache(now)
+            for job_id, status in statuses.items():
+                self._status_cache[(node.name, str(job_id))] = (status, now)
+        return statuses
+
+    def _run_bjobs_status(
+        self, node: RemoteNode, lsf_job_ids: list[str], *, timeout: float
+    ) -> str | None:
+        """Run one ``bjobs <ids...>`` query; ``None`` on a transport failure."""
+        ids = " ".join(shlex.quote(str(job_id)) for job_id in lsf_job_ids)
+        try:
+            _code, out, _err = self._ssh.execute(node, f"bjobs {ids} 2>&1", timeout=timeout)
+        except SSHExecutionError:
+            logger.warning("bjobs query failed for %d job(s) on %s", len(lsf_job_ids), node.name)
+            return None
+        return out or ""
+
+    def _parse_single_status(self, raw: str, lsf_job_id: str) -> str:
+        """Parse one job's ``bjobs`` output (single-job semantics preserved).
+
+        Empty output and explicit "not found" text stay ``STATUS_NOT_FOUND``
+        (``tests/test_remote_phase2.py`` contract).  The legacy "scan the whole
+        output for any LSF stat code" fallback is narrowed to a genuine
+        single-token output: a bare ``PEND``/``RUN``/``DONE`` line is the whole
+        answer, but a code found anywhere inside another job's table row is
+        NOT this job's status.
+        """
+        stripped = raw.strip()
+        if not stripped:
             return STATUS_NOT_FOUND
 
-        lower = raw.lower()
-        # "Job <1234> is not found" (OpenLAVA) or "not submitted"
-        if "not found" in lower or "not submitted" in lower or "no unfinished" in lower:
+        lower = stripped.lower()
+        if any(phrase in lower for phrase in _NOT_FOUND_PHRASES):
             return STATUS_NOT_FOUND
 
-        # Parse the table: find the line whose first column matches the job ID,
-        # then extract the STAT column (3rd column).  OpenLAVA prints a table
-        # header followed by one data line per job (which may be followed by
-        # continuation lines listing multi-host execution hosts).
-        for line in raw.splitlines():
-            parts = line.split()
-            if len(parts) >= 3 and parts[0] == lsf_job_id:
-                stat = parts[2].upper()
-                mapped = _LSF_STATE_MAP.get(stat)
-                if mapped is not None:
-                    return mapped
-                break
+        rows = _bjobs_row_statuses(stripped)
+        if lsf_job_id in rows:
+            return rows[lsf_job_id]
 
-        # Fallback: scan for any recognised LSF stat code in the output.
-        for stat_code, mapped in _LSF_STATE_MAP.items():
-            if stat_code in raw.upper():
+        tokens = stripped.split()
+        if len(tokens) == 1:
+            mapped = _LSF_STATE_MAP.get(tokens[0].upper())
+            if mapped is not None:
                 return mapped
 
-        logger.debug("Unrecognised bjobs output for %s: %r", lsf_job_id, raw)
+        logger.debug("Unrecognised bjobs output for %s: %r", lsf_job_id, stripped[:200])
         return STATUS_UNKNOWN
+
+    @staticmethod
+    def _resolve_batch_statuses(raw: str, requested: list[str]) -> dict[str, str]:
+        """Resolve a batch chunk's ids from one full ``bjobs`` table."""
+        rows = _bjobs_row_statuses(raw)
+        resolved = {job_id: rows[job_id] for job_id in requested if job_id in rows}
+        unmatched = [job_id for job_id in requested if job_id not in resolved]
+        if not unmatched:
+            return resolved
+
+        lower = raw.lower()
+        if any(phrase in lower for phrase in _GLOBAL_NOT_FOUND_PHRASES):
+            resolved.update(dict.fromkeys(unmatched, STATUS_NOT_FOUND))
+            return resolved
+
+        explicit = _explicit_not_found_ids(raw, set(unmatched))
+        for job_id in unmatched:
+            resolved[job_id] = STATUS_NOT_FOUND if job_id in explicit else STATUS_UNKNOWN
+        return resolved
+
+    def _pop_cached_status(self, node_name: str, lsf_job_id: str) -> str | None:
+        """Consume a prefetched status once; stale entries are dropped."""
+        key = (node_name, str(lsf_job_id))
+        with self._status_cache_lock:
+            entry = self._status_cache.pop(key, None)
+        if entry is None:
+            return None
+        status, cached_at = entry
+        if time.monotonic() - cached_at > self._status_cache_ttl:
+            return None
+        return status
+
+    def _prune_status_cache(self, now: float) -> None:
+        """Drop expired entries (caller holds ``_status_cache_lock``)."""
+        for key, (_status, cached_at) in list(self._status_cache.items()):
+            if now - cached_at > self._status_cache_ttl:
+                del self._status_cache[key]
 
     @staticmethod
     def is_terminal(status: str) -> bool:
