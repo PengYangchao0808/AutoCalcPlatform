@@ -1189,7 +1189,10 @@ def test_prepare_schema_is_the_seventeen_field_authority() -> None:
 
 def test_read_and_analyze_declare_their_mandatory_identity_fields() -> None:
     read = _declared(mcp.McpTool.READ_ARTIFACT)
-    assert read["required"] == ["artifact_ref"]
+    # W-06: single artifact_ref and batch artifact_refs are a documented anyOf
+    # choice, so neither field is individually required any more.
+    assert "required" not in read
+    assert read["anyOf"] == [{"required": ["artifact_ref"]}, {"required": ["artifact_refs"]}]
     assert read["additionalProperties"] is False
     assert set(read["properties"]["artifact_ref"]["required"]) == {
         "task_id",
@@ -1198,6 +1201,10 @@ def test_read_and_analyze_declare_their_mandatory_identity_fields() -> None:
         "generation",
         "digest",
     }
+    assert read["properties"]["artifact_refs"]["minItems"] == 1
+    assert read["properties"]["artifact_refs"]["maxItems"] == mcp.MAX_BATCH_ARTIFACT_REFS
+    # Every batch entry is the same frozen identity tuple, never a summary.
+    assert read["properties"]["artifact_refs"]["items"] == read["properties"]["artifact_ref"]
     analyze = _declared(mcp.McpTool.ANALYZE)
     assert analyze["required"] == ["analysis_id", "input_refs", "explicit"]
     assert analyze["additionalProperties"] is False
@@ -1354,6 +1361,7 @@ def test_summary_scope_is_clipped_at_the_mcp_surface() -> None:
 
 def test_summary_budget_marks_overflow_when_nothing_is_clippable() -> None:
     """An oversized non-essential-free payload is flagged, never silently truncated."""
+
     class _HugeNavigationCapabilities:
         def capabilities(self, *, workflow=None, detail=None):
             return {
