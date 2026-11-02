@@ -25,7 +25,10 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 
-from acp.api.v1_routes import _apply_auto_tag_rules_on_submit
+from acp.api.v1_routes import (
+    _apply_auto_tag_rules_on_submit,
+    _job_read_root,
+)
 from acp.api.v2_schemas import (
     V2BatchOpItemResult,
     V2BatchOpsRequest,
@@ -377,13 +380,17 @@ def _storage_for(record: JobRecord) -> TaskStorageBackend:
 
 
 # ---------------------------------------------------------------------------
-# Remote-aware reads (plan todo 6 / GAP-5, R6).
+# Remote-aware reads (plan todo 6 / GAP-5, R6; W-01a single implementation).
 #
-# v2-local mirrors of v1_routes._is_remote_job/_job_read_root: v1_routes.py
-# is a user-dirty file, so the mirror lives here instead of hoisting shared
-# code out of it.  All remote reads use the ONE manager-owned cache
-# singleton (``JobManager.structure_cache``) — never a second cache — and
-# never write into the task ``work_dir``.
+# ``_job_read_root`` now has ONE implementation, imported from ``v1_routes``:
+# the v2-local mirror existed only because v1 was a user-dirty file, which is
+# no longer a valid reason.  The behaviour (including the intentionally
+# retained terminal ``fetch_catalog`` transition side effect, closure L2-03) is
+# unchanged — retiring that side effect is W-01b and stays blocked until the
+# registered F0/F1 x S0/S1 exit condition is met
+# (``cache_only_switch_matrix.md`` §6).  All remote reads use the ONE
+# manager-owned cache singleton (``JobManager.structure_cache``) — never a
+# second cache — and never write into the task ``work_dir``.
 # ---------------------------------------------------------------------------
 
 
@@ -396,22 +403,6 @@ def _is_remote_job(record: JobRecord) -> bool:
 def _remote_cache(request: Request) -> RemoteStructureCache:
     """Return the manager-owned ``RemoteStructureCache`` singleton."""
     return _manager(request).structure_cache
-
-
-def _job_read_root(request: Request, record: JobRecord) -> Path:
-    """Readable result root: ``work_dir`` locally, controlled cache for remote.
-
-    v1 mirror: terminal remote jobs fetch the small catalog files first
-    (``cache.fetch_catalog``), so manifest reads never depend on a frontend
-    ``?fetch=1`` retry.  Remote geometry/files stay lazy — downloads fetch
-    them on demand.
-    """
-    if not _is_remote_job(record):
-        return Path(record.work_dir)
-    cache = _remote_cache(request)
-    if record.status.is_terminal:
-        cache.fetch_catalog(record, str(record.spec.workflow or ""))
-    return cache.job_root(record.id)
 
 
 def _normalize_task_rel_path(file_path: str) -> str | None:

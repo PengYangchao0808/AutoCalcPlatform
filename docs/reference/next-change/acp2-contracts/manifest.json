@@ -152,7 +152,7 @@
       "NOT_APPLICABLE"
     ]
   },
-  "contract_digest": "06263b04e6ca58dbea5503aa7a1f56c80faa74f1aec7595252c3b2f1f51434f7",
+  "contract_digest": "f69292b7ff96f7dc8dee2bc5938380429587e2b856f0f4f4858f78d118ec3ad5",
   "contract_digest_rule": "sha256 over sorted lines '<path> <sha256>\\n' for delivered contracts excluding manifest.json, runtime/baseline-lock.json and release/bom.current.json (self-referential files; the BOM embeds this aggregate digest).",
   "contract_version": "1.7.0",
   "contract_version_history": [
@@ -212,6 +212,11 @@
       "version": "1.6.0"
     },
     {
+      "note": "V2 experience-parity W-06 additive batch selectors: acp_status gains job_ids and acp_read_artifact gains artifact_refs (anyOf with the existing single field); no delivered field removed or renamed, so contract_version stays 1.7.0. The frozen launch tables and the runtime tools/list schema move together.",
+      "stage": "W-06",
+      "version": "1.7.0"
+    },
+    {
       "note": "M5-02 final release registration: release/scope.json, the evidence-coverage and BOM schemas flip from planned to delivered, and the generated bom.current.json / evidence-coverage.current.json instances register as delivered B26 contracts. contract_version is bumped because the release namespace is now a delivered consumer-visible contract family. The BOM instance itself is excluded from contract_digest (it embeds the aggregate digest); both release schemas and the coverage instance stay inside it.",
       "stage": "B26",
       "version": "1.7.0"
@@ -224,7 +229,7 @@
       "note": "Self-referential: sha256 computed with this field emptied; see digest_rules.manifest_self.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/manifest.json",
-      "sha256": "6ef0edb13da3d860285fafe49f76007c0c797d8f6c388315c370c9ba699f8158",
+      "sha256": "bc30f77d2d32b80757aa1c8b2da8a96cda20e224446fcbaf834912e326ffd24b",
       "status": "delivered"
     },
     {
@@ -317,7 +322,7 @@
       "id": "mcp-launch-schema",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.schema.json",
-      "sha256": "4cda599267e51374e7aceb3be43e7d393c594507cb88bfdd2e2cfc599072eae9",
+      "sha256": "379fb60f23d1287c1dfbaa811c181da960f6b7b483598f5df7ea28a386731665",
       "status": "delivered",
       "updated_by": "B06"
     },
@@ -326,7 +331,7 @@
       "id": "mcp-launch-template",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/runtime/mcp-launch.template.json",
-      "sha256": "b1d1afbd4ec956c3ada43fd0fc3f85996a25e49d4882e22479ee316d45d21f5e",
+      "sha256": "95c3eda1c241eb86d54df7a8e6c96cea274803ca9990b100f0f7f3192f395618",
       "status": "delivered",
       "updated_by": "B06"
     },
@@ -474,7 +479,7 @@
       "note": "M5-02 clean-candidate BOM: 27 artifacts with URI+sha256+size, toolchain/DSH locks, contract digest and coverage canonical digest. Self-referential: excluded from contract_digest because it embeds that aggregate digest.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/release/bom.current.json",
-      "sha256": "898d9489e5fda45eb6d2d6f90e738d04615361cec15cc30ebdca0a87f2f3f305",
+      "sha256": "14d929d40a315a8f7702e6fcd5a81371f2682dc9f89cc37460db8c4bfe8d0fb7",
       "status": "delivered"
     },
     {
@@ -483,7 +488,7 @@
       "note": "M5-02 final coverage ledger: 39 tasks / 32 checkpoints / 26 gaps / 8 H rows + 3 DEFERRED rows, each with a receipt+sha256, candidate, reuse and required_observations. Delivery status lives only here, never in the BOM.",
       "owner": "B",
       "path": "docs/reference/next-change/acp2-contracts/release/evidence-coverage.current.json",
-      "sha256": "81029f669b24eab678abfc071e6fcd9bceed11c8e4654dcb939b5942e0cb0d07",
+      "sha256": "2eaea69e77d7fef67a2e3cfd962474224593a27c655c45196f193432fd003220",
       "status": "delivered"
     }
   ],

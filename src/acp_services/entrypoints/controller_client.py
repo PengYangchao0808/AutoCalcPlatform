@@ -598,6 +598,65 @@ class ControllerClient:
             raise ControllerClientError("status response is not an object")
         return StatusSnapshot.from_legacy(data, fallback_task_id=task_id)
 
+    def status_many(
+        self,
+        task_ids: Sequence[str],
+        *,
+        extensions: Mapping[str, Any] | None = None,
+    ) -> dict[str, StatusSnapshot]:
+        """Return authoritative snapshots for a bounded id set in ONE request.
+
+        W-06: reuses the Controller's additive ``GET /api/v1/jobs?ids=...``
+        selector (max 100 ids) so N status reads are one round trip instead of
+        N.  ``{jobs, counts}`` is the existing list shape; only the converged
+        rows are returned — an unknown id is simply absent from the mapping (the
+        caller renders the per-item ``not_found``), never a fabricated row.
+
+        Blank ids and duplicates are normalised away here (the selector is a
+        set on the Controller side too); an empty or oversized set is a typed
+        ``input_invalid`` before any request.
+        """
+        del extensions  # reserved for the status request envelope
+        ids: list[str] = []
+        seen: set[str] = set()
+        for value in task_ids:
+            task_id = str(value or "").strip()
+            if not task_id or task_id in seen:
+                continue
+            seen.add(task_id)
+            ids.append(task_id)
+        if not ids:
+            raise InvalidParameterError(
+                "status_many requires at least one non-empty task id",
+                params={"field": "task_ids", "rule": "min_items", "minimum": 1},
+            )
+        if len(ids) > 100:
+            raise InvalidParameterError(
+                "status_many accepts at most 100 task ids",
+                params={
+                    "field": "task_ids",
+                    "rule": "max_items",
+                    "maximum": 100,
+                    "requested": len(ids),
+                },
+            )
+        query = urllib.parse.urlencode({"ids": ",".join(ids)})
+        data = self._request_json("GET", f"/api/v1/jobs?{query}")
+        if not isinstance(data, Mapping):
+            raise ControllerClientError("status response is not an object")
+        rows = data.get("jobs")
+        if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
+            raise ControllerClientError("status response has no jobs list")
+        snapshots: dict[str, StatusSnapshot] = {}
+        for row in rows:
+            if not isinstance(row, Mapping):
+                continue
+            task_id = str(row.get("task_id") or row.get("id") or "")
+            if not task_id:
+                continue
+            snapshots[task_id] = StatusSnapshot.from_legacy(row, fallback_task_id=task_id)
+        return snapshots
+
     def list_tasks(
         self,
         *,

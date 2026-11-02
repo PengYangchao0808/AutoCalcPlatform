@@ -54,6 +54,12 @@ and API expose.  It is a *transport adapter*, never a second execution owner:
   ``input_invalid``/``unknown_field``, a missing required field is
   ``input_invalid``/``missing_required_field``.  Status stays a permissive
   historical read (unknown-field policy U2).
+* **W-06 additive batch reads.**  ``acp_status`` accepts ``job_ids`` and
+  ``acp_read_artifact`` accepts ``artifact_refs`` as the mutually-exclusive
+  alternative to their single reference (``anyOf`` in the advertised schema,
+  ``_validate_exclusive_selector`` here).  The single-argument path and response
+  shape are unchanged; a batch answers ``{tool, items, count}`` with per-item
+  isolation and never adds prepare/fetch power.
 * **One reviewed wire-id station (M1-01c).**  The only ``acp.*`` wire literal in
   this package is the negotiation-guidance id declared in
   :mod:`acp_services.entrypoints.wire_identifiers`; this module refers to the
@@ -102,6 +108,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import threading
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -144,6 +151,8 @@ from acp_services.workspace.command_identity import (
     PermissionScope,
 )
 
+logger = logging.getLogger(__name__)
+
 __all__ = [
     # Protocol / transport
     "MCP_PROTOCOL_VERSION",
@@ -181,6 +190,7 @@ __all__ = [
     "PreflightPort",
     "SubmitPort",
     "StatusPort",
+    "StatusBatchPort",
     "CancelPort",
     "ArtifactPort",
     "AnalysisPort",
@@ -377,9 +387,7 @@ def _summarize_job_listing(payload: Mapping[str, Any]) -> dict[str, Any]:
 
 #: Terminal job states for the cancel already-terminal marker (report
 #: vocabulary; the scheduler's own JobStatus stays the authority).
-_TERMINAL_STATES: frozenset[str] = frozenset(
-    {"failed", "cancelled", "completed", "canceled"}
-)
+_TERMINAL_STATES: frozenset[str] = frozenset({"failed", "cancelled", "completed", "canceled"})
 
 #: Terminal spellings the cancel *intent* already produced (a queued job is
 #: moved to CANCELLED synchronously).  These keep ``cancelled=True`` instead of
@@ -1129,12 +1137,22 @@ _ARTIFACT_REF_SCHEMA: dict[str, Any] = {
     },
 }
 
+#: W-06: one batch tool call is bounded so a single request cannot fan out
+#: unbounded Controller/read work.  ``acp_status`` fans out to one Controller
+#: round trip (the route caps ``ids`` at 100); ``acp_read_artifact`` is a local
+#: loop of bounded reads, so its cap is smaller.
+MAX_BATCH_JOB_IDS = 50
+MAX_BATCH_ARTIFACT_REFS = 20
+
 _READ_SCHEMA: dict[str, Any] = {
     "type": "object",
     "description": (
-        "Bounded read of an already-prepared artifact. artifact_ref is required; a miss is "
-        "resource_not_ready and a read never fetches, prepares or starts computation "
-        "max_bytes above the frozen max_read_bytes bound is refused "
+        "Bounded read of an already-prepared artifact. Exactly one of artifact_ref "
+        "(single) or artifact_refs (batch) is required; a miss is resource_not_ready "
+        "and a read never fetches, prepares or starts computation. The batch shape "
+        "returns one item per reference and never lets one failed item drop the "
+        "others; encoding=base64 stays single-read only (a batch returns text "
+        "bodies). max_bytes above the frozen max_read_bytes bound is refused "
         "(input_invalid, rule=max_read_bytes_exceeded) instead of served. A body that "
         "carries host paths or secrets is returned MASKED, never refused: the response "
         "sets body_masked=true, masked_digest (sha256 of the returned masked slice, which "
@@ -1146,6 +1164,17 @@ _READ_SCHEMA: dict[str, Any] = {
     "properties": {
         "schema_version": {"type": "integer", "enum": [1], "default": 1},
         "artifact_ref": _ARTIFACT_REF_SCHEMA,
+        "artifact_refs": {
+            "type": "array",
+            "items": _ARTIFACT_REF_SCHEMA,
+            "minItems": 1,
+            "maxItems": MAX_BATCH_ARTIFACT_REFS,
+            "description": (
+                "Batch of frozen artifact references; mutually exclusive with "
+                f"artifact_ref. Capped at {MAX_BATCH_ARTIFACT_REFS} so one call stays a "
+                "bounded loop of normal reads (bodies are never merged)."
+            ),
+        },
         "max_bytes": {
             "type": "integer",
             "minimum": 1,
@@ -1161,7 +1190,7 @@ _READ_SCHEMA: dict[str, Any] = {
             "description": "Namespaced extension metadata (never used for execution).",
         },
     },
-    "required": ["artifact_ref"],
+    "anyOf": [{"required": ["artifact_ref"]}, {"required": ["artifact_refs"]}],
     "additionalProperties": False,
 }
 
@@ -1219,15 +1248,34 @@ _ANALYZE_SCHEMA: dict[str, Any] = {
 
 #: Status is a historical read: extra query fields are preserved (unknown-field
 #: policy U2), so its declared table stays permissive.
+#:
+#: W-06 batch read: exactly one of ``reference`` (unchanged single shape) or
+#: ``job_ids`` (1..50, one Controller ``GET /api/v1/jobs?ids=`` round trip).
+#: The ``anyOf`` carries the mutually-exclusive choice; ``additionalProperties``
+#: stays permissive for the U2 legacy-read policy.
 _STATUS_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "reference": {
             "description": "Operation/job reference returned by acp_submit (id or {kind,id}).",
             "oneOf": [{"type": "string"}, {"type": "object"}],
-        }
+        },
+        "job_ids": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1},
+            "minItems": 1,
+            "maxItems": MAX_BATCH_JOB_IDS,
+            "description": (
+                "Batch of job ids; mutually exclusive with reference. Read-only and "
+                f"capped at {MAX_BATCH_JOB_IDS}; resolves through ONE Controller "
+                "GET /api/v1/jobs?ids= request. The answer is additive: "
+                '{"tool": "acp_status", "items": [{reference, status, data|error}], '
+                '"count": n}. An unknown or failed item answers status="error" without '
+                "dropping the rest."
+            ),
+        },
     },
-    "required": ["reference"],
+    "anyOf": [{"required": ["reference"]}, {"required": ["job_ids"]}],
     "additionalProperties": True,
 }
 
@@ -1295,8 +1343,7 @@ _PREPARE_SCHEMA: dict[str, Any] = {
         "job_id": {
             "type": "string",
             "description": (
-                "Task id to prepare; a mismatch with task_ref.task_id is "
-                "revision_conflict."
+                "Task id to prepare; a mismatch with task_ref.task_id is revision_conflict."
             ),
         },
         "artifact_id": {
@@ -1703,7 +1750,116 @@ def _validate_arguments(tool: str, arguments: Mapping[str, Any]) -> None:
             params={"field": missing[0], "rule": rule, "missing": missing, "tool": tool},
             retryable=False,
         )
+    _validate_exclusive_selector(tool, arguments)
     _validate_artifact_refs(tool, arguments)
+
+
+#: W-06: the single-or-batch selector table.  Each entry is
+#: ``(single field, batch field, batch cap, item kind)``; ``acp_status`` stays
+#: outside ``_ARGUMENT_SCHEMAS`` (U2 permissive legacy read) and validates through
+#: the same helper from its handler.  The item kind names what one batch entry
+#: must be: a job id token here, an ArtifactRef object validated by
+#: :func:`_validate_artifact_refs` for a read.
+_BATCH_SELECTORS: dict[str, tuple[str, str, int, str]] = {
+    McpTool.STATUS: ("reference", "job_ids", MAX_BATCH_JOB_IDS, "job_id"),
+    McpTool.READ_ARTIFACT: (
+        "artifact_ref",
+        "artifact_refs",
+        MAX_BATCH_ARTIFACT_REFS,
+        "artifact_ref",
+    ),
+}
+
+
+def _validate_exclusive_selector(tool: str, arguments: Mapping[str, Any]) -> bool:
+    """Validate the ``single | batch`` choice before any port call (W-06).
+
+    The JSON schema expresses the choice as ``anyOf``; this is the adapter half
+    that turns a malformed request into a typed ``input_invalid`` instead of a
+    handler guess.  Exactly one of the two declared fields is required — both is
+    a conflict, neither is a missing required field — and the batch value must
+    be a non-empty array no longer than its cap.  A job-id batch must hold
+    non-blank strings (an artifact batch holds structured refs, validated
+    separately by :func:`_validate_artifact_refs`).
+
+    Returns:
+        ``True`` when the batch field is the selected one.
+    """
+    selector = _BATCH_SELECTORS.get(tool)
+    if selector is None:
+        return False
+    single, batch, limit, item_kind = selector
+    has_single = arguments.get(single) is not None
+    has_batch = arguments.get(batch) is not None
+    if has_single and has_batch:
+        raise McpToolError(
+            mo.ErrorCode.INPUT_INVALID,
+            f"{tool} accepts either {single!r} or {batch!r}, not both",
+            params={
+                "field": batch,
+                "rule": "conflicting_arguments",
+                "fields": [single, batch],
+                "tool": tool,
+            },
+            retryable=False,
+        )
+    if not has_single and not has_batch:
+        raise McpToolError(
+            mo.ErrorCode.INPUT_INVALID,
+            f"{tool} requires either {single!r} or {batch!r}",
+            params={
+                "field": single,
+                "rule": "missing_required_field",
+                "fields": [single, batch],
+                "any_of": [single, batch],
+                "tool": tool,
+            },
+            retryable=False,
+        )
+    if not has_batch:
+        return False
+    values = arguments.get(batch)
+    if not isinstance(values, (list, tuple)) or isinstance(values, (str, bytes)):
+        raise McpToolError(
+            mo.ErrorCode.INPUT_INVALID,
+            f"{tool} requires {batch!r} to be an array of strings",
+            params={"field": batch, "rule": "invalid_type", "expected": "array", "tool": tool},
+            retryable=False,
+        )
+    if not values:
+        raise McpToolError(
+            mo.ErrorCode.INPUT_INVALID,
+            f"{tool} requires at least one entry in {batch!r}",
+            params={"field": batch, "rule": "min_items", "minimum": 1, "tool": tool},
+            retryable=False,
+        )
+    if len(values) > limit:
+        raise McpToolError(
+            mo.ErrorCode.INPUT_INVALID,
+            f"{tool} accepts at most {limit} entries in {batch!r}",
+            params={
+                "field": batch,
+                "rule": "max_items",
+                "maximum": limit,
+                "requested": len(values),
+                "tool": tool,
+            },
+            retryable=False,
+        )
+    if item_kind == "job_id":
+        for index, value in enumerate(values):
+            if not isinstance(value, str) or not value.strip():
+                raise McpToolError(
+                    mo.ErrorCode.INPUT_INVALID,
+                    f"{tool} requires {batch}[{index}] to be a non-blank string",
+                    params={
+                        "field": f"{batch}[{index}]",
+                        "rule": "invalid_type",
+                        "tool": tool,
+                    },
+                    retryable=False,
+                )
+    return True
 
 
 def _validate_artifact_refs(tool: str, arguments: Mapping[str, Any]) -> None:
@@ -1715,12 +1871,22 @@ def _validate_artifact_refs(tool: str, arguments: Mapping[str, Any]) -> None:
     is the same typed ``input_invalid`` here and never reaches a Controller (or
     a custom port) where it would have to be guessed.
 
+    W-06: ``artifact_refs`` is a batch of the same tuple, so every entry is
+    validated with the same normaliser and the refused field names its index.
+
     Raises:
         McpToolError: ``input_invalid`` with ``params.rule``
             ``missing_artifact_ref``/``unknown_field``/``digest``/``minimum``.
     """
     if tool == McpTool.READ_ARTIFACT:
-        targets: list[tuple[str, Any]] = [("artifact_ref", arguments.get("artifact_ref"))]
+        targets: list[tuple[str, Any]] = []
+        if arguments.get("artifact_ref") is not None:
+            targets.append(("artifact_ref", arguments.get("artifact_ref")))
+        raw_batch = arguments.get("artifact_refs")
+        if isinstance(raw_batch, (list, tuple)):
+            targets.extend(
+                (f"artifact_refs[{index}]", item) for index, item in enumerate(raw_batch)
+            )
     elif tool == McpTool.ANALYZE:
         raw_refs = arguments.get("input_refs")
         if not isinstance(raw_refs, (list, tuple)):
@@ -1763,7 +1929,12 @@ def _tool_specs() -> tuple[dict[str, Any], ...]:
         ),
         _tool_spec(
             McpTool.STATUS,
-            "Query the status of an operation/job reference. Holds no connection state.",
+            (
+                "Query the status of an operation/job reference. Holds no connection "
+                "state. Pass job_ids (1..50) instead of reference for a batch read: "
+                "one Controller round trip, one item per id, and an unknown id is an "
+                "item-level not_found that never drops the other items."
+            ),
             _STATUS_SCHEMA,
         ),
         _tool_spec(
@@ -1782,7 +1953,12 @@ def _tool_specs() -> tuple[dict[str, Any], ...]:
         ),
         _tool_spec(
             McpTool.READ_ARTIFACT,
-            "Read an already-prepared artifact (bounded; no fetch on miss).",
+            (
+                "Read an already-prepared artifact (bounded; no fetch on miss). Pass "
+                "artifact_refs (1..20) instead of artifact_ref for a batch read: each "
+                "reference is read on its own (bodies are never merged) and a failed "
+                "item is reported without dropping the rest."
+            ),
             _READ_SCHEMA,
         ),
         _tool_spec(
@@ -1990,6 +2166,7 @@ def _enforce_summary_budget(data: dict[str, Any]) -> dict[str, Any]:
         }
     return data
 
+
 @runtime_checkable
 class CapabilityPort(Protocol):
     """Capability discovery (read-only)."""
@@ -2029,6 +2206,25 @@ class StatusPort(Protocol):
 
     def get(self, reference: str, *, workspace_id: str) -> Any:
         """Return the status projection for *reference*, or ``None`` when unknown."""
+        ...
+
+
+@runtime_checkable
+class StatusBatchPort(Protocol):
+    """Optional batch status read (W-06) — preferred over per-item ``get``.
+
+    A port that implements this answers N ids in ONE Controller round trip.  A
+    port that only implements :class:`StatusPort` still serves ``acp_status``
+    with ``job_ids`` (one ``get`` per id) and the result records that fallback
+    instead of pretending the batch was optimized.  It is deliberately a
+    separate protocol so the existing single-reference port contract is
+    unchanged.
+    """
+
+    def get_many(
+        self, references: Sequence[Any], *, workspace_id: str = ""
+    ) -> Mapping[str, Any | None]:
+        """Return status projections keyed by task id; unknown ids stay ``None``."""
         ...
 
 
@@ -2093,9 +2289,7 @@ class SelectionPort(Protocol):
         """Cache-only selection status (revision/source/publication receipt)."""
         ...
 
-    def publish_review(
-        self, job_id: str, request: Mapping[str, Any], *, workspace_id: str
-    ) -> Any:
+    def publish_review(self, job_id: str, request: Mapping[str, Any], *, workspace_id: str) -> Any:
         """Publish a selection inside a bounded authorization."""
         ...
 
@@ -2877,7 +3071,9 @@ class McpServer:
         revision = payload.get("revision")
         payload.setdefault(
             "selection_ref",
-            f"pes-selection:{job_id}:r{revision}" if revision is not None else f"pes-selection:{job_id}",
+            f"pes-selection:{job_id}:r{revision}"
+            if revision is not None
+            else f"pes-selection:{job_id}",
         )
         return mo.MachineResult(
             operation=McpTool.PUBLISH_PES_REVIEW,
@@ -3230,9 +3426,7 @@ class McpServer:
                 "gaps",
                 "full",
             }
-            requested = {
-                part.strip() for part in str(contract_sections).split(",") if part.strip()
-            }
+            requested = {part.strip() for part in str(contract_sections).split(",") if part.strip()}
             if not requested or requested - allowed_sections:
                 raise McpToolError(
                     mo.ErrorCode.INPUT_INVALID,
@@ -3558,7 +3752,12 @@ class McpServer:
         2) — never ``RESOURCE_NOT_READY``, which promised a retry that can never
         succeed.  The message names the two recovery surfaces so an agent does
         not fall back to walking the run root.
+
+        W-06: ``job_ids`` selects the additive batch shape instead of
+        ``reference``; the single shape below is unchanged.
         """
+        if _validate_exclusive_selector(McpTool.STATUS, arguments):
+            return self._tool_status_many(arguments, context)
         reference = _require_reference(arguments)
         try:
             record = self._backends.status.get(reference, workspace_id=context.workspace_id)
@@ -3567,18 +3766,7 @@ class McpServer:
                 raise
             record = None
         if record is None:
-            raise McpToolError(
-                mo.ErrorCode.NOT_FOUND,
-                _unknown_reference_message(reference),
-                params={
-                    "reference": reference,
-                    "rule": "unknown_reference",
-                    "note": "job_id != operation_id",
-                    "suggested_tools": [McpTool.LIST_JOBS],
-                    "job_id_shape": "YYYYMMDD_HHMMSS_NNN_<name>",
-                },
-                retryable=False,
-            )
+            raise _unknown_reference_error(reference)
         projection = record if isinstance(record, Mapping) else {"result": record}
         projection = dict(projection)
         projection.setdefault("reference", reference)
@@ -3588,6 +3776,72 @@ class McpServer:
             operation=McpTool.STATUS,
             status="ok",
             data=projection,
+            operation_identity=context.workspace_id,
+        )
+
+    def _tool_status_many(
+        self, arguments: Mapping[str, Any], context: WorkspaceContext
+    ) -> mo.MachineResult:
+        """Return one snapshot per job id without letting one item drop the batch.
+
+        W-06 batch shape (additive): ``{"tool", "items", "count"}`` where each
+        item is ``{reference, status: "ok"|"error", data|error}``.  A batch is
+        still a read: no item may trigger a prepare/fetch, and the deferred
+        budget release runs only for terminal projections, exactly like the
+        single path.
+
+        The preferred ``backends.status`` path is ``get_many`` so N ids cost ONE
+        Controller round trip.  A port that only implements ``get`` falls back to
+        per-item reads and the answer records that degradation instead of
+        pretending the batch was optimized.
+        """
+        job_ids = _batch_job_ids(arguments)
+        status_port = self._backends.status
+        records: Mapping[str, Any] = {}
+        degraded = not isinstance(status_port, StatusBatchPort)
+        if not degraded:
+            fetched = status_port.get_many(job_ids, workspace_id=context.workspace_id)
+            records = fetched if isinstance(fetched, Mapping) else {}
+        items: list[dict[str, Any]] = []
+        for job_id in job_ids:
+            if degraded:
+                try:
+                    record = status_port.get(job_id, workspace_id=context.workspace_id)
+                except McpToolError as exc:
+                    items.append(_status_error_item(job_id, exc))
+                    continue
+                if record is None:
+                    items.append(_status_error_item(job_id, _unknown_reference_error(job_id)))
+                    continue
+            else:
+                record = records.get(job_id)
+                if record is None:
+                    items.append(_status_error_item(job_id, _unknown_reference_error(job_id)))
+                    continue
+            projection = dict(record) if isinstance(record, Mapping) else {"result": record}
+            projection.setdefault("reference", job_id)
+            if _projection_is_terminal(projection) and self._budget is not None:
+                self._budget.release(context.workspace_id)
+            items.append({"reference": job_id, "status": "ok", "data": projection})
+        payload: dict[str, Any] = {
+            "tool": McpTool.STATUS,
+            "items": items,
+            "count": len(items),
+        }
+        if degraded:
+            logger.warning(
+                "acp_status batch: status port has no get_many; falling back to "
+                "%d per-item get() reads",
+                len(job_ids),
+            )
+            payload["degraded"] = {
+                "reason": "status_port_get_many_missing",
+                "fallback": "per_item_get",
+            }
+        return mo.MachineResult(
+            operation=McpTool.STATUS,
+            status="ok",
+            data=payload,
             operation_identity=context.workspace_id,
         )
 
@@ -3677,6 +3931,9 @@ class McpServer:
     def _tool_read_artifact(
         self, arguments: Mapping[str, Any], context: WorkspaceContext
     ) -> mo.MachineResult:
+        """Read one prepared artifact; ``artifact_refs`` selects the W-06 batch."""
+        if _validate_exclusive_selector(McpTool.READ_ARTIFACT, arguments):
+            return self._tool_read_artifacts(arguments, context)
         record = self._backends.artifacts.read(arguments, workspace_id=context.workspace_id)
         data = dict(record) if isinstance(record, Mapping) else {"result": record}
         self._verify_artifact_body(data)
@@ -3686,6 +3943,72 @@ class McpServer:
             data=dict(data),
             operation_identity=context.workspace_id,
             passthrough_body=data.get("encoding") == "base64",
+        )
+
+    def _tool_read_artifacts(
+        self, arguments: Mapping[str, Any], context: WorkspaceContext
+    ) -> mo.MachineResult:
+        """Read a bounded batch of prepared artifacts, one item per reference.
+
+        W-06 batch shape (additive): ``{"tool", "items", "count"}`` where each
+        item is ``{artifact_ref, status: "ok"|"error", data|error}``.  Bodies
+        differ per artifact so nothing is merged: every reference goes through
+        the SAME read-only ``ArtifactPort.read`` as the single path (never a
+        prepare/fetch) and is verified with the SAME body verifier.  A refused or
+        unverifiable item answers ``status="error"``; the remaining items are
+        still returned.
+
+        ``encoding="base64"`` is refused for a batch: the single path keeps that
+        body verbatim through the top-level ``passthrough_body`` exemption, and a
+        nested batch body has no such exemption — quietly returning a redacted
+        base64 blob would corrupt it, so the caller must read those one at a time.
+        """
+        if str(arguments.get("encoding") or "") == "base64":
+            raise McpToolError(
+                mo.ErrorCode.UNSUPPORTED_CAPABILITY,
+                "artifact_refs returns text bodies; read base64 artifacts one at "
+                "a time with artifact_ref so the verbatim body is preserved",
+                params={
+                    "field": "encoding",
+                    "rule": "batch_binary_requires_single_read",
+                    "tool": McpTool.READ_ARTIFACT,
+                    "single_arguments": {"artifact_ref": "<artifact_ref>", "encoding": "base64"},
+                },
+                retryable=False,
+            )
+        references = list(arguments.get("artifact_refs") or ())
+        shared: dict[str, Any] = {
+            key: arguments[key]
+            for key in ("schema_version", "max_bytes", "encoding")
+            if arguments.get(key) is not None
+        }
+        items: list[dict[str, Any]] = []
+        for artifact_ref in references:
+            request = dict(shared)
+            request["artifact_ref"] = artifact_ref
+            try:
+                record = self._backends.artifacts.read(request, workspace_id=context.workspace_id)
+                data = dict(record) if isinstance(record, Mapping) else {"result": record}
+                self._verify_artifact_body(data)
+            except McpToolError as exc:
+                items.append(
+                    {
+                        "artifact_ref": artifact_ref,
+                        "status": "error",
+                        "error": exc.to_error_object().to_dict(),
+                    }
+                )
+                continue
+            items.append({"artifact_ref": artifact_ref, "status": "ok", "data": data})
+        return mo.MachineResult(
+            operation=McpTool.READ_ARTIFACT,
+            status="ok",
+            data={
+                "tool": McpTool.READ_ARTIFACT,
+                "items": items,
+                "count": len(items),
+            },
+            operation_identity=context.workspace_id,
         )
 
     @staticmethod
@@ -4127,10 +4450,7 @@ def _port_accepts(port: Any, keyword: str, *, method: str = "list_tasks") -> boo
         return False
     if keyword in parameters:
         return True
-    return any(
-        parameter.kind is inspect.Parameter.VAR_KEYWORD
-        for parameter in parameters.values()
-    )
+    return any(parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in parameters.values())
 
 
 def _row_state(row: Any) -> str | None:
@@ -4152,6 +4472,44 @@ def _unknown_reference_message(reference: Any) -> str:
         "the task directory. A job_id (YYYYMMDD_HHMMSS_NNN_<name>) and an "
         "operation_id are different ids: acp_submit returns both."
     )
+
+
+def _unknown_reference_error(reference: Any) -> McpToolError:
+    """The typed K6 refusal, shared by the single and W-06 batch status paths."""
+    return McpToolError(
+        mo.ErrorCode.NOT_FOUND,
+        _unknown_reference_message(reference),
+        params={
+            "reference": reference,
+            "rule": "unknown_reference",
+            "note": "job_id != operation_id",
+            "suggested_tools": [McpTool.LIST_JOBS],
+            "job_id_shape": "YYYYMMDD_HHMMSS_NNN_<name>",
+        },
+        retryable=False,
+    )
+
+
+def _batch_job_ids(arguments: Mapping[str, Any]) -> list[str]:
+    """Return the deduped ``job_ids`` in request order (already shape-checked).
+
+    ``_validate_exclusive_selector`` has refused a non-array/blank/oversized
+    selector before this runs; duplicates are harmless for a read, so they are
+    collapsed here (the Controller route uses a set too) instead of being a
+    usage error that would make a caller's retry fail differently.
+    """
+    raw = arguments.get("job_ids")
+    values = list(raw) if isinstance(raw, (list, tuple)) else []
+    return list(dict.fromkeys(str(value) for value in values))
+
+
+def _status_error_item(reference: str, exc: McpToolError) -> dict[str, Any]:
+    """Project one failed batch-status item; the error never drops the batch."""
+    return {
+        "reference": reference,
+        "status": "error",
+        "error": exc.to_error_object().to_dict(),
+    }
 
 
 def _read_ref_from_prepare(payload: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -4254,8 +4612,10 @@ def _analysis_capability_view(value: Any, *, summary: bool) -> Any:
     if isinstance(value, Mapping) and value.get("status"):
         # A declared status projection is forwarded, never re-derived.
         return dict(value)
-    if isinstance(value, Mapping) and value and all(
-        isinstance(item, str) for item in value.values()
+    if (
+        isinstance(value, Mapping)
+        and value
+        and all(isinstance(item, str) for item in value.values())
     ):
         # Round-9 M4a: the Controller's summary publishes a compact
         # {analysis_id: state} table.  It is a known projection, so forward it

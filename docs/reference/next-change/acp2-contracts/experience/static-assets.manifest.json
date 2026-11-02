@@ -1,12 +1,12 @@
 {
   "counts": {
-    "bytes": 4018914,
+    "bytes": 4019596,
     "css": 18,
     "files": 107,
     "html": 4,
     "js": 80
   },
-  "digest": "b1797515b08647a58dab2307452d71699c2e9484953d248f2dddb6e1d1375cf0",
+  "digest": "fb4a4a780b7ddb24176800c9a0b2c2997425494a84190ce4d743f37797884d06",
   "digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\"",
   "entry_points": {
     "index": "ACP_Workbench_v2.html",
@@ -545,8 +545,8 @@
     {
       "media_type": "text/javascript",
       "path": "js/workbench/features/energy.js",
-      "sha256": "873b78329df4a668251f0d5aa52eab7845efa432bfdabdd3cb9577708278a01d",
-      "size_bytes": 253767
+      "sha256": "c94584661fabcfe853a0275fc4b2c54c55c0fe76c22f661ea6da856529ce0d99",
+      "size_bytes": 254377
     },
     {
       "media_type": "text/javascript",
@@ -647,8 +647,8 @@
     {
       "media_type": "text/javascript",
       "path": "js/workbench/i18n.js",
-      "sha256": "8d88cd511a8a3318fbb5e2d5ae6c070d35301d99d1e5920558c53cd593cb6424",
-      "size_bytes": 192821
+      "sha256": "042b9c43d625c43dbddc3f4a427372c1a6fbd09ee96e89ee7484fb0e804c87e2",
+      "size_bytes": 192893
     },
     {
       "media_type": "text/html",

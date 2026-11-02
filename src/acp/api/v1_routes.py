@@ -3238,6 +3238,13 @@ def list_jobs(
     status_group: str | None = Query(default=None),
     workflow: str | None = Query(default=None),
     project_id: str | None = Query(default=None),
+    ids: str | None = Query(
+        default=None,
+        description=(
+            "Comma-separated job ids for one batch status read (additive; max 100). "
+            "W-06 uses this so a batched MCP status call is ONE Controller round trip."
+        ),
+    ),
     limit: int = Query(default=200, ge=1, le=1000),
 ) -> V1JobListResponse:
     """List tasks in scope.
@@ -3246,19 +3253,60 @@ def list_jobs(
     is 422 with ``allowed``), ``status_group`` (``active|terminal|running_now``)
     is the mutually-exclusive family filter, and ``counts`` is computed
     **before** either filter and always carries all ten state keys.
+
+    W-06 adds the optional ``ids`` batch selector: the response shape is
+    unchanged (``jobs``/``counts``); the selection is applied after the same
+    project/status filters, so scope rules cannot be bypassed.
     """
     store = _job_store(request)
     manager = _manager(request)
     project_id = _scoped_read_project(request, project_id)
     status, status_group = _validate_job_status_query(status, status_group)
     counts = _scoped_counts(store, project_id)
-    if project_id:
+    requested_ids: set[str] | None = None
+    if ids is not None:
+        requested_ids = {part.strip() for part in ids.split(",") if part.strip()}
+        if not requested_ids:
+            raise HTTPException(status_code=400, detail="ids must contain at least one job id")
+        if len(requested_ids) > 100:
+            raise HTTPException(status_code=400, detail="ids accepts at most 100 job ids")
+    if requested_ids is not None:
+        # A batch read must not lose a requested id to the list page window:
+        # ids are resolved exactly, then the same project/status filters apply.
+        enriched = store.list_enriched(limit=1000, project_id=project_id or None)
+        enriched = [item for item in enriched if item["record"].id in requested_ids]
+        seen_ids = {item["record"].id for item in enriched}
+        for job_id in sorted(requested_ids - seen_ids):
+            record = store.get(job_id)
+            if record is None:
+                continue
+            if project_id is not None and record.project_id != project_id:
+                continue
+            if status is not None and record.status.value != status:
+                continue
+            if status_group is not None and not _match_job_filter(record, None, status_group):
+                continue
+            enriched.append(
+                {
+                    "record": record,
+                    "project_name": None,
+                    "study_id": None,
+                    "study_status": None,
+                }
+            )
+        if status_group is not None or status is not None or project_id:
+            enriched = [
+                item
+                for item in enriched
+                if _match_job_filter(item["record"], status, status_group)
+            ]
+    elif project_id:
         enriched = store.list_enriched(limit=limit, project_id=project_id)
     else:
         # The exact-state filter stays in SQL (so LIMIT counts matching rows,
         # not newest rows); only the family filter needs the in-memory pass.
         enriched = store.list_enriched(status=status, limit=limit)
-    if status_group is not None or project_id:
+    if status_group is not None or (project_id and requested_ids is None):
         enriched = [
             item
             for item in enriched

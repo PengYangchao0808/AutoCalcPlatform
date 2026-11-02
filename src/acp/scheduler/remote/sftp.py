@@ -17,6 +17,9 @@ import logging
 import os
 import posixpath
 import stat
+import tarfile
+import tempfile
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -35,6 +38,14 @@ if TYPE_CHECKING:  # pragma: no cover - typing only (ssh.py needs the optional e
 logger = logging.getLogger(__name__)
 
 __all__ = ["FileStager", "RemoteDirConflictError", "RemoteFileInfo"]
+
+#: Timeout (seconds) for the remote ``tar`` extraction command; a release is a
+#: few hundred small files, so this only guards a genuinely wedged node.
+_UPLOAD_TAR_TIMEOUT = 600
+#: Archive modes: executability is preserved, but setuid/setgid/sticky bits are
+#: never written — the node must not gain privilege from an uploaded release.
+_TAR_FILE_MODE = 0o644
+_TAR_EXEC_MODE = 0o755
 
 
 class RemoteDirConflictError(RuntimeError):
@@ -429,6 +440,98 @@ class FileStager:
                 sftp.put(str(local), target)
                 logger.debug("Uploaded %s -> %s:%s", local, node.name, target)
 
+    def upload_tar_stream(
+        self,
+        node: RemoteNode,
+        items: list[tuple[Path, str]],
+        remote_root: str,
+    ) -> bool:
+        """Upload *items* as one local tar, unpacked under *remote_root*.
+
+        A source release is hundreds of small files; even over one SFTP session
+        the per-file ``put`` round trips dominate submission latency.  This
+        primitive writes the whole set into a local temporary tar (archive names
+        are the remote paths relative to *remote_root*), uploads it once and
+        lets the node unpack it with a single ``tar -xf ... -C`` command.
+
+        The caller must treat ``False`` as "use the per-file path": every
+        failure (refused item set, tar build, upload, remote command) returns
+        ``False`` and never raises.  The batch is only a transport optimisation
+        — it is never the authority on content (callers verify digests after).
+
+        Args:
+            node: Target remote node.
+            items: ``(local file, remote destination)`` pairs.  Each remote
+                destination must live under *remote_root*; absolute paths,
+                ``..`` traversal, empty names, duplicate names and symlinked
+                local files are refused.
+            remote_root: Remote extraction root (the release staging dir).
+
+        Returns:
+            ``True`` when the remote extraction command succeeded, otherwise
+            ``False``.
+        """
+        if not items:
+            return True
+        root = _norm_remote(remote_root)
+        try:
+            members = _stream_tar_members(items, root)
+        except (OSError, ValueError) as exc:
+            logger.warning("Refusing tar upload to %s:%s: %s", node.name, root, exc)
+            return False
+        remote_tar = posixpath.join(root, f".acp_upload_{uuid.uuid4().hex[:12]}.tar")
+        local_tar: str | None = None
+        uploaded = False
+        try:
+            local_tar = _write_stream_tar(members)
+            self.upload_file(node, Path(local_tar), remote_tar)
+            uploaded = True
+            import shlex
+
+            command = (
+                f"mkdir -p {shlex.quote(root)} && "
+                f"tar -xf {shlex.quote(remote_tar)} -C {shlex.quote(root)} && "
+                f"rm -f {shlex.quote(remote_tar)}"
+            )
+            code, _out, err = self._ssh.execute(node, command, timeout=_UPLOAD_TAR_TIMEOUT)
+            if code != 0:
+                logger.warning(
+                    "Remote tar extraction failed on %s:%s (exit %s): %s",
+                    node.name,
+                    root,
+                    code,
+                    (err or "").strip()[:300],
+                )
+                self._remove_uploaded_tar(node, remote_tar)
+                return False
+            logger.debug("Unpacked %d files via tar stream on %s:%s", len(members), node.name, root)
+            return True
+        except Exception:  # noqa: BLE001 — documented fallback: caller re-uploads per file
+            logger.warning(
+                "Tar stream upload to %s:%s failed; falling back to per-file upload",
+                node.name,
+                root,
+                exc_info=True,
+            )
+            if uploaded:
+                self._remove_uploaded_tar(node, remote_tar)
+            return False
+        finally:
+            if local_tar is not None:
+                try:
+                    os.unlink(local_tar)
+                except OSError:
+                    logger.debug("Could not remove local tar %s", local_tar, exc_info=True)
+
+    def _remove_uploaded_tar(self, node: RemoteNode, remote_tar: str) -> None:
+        """Best-effort removal of a temporary uploaded tar (never raises)."""
+        try:
+            self.remove_file(node, remote_tar)
+        except Exception:  # noqa: BLE001 — cleanup must not mask the upload failure
+            logger.debug(
+                "Could not remove temporary tar %s:%s", node.name, remote_tar, exc_info=True
+            )
+
     def claim_remote_job_dir(self, node: RemoteNode, remote_job_dir: str, record: JobRecord) -> str:
         """Exclusively claim *remote_job_dir* for *record*.
 
@@ -486,6 +589,81 @@ class FileStager:
 def _norm_remote(path: str) -> str:
     """Normalise a remote POSIX path (expand ``~`` is left to the server)."""
     return posixpath.normpath(path) if path else path
+
+
+def _tar_member_name(remote_path: str, remote_root: str) -> str:
+    """Return the archive name for *remote_path*, relative to *remote_root*.
+
+    Raises:
+        ValueError: when the destination is outside *remote_root*, is absolute,
+            is empty, contains a NUL byte, or escapes the extraction root via
+            ``..``.  Archive names are the only place a tar upload could write
+            outside the staging dir, so they are validated on the way IN.
+    """
+    root = _norm_remote(remote_root)
+    target = _norm_remote(remote_path)
+    prefix = root.rstrip("/") + "/" if root != "/" else "/"
+    if not target.startswith(prefix):
+        raise ValueError(f"tar destination {remote_path!r} is outside {remote_root!r}")
+    relative = target[len(prefix) :]
+    if not relative:
+        raise ValueError("tar member name must not be empty")
+    if "\x00" in relative:
+        raise ValueError(f"tar member name {relative!r} contains a NUL byte")
+    if relative.startswith("/") or posixpath.isabs(relative):
+        raise ValueError(f"tar member name {relative!r} must be relative")
+    normalized = posixpath.normpath(relative)
+    if normalized != relative or normalized == ".." or normalized.startswith("../"):
+        raise ValueError(f"tar member name {relative!r} escapes the extraction root")
+    return relative
+
+
+def _stream_tar_members(items: list[tuple[Path, str]], remote_root: str) -> list[tuple[Path, str]]:
+    """Validate *items* and return ``(local file, archive name)`` pairs."""
+    members: list[tuple[Path, str]] = []
+    seen: set[str] = set()
+    for local_path, remote_path in items:
+        local = Path(local_path)
+        if local.is_symlink():
+            # tar would archive the link itself; the per-file SFTP path follows
+            # it.  Refuse in the batch primitive so the caller re-uploads.
+            raise ValueError(f"refusing to archive symlink {local}")
+        if not local.is_file():
+            raise ValueError(f"local file not found: {local}")
+        name = _tar_member_name(remote_path, remote_root)
+        if name in seen:
+            raise ValueError(f"duplicate tar member {name!r}")
+        seen.add(name)
+        members.append((local, name))
+    return members
+
+
+def _write_stream_tar(members: list[tuple[Path, str]]) -> str:
+    """Write *members* into a fresh local temporary tar; return its path.
+
+    Modes are normalised to 0644/0755 (executability preserved) so no setuid,
+    setgid or sticky bit can be smuggled onto the node.
+    """
+    fd, tar_name = tempfile.mkstemp(prefix="acp-upload-", suffix=".tar")
+    os.close(fd)
+    try:
+        with tarfile.open(tar_name, "w") as archive:
+            for local, arcname in members:
+                info = archive.gettarinfo(str(local), arcname=arcname)
+                info.mode = _TAR_EXEC_MODE if (info.mode & 0o111) else _TAR_FILE_MODE
+                info.uid = 0
+                info.gid = 0
+                info.uname = ""
+                info.gname = ""
+                with local.open("rb") as handle:
+                    archive.addfile(info, handle)
+    except BaseException:
+        try:
+            os.unlink(tar_name)
+        except OSError:
+            pass
+        raise
+    return tar_name
 
 
 def _read_owner_identity(

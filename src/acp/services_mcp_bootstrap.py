@@ -13,7 +13,8 @@ MCP tool                                Controller command
 ``acp_preflight``                       ``POST /api/v1/preflight``
 ``acp_submit``                          ``POST /api/v1/jobs``
 ``acp_status``                          ``GET /api/v1/jobs/{id}`` /
-                                        ``GET /api/v1/operations/{id}``
+                                        ``GET /api/v1/operations/{id}`` /
+                                        ``GET /api/v1/jobs?ids=`` (batch)
 ``acp_cancel``                          ``POST /api/v1/jobs/{id}/cancel``
 ``acp_prepare_artifact``                ``POST /api/v1/jobs/{id}/prepare``
 ``acp_read_artifact``                   ``GET /api/v1/jobs/{id}/prepared/{r}``
@@ -35,7 +36,7 @@ opens the jobs database or starts a Controller.
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -336,9 +337,7 @@ class _ControllerStatus:
             # Round-8 K5: forward the family filter so the Controller applies it
             # (one authority) instead of filtering a page after the fact.
             return dict(
-                self._client.list_tasks(
-                    status=status, status_group=status_group, limit=limit
-                )
+                self._client.list_tasks(status=status, status_group=status_group, limit=limit)
             )
         except ControllerClientError as exc:
             raise _tool_error("list_tasks", exc) from None
@@ -365,6 +364,50 @@ class _ControllerStatus:
         projection = project_task_status(snapshot.raw, fallback_task_id=snapshot.task_id)
         projection["reference"] = reference
         return projection
+
+    def get_many(
+        self, references: Sequence[Any], *, workspace_id: str = ""
+    ) -> dict[str, Mapping[str, Any] | None]:
+        """Return several status projections; job ids cost ONE Controller request.
+
+        W-06: the MCP batch branch calls this when it exists, so ``acp_status``
+        with ``job_ids`` is one ``GET /api/v1/jobs?ids=`` round trip.  An id the
+        Controller does not know stays ``None`` in the mapping (the adapter turns
+        it into an item-level ``not_found``) instead of failing the whole batch.
+        Operation references are not job rows, so they reuse the single-reference
+        path per item — the batch shape stays correct even for a mixed list.
+        """
+        projections: dict[str, Mapping[str, Any] | None] = {}
+        job_ids: list[str] = []
+        for reference in references:
+            operation_id = self._operation_reference(reference)
+            if operation_id:
+                projections[operation_id] = self.get(reference, workspace_id=workspace_id)
+                continue
+            job_id = self._job_id(reference)
+            job_ids.append(job_id)
+            projections[job_id] = None
+        if not job_ids:
+            return projections
+        try:
+            snapshots = self._client.status_many(job_ids)
+        except ControllerClientError as exc:
+            raise _tool_error("status", exc) from None
+        for job_id in dict.fromkeys(job_ids):
+            snapshot = snapshots.get(job_id)
+            if snapshot is None:
+                continue
+            projection = project_task_status(snapshot.raw, fallback_task_id=snapshot.task_id)
+            projection["reference"] = job_id
+            projections[job_id] = projection
+        return projections
+
+    @staticmethod
+    def _job_id(reference: Any) -> str:
+        if isinstance(reference, Mapping):
+            value = reference.get("id") or reference.get("task_id") or ""
+            return str(value).strip()
+        return str(reference or "").strip()
 
 
 class _ControllerCancel:
@@ -465,9 +508,7 @@ class _ControllerSelection:
         except ControllerClientError as exc:
             raise _tool_error("selection.status", exc) from None
 
-    def publish_review(
-        self, job_id: str, request: Mapping[str, Any], *, workspace_id: str
-    ) -> Any:
+    def publish_review(self, job_id: str, request: Mapping[str, Any], *, workspace_id: str) -> Any:
         del workspace_id
         try:
             return self._client.publish_pes_review(job_id, dict(request))

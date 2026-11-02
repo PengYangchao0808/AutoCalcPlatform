@@ -20,9 +20,11 @@ Author: QCcalc Team
 
 from __future__ import annotations
 
+import fnmatch
 import logging
 import os.path
 import posixpath
+import shlex
 import stat as stat_mod
 import tempfile
 from collections.abc import Iterator
@@ -59,6 +61,13 @@ _MAX_TEXT_PREVIEW_BYTES = 50 * 1024 * 1024
 _MAX_ARCHIVE_BYTES = 5 * 1024 * 1024 * 1024
 # Maximum trailing lines for tail/range preview modes.
 _MAX_TAIL_LINES = 5000
+# Timeout (seconds) for the batched ``find`` enumeration below.  The command
+# streams a whole job tree in one round trip; a node without GNU ``find``
+# fails fast and the caller falls back to per-directory SFTP listing.
+_FIND_TIMEOUT = 120
+# NUL-separated ``%y``/``%s``/``%T@``/``%p`` records.  Newlines and tabs are
+# legal in POSIX filenames, so the record separator must not be a line break.
+_FIND_COMMAND = "LC_ALL=C find {base} -mindepth 1 -printf '%y\\0%s\\0%T@\\0%p\\0'"
 
 
 @dataclass(frozen=True)
@@ -179,9 +188,13 @@ class RemoteResultFetcher:
         remote tree contains more than *max_entries* entries.
         """
         node, remote_dir = self.resolve(record)
-        entries: list[RemoteFileInfo] = []
-        with self._ssh.sftp_session(node) as sftp:
-            _list_remote_dir_recursive(sftp, remote_dir, "", entries, max_entries)
+        entries = self._find_remote_entries(node, remote_dir, max_entries)
+        if entries is None:
+            # Batch listing unavailable (no GNU find / permissions / odd
+            # output) — fall back to the original SFTP recursion.
+            entries = []
+            with self._ssh.sftp_session(node) as sftp:
+                _list_remote_dir_recursive(sftp, remote_dir, "", entries, max_entries)
         return entries, len(entries) >= max_entries
 
     def walk_remote_files(
@@ -191,6 +204,11 @@ class RemoteResultFetcher:
         exclude: list[str] | None = None,
     ) -> Iterator[tuple[str, RemoteFileInfo]]:
         """Recursively enumerate files under the remote job directory.
+
+        One batched ``find`` call replaces the per-directory SFTP walk when the
+        node supports it; matching (include/exclude) happens locally on the
+        relative paths.  Any failure of the batch path falls back to the
+        original SFTP recursion, so the result is always complete.
 
         Args:
             record: Job record with remote execution metadata.
@@ -204,8 +222,113 @@ class RemoteResultFetcher:
             yielded; only regular files.
         """
         node, remote_dir = self.resolve(record)
+        patterns_include = include or ["*"]
+        patterns_exclude = exclude or []
+        entries = self._find_remote_entries(node, remote_dir)
+        if entries is not None:
+            for info in entries:
+                if info.is_dir:
+                    continue
+                rel = info.name
+                if any(fnmatch.fnmatch(rel, pat) for pat in patterns_exclude):
+                    continue
+                if patterns_include != ["*"] and not any(
+                    fnmatch.fnmatch(rel, pat) for pat in patterns_include
+                ):
+                    continue
+                yield (
+                    rel,
+                    RemoteFileInfo(
+                        name=posixpath.basename(rel),
+                        size=info.size,
+                        mtime=info.mtime,
+                        is_dir=False,
+                    ),
+                )
+            return
         with self._ssh.sftp_session(node) as sftp:
-            yield from _walk_remote_dir(sftp, remote_dir, "", include or ["*"], exclude or [])
+            yield from _walk_remote_dir(sftp, remote_dir, "", patterns_include, patterns_exclude)
+
+    def _find_remote_entries(
+        self,
+        node: RemoteNode,
+        base_dir: str,
+        max_entries: int | None = None,
+    ) -> list[RemoteFileInfo] | None:
+        """Enumerate *base_dir* with a single GNU ``find`` command.
+
+        The output is ``%y`` (type), ``%s`` (size), ``%T@`` (mtime) and ``%p``
+        (path) per entry, NUL-separated so filenames containing spaces, tabs or
+        newlines survive intact.  Directories are reported with ``size=0``
+        (matching :func:`_list_remote_dir_recursive`), and ``name`` is the path
+        relative to *base_dir*.
+
+        Args:
+            node: Target remote node.
+            base_dir: Remote directory to enumerate.
+            max_entries: Stop after this many entries (``None`` = no limit).
+
+        Returns:
+            The entries, or ``None`` when the batch path is unavailable — a
+            non-zero exit, non-empty stderr (permission errors etc.), an
+            unparseable record, or a path that escapes *base_dir*.  Callers
+            then fall back to the SFTP recursion.  Never raises.
+        """
+        base = posixpath.normpath(base_dir)
+        command = _FIND_COMMAND.format(base=shlex.quote(base))
+        try:
+            code, out, err = self._ssh.execute(node, command, timeout=_FIND_TIMEOUT)
+        except Exception:  # noqa: BLE001 — a failed batch listing must never break retrieval
+            logger.debug("Batched find failed on %s:%s", node.name, base, exc_info=True)
+            return None
+        if code != 0 or (err or "").strip():
+            logger.debug(
+                "Batched find unavailable on %s:%s (exit=%s, stderr=%r)",
+                node.name,
+                base,
+                code,
+                (err or "")[:200],
+            )
+            return None
+        if "\ufffd" in out:
+            # ``execute`` decodes stdout as UTF-8 with replacement; a mangled
+            # name would point callers at a path that does not exist, so a
+            # non-UTF-8 tree must use the SFTP recursion instead.
+            logger.debug("Batched find output is not valid UTF-8 on %s:%s", node.name, base)
+            return None
+        fields = out.split("\x00")
+        if fields and fields[-1] == "":
+            fields.pop()
+        if len(fields) % 4 != 0:
+            logger.debug("Unparseable batched find output on %s:%s", node.name, base)
+            return None
+        entries: list[RemoteFileInfo] = []
+        for start in range(0, len(fields), 4):
+            entry_type, size_raw, mtime_raw, path = fields[start : start + 4]
+            relative = _relative_under(base, path)
+            if relative is None:
+                logger.debug("Batched find returned %r outside %r on %s", path, base, node.name)
+                return None
+            try:
+                size = int(size_raw)
+                mtime = float(mtime_raw)
+            except ValueError:
+                logger.debug(
+                    "Unparseable batched find record %r on %s", fields[start : start + 4], node.name
+                )
+                return None
+            if max_entries is not None and len(entries) >= max_entries:
+                break
+            is_dir = entry_type == "d"
+            entries.append(
+                RemoteFileInfo(
+                    name=relative,
+                    size=0 if is_dir else size,
+                    mtime=mtime,
+                    is_dir=is_dir,
+                )
+            )
+        return entries
 
     # ------------------------------------------------------------------ #
     # Single file
@@ -429,8 +552,6 @@ def _walk_remote_dir(
     exclude: list[str],
 ) -> Iterator[tuple[str, RemoteFileInfo]]:
     """Recursively walk *base_dir* and yield matching files."""
-    import fnmatch
-
     try:
         entries = sftp.listdir_attr(base_dir)
     except FileNotFoundError:
@@ -490,6 +611,26 @@ def _list_remote_dir_recursive(
         if is_dir:
             child_dir = posixpath.join(base_dir, name)
             _list_remote_dir_recursive(sftp, child_dir, rel, result, max_entries)
+
+
+def _relative_under(base_dir: str, path: str) -> str | None:
+    """Return *path* relative to *base_dir*, or ``None`` when it escapes it.
+
+    Used to validate batched ``find`` output: only entries below the directory
+    we asked about are accepted, so a malformed/hostile listing can never hand
+    a caller a path outside the remote job tree.
+    """
+    base = posixpath.normpath(base_dir)
+    prefix = base.rstrip("/") + "/" if base != "/" else "/"
+    if not path.startswith(prefix):
+        return None
+    relative = path[len(prefix) :]
+    if not relative:
+        return None
+    normalized = posixpath.normpath(relative)
+    if normalized == ".." or normalized.startswith("../") or normalized.startswith("/"):
+        return None
+    return relative
 
 
 def _safe_join(remote_dir: str, filename: str) -> str:
