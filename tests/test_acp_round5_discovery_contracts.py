@@ -6,8 +6,9 @@ limit anything.  This suite pins the discovery/preflight statements:
 
 * an empty recommendation set is policy-disabled (never "no peak found");
 * a constructed curve with an obvious peak still reports disabled;
-* the effective local concurrency is registry.local.max_jobs, and the legacy
-  max_running/ACP_MAX_RUNNING value is published as legacy_noop;
+* the effective local concurrency is registry.local.max_jobs, published once as
+  ``limits.max_running = {value, source, legacy_env, legacy_in_effect: false}``
+  (round-9 M11 replaced the old mutually exclusive ``legacy_noop`` block);
 * task_id/job_id are documented aliases and idempotency advice is explicit.
 """
 
@@ -47,15 +48,24 @@ def test_effective_local_capacity_comes_from_the_registry(client: TestClient) ->
     assert limits["local"]["max_jobs"] == effective
     assert limits["local"]["source"] == "registry.local.max_jobs"
     assert "local STARTING/RUNNING" in limits["local"]["count_scope"]
-    assert limits["max_running"]["status"] == "legacy_noop"
-    assert limits["max_running"]["effective_config"] == "registry.local.max_jobs"
+    # Round-9 M11: one effective value + its source; the legacy knob is a fact,
+    # never a second, mutually exclusive ``legacy_noop`` authority.
+    assert limits["max_running"] == {
+        "value": effective,
+        "source": "registry.local.max_jobs",
+        "legacy_env": "ACP_MAX_RUNNING",
+        "legacy_in_effect": False,
+    }
 
     # changing the legacy value never changes the effective capacity
     import os
 
     os.environ["ACP_MAX_RUNNING"] = "8"
     try:
-        assert _limits(client)["local"]["max_jobs"] == effective
+        changed = _limits(client)
+        assert changed["local"]["max_jobs"] == effective
+        assert changed["max_running"]["value"] == effective
+        assert changed["max_running"]["legacy_in_effect"] is False
     finally:
         os.environ.pop("ACP_MAX_RUNNING", None)
 

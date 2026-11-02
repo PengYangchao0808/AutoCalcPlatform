@@ -427,14 +427,27 @@ def _context(
     )
 
 
-def _orca_default_method(config: Mapping[str, Any]) -> str:
+def _orca_default_method(
+    config: Mapping[str, Any], *, workflow: str | None = None
+) -> str:
+    """Return the implicit ORCA method for a simple workflow.
+
+    Round-9: a bare ``singlepoint`` used to inherit
+    ``theory.optimization.method`` (now r2SCAN-3c), contradicting the published
+    single-point default (wB97M-V).  Optimization keeps r2SCAN-3c (round-8
+    correction); every other workflow keeps the historical optimization fallback.
+    """
     theory = config.get("theory", {})
-    if isinstance(theory, dict):
-        optimization = theory.get("optimization", {})
-        if isinstance(optimization, dict):
-            method = optimization.get("method")
-            if method:
-                return str(method)
+    if not isinstance(theory, dict):
+        theory = {}
+    if workflow == "singlepoint":
+        single_point = theory.get("single_point", {})
+        if isinstance(single_point, dict) and single_point.get("method"):
+            return str(single_point["method"])
+        return "wB97M-V"
+    optimization = theory.get("optimization", {})
+    if isinstance(optimization, dict) and optimization.get("method"):
+        return str(optimization["method"])
     return "r2SCAN-3c"
 
 
@@ -448,7 +461,10 @@ def _build_request(context: _AdapterContext, definition: _RequestDefinition) -> 
         method = str(raw_kwargs.get("method") or "")
     else:
         resources = _build_method_kwargs(raw_kwargs)
-        method = str(raw_kwargs.get("method") or _orca_default_method(context.config))
+        method = str(
+            raw_kwargs.get("method")
+            or _orca_default_method(context.config, workflow=definition.workflow)
+        )
 
     resources.update(
         {
@@ -470,8 +486,20 @@ def _build_request(context: _AdapterContext, definition: _RequestDefinition) -> 
 
 
 def _step_spec(request: CalculationRequest) -> dict[str, Any]:
+    """Job-spec view of one step, naming the level that actually runs.
+
+    Round-9 M12: the resolved method rides in ``method``; an empty method is
+    omitted rather than stored as ``""`` (blank is not a level of theory).
+    """
     spec = dict(request.resources)
-    spec["method"] = request.method
+    method = str(request.method or "").strip()
+    if method:
+        spec["method"] = method
+    else:
+        spec.pop("method", None)
+    basis = spec.get("basis")
+    if isinstance(basis, str) and not basis.strip():
+        spec.pop("basis", None)
     return spec
 
 

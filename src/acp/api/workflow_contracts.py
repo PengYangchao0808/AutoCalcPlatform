@@ -616,7 +616,11 @@ def _pes_block() -> dict[str, Any]:
         "workflow": "PESsearch",
         "coverage": "partial",
         "partial_scope": (
-            "mode=bond_length_scan direct branch only; the manifest path is not published"
+            "mode=bond_length_scan direct branch only; the workflow now publishes "
+            "RESULT/result_manifest.json plus one structure product per published scan "
+            "frame (RESULT/structures/frame_NNN.xyz, role=scan_frame), so BatchOptimize "
+            "input.from_artifact can address the frames; raw unconfirmed frames still "
+            "require an authorized selection publication before Batch will load them"
         ),
         "gaps": [
             "input.protocol level values are type-checked only; per-level value "

@@ -1632,6 +1632,9 @@ class BatchOptimizeEngine:
             self._materialize_optimization_trajectory(item)
             self._materialize_normal_modes(item, result_manifest)
             thermochemistry_product_id = self._materialize_thermochemistry(item, result_manifest)
+            energy_product_id = self._materialize_energy_product(
+                item, result_manifest, profile=manifest.profile
+            )
             source = self._resolve_output_geometry(item)
             if source is None:
                 logger.warning(
@@ -1675,6 +1678,8 @@ class BatchOptimizeEngine:
                           **self._hessian_facts(item),
                           **({"thermochemistry_product_id": thermochemistry_product_id}
                              if thermochemistry_product_id else {}),
+                          **({"energy_product_id": energy_product_id}
+                             if energy_product_id else {}),
                           **self._item_stage_facts.get(item.item_id, {})},
             )
         _ = result_manifest.write(self._result_root)
@@ -1815,6 +1820,101 @@ class BatchOptimizeEngine:
         )
 
     # ── thermochemistry / energy / Hessian facts (round-8 三.4, 三.5) ─────
+
+    def _materialize_energy_product(
+        self,
+        item: BatchCalculationItem,
+        result_manifest: ResultManifest,
+        *,
+        profile: str,
+    ) -> str | None:
+        """Publish the item's step energy as ``RESULT/energy/<item>_<step>.json``.
+
+        The value is the electronic energy a completed step printed — the
+        single-point step when the profile ran one, otherwise the frequency
+        step (the same fact the structure product's ``energy_hartree`` metadata
+        carries).  Round-9 M5: it is now a first-class ``energy_report`` product,
+        so reading an item's energy never needs another calculation.
+
+        The document is written by the single energy-product writer
+        (:mod:`acp.results.energy_product`), which shares the optimize
+        workflow's ``acp_energy_product_v1`` key set.  A method that cannot be
+        resolved is written as ``null`` plus ``method_unknown_reason`` in the
+        manifest metadata — never ``""``.  Nothing is fabricated: an item
+        without a step-printed energy publishes no product.
+        """
+        facts = self._item_energy_metadata(item)
+        energy_hartree = facts.get("energy_hartree")
+        step_kind = str(facts.get("energy_step") or "")
+        if (
+            not step_kind
+            or not isinstance(energy_hartree, (int, float))
+            or isinstance(energy_hartree, bool)
+        ):
+            return None
+        from acp.results.energy_product import (
+            ENERGY_METHOD_UNKNOWN_REASON,
+            publish_energy_product,
+        )
+
+        method, basis, method_source = self._item_energy_level(item, step_kind)
+        metadata: dict[str, object] = {
+            "item_id": item.item_id,
+            "tag": item.tag,
+            "energy_step": step_kind,
+            "selection_source": "step",
+        }
+        if profile:
+            metadata["profile"] = str(profile)
+        if basis is not None:
+            metadata["basis"] = basis
+        if method_source is not None:
+            metadata["method_source"] = method_source
+        if method is None:
+            metadata["method_unknown_reason"] = ENERGY_METHOD_UNKNOWN_REASON
+        return publish_energy_product(
+            self._result_root,
+            step_id=f"{item.item_id}_{step_kind}",
+            step_kind=step_kind,
+            energy_hartree=float(energy_hartree),
+            method=method,
+            manifest=result_manifest,
+            product_id=f"batch_{item.item_id}_energy",
+            label=f"{item.name} — energy ({step_kind})",
+            metadata=metadata,
+        )
+
+    def _item_energy_level(
+        self, item: BatchCalculationItem, step_kind: str
+    ) -> tuple[str | None, str | None, str | None]:
+        """Resolve ``(method, basis, source)`` for the step that printed *item*'s energy.
+
+        Reads the engine's resolved per-role/per-step levels
+        (:meth:`BatchMethodOptions.for_step`); the declared defaults are never
+        re-applied here.  ``source`` is the resolution provenance
+        (``role``/``role_method``/``single_point_method``/…) for audit.
+        """
+        methods = self._active_methods
+        if methods is None:
+            return None, None, None
+        try:
+            kind = StepKind(step_kind)
+        except ValueError:  # pragma: no cover - engine steps are StepKind values
+            return None, None, None
+        from acp.results.energy_product import normalize_energy_method
+
+        is_ts = item.tag == "TS"
+        method, basis = methods.for_step(kind, is_ts)
+        if kind is StepKind.SINGLEPOINT:
+            source = methods.sp_provenance(is_ts).get("method") or None
+        else:
+            source = "role_method" if method else None
+        resolved_method = normalize_energy_method(method)
+        return (
+            resolved_method,
+            normalize_energy_method(basis),
+            source if resolved_method is not None else None,
+        )
 
     def _shermo_thermochemistry_payload(
         self, item: BatchCalculationItem

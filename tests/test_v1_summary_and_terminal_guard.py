@@ -136,6 +136,10 @@ def test_job_record_round_trips_full_live_status_metrics() -> None:
         "observed_at": None,
         "source": None,
         "unknown_reason": None,
+        # round-9 M13: freshness fields are part of the live-status shape
+        "observed_age_seconds": None,
+        "stale": None,
+        "source_mtime": None,
     }
     model = V1JobRecordModel(
         id="live-status-round-trip",

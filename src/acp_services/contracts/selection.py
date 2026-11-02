@@ -8,6 +8,13 @@ policy checks live in ``acp_services.runtime.selection_authorization``.
 
 Agents can never create, extend or renew their own authorization: creation
 takes an explicit ``is_admin`` flag and the runtime refuses everything else.
+
+Round-9 M3 adds exactly one bounded exception, and only on a ``local-single``
+deployment: the trusted local operator entry may ask the Controller to *mint*
+an ``origin="agent-self"`` record for the publication it is about to make.  The
+record is created through the same admin path (never a second store), is
+bounded by job/attempt/action/candidates/TTL, and every publication still runs
+the normal validate/consume path — self-signing never skips a check.
 """
 
 from __future__ import annotations
@@ -20,6 +27,10 @@ __all__ = [
     "SELECTION_ACTIONS",
     "SELECTION_AUTHORIZATION_SCHEMA",
     "SELECTION_CONTRACT_VERSION",
+    "SELECTION_SELF_SIGNED_MAX_CANDIDATES",
+    "SELECTION_SELF_SIGNED_ORIGIN",
+    "SELECTION_SELF_SIGNED_POLICY_REVISION",
+    "SELECTION_SELF_SIGNED_TTL_SECONDS",
     "SelectionAuthorization",
     "SelectionDecision",
     "SelectionLimits",
@@ -31,6 +42,17 @@ SELECTION_CONTRACT_VERSION = "acp2.selection.v1"
 SELECTION_AUTHORIZATION_SCHEMA = "acp2.selection.authorization.v1"
 SELECTION_ACTIONS = frozenset({"publish_pes_selection", "batch_consume"})
 SELECTION_SELECTORS = frozenset({"manual", "manual_frame", "agent"})
+
+#: ``agent-self``: the bounded local-single record the Controller mints for
+#: its own trusted operator entry (round-9 M3).  Explicit grants keep the
+#: default ``operator`` origin.
+SELECTION_SELF_SIGNED_ORIGIN = "agent-self"
+#: The self-signed record's own policy revision (never the operator policy).
+SELECTION_SELF_SIGNED_POLICY_REVISION = "acp2.selection.self-signed.v1"
+#: Candidate ceiling for one self-signed record (the request can never widen it).
+SELECTION_SELF_SIGNED_MAX_CANDIDATES = 8
+#: Short TTL: a self-signed record is meant to be consumed right away.
+SELECTION_SELF_SIGNED_TTL_SECONDS = 3600
 
 
 def _text(payload: Mapping[str, Any], key: str, default: str = "") -> str:
@@ -136,12 +158,16 @@ class SelectionAuthorization:
     limits: SelectionLimits = field(default_factory=SelectionLimits)
     revoked: bool = False
     actions_log: tuple[dict[str, Any], ...] = ()
+    #: ``operator`` (explicit grant) or ``agent-self`` (round-9 M3).  Reader
+    #: input is never trusted: the Controller owns the value it mints.
+    origin: str = "operator"
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema": SELECTION_AUTHORIZATION_SCHEMA,
             "contract_version": SELECTION_CONTRACT_VERSION,
             "authorization_id": self.authorization_id,
+            "origin": self.origin,
             "owner_principal_id": self.owner_principal_id,
             "owner_project_id": self.owner_project_id,
             # store-level envelope fields (the Data store validates these)
@@ -184,6 +210,7 @@ class SelectionAuthorization:
             limits=SelectionLimits.from_dict(data.get("limits")),
             revoked=bool(data.get("revoked", False)),
             actions_log=tuple(log),
+            origin=_text(data, "origin", "operator"),
         )
 
 
@@ -223,6 +250,10 @@ class SelectionDecision:
     authorization_digest: str = ""
     policy_revision: str = ""
     remaining: int | None = None
+    #: Origin of the consumed record (``operator``/``agent-self``); the
+    #: publication response echoes it so a client can tell a self-signed
+    #: local-single publication from an operator-minted one.
+    authorization_origin: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -233,6 +264,7 @@ class SelectionDecision:
             "authorization_digest": self.authorization_digest,
             "policy_revision": self.policy_revision,
             "remaining": self.remaining,
+            "authorization_origin": self.authorization_origin,
         }
 
     @classmethod
@@ -246,4 +278,5 @@ class SelectionDecision:
             authorization_digest=_text(data, "authorization_digest"),
             policy_revision=_text(data, "policy_revision"),
             remaining=None if data.get("remaining") is None else int(data["remaining"]),
+            authorization_origin=_text(data, "authorization_origin"),
         )

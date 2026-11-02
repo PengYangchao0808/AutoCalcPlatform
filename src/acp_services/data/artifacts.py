@@ -23,7 +23,11 @@ frozen artifact facts.  What this module adds is:
   itself and never fetches.
 * :func:`resolve_artifact_read` — the query-only read resolver.  It refuses
   stale generations, cross-attempt reads, missing bodies and digest mismatches
-  with named errors before the caller can serve bytes.
+  with named errors before the caller can serve bytes.  A verified body that
+  carries host paths/secrets is returned **masked** (``body_masked`` /
+  ``masked_digest`` / ``redaction``) rather than refused: the integrity check
+  always runs on the stored bytes, and only a body that cannot be verified at
+  all (non-UTF-8/binary) stays a hard refusal.
 
 **EvidenceReport storage, not interpretation.**  When a prepare payload carries
 an ``evidence_report`` document the executor stores those exact bytes as an
@@ -63,6 +67,9 @@ __all__ = [
     "ARTIFACT_REF_SCHEMA",
     "ARTIFACT_REF_VERSION",
     "MAX_ARTIFACT_BYTES",
+    "BODY_POLICIES",
+    "BODY_POLICY_MASK",
+    "BODY_POLICY_REFUSE",
     "ArtifactAuthorization",
     "ArtifactError",
     "ArtifactNotPreparedError",
@@ -97,6 +104,17 @@ MAX_ARTIFACT_BYTES = 64 * 1024 * 1024
 _SAFE_TOKEN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 _SHA256_PREFIXED = re.compile(r"^sha256:[0-9a-f]{64}$")
 _SHA256_BARE = re.compile(r"^[0-9a-f]{64}$")
+
+#: How one prepared body is presented on a read (round-9 M1).
+#:
+#: ``mask`` returns the stored body with host paths and secrets **masked** (the
+#: default: an artifact whose JSON carries a ``/ACPServer/...`` path is readable
+#: instead of refused) and declares the masking on the response.  ``refuse`` is
+#: the historical hard refusal, kept for a caller that wants the strict
+#: presentation; it is not a second policy — both run the same implementation.
+BODY_POLICY_MASK = "mask"
+BODY_POLICY_REFUSE = "refuse"
+BODY_POLICIES: tuple[str, ...] = (BODY_POLICY_MASK, BODY_POLICY_REFUSE)
 
 
 # ---------------------------------------------------------------------------
@@ -855,12 +873,18 @@ def _refuse(reason: str, *, retryable: bool = False) -> PrepareExecutionResult:
 
 @dataclass(frozen=True)
 class ArtifactRead:
-    """The verified result of one artifact read (no unverified bytes)."""
+    """The verified result of one artifact read (no unverified bytes).
+
+    ``masked`` records that :attr:`body` is the **masked** presentation of the
+    stored artifact (round-9 M1): ``digest`` still covers the stored bytes,
+    ``masked_digest`` covers the returned slice.
+    """
 
     ref: ArtifactRef
     body: bytes
     encoding: str = "identity"
     truncated: bool = False
+    masked: bool = False
 
     @property
     def digest(self) -> str:
@@ -877,6 +901,11 @@ class ArtifactRead:
     def to_dict(self) -> dict[str, Any]:
         import base64
 
+        from acp_services.entrypoints.machine_output import (
+            ARTIFACT_BODY_REDACTION,
+            masked_body_digest,
+        )
+
         body_text: str | None
         encoding = self.encoding
         if self.encoding == "base64":
@@ -889,13 +918,16 @@ class ArtifactRead:
                 # report what the body actually is instead of mislabelling it.
                 body_text = base64.b64encode(self.body).decode("ascii")
                 encoding = "base64"
-        return {
+        payload: dict[str, Any] = {
             "schema": self.ref.schema,
             "version": self.ref.version,
             "artifact_ref": self.ref.to_dict(),
             "media_type": self.ref.media_type,
             "size_bytes": self.ref.size_bytes,
             "digest": self.ref.digest,
+            # The digest names the stored artifact, never the returned slice; a
+            # consumer must be able to tell the two scopes apart (round-9 M1).
+            "digest_scope": "artifact",
             "generation": self.ref.generation,
             "availability": self.ref.availability.value,
             "encoding": encoding,
@@ -905,29 +937,70 @@ class ArtifactRead:
             "source_schema": self.ref.source_schema,
             "source_refs": [dict(item) for item in self.ref.source_refs],
         }
+        if self.masked:
+            payload["body_masked"] = True
+            # Covers exactly what is returned (the possibly truncated masked
+            # slice); ``digest`` keeps covering the stored artifact.
+            payload["masked_digest"] = masked_body_digest(self.body)
+            payload["redaction"] = ARTIFACT_BODY_REDACTION
+        return payload
 
 
-def _assert_body_content_safe(body: bytes) -> None:
-    """One content policy on the **whole** body before any truncation.
+def _present_body_text(body: bytes, *, policy: str) -> tuple[bytes, bool]:
+    """Apply the body presentation policy on the **whole** body.
 
-    A truncated slice can hide a path/secret that straddles the boundary, so
-    the policy must run here, not only in the MCP verifier.  Binary bodies
-    cannot be checked this round and are refused (residual: binary allowlist).
+    A truncated slice can hide a path/secret that straddles the boundary, so the
+    policy must run on the complete body, before ``max_bytes`` is applied.
+
+    Round-9 M1: the default presentation is ``mask`` — the stored body is
+    returned with host paths/secrets replaced by the shared redactor's
+    placeholders (never revealed).  ``refuse`` keeps the historical hard refusal
+    for callers that want it.  Both run the *same* masking implementation
+    (:func:`acp_services.entrypoints.machine_output.mask_body_text`); the only
+    refusal left in both policies is a body whose content cannot be verified at
+    all (non-UTF-8 / binary).
+
+    Returns:
+        ``(presented_bytes, masked)``.
+
+    Raises:
+        ArtifactBodyRefusedError: Non-UTF-8 body (``artifact_body_unverifiable``)
+            or, under ``refuse``, a body carrying a redacted pattern
+            (``artifact_body_redacted``).
     """
+    from acp_services.entrypoints.machine_output import mask_body_text
+
     try:
         text = body.decode("utf-8")
     except UnicodeDecodeError:
         raise ArtifactBodyRefusedError(
             "artifact body is not UTF-8; content cannot be verified",
-            params={"field": "body", "rule": "artifact_body_unverifiable"},
+            params={
+                "field": "body",
+                "rule": "artifact_body_unverifiable",
+                "allowed_formats": ["utf-8 text"],
+                "hint": "a binary body is not returned; use a structured product instead",
+            },
         ) from None
-    from acp_services.entrypoints.machine_output import redact
-
-    if redact(text) != text:
+    masked_text = mask_body_text(text)
+    if masked_text == text:
+        return body, False
+    if policy == BODY_POLICY_REFUSE:
         raise ArtifactBodyRefusedError(
             "artifact body contains a redacted pattern",
             params={"field": "body", "rule": "artifact_body_redacted"},
         )
+    return masked_text.encode("utf-8"), True
+
+
+def _assert_body_content_safe(body: bytes) -> None:
+    """The strict (``refuse``) presentation policy on the **whole** body.
+
+    A truncated slice can hide a path/secret that straddles the boundary, so
+    the policy must run here, not only in the MCP verifier.  Binary bodies
+    cannot be checked this round and are refused (residual: binary allowlist).
+    """
+    _present_body_text(body, policy=BODY_POLICY_REFUSE)
 
 
 def resolve_artifact_read(
@@ -943,6 +1016,7 @@ def resolve_artifact_read(
     authorization: ArtifactAuthorization | None = None,
     max_bytes: int = 256 * 1024,
     encoding: str = "identity",
+    body_policy: str = BODY_POLICY_MASK,
 ) -> ArtifactRead:
     """Resolve and verify one prepared artifact without any side effect.
 
@@ -954,7 +1028,15 @@ def resolve_artifact_read(
     4. the operation is ``succeeded`` and ``ready``;
     5. the requested generation and digest equal the committed values;
     6. the published body exists (an evicted body is ``not_prepared``);
-    7. the bytes recompute to the committed digest.
+    7. the stored bytes recompute to the committed digest (the **unmasked**
+       body: masking never skips or weakens the integrity check);
+    8. the whole body is presented under ``body_policy`` (masked by default),
+       and only then is ``max_bytes`` applied to the presented text.
+
+    The order in 7/8 is deliberate: the policy runs on the complete stored body
+    so a path/secret straddling the truncation boundary can never slip through,
+    and the digest is always computed from the stored bytes — never from the
+    returned (masked, possibly truncated) slice.
 
     Args:
         service: The persistent operation authority (read-only here).
@@ -968,13 +1050,26 @@ def resolve_artifact_read(
         authorization: Inert projection to freeze onto the returned ref.
         max_bytes: Bound for the returned body.
         encoding: ``identity`` or ``base64``.
+        body_policy: ``mask`` (default: return the body with host paths/secrets
+            masked and declare it) or ``refuse`` (historical hard refusal).
 
     Raises:
         ArtifactNotPreparedError: No operation/body (cold cache).
         ArtifactAttemptMismatchError: Cross-attempt read.
         ArtifactGenerationMismatchError: Old generation.
         ArtifactDigestMismatchError: Digest/corruption mismatch.
+        ArtifactBodyRefusedError: Non-UTF-8 body, or a redacted pattern under
+            ``body_policy="refuse"``.
     """
+    if body_policy not in BODY_POLICIES:
+        raise ArtifactError(
+            f"unknown artifact body policy {body_policy!r}",
+            params={
+                "field": "body_policy",
+                "rule": "invalid_enum",
+                "allowed": list(BODY_POLICIES),
+            },
+        )
     if not is_safe_artifact_token(job_id) or not is_safe_artifact_token(resource_id):
         raise ArtifactPathRefusedError("unsafe artifact token")
     if int(attempt) < 1 or int(generation) < 1:
@@ -1064,7 +1159,9 @@ def resolve_artifact_read(
             },
         )
     body = store.read(stored)
-    _assert_body_content_safe(body)
+    # 7/8: integrity first (the store recomputed the stored digest above), then
+    # the whole-body presentation policy, then — and only then — the bound.
+    presented, masked = _present_body_text(body, policy=body_policy)
     ref = replace(
         stored,
         operation_id=record.operation_id,
@@ -1073,14 +1170,15 @@ def resolve_artifact_read(
         relative_path=str(payload.get("relative_path") or stored.relative_path),
         source_schema=str(payload.get("source_schema") or stored.source_schema),
     )
-    total = len(body)
-    limit = _align_read_limit(body, max(0, int(max_bytes)), encoding=str(encoding))
+    total = len(presented)
+    limit = _align_read_limit(presented, max(0, int(max_bytes)), encoding=str(encoding))
     truncated = limit < total
     return ArtifactRead(
         ref=ref,
-        body=body[:limit] if truncated else body,
+        body=presented[:limit] if truncated else presented,
         encoding="base64" if str(encoding) == "base64" else "identity",
         truncated=truncated,
+        masked=masked,
     )
 
 

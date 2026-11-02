@@ -94,6 +94,8 @@ __all__ = [
     "PrepareLease",
     "PrepareCompletion",
     "PrepareExecutionResult",
+    "PrepareRefusal",
+    "PREPARE_REFUSAL_RULES",
     "RecoveryReport",
     "PrepareOperationError",
     "PrepareOperationNotFoundError",
@@ -112,6 +114,7 @@ __all__ = [
     "content_identity_for",
     "workflow_from_resource_id",
     "default_resource_key",
+    "prepare_refusal",
     "resolve_operation_state",
     "resolve_prepare_identity_version",
 ]
@@ -440,10 +443,22 @@ class PrepareOperationRecord:
         )
 
     def to_contract(self) -> PrepareOperation:
-        """Project the row onto the frozen ``PrepareOperation`` wire shape."""
+        """Project the row onto the frozen ``PrepareOperation`` wire shape.
+
+        Round-9 M7: a failure whose code is a known prepare refusal also carries
+        ``params.field``/``params.rule`` and the error class's ``retryable``
+        flag, so a caller can tell "fix the request" from "wait and retry"
+        without parsing prose.  A transport failure (an exception class name the
+        worker recorded) keeps the historical ``{"code", "message"}`` shape —
+        it is not a classified refusal.
+        """
         error: Mapping[str, Any] | None = None
         if self.error_code is not None:
             error = {"code": self.error_code, "message": self.error_message or ""}
+            refusal = _refusal_projection(self.error_code, self.error_message)
+            if refusal is not None:
+                error["params"] = {"field": refusal.field, "rule": refusal.rule}
+                error["retryable"] = refusal.retryable
         if self.state is PrepareState.SUCCEEDED and not self.is_legacy_identity:
             freshness = Freshness.CURRENT
         elif self.state is PrepareState.SUCCEEDED:
@@ -1467,7 +1482,8 @@ class PrepareOperationService:
                     )
                 self._conn.execute(
                     "UPDATE data_operations SET state=?, availability=?, result_json=?, "
-                    "size_bytes=?, sha256=?, lease_token=NULL, lease_expires_at=NULL, "
+                    "size_bytes=?, sha256=?, error_code=NULL, error_message=NULL, "
+                    "lease_token=NULL, lease_expires_at=NULL, "
                     "updated_at=? WHERE operation_id=?",
                     (
                         PrepareState.SUCCEEDED.value,
@@ -1785,30 +1801,100 @@ class PrepareOperationService:
         )
 
 
-_NAMED_REFUSAL_CODES = frozenset(
-    {
-        "not_prepared",
-        "remote_cache_missing",
-        "digest_mismatch",
-        "path_traversal",
-        "permission_revoked",
-        "unsupported_capability",
-        "invalid_parameter",
-        "artifact_too_large",
-        "artifact_error",
-    }
-)
+@dataclass(frozen=True)
+class PrepareRefusal:
+    """Machine-readable projection of one prepare refusal (M7).
 
-
-def _error_code_for(detail: str) -> str:
-    """Return the named refusal code carried by an executor detail string.
-
-    Executors report ``"<code>"`` or ``"<code>:<reason>"``.  Only the frozen
-    vocabulary is surfaced as ``error_code``; anything else stays the generic
-    ``not_prepared`` so a transport message never becomes a typed outcome.
+    ``code`` is the frozen operation error code.  ``field``/``rule`` are what
+    the caller reads to decide between fixing the request and waiting:
+    ``invalid_parameter`` is a genuine parameter error (rule ``required``,
+    ``retryable=False``), while a source body that is merely not materialized
+    yet is the retryable ``not_ready_yet`` race.  ``retryable`` classifies the
+    error, not the remaining attempt budget.
     """
-    code = str(detail or "").split(":", 1)[0].strip()
-    return code if code in _NAMED_REFUSAL_CODES else "not_prepared"
+
+    code: str
+    field: str
+    rule: str
+    retryable: bool
+
+
+#: One table for "error code → (field, rule, retryable)", shared by the worker's
+#: retry decision and the operation projection (HTTP/MCP/CLI all read the same
+#: ``PrepareOperation.error``).  The catalog executor's identity refusals are
+#: included because :func:`prepare_refusal` narrows them to ``not_prepared``;
+#: without an entry they would inherit the retryable source-miss rule, which is
+#: wrong.
+PREPARE_REFUSAL_RULES: dict[str, PrepareRefusal] = {
+    # Retryable race: the artifact/cache body is not (yet) materialized.
+    "not_prepared": PrepareRefusal("not_prepared", "relative_path", "not_ready_yet", True),
+    "remote_cache_missing": PrepareRefusal(
+        "remote_cache_missing", "relative_path", "not_ready_yet", True
+    ),
+    "not_ready": PrepareRefusal("not_prepared", "artifact_id", "not_ready_yet", True),
+    "resource_not_ready": PrepareRefusal(
+        "resource_not_ready", "artifact_id", "not_ready_yet", True
+    ),
+    # Genuine parameter errors: the caller can fix these, retrying cannot.
+    "invalid_parameter": PrepareRefusal("invalid_parameter", "relative_path", "required", False),
+    "path_traversal": PrepareRefusal("path_traversal", "relative_path", "path_traversal", False),
+    "digest_mismatch": PrepareRefusal(
+        "digest_mismatch", "expected_digest", "digest_mismatch", False
+    ),
+    "artifact_too_large": PrepareRefusal(
+        "artifact_too_large", "relative_path", "artifact_too_large", False
+    ),
+    "artifact_error": PrepareRefusal("artifact_error", "relative_path", "artifact_error", False),
+    "permission_revoked": PrepareRefusal(
+        "permission_revoked", "authorization", "permission_revoked", False
+    ),
+    "unsupported_capability": PrepareRefusal(
+        "unsupported_capability", "purpose", "unsupported_capability", False
+    ),
+    # Catalog lease identity refusals (narrowed to ``not_prepared`` on the wire).
+    "job_missing": PrepareRefusal("not_prepared", "job_id", "unknown_job", False),
+    "not_terminal": PrepareRefusal("not_prepared", "job_id", "job_not_terminal", False),
+    "not_remote": PrepareRefusal("not_prepared", "job_id", "job_not_remote", False),
+    "stale_attempt": PrepareRefusal("not_prepared", "attempt", "stale_attempt", False),
+}
+
+
+def prepare_refusal(detail: str) -> PrepareRefusal:
+    """Project one executor refusal detail onto its typed code/field/rule.
+
+    Executors report ``"<code>"`` or ``"<code>:<reason>"``.  A detail outside
+    the known refusal vocabulary keeps the historical generic ``not_prepared``
+    code and gains no rule projection: a transport message never becomes a typed
+    outcome, so the caller falls back to the executor's own ``retryable`` flag.
+    """
+    base = str(detail or "").split(":", 1)[0].strip()
+    entry = PREPARE_REFUSAL_RULES.get(base)
+    if entry is not None:
+        return entry
+    return PrepareRefusal("not_prepared", "", "", False)
+
+
+def _refusal_projection(error_code: str | None, error_message: str | None) -> PrepareRefusal | None:
+    """Pick the table entry for a persisted failure row (M7 projection).
+
+    The row keeps the frozen ``error_code``; the worker also stores the
+    executor's detail token as ``error_message``.  For the generic
+    ``not_prepared`` code the detail token is more precise (an identity refusal
+    vs. an unmaterialized body), so it is used when it names the same code.
+    Prose/transport messages match nothing and keep the legacy shape.
+    """
+    entry = PREPARE_REFUSAL_RULES.get(str(error_code or ""))
+    if error_code == "not_prepared":
+        token = str(error_message or "").split(":", 1)[0].strip()
+        detail_entry = PREPARE_REFUSAL_RULES.get(token)
+        if detail_entry is not None and detail_entry.code == error_code:
+            return detail_entry
+        if token not in PREPARE_REFUSAL_RULES:
+            # An unclassified executor failure keeps the frozen ``not_prepared``
+            # code but must not borrow the retryable "not materialized yet"
+            # rule: the client would retry a request it cannot fix.
+            return None
+    return entry
 
 
 # ---------------------------------------------------------------------------
@@ -1913,11 +1999,17 @@ class PrepareOperationWorker:
             except PrepareOperationError:
                 logger.info("prepare completion rejected for %s", lease.operation_id, exc_info=True)
         else:
+            # M7: the refusal table decides the error class's retryability.  A
+            # body that is not materialized yet ("not_prepared"/
+            # "remote_cache_missing") is the retryable race even though the
+            # executor reports it with the default ``retryable=False``; an
+            # executor that already declared a failure retryable keeps that.
+            refusal = prepare_refusal(result.detail)
             self._record_failure(
                 lease,
-                _error_code_for(result.detail),
+                refusal.code,
                 result.detail,
-                retryable=result.retryable,
+                retryable=result.retryable or refusal.retryable,
             )
 
     def _record_failure(

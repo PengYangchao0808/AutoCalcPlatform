@@ -14,6 +14,14 @@ registers a real handler for ``vibration.analyze``:
   (``cccp.analysis.frequency_products.build_frequency_report``) through
   :func:`cccp.calculation.capabilities.bind_capability`.  It never starts a task,
   a subprocess, a QC program or a plugin.
+
+  Two input formats are accepted: the legacy ORCA frequency output
+  (``orca-output``) and the ``normal_modes_v1`` frequency product that
+  BatchOptimize/optimize already publish (round-9 M4b).  The format is detected
+  from the prepared body unless ``parameters.format`` names one; both formats
+  reach the **same** preflight/execute path, so accepting the product shape
+  never loosens the scientific checks.  An empty product keeps the typed
+  not-ready refusal.
 * ``vibration.compute`` — **declared, not executable** here.  It is a compute
   capability that runs exactly one ``frequency`` task; submitting it as a task is
   the only path, so an analyze request for it is refused with
@@ -29,7 +37,9 @@ No QC/executable/LSF/model call is reachable from this module.
 
 from __future__ import annotations
 
+import json
 import logging
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
@@ -54,6 +64,8 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "ANALYSIS_PRODUCT_SCHEMA",
+    "NORMAL_MODES_FORMAT",
+    "ORCA_OUTPUT_FORMAT",
     "AnalysisInputError",
     "VIBRATION_ANALYZE_ID",
     "VIBRATION_ANALYZE_VERSION",
@@ -75,10 +87,14 @@ _SCIENCE_OWNER = "A"
 #: Owner of the artifact/read lifecycle backing the handler.
 _PLATFORM_OWNER = "B12"
 
-#: The only analysis input format the built-in handler reads.  An ORCA output is
-#: the format CCCP's frequency science parses; anything else is a typed refusal
-#: rather than a guess.
-_SUPPORTED_INPUT_FORMATS: tuple[str, ...] = ("orca-output",)
+#: The analysis input formats the built-in handler reads.  An ORCA output is
+#: the legacy text format; ``normal_modes_v1`` is the frequency product Batch
+#: and optimize publish (``RESULT/frequencies/*__normal_modes.json``).  Both go
+#: through the same ``bind_capability`` preflight/execute path — accepting the
+#: product shape never loosens a scientific check.
+ORCA_OUTPUT_FORMAT = "orca-output"
+NORMAL_MODES_FORMAT = "normal_modes_v1"
+_SUPPORTED_INPUT_FORMATS: tuple[str, ...] = (ORCA_OUTPUT_FORMAT, NORMAL_MODES_FORMAT)
 #: Declared parameter keys of the built-in handler.
 _SUPPORTED_PARAMETER_KEYS: frozenset[str] = frozenset({"format"})
 
@@ -126,10 +142,14 @@ class VibrationAnalyzeHandler:
         """Run ``vibration.analyze`` over the request's prepared artifacts."""
         parameters = request.get("parameters")
         params = dict(parameters) if isinstance(parameters, Mapping) else {}
-        input_format = str(params.get("format") or _SUPPORTED_INPUT_FORMATS[0])
-        if input_format not in _SUPPORTED_INPUT_FORMATS:
+        raw_format = params.get("format")
+        requested_format = str(raw_format).strip() if raw_format is not None else None
+        if requested_format == "":
+            # An omitted/blank selector keeps the legacy "detect" behaviour.
+            requested_format = None
+        if requested_format is not None and requested_format not in _SUPPORTED_INPUT_FORMATS:
             raise AnalysisInputError(
-                f"unsupported vibration analysis input format {input_format!r}",
+                f"unsupported vibration analysis input format {requested_format!r}",
                 params={
                     "field": "parameters.format",
                     "rule": "unsupported_format",
@@ -152,18 +172,10 @@ class VibrationAnalyzeHandler:
         # The first prepared artifact is the science input; every reference is
         # still verified, so an unrelated/unprepared ref can never ride along.
         primary = reads[0]
-        try:
-            text = primary.body.decode("utf-8")
-        except UnicodeDecodeError as exc:
-            raise AnalysisInputError(
-                "the prepared artifact is not a UTF-8 text frequency output",
-                params={
-                    "field": "input_refs[0]",
-                    "rule": "unsupported_format",
-                    "reason": "not_text",
-                },
-            ) from exc
-        report = self._analyse_text(text)
+        input_format = (
+            requested_format if requested_format is not None else _detect_input_format(primary.body)
+        )
+        report = self._analyse_payload(primary.body, input_format)
         product_digest = compute_input_digest(report)
         inputs = [read.ref.to_dict() for read in reads]
         return {
@@ -207,19 +219,74 @@ class VibrationAnalyzeHandler:
 
     # -- science (pure CCCP) ----------------------------------------------
 
+    def _analyse_payload(self, body: bytes, input_format: str) -> dict[str, Any]:
+        """Decode one prepared artifact and run the declared analysis over it.
+
+        A ``normal_modes_v1`` document is projected into the same duck-typed
+        calculation view the ORCA parser returns, so both formats reach
+        ``bind_capability(...).preflight()`` / ``execute()`` unchanged.  The
+        science (``cccp.analysis.frequency_products.build_frequency_report``)
+        is never re-implemented here.
+        """
+        try:
+            text = body.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise AnalysisInputError(
+                "the prepared artifact is not a UTF-8 text frequency output",
+                params={
+                    "field": "input_refs[0]",
+                    "rule": "unsupported_format",
+                    "reason": "not_text",
+                },
+            ) from exc
+        if input_format == NORMAL_MODES_FORMAT:
+            return self._analyse_normal_modes(text)
+        return self._analyse_text(text)
+
     @staticmethod
     def _analyse_text(text: str) -> dict[str, Any]:
+        """Analysis over a legacy ORCA frequency output."""
+        from cccp.analysis.orca_parser import OrcaOutputParser
+
+        return VibrationAnalyzeHandler._analyse_calculation(OrcaOutputParser().parse_text(text))
+
+    @staticmethod
+    def _analyse_normal_modes(text: str) -> dict[str, Any]:
+        """Analysis over a ``normal_modes_v1`` frequency product."""
+        try:
+            payload = json.loads(text)
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise AnalysisInputError(
+                "the prepared artifact is not a valid normal_modes_v1 JSON document",
+                params={
+                    "field": "input_refs[0]",
+                    "rule": "unsupported_format",
+                    "reason": "not_normal_modes_json",
+                },
+            ) from exc
+        calculation = _normal_modes_calculation(payload)
+        if calculation is None:
+            raise AnalysisInputError(
+                "the prepared artifact is not a normal_modes_v1 frequency product",
+                params={
+                    "field": "input_refs[0]",
+                    "rule": "unsupported_format",
+                    "reason": "not_normal_modes_v1",
+                },
+            )
+        return VibrationAnalyzeHandler._analyse_calculation(calculation)
+
+    @staticmethod
+    def _analyse_calculation(calculation: Any) -> dict[str, Any]:
         """Delegate to A's declared pure-analysis entry point exactly once.
 
-        The viewer parse is CCCP's single ORCA aggregate parse
-        (:class:`cccp.analysis.orca_parser.OrcaOutputParser`); the science is
-        A's declared ``vibration.analyze`` binding, which resolves
+        The viewer parse is CCCP's single ORCA aggregate parse for text inputs
+        (:class:`cccp.analysis.orca_parser.OrcaOutputParser`) or the product
+        adapter above; the science is A's declared ``vibration.analyze``
+        binding, which resolves
         ``cccp.analysis.frequency_products.build_frequency_report``.  No task
         module is imported and no subprocess is reachable.
         """
-        from cccp.analysis.orca_parser import OrcaOutputParser
-
-        calculation = OrcaOutputParser().parse_text(text)
         binding = bind_capability(VIBRATION_ANALYZE_ID, analysis_input=calculation)
         preflight = binding.preflight()
         if not preflight.ready:
@@ -240,6 +307,145 @@ class VibrationAnalyzeHandler:
                 http_status=500,
             )
         return dict(report)
+
+
+def _detect_input_format(body: bytes) -> str:
+    """Return the declared format of a prepared artifact body.
+
+    A UTF-8 JSON object whose ``schema_version`` is ``normal_modes_v1`` and
+    which carries a ``modes`` list is the frequency product published by
+    BatchOptimize / optimize.  Everything else — including a JSON document of
+    another shape — keeps the legacy ORCA text path, so an existing caller's
+    bytes are never reinterpreted.
+    """
+    try:
+        text = body.decode("utf-8")
+    except UnicodeDecodeError:
+        return ORCA_OUTPUT_FORMAT
+    if not text.lstrip().startswith("{"):
+        return ORCA_OUTPUT_FORMAT
+    try:
+        payload = json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        return ORCA_OUTPUT_FORMAT
+    if (
+        isinstance(payload, Mapping)
+        and payload.get("schema_version") == NORMAL_MODES_FORMAT
+        and isinstance(payload.get("modes"), list)
+    ):
+        return NORMAL_MODES_FORMAT
+    return ORCA_OUTPUT_FORMAT
+
+
+@dataclass(frozen=True)
+class _NormalModesCalculation:
+    """Duck-typed ``OrcaCalculation`` view over a ``normal_modes_v1`` product.
+
+    ``build_frequency_report`` reads exactly these attributes.  The adapter
+    copies the product's own numbers; it never derives an energy/frequency,
+    reorders by value, or fills a missing mode.
+    """
+
+    frequencies: list[float]
+    imaginary_modes: list[float]
+    ir_intensities: list[float] | None
+    mode_frequencies: dict[int, float]
+    mode_vectors: dict[int, tuple[tuple[float, float, float], ...]]
+    mode_ir_intensities: dict[int, float] | None
+
+
+def _number(value: object) -> float | None:
+    """Return a finite float, or ``None`` (bools/strings/NaN/inf are not values)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    return number if math.isfinite(number) else None
+
+
+def _normal_mode_vectors(
+    value: object, atom_count: int
+) -> tuple[tuple[float, float, float], ...] | None:
+    """Validate one mode's displacement vectors (one finite 3-vector per atom)."""
+    if not isinstance(value, list) or len(value) != atom_count:
+        return None
+    rows: list[tuple[float, float, float]] = []
+    for row in value:
+        if not isinstance(row, (list, tuple)) or len(row) != 3:
+            return None
+        x = _number(row[0])
+        y = _number(row[1])
+        z = _number(row[2])
+        if x is None or y is None or z is None:
+            return None
+        rows.append((x, y, z))
+    return tuple(rows)
+
+
+def _normal_modes_calculation(payload: object) -> _NormalModesCalculation | None:
+    """Project a ``normal_modes_v1`` document into the analysis calculator view.
+
+    Returns ``None`` when *payload* is not a normal-modes document (no
+    ``modes`` list), which the caller reports as an unsupported input shape.
+    A document whose ``modes`` list is empty — or whose modes carry no finite
+    frequency — returns an **empty** view, so the shared ``bind_capability``
+    preflight produces the typed "no frequency products" refusal instead of a
+    fabricated report.  Modes with missing/ragged/non-finite vectors are
+    dropped exactly like ``build_normal_modes_product`` drops them; their
+    frequencies stay readable.
+    """
+    if not isinstance(payload, Mapping):
+        return None
+    modes = payload.get("modes")
+    if not isinstance(modes, list):
+        return None
+    raw: list[tuple[int, float, object, float | None]] = []
+    for mode in modes:
+        if not isinstance(mode, Mapping):
+            continue
+        index = mode.get("mode_index")
+        if not isinstance(index, int) or isinstance(index, bool):
+            continue
+        frequency = _number(mode.get("frequency_cm1"))
+        if frequency is None:
+            continue
+        raw.append((index, frequency, mode.get("vectors"), _number(mode.get("ir_intensity"))))
+    declared = payload.get("atom_count")
+    atom_count = (
+        declared
+        if isinstance(declared, int) and not isinstance(declared, bool) and declared > 0
+        else None
+    )
+    if atom_count is None:
+        for _index, _frequency, vectors, _ir in raw:
+            if isinstance(vectors, list) and vectors:
+                atom_count = len(vectors)
+                break
+    mode_frequencies: dict[int, float] = {}
+    mode_vectors: dict[int, tuple[tuple[float, float, float], ...]] = {}
+    mode_ir_intensities: dict[int, float] = {}
+    for index, frequency, vectors, ir in raw:
+        mode_frequencies[index] = frequency
+        if atom_count is not None:
+            parsed = _normal_mode_vectors(vectors, atom_count)
+            if parsed is not None:
+                mode_vectors[index] = parsed
+        if ir is not None:
+            mode_ir_intensities[index] = ir
+    order = sorted(mode_frequencies)
+    frequencies = [mode_frequencies[index] for index in order]
+    ir_intensities = (
+        [mode_ir_intensities[index] for index in order]
+        if order and all(index in mode_ir_intensities for index in order)
+        else None
+    )
+    return _NormalModesCalculation(
+        frequencies=frequencies,
+        imaginary_modes=[frequency for frequency in frequencies if frequency < 0],
+        ir_intensities=ir_intensities,
+        mode_frequencies=mode_frequencies,
+        mode_vectors=mode_vectors,
+        mode_ir_intensities=mode_ir_intensities or None,
+    )
 
 
 def _delegation_target() -> str:
@@ -357,6 +563,9 @@ def build_analysis_registry(
                     "inputs": "prepared artifact_ref only",
                     "delegation_target": _delegation_target(),
                     "input_formats": list(_SUPPORTED_INPUT_FORMATS),
+                    "input_format_detection": (
+                        "auto from the prepared body; parameters.format overrides"
+                    ),
                     "product_schema": ANALYSIS_PRODUCT_SCHEMA,
                 },
             )

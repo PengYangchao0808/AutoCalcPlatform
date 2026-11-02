@@ -3460,6 +3460,16 @@ MIGRATION_STATION_PREFIXES = (
     # projected onto the single thermochemistry result station.  Exact file
     # only — never widen this to ``src/acp/results/``.
     "src/acp/results/thermochemistry.py",
+    # round-9 M2: the PES workflow now records the unified result manifest path
+    # (``RESULT/result_manifest.json``) instead of pointing at the profile JSON,
+    # so BatchOptimize's ``from_artifact`` carrier resolves.  Exact file only.
+    "src/acp/workflows/pes_search.py",
+    # round-9 M12: the shared energy-product payload writer (schema
+    # ``acp_energy_product_v1``) is the second results-side publication
+    # station: the executor and attempt_publication both project onto it, so a
+    # "method" can no longer be published blank.  Exact file only — never widen
+    # this to ``src/acp/results/``.
+    "src/acp/results/energy_product.py",
     "src/acp/confsearch/report.py",
     # Amendment 2026-10-17 (docs reorg): docstring-only doc-path updates
     # (docs/… → docs/archive|reference/…) in confsearch root files — no
@@ -3672,6 +3682,8 @@ def test_migration_scope_audit_reaches_migration_files() -> None:
         # round-7 #7d: the energy-report projection stays inside the registered
         # thermochemistry station (exact file, not the whole results package).
         "src/acp/results/thermochemistry.py",
+        # round-9 M12: energy product payload station (see MIGRATION_STATION_PREFIXES).
+        "src/acp/results/energy_product.py",
     }
     assert expected <= changed, f"migration audit scope lost files: {sorted(expected - changed)}"
     post_baseline = {path for path in expected if not _in_baseline(path)}

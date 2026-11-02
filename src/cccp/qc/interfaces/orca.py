@@ -154,6 +154,10 @@ _REASON_LINE_LIMIT = 5
 _REASON_LINE_MAX_CHARS = 200
 #: ``error_message`` summary bound (plan 三.3: "≤200 chars, no absolute paths").
 _FAILURE_SUMMARY_MAX_CHARS = 200
+#: Round-9 (M14): a clipped summary names where the full diagnostic lives.
+_FAILURE_DETAILS_POINTER = "… full text in failure_details.diagnostic_message"
+#: Bound on ``failure_details.diagnostic_message`` (the full diagnostic text).
+_DIAGNOSTIC_MESSAGE_MAX_CHARS = 4000
 
 #: Printed lines that describe *why* a run failed (case-insensitive).
 _REASON_LINE_KEYWORDS: tuple[str, ...] = (
@@ -298,6 +302,54 @@ def _redact_host_paths(text: str) -> str:
     return text
 
 
+def _clip_words(text: str, limit: int) -> str:
+    """Longest prefix of *text* within *limit* chars, cut at a word boundary."""
+    if len(text) <= limit:
+        return text
+    head = text[: max(limit, 0)]
+    cut = head.rfind(" ")
+    if cut > 0:
+        head = head[:cut]
+    return head.rstrip(" ,;:.")
+
+
+def _clip_with_pointer(text: str) -> str:
+    """Clip *text* to the message bound, naming where the full text lives."""
+    if len(text) <= _FAILURE_SUMMARY_MAX_CHARS:
+        return text
+    budget = _FAILURE_SUMMARY_MAX_CHARS - len(_FAILURE_DETAILS_POINTER) - 1
+    return f"{_clip_words(text, budget)} {_FAILURE_DETAILS_POINTER}"
+
+
+def _diagnostic_full_text(text: str) -> str:
+    """Full diagnostic text carried by ``failure_details.diagnostic_message``.
+
+    Host paths are reduced to basenames (the same rule as the message) and the
+    text is bounded by :data:`_DIAGNOSTIC_MESSAGE_MAX_CHARS`.  An overlong text
+    is cut at a word boundary and marked with a trailing ``"…"`` — never
+    mid-word, never mid-sentence, so a reader cannot mistake a cut for the
+    end of the diagnostic.
+    """
+    redacted = _redact_host_paths(str(text or "").strip())
+    if len(redacted) <= _DIAGNOSTIC_MESSAGE_MAX_CHARS:
+        return redacted
+    return f"{_clip_words(redacted, _DIAGNOSTIC_MESSAGE_MAX_CHARS - 1)}…"
+
+
+def diagnostic_message_pair(text: str) -> tuple[str, str]:
+    """Split one diagnostic block into ``(short message, full text)``.
+
+    Round-9 (M14): an agent-facing failure message stays at most
+    :data:`_FAILURE_SUMMARY_MAX_CHARS` characters, but it must never be the
+    *only* place the diagnostic exists.  When clipping happens the message ends
+    with :data:`_FAILURE_DETAILS_POINTER`, and the caller publishes the second
+    element as ``metadata["failure_details"]["diagnostic_message"]``.  Both
+    halves come from this one builder, so the two surfaces cannot drift.
+    """
+    full = _diagnostic_full_text(text)
+    return _clip_with_pointer(full), full
+
+
 def _reason_lines(tail: str) -> list[str]:
     """Return up to :data:`_REASON_LINE_LIMIT` printed failure lines (redacted)."""
     lines: list[str] = []
@@ -379,18 +431,27 @@ def _failure_details(output_text: str) -> dict[str, Any]:
     * ``imaginary_count`` — imaginary modes in the last vibrational block
       (``None`` when no block was printed; 0 is a real value);
     * ``terminal`` — ``"error_termination"`` / ``"aborted"`` / ``"normal"`` /
-      ``None`` when no terminal marker was printed.
+      ``None`` when no terminal marker was printed;
+    * ``diagnostic_message`` — the *full* text behind the (possibly clipped)
+      ``error_message`` summary: same facts, host paths reduced to basenames,
+      bounded by :data:`_DIAGNOSTIC_MESSAGE_MAX_CHARS` and never cut mid-word.
+      Round-9 (M14): the short message is never the only place the diagnostic
+      exists.
 
     Nothing is inferred: a missing counter stays ``None``.
     """
     tail = str(output_text or "")[-_FAILURE_TAIL_CHARS:]
-    return {
+    details: dict[str, Any] = {
         "reason_lines": _reason_lines(tail),
         "scf_cycles": _scf_cycle_count(tail),
         "opt_cycles": _opt_cycle_count(tail),
         "imaginary_count": _imaginary_mode_count(tail),
         "terminal": _terminal_state(tail.lower()),
     }
+    details["diagnostic_message"] = _diagnostic_full_text(
+        _failure_diagnostic(_classify_failure_text(tail), details)
+    )
+    return details
 
 
 def _failure_details_from_output(output_path: Path) -> dict[str, Any]:
@@ -403,6 +464,7 @@ def _failure_details_from_output(output_path: Path) -> dict[str, Any]:
             "opt_cycles": None,
             "imaginary_count": None,
             "terminal": None,
+            "diagnostic_message": "",
         }
     return _failure_details(tail)
 
@@ -431,8 +493,14 @@ def _message_reason_lines(failure_class: str, details: dict[str, Any]) -> list[s
     return kept
 
 
-def _failure_summary(failure_class: str, details: dict[str, Any]) -> str:
-    """Build the ``≤200 chars`` summary appended to a failure message."""
+def _failure_diagnostic(failure_class: str, details: dict[str, Any]) -> str:
+    """Unclipped diagnostic text behind :func:`_failure_summary`.
+
+    One builder feeds both surfaces — the ``≤200``-char message summary and
+    ``failure_details.diagnostic_message`` — so the published full text is
+    always the same facts the short message was derived from (round-9 M14).
+    Reason lines pass the same class-safety filter as the message.
+    """
     parts = list(_message_reason_lines(failure_class, details)[-2:])
     if not parts:
         curated = _CLASS_SUMMARY.get(failure_class)
@@ -448,10 +516,16 @@ def _failure_summary(failure_class: str, details: dict[str, Any]) -> str:
         parts.append(f"nimag={details['imaginary_count']}")
     if failure_class.startswith("scf") and details.get("scf_cycles") is not None:
         parts.append(f"scf_cycles={details['scf_cycles']}")
-    summary = "; ".join(part.strip() for part in parts if part and part.strip())
-    if len(summary) > _FAILURE_SUMMARY_MAX_CHARS:
-        summary = summary[: _FAILURE_SUMMARY_MAX_CHARS - 1].rstrip() + "…"
-    return summary
+    return _redact_host_paths("; ".join(part.strip() for part in parts if part and part.strip()))
+
+
+def _failure_summary(failure_class: str, details: dict[str, Any]) -> str:
+    """Build the ``≤200 chars`` summary appended to a failure message.
+
+    A clipped summary ends with :data:`_FAILURE_DETAILS_POINTER`: the complete
+    text is published in ``failure_details.diagnostic_message``.
+    """
+    return _clip_with_pointer(_failure_diagnostic(failure_class, details))
 
 
 def _failure_message(prefix: str, failure_class: str, details: dict[str, Any]) -> str:

@@ -861,13 +861,24 @@ def test_from_confsearch_manifest(
     )
     # 2026-09-03 recommendation isolation: guesses are audit-only and never
     # registered as structure products — only manual review adds those.
+    # Round-9 M2 adds the scan frames themselves as addressable structure
+    # products (selection_source="scan"); they are not guesses/picks.
     assert {product["kind"] for product in result_manifest["products"]} == {
         "pes_profile",
         "report",
+        "structure",
     }
-    assert not [
+    structures = [
         product for product in result_manifest["products"] if product["kind"] == "structure"
     ]
+    assert structures, "every real scan frame is published as a structure product"
+    assert all(
+        product["metadata"]["role"] == "scan_frame"
+        and product["metadata"]["selection_source"] == "scan"
+        and "frame_index" in product["metadata"]
+        for product in structures
+    )
+    assert not [product for product in structures if "guess" in product["id"]]
 
     recommendations = __import__("json").loads(
         (tmp_path / "RESULT" / "pes_search" / "pes_recommendations.json").read_text(
