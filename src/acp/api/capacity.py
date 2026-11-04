@@ -12,7 +12,9 @@ resource rule of its own:
 * per-job reservations are normalised by
   :func:`acp.scheduler.resources.resolve_job_resources` and
   :func:`cccp.utils.resource_utils.parse_memory_mb` (the single memory parser);
-* concurrency slots use the manager's own ``ACP_MAX_RUNNING``.
+* concurrency slots use :func:`effective_max_running` — the single projection
+  of ``registry.local.max_jobs`` (the legacy ``ACP_MAX_RUNNING`` knob never
+  caps local concurrency).
 
 It reports the **admission view** — what the Controller can admit right now —
 not an OS-idle snapshot: other processes share the host and the admission
@@ -31,7 +33,7 @@ from cccp.utils.resource_utils import parse_memory_mb
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["build_capacity_projection"]
+__all__ = ["build_capacity_projection", "effective_max_running"]
 
 _SCHEMA = "acp2.capacity.view.v1"
 _ACTIVE_STATES = ("queued", "running", "paused", "waiting_review")
@@ -39,6 +41,26 @@ _ACTIVE_STATES = ("queued", "running", "paused", "waiting_review")
 
 def _iso_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def effective_max_running(manager: Any) -> tuple[int | None, str]:
+    """The local-concurrency ceiling this Controller actually enforces.
+
+    One authority, one computation: ``registry.local.max_jobs`` is the effective
+    limit (round-6 PR-08); ``manager.max_running`` is only a labelled fallback
+    for a manager without a registry, and the legacy ``ACP_MAX_RUNNING`` knob
+    never caps concurrency.  Returns ``(value, source)`` with ``value=None`` and
+    ``source=""`` when no authority is available (never a fabricated number).
+    """
+    registry = getattr(manager, "registry", None)
+    local = getattr(registry, "local", None)
+    value = getattr(local, "max_jobs", None)
+    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        return value, "registry.local.max_jobs"
+    fallback = getattr(manager, "max_running", None)
+    if isinstance(fallback, int) and not isinstance(fallback, bool) and fallback > 0:
+        return fallback, "manager.max_running"
+    return None, ""
 
 
 def _admission_view(admission: Any) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
@@ -166,22 +188,16 @@ def build_capacity_projection(manager: Any, *, admission: Any = None) -> dict[st
         unknown.append("concurrency.admission_max_tasks")
     # Round-6: slots must reflect the limit admission actually enforces
     # (registry.local.max_jobs), not the legacy max_running knob that no longer
-    # caps local concurrency (round-5 PR-08 published it as legacy_noop).
-    registry = getattr(manager, "registry", None)
-    local = getattr(registry, "local", None)
-    effective_slots = getattr(local, "max_jobs", None)
-    if isinstance(effective_slots, int) and effective_slots > 0:
+    # caps local concurrency.  Round-9 M11: the value *and* its source come from
+    # the one shared projection, so the limits block cannot publish a different
+    # answer than this block.
+    effective_slots, slots_source = effective_max_running(manager)
+    if effective_slots is not None:
         concurrency["max_running"] = effective_slots
-        concurrency["max_running_source"] = "registry.local.max_jobs"
+        concurrency["max_running_source"] = slots_source
         concurrency["slots_free"] = max(0, effective_slots - running)
     else:
-        legacy_slots = getattr(manager, "max_running", None)
-        if isinstance(legacy_slots, int) and legacy_slots > 0:
-            concurrency["max_running"] = legacy_slots
-            concurrency["max_running_source"] = "manager.max_running"
-            concurrency["slots_free"] = max(0, legacy_slots - running)
-        else:
-            unknown.append("concurrency.max_running")
+        unknown.append("concurrency.max_running")
 
     return {
         "schema": _SCHEMA,

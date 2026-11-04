@@ -1189,7 +1189,10 @@ def test_prepare_schema_is_the_seventeen_field_authority() -> None:
 
 def test_read_and_analyze_declare_their_mandatory_identity_fields() -> None:
     read = _declared(mcp.McpTool.READ_ARTIFACT)
-    assert read["required"] == ["artifact_ref"]
+    # W-06: single artifact_ref and batch artifact_refs are a documented anyOf
+    # choice, so neither field is individually required any more.
+    assert "required" not in read
+    assert read["anyOf"] == [{"required": ["artifact_ref"]}, {"required": ["artifact_refs"]}]
     assert read["additionalProperties"] is False
     assert set(read["properties"]["artifact_ref"]["required"]) == {
         "task_id",
@@ -1198,6 +1201,10 @@ def test_read_and_analyze_declare_their_mandatory_identity_fields() -> None:
         "generation",
         "digest",
     }
+    assert read["properties"]["artifact_refs"]["minItems"] == 1
+    assert read["properties"]["artifact_refs"]["maxItems"] == mcp.MAX_BATCH_ARTIFACT_REFS
+    # Every batch entry is the same frozen identity tuple, never a summary.
+    assert read["properties"]["artifact_refs"]["items"] == read["properties"]["artifact_ref"]
     analyze = _declared(mcp.McpTool.ANALYZE)
     assert analyze["required"] == ["analysis_id", "input_refs", "explicit"]
     assert analyze["additionalProperties"] is False
@@ -1256,21 +1263,54 @@ def test_read_status_prepare_never_start_computation() -> None:
 
 
 def test_capabilities_project_the_three_analysis_states() -> None:
+    """Round-9 M4a: a Controller projection is forwarded, never re-derived.
+
+    The adapter cannot read the Controller's analysis registry, so it forwards
+    the rows it is given (``summary`` keeps the four decision fields).  An
+    absent projection is ``status: "unknown"`` — see
+    ``tests/test_acp_round9_analysis_capability_unknown.py``.
+    """
+    import dataclasses
+
     from acp_services.runtime.analysis_capabilities import (
         ANALYSIS_CAPABILITY_IDS,
         ANALYSIS_CAPABILITY_STATES,
     )
 
-    result = _call_tool(_server(), mcp.McpTool.CAPABILITIES)
+    rows = [
+        {
+            "analysis_id": "vibration.compute",
+            "state": "registered",
+            "registered": True,
+            "executable": False,
+            "version": "1.0.0",
+            "owner": "A",
+        },
+        {
+            "analysis_id": "vibration.analyze",
+            "state": "executable",
+            "registered": True,
+            "executable": True,
+            "version": "1.0.0",
+            "owner": "A",
+        },
+    ]
+
+    class _ProjectedCapabilities:
+        def capabilities(self, **kwargs: Any) -> dict[str, Any]:
+            return {"analysis_capabilities": rows}
+
+    backends = dataclasses.replace(_Fakes().backends(), capabilities=_ProjectedCapabilities())
+    result = _call_tool(mcp.McpServer(backends=backends), mcp.McpTool.CAPABILITIES)
     assert result["isError"] is False
     projection = result["structuredContent"]["data"]["analysis_capabilities"]
     assert [entry["analysis_id"] for entry in projection] == list(ANALYSIS_CAPABILITY_IDS)
     assert {entry["state"] for entry in projection} <= set(ANALYSIS_CAPABILITY_STATES)
-    # The default registry ships empty: nothing is executable, nothing is "ready".
-    assert {entry["state"] for entry in projection} == {"unavailable"}
+    # A declared capability is never reported as executable, and a handler is.
+    assert {entry["state"] for entry in projection} == {"registered", "executable"}
     for entry in projection:
-        assert entry["registered"] is False
-        assert entry["executable"] is False
+        assert entry["registered"] is True
+        assert entry["executable"] is (entry["state"] == "executable")
 
 
 # --------------------------------------------------------------------------- #
@@ -1321,6 +1361,7 @@ def test_summary_scope_is_clipped_at_the_mcp_surface() -> None:
 
 def test_summary_budget_marks_overflow_when_nothing_is_clippable() -> None:
     """An oversized non-essential-free payload is flagged, never silently truncated."""
+
     class _HugeNavigationCapabilities:
         def capabilities(self, *, workflow=None, detail=None):
             return {

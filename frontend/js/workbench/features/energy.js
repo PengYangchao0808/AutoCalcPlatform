@@ -464,7 +464,7 @@ function energyHeaderStripMarkup(data, titleFallback) {
   '</div>';
 }
 
-function energyGraphRenderState(state, message) {
+function energyGraphRenderState(state, message, detail) {
   var screen = getEnergyViewerContainer();
   if (!screen) return;
   energyGraphDestroyViewer();
@@ -490,6 +490,9 @@ function energyGraphRenderState(state, message) {
     spinner + icon +
     '<div class="energy-state-title">' + escapeHtml(title) + '</div>' +
     '<div class="energy-state-msg">' + escapeHtml(message || "") + '</div>' +
+    (detail
+      ? '<div class="energy-state-msg energy-state-detail" data-energy-state-detail="1" title="' + escapeHtml(detail) + '">' + escapeHtml(detail) + '</div>'
+      : '') +
     retryBtn +
   '</div>';
   if (retryBtn) {
@@ -4374,8 +4377,13 @@ async function renderEnergyGraphWorkspace(job, options) {
       energyGraphState.status = "empty";
       var ircReason = String((data.metadata && data.metadata.reason) || "");
       var ircTerminal = ["completed", "failed", "cancelled"].indexOf(String(data.status || "").toLowerCase()) >= 0;
-      var ircMessage = ircReason.indexOf("remote_fetch") === 0 ? t("energy.irc_remote_error") : ircTerminal ? t("energy.irc_missing") : t("energy.irc_pending");
-      energyGraphRenderState("empty", ircMessage);
+      // E2 locality-neutral copy: transport locality (remote_fetch_*) never
+      // shows up in the user-facing sentence; the raw backend reason survives
+      // in the diagnostic detail line so support can still tell the cases apart.
+      var ircTransportFailure = ircReason.indexOf("remote_fetch") === 0;
+      var ircMessage = ircTransportFailure ? t("energy.irc_unavailable") : ircTerminal ? t("energy.irc_missing") : t("energy.irc_pending");
+      var ircDetail = ircTransportFailure && ircReason ? t("energy.state_detail_reason", { reason: ircReason }) : "";
+      energyGraphRenderState("empty", ircMessage, ircDetail);
       return true;
     }
     if (data && String(data.view_type || "") === "scan" && !(Array.isArray(data.nodes) && data.nodes.length) && !(Array.isArray(data.series) && data.series.length) && data.metadata && data.metadata.reason === "pes_scan_pending") {

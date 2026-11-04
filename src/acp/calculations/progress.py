@@ -87,7 +87,12 @@ class ProgressReporter:
             self._batch_settled.clear()
 
     def begin_batch_item(self, index: int) -> None:
-        """Reset per-item stage observations while retaining aggregate progress."""
+        """Reset per-item stage observations while retaining aggregate progress.
+
+        The snapshot is rewritten immediately (round-9 M13): a reader must see
+        the new item index from the moment the item starts, not only after the
+        first stage write.
+        """
         with self._lock:
             self._batch_item = index
             self._status = "running"
@@ -95,6 +100,7 @@ class ProgressReporter:
             self._live_metrics = ()
             for name in self._batch_steps:
                 self._stages[name] = {"status": "pending"}
+        self._write(force=True)
 
     def finish_batch_item(self, index: int) -> None:
         """Account for completed, cache-skipped, or failed item processing."""
@@ -296,6 +302,10 @@ class ProgressReporter:
                 self._last_write = now
                 current_stage = self._current_stage
                 stages = copy.deepcopy(self._stages)
+                # One clock reading stamps the write and the observation it
+                # carries (round-9 M13): a reader projecting freshness must see
+                # the same instant for ``observed_at`` and ``updated_at``.
+                observed_at = _iso_now()
                 data = {
                     "version": "1.0",
                     "job_name": self._job_name,
@@ -317,7 +327,8 @@ class ProgressReporter:
                     ),
                     "progress_state": self._progress_state_unlocked(),
                     "created_at": self._created_at,
-                    "updated_at": _iso_now(),
+                    "updated_at": observed_at,
+                    "observed_at": observed_at,
                     "stages": stages,
                 }
                 if self._batch_total:

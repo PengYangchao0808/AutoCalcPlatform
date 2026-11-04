@@ -140,6 +140,31 @@ def _atomic_copy(source: Path, target: Path) -> None:
         raise
 
 
+def _energy_method(body: Mapping[str, Any]) -> str | None:
+    """Return the method that actually produced the energy, or ``None``.
+
+    Round-9 M12: the cccp task-result body carries the method under
+    ``provenance.method`` (never at the top level), so the published energy
+    product used to say ``"method": ""``.  A blank string violates
+    ``provenance_requirements.method_identity``; ``None`` plus an explicit
+    reason is the honest fallback (never a guess, never a fabricated level).
+    """
+    provenance = body.get("provenance")
+    if isinstance(provenance, Mapping):
+        method = provenance.get("method")
+        if isinstance(method, str) and method.strip():
+            return method.strip()
+        level = provenance.get("level")
+        if isinstance(level, Mapping):
+            nested = level.get("method")
+            if isinstance(nested, str) and nested.strip():
+                return nested.strip()
+    top_level = body.get("method")
+    if isinstance(top_level, str) and top_level.strip():
+        return top_level.strip()
+    return None
+
+
 def _atomic_write_text(target: Path, text: str) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(
@@ -411,7 +436,7 @@ class AttemptResultPublication:
                         "energy": energy,
                         "energy_hartree": energy,
                         "unit": "hartree",
-                        "method": str(body.get("method") or ""),
+                        "method": _energy_method(body),
                         "source": "task_result.json",
                     },
                     indent=2,

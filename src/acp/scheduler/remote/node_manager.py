@@ -20,7 +20,7 @@ from typing import Any
 
 from acp.scheduler.remote.config import NodeCapabilities, RemoteExecutionConfig, RemoteNode
 from acp.scheduler.remote.monitor import RemoteJobMonitor
-from acp.scheduler.remote.ssh import SSHConnectionPool, SSHExecutionError
+from acp.scheduler.remote.ssh import SSHConnectionError, SSHConnectionPool, SSHExecutionError
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +130,11 @@ def detect_node_python(
         command = f"{_quote_probe_target(py)} -c {shlex.quote(_VERSION_PROBE_SCRIPT)}"
         try:
             code, out, err = pool.execute(node, command, timeout=timeout)
+        except SSHConnectionError:
+            # Node-level connection failure (host key / auth / unreachable):
+            # every other interpreter candidate would fail the same way, so
+            # stop probing instead of multiplying the connect timeout.
+            raise
         except SSHExecutionError as exc:
             logger.debug("Python probe %r on %s failed: %s", py, node.name, exc)
             last_ssh_error = exc

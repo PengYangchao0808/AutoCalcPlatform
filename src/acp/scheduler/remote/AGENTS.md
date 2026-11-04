@@ -1,14 +1,14 @@
 # scheduler/remote/ — Remote LSF Execution
 
 ## OVERVIEW
-Dispatching ACP jobs to remote compute nodes over SSH/SFTP + LSF (bsub/bjobs/bkill). Self-contained subpackage under the scheduler — the **only** scheduler component that talks to external machines. 11 modules, ~3900 lines; `runner.py` (1213 L) is the largest module in the entire project. Requires the `remote` extra (paramiko). Root parent: `../AGENTS.md` (scheduler).
+Dispatching ACP jobs to remote compute nodes over SSH/SFTP + LSF (bsub/bjobs/bkill). Self-contained subpackage under the scheduler — the **only** scheduler component that talks to external machines. 14 modules, ~10,300 lines; `runner.py` (3201 L) is the largest module in the entire project. Requires the `remote` extra (paramiko). Root parent: `../AGENTS.md` (scheduler).
 
 ## STRUCTURE
 ```
 remote/
 ├── __init__.py          # 30+ re-exported symbols (config, ssh, sftp, sync, script_gen, monitor, runner, fetcher, cleanup, node_manager)
-├── config.py            # RemoteExecutionConfig, RemoteNode dataclasses (9824 B)
-├── ssh.py               # SSHConnectionPool — thread-safe, per-node paramiko pooling (323 L)
+├── config.py            # RemoteExecutionConfig, RemoteNode dataclasses (22595 B)
+├── ssh.py               # SSHConnectionPool — thread-safe, per-node paramiko pooling + known-hosts trust store (406 L)
 ├── sftp.py              # FileStager — SFTP upload/download/incremental log tail (11575 B)
 ├── sync.py              # CodeSyncer — incremental mtime-based source sync to nodes (261 L)
 ├── script_gen.py        # build_lsf_script_spec / generate_lsf_script / build_remote_cli_command / derive_lsf_resources (360 L)
@@ -16,17 +16,17 @@ remote/
 ├── release.py            # Content-hash code releases (D03): verify-then-publish to <remote_code_dir>/releases/<release_id>/ (immutable after .complete), ref/GC coordination locks, prune_releases (900+ L)
 ├── submission.py          # Submit identity + submit-right lease (D02/contract A): submission_id = sub_+sha256(job_id:attempt)[:16], owner token, wall-clock-UTC lease — pure stdlib, no paramiko
 ├── monitor.py           # RemoteJobMonitor — bjobs polling + log tail + bkill cancellation (341 L)
-├── runner.py            # RemoteJobRunner — end-to-end orchestrator: submit/monitor/cancel/cleanup (1213 L)
+├── runner.py            # RemoteJobRunner — end-to-end orchestrator: submit/monitor/cancel/cleanup (3201 L)
 ├── fetcher.py           # RemoteResultFetcher — on-demand SFTP file/log retrieval (464 L)
 ├── cleanup.py           # RemoteCleanup — retention-based job-dir cleanup + disk-pressure housekeeping (514 L)
-└── node_manager.py      # NodeManager/NodeStatus — node state with 30s TTL cache (315 L)
+└── node_manager.py      # NodeManager/NodeStatus — node state with 30s TTL cache (915 L)
 ```
 
 ## WHERE TO LOOK
 | Task | File | Notes |
 |------|------|-------|
 | Config models | `config.py` | `RemoteExecutionConfig` (hosts, paths, LSF params) + `RemoteNode` |
-| SSH connection pool | `ssh.py` | Thread-safe; raises `SSHExecutionError`; **never leak connections — use context manager** |
+| SSH connection pool | `ssh.py` | Thread-safe; loads the invoking user's `~/.ssh/known_hosts` as the trust store; connection-phase failures raise `SSHConnectionError` (an `SSHExecutionError`, never retried) while command failures retry; **never leak connections — use context manager** |
 | File transfer | `sftp.py` | `FileStager` — upload/download + `tail_log` incremental fetch |
 | Code sync | `sync.py` | mtime-based incremental sync; `SyncResult` reports transferred/skipped |
 | LSF script | `script_gen.py` | `derive_lsf_resources` (nproc/mem/queue) → `generate_lsf_script`; shared flag resolution via `jobs.xtbmd_method_flags` (E7 parity — add new xtbmd flags in `scheduler/jobs.py`, NOT here) |
@@ -41,6 +41,8 @@ remote/
 
 ## CONVENTIONS
 - **Paramiko only**: no subprocess ssh/rsync/scp — everything via paramiko SSHClient/SFTPClient
+- **Host-key trust store**: `ssh.py::_create_client` loads `~/.ssh/known_hosts` (best-effort; a corrupt line only warns) before applying `host_key_policy`. `reject` (default) verifies against it; `auto_add`/`warn` accept only *unknown* hosts and keep them in memory (never written back); a known host with a changed key always raises `BadHostKeyException`. The `acp init` TOFU probe and the runtime pool therefore share one trust source.
+- **Failure taxonomy**: connection establishment (`SSHConnectionError`, subclass of `SSHExecutionError`) is never retried and aborts `detect_node_python` after one probe; command execution retries `_MAX_RETRIES`.
 - **Thread safety**: `SSHConnectionPool` is the single shared resource; FileStager/Monitor operate per-job
 - **Type annotations**: PEP 604 (`X | None`) with `from __future__ import annotations`
 - **`__all__`**: every module exports `__all__`; `__init__.py` aggregates 30+ symbols
@@ -56,8 +58,8 @@ remote/
 - **poll/reconcile ownership**: 观测写归 runner/monitor，控制意图归 manager；`bjobs` `STATUS_UNKNOWN`/多匹配保持未决，不下结论。
 
 ## ANTI-PATTERNS
-- **`runner.py` monolith**: 1213 lines, single orchestrator — hardest file in the project to modify; test via `test_remote_phase*.py` mocks
-- **Bare `except Exception:`**: ~10 sites swallow errors — `runner.py:201/292/452/627/752/821/830/1076/1191/1305` (mostly debug-logged, 1076 silent), `monitor.py:141/186/205/231`, `ssh.py:115` (return False), `cleanup.py:449/463`, `sftp.py:256`
+- **`runner.py` monolith**: 3201 lines, single orchestrator — hardest file in the project to modify; test via `test_remote_phase*.py` mocks
+- **Bare `except Exception:`**: ~10 sites swallow errors — `runner.py:201/292/452/627/752/821/830/1076/1191/1305` (mostly debug-logged, 1076 silent), `monitor.py:141/186/205/231`, `ssh.py:168` (return False; the intentional best-effort bars are `_load_known_hosts` at `:109`, the connect-close catch at `:147`, and the sftp borrow wrapper at `:367`, all of which log or re-raise), `cleanup.py:449/463`, `sftp.py:256`
 - **Generated-script strings contain fake `except Exception:`** at `runner.py:1025/1042` — these are literal text inside the LSF submission script template, NOT real handlers; do not "fix" them
 - **`type: ignore` density**: 13 in runner.py alone — typed-state contracts with remote JSON are unresolved
 - **No local fallback**: remote failures surface as `RemoteNodeUnavailableError`/`RemoteSubmissionError` — job manager must handle, not the remote layer
@@ -68,3 +70,4 @@ remote/
 - Requires `pip install -e '.[remote]'` (paramiko)
 - CLI-flag parity (E7): shared resolution lives in `scheduler/jobs.py` (`censo_preset_from_method`, `xtbmd_method_flags`, `_as_bool`) — used by BOTH local `runner.py` and remote `script_gen.py`
 - Directory-reuse fix (BUG-1, root AGENTS.md ANTI #11): remote nodes run the synced `acp/workflows/simple.py::_resolve_output_dir` in their `python -m acp.cli run ...` subprocesses, so scheduler-identity reuse + the full marker whitelist apply remotely through the identical code path; no new runtime imports (`requirements-node.txt` unchanged)
+- **Host-key trust model (2026-11-02)**: the pool now loads the invoking user's `~/.ssh/known_hosts` before connecting; this intentionally reverses the init-wizard plan's "Must NOT touch `ssh.py::_create_client`" scope guard, because that guard assumed the pool already verified keys the `acp init` probe had accepted (it did not — every `reject` node failed as "not found in known_hosts"). `auto_add`/`warn` still never write to disk; a known-but-changed key always raises `BadHostKeyException`. Deployment requirement: run `acp init` as the same user (same `HOME`) as the ACP service, otherwise the service's `reject` check sees a different trust store.

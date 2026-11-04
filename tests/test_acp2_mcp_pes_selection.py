@@ -169,7 +169,12 @@ def test_publish_tool_requires_the_authorization_arguments() -> None:
     from acp_services.entrypoints import mcp
 
     schema = mcp._ARGUMENT_SCHEMAS[mcp.McpTool.PUBLISH_PES_REVIEW]
-    assert set(schema["required"]) == {"job_id", "authorization_id", "candidates"}
+    # Round-9 M3: on a local-single Controller with self-signed agent
+    # publication enabled, the Controller mints the bounded, recorded
+    # authorization, so the id is optional here; the Controller still refuses an
+    # absent id on every other tier.
+    assert set(schema["required"]) == {"job_id", "candidates"}
+    assert "authorization_id" in schema["properties"]
     assert schema["additionalProperties"] is False
     get_schema = mcp._ARGUMENT_SCHEMAS[mcp.McpTool.GET_PES_REVIEW]
     assert set(get_schema["required"]) == {"job_id"}

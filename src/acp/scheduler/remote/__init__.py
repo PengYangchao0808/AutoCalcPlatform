@@ -8,7 +8,9 @@ Infrastructure for dispatching ACP jobs to remote compute nodes over
 SSH/SFTP.  This sub-package provides:
 
 * :class:`RemoteNode` / :class:`RemoteExecutionConfig` — configuration models.
-* :class:`SSHConnectionPool` — thread-safe, per-node connection pooling.
+* :class:`SSHConnectionPool` — thread-safe, per-node connection pooling
+  (:class:`SSHConnectionError` for connect-stage failures,
+  :class:`SSHExecutionError` for command failures).
 * :class:`FileStager` — SFTP upload / download / incremental log tail.
 * :class:`CodeSyncer` — incremental source-code synchronisation.
 * :func:`build_remote_cli_command` / :func:`generate_lsf_script` /
@@ -102,7 +104,11 @@ else:
         generate_lsf_script,
     )
     from acp.scheduler.remote.sftp import FileStager, RemoteFileInfo
-    from acp.scheduler.remote.ssh import SSHConnectionPool, SSHExecutionError
+    from acp.scheduler.remote.ssh import (
+        SSHConnectionError,
+        SSHConnectionPool,
+        SSHExecutionError,
+    )
     from acp.scheduler.remote.submission import (
         build_owner_token,
         heartbeat_submit_worker,
@@ -147,6 +153,7 @@ __all__ = [
         "ReleaseBinding",
         "ReleaseError",
         "ReleaseManifest",
+        "SSHConnectionError",
         "SSHConnectionPool",
         "SSHExecutionError",
         "SyncResult",

@@ -83,6 +83,7 @@ from cccp.calculation.requests import (
 )
 from cccp.calculation.results import ErrorKind, IrcDirectionResult, IrcPayload, TaskResult
 from cccp.calculation.selection import precheck_runtime, select_semantic
+from cccp.qc.interfaces.orca import diagnostic_message_pair
 
 logger = logging.getLogger(__name__)
 
@@ -227,9 +228,13 @@ def run_irc(
             recorder.stop()
             stages.fail_active(error_text(error), clear=False)
             partial = recorder.finish(status="failed", complete=False)
+            message, failure_diagnostic = diagnostic_message_pair(error_text(error))
             metadata: dict[str, JsonValue] = {"directions": list(directions)}
             if partial is not None:
                 metadata["trajectory_frame_count"] = len(partial.get("frames") or [])
+            # Round-9 (M14): the short message is never the only place the
+            # diagnostic exists — the full text rides in failure_details.
+            _attach_failure_diagnostic(metadata, failure_diagnostic)
             # No per-direction record exists when the backend call itself
             # failed: the payload stays empty (the ACP publication seam uses
             # "payload empty ⟺ no parsed result" to mirror the legacy
@@ -239,7 +244,7 @@ def run_irc(
                 status="failed",
                 complete=False,
                 error_kind=classify_failure(raised=error),
-                errors=(error_text(error),),
+                errors=(message,),
                 symbols=tuple(symbols),
                 provenance=_provenance(backend_label, request),
                 payload=IrcPayload(),
@@ -261,10 +266,14 @@ def run_irc(
             direction: info for direction, info in endpoints_all.items() if direction in completed
         }
         errors: list[str] = []
+        failure_diagnostic: str | None = None
         if not success:
             raw_error = getattr(raw_result, "error_message", None) or qc_result.error_message
             if raw_error:
-                errors.append(str(raw_error))
+                # Round-9 (M14): one builder yields both the short agent-facing
+                # message and the full text published in failure_details.
+                error_message, failure_diagnostic = diagnostic_message_pair(str(raw_error))
+                errors.append(error_message)
             failure_message = errors[0] if errors else "IRC calculation failed"
             stages.fail_active(failure_message, clear=False)
         else:
@@ -285,7 +294,7 @@ def run_irc(
         if success and not endpoints:
             success = False
             not_converged_failure = True
-            message = "IRC produced no endpoint geometries"
+            headline = "IRC produced no endpoint geometries"
             # Report what the walk actually captured instead of a bare failure:
             # 80 points may be on disk while the endpoint reader recognizes none.
             snapshot = recorder.refresh(force=True) or {}
@@ -306,17 +315,18 @@ def run_irc(
                 where = (
                     " for " + ", ".join(directions_seen) if directions_seen else ""
                 )
-                message += (
-                    f" ({frame_count} trajectory frame(s) captured{where}; the last "
+                detail = (
+                    f"{frame_count} trajectory frame(s) captured{where}; the last "
                     "observed geometry is kept as diagnostic evidence, not a formal "
                     "endpoint. Inspect the run log for the endpoint file format, or "
-                    "rerun with a Hessian handoff.)"
+                    "rerun with a Hessian handoff."
                 )
             else:
-                message += (
-                    " (no trajectory frames were captured either; inspect the ORCA "
-                    "output for the in-progress path files.)"
+                detail = (
+                    "no trajectory frames were captured either; inspect the ORCA "
+                    "output for the in-progress path files."
                 )
+            message, failure_diagnostic = diagnostic_message_pair(f"{headline} ({detail})")
             errors.append(message)
             stages.fail_active(message, clear=True)
 
@@ -341,6 +351,10 @@ def run_irc(
                 trajectory, directions
             )
         metadata.update(base_metadata)
+        if failure_diagnostic is not None:
+            # Round-9 (M14): downstream projections clip the job error at ~200
+            # chars, so the complete diagnostic always has a second home.
+            _attach_failure_diagnostic(metadata, failure_diagnostic)
 
         if success:
             stages.complete_active()  # validating
@@ -680,6 +694,20 @@ def _last_observed_geometries(
             entry["energy_hartree"] = float(energy)
         result[direction] = entry
     return result
+
+
+def _attach_failure_diagnostic(metadata: dict[str, JsonValue], diagnostic: str) -> None:
+    """Publish the full failure text beside the short agent-facing message.
+
+    Round-9 (M14): the message itself may be clipped by downstream projections,
+    so the complete text always has a second home in
+    ``metadata.failure_details.diagnostic_message``.  Any ``failure_details``
+    the backend already published keeps its facts — the key is additive.
+    """
+    existing = metadata.get("failure_details")
+    details: dict[str, JsonValue] = dict(existing) if isinstance(existing, dict) else {}
+    details["diagnostic_message"] = diagnostic
+    metadata["failure_details"] = details
 
 
 def _overall_convergence(

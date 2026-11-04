@@ -3,13 +3,21 @@
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Mapping
+from datetime import datetime, timezone
 from html import unescape
+from pathlib import Path
 from typing import Any, Final
 
 from acp.api.v1_schemas import JobLiveMetric, JobLiveStatus
 from acp.core.stage_labels import stage_label
+
+#: A live observation older than this many seconds is reported as stale.
+#: A state file always carries ``observed_at``/``updated_at``; when the clock
+#: cannot be read the projection reports ``None`` instead of guessing.
+LIVE_STATUS_STALE_SECONDS: Final[float] = 90.0
 
 _ALLOWED_METRIC_KINDS: Final[frozenset[str]] = frozenset(
     {"count", "iteration", "status", "text", "progress"}
@@ -109,11 +117,58 @@ def _stage_number(value: Any) -> int | None:
     return None
 
 
-def build_live_status(state_data: Mapping[str, Any]) -> JobLiveStatus | None:
+def _parse_timestamp(value: Any) -> datetime | None:
+    """Parse an observation timestamp into an aware UTC datetime.
+
+    Accepts ISO-8601 strings (``Z`` included), ``datetime`` values and epoch
+    seconds.  Anything else is ``None``: freshness is never guessed.
+    """
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(float(value), tz=timezone.utc)
+        except (OverflowError, OSError, ValueError):
+            return None
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text[:-1] + "+00:00" if text.endswith("Z") else text)
+    except ValueError:
+        return None
+    return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed
+
+
+def _utc_now(now: datetime | None) -> datetime:
+    if isinstance(now, datetime):
+        return now.replace(tzinfo=timezone.utc) if now.tzinfo is None else now
+    return datetime.now(timezone.utc)
+
+
+def build_live_status(
+    state_data: Mapping[str, Any],
+    *,
+    now: datetime | None = None,
+    source_mtime: str | datetime | float | None = None,
+) -> JobLiveStatus | None:
     """Project a parsed state payload into the typed live-status response model.
+
+    Freshness is computed here, on every call, from the payload's own
+    ``observed_at``/``updated_at`` — a projection is never cached as fresh.
 
     Args:
         state_data: Parsed ``state.json`` mapping.
+        now: Projection clock (UTC; naive values are read as UTC).  Defaults
+            to the current time.
+        source_mtime: The state file's mtime when the caller can stat it.  A
+            file rewritten later than the moment its payload claims marks the
+            observation stale: a newer write is not evidence of a newer
+            observation, and the recorded one is never presented as current.
 
     Returns:
         A ``JobLiveStatus`` when a stage or metric is present; otherwise ``None``.
@@ -129,9 +184,26 @@ def build_live_status(state_data: Mapping[str, Any]) -> JobLiveStatus | None:
     if stage_display is None and not metrics:
         return None
 
-    observed_at = _first_text(
-        state_data, ("updated_at", "last_observed_at", "observed_at")
-    )
+    observed_at = _first_text(state_data, ("updated_at", "last_observed_at", "observed_at"))
+    observed_moment = _parse_timestamp(observed_at)
+    mtime_moment = _parse_timestamp(source_mtime) if source_mtime is not None else None
+
+    observed_age_seconds: float | None = None
+    stale: bool | None = None
+    if observed_moment is not None:
+        projection_now = _utc_now(now)
+        observed_age_seconds = round(
+            max(0.0, (projection_now - observed_moment).total_seconds()), 3
+        )
+        stale = observed_age_seconds > LIVE_STATUS_STALE_SECONDS
+        if (
+            mtime_moment is not None
+            and (mtime_moment - observed_moment).total_seconds() > LIVE_STATUS_STALE_SECONDS
+        ):
+            # Defensive re-read: the file was rewritten later than the clock
+            # reading it claims; do not reuse that reading as live.
+            stale = True
+
     source = _first_text(state_data, ("live_source", "source"))
     return JobLiveStatus(
         stage_label=stage_display,
@@ -147,7 +219,43 @@ def build_live_status(state_data: Mapping[str, Any]) -> JobLiveStatus | None:
             if not metrics
             else None
         ),
+        observed_age_seconds=observed_age_seconds,
+        stale=stale,
+        source_mtime=(
+            mtime_moment.astimezone(timezone.utc).isoformat() if mtime_moment is not None else None
+        ),
     )
+
+
+def read_live_status(
+    state_path: str | Path,
+    *,
+    now: datetime | None = None,
+) -> JobLiveStatus | None:
+    """Stat and re-read one ``state.json``, then project it with freshness.
+
+    This is the defensive read path: the file is parsed from its current bytes
+    on every call (a previously parsed payload is never reused), and its mtime
+    travels with the projection as ``source_mtime``.  A cached projection can
+    therefore never be served as live.
+
+    Args:
+        state_path: The workflow ``state.json`` to observe.
+        now: Projection clock, forwarded to :func:`build_live_status`.
+
+    Returns:
+        The live projection, or ``None`` when the file is absent, unreadable
+        or carries no stage/metric.
+    """
+    path = Path(state_path)
+    try:
+        stat = path.stat()
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(raw, Mapping):
+        return None
+    return build_live_status(raw, now=now, source_mtime=stat.st_mtime)
 
 
 def _mapping(value: Any) -> Mapping[str, Any] | None:
@@ -285,8 +393,10 @@ def resolve_display_method(
 
 
 __all__ = [
+    "LIVE_STATUS_STALE_SECONDS",
     "build_live_status",
     "normalize_live_metrics",
+    "read_live_status",
     "resolve_display_method",
     "resolve_stage_label",
 ]

@@ -13,7 +13,8 @@ MCP tool                                Controller command
 ``acp_preflight``                       ``POST /api/v1/preflight``
 ``acp_submit``                          ``POST /api/v1/jobs``
 ``acp_status``                          ``GET /api/v1/jobs/{id}`` /
-                                        ``GET /api/v1/operations/{id}``
+                                        ``GET /api/v1/operations/{id}`` /
+                                        ``GET /api/v1/jobs?ids=`` (batch)
 ``acp_cancel``                          ``POST /api/v1/jobs/{id}/cancel``
 ``acp_prepare_artifact``                ``POST /api/v1/jobs/{id}/prepare``
 ``acp_read_artifact``                   ``GET /api/v1/jobs/{id}/prepared/{r}``
@@ -35,7 +36,7 @@ opens the jobs database or starts a Controller.
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -140,6 +141,45 @@ def _terminal_failure(command: str, exc: Exception) -> mcp.McpToolError:
     )
 
 
+#: The two body rules that mean "this artifact has no verified presentation".
+#: Round-9 M1 made a path/secret-bearing body *readable* (masked), so the only
+#: remaining body refusal is a body that cannot be verified at all (binary).
+_READ_BODY_REFUSAL_RULES = frozenset({"artifact_body_unverifiable", "artifact_body_redacted"})
+
+
+def _read_error(exc: ControllerClientError) -> mcp.McpToolError:
+    """Map one artifact-read refusal onto the MCP read vocabulary.
+
+    A body with no verifiable presentation (non-UTF-8/binary) is an
+    ``unsupported_capability`` at this surface — the same code the adapter's own
+    body verifier raises for that rule — never ``input_invalid``: the request was
+    well formed and the artifact simply cannot be shown as text.
+    """
+    params = {"command": "read", **dict(exc.params)}
+    if str(params.get("rule") or "") in _READ_BODY_REFUSAL_RULES:
+        return mcp.McpToolError(
+            mo.ErrorCode.UNSUPPORTED_CAPABILITY,
+            exc.message,
+            params=params,
+            retryable=False,
+        )
+    return _tool_error("read", exc)
+
+
+def _operation_reference(operation_ref: Any) -> dict[str, Any]:
+    """Project one prepare operation reference onto ``{kind, id}`` (round-9 M10).
+
+    The Controller answers ``operation_ref`` as a mapping; it must be passed
+    through as a mapping.  ``str()``-ing it produced the Python ``dict`` repr,
+    which then became the ``id`` an agent could not send back.
+    """
+    if isinstance(operation_ref, Mapping):
+        reference = dict(operation_ref)
+        reference.setdefault("kind", "operation")
+        return reference
+    return {"kind": "operation", "id": str(operation_ref)}
+
+
 def _job_reference(record: Mapping[str, Any]) -> dict[str, Any]:
     task_ref = record.get("task_ref")
     if isinstance(task_ref, Mapping):
@@ -168,13 +208,24 @@ class _ControllerCapabilities:
         self._client = client
 
     def capabilities(
-        self, *, workflow: str | None = None, detail: str | None = None
+        self,
+        *,
+        workflow: str | None = None,
+        detail: str | None = None,
+        contract_sections: str | None = None,
     ) -> dict[str, Any]:
+        """Forward the discovery arguments to the Controller's capability route.
+
+        Round-9 M8: ``contract_sections`` is forwarded only when the caller asked
+        for it (the default response is unchanged), so the MCP port gate in
+        :mod:`acp_services.entrypoints.mcp` sees the keyword and the CORE view's
+        ``next.arguments`` actually work instead of failing ``capability_not_wired``.
+        A no-argument call still uses the plain ``GET /api/capabilities`` read.
+        """
         try:
-            if workflow is None and detail is None:
-                snapshot = self._client.capabilities()
-            else:
-                snapshot = self._client.capabilities(workflow=workflow, detail=detail)
+            snapshot = self._client.capabilities(
+                workflow=workflow, detail=detail, contract_sections=contract_sections
+            )
         except ControllerClientError as exc:
             raise _tool_error("capabilities", exc) from None
         data = dict(snapshot.raw)
@@ -286,9 +337,7 @@ class _ControllerStatus:
             # Round-8 K5: forward the family filter so the Controller applies it
             # (one authority) instead of filtering a page after the fact.
             return dict(
-                self._client.list_tasks(
-                    status=status, status_group=status_group, limit=limit
-                )
+                self._client.list_tasks(status=status, status_group=status_group, limit=limit)
             )
         except ControllerClientError as exc:
             raise _tool_error("list_tasks", exc) from None
@@ -315,6 +364,50 @@ class _ControllerStatus:
         projection = project_task_status(snapshot.raw, fallback_task_id=snapshot.task_id)
         projection["reference"] = reference
         return projection
+
+    def get_many(
+        self, references: Sequence[Any], *, workspace_id: str = ""
+    ) -> dict[str, Mapping[str, Any] | None]:
+        """Return several status projections; job ids cost ONE Controller request.
+
+        W-06: the MCP batch branch calls this when it exists, so ``acp_status``
+        with ``job_ids`` is one ``GET /api/v1/jobs?ids=`` round trip.  An id the
+        Controller does not know stays ``None`` in the mapping (the adapter turns
+        it into an item-level ``not_found``) instead of failing the whole batch.
+        Operation references are not job rows, so they reuse the single-reference
+        path per item — the batch shape stays correct even for a mixed list.
+        """
+        projections: dict[str, Mapping[str, Any] | None] = {}
+        job_ids: list[str] = []
+        for reference in references:
+            operation_id = self._operation_reference(reference)
+            if operation_id:
+                projections[operation_id] = self.get(reference, workspace_id=workspace_id)
+                continue
+            job_id = self._job_id(reference)
+            job_ids.append(job_id)
+            projections[job_id] = None
+        if not job_ids:
+            return projections
+        try:
+            snapshots = self._client.status_many(job_ids)
+        except ControllerClientError as exc:
+            raise _tool_error("status", exc) from None
+        for job_id in dict.fromkeys(job_ids):
+            snapshot = snapshots.get(job_id)
+            if snapshot is None:
+                continue
+            projection = project_task_status(snapshot.raw, fallback_task_id=snapshot.task_id)
+            projection["reference"] = job_id
+            projections[job_id] = projection
+        return projections
+
+    @staticmethod
+    def _job_id(reference: Any) -> str:
+        if isinstance(reference, Mapping):
+            value = reference.get("id") or reference.get("task_id") or ""
+            return str(value).strip()
+        return str(reference or "").strip()
 
 
 class _ControllerCancel:
@@ -361,10 +454,7 @@ class _ControllerArtifacts:
         operation_ref = record.get("operation_ref") or record.get("operation_id") or ""
         payload_out = dict(record)
         payload_out["operation_ref"] = operation_ref
-        payload_out.setdefault(
-            "reference",
-            {"kind": "operation", "id": str(operation_ref)},
-        )
+        payload_out.setdefault("reference", _operation_reference(operation_ref))
         return payload_out
 
     def read(self, request: Mapping[str, Any], *, workspace_id: str) -> Any:
@@ -375,7 +465,7 @@ class _ControllerArtifacts:
         except ApplicationParamError as exc:
             raise _param_error("read", exc) from None
         except ControllerClientError as exc:
-            raise _tool_error("read", exc) from None
+            raise _read_error(exc) from None
 
 
 class _ControllerAnalysis:
@@ -418,9 +508,7 @@ class _ControllerSelection:
         except ControllerClientError as exc:
             raise _tool_error("selection.status", exc) from None
 
-    def publish_review(
-        self, job_id: str, request: Mapping[str, Any], *, workspace_id: str
-    ) -> Any:
+    def publish_review(self, job_id: str, request: Mapping[str, Any], *, workspace_id: str) -> Any:
         del workspace_id
         try:
             return self._client.publish_pes_review(job_id, dict(request))

@@ -468,15 +468,39 @@ def test_mcp_launch_tool_inputs_match_the_runtime_and_application_tables() -> No
     assert prepare["required"] == runtime["acp_prepare_artifact"]["required"] == ["purpose"]
     assert prepare["additionalProperties"] is False
 
-    for name, required in (
-        ("acp_read_artifact", ["artifact_ref"]),
-        ("acp_analyze", ["analysis_id", "input_refs", "explicit"]),
-    ):
-        assert tool_inputs[name]["required"] == runtime[name]["required"] == required
-        assert set(tool_inputs[name]["properties"]) == set(runtime[name]["properties"])
-        assert tool_inputs[name]["additionalProperties"] is False
+    # W-06: status and read grow a mutually-exclusive batch selector.  The
+    # launch table and the runtime table must agree on the choice, the fields
+    # and the frozen identity tuple; the single-argument calls stay legal.
+    status_input = tool_inputs["acp_status"]
+    runtime_status = runtime["acp_status"]
+    assert "required" not in status_input and "required" not in runtime_status
+    status_choice = [{"required": ["reference"]}, {"required": ["job_ids"]}]
+    assert status_input["anyOf"] == runtime_status["anyOf"] == status_choice
+    assert set(status_input["properties"]) == set(runtime_status["properties"])
+    assert status_input["properties"]["job_ids"]["maxItems"] == 50
 
-    # Per-tool input table version: the four moved tables say 2, the rest 1.
+    read_input = tool_inputs["acp_read_artifact"]
+    runtime_read = runtime["acp_read_artifact"]
+    assert "required" not in read_input and "required" not in runtime_read
+    read_choice = [{"required": ["artifact_ref"]}, {"required": ["artifact_refs"]}]
+    assert read_input["anyOf"] == runtime_read["anyOf"] == read_choice
+    assert set(read_input["properties"]) == set(runtime_read["properties"])
+    assert read_input["additionalProperties"] is False
+    assert read_input["properties"]["artifact_refs"]["items"] == read_input["properties"][
+        "artifact_ref"
+    ]
+
+    analyze_input = tool_inputs["acp_analyze"]
+    assert (
+        analyze_input["required"]
+        == runtime["acp_analyze"]["required"]
+        == ["analysis_id", "input_refs", "explicit"]
+    )
+    assert set(analyze_input["properties"]) == set(runtime["acp_analyze"]["properties"])
+    assert analyze_input["additionalProperties"] is False
+
+    # Per-tool input table version: M1-01b moved four tables to 2; W-06 moved
+    # acp_status to 2 and acp_read_artifact to 3 (batch selectors).
     versions = {
         tool["name"]: tool.get("input_schema_version") for tool in template["instance"]["tools"]
     }
@@ -484,10 +508,10 @@ def test_mcp_launch_tool_inputs_match_the_runtime_and_application_tables() -> No
         "acp_capabilities": 1,
         "acp_preflight": 1,
         "acp_submit": 2,
-        "acp_status": 1,
+        "acp_status": 2,
         "acp_cancel": 1,
         "acp_prepare_artifact": 2,
-        "acp_read_artifact": 2,
+        "acp_read_artifact": 3,
         "acp_analyze": 2,
         "acp_get_guidance": 1,
         "acp_list_jobs": 1,

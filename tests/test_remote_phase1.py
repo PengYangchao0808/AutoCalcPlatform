@@ -27,7 +27,11 @@ from acp.scheduler.remote import ssh as ssh_mod
 # call time, so importing first is fine.
 from acp.scheduler.remote.config import RemoteExecutionConfig, RemoteNode
 from acp.scheduler.remote.sftp import FileStager
-from acp.scheduler.remote.ssh import SSHConnectionPool, SSHExecutionError
+from acp.scheduler.remote.ssh import (
+    SSHConnectionError,
+    SSHConnectionPool,
+    SSHExecutionError,
+)
 from acp.scheduler.remote.sync import CodeSyncer, SyncResult, _build_sync_file_list, _project_root
 
 # ====================================================================== #
@@ -837,6 +841,257 @@ def test_ssh_create_client_uses_node_policy():
     print("  [OK] P0-3: _create_client respects node.host_key_policy")
 
 
+def test_ssh_create_client_loads_system_host_keys():
+    """REGRESSION: _create_client verifies against ~/.ssh/known_hosts.
+
+    A bare paramiko.SSHClient starts with an empty host-key store; with the
+    default ``reject`` policy every host is then reported as "not found in
+    known_hosts" — which broke ``acp init`` bootstrap on a node whose key
+    the TOFU probe had already verified.  The trust store must be loaded
+    before connect().
+    """
+    node = RemoteNode(
+        name="n",
+        host="h",
+        username="u",
+        remote_work_dir="/w",
+        remote_code_dir="/c",
+        host_key_policy="reject",
+    )
+    with patch.object(ssh_mod.paramiko, "SSHClient") as mock_client_cls:
+        mock_instance = mock_client_cls.return_value
+        mock_instance.get_transport.return_value = None
+        ssh_mod._create_client(node, timeout=5)
+        call_names = [call[0] for call in mock_instance.method_calls]
+        assert "load_system_host_keys" in call_names, call_names
+        assert call_names.index("load_system_host_keys") < call_names.index("connect"), call_names
+    print("  [OK] _create_client loads the known-hosts trust store before connecting")
+
+
+def test_ssh_create_client_loads_hashed_known_hosts():
+    """REGRESSION: hashed known_hosts entries are trusted, not rejected.
+
+    ``acp init``'s probe verified the node through a hashed entry; the pool
+    must consult the same store (paramiko supports OpenSSH hashed names).
+    This test parses a REAL hashed file, not a mock of the load call.
+    """
+    import paramiko
+
+    host = "10.99.0.9"
+    key = paramiko.RSAKey.generate(2048)
+    with tempfile.TemporaryDirectory() as home, patch.dict(os.environ, {"HOME": home}):
+        ssh_dir = Path(home) / ".ssh"
+        ssh_dir.mkdir()
+        hashed = paramiko.HostKeys.hash_host(host)
+        (ssh_dir / "known_hosts").write_text(
+            f"{hashed} {key.get_name()} {key.get_base64()}\n", encoding="utf-8"
+        )
+        captured: dict[str, object] = {}
+
+        def _capture_connect(self, **kwargs):
+            captured["entry"] = self._system_host_keys.get(host)
+            raise RuntimeError("stop-after-lookup")
+
+        node = RemoteNode(
+            name="n",
+            host=host,
+            username="u",
+            remote_work_dir="/w",
+            remote_code_dir="/c",
+        )
+        with patch.object(ssh_mod.paramiko.SSHClient, "connect", _capture_connect):
+            try:
+                ssh_mod._create_client(node, timeout=5)
+                assert False, "connect sentinel should have raised"
+            except RuntimeError as exc:
+                assert "stop-after-lookup" in str(exc)
+        assert captured["entry"] is not None, "hashed known_hosts entry was not loaded"
+    print("  [OK] _create_client loads hashed known_hosts entries")
+
+
+def test_ssh_create_client_non_default_port_known_hosts():
+    """REGRESSION: non-22 nodes verify the ``[host]:port`` known_hosts key."""
+    import paramiko
+
+    host = "10.0.0.8"
+    port = 2222
+    key = paramiko.RSAKey.generate(2048)
+    with tempfile.TemporaryDirectory() as home, patch.dict(os.environ, {"HOME": home}):
+        ssh_dir = Path(home) / ".ssh"
+        ssh_dir.mkdir()
+        (ssh_dir / "known_hosts").write_text(
+            f"[{host}]:{port} {key.get_name()} {key.get_base64()}\n", encoding="utf-8"
+        )
+        captured: dict[str, object] = {}
+
+        def _capture_connect(self, **kwargs):
+            captured["entry"] = self._system_host_keys.get(f"[{host}]:{port}")
+            raise RuntimeError("stop-after-lookup")
+
+        node = RemoteNode(
+            name="n",
+            host=host,
+            port=port,
+            username="u",
+            remote_work_dir="/w",
+            remote_code_dir="/c",
+        )
+        with patch.object(ssh_mod.paramiko.SSHClient, "connect", _capture_connect):
+            try:
+                ssh_mod._create_client(node, timeout=5)
+                assert False, "connect sentinel should have raised"
+            except RuntimeError as exc:
+                assert "stop-after-lookup" in str(exc)
+        assert captured["entry"] is not None, "bracketed host:port entry was not loaded"
+    print("  [OK] _create_client loads [host]:port known_hosts entries")
+
+
+def test_ssh_create_client_tolerates_corrupt_known_hosts():
+    """REGRESSION: a corrupt local known_hosts must not break every node.
+
+    paramiko raises ``InvalidHostKey`` (not an SSHException) for a bad
+    base64 line; the load is best-effort and must degrade to a warning.
+    """
+    with tempfile.TemporaryDirectory() as home, patch.dict(os.environ, {"HOME": home}):
+        ssh_dir = Path(home) / ".ssh"
+        ssh_dir.mkdir()
+        (ssh_dir / "known_hosts").write_text(
+            "10.0.0.9 ssh-ed25519 not-a-valid-base64!!!\n", encoding="utf-8"
+        )
+        node = RemoteNode(
+            name="n",
+            host="10.0.0.9",
+            username="u",
+            remote_work_dir="/w",
+            remote_code_dir="/c",
+        )
+        with patch.object(
+            ssh_mod.paramiko.SSHClient,
+            "connect",
+            side_effect=RuntimeError("stop-after-load"),
+        ):
+            try:
+                ssh_mod._create_client(node, timeout=5)
+                assert False, "connect sentinel should have raised"
+            except RuntimeError as exc:
+                assert "stop-after-load" in str(exc)
+            except Exception as exc:  # noqa: BLE001 — any load error fails the test
+                raise AssertionError(f"corrupt known_hosts propagated: {exc!r}") from exc
+    print("  [OK] _create_client tolerates a corrupt known_hosts file")
+
+
+def test_ssh_create_client_closes_on_connect_failure():
+    """REGRESSION: a failed connect() closes the client (no transport leak)."""
+    import paramiko
+
+    class _FakeClient:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def load_system_host_keys(self) -> None:
+            pass
+
+        def set_missing_host_key_policy(self, policy) -> None:
+            pass
+
+        def connect(self, **kwargs) -> None:
+            raise paramiko.SSHException("auth failed")
+
+        def close(self) -> None:
+            self.closed = True
+
+    created: list[_FakeClient] = []
+
+    def _factory() -> _FakeClient:
+        client = _FakeClient()
+        created.append(client)
+        return client
+
+    node = RemoteNode(
+        name="n",
+        host="h",
+        username="u",
+        remote_work_dir="/w",
+        remote_code_dir="/c",
+    )
+    with patch.object(ssh_mod.paramiko, "SSHClient", side_effect=_factory):
+        try:
+            ssh_mod._create_client(node, timeout=5)
+            assert False, "connect failure should propagate"
+        except paramiko.SSHException:
+            pass
+    assert created and created[0].closed, "client was not closed after failed connect"
+    print("  [OK] _create_client closes the client when connect() fails")
+
+
+def test_ssh_execute_wraps_connection_errors():
+    """REGRESSION: connect-time SSH failures surface as SSHConnectionError.
+
+    ``acp init`` bootstrap calls pool.execute(); a raw paramiko.SSHException
+    escaping from borrow() crashed the wizard with a traceback instead of
+    the D18a retry/abort menu.  Connection failures are deterministic and
+    must NOT be retried (retrying multiplied the connect timeout inside
+    ``detect_node_python``'s candidate loop).
+    """
+    import paramiko
+
+    node = RemoteNode(
+        name="n",
+        host="h",
+        username="u",
+        remote_work_dir="/w",
+        remote_code_dir="/c",
+    )
+    pool = SSHConnectionPool()
+    attempts: list[RemoteNode] = []
+
+    def _fail_connect(n, timeout=30):
+        attempts.append(n)
+        raise paramiko.ssh_exception.SSHException("Server 'h' not found in known_hosts")
+
+    with patch.object(ssh_mod, "_create_client", side_effect=_fail_connect):
+        try:
+            pool.execute(node, "echo ok", timeout=5)
+            assert False, "should have raised SSHConnectionError"
+        except SSHConnectionError as exc:
+            assert "n" in str(exc), str(exc)
+            assert "known_hosts" in str(exc), str(exc)
+            assert isinstance(exc, SSHExecutionError)
+            assert isinstance(exc.__cause__, paramiko.ssh_exception.SSHException)
+    assert len(attempts) == 1, attempts
+    node_pool = pool._pools[node.name]
+    assert node_pool._created == 0
+    assert node_pool._queue.qsize() == 0
+    print("  [OK] execute() wraps connection failures in SSHConnectionError (no retry)")
+
+
+def test_ssh_sftp_session_wraps_connection_errors():
+    """REGRESSION: sftp_session connect failures share the SSHConnectionError type."""
+    import paramiko
+
+    node = RemoteNode(
+        name="n",
+        host="h",
+        username="u",
+        remote_work_dir="/w",
+        remote_code_dir="/c",
+    )
+    pool = SSHConnectionPool()
+
+    def _fail_connect(n, timeout=30):
+        raise paramiko.ssh_exception.SSHException("no route to host")
+
+    with patch.object(ssh_mod, "_create_client", side_effect=_fail_connect):
+        try:
+            with pool.sftp_session(node):
+                pass
+            assert False, "should have raised SSHConnectionError"
+        except SSHConnectionError as exc:
+            assert isinstance(exc, SSHExecutionError)
+            assert "no route to host" in str(exc), str(exc)
+    print("  [OK] sftp_session wraps connection failures in SSHConnectionError")
+
+
 # ====================================================================== #
 
 
@@ -866,6 +1121,13 @@ def main():
         test_ssh_host_key_policy_warn,
         test_remote_node_host_key_policy_default,
         test_ssh_create_client_uses_node_policy,
+        test_ssh_create_client_loads_system_host_keys,
+        test_ssh_create_client_loads_hashed_known_hosts,
+        test_ssh_create_client_non_default_port_known_hosts,
+        test_ssh_create_client_tolerates_corrupt_known_hosts,
+        test_ssh_create_client_closes_on_connect_failure,
+        test_ssh_execute_wraps_connection_errors,
+        test_ssh_sftp_session_wraps_connection_errors,
     ]
     failed = 0
     for t in tests:

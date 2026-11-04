@@ -676,6 +676,23 @@ def _release_staging_claim(node: RemoteNode, release_id: str) -> None:
 #: Files per batched SFTP session / batched sha256sum invocation.
 _UPLOAD_CHUNK = 64
 
+#: Opt-in tar-stream upload for large batches.  Default is OFF (the per-file
+#: chunked path is the production behaviour); ``ACP_REMOTE_TAR_UPLOAD`` must be
+#: explicitly set to one of the truthy values below AND the pending batch must
+#: exceed the threshold before the batch is sent as a single tar.
+_TAR_UPLOAD_ENV = "ACP_REMOTE_TAR_UPLOAD"
+_TAR_UPLOAD_ENV_TRUTHY = frozenset({"1", "true", "yes"})
+_TAR_UPLOAD_THRESHOLD = 16
+
+
+def _tar_upload_enabled(stager: FileStager, pending_count: int) -> bool:
+    """True when the opt-in tar-stream upload should be attempted."""
+    if pending_count <= _TAR_UPLOAD_THRESHOLD:
+        return False
+    if os.environ.get(_TAR_UPLOAD_ENV, "").strip().lower() not in _TAR_UPLOAD_ENV_TRUTHY:
+        return False
+    return callable(getattr(stager, "upload_tar_stream", None))
+
 
 def _chunks(items: list[Any], size: int) -> list[list[Any]]:
     return [items[start : start + size] for start in range(0, len(items), size)]
@@ -696,6 +713,11 @@ def _upload_missing(
     session per chunk): a 600-file release otherwise costs ~600 SSH round trips
     before a single ``bsub``.  Small manifests keep the per-file primitives so
     the unit-test fakes stay authoritative.
+
+    When ``ACP_REMOTE_TAR_UPLOAD`` is explicitly enabled and the pending batch
+    is large enough, the whole batch is uploaded as ONE tar stream and unpacked
+    on the node.  Any failure of that gray path falls back to the per-file
+    chunked upload below, so behaviour is unchanged by default.
     """
     targets = {rel: posixpath.join(staging, rel) for rel in manifest.files}
     batched = len(targets) > _BATCH_VERIFY_THRESHOLD
@@ -717,6 +739,16 @@ def _upload_missing(
             if current == str(meta["sha256"]):
                 continue
         pending.append((resolve_sync_source(project_root, rel), remote))
+    if _tar_upload_enabled(stager, len(pending)):
+        try:
+            if stager.upload_tar_stream(node, pending, staging):
+                return len(pending)
+        except Exception:  # noqa: BLE001 — the gray path must always fall back
+            logger.warning(
+                "Tar stream upload raised on %s; falling back to per-file upload",
+                node.name,
+                exc_info=True,
+            )
     upload_many = getattr(stager, "upload_files", None)
     if upload_many is None:
         for local, remote in pending:

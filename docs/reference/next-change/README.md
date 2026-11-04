@@ -29,6 +29,13 @@
 | [ACP_Frontend_DSH_Pluginization_Plan_20261102.md](ACP_Frontend_DSH_Pluginization_Plan_20261102.md) | **ACP-NEXT 就是 DSH 插件**；§13.15 为窗口级固定工作台优化提案；§13.14 为原生停靠修复与限定桌面回执；§13.13 为 A—G 内部布局 | **现行**（固定工作台尚未实施；原生停靠已实现；验收按各自范围） |
 | [ACP_Web_Agent_DSH_Bridge_Plan_20261102.md](ACP_Web_Agent_DSH_Bridge_Plan_20261102.md) | ACP 主界面内托管 DSH Agent 网关的备选路线；不与插件主线同时实施 | 备选记录 |
 | [ACP_MultiUser_VirtualHost_DSH_Topology_20261031.md](ACP_MultiUser_VirtualHost_DSH_Topology_20261031.md) | 一人一 Linux 虚机 + 一人一 DSH + 虚拟文件系统的代码级差距与文件清单 | 现行（附件） |
+| [ACP_V3_CCCP_ACR_Backend_Architecture_20261102.md](ACP_V3_CCCP_ACR_Backend_Architecture_20261102.md) | V3 后端关键架构方案（CCCP × ACR）：科学编译 / 中央调度 / Agentless 远端原生执行；问题来源与边界参考，**非 V2 线实施依赖** | 参考（未实施） |
+
+## 分布式体验等价性（V2 线，2026-11-02）
+
+| 文档 | 内容 | 状态 |
+|---|---|---|
+| [ACP_V2_Experience_Parity_Plan_20261102.md](ACP_V2_Experience_Parity_Plan_20261102.md) | **V2 线的自然延伸**：Read-Root 收口（退役 `_job_read_root` 双份实现）、RTT 批量化（`bjobs` / 递归列举 / 上传 / MCP）、投影存储前置决策；A 档 6 项可开工 / B 档 3 项待拍板 / C 档不做。不引入 V3 的 Agentless / 统一插件协议。**§9 实施记录**：W-01a/W-02/W-03/W-04(flag-off)/W-05/W-06 已落地，W-01b 被 L2-03/ANTI #27 登记门阻塞；E1—E5 记 NOT_VERIFIED | **部分实施**（见 §9） |
 
 ## 前端（2026-10-27…31）
 

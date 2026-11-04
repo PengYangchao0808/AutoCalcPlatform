@@ -73,9 +73,31 @@ def _energy_product(work_dir: Path) -> tuple[Path, dict[str, Any]]:
         raise EvidenceProductionError(
             "manifest_unreadable", f"the result manifest is not readable: {exc}"
         ) from exc
-    for product in manifest.get("products") or []:
-        if not isinstance(product, dict) or product.get("kind") != "energy_report":
-            continue
+    candidates = [
+        product
+        for product in (manifest.get("products") or [])
+        if isinstance(product, dict) and product.get("kind") == "energy_report"
+    ]
+    if len(candidates) > 1:
+        # Round-9: BatchOptimize now publishes one energy_report per item, so
+        # "first product wins" is no longer a single answer.  Prefer the
+        # single-point step when exactly one product says so; otherwise refuse
+        # explicitly instead of silently attaching an arbitrary item's energy.
+        preferred = [
+            product
+            for product in candidates
+            if isinstance(product.get("metadata"), dict)
+            and product["metadata"].get("energy_step") == "singlepoint"
+        ]
+        if len(preferred) == 1:
+            candidates = preferred
+        else:
+            raise EvidenceProductionError(
+                "energy_product_ambiguous",
+                "the attempt published several energy_report products; "
+                "the evidence carrier needs one unambiguous singlepoint energy",
+            )
+    for product in candidates:
         relative = str(product.get("path") or "")
         if not relative:
             continue

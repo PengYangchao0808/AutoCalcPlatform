@@ -41,7 +41,7 @@ import shlex
 import threading
 import time
 import uuid
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -667,6 +667,44 @@ class RemoteJobRunner:
             progress=record.progress,
             current_stage=record.current_stage,
         )
+
+    def prefetch_lsf_statuses(self, records: Iterable[JobRecord]) -> int:
+        """Batch-prefetch LSF statuses of *records*, one query per node group.
+
+        Groups the records by their persisted ``result["node"]`` and their LSF
+        id (``remote_job_id`` or ``result["lsf_job_id"]``), then asks the
+        monitor for the whole group at once.  The cached statuses are consumed
+        by the per-job :meth:`poll_remote` of the same poll round.
+
+        Best-effort: a failed group only logs — the per-job poll path still
+        queries ``bjobs`` directly for whatever was not cached.  Returns the
+        number of statuses cached.
+        """
+        groups: dict[str, list[str]] = {}
+        for record in records:
+            result = record.result or {}
+            node_name = result.get("node")
+            lsf_job_id = record.remote_job_id or result.get("lsf_job_id")
+            if not node_name or not lsf_job_id:
+                continue
+            groups.setdefault(str(node_name), []).append(str(lsf_job_id))
+
+        prefetched = 0
+        for node_name, job_ids in groups.items():
+            node = self._config.get_node(node_name)
+            if node is None:
+                logger.debug("batch status prefetch skipped for unknown node %s", node_name)
+                continue
+            try:
+                prefetched += len(self._monitor.prefetch_statuses(node, job_ids))
+            except Exception:
+                logger.warning(
+                    "Batch LSF status prefetch failed for node %s (%d job(s))",
+                    node_name,
+                    len(job_ids),
+                    exc_info=True,
+                )
+        return prefetched
 
     def cancel_remote(
         self,

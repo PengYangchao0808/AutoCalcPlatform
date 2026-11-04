@@ -59,6 +59,7 @@ import logging
 import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
+from pathlib import PurePosixPath
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -89,6 +90,7 @@ __all__ = [
     "SUBMIT_FIELD_POLICY",
     "canonical_submit_request",
     "field_policy_gaps",
+    "media_type_for_path",
     "normalize_analyze",
     "normalize_artifact_ref",
     "normalize_node_tags",
@@ -448,7 +450,10 @@ PREPARE_FIELD_POLICY: dict[str, FieldPolicy] = {
             request_kinds=(REQUEST_PREPARE,),
             note=(
                 "Relative path inside the attempt work dir; traversal is refused, and for "
-                "purpose=structure-input it names the parsed structure source."
+                "purpose=structure-input it names the parsed structure source. Round-9 M6: "
+                "optional for purpose=artifact — when omitted, the route derives it from the "
+                "task's result-manifest product whose id is artifact_id (server authority, "
+                "never a client path). The status descriptor already sends it."
             ),
         ),
         _entry(
@@ -497,7 +502,11 @@ PREPARE_FIELD_POLICY: dict[str, FieldPolicy] = {
             "media_type",
             DISPOSITION_REQUEST_CONTROL,
             request_kinds=(REQUEST_PREPARE,),
-            note="Recorded media type of the prepared body.",
+            note=(
+                "Recorded media type of the prepared body. Optional: when omitted it is "
+                "derived from the resolved relative path's extension (round-9 M6), and an "
+                "unknown extension leaves the executor's default."
+            ),
         ),
         _entry(
             "idempotency_key",
@@ -950,8 +959,40 @@ def normalize_submit(payload: Mapping[str, Any]) -> dict[str, Any]:
     return data
 
 
+#: Extension → media type for an artifact body.  This is the vocabulary the
+#: prepare executor applies as its own fallback (JSON bodies, XYZ geometries,
+#: text logs); an unknown extension derives nothing — the field stays omitted
+#: rather than recording an invented type.
+_MEDIA_TYPES: dict[str, str] = {
+    ".json": "application/json",
+    ".xyz": "chemical/x-xyz",
+    ".txt": "text/plain",
+    ".log": "text/plain",
+    ".out": "text/plain",
+}
+
+
+def media_type_for_path(relative_path: str) -> str | None:
+    """Return the media type implied by an artifact path's extension.
+
+    Round-9 M6: the status descriptor and :func:`normalize_prepare` use this one
+    mapping, so a prepare template and the server-derived default can never name
+    different types for the same product.  ``None`` means "not derivable" (the
+    caller or the executor decides) — never a fabricated type.
+    """
+    suffix = PurePosixPath(str(relative_path or "")).suffix.lower()
+    return _MEDIA_TYPES.get(suffix)
+
+
 def normalize_prepare(payload: Mapping[str, Any]) -> dict[str, Any]:
-    """Normalise an explicit prepare request."""
+    """Normalise an explicit prepare request.
+
+    ``relative_path``/``media_type`` are optional for ``purpose=artifact``: the
+    round-9 status descriptor sends both, and a caller that omits the path is
+    resolved server-side from the task's result manifest (the single product
+    authority) by ``acp.api.artifact_descriptors.resolve_prepare_target``.  A
+    supplied ``media_type`` wins; otherwise it is derived from the extension.
+    """
     request = _require_mapping(payload, field="request")
     _schema_version(request)
     purpose = _string(request, "purpose")
@@ -992,6 +1033,10 @@ def normalize_prepare(payload: Mapping[str, Any]) -> dict[str, Any]:
         value = _string(request, field)
         if value is not None:
             data[field] = value
+    if purpose == "artifact" and "media_type" not in data and "relative_path" in data:
+        derived_media_type = media_type_for_path(data["relative_path"])
+        if derived_media_type is not None:
+            data["media_type"] = derived_media_type
     expected_size = _optional_int(request, "expected_size_bytes", minimum=0)
     if expected_size is not None:
         data["expected_size_bytes"] = expected_size

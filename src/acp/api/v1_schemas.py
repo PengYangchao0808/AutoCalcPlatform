@@ -250,6 +250,9 @@ class JobLiveStatus(BaseModel):
         stage_index: One-based index of the current workflow stage.
         stage_total: Total number of workflow stages.
         metrics: Semantic metrics for the current computation state.
+        observed_age_seconds: Seconds between the observation and this projection.
+        stale: Whether the observation is older than the bounded freshness window.
+        source_mtime: File mtime of the state snapshot, when the reader can observe it.
     """
 
     stage_label: str | None = None
@@ -260,6 +263,11 @@ class JobLiveStatus(BaseModel):
     observed_at: str | None = None
     source: str | None = None
     unknown_reason: str | None = None
+    # Round-9 M13: freshness of that observation. ``None`` means "cannot be
+    # known" — a missing timestamp is never filled in and never reported fresh.
+    observed_age_seconds: float | None = None
+    stale: bool | None = None
+    source_mtime: str | None = None
 
 
 class V1JobRecordModel(BaseModel):
@@ -2002,6 +2010,13 @@ class V1PrepareRequest(BaseModel):
     (or from ``relative_path`` for a structure input) and hands it to
     ``PrepareRequest.resource_id``.  MCP/bridge callers therefore send
     ``artifact_id``, never ``resource_id``.
+
+    Round-9 M6: ``relative_path`` and ``media_type`` are optional for
+    ``purpose="artifact"``.  The status descriptor's ``prepare.arguments``
+    already carries both (so a copy-paste call works as-is); when a caller omits
+    ``relative_path`` the route resolves the manifest product whose id is
+    ``artifact_id`` (server authority — a client path never wins) and derives
+    ``media_type`` from the extension when omitted.
 
     M0-06: the MCP adapter forwards the prepare request unchanged, so both
     entries must agree on what a declared field is (unknown_field_policy U1

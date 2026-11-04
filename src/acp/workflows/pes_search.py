@@ -187,7 +187,9 @@ def run_pes_search(
             "ts_candidates": len(result.ts_candidates),
             "int_candidates": len(result.int_candidates),
             "pes_profile_path": str(result.pes_profile_path) if result.pes_profile_path else None,
-            "manifest_path": str(output_root / "RESULT" / "pes_search" / "pes_profile.json"),
+            # Round-9 M2: ``manifest_path`` names the unified result manifest
+            # (what ``from_artifact`` reads), not the PES profile JSON.
+            "manifest_path": str(output_root / "RESULT" / "result_manifest.json"),
             "reaction": reaction,
         },
     )
@@ -258,7 +260,9 @@ def run_bond_length_scan(
             "int_candidates": len(int_recs),
             "frames_count": len(frames),
             "pes_profile_path": str(pes_profile_path),
-            "manifest_path": str(pes_profile_path),
+            # Round-9 M2: the unified result manifest is the Batch input
+            # reference (``from_artifact``); the profile stays the curve file.
+            "manifest_path": str(result_manifest_path),
             "result_manifest_path": str(result_manifest_path),
             "scan_dir": str(scan_dir),
             "level_warnings": level_warnings,

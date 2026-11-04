@@ -290,9 +290,6 @@
         "inputSchema": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "reference"
-          ],
           "properties": {
             "reference": {
               "oneOf": [
@@ -322,11 +319,33 @@
                   }
                 }
               ]
+            },
+            "job_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 1,
+              "maxItems": 50,
+              "description": "Batch of job ids; mutually exclusive with reference. Read-only; one Controller GET /api/v1/jobs?ids= request. The answer is additive: {\"tool\": \"acp_status\", \"items\": [{reference, status, data|error}], \"count\": n}."
             }
           },
-          "description": "Authoritative snapshot. Holds no connection state."
+          "description": "Authoritative snapshot. Holds no connection state.",
+          "anyOf": [
+            {
+              "required": [
+                "reference"
+              ]
+            },
+            {
+              "required": [
+                "job_ids"
+              ]
+            }
+          ]
         },
-        "input_schema_version": 1
+        "input_schema_version": 2
       },
       {
         "name": "acp_cancel",
@@ -513,9 +532,6 @@
         "inputSchema": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "artifact_ref"
-          ],
           "properties": {
             "schema_version": {
               "type": "integer",
@@ -581,11 +597,69 @@
             "extensions": {
               "type": "object",
               "description": "Namespaced extension metadata (never used for execution)."
+            },
+            "artifact_refs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "task_id",
+                  "attempt",
+                  "artifact_id",
+                  "generation",
+                  "digest"
+                ],
+                "properties": {
+                  "task_id": {
+                    "type": "string"
+                  },
+                  "attempt": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "artifact_id": {
+                    "type": "string"
+                  },
+                  "generation": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "digest": {
+                    "type": "string"
+                  },
+                  "size_bytes": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "media_type": {
+                    "type": "string"
+                  },
+                  "relative_path": {
+                    "type": "string"
+                  }
+                }
+              },
+              "minItems": 1,
+              "maxItems": 20,
+              "description": "Batch of frozen artifact references; mutually exclusive with artifact_ref. Each reference is read on its own; bodies are never merged."
             }
           },
-          "description": "Bounded read of an already-prepared artifact; a miss never fetches, prepares or starts computation."
+          "description": "Bounded read of an already-prepared artifact; a miss never fetches, prepares or starts computation.",
+          "anyOf": [
+            {
+              "required": [
+                "artifact_ref"
+              ]
+            },
+            {
+              "required": [
+                "artifact_refs"
+              ]
+            }
+          ]
         },
-        "input_schema_version": 2
+        "input_schema_version": 3
       },
       {
         "name": "acp_analyze",

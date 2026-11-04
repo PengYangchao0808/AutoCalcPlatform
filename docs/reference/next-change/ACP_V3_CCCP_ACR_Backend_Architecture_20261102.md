@@ -4,7 +4,7 @@
 
 **日期**：2026-11-02
 **性质**：方案（未实施；团队讨论稿，不代表功能已交付）
-**上位/取代**：V3 后端架构讨论稿；V2 线的读根/传输/投影收敛见 [V2 体验对等方案（远端参考，本地未同步）](https://github.com/PengYangchao0808/AutoCalcPlatform/blob/main/docs/reference/next-change/ACP_V2_Experience_Parity_Plan_20261102.md)
+**上位/取代**：V3 后端架构讨论稿；V2 线的读根/传输/投影收敛见 [`ACP_V2_Experience_Parity_Plan_20261102.md`](ACP_V2_Experience_Parity_Plan_20261102.md)（本次合并后已在本目录，按相对链接引用）
 
 > **状态**：团队讨论稿 / Proposed Architecture（尚未实施，不代表功能已交付）  
 > **版本**：v3.0-design-2026-11-02  
@@ -498,4 +498,3 @@ ACR RemoteNativeExecutor
 - [2026-10-31 ACP 3.0 Backend Plan（旧草案，需按本方案更新）](https://github.com/PengYangchao0808/AutoCalcPlatform/blob/main/docs/reference/next-change/ACP_3.0_Backend_Plan_20261031.md)
 
 > **文档结论 / Decision Proposal**：V3.0 的后端升级不应是将 CCCP 与 ACR 的管理代码合并成一个巨型执行系统，而应以**统一科学协议与原生执行交接**打通两个独立职责。CCCP 独立完成科学工作流、能力插件与单机计算；ACR 执行跨机器的可靠资源调度；远端只运行原生软件；ACP Data 持续管理工件。这一边界应在 P0 冻结，后续升级优先采用新插件与适配器，而不是不断改动核心调度链。
-

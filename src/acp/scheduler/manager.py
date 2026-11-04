@@ -15,7 +15,6 @@ from __future__ import annotations
 import functools
 import json
 import logging
-import math
 import os
 import queue
 import random
@@ -165,6 +164,19 @@ _POLL_SCAN_STATUSES: Final[tuple[JobStatus, ...]] = (
     JobStatus.PENDING,
     JobStatus.CANCELLING,
 )
+
+#: Batch ``bjobs`` status prefetch switch (W-02).  Default on: one query per
+#: (node, chunk) per poll round instead of one per remote job.  ``"0"`` /
+#: ``"false"`` restores the per-job query path.
+_LSF_BATCH_STATUS_ENV: Final[str] = "ACP_LSF_BATCH_STATUS"
+
+_LSF_BATCH_FALSY_FLAGS: Final[frozenset[str]] = frozenset({"0", "false", "no", "off"})
+
+
+def _lsf_batch_status_enabled() -> bool:
+    """Read ``ACP_LSF_BATCH_STATUS`` (default on, falsy values disable)."""
+    return os.environ.get(_LSF_BATCH_STATUS_ENV, "1").strip().lower() not in _LSF_BATCH_FALSY_FLAGS
+
 
 _SUBMIT_RECONCILE_STATES: Final[frozenset[str]] = frozenset({"intent", "unconfirmed"})
 
@@ -1597,9 +1609,7 @@ class JobManager:
             raise ValueError("IRC maxpoints must be a positive integer")
         from acp.calculations.irc_directions import normalize_irc_directions
 
-        directions = normalize_irc_directions(
-            inp.get("directions") or ["forward", "reverse"]
-        )
+        directions = normalize_irc_directions(inp.get("directions") or ["forward", "reverse"])
         # An XYZ snapshot is persisted in the IRC spec and materialized by
         # the runner. No path into another task is used during execution.
         return replace(
@@ -6649,35 +6659,70 @@ class JobManager:
     def _poll_loop(self) -> None:
         """Background daemon: periodically poll all RUNNING jobs."""
         logger.info(
-            "Poll loop started (interval=%ds, remote=%s)",
+            "Poll loop started (interval=%ds, remote=%s, batch_status=%s)",
             self.poll_interval,
             self._is_remote_enabled(),
+            _lsf_batch_status_enabled(),
         )
         while not self._poll_stop.wait(self.poll_interval):
             try:
-                # WAITING_REVIEW, PAUSED and STARTING jobs are intentionally
-                # excluded here: WAITING_REVIEW is held for manual review, a
-                # PAUSED job is frozen (SIGSTOP / bstop) with nothing for
-                # polling to observe, and STARTING submissions are owned by
-                # the reconcile loop (_reconcile_loop).
-                for status in _POLL_SCAN_STATUSES:
-                    records = self.store.list(status=status.value, limit=10000)
-                    for record in records:
-                        if self._poll_stop.is_set():
-                            break
-                        try:
-                            self._poll_job(record.id)
-                        except Exception:
-                            logger.exception("Poll error for job %s", record.id)
-                # Queued jobs are durable scheduler state. This pass also
-                # recovers jobs whose submission worker disappeared because
-                # the service restarted while they were waiting for a batch
-                # slot.
-                self._sweep_idempotency_staging()
-                self._dispatch_queued_jobs()
+                self._poll_round()
             except Exception:
                 logger.exception("Poll loop iteration failed")
         logger.info("Poll loop stopped")
+
+    def _poll_round(self) -> None:
+        """One poll pass: batch status prefetch, per-job poll, queue sweep.
+
+        WAITING_REVIEW, PAUSED and STARTING jobs are intentionally excluded
+        from the scan set: WAITING_REVIEW is held for manual review, a PAUSED
+        job is frozen (SIGSTOP / bstop) with nothing for polling to observe,
+        and STARTING submissions are owned by the reconcile loop
+        (``_reconcile_loop``).
+        """
+        scans: list[tuple[JobStatus, list[JobRecord]]] = [
+            (status, self.store.list(status=status.value, limit=10000))
+            for status in _POLL_SCAN_STATUSES
+        ]
+        # W-02: one batch ``bjobs`` per node group *before* the per-job polls,
+        # so each poll consumes its prefetched status instead of paying a
+        # cross-job RTT.  Failures here never abort the round.
+        self._prefetch_remote_lsf_statuses(
+            [record for _status, records in scans for record in records]
+        )
+        for _status, records in scans:
+            for record in records:
+                if self._poll_stop.is_set():
+                    break
+                try:
+                    self._poll_job(record.id)
+                except Exception:
+                    logger.exception("Poll error for job %s", record.id)
+        # Queued jobs are durable scheduler state. This pass also recovers
+        # jobs whose submission worker disappeared because the service
+        # restarted while they were waiting for a batch slot.
+        self._sweep_idempotency_staging()
+        self._dispatch_queued_jobs()
+
+    def _prefetch_remote_lsf_statuses(self, records: Iterable[JobRecord]) -> None:
+        """Prime the monitor's one-shot status cache for this poll round.
+
+        Only remote records are considered; the runner groups them by node and
+        performs one batch ``bjobs`` per group.  Disabled with
+        ``ACP_LSF_BATCH_STATUS=0`` (per-job query path) and never fatal.
+        """
+        if self.remote_runner is None or not _lsf_batch_status_enabled():
+            return
+        remote_records = [record for record in records if self._is_remote_job(record)]
+        if not remote_records:
+            return
+        try:
+            self.remote_runner.prefetch_lsf_statuses(remote_records)
+        except Exception:
+            logger.warning(
+                "Batch LSF status prefetch failed; per-job bjobs will be used",
+                exc_info=True,
+            )
 
     # ------------------------------------------------------------------ #
     # Execution deadlines (M4-03)

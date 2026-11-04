@@ -11,8 +11,9 @@ These tests pin the round-8 contract:
   additionally recognizes real ORCA phrasing (Hessian not positive definite,
   maximum-cycle wording, generic convergence failure, ``error termination``);
 * ``_failure_details`` reports ``reason_lines`` (≤5, host paths reduced to
-  basenames), ``scf_cycles``, ``opt_cycles``, ``imaginary_count`` and
-  ``terminal`` — absent facts stay ``None``, a real 0 stays 0;
+  basenames), ``scf_cycles``, ``opt_cycles``, ``imaginary_count``,
+  ``terminal`` and (round-9 M14) ``diagnostic_message`` — absent facts stay
+  ``None``, a real 0 stays 0;
 * ``TsOptResult.error_message`` is ``failed [<class>]: <summary>`` (summary
   ≤200 chars, no absolute host path) and ``metadata["failure_details"]``
   carries the same structure;
@@ -172,6 +173,8 @@ def test_details_shape_and_counters() -> None:
         "opt_cycles",
         "imaginary_count",
         "terminal",
+        # round-9 M14: the unclipped diagnostic always has a second home
+        "diagnostic_message",
     }
     assert details["opt_cycles"] == 7
     assert details["imaginary_count"] == 2
@@ -291,6 +294,8 @@ def test_ts_failure_message_names_the_class_and_the_reason(
         "opt_cycles",
         "imaginary_count",
         "terminal",
+        # round-9 M14: the unclipped diagnostic always has a second home
+        "diagnostic_message",
     }
 
 

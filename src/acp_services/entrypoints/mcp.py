@@ -54,6 +54,12 @@ and API expose.  It is a *transport adapter*, never a second execution owner:
   ``input_invalid``/``unknown_field``, a missing required field is
   ``input_invalid``/``missing_required_field``.  Status stays a permissive
   historical read (unknown-field policy U2).
+* **W-06 additive batch reads.**  ``acp_status`` accepts ``job_ids`` and
+  ``acp_read_artifact`` accepts ``artifact_refs`` as the mutually-exclusive
+  alternative to their single reference (``anyOf`` in the advertised schema,
+  ``_validate_exclusive_selector`` here).  The single-argument path and response
+  shape are unchanged; a batch answers ``{tool, items, count}`` with per-item
+  isolation and never adds prepare/fetch power.
 * **One reviewed wire-id station (M1-01c).**  The only ``acp.*`` wire literal in
   this package is the negotiation-guidance id declared in
   :mod:`acp_services.entrypoints.wire_identifiers`; this module refers to the
@@ -102,6 +108,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import threading
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -133,8 +140,8 @@ from acp_services.entrypoints.research_consumption import (
     ConsumptionPort,
 )
 from acp_services.runtime.analysis_capabilities import (
-    AnalysisCapabilityRegistry,
-    capability_projection,
+    ANALYSIS_CAPABILITY_IDS,
+    ANALYSIS_CAPABILITY_STATES,
 )
 from acp_services.store.records import JobStatus
 from acp_services.workspace.boundary import evaluate_tier_request
@@ -143,6 +150,8 @@ from acp_services.workspace.command_identity import (
     EntryClass,
     PermissionScope,
 )
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     # Protocol / transport
@@ -181,6 +190,7 @@ __all__ = [
     "PreflightPort",
     "SubmitPort",
     "StatusPort",
+    "StatusBatchPort",
     "CancelPort",
     "ArtifactPort",
     "AnalysisPort",
@@ -377,9 +387,7 @@ def _summarize_job_listing(payload: Mapping[str, Any]) -> dict[str, Any]:
 
 #: Terminal job states for the cancel already-terminal marker (report
 #: vocabulary; the scheduler's own JobStatus stays the authority).
-_TERMINAL_STATES: frozenset[str] = frozenset(
-    {"failed", "cancelled", "completed", "canceled"}
-)
+_TERMINAL_STATES: frozenset[str] = frozenset({"failed", "cancelled", "completed", "canceled"})
 
 #: Terminal spellings the cancel *intent* already produced (a queued job is
 #: moved to CANCELLED synchronously).  These keep ``cancelled=True`` instead of
@@ -405,7 +413,9 @@ _CANCEL_ENVELOPE_FIELDS: tuple[str, ...] = (
 )
 
 
-def _cancel_acknowledgement(record: Any, reference: str) -> dict[str, Any]:
+def _cancel_acknowledgement(
+    record: Any, reference: Any, *, reason: str | None = None
+) -> dict[str, Any]:
     """Project one cancel result onto the bounded status envelope (#7e).
 
     The Controller answers ``POST /api/v1/jobs/{id}/cancel`` with the full
@@ -419,6 +429,12 @@ def _cancel_acknowledgement(record: Any, reference: str) -> dict[str, Any]:
     invents a reference.  A non-mapping record degrades to identity-only facts
     (same policy as :func:`_reference_from`).  An unknown job never reaches this
     function: the backend port raises the existing typed error first.
+
+    Round-9 M9: an optional audit-only ``reason`` is echoed back as
+    ``cancel_reason``; it is never part of the control path (the Controller route
+    does not accept it and the intent is the reference alone).  Round-9 M10: the
+    echoed ``reference`` is normalised, so a mapping handed back as a ``dict``
+    repr string never becomes the id.
     """
     row: Mapping[str, Any] = record if isinstance(record, Mapping) else {}
     job_id = ""
@@ -450,7 +466,7 @@ def _cancel_acknowledgement(record: Any, reference: str) -> dict[str, Any]:
             continue
         if value is not None and value != "":
             acknowledgement[key] = value
-    acknowledgement["reference"] = row.get("reference") or reference
+    acknowledgement["reference"] = _normalise_reference(row.get("reference") or reference)
     # Round-2 compatibility: cancelling an already-terminal job must say so
     # explicitly instead of returning a bare "completed" next to the intent.
     # A *cancelled* answer is the intent being satisfied (a queued job is moved
@@ -464,6 +480,10 @@ def _cancel_acknowledgement(record: Any, reference: str) -> dict[str, Any]:
     else:
         acknowledgement["cancelled"] = True
     acknowledgement["cancel_requested"] = True
+    if reason:
+        # Audit-only: recorded here, never sent to the Controller and never
+        # allowed to change the cancel semantics above (round-9 M9).
+        acknowledgement["cancel_reason"] = reason
     return acknowledgement
 
 
@@ -1117,17 +1137,44 @@ _ARTIFACT_REF_SCHEMA: dict[str, Any] = {
     },
 }
 
+#: W-06: one batch tool call is bounded so a single request cannot fan out
+#: unbounded Controller/read work.  ``acp_status`` fans out to one Controller
+#: round trip (the route caps ``ids`` at 100); ``acp_read_artifact`` is a local
+#: loop of bounded reads, so its cap is smaller.
+MAX_BATCH_JOB_IDS = 50
+MAX_BATCH_ARTIFACT_REFS = 20
+
 _READ_SCHEMA: dict[str, Any] = {
     "type": "object",
     "description": (
-        "Bounded read of an already-prepared artifact. artifact_ref is required; a miss is "
-        "resource_not_ready and a read never fetches, prepares or starts computation "
-        "max_bytes above the frozen max_read_bytes bound is refused "
-        "(input_invalid, rule=max_read_bytes_exceeded) instead of served."
+        "Bounded read of an already-prepared artifact. Exactly one of artifact_ref "
+        "(single) or artifact_refs (batch) is required; a miss is resource_not_ready "
+        "and a read never fetches, prepares or starts computation. The batch shape "
+        "returns one item per reference and never lets one failed item drop the "
+        "others; encoding=base64 stays single-read only (a batch returns text "
+        "bodies). max_bytes above the frozen max_read_bytes bound is refused "
+        "(input_invalid, rule=max_read_bytes_exceeded) instead of served. A body that "
+        "carries host paths or secrets is returned MASKED, never refused: the response "
+        "sets body_masked=true, masked_digest (sha256 of the returned masked slice, which "
+        "may be truncated by max_bytes) and redaction='paths+secrets', while digest always "
+        "covers the stored artifact (digest_scope='artifact'). Only a body that cannot be "
+        "verified at all (non-UTF-8/binary) is refused, with "
+        "unsupported_capability/rule=artifact_body_unverifiable."
     ),
     "properties": {
         "schema_version": {"type": "integer", "enum": [1], "default": 1},
         "artifact_ref": _ARTIFACT_REF_SCHEMA,
+        "artifact_refs": {
+            "type": "array",
+            "items": _ARTIFACT_REF_SCHEMA,
+            "minItems": 1,
+            "maxItems": MAX_BATCH_ARTIFACT_REFS,
+            "description": (
+                "Batch of frozen artifact references; mutually exclusive with "
+                f"artifact_ref. Capped at {MAX_BATCH_ARTIFACT_REFS} so one call stays a "
+                "bounded loop of normal reads (bodies are never merged)."
+            ),
+        },
         "max_bytes": {
             "type": "integer",
             "minimum": 1,
@@ -1143,7 +1190,7 @@ _READ_SCHEMA: dict[str, Any] = {
             "description": "Namespaced extension metadata (never used for execution).",
         },
     },
-    "required": ["artifact_ref"],
+    "anyOf": [{"required": ["artifact_ref"]}, {"required": ["artifact_refs"]}],
     "additionalProperties": False,
 }
 
@@ -1201,20 +1248,41 @@ _ANALYZE_SCHEMA: dict[str, Any] = {
 
 #: Status is a historical read: extra query fields are preserved (unknown-field
 #: policy U2), so its declared table stays permissive.
+#:
+#: W-06 batch read: exactly one of ``reference`` (unchanged single shape) or
+#: ``job_ids`` (1..50, one Controller ``GET /api/v1/jobs?ids=`` round trip).
+#: The ``anyOf`` carries the mutually-exclusive choice; ``additionalProperties``
+#: stays permissive for the U2 legacy-read policy.
 _STATUS_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "reference": {
             "description": "Operation/job reference returned by acp_submit (id or {kind,id}).",
             "oneOf": [{"type": "string"}, {"type": "object"}],
-        }
+        },
+        "job_ids": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1},
+            "minItems": 1,
+            "maxItems": MAX_BATCH_JOB_IDS,
+            "description": (
+                "Batch of job ids; mutually exclusive with reference. Read-only and "
+                f"capped at {MAX_BATCH_JOB_IDS}; resolves through ONE Controller "
+                "GET /api/v1/jobs?ids= request. The answer is additive: "
+                '{"tool": "acp_status", "items": [{reference, status, data|error}], '
+                '"count": n}. An unknown or failed item answers status="error" without '
+                "dropping the rest."
+            ),
+        },
     },
-    "required": ["reference"],
+    "anyOf": [{"required": ["reference"]}, {"required": ["job_ids"]}],
     "additionalProperties": True,
 }
 
 #: Cancel writes one control intent, so it follows the execution-field policy U1:
-#: exactly ``reference`` (+ an optional CAS guard).
+#: exactly ``reference`` (+ an optional CAS guard and an audit-only ``reason``).
+#: ``reason`` never reaches the Controller route (which does not accept it) and
+#: never changes the control path: it is echoed back as ``cancel_reason`` only.
 _CANCEL_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -1223,6 +1291,16 @@ _CANCEL_SCHEMA: dict[str, Any] = {
             "oneOf": [{"type": "string"}, {"type": "object"}],
         },
         "expected_revision": {"type": "integer", "minimum": 0},
+        "reason": {
+            "type": "string",
+            "maxLength": 200,
+            "description": (
+                "Optional audit-only note for why the cancellation is requested (<= 200 "
+                "characters). It is recorded in the acknowledgement as cancel_reason and "
+                "is never forwarded to the Controller nor used to decide anything: the "
+                "cancel intent is the reference alone."
+            ),
+        },
     },
     "required": ["reference"],
     "additionalProperties": False,
@@ -1265,8 +1343,7 @@ _PREPARE_SCHEMA: dict[str, Any] = {
         "job_id": {
             "type": "string",
             "description": (
-                "Task id to prepare; a mismatch with task_ref.task_id is "
-                "revision_conflict."
+                "Task id to prepare; a mismatch with task_ref.task_id is revision_conflict."
             ),
         },
         "artifact_id": {
@@ -1410,13 +1487,22 @@ _PUBLISH_PES_REVIEW_SCHEMA: dict[str, Any] = {
                 "additionalProperties": False,
             },
         },
-        "authorization_id": {"type": "string"},
+        "authorization_id": {
+            "type": "string",
+            "description": (
+                "Optional on a local-single Controller with self-signed agent "
+                "publication enabled: omit it and the Controller mints a bounded, "
+                "recorded agent-self authorization (origin and audit event are in "
+                "the response). On every other deployment the id is required and an "
+                "absent id is refused with access_denied."
+            ),
+        },
         "source_binding": {"type": "object"},
         "idempotency_key": {"type": "string"},
         "expected_revision": {"type": "integer", "minimum": 0},
         "note": {"type": "string"},
     },
-    "required": ["job_id", "authorization_id", "candidates"],
+    "required": ["job_id", "candidates"],
     "additionalProperties": False,
 }
 
@@ -1643,6 +1729,10 @@ def _validate_arguments(tool: str, arguments: Mapping[str, Any]) -> None:
                 "field": unknown[0],
                 "rule": "unknown_field",
                 "fields": unknown,
+                # Round-9 M9: name the legal surface so a caller can self-correct
+                # instead of guessing (the cancel schema grew an audit-only
+                # ``reason``; this is the table that proves it).
+                "allowed": sorted(str(name) for name in declared),
                 "tool": tool,
             },
             retryable=False,
@@ -1660,7 +1750,116 @@ def _validate_arguments(tool: str, arguments: Mapping[str, Any]) -> None:
             params={"field": missing[0], "rule": rule, "missing": missing, "tool": tool},
             retryable=False,
         )
+    _validate_exclusive_selector(tool, arguments)
     _validate_artifact_refs(tool, arguments)
+
+
+#: W-06: the single-or-batch selector table.  Each entry is
+#: ``(single field, batch field, batch cap, item kind)``; ``acp_status`` stays
+#: outside ``_ARGUMENT_SCHEMAS`` (U2 permissive legacy read) and validates through
+#: the same helper from its handler.  The item kind names what one batch entry
+#: must be: a job id token here, an ArtifactRef object validated by
+#: :func:`_validate_artifact_refs` for a read.
+_BATCH_SELECTORS: dict[str, tuple[str, str, int, str]] = {
+    McpTool.STATUS: ("reference", "job_ids", MAX_BATCH_JOB_IDS, "job_id"),
+    McpTool.READ_ARTIFACT: (
+        "artifact_ref",
+        "artifact_refs",
+        MAX_BATCH_ARTIFACT_REFS,
+        "artifact_ref",
+    ),
+}
+
+
+def _validate_exclusive_selector(tool: str, arguments: Mapping[str, Any]) -> bool:
+    """Validate the ``single | batch`` choice before any port call (W-06).
+
+    The JSON schema expresses the choice as ``anyOf``; this is the adapter half
+    that turns a malformed request into a typed ``input_invalid`` instead of a
+    handler guess.  Exactly one of the two declared fields is required — both is
+    a conflict, neither is a missing required field — and the batch value must
+    be a non-empty array no longer than its cap.  A job-id batch must hold
+    non-blank strings (an artifact batch holds structured refs, validated
+    separately by :func:`_validate_artifact_refs`).
+
+    Returns:
+        ``True`` when the batch field is the selected one.
+    """
+    selector = _BATCH_SELECTORS.get(tool)
+    if selector is None:
+        return False
+    single, batch, limit, item_kind = selector
+    has_single = arguments.get(single) is not None
+    has_batch = arguments.get(batch) is not None
+    if has_single and has_batch:
+        raise McpToolError(
+            mo.ErrorCode.INPUT_INVALID,
+            f"{tool} accepts either {single!r} or {batch!r}, not both",
+            params={
+                "field": batch,
+                "rule": "conflicting_arguments",
+                "fields": [single, batch],
+                "tool": tool,
+            },
+            retryable=False,
+        )
+    if not has_single and not has_batch:
+        raise McpToolError(
+            mo.ErrorCode.INPUT_INVALID,
+            f"{tool} requires either {single!r} or {batch!r}",
+            params={
+                "field": single,
+                "rule": "missing_required_field",
+                "fields": [single, batch],
+                "any_of": [single, batch],
+                "tool": tool,
+            },
+            retryable=False,
+        )
+    if not has_batch:
+        return False
+    values = arguments.get(batch)
+    if not isinstance(values, (list, tuple)) or isinstance(values, (str, bytes)):
+        raise McpToolError(
+            mo.ErrorCode.INPUT_INVALID,
+            f"{tool} requires {batch!r} to be an array of strings",
+            params={"field": batch, "rule": "invalid_type", "expected": "array", "tool": tool},
+            retryable=False,
+        )
+    if not values:
+        raise McpToolError(
+            mo.ErrorCode.INPUT_INVALID,
+            f"{tool} requires at least one entry in {batch!r}",
+            params={"field": batch, "rule": "min_items", "minimum": 1, "tool": tool},
+            retryable=False,
+        )
+    if len(values) > limit:
+        raise McpToolError(
+            mo.ErrorCode.INPUT_INVALID,
+            f"{tool} accepts at most {limit} entries in {batch!r}",
+            params={
+                "field": batch,
+                "rule": "max_items",
+                "maximum": limit,
+                "requested": len(values),
+                "tool": tool,
+            },
+            retryable=False,
+        )
+    if item_kind == "job_id":
+        for index, value in enumerate(values):
+            if not isinstance(value, str) or not value.strip():
+                raise McpToolError(
+                    mo.ErrorCode.INPUT_INVALID,
+                    f"{tool} requires {batch}[{index}] to be a non-blank string",
+                    params={
+                        "field": f"{batch}[{index}]",
+                        "rule": "invalid_type",
+                        "tool": tool,
+                    },
+                    retryable=False,
+                )
+    return True
 
 
 def _validate_artifact_refs(tool: str, arguments: Mapping[str, Any]) -> None:
@@ -1672,12 +1871,22 @@ def _validate_artifact_refs(tool: str, arguments: Mapping[str, Any]) -> None:
     is the same typed ``input_invalid`` here and never reaches a Controller (or
     a custom port) where it would have to be guessed.
 
+    W-06: ``artifact_refs`` is a batch of the same tuple, so every entry is
+    validated with the same normaliser and the refused field names its index.
+
     Raises:
         McpToolError: ``input_invalid`` with ``params.rule``
             ``missing_artifact_ref``/``unknown_field``/``digest``/``minimum``.
     """
     if tool == McpTool.READ_ARTIFACT:
-        targets: list[tuple[str, Any]] = [("artifact_ref", arguments.get("artifact_ref"))]
+        targets: list[tuple[str, Any]] = []
+        if arguments.get("artifact_ref") is not None:
+            targets.append(("artifact_ref", arguments.get("artifact_ref")))
+        raw_batch = arguments.get("artifact_refs")
+        if isinstance(raw_batch, (list, tuple)):
+            targets.extend(
+                (f"artifact_refs[{index}]", item) for index, item in enumerate(raw_batch)
+            )
     elif tool == McpTool.ANALYZE:
         raw_refs = arguments.get("input_refs")
         if not isinstance(raw_refs, (list, tuple)):
@@ -1720,7 +1929,12 @@ def _tool_specs() -> tuple[dict[str, Any], ...]:
         ),
         _tool_spec(
             McpTool.STATUS,
-            "Query the status of an operation/job reference. Holds no connection state.",
+            (
+                "Query the status of an operation/job reference. Holds no connection "
+                "state. Pass job_ids (1..50) instead of reference for a batch read: "
+                "one Controller round trip, one item per id, and an unknown id is an "
+                "item-level not_found that never drops the other items."
+            ),
             _STATUS_SCHEMA,
         ),
         _tool_spec(
@@ -1739,7 +1953,12 @@ def _tool_specs() -> tuple[dict[str, Any], ...]:
         ),
         _tool_spec(
             McpTool.READ_ARTIFACT,
-            "Read an already-prepared artifact (bounded; no fetch on miss).",
+            (
+                "Read an already-prepared artifact (bounded; no fetch on miss). Pass "
+                "artifact_refs (1..20) instead of artifact_ref for a batch read: each "
+                "reference is read on its own (bodies are never merged) and a failed "
+                "item is reported without dropping the rest."
+            ),
             _READ_SCHEMA,
         ),
         _tool_spec(
@@ -1947,6 +2166,7 @@ def _enforce_summary_budget(data: dict[str, Any]) -> dict[str, Any]:
         }
     return data
 
+
 @runtime_checkable
 class CapabilityPort(Protocol):
     """Capability discovery (read-only)."""
@@ -1986,6 +2206,25 @@ class StatusPort(Protocol):
 
     def get(self, reference: str, *, workspace_id: str) -> Any:
         """Return the status projection for *reference*, or ``None`` when unknown."""
+        ...
+
+
+@runtime_checkable
+class StatusBatchPort(Protocol):
+    """Optional batch status read (W-06) — preferred over per-item ``get``.
+
+    A port that implements this answers N ids in ONE Controller round trip.  A
+    port that only implements :class:`StatusPort` still serves ``acp_status``
+    with ``job_ids`` (one ``get`` per id) and the result records that fallback
+    instead of pretending the batch was optimized.  It is deliberately a
+    separate protocol so the existing single-reference port contract is
+    unchanged.
+    """
+
+    def get_many(
+        self, references: Sequence[Any], *, workspace_id: str = ""
+    ) -> Mapping[str, Any | None]:
+        """Return status projections keyed by task id; unknown ids stay ``None``."""
         ...
 
 
@@ -2050,9 +2289,7 @@ class SelectionPort(Protocol):
         """Cache-only selection status (revision/source/publication receipt)."""
         ...
 
-    def publish_review(
-        self, job_id: str, request: Mapping[str, Any], *, workspace_id: str
-    ) -> Any:
+    def publish_review(self, job_id: str, request: Mapping[str, Any], *, workspace_id: str) -> Any:
         """Publish a selection inside a bounded authorization."""
         ...
 
@@ -2834,7 +3071,9 @@ class McpServer:
         revision = payload.get("revision")
         payload.setdefault(
             "selection_ref",
-            f"pes-selection:{job_id}:r{revision}" if revision is not None else f"pes-selection:{job_id}",
+            f"pes-selection:{job_id}:r{revision}"
+            if revision is not None
+            else f"pes-selection:{job_id}",
         )
         return mo.MachineResult(
             operation=McpTool.PUBLISH_PES_REVIEW,
@@ -3187,9 +3426,7 @@ class McpServer:
                 "gaps",
                 "full",
             }
-            requested = {
-                part.strip() for part in str(contract_sections).split(",") if part.strip()
-            }
+            requested = {part.strip() for part in str(contract_sections).split(",") if part.strip()}
             if not requested or requested - allowed_sections:
                 raise McpToolError(
                     mo.ErrorCode.INPUT_INVALID,
@@ -3234,25 +3471,21 @@ class McpServer:
                 kwargs["contract_sections"] = contract_sections
             data = dict(self._backends.capabilities.capabilities(**kwargs))
         data.setdefault("protocol_version", MCP_PROTOCOL_VERSION)
-        # M1-01b/M2-02: the frozen three-state analysis-capability projection.  A
-        # descriptor is never "available": registered/executable/unavailable are
-        # the only states, and analyze refuses anything that is not executable.
-        # The Controller's composition root injects the application registry, so a
-        # payload that already carries the projection is forwarded verbatim; the
-        # fallback is an explicitly empty table, never the process-global default
-        # registry (that module-level object is not a production authority).
-        analysis_rows = list(capability_projection(AnalysisCapabilityRegistry()))
-        if data.get("detail") == "summary":
-            # bounded scope: the full projection lives in detail="full"
-            data.setdefault(
-                "analysis_capabilities",
-                {
-                    "count": len(analysis_rows),
-                    "detail": {"tool": "acp_capabilities", "arguments": {"detail": "full"}},
-                },
-            )
-        else:
-            data.setdefault("analysis_capabilities", analysis_rows)
+        # M1-01b/M2-02: the frozen three-state analysis-capability projection
+        # (registered/executable/unavailable; nothing is "available", and analyze
+        # refuses anything that is not executable).  The Controller's composition
+        # root injects the application registry, so a payload that carries the
+        # projection is forwarded verbatim.
+        #
+        # Round-9 M4a: this adapter cannot read the Controller's registry, so an
+        # absent projection is answered with an explicit **unknown** — never with
+        # an empty registry projected as ``unavailable``/``registered: false``,
+        # which would claim a negative this layer cannot know and contradicted
+        # ``detail=full`` (which forwards the real projection).
+        data["analysis_capabilities"] = _analysis_capability_view(
+            data.get("analysis_capabilities"),
+            summary=data.get("detail") == "summary" or detail == "summary",
+        )
 
         raw_extension = arguments.get("research_extension")
         if raw_extension is not None and not isinstance(raw_extension, Mapping):
@@ -3489,9 +3722,14 @@ class McpServer:
         # Full response passthrough: every field the Controller returned is part
         # of the replay contract (task_ref/attempt/state/identity/admission...).
         payload: dict[str, Any] = dict(record) if isinstance(record, Mapping) else {}
-        payload["reference"] = payload.get("reference") or reference
+        payload["reference"] = _normalise_reference(payload.get("reference") or reference)
         if not isinstance(payload.get("task_ref"), Mapping):
-            task_id = str(payload["reference"].get("id") or "")
+            reference_value = payload["reference"]
+            task_id = (
+                str(reference_value.get("id") or "")
+                if isinstance(reference_value, Mapping)
+                else str(reference_value or "")
+            )
             payload["task_ref"] = {"task_id": task_id, "job_id": task_id}
         payload["idempotency_key"] = resolution.key or None
         payload["idempotency_key_origin"] = resolution.origin
@@ -3514,7 +3752,12 @@ class McpServer:
         2) — never ``RESOURCE_NOT_READY``, which promised a retry that can never
         succeed.  The message names the two recovery surfaces so an agent does
         not fall back to walking the run root.
+
+        W-06: ``job_ids`` selects the additive batch shape instead of
+        ``reference``; the single shape below is unchanged.
         """
+        if _validate_exclusive_selector(McpTool.STATUS, arguments):
+            return self._tool_status_many(arguments, context)
         reference = _require_reference(arguments)
         try:
             record = self._backends.status.get(reference, workspace_id=context.workspace_id)
@@ -3523,18 +3766,7 @@ class McpServer:
                 raise
             record = None
         if record is None:
-            raise McpToolError(
-                mo.ErrorCode.NOT_FOUND,
-                _unknown_reference_message(reference),
-                params={
-                    "reference": reference,
-                    "rule": "unknown_reference",
-                    "note": "job_id != operation_id",
-                    "suggested_tools": [McpTool.LIST_JOBS],
-                    "job_id_shape": "YYYYMMDD_HHMMSS_NNN_<name>",
-                },
-                retryable=False,
-            )
+            raise _unknown_reference_error(reference)
         projection = record if isinstance(record, Mapping) else {"result": record}
         projection = dict(projection)
         projection.setdefault("reference", reference)
@@ -3544,6 +3776,72 @@ class McpServer:
             operation=McpTool.STATUS,
             status="ok",
             data=projection,
+            operation_identity=context.workspace_id,
+        )
+
+    def _tool_status_many(
+        self, arguments: Mapping[str, Any], context: WorkspaceContext
+    ) -> mo.MachineResult:
+        """Return one snapshot per job id without letting one item drop the batch.
+
+        W-06 batch shape (additive): ``{"tool", "items", "count"}`` where each
+        item is ``{reference, status: "ok"|"error", data|error}``.  A batch is
+        still a read: no item may trigger a prepare/fetch, and the deferred
+        budget release runs only for terminal projections, exactly like the
+        single path.
+
+        The preferred ``backends.status`` path is ``get_many`` so N ids cost ONE
+        Controller round trip.  A port that only implements ``get`` falls back to
+        per-item reads and the answer records that degradation instead of
+        pretending the batch was optimized.
+        """
+        job_ids = _batch_job_ids(arguments)
+        status_port = self._backends.status
+        records: Mapping[str, Any] = {}
+        degraded = not isinstance(status_port, StatusBatchPort)
+        if not degraded:
+            fetched = status_port.get_many(job_ids, workspace_id=context.workspace_id)
+            records = fetched if isinstance(fetched, Mapping) else {}
+        items: list[dict[str, Any]] = []
+        for job_id in job_ids:
+            if degraded:
+                try:
+                    record = status_port.get(job_id, workspace_id=context.workspace_id)
+                except McpToolError as exc:
+                    items.append(_status_error_item(job_id, exc))
+                    continue
+                if record is None:
+                    items.append(_status_error_item(job_id, _unknown_reference_error(job_id)))
+                    continue
+            else:
+                record = records.get(job_id)
+                if record is None:
+                    items.append(_status_error_item(job_id, _unknown_reference_error(job_id)))
+                    continue
+            projection = dict(record) if isinstance(record, Mapping) else {"result": record}
+            projection.setdefault("reference", job_id)
+            if _projection_is_terminal(projection) and self._budget is not None:
+                self._budget.release(context.workspace_id)
+            items.append({"reference": job_id, "status": "ok", "data": projection})
+        payload: dict[str, Any] = {
+            "tool": McpTool.STATUS,
+            "items": items,
+            "count": len(items),
+        }
+        if degraded:
+            logger.warning(
+                "acp_status batch: status port has no get_many; falling back to "
+                "%d per-item get() reads",
+                len(job_ids),
+            )
+            payload["degraded"] = {
+                "reason": "status_port_get_many_missing",
+                "fallback": "per_item_get",
+            }
+        return mo.MachineResult(
+            operation=McpTool.STATUS,
+            status="ok",
+            data=payload,
             operation_identity=context.workspace_id,
         )
 
@@ -3557,12 +3855,18 @@ class McpServer:
         control intent no longer ships the spec body/xyz/artifacts.  An unknown
         job still fails inside the port with the existing typed error -- no
         projection is built from a missing record.
+
+        Round-9 M9: ``reason`` is accepted as **audit metadata only**.  It is
+        validated here, echoed back as ``cancel_reason`` and never forwarded to
+        the Controller (whose cancel route does not accept it), so the control
+        path, its idempotency and its CAS semantics are unchanged.
         """
         reference = _require_reference(arguments)
+        reason = _cancel_reason(arguments)
         record = self._backends.cancel.cancel(reference, workspace_id=context.workspace_id)
         if self._budget is not None:
             self._budget.release(context.workspace_id)
-        acknowledgement = _cancel_acknowledgement(record, reference)
+        acknowledgement = _cancel_acknowledgement(record, reference, reason=reason)
         return mo.MachineResult(
             operation=McpTool.CANCEL,
             status="ok",
@@ -3627,6 +3931,9 @@ class McpServer:
     def _tool_read_artifact(
         self, arguments: Mapping[str, Any], context: WorkspaceContext
     ) -> mo.MachineResult:
+        """Read one prepared artifact; ``artifact_refs`` selects the W-06 batch."""
+        if _validate_exclusive_selector(McpTool.READ_ARTIFACT, arguments):
+            return self._tool_read_artifacts(arguments, context)
         record = self._backends.artifacts.read(arguments, workspace_id=context.workspace_id)
         data = dict(record) if isinstance(record, Mapping) else {"result": record}
         self._verify_artifact_body(data)
@@ -3638,13 +3945,92 @@ class McpServer:
             passthrough_body=data.get("encoding") == "base64",
         )
 
+    def _tool_read_artifacts(
+        self, arguments: Mapping[str, Any], context: WorkspaceContext
+    ) -> mo.MachineResult:
+        """Read a bounded batch of prepared artifacts, one item per reference.
+
+        W-06 batch shape (additive): ``{"tool", "items", "count"}`` where each
+        item is ``{artifact_ref, status: "ok"|"error", data|error}``.  Bodies
+        differ per artifact so nothing is merged: every reference goes through
+        the SAME read-only ``ArtifactPort.read`` as the single path (never a
+        prepare/fetch) and is verified with the SAME body verifier.  A refused or
+        unverifiable item answers ``status="error"``; the remaining items are
+        still returned.
+
+        ``encoding="base64"`` is refused for a batch: the single path keeps that
+        body verbatim through the top-level ``passthrough_body`` exemption, and a
+        nested batch body has no such exemption — quietly returning a redacted
+        base64 blob would corrupt it, so the caller must read those one at a time.
+        """
+        if str(arguments.get("encoding") or "") == "base64":
+            raise McpToolError(
+                mo.ErrorCode.UNSUPPORTED_CAPABILITY,
+                "artifact_refs returns text bodies; read base64 artifacts one at "
+                "a time with artifact_ref so the verbatim body is preserved",
+                params={
+                    "field": "encoding",
+                    "rule": "batch_binary_requires_single_read",
+                    "tool": McpTool.READ_ARTIFACT,
+                    "single_arguments": {"artifact_ref": "<artifact_ref>", "encoding": "base64"},
+                },
+                retryable=False,
+            )
+        references = list(arguments.get("artifact_refs") or ())
+        shared: dict[str, Any] = {
+            key: arguments[key]
+            for key in ("schema_version", "max_bytes", "encoding")
+            if arguments.get(key) is not None
+        }
+        items: list[dict[str, Any]] = []
+        for artifact_ref in references:
+            request = dict(shared)
+            request["artifact_ref"] = artifact_ref
+            try:
+                record = self._backends.artifacts.read(request, workspace_id=context.workspace_id)
+                data = dict(record) if isinstance(record, Mapping) else {"result": record}
+                self._verify_artifact_body(data)
+            except McpToolError as exc:
+                items.append(
+                    {
+                        "artifact_ref": artifact_ref,
+                        "status": "error",
+                        "error": exc.to_error_object().to_dict(),
+                    }
+                )
+                continue
+            items.append({"artifact_ref": artifact_ref, "status": "ok", "data": data})
+        return mo.MachineResult(
+            operation=McpTool.READ_ARTIFACT,
+            status="ok",
+            data={
+                "tool": McpTool.READ_ARTIFACT,
+                "items": items,
+                "count": len(items),
+            },
+            operation_identity=context.workspace_id,
+        )
+
     @staticmethod
     def _verify_artifact_body(data: Mapping[str, Any]) -> None:
-        """Refuse reads whose body was altered after the digest was computed.
+        """Verify one read body against the digest scope it declares.
 
-        MachineResult redacts on serialization, so a path inside the body would
-        otherwise be returned under the original digest.  A truncated slice is
-        exempt: its digest applies to the whole artifact, not the slice.
+        Round-9 M1 replaced the whole-body refusal with an explicit **masking**
+        presentation (the artifact layer masks before it slices and declares
+        ``body_masked``/``masked_digest``/``redaction``).  Two shapes exist:
+
+        * **masked** — the returned body is the masked text: this method verifies
+          ``masked_digest`` against exactly those bytes, requires that the masked
+          text no longer carries a redactable path/secret, and keeps
+          ``digest_scope="artifact"`` (``digest`` names the stored artifact);
+        * **unmasked** — the body claims to be the stored bytes, so it must be
+          byte-identical to them: a redactable pattern is still refused and the
+          full body is checked against ``digest`` (a truncated slice is exempt
+          from that check — its digest applies to the whole artifact).
+
+        No branch skips the integrity check: masking is verified, never trusted,
+        and a non-UTF-8 body stays refused because no presentation of it can be
+        verified this round.
         """
         body = data.get("body")
         if not isinstance(body, str):
@@ -3654,7 +4040,7 @@ class McpServer:
         import binascii
         import hashlib
 
-        from acp_services.entrypoints.machine_output import redact
+        from acp_services.entrypoints.machine_output import mask_body_text, masked_body_digest
 
         if encoding == "base64":
             try:
@@ -3675,9 +4061,8 @@ class McpServer:
                 params={"field": "encoding", "rule": "artifact_encoding_invalid"},
                 retryable=False,
             )
-        # One content policy for both encodings: a decoded path/secret is
-        # refused, never smuggled through base64.  Undecodable bytes decode with
-        # surrogate escapes so ASCII path fragments are still visible.
+        # One content policy for both encodings: a decoded path/secret is never
+        # smuggled through base64.  Undecodable bytes cannot be verified.
         try:
             decoded = raw.decode("utf-8")
         except UnicodeDecodeError:
@@ -3686,10 +4071,41 @@ class McpServer:
             raise McpToolError(
                 mo.ErrorCode.UNSUPPORTED_CAPABILITY,
                 "non-UTF-8 artifact body cannot be verified",
-                params={"field": "body", "rule": "artifact_body_unverifiable"},
+                params={
+                    "field": "body",
+                    "rule": "artifact_body_unverifiable",
+                    "allowed_formats": ["utf-8 text"],
+                },
                 retryable=False,
             ) from None
-        if redact(decoded) != decoded:
+        if data.get("body_masked") is True:
+            expected_masked = data.get("masked_digest")
+            if not isinstance(expected_masked, str) or not expected_masked:
+                raise McpToolError(
+                    mo.ErrorCode.UNSUPPORTED_CAPABILITY,
+                    "a masked artifact body must declare masked_digest",
+                    params={"field": "masked_digest", "rule": "artifact_masked_digest_missing"},
+                    retryable=False,
+                )
+            if masked_body_digest(raw) != expected_masked:
+                raise McpToolError(
+                    mo.ErrorCode.UNSUPPORTED_CAPABILITY,
+                    "the returned masked body does not match masked_digest",
+                    params={"field": "body", "rule": "artifact_masked_digest_mismatch"},
+                    retryable=False,
+                )
+            if mask_body_text(decoded) != decoded:
+                # A body that still contains a redactable path/secret is not a
+                # masked body: refuse rather than return a partial mask.
+                raise McpToolError(
+                    mo.ErrorCode.UNSUPPORTED_CAPABILITY,
+                    "artifact body claims masking but still carries a redacted pattern",
+                    params={"field": "body", "rule": "artifact_body_redacted"},
+                    retryable=False,
+                )
+            data.setdefault("digest_scope", "artifact")
+            return
+        if mask_body_text(decoded) != decoded:
             raise McpToolError(
                 mo.ErrorCode.UNSUPPORTED_CAPABILITY,
                 "artifact body contains a redacted pattern; the bytes cannot be "
@@ -3932,12 +4348,59 @@ class McpServer:
 
 _ID_KEYS = ("reference", "job_id", "jobId", "id", "operation_id", "operationId", "task_id")
 
+#: Longest string this adapter will try to parse as a reference mapping.  A
+#: reference is a name, so a longer string is kept verbatim instead of parsed.
+_REFERENCE_STRING_MAX = 512
+
+
+def _parse_reference_mapping(value: Any) -> dict[str, Any] | None:
+    """Parse a Mapping that was handed back as a ``dict`` repr/JSON string.
+
+    Round-9 M10: an upstream adapter occasionally serialised a
+    ``{"kind": "operation", "id": "op_..."}`` reference with ``str()``, so the
+    Python ``dict`` repr (single quotes) arrived where an id was expected.  This
+    parses such a string defensively — ``ast.literal_eval`` only (never
+    ``eval``), bounded length, ``{``/``}``-shaped only — and returns ``None``
+    for anything else so the caller keeps the original string.
+    """
+    import ast
+
+    if not isinstance(value, str):
+        return None
+    candidate = value.strip()
+    if not candidate.startswith("{") or not candidate.endswith("}"):
+        return None
+    if len(candidate) > _REFERENCE_STRING_MAX:
+        return None
+    try:
+        parsed = ast.literal_eval(candidate)
+    except (ValueError, SyntaxError, TypeError, MemoryError, RecursionError):
+        return None
+    if isinstance(parsed, Mapping):
+        return dict(parsed)
+    return None
+
+
+def _normalise_reference(value: Any) -> Any:
+    """Return a reference value that is safe to hand back to a caller.
+
+    A Mapping passes through as a mapping (never ``str()``-ed); a string that is
+    a serialised mapping is parsed into one; every other value is unchanged.
+    """
+    parsed = _parse_reference_mapping(value)
+    if parsed is not None:
+        return parsed
+    return value
+
 
 def _reference_from(record: Any, *, kind: str) -> dict[str, Any]:
     """Normalise a backend record into a stable ``{kind, id}`` reference.
 
     Ports return a mapping (the adapter is thin and never reflects attributes);
     a non-mapping record degrades to a string id rather than dynamic lookup.
+    Round-9 M10: a nested Mapping is passed through as a mapping and a
+    serialised mapping is parsed with :func:`_normalise_reference`, so an id is
+    never the Python ``dict`` repr that could not be sent back.
     """
     if record is None:
         return {"kind": kind, "id": ""}
@@ -3946,12 +4409,19 @@ def _reference_from(record: Any, *, kind: str) -> dict[str, Any]:
             value = record.get(key)
             if value is None:
                 continue
-            if isinstance(value, Mapping):
-                merged = dict(value)
+            normalised = _normalise_reference(value)
+            if isinstance(normalised, Mapping):
+                merged = dict(normalised)
                 merged.setdefault("kind", kind)
                 return merged
-            return {"kind": kind, "id": str(value)}
-    return {"kind": kind, "id": str(record)}
+            return {"kind": kind, "id": str(normalised)}
+        return {"kind": kind, "id": ""}
+    normalised = _normalise_reference(record)
+    if isinstance(normalised, Mapping):
+        merged = dict(normalised)
+        merged.setdefault("kind", kind)
+        return merged
+    return {"kind": kind, "id": str(normalised)}
 
 
 def _port_accepts(port: Any, keyword: str, *, method: str = "list_tasks") -> bool:
@@ -3980,10 +4450,7 @@ def _port_accepts(port: Any, keyword: str, *, method: str = "list_tasks") -> boo
         return False
     if keyword in parameters:
         return True
-    return any(
-        parameter.kind is inspect.Parameter.VAR_KEYWORD
-        for parameter in parameters.values()
-    )
+    return any(parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in parameters.values())
 
 
 def _row_state(row: Any) -> str | None:
@@ -4005,6 +4472,44 @@ def _unknown_reference_message(reference: Any) -> str:
         "the task directory. A job_id (YYYYMMDD_HHMMSS_NNN_<name>) and an "
         "operation_id are different ids: acp_submit returns both."
     )
+
+
+def _unknown_reference_error(reference: Any) -> McpToolError:
+    """The typed K6 refusal, shared by the single and W-06 batch status paths."""
+    return McpToolError(
+        mo.ErrorCode.NOT_FOUND,
+        _unknown_reference_message(reference),
+        params={
+            "reference": reference,
+            "rule": "unknown_reference",
+            "note": "job_id != operation_id",
+            "suggested_tools": [McpTool.LIST_JOBS],
+            "job_id_shape": "YYYYMMDD_HHMMSS_NNN_<name>",
+        },
+        retryable=False,
+    )
+
+
+def _batch_job_ids(arguments: Mapping[str, Any]) -> list[str]:
+    """Return the deduped ``job_ids`` in request order (already shape-checked).
+
+    ``_validate_exclusive_selector`` has refused a non-array/blank/oversized
+    selector before this runs; duplicates are harmless for a read, so they are
+    collapsed here (the Controller route uses a set too) instead of being a
+    usage error that would make a caller's retry fail differently.
+    """
+    raw = arguments.get("job_ids")
+    values = list(raw) if isinstance(raw, (list, tuple)) else []
+    return list(dict.fromkeys(str(value) for value in values))
+
+
+def _status_error_item(reference: str, exc: McpToolError) -> dict[str, Any]:
+    """Project one failed batch-status item; the error never drops the batch."""
+    return {
+        "reference": reference,
+        "status": "error",
+        "error": exc.to_error_object().to_dict(),
+    }
 
 
 def _read_ref_from_prepare(payload: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -4057,6 +4562,13 @@ def _read_ref_from_prepare(payload: Mapping[str, Any]) -> dict[str, Any] | None:
 
 
 def _require_reference(arguments: Mapping[str, Any]) -> str:
+    """Return the id string behind a ``reference`` argument.
+
+    Round-8 K6: a ``{kind, id}`` object is unwrapped to its id, but a *string* is
+    forwarded as the opaque id it is — a stringified JSON blob is never decoded
+    into a real task here (the round-9 M10 fix is that this adapter no longer
+    *produces* such a string, not that inputs are reinterpreted).
+    """
     raw = arguments.get("reference")
     if isinstance(raw, Mapping):
         raw = raw.get("id")
@@ -4067,6 +4579,115 @@ def _require_reference(arguments: Mapping[str, Any]) -> str:
             params={"field": "reference"},
         )
     return raw
+
+
+#: Fields of one analysis-capability row kept by ``detail="summary"``.  They are
+#: exactly the decision fields, so summary and full can never disagree on the
+#: state of one id (round-9 M4a).
+_ANALYSIS_SUMMARY_FIELDS: tuple[str, ...] = (
+    "analysis_id",
+    "state",
+    "registered",
+    "executable",
+)
+
+
+def _analysis_capability_view(value: Any, *, summary: bool) -> Any:
+    """Shape the analysis-capability projection without inventing a state.
+
+    The Controller owns the application registry; this adapter only forwards what
+    it was handed.  A payload that carries rows is forwarded unchanged (``full``)
+    or trimmed to :data:`_ANALYSIS_SUMMARY_FIELDS` (``summary``) so both details
+    agree.  A payload that does not carry the projection is answered with
+    ``status: "unknown"``: the adapter cannot know whether a capability is
+    registered or executable, and reporting ``unavailable``/``registered: false``
+    would be a fabricated negative that also contradicted ``detail=full``
+    (round-9 M4a).
+    """
+    if isinstance(value, (list, tuple)):
+        rows = [dict(row) for row in value if isinstance(row, Mapping)]
+        if summary:
+            return [{key: row.get(key) for key in _ANALYSIS_SUMMARY_FIELDS} for row in rows]
+        return rows
+    if isinstance(value, Mapping) and value.get("status"):
+        # A declared status projection is forwarded, never re-derived.
+        return dict(value)
+    if (
+        isinstance(value, Mapping)
+        and value
+        and all(isinstance(item, str) for item in value.values())
+    ):
+        # Round-9 M4a: the Controller's summary publishes a compact
+        # {analysis_id: state} table.  It is a known projection, so forward it
+        # (annotated) instead of claiming the adapter cannot see it.
+        states = {
+            str(key): str(value[key])
+            for key in value
+            if str(value[key]) in ANALYSIS_CAPABILITY_STATES
+        }
+        if states:
+            return {
+                "summary_states": states,
+                "source": "controller_capabilities",
+                "detail_tool": {
+                    "tool": McpTool.CAPABILITIES,
+                    "arguments": {"detail": "full"},
+                },
+            }
+    return {
+        "status": "unknown",
+        "source": "controller_capabilities",
+        "unknown_reason": "controller_projection_missing",
+        # The frozen id vocabulary is a local fact (not a registry read), so an
+        # agent still learns which ids exist while their state stays unknown.
+        "capability_ids": list(ANALYSIS_CAPABILITY_IDS),
+        "detail_tool": {
+            "tool": McpTool.CAPABILITIES,
+            "arguments": {"detail": "full"},
+        },
+    }
+
+
+#: Longest audit-only cancel note accepted (round-9 M9).  The controller does
+#: not accept a reason, so this bound is purely the MCP acknowledgement's.
+_CANCEL_REASON_MAX_LENGTH = 200
+
+
+def _cancel_reason(arguments: Mapping[str, Any]) -> str | None:
+    """Validate the optional audit-only cancel ``reason`` (never a control input).
+
+    Raises:
+        McpToolError: ``input_invalid`` with ``params.field="reason"`` and
+            ``rule`` ``invalid_type`` / ``max_length``.
+    """
+    raw = arguments.get("reason")
+    if raw is None:
+        return None
+    if not isinstance(raw, str):
+        raise McpToolError(
+            mo.ErrorCode.INPUT_INVALID,
+            "reason must be a string",
+            params={
+                "field": "reason",
+                "rule": "invalid_type",
+                "received_type": type(raw).__name__,
+            },
+            retryable=False,
+        )
+    reason = raw.strip()
+    if len(reason) > _CANCEL_REASON_MAX_LENGTH:
+        raise McpToolError(
+            mo.ErrorCode.INPUT_INVALID,
+            f"reason exceeds {_CANCEL_REASON_MAX_LENGTH} characters",
+            params={
+                "field": "reason",
+                "rule": "max_length",
+                "max_length": _CANCEL_REASON_MAX_LENGTH,
+                "length": len(reason),
+            },
+            retryable=False,
+        )
+    return reason or None
 
 
 def _requested_cores(arguments: Mapping[str, Any]) -> int:

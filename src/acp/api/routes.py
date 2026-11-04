@@ -273,7 +273,16 @@ def _capability_limits(request: Request) -> dict[str, Any]:
     C6: the previous dict was a second hardcoded set of numbers, so discovery
     and admission could disagree.  The admission instance is the authority;
     when it is not assembled, say so instead of inventing a limit.
+
+    Round-9 M11: local concurrency has exactly one authority (the same
+    :func:`acp.api.capacity.effective_max_running` projection the capacity block
+    publishes).  ``limits.max_running`` states the effective value *and* its
+    source once; the legacy ``ACP_MAX_RUNNING`` knob is reported as a fact
+    (``legacy_in_effect: false``) instead of a second, mutually exclusive
+    ``status: "legacy_noop"`` block.
     """
+    from acp.api.capacity import effective_max_running
+
     published = dict(_CONTROLLER_LIMITS)
     manager = getattr(request.app.state, "job_manager", None)
     registry = getattr(manager, "registry", None)
@@ -296,13 +305,12 @@ def _capability_limits(request: Request) -> dict[str, Any]:
             ),
             "source": "registry.local.max_jobs",
         }
+    max_running_value, max_running_source = effective_max_running(manager)
     published["max_running"] = {
-        "status": "legacy_noop",
-        "effective_config": "registry.local.max_jobs",
-        "note": (
-            "the legacy max_running / ACP_MAX_RUNNING value does not cap local "
-            "concurrency; the effective limit is registry.local.max_jobs"
-        ),
+        "value": max_running_value,
+        "source": max_running_source or None,
+        "legacy_env": "ACP_MAX_RUNNING",
+        "legacy_in_effect": False,
     }
     admission = getattr(request.app.state, "admission", None)
     limits = getattr(admission, "limits", None)
@@ -417,6 +425,30 @@ def _capacity_block(request: Request) -> dict[str, Any]:
             "semantics": "unavailable",
             "unknown": ["capacity"],
         }
+
+
+def _analysis_capabilities_summary(request: Request) -> dict[str, str]:
+    """Bounded analysis-capability table for the navigation scope (M4a).
+
+    The full scope publishes the frozen rows (``analysis_id``/``state``/
+    ``registered``/``executable``/``version``/``owner``).  The bounded scope
+    carries the *same ids with the same state* in the compact ``id -> state``
+    form: the projection is the one the analyze route reads (the injected
+    application registry), computed in memory, so the summary never has to
+    invent ``unavailable``/``registered: false`` for a capability the Controller
+    knows.  ``navigation.capability_detail`` in the same payload points at the
+    full rows.
+
+    If a future summary projection cannot afford the scan, it must emit
+    ``{"status": "unknown", "detail_hint": {...}}`` instead of a fabricated
+    negative state — unknown is not unavailable.
+    """
+    from acp.api import science_catalog
+
+    return {
+        str(entry["analysis_id"]): str(entry["state"])
+        for entry in science_catalog.analysis_capabilities(request.app.state)
+    }
 
 
 def _capability_index(request: Request) -> list[dict[str, Any]]:
@@ -937,6 +969,10 @@ def _capabilities_payload(
             "task_instructions": _bounded_task_instruction_index(),
             "capacity": capacity_block,
             "capability_index": _capability_index(request),
+            # M4a: the bounded scope publishes the same analysis ids/states as
+            # the full rows (compact ``id -> state``); it never contradicts the
+            # full projection with a fabricated ``unavailable``.
+            "analysis_capabilities": _analysis_capabilities_summary(request),
             "limits": _capability_limits(request),
             "admission": _admission_summary(admission_snapshot),
             "identity_mode": identity_mode,

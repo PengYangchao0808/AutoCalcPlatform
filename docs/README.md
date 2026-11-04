@@ -2,8 +2,7 @@
 
 > **2026-11-04 开发导航增量**：[ACP3 双人总纲 §10](reference/next-change/ACP_3.0_Architecture_20261031.md)是责任/排序/交接/进度唯一入口；A=用户（前端+化学语义编译+网络适配），B=队友（科学 Workflow 编译+插件+最小执行平台接入）。先 C0/P0 契约，再 C1—C4 本机/远程科研闭环，C5 Agent 与扩展随后。插件细节见[CCCP × ACR](reference/next-change/ACP_V3_CCCP_ACR_Backend_Architecture_20261102.md)，当前网络接口见[网络契约](reference/next-change/ACP_Chemistry_Network_Contract_20261103.md)。历史审查计数与发布门不变；本次未进行真实计算验收。
 
-
-> **最后核对**：2026-10-31（文档结构批次）· 本文件是唯一入口。新增、移动或废弃文档时，必须同步本文件与对应目录的 `README.md`，并跑 `python scripts/check_docs_links.py`。
+> **最后核对**：2026-11-04（新增 ACP3 双人开发导航增量；V2 体验等价性计划 §9 实施记录；V3 后端架构方案移入 `reference/next-change/`）· 本文件是唯一入口。新增、移动或废弃文档时，必须同步本文件与对应目录的 `README.md`，并跑 `python scripts/check_docs_links.py`。
 >
 > 代码契约以仓库根的 `AGENTS.md` 和各包 `AGENTS.md` 为准；两者冲突时**以代码与 `AGENTS.md` 为准**，文档按它修正。
 
@@ -32,6 +31,7 @@
 | 改 MCP / Agent 接口与指南 | `src/acp_services/AGENTS.md`（MCP 段） | [MCP / Agent 统一计划](reference/next-change/ACP_MCP_Agent_Guidance_PES_Batch_Plan_20261030.md) |
 | 了解当前真实状态（审查与放行门） | [ACP2 功能审查](../reports/acp2_function_audit_20261028/REPORT.md) | [ACP / RPH 现状说明](reference/current/ACP_RPH_Status_20261028.md) |
 | 看下一轮路线 | [ACP 3.0 架构](reference/next-change/ACP_3.0_Architecture_20261031.md) | [3.0 后端计划](reference/next-change/ACP_3.0_Backend_Plan_20261031.md)、[3.0 前端计划](reference/next-change/ACP_3.0_Frontend_Plan_20261031.md) |
+| 让分布式拥有与本地一致的体验（读根 / 传输 / MCP 批量） | [分布式体验等价性实施计划（V2 线）](reference/next-change/ACP_V2_Experience_Parity_Plan_20261102.md) | [ACP V3 后端关键架构方案](reference/next-change/ACP_V3_CCCP_ACR_Backend_Architecture_20261102.md)（问题来源，非依赖） |
 | 跑真实计算验收 | [ACP_Function_Test_Manual](reference/current/ACP_Function_Test_Manual.md) | — |
 | 查历史决策/旧方案 | [archive/](archive/) | [2026-10-31 批次](archive/2026-10-31/README.md)、[2026-10-16 批次](archive/2026-10-16/README.md) |
 
