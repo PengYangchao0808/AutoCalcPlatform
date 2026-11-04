@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="/css/workbench/base.css">
 <link rel="stylesheet" href="/css/workbench/energy.css">
 <link rel="stylesheet" href="/css/shell/shell.css">
-<link rel="stylesheet" href="/css/shell/tool-drawer.css">
+<link rel="stylesheet" href="/css/shell/platform-panels.css">
 <link rel="stylesheet" href="/css/shell/agent.css">
 <link rel="stylesheet" href="/css/modules/molecule-viewer.css">
 <link rel="stylesheet" href="/css/modules/energy-profile.css">
@@ -31,6 +31,8 @@
 <link rel="stylesheet" href="/css/modules/research-record.css">
 <link rel="stylesheet" href="/css/modules/path-view.css">
 <link rel="stylesheet" href="/css/modules/pes-handoff.css">
+<link rel="stylesheet" href="/css/modules/files-workspace.css">
+<link rel="stylesheet" href="/css/shell/next-layout.css">
 </head>
 <body>
 <!-- file:// guard. Every asset below is an absolute URL (/css, /js), so an
@@ -101,6 +103,45 @@
     <symbol id="acp-i-signal" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M4 16v-2M8 16v-5M12 16v-8M16 16V4"/>
     </symbol>
+    <symbol id="acp-i-view-network" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="5" cy="10" r="2.2"/><circle cx="15" cy="5" r="2.2"/><circle cx="15" cy="15" r="2.2"/><path d="M7 9l6-3M7 11l6 3"/>
+    </symbol>
+    <symbol id="acp-i-view-import" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 15l8.5-8.5 2 2L6 17H4v-2zM12 5l2-2 3 3-2 2M10 17h6"/>
+    </symbol>
+    <symbol id="acp-i-view-structure" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10 2l7 4v8l-7 4-7-4V6l7-4zM3 6l7 4 7-4M10 10v8"/>
+    </symbol>
+    <symbol id="acp-i-view-files" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 2.5h7l5 5v10H4zM11 2.5v5h5M7 11h6M7 14h4"/>
+    </symbol>
+    <symbol id="acp-i-files" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 2.5h7l5 5v10H4zM11 2.5v5h5M7 11h6M7 14h4"/>
+    </symbol>
+    <symbol id="acp-i-view-config" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 5h14M3 10h14M3 15h14"/><circle cx="7" cy="5" r="1.7" fill="currentColor"/><circle cx="13" cy="10" r="1.7" fill="currentColor"/><circle cx="8" cy="15" r="1.7" fill="currentColor"/>
+    </symbol>
+    <symbol id="acp-i-view-results" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 3v14h14M5 14l4-4 3 2 5-7"/><circle cx="9" cy="10" r="1"/><circle cx="12" cy="12" r="1"/>
+    </symbol>
+    <symbol id="acp-i-theme" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M15.5 12.5A6 6 0 0 1 7.5 4.5 6 6 0 1 0 15.5 12.5z"/>
+    </symbol>
+    <symbol id="acp-i-settings" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="10" cy="10" r="3"/><path d="M10 2.8v2M10 15.2v2M2.8 10h2M15.2 10h2M4.9 4.9l1.4 1.4M13.7 13.7l1.4 1.4M15.1 4.9l-1.4 1.4M6.3 13.7l-1.4 1.4"/>
+    </symbol>
+    <symbol id="acp-i-folder" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 5h5l1.7 2H17v9H3V5z"/>
+    </symbol>
+    <symbol id="acp-i-search" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="8.5" cy="8.5" r="5"/><path d="M12.5 12.5L17 17"/>
+    </symbol>
+    <symbol id="acp-i-approval" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 3h12v14H4zM7 7h6M7 10h6M7 13h3"/><path d="M12.5 13.5l1.3 1.3 2.2-2.4"/>
+    </symbol>
+    <symbol id="acp-i-monitor" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 4h14v10H3zM7 17h6M10 14v3"/>
+    </symbol>
   </defs>
 </svg>
 
@@ -115,100 +156,96 @@
 
   <header class="acp-shell-topbar">
     <div class="acp-shell-brand">
-      <div class="acp-shell-brand-mark" aria-hidden="true">A</div>
-      <div class="acp-shell-brand-copy">
-        <h1 data-i18n="shell.app.title">ACP 分子计算工作台 · Next</h1>
-        <span class="acp-shell-badge-lab" data-i18n="shell.app.badge">实验入口</span>
+      <div class="acp-shell-brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 2.7l8 4.6v9.4l-8 4.6-8-4.6V7.3l8-4.6z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M7.4 15.4V9l4.6 3 4.6-3v6.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></div>
+    </div>
+
+    <div class="acp-topbar-pop acp-project-wrap">
+      <button class="acp-project-btn" id="acp-project-btn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="acp-project-popover" aria-label="选择项目" data-i18n-aria="shell.project.select">
+        <svg class="acp-topbar-icon" width="15" height="15" aria-hidden="true"><use href="#acp-i-folder"/></svg>
+        <strong id="acp-project-name">全部项目</strong>
+        <svg class="acp-topbar-chevron" width="13" height="13" aria-hidden="true"><use href="#acp-i-chevron"/></svg>
+      </button>
+      <div class="acp-topbar-popover acp-project-popover" id="acp-project-popover" role="dialog" aria-modal="false" aria-label="选择项目" hidden>
+        <label class="acp-project-search" for="acp-project-search"><svg width="15" height="15" aria-hidden="true"><use href="#acp-i-search"/></svg><input id="acp-project-search" type="search" autocomplete="off" spellcheck="false" placeholder="搜索项目名称…" aria-label="搜索项目" data-i18n-ph="shell.project.search" data-i18n-aria="shell.project.search"></label>
+        <div class="acp-project-status" id="acp-project-status" role="status" aria-live="polite">正在读取项目…</div>
+        <div class="acp-project-list" id="acp-project-list" role="listbox" aria-label="可用项目"></div>
+        <button class="acp-project-retry" id="acp-project-refresh" data-i18n="shell.project.refresh" type="button">刷新项目列表</button>
+        <button class="acp-project-retry" id="acp-project-retry" data-i18n="shell.project.retry" type="button" hidden>重试项目列表</button>
       </div>
     </div>
 
-    <nav class="acp-shell-switch" role="tablist" aria-label="工作区" aria-orientation="horizontal"
-         data-i18n-aria="shell.workspace.switch_label" data-acp-focus-kind="tablist">
-      <button class="acp-shell-tab is-active" id="acp-tab-research" role="tab"
-              aria-selected="true" aria-controls="acp-ws-research" aria-keyshortcuts="Alt+1"
-              data-workspace-id="research" data-acp-focus-kind="tab"
-              tabindex="0" title="Alt+1/2/3 切换工作区" data-i18n-title="shell.workspace.shortcut_hint" type="button">
-        <svg class="acp-shell-tab-icon" width="16" height="16" aria-hidden="true"><use href="#acp-i-research"/></svg>
-        <span data-i18n="shell.workspace.research">研究</span>
+    <span class="acp-topbar-sep" aria-hidden="true">/</span>
+
+    <div class="acp-topbar-pop acp-view-wrap">
+      <button class="acp-view-btn" id="acp-view-menu-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="acp-view-menu" aria-label="当前视图：化学网络">
+        <svg class="acp-topbar-icon acp-current-view-icon" width="15" height="15" aria-hidden="true"><use id="acp-current-view-icon" href="#acp-i-view-network"/></svg>
+        <strong id="acp-current-view-name">化学网络</strong><span id="acp-current-view-short" class="acp-current-view-short">网络</span>
+        <svg class="acp-topbar-chevron" width="13" height="13" aria-hidden="true"><use href="#acp-i-chevron"/></svg>
       </button>
-      <button class="acp-shell-tab" id="acp-tab-molecular" role="tab"
-              aria-selected="false" aria-controls="acp-ws-molecular" aria-keyshortcuts="Alt+2"
-              data-workspace-id="molecular" data-acp-focus-kind="tab"
-              tabindex="-1" title="Alt+1/2/3 切换工作区" data-i18n-title="shell.workspace.shortcut_hint" type="button">
-        <svg class="acp-shell-tab-icon" width="16" height="16" aria-hidden="true"><use href="#acp-i-structure"/></svg>
-        <span data-i18n="shell.workspace.molecular">分子</span>
-      </button>
-      <button class="acp-shell-tab" id="acp-tab-execution" role="tab"
-              aria-selected="false" aria-controls="acp-ws-execution" aria-keyshortcuts="Alt+3"
-              data-workspace-id="execution" data-acp-focus-kind="tab"
-              tabindex="-1" title="Alt+1/2/3 切换工作区" data-i18n-title="shell.workspace.shortcut_hint" type="button">
-        <svg class="acp-shell-tab-icon" width="16" height="16" aria-hidden="true"><use href="#acp-i-task"/></svg>
-        <span data-i18n="shell.workspace.execution">执行</span>
-      </button>
-    </nav>
+      <div class="acp-topbar-popover acp-view-menu" id="acp-view-menu" role="menu" aria-label="切换工作视图" hidden>
+        <button class="acp-view-item is-active" id="acp-tab-research" role="menuitemradio" aria-checked="true" aria-current="page" aria-controls="acp-ws-research" aria-keyshortcuts="Alt+1" data-workspace-id="research" data-icon="acp-i-view-network" data-short="网络" type="button"><svg width="17" height="17" aria-hidden="true"><use href="#acp-i-view-network"/></svg><span><strong data-i18n="shell.workspace.research">化学网络</strong><small data-i18n="shell.workspace.desc.research">按项目查看结构、路径与任务关系</small></span><kbd>Alt+1</kbd></button>
+        <button class="acp-view-item" id="acp-tab-drawing" role="menuitemradio" aria-checked="false" aria-controls="acp-ws-drawing" aria-keyshortcuts="Alt+2" data-workspace-id="drawing" data-icon="acp-i-view-import" data-short="导入" type="button"><svg width="17" height="17" aria-hidden="true"><use href="#acp-i-view-import"/></svg><span><strong data-i18n="shell.workspace.drawing">结构导入</strong><small data-i18n="shell.workspace.desc.drawing">导入真实结构；二维绘制能力接入前明确标注</small></span><kbd>Alt+2</kbd></button>
+        <button class="acp-view-item" id="acp-tab-molecular" role="menuitemradio" aria-checked="false" aria-controls="acp-ws-molecular" aria-keyshortcuts="Alt+3" data-workspace-id="molecular" data-icon="acp-i-view-structure" data-short="3D" type="button"><svg width="17" height="17" aria-hidden="true"><use href="#acp-i-view-structure"/></svg><span><strong data-i18n="shell.workspace.molecular">三维结构</strong><small data-i18n="shell.workspace.desc.molecular">查看、测量、叠合、振动与帧选择</small></span><kbd>Alt+3</kbd></button>
+        <button class="acp-view-item" id="acp-tab-config" role="menuitemradio" aria-checked="false" aria-controls="acp-ws-config" aria-keyshortcuts="Alt+4" data-workspace-id="config" data-icon="acp-i-view-config" data-short="配置" type="button"><svg width="17" height="17" aria-hidden="true"><use href="#acp-i-view-config"/></svg><span><strong data-i18n="shell.workspace.config">任务配置</strong><small data-i18n="shell.workspace.desc.config">选择工作流、参数、草稿与预检提交</small></span><kbd>Alt+4</kbd></button>
+        <button class="acp-view-item" id="acp-tab-execution" role="menuitemradio" aria-checked="false" aria-controls="acp-ws-execution" aria-keyshortcuts="Alt+5" data-workspace-id="execution" data-icon="acp-i-view-results" data-short="结果" type="button"><svg width="17" height="17" aria-hidden="true"><use href="#acp-i-view-results"/></svg><span><strong data-i18n="shell.workspace.execution">状态与结果</strong><small data-i18n="shell.workspace.desc.execution">执行阶段、能量、路径、证据与产物</small></span><kbd>Alt+5</kbd></button>
+        <button class="acp-view-item" id="acp-tab-files" role="menuitemradio" aria-checked="false" aria-controls="acp-ws-files" aria-keyshortcuts="Alt+6" data-workspace-id="files" data-icon="acp-i-view-files" data-short="文件" type="button"><svg width="17" height="17" aria-hidden="true"><use href="#acp-i-view-files"/></svg><span><strong data-i18n="shell.workspace.files">文件</strong><small data-i18n="shell.workspace.desc.files">浏览项目文件、只读查看内容与命令行</small></span><kbd>Alt+6</kbd></button>
+      </div>
+    </div>
+
+    <div class="acp-dsh-session-slot" id="acp-dsh-session-slot" data-acp-session-slot="1"></div>
 
     <div class="acp-shell-focus" id="acp-focus-chip" role="status" aria-live="polite" data-empty="true">
       <span class="acp-shell-focus-empty" data-i18n="shell.focus.empty">未选择结构或任务</span>
     </div>
 
-    <div class="acp-shell-actions">
-      <button class="acp-tools-btn" id="acp-tools-btn" data-i18n="shell.tools.open"
-              type="button" aria-controls="acp-tools-drawer" aria-expanded="false">工具</button>
-      <button class="acp-shell-lang" id="acp-layout-edit" data-i18n="layout.title" type="button">配置布局</button>
-      <a class="acp-shell-link-classic" href="/">
-        <span data-i18n="shell.link.classic">经典工作台</span>
-        <svg width="14" height="14" aria-hidden="true"><use href="#acp-i-external"/></svg>
-      </a>
-      <button class="acp-shell-lang" id="acp-lang-toggle" data-i18n="shell.lang.toggle" type="button">中文 | EN</button>
-      <div class="acp-shell-pill" id="acp-conn-pill" data-conn="unknown" data-i18n="shell.conn.unknown">连接状态未知</div>
+    <button class="acp-conn-status" id="acp-conn-status" type="button" data-conn="unknown" aria-label="连接状态未知，点击重试" title="连接状态未知，点击重试">
+      <span class="acp-conn-dot" id="acp-conn-pill" data-conn="unknown" aria-hidden="true"></span><span id="acp-conn-label">未知</span>
+    </button>
+    <button class="acp-theme-btn" id="acp-theme-toggle" type="button" aria-label="主题切换（仅深色可用）" title="仅深色可用" aria-disabled="true" data-i18n-aria="shell.theme.dark_only" data-i18n-title="shell.theme.dark_only" disabled>
+      <svg width="16" height="16" aria-hidden="true"><use href="#acp-i-theme"/></svg>
+    </button>
+
+    <div class="acp-topbar-pop acp-settings-wrap">
+      <button class="acp-settings-btn" id="acp-settings-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="acp-settings-menu" aria-label="设置" title="设置" data-i18n-aria="shell.settings.title" data-i18n-title="shell.settings.title">
+        <svg class="acp-topbar-icon" width="16" height="16" aria-hidden="true"><use href="#acp-i-settings"/></svg>
+        <span data-i18n="shell.settings.title">设置</span>
+      </button>
+      <div class="acp-topbar-popover acp-settings-menu" id="acp-settings-menu" role="menu" aria-label="设置" hidden>
+        <div class="acp-settings-status" role="status">
+          <span class="acp-conn-dot" id="acp-conn-menu-dot" data-conn="unknown" aria-hidden="true"></span>
+          <span><strong data-i18n="shell.settings.connection">平台连接</strong><small id="acp-conn-text">连接状态未知</small></span>
+        </div>
+        <p class="acp-settings-label" data-i18n="shell.settings.platform">平台</p>
+        <button class="acp-settings-item" id="acp-approvals-btn" data-i18n="shell.platform.approvals" type="button" role="menuitem"><svg width="16" height="16" aria-hidden="true"><use href="#acp-i-approval"/></svg><span>审批</span></button>
+        <button class="acp-settings-item" id="acp-system-btn" data-i18n="shell.platform.system" type="button" role="menuitem"><svg width="16" height="16" aria-hidden="true"><use href="#acp-i-monitor"/></svg><span>系统状态</span></button>
+        <p class="acp-settings-label" data-i18n="shell.settings.workspace">工作台</p>
+        <button class="acp-settings-item" id="acp-layout-edit" data-i18n="layout.title" type="button" role="menuitem"><svg width="16" height="16" aria-hidden="true"><use href="#acp-i-view-config"/></svg><span>配置布局</span></button>
+        <button class="acp-settings-item" id="acp-lang-toggle" data-i18n="shell.lang.toggle" type="button" role="menuitem"><svg width="16" height="16" aria-hidden="true"><use href="#acp-i-research"/></svg><span>中文 | EN</span></button>
+        <a class="acp-settings-item acp-shell-link-classic" href="/" role="menuitem"><svg width="16" height="16" aria-hidden="true"><use href="#acp-i-external"/></svg><span data-i18n="shell.link.classic">经典工作台</span></a>
+      </div>
     </div>
   </header>
 
   <!-- A-63: the workspace landmark is focusable (tabpanel tabindex=0) so the
        skip link and panel-title walk have a real focus target. -->
-  <main class="acp-shell-main" id="acp-shell-main"
-        aria-label="工作区" data-i18n-aria="shell.workspace.switch_label"
-        data-acp-landmark="workspace-area">
-    <section class="acp-workspace" id="acp-ws-research" role="tabpanel"
-             aria-labelledby="acp-tab-research" tabindex="0"
-             data-workspace-id="research" data-acp-landmark="workspace" data-has-side="true" data-has-bottom="true">
-      <div class="acp-slot" data-slot="main"   id="acp-slot-research-main"></div>
-      <div class="acp-slot" data-slot="side"   id="acp-slot-research-side"></div>
-      <div class="acp-slot" data-slot="bottom" id="acp-slot-research-bottom"></div>
-    </section>
-    <section class="acp-workspace" id="acp-ws-molecular" role="tabpanel"
-             aria-labelledby="acp-tab-molecular" tabindex="0" hidden
-             data-workspace-id="molecular" data-acp-landmark="workspace" data-has-side="true" data-has-bottom="true">
-      <div class="acp-slot" data-slot="main" id="acp-slot-molecular-main"></div>
-      <div class="acp-slot" data-slot="side" id="acp-slot-molecular-side"></div>
-      <div class="acp-slot" data-slot="bottom" id="acp-slot-molecular-bottom"></div>
-    </section>
-    <section class="acp-workspace" id="acp-ws-execution" role="tabpanel"
-             aria-labelledby="acp-tab-execution" tabindex="0" hidden
-             data-workspace-id="execution" data-acp-landmark="workspace" data-has-side="true" data-has-bottom="true">
-      <div class="acp-slot" data-slot="main" id="acp-slot-execution-main"></div>
-      <div class="acp-slot" data-slot="side" id="acp-slot-execution-side"></div>
-      <div class="acp-slot" data-slot="bottom" id="acp-slot-execution-bottom"></div>
-    </section>
-  </main>
+  <div class="acp-next-body" id="acp-next-body">
+    <main class="acp-shell-main" id="acp-shell-main" aria-label="工作视图" data-i18n-aria="shell.workspace.switch_label" data-acp-landmark="workspace-area">
+      <section class="acp-workspace" id="acp-ws-research" role="region" aria-labelledby="acp-tab-research" tabindex="0" data-workspace-id="research" data-acp-landmark="workspace" data-has-side="false" data-has-bottom="false"><div class="acp-next-research-tools"><button id="acp-capability-btn" data-i18n="shell.platform.capability" type="button" aria-controls="acp-platform-panel" aria-expanded="false">科学能力计划</button><span>项目范围 · 需要真实审批后才可提交</span></div><div class="acp-slot" data-slot="main" id="acp-slot-research-main"></div><div class="acp-slot" data-slot="side" id="acp-slot-research-side" hidden></div><div class="acp-slot" data-slot="bottom" id="acp-slot-research-bottom" hidden></div></section>
+      <section class="acp-workspace" id="acp-ws-drawing" role="region" aria-labelledby="acp-tab-drawing" tabindex="0" hidden data-workspace-id="drawing" data-acp-landmark="workspace" data-has-side="false" data-has-bottom="false"><div class="acp-slot" data-slot="main" id="acp-slot-drawing-main"></div><div class="acp-slot" data-slot="side" id="acp-slot-drawing-side" hidden></div><div class="acp-slot" data-slot="bottom" id="acp-slot-drawing-bottom" hidden></div></section>
+      <section class="acp-workspace" id="acp-ws-molecular" role="region" aria-labelledby="acp-tab-molecular" tabindex="0" hidden data-workspace-id="molecular" data-acp-landmark="workspace" data-has-side="false" data-has-bottom="true"><div class="acp-slot" data-slot="main" id="acp-slot-molecular-main"></div><div class="acp-slot" data-slot="side" id="acp-slot-molecular-side" hidden></div><div class="acp-slot" data-slot="bottom" id="acp-slot-molecular-bottom"></div></section>
+      <section class="acp-workspace" id="acp-ws-config" role="region" aria-labelledby="acp-tab-config" tabindex="0" hidden data-workspace-id="config" data-acp-landmark="workspace" data-has-side="false" data-has-bottom="false"><div class="acp-slot" data-slot="main" id="acp-slot-config-main"></div><div class="acp-slot" data-slot="side" id="acp-slot-config-side" hidden></div><div class="acp-slot" data-slot="bottom" id="acp-slot-config-bottom" hidden></div></section>
+      <section class="acp-workspace" id="acp-ws-execution" role="region" aria-labelledby="acp-tab-execution" tabindex="0" hidden data-workspace-id="execution" data-acp-landmark="workspace" data-has-side="true" data-has-bottom="false"><div class="acp-slot" data-slot="main" id="acp-slot-execution-main"></div><div class="acp-slot" data-slot="side" id="acp-slot-execution-side"></div><div class="acp-slot" data-slot="bottom" id="acp-slot-execution-bottom" hidden></div></section>
+      <section class="acp-workspace" id="acp-ws-files" role="region" aria-labelledby="acp-tab-files" tabindex="0" hidden data-workspace-id="files" data-acp-landmark="workspace" data-has-side="false" data-has-bottom="false"><div class="acp-slot" data-slot="main" id="acp-slot-files-main"></div><div class="acp-slot" data-slot="side" id="acp-slot-files-side" hidden></div><div class="acp-slot" data-slot="bottom" id="acp-slot-files-bottom" hidden></div></section>
+    </main>
+    <div class="acp-next-task-sash" id="acp-next-task-sash" role="separator" aria-orientation="vertical" aria-controls="acp-next-task-rail" aria-valuemin="260" aria-valuemax="960" aria-valuenow="320" tabindex="0" title="拖拽调整任务栏宽度；双击恢复 320px；方向键微调"></div>
+    <aside class="acp-next-task-rail" id="acp-next-task-rail" aria-label="任务"><header><svg width="16" height="16" aria-hidden="true"><use href="#acp-i-task"/></svg><strong data-i18n="shell.tasks.title">任务</strong><span data-i18n="shell.tasks.global_hint">所有视图常驻</span><select class="acp-task-mode" id="acp-next-task-mode" aria-label="任务栏位置"><option value="right" data-i18n="shell.tasks.mode.right">右侧</option><option value="bottom" data-i18n="shell.tasks.mode.bottom">底部</option><option value="drawer" data-i18n="shell.tasks.mode.drawer">抽屉</option></select><button id="acp-next-task-close" type="button" aria-label="收起任务栏" data-i18n-aria="shell.tasks.collapse" title="收起任务栏" data-i18n-title="shell.tasks.collapse">»</button></header><div id="acp-next-task-host"></div></aside>
+  </div>
+  <footer class="acp-next-statusbar"><span id="acp-next-status" role="status">未选择任务</span><button id="acp-next-task-open" type="button" aria-expanded="false" aria-controls="acp-next-task-rail">当前任务</button><button id="acp-next-job-edit" data-i18n="shell.platform.edit_task" type="button" hidden>修改参数后重算</button><span class="acp-next-muted">切换视图保留对象、任务与草稿</span></footer>
 
-  <!-- V7: default access to registered modules that are not pinned to a core
-       recipe. One module is mounted at a time and disposed on close/switch. -->
-  <aside class="acp-tools-drawer" id="acp-tools-drawer" hidden
-         aria-label="工具" data-i18n-aria="shell.tools.title" data-acp-tools="drawer">
-    <nav class="acp-tools-nav" role="tablist" aria-orientation="vertical"
-         data-acp-tools-tabs>
-      <p class="acp-tools-nav-title" data-i18n="shell.tools.title">工具</p>
-    </nav>
-    <div class="acp-tools-main">
-      <header class="acp-tools-head">
-        <h2 class="acp-tools-title" data-acp-tools-title data-i18n="shell.tools.title">工具</h2>
-        <button class="acp-tools-close" data-acp-tools-close type="button"
-                aria-label="关闭工具面板" data-i18n-aria="shell.tools.close">×</button>
-      </header>
-      <div class="acp-tools-host" data-acp-tools-host></div>
-    </div>
-  </aside>
+  <section class="acp-platform-panel" id="acp-platform-panel" role="dialog" aria-modal="true" aria-labelledby="acp-platform-title" hidden>
+    <header><h2 id="acp-platform-title"></h2><button id="acp-platform-close" type="button" aria-label="关闭平台面板">×</button></header>
+    <div class="acp-platform-host" id="acp-platform-host"></div>
+  </section>
 
   <!-- whole-page fatal layer (registry/bootstrap failure), design §2.2 -->
   <div class="acp-shell-fatal" id="acp-shell-fatal" hidden role="alert"></div>
@@ -216,6 +253,8 @@
 </div>
 
 <!-- ── classic script stack, explicit order, no build step ── -->
+<!-- host environment seam (window.ACP_ENV injection point; defaults to Workbench) -->
+<script src="/js/shell/host-env.js"></script>
 <!-- client transport + shared cache -->
 <script src="/js/client/transport.js"></script>
 <script src="/js/client/resource-store.js"></script>
@@ -235,6 +274,7 @@
 <script src="/js/client/research-query.js"></script>
 <script src="/js/client/research-commands.js"></script>
 <script src="/js/client/system-endpoints.js"></script>
+<script src="/js/client/project-files.js"></script>
 <!-- shell core (load order matters: i18n → context → registry → loader → commands → layout → recipes → bootstrap) -->
 <script src="/js/shell/i18n.js"></script>
 <script src="/js/shell/workspace-context.js"></script>
@@ -245,7 +285,11 @@
 <script src="/js/shell/recipes.js"></script>
 <script src="/js/shell/layout-preferences.js"></script>
 <script src="/js/shell/layout-editor.js"></script>
-<script src="/js/shell/tool-drawer.js"></script>
+<script src="/js/shell/project-switcher.js"></script>
+<script src="/js/shell/topbar.js"></script>
+<script src="/js/shell/global-regions.js"></script>
+<script src="/js/shell/connection.js"></script>
+<script src="/js/shell/platform-panels.js"></script>
 <script src="/js/shell/bootstrap.js"></script>
 <!-- UI-02/UI-03A module runtime deps: shared geometry store + visualization
      stack (the only sanctioned $3Dmol station is mol3d_adapter) + the three
@@ -273,17 +317,26 @@
      registry during bootstrap.boot() below) -->
 <script src="/js/modules/molecule-viewer/module.js"></script>
 <script src="/js/modules/energy-profile/module.js"></script>
+<script src="/js/modules/results-workspace/module.js"></script>
+<script src="/js/modules/files-workspace/module.js"></script>
 <script src="/js/modules/task-explorer/module.js"></script>
 <script src="/js/modules/agent-workspace/module.js"></script>
 <script src="/js/modules/task-config/model.js"></script>
 <script src="/js/modules/task-config/module.js"></script>
 <script src="/js/modules/exec-detail/module.js"></script>
+<!-- reaction-network: pinned local UMD globals `cytoscape`, `ELK`, then
+     `cytoscapeElk` (the adapter auto-registers with Cytoscape). No runtime CDN. -->
+<script src="/js/vendor/cytoscape-3.34.4.min.js"></script>
+<script src="/js/vendor/elk-0.12.1.bundled.js"></script>
+<script src="/js/vendor/cytoscape-elk-2.3.0.js"></script>
 <script src="/js/modules/reaction-network/module.js"></script>
+<script src="/js/modules/structure-import/module.js"></script>
 <script src="/js/modules/node-status/module.js"></script>
 <script src="/js/modules/approval-card/module.js"></script>
 <script src="/js/modules/capability-form/module.js"></script>
 <script src="/js/modules/s2-scan/module.js"></script>
 <script src="/js/modules/task-wizard/module.js"></script>
+<script src="/js/modules/config-workspace/module.js"></script>
 <script src="/js/modules/nmr-report/module.js"></script>
 <script src="/js/modules/tsmode-editor/module.js"></script>
 <script src="/js/modules/mechanism-plan/module.js"></script>

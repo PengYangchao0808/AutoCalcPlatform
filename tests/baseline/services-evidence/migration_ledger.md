@@ -118,6 +118,7 @@
 | 首次规划预算预留与两阶段账本（M1-04c，2026-10-27） | `src/acp_services/runtime/planning_reservation.py:1`（复用 `research_session.planning_claim` + `ReservationLedger`） | 不新增账本/表；planning budget_id = project + `planning:<research>:<session>`，执行阶段仍为 project+proposal_ref | 尚未接线：模型 gateway（M3-03）是该预留的生产消费者；`reconcile_planning` 为对账只读面 | [OPEN] 模块级已验证：服务端派生 claim/request/receipt digest、不伪造 job/attempt、同 claim 重放同一 reservation、unknown/stream 中断保持 reserved 且不 release。真实 gateway 接线与真实模型调用未落，额度不得标 enforced | `tests/test_acp2_planning_reservation.py` |
 | MCP wire id 去混淆与隔离治理（M1-01c，2026-10-27） | `src/acp_services/entrypoints/wire_identifiers.py:1`（`NEGOTIATION_EXTENSION_ID` + `REVIEWED_WIRE_IDENTIFIERS` 唯一常量驻点） | `src/acp_services/entrypoints/mcp.py` 仅常量引用（`wire_identifiers.NEGOTIATION_EXTENSION_ID`），不再有 `chr(97)` 拼接与第二份字面量 | `src/acp_services/entrypoints/mcp.py:initialize`（`capabilities.extensions` 指引）；两个隔离扫描器 `tests/test_acp_services_isolation.py`、`tests/test_services_injection_contracts.py` 读取同一 allowlist | [CLOSED] 本行声明范围：删除 `chr(97)` 装配、wire 字面量集中到单一经审查模块、root `AGENTS.md` ANTI #29 例外范围收窄（ANTI #32 不新增例外）、扫描器改为按常量值+模块 allowlist（不按行号/函数位置豁免）并保留 import/importlib/getattr/sys.modules 负例。**退出条件**：新增 wire id 必须先在本模块常量+冻结契约登记并补越界负例；任何模块（含本模块）出现 import/反射仍失败；`REVIEWED_WIRE_IDENTIFIERS` 之外的 `acp.*` 字面量一律失败。扩展 id/version 语义仍属 P2 契约（不由本行声明） | `tests/test_acp_services_isolation.py`；`tests/test_services_injection_contracts.py`；`tests/test_services_worker_contract.py` |
 | RPH 研究消费面与客户端恢复元数据（F05，2026-10-29） | `src/acp_services/entrypoints/research_consumption.py:1`；`src/acp_services/runtime/research_consumption.py:1` | `acp.research.v1` 协商后加性消费操作；不新增旧路径实现或 worker checkpoint | `src/acp/services_mcp_bootstrap.py`；`rph/packages/dsh-bundle/src/product-parts.ts` | [OPEN] 单元/CAS/fake gateway 与安装入口验证；真实 HTTP 消费、同链模型/QC/恢复为 NOT_VERIFIED，须 Phase C 回执后复核，不提升正式发布门 | `tests/test_acp2_research_consumption.py`；`rph/test/product-parts.test.ts` |
+| 项目级只读文件 API（project_files） | `src/acp_services/data/project_files.py:1` | 无（新增只读面；旧任务级 GET 保留） | `src/acp/api/v2_routes.py`（GET /projects/{id}/tree 与 /file） | [CLOSED] 项目 root 限平台 run_root 直接子目录；严格相对 POSIX 路径并拒绝链接/敏感项；GET 零副作用；复用 v2 项目与 entry access | `tests/test_services_project_files.py`；`tests/test_acp_api_v2_project_files.py` |
 
 | M2-04a 唯一 StepDispatchAdapter（冻结 step→TaskRequest/TaskContext→run_*→完成资格→产物声明） | `src/acp_services/runtime/step_dispatch.py:1` | 无（新面，无 acp 旧路径） | `src/acp_services/runtime/step_dag_worker.py`（StepDagTaskExecutor） | [CLOSED] 单参 DispatchFn、typed request、decide_task_result 复用、产物/publish 分验；真实 QC 未执行 | `tests/test_acp2_runtime_bounded_recipe_dag_a.py` |
 | M2-04b 冻结定义身份与运行时执行身份分离（StepDagDefinition + 双 digest 校验） | `src/acp_services/runtime/step_definition.py:1` | 无（新面）；envelope `step_identities` wire 名保留 | `src/acp_services/runtime/step_dag.py`（materialize_execution_identity）；`src/acp_services/runtime/step_dag_worker.py` | [CLOSED] 转换在 freeze；runtime 只反序列化；运行时只用 CCCP materialize_step_identity；旧 DagRunState 拒绝收养 | `tests/test_acp2_runtime_bounded_recipe_dag_b.py` |
@@ -134,16 +135,15 @@
 - remote paths/release/submission → 行 7/8/9；calculations 发布 → 行 12；
 - api 读取 → 行 17；init_wizard → 行 28；catalog → 行 26；
 - 另含 storage/manifest、results/frame_candidates、remote_structure_cache、scheduler/store、manager 控制面、calculations/executor、calculations/step_requirements、api 事件/SSE、scheduler/events、remote/script_gen、CLI dispatch、batch engine、compat/legacy、workflows registry。
-
 **逐资源过渡兼容面（todo 16 追加）**：cache-only 逐资源切换新增 5 行兼容面登记
 （catalog/manifest/frame_candidates/frequency_modes/geometry），每行含调用者（兼容入口=旧 GET、生产消费者=新只读面）、
 期限（矩阵收口切片）与退出条件（F0/F1×S0/S1 矩阵齐备且旧 GET 零消费者后删除）。
 旧读取根 GET 过渡适配器（todo 15 登记）在窗口内保留，其终态远端 `fetch_catalog` 副作用属已登记过渡项。
 
-## 当前台账摘要（2026-10-22；2026-10-24 追加 2 行 B1-1/B1-7；2026-10-27 M1-04 追加 3 行；2026-10-27 M2-04 追加 6 行；保留 todo 70 的历史收口口径）
+## 当前台账摘要（2026-10-22；2026-10-24 追加 2 行 B1-1/B1-7；2026-10-27 M1-04 追加 3 行；2026-10-27 M2-04 追加 6 行；2026-11-04 追加 1 行 project_files；保留 todo 70 的历史收口口径）
 
-- **行数**：78（全部恰好 6 列；守护 `tests/test_services_first_slice_contracts.py` + `tests/test_acp_services_isolation.py`）。
-- **状态计数**：`[CLOSED]` 59 · `[RETAINED]` 5 · `[OPEN]` 14 · `[DEFERRED]` 0。
+- **行数**：79（全部恰好 6 列；守护 `tests/test_services_first_slice_contracts.py` + `tests/test_acp_services_isolation.py`）。
+- **状态计数**：`[CLOSED]` 60 · `[RETAINED]` 5 · `[OPEN]` 14 · `[DEFERRED]` 0。
 - **2026-10-24 追加**：`research_resource_key`（B1-7）与 `PrepareOperationService.list_for_job`（B1-1）各 1 行，均为只读/加性能力；HTTP 投影尚未接线，未改写任何既有 `NOT_VERIFIED` 状态。
 - **本轮关闭的切片**：todo 6（ProjectManager/Workspace owner）、11—15（Data 端口/持久 prepare/读取根）、25—29（Runtime 控制/PES-plan 恢复/发布端口）、77（store/migrations/plan/step 闭包迁移）。
 - **保留面（未删除）**：`acp.calculations.primitives`、`acp.backends`、`acp.scheduler.{store,migrations}` 等同实现转发，`src/acp/compat/legacy/` 只读历史 reader，`tests/baseline/recovery_fixtures/` 跨版本 fixture，模型/资产/notice 随包。调用者审计见 `public_shim_inventory.md`。

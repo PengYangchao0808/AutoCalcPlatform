@@ -1,5 +1,8 @@
 # ACP 文档入口
 
+> **2026-11-04 开发导航增量**：[ACP3 双人总纲 §10](reference/next-change/ACP_3.0_Architecture_20261031.md)是责任/排序/交接/进度唯一入口；A=用户（前端+化学语义编译+网络适配），B=队友（科学 Workflow 编译+插件+最小执行平台接入）。先 C0/P0 契约，再 C1—C4 本机/远程科研闭环，C5 Agent 与扩展随后。插件细节见[CCCP × ACR](reference/next-change/ACP_V3_CCCP_ACR_Backend_Architecture_20261102.md)，当前网络接口见[网络契约](reference/next-change/ACP_Chemistry_Network_Contract_20261103.md)。历史审查计数与发布门不变；本次未进行真实计算验收。
+
+
 > **最后核对**：2026-10-31（文档结构批次）· 本文件是唯一入口。新增、移动或废弃文档时，必须同步本文件与对应目录的 `README.md`，并跑 `python scripts/check_docs_links.py`。
 >
 > 代码契约以仓库根的 `AGENTS.md` 和各包 `AGENTS.md` 为准；两者冲突时**以代码与 `AGENTS.md` 为准**，文档按它修正。
@@ -22,6 +25,7 @@
 | 改工作流、调度、Job 生命周期 | `src/acp/AGENTS.md`、`src/acp/scheduler/AGENTS.md` | [ACP_Job_File_Layout_Spec](reference/current/ACP_Job_File_Layout_Spec.md) |
 | 改平台服务层（store/data/runtime） | `src/acp_services/AGENTS.md` | [ACP_Services_Closure_20261019](reference/current/ACP_Services_Closure_20261019.md) |
 | 做前端可视化 / 迁移老 UI 功能 | [ACP 3.0 前端计划 v2（功能对等 + 两条任务线）](reference/next-change/ACP_3.0_Frontend_Plan_20261031.md)§2.4 / §5 | [能量/轨迹查看器 DevDoc](reference/current/ACP_Energy_Trajectory_Viewer_DevDoc.md)、[结构查看器 DevDoc](reference/current/ACP_Structure_Viewer_DevDoc.md) |
+| 开发 ACP-NEXT（DSH 插件）/ 按草图布局 / 接入 RPH | [ACP-NEXT 插件计划 §13 / 草图 A—F 对齐 §13.10](reference/next-change/ACP_Frontend_DSH_Pluginization_Plan_20261102.md) | [三工作区目标形态](reference/next-change/ACP_Frontend_Target_Workbench_Plan_20261030.md)、[3.0 功能对等矩阵](reference/next-change/ACP_3.0_Frontend_Plan_20261031.md)、[MCP / Agent 统一计划](reference/next-change/ACP_MCP_Agent_Guidance_PES_Batch_Plan_20261030.md) |
 | 改 API / 前端接口 | `src/acp/api/AGENTS.md` | [任务文件布局](reference/current/ACP_Job_File_Layout_Spec.md)、[前端目标形态方案](reference/next-change/ACP_Frontend_Target_Workbench_Plan_20261030.md) |
 | 改结构输入 / 结果复用 / 查看器 | [ACP_Structure_Sources_DevDoc](reference/current/ACP_Structure_Sources_DevDoc.md) | [ACP_Structure_Viewer_DevDoc](reference/current/ACP_Structure_Viewer_DevDoc.md)、[能量与轨迹查看器](reference/current/ACP_Energy_Trajectory_Viewer_DevDoc.md) |
 | 改 NMR / DP4 | `src/acp/nmr/AGENTS.md` | [ACP_NMR_DP4_DevDoc](reference/current/ACP_NMR_DP4_DevDoc.md) |

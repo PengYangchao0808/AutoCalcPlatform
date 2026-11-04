@@ -1,5 +1,11 @@
 # ACP 3.0 前端可视化适配计划（v2 · 可视化先行）
 
+> **2026-11-04 双人开发同步**：本文件继续持有 P01—P24 parity 范围；新增 Chemical IR/ResearchPlan/语义诊断与物种—结构—证据交互按[架构总纲 §10](ACP_3.0_Architecture_20261031.md)的 A 线 C0—C5 实施。不是把新增能力标为老功能已迁移。DSH 布局按插件计划 §13.13—15；下文旧缺口/周数属于各自审查快照，11-04 增量更正见文末。
+
+> **2026-11-03 布局更新**：用户新草图 A—G 的最新布局见[插件计划 §13.13](ACP_Frontend_DSH_Pluginization_Plan_20261102.md#next-layout-20261103)：中央 A/B/C/E/F 切换，D 当前任务全局常驻，G 文件/日志/命令行统一停靠。此为布局提案，不改本文件唯一 P01—P24 功能对等清单，也不提升真实数据/科研链验收状态。
+
+> **2026-11-02 产品与排序修订**：**ACP-NEXT 即 DSH 化学工作台插件**，`/next/` 为独立测试/迁移入口，不另立独立 APP 产品。已核对用户《回顾ACP2更新》的原手绘图，A—F 对齐见 [插件计划 §13.10](ACP_Frontend_DSH_Pluginization_Plan_20261102.md#1310-原草图对齐acp-next-的产品与界面验收依据)。DSH 接入由末期 V8 提前为首批最小纵向切片，修改、RPH 接入与验收以该计划 §13 为准；本文件继续持有唯一 P01—P24 功能对等矩阵与既有实现记录。下文 D1/D4、“最后宿主”“B 线不得抢 A 线资源”及 V8 推迟是此前排序，不再约束本次已选的 DSH 接入切片；其余功能范围与真实验收要求保留。此次是计划调整，不代表插件已实现。
+
 **日期**：2026-10-31（v2 改写）· **性质**：实施计划（**前端**；目标为全功能对等 D5；不含后端实现，后端缺口见 §6 登记）
 **上位**：[ACP 3.0 架构与共享契约](ACP_3.0_Architecture_20261031.md) · [前端目标形态](ACP_Frontend_Target_Workbench_Plan_20261030.md) · [多用户/DSH 拓扑](ACP_MultiUser_VirtualHost_DSH_Topology_20261031.md)
 **并行**：[ACP 3.0 后端实现计划](ACP_3.0_Backend_Plan_20261031.md)（本计划**不等待**它）
@@ -295,7 +301,7 @@ window.ACPView.source.create({ mode, baseUrl, fetch })
 - ✅ **A-63 已落地（代码/契约层）**：Shell skip link、tabs `role=tab`/`aria-selected`、panel `region`/focus metadata、layout-editor dialog Tab trap + focus restore、Escape 退出、focus order tabs→panel titles→content；新增 `acp2_shell_a11y.test.js` 10 项。
 - **Track A 63/63 收口（62 实现 + A-49 ADR 退役）**（A-00…A-09、A-10…A-28、A-30/31、A-32…A-48、A-50…A-56、A-57…A-63）。V7 代码/装配/parity 已完成；真实浏览器后端/Playwright/科学闭环仍为 NOT_VERIFIED。
 - **并行批次专项测试**：task-explorer **58**、node-status **15**、approval-card **16**、capability-form **20**、exec-detail **27**、molecule-viewer **51**、task-config **23**、s2-scan **20**、task-wizard **66**、nmr-report **30**、tsmode-editor **21**、job-edit **29**、mechanism-plan **29**、research-record **31**、path-view **25**、pes-handoff **37**、theme-narrow **6**、shell-a11y **10**、tool-drawer **3**、tool-drawer-dom **3**、boot-registration **3**、parity **3**、i18n **5**、layout-preferences **5**；全量 `run_all.js` **1115 passed / 0 failed**。
-- **并行批次未验收面**：以上只完成模块注册 + 四态 + Node vm 专项测试；真实服务/权限、Playwright 浏览器套件、i18n 全键（EN）仍未执行。2026-10-31 用 headless Edge + CDP 做了 **1280px 静态 boot**、**skip-link/live-region/tab Arrow/布局 dialog Escape**、**真实工具抽屉点击**（12 tabs，task-wizard/job-edit 挂载；无后端 404 属预期）和 **390×844 移动 emulation**：`innerWidth=390`、`scrollWidth=390`、`data-acp-ready=true`，单列无横向溢出，0 uncaught；证据在 `reports/acp2_implementation/next_boot_20261031/`。Playwright 完整交互套件与真实后端数据仍 NOT_VERIFIED。A-48 的后端契约验证是 throwaway 进程，不等于真实 ORCA/HTTP 运行。A-61 的 **1783 keys/language** 已覆盖 16 个新模块（1717 模块自有键）；仅浏览器 EN 文案未逐项走查。`research-record` 的提交还依赖 shell 注入 `researchBinding`（当前 `layout-manager.hostApi()` 无 per-module deps 通道），缺失时只能走高级 JSON 绑定或拒绝提交；`mechanism-plan` 的 plan 确认后端返回 410。A-62 的静态审计未纳入后加的 `path-view.css`/`pes-handoff.css`，它们的颜色/720 规则需在 V7 前补审。
+- **并行批次未验收面（历史记录；工具抽屉已于 2026-11 移除）**：以上只完成模块注册 + 四态 + Node vm 专项测试；真实服务/权限、Playwright 浏览器套件、i18n 全键（EN）仍未执行。2026-10-31 用 headless Edge + CDP 做了 **1280px 静态 boot**、**skip-link/live-region/tab Arrow/布局 dialog Escape**、**真实工具抽屉点击**（12 tabs，task-wizard/job-edit 挂载；无后端 404 属预期）和 **390×844 移动 emulation**：`innerWidth=390`、`scrollWidth=390`、`data-acp-ready=true`，单列无横向溢出，0 uncaught；证据在 `reports/acp2_implementation/next_boot_20261031/`。Playwright 完整交互套件与真实后端数据仍 NOT_VERIFIED。A-48 的后端契约验证是 throwaway 进程，不等于真实 ORCA/HTTP 运行。A-61 的 **1783 keys/language** 已覆盖 16 个新模块（1717 模块自有键）；仅浏览器 EN 文案未逐项走查。`research-record` 的提交还依赖 shell 注入 `researchBinding`（当前 `layout-manager.hostApi()` 无 per-module deps 通道），缺失时只能走高级 JSON 绑定或拒绝提交；`mechanism-plan` 的 plan 确认后端返回 410。A-62 的静态审计未纳入后加的 `path-view.css`/`pes-handoff.css`，它们的颜色/720 规则需在 V7 前补审。
 
 ### V3 谱图（5 人日）
 - `nmr-panel`：先 `live(file)`（读现有文件端点）+ fixture；归属高亮、峰表、多候选切换。
@@ -466,7 +472,7 @@ DSH 插件打包、`/u/{account}/panel/*`、v3 事件流、多用户隔离。v1 
 | BE-GAP-05 | 无波函数/轨道端点（架构 §2.4 明示 ABSENT） | F11（老 UI 只有占位 tab） | 隐藏面板 + "未接入" | 科学侧定义轨道产品 |
 | BE-GAP-06 | `TaskRowProjection` 缺 `stage_order / stage_progress` | F9 进度条准确性 | 读 v1 `stage_*` 字段 | 投影扩展或明确二选一 |
 | BE-GAP-07 | 通用多帧端点缺失（仅 s2/irc 专用） | F2 轨迹 | 用 structure-viewer 多帧 XYZ | 轨迹产品契约 |
-| BE-GAP-08 | 迁移号冲突：代码已用 **024/025/027**（026 按约定缺号），文档中的 024/025 提案已撞号 | 后端建表 | 与本计划无关（前端不建表） | 后端改用 **028+** |
+| BE-GAP-08 | 迁移号冲突：代码已用 **024/025/027**（026 按约定缺号），文档中的 024/025 提案已撞号 | 后端建表 | 与本计划无关（前端不建表） | 合并前从实际 migrations 最新值后分配（工作区已有 029），不预占号 |
 | BE-GAP-09 | 多用户/宿主基础设施 0%（主机生命周期、acpfs、`/u/{account}` 反代） | V8 阶段 | 单用户本地入口 | WP1/WP4 交付 |
 | BE-GAP-10 | 网络算法落点未定：目标形态提到 `acp_services/chemistry/`，但该目录**不存在**，后端计划也无对应工作包 | BE-GAP-02 前置 | 只读历史数据（不变） | 后端补 WP 并定落点 |
 | BE-GAP-11 | 跨任务构象身份缺失（`structure_sources.py` 硬编码 `smiles=None`） | F9 跨任务构象表 | 单任务内展示 | 身份链路补齐 |
@@ -533,3 +539,27 @@ DSH 插件打包、`/u/{account}/panel/*`、v3 事件流、多用户隔离。v1 
 | [UI-00 契约草案](ACP_Frontend_UI00_Module_Recipe_Contract_Draft_20261030.md) | 模块契约（descriptor/factory/ModuleInstance）继续有效，本计划复用 |
 | [UI-01/02/03A](ACP_Frontend_UI01_UI02_UI03A_Closure_20261030.md)、[UI-03/04/05](ACP_Frontend_UI03_UI04_UI05_Closure_20261030.md) 收口 | 已交付能力基线；本计划只做增量 |
 | [能量/轨迹查看器 DevDoc](../current/ACP_Energy_Trajectory_Viewer_DevDoc.md)、[结构查看器 DevDoc](../current/ACP_Structure_Viewer_DevDoc.md) | 帧/视图契约权威；`VIEW_REGISTRY` 与 `to_node()/to_annotation()` 不得绕过（ANTI #21） |
+
+## 11. A 线化学编译与前端增量（2026-11-04）
+
+A 不只负责页面：同时主写纯科学 Chemical IR / Chemical Compiler 与 ResearchPlan→WorkflowRecipe 的唯一接入适配。B 主写 Workflow Compiler/Provider/Renderer/Parser。具体对象语义、路径草案、交接门仅引用架构 §10.2—10.7，不在本文件复制 schema。
+
+| 阶段 | 界面/服务交付 | 消费 B 的什么 | 不能以何种结果替代 |
+|---|---|---|---|
+| C0/C1 | 导入源/解析能力标识、未识别内容、化学问题、字段诊断、计划预览；无模型手动路径 | 目录快照/参数契约/几何候选能力 | 上传成功不代表完成映射/3D/TS |
+| C2 | Species→Conformer/Structure→Task/Attempt 逐层展开；独立 TS；未知/弱身份提示；claim 草稿与版本冲突 | 身份适用域、科学结果/验证契约 | 同键聚图不代表手动组归并、驻点验证或化学连接 |
+| C3 | 预览能力需求、依赖、所缺证据/能力、方法约束、预算与确认版本；变更后旧预览失效 | Recipe compiler/Provider lock/诊断 | fixture DAG 不代表真实可执行计划 |
+| C4 | 点击物种/TS/边回到对应结构、振动、IRC、能量与原始 Artifact；部分失败可见 | 实际 ScienceResult/Validator；ACR/Data 状态 | COMPLETED 或曲线峰值不代表化学支持 |
+| C5 | 假设/竞争路径/证据缺口/下一步、停止理由和人工介入次数 | 授权/预算/事件恢复 | 一轮对话不代表真模型+QC 自主闭环 |
+
+所有视图保留同一 project/task/attempt/claim 上下文和来源标签。UI 只投影证据状态，不在 JS 中另写科学验证器；网络加载不启动 QC 或远端下载。颜色之外显示文字/图例，空/未连接/失败/partial 各自可辨。
+
+### 11.1 旧缺口的增量更正（不覆盖历史回执）
+
+- BE-GAP-02/10：11-03 工作区已新增 `/api/v2/projects/{id}/chemistry-network`（注意 chemistry，不是旧提案 chemical），投影/身份/持久化见网络契约。完整反应边、Chemical IR/claim/编译写入仍待 C0—C4；不以旧表名 `structure_connectivity` 强制建表。
+- BE-GAP-11：B1 分子身份已有实现，不等于构象聚类、严格电子态身份或 Viewer 按身份解析均已验收；这些分别列门。
+- BE-GAP-08/C1：旧 028+ 提议也已过时，当前工作区含 028/029；实际合并前分配，不抢占编号。
+- BE-GAP-01/09：DSH 单用户宿主切片与完整工作站基础设施不同，不能因无 v3/多用户而冻结所有界面开发。
+- C8/BE-GAP-12：MCP 按当前 tools/list/装配/协商发现；文档计数不得作 wire 固定值。后端迁移快照已本批更正，但本批没有验收新 MCP 工具。
+
+本节均为增量开发要求，未新增 parity PASS 或 live 验收结论。

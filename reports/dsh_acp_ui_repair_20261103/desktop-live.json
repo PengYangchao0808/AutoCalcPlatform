@@ -1,0 +1,42 @@
+{
+  "status": "PASS",
+  "date": "2026-11-03",
+  "host": "DSH 0.2.1-rc.5 Windows desktop",
+  "first": {
+    "mounted": true,
+    "booted": true,
+    "readOnly": true,
+    "degraded": true,
+    "sessionBound": true,
+    "roots": 1,
+    "panels": 3,
+    "globalACPClient": false,
+    "globalShell": false,
+    "errors": [],
+    "slotErrors": 0,
+    "focusGeneration": 1,
+    "focusRevision": 0,
+    "width": 575,
+    "height": 742
+  },
+  "reopened": {
+    "mounted": true,
+    "booted": true,
+    "readOnly": true,
+    "degraded": true,
+    "sessionBound": true,
+    "roots": 1,
+    "panels": 3,
+    "globalACPClient": false,
+    "globalShell": false,
+    "errors": [],
+    "slotErrors": 0,
+    "focusGeneration": 2,
+    "focusRevision": 0,
+    "width": 575,
+    "height": 742
+  },
+  "uncaughtExceptions": 0,
+  "controller": "not running; explicitly degraded",
+  "scope": "native UI load, not model/QC acceptance"
+}

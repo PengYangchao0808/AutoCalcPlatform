@@ -107,6 +107,7 @@ module.exports.register = async function (h) {
         hidden: false,
         disabled: false,
         attrs: {},
+        style: {},
         listeners,
         setAttribute(k, v) { this.attrs[k] = String(v); if (k === "id") byId.set(String(v), this); },
         getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; },
@@ -360,7 +361,7 @@ module.exports.register = async function (h) {
   function filterChips(root) {
     const filters = findByClass(root, "acp-mod-tasks-filters");
     return filters
-      ? walk(filters).filter((n) => n.tagName === "BUTTON" && n.getAttribute("data-acp-status"))
+      ? walk(filters).filter((n) => n.tagName === "BUTTON" && n.getAttribute("data-acp-filter"))
       : [];
   }
 
@@ -646,7 +647,7 @@ module.exports.register = async function (h) {
     // Toolbar present: project select + refresh button.
     const refresh = findByClass(root, "acp-mod-tasks-refresh");
     assert(refresh, "refresh button rendered");
-    assertEq(refresh.getAttribute("data-i18n"), "next.tasks.refresh");
+    assertEq(refresh.getAttribute("data-i18n-aria"), "next.tasks.refresh");
     // Loading state existed before the body arrived (root flipped to empty).
     assertEq(ctx.client.taskView.viewCalls.length, 1, "exactly one explicit fetch, no polling");
   });
@@ -655,8 +656,8 @@ module.exports.register = async function (h) {
     const ctx = setup();
     await mountReady(ctx, bodyWith([
       { key: "ethanol", jobs: [
-        jobRow({ id: "job-A", display_name: "ethanol_sp", status: "completed", attempt: 1 }),
-        jobRow({ id: "job-B", display_name: "ethanol_opt", status: "running", workflow: "optimize", attempt: 2 }),
+        jobRow({ id: "job-A", display_name: "ethanol_sp", status: "completed", attempt: 1, updated_at: 1700000000 }),
+        jobRow({ id: "job-B", display_name: "ethanol_opt", status: "running", workflow: "optimize", attempt: 2, progress: 0.5 }),
       ] },
       { key: "benzene", jobs: [
         jobRow({ id: "job-C", display_name: "benzene_freq", status: "failed", workflow: "frequency", attempt: 3 }),
@@ -674,10 +675,17 @@ module.exports.register = async function (h) {
     assert(badgeA, "completed badge on row A");
     const badgeC = walk(rowC).find((n) => String(n.className).indexOf("acp-mod-tasks-badge--failed") !== -1);
     assert(badgeC, "failed badge on row C");
-    assertEq(walk(rowA).some((n) => String(n.className).indexOf("acp-mod-tasks-attempt") !== -1), false,
-      "no attempt chip for attempt 1");
+    assertEq(walk(rowA).some((n) => String(n.className).indexOf("acp-mod-tasks-attempt") !== -1), true,
+      "attempt 1 is still visible in the meta line");
     assertEq(walk(rowB).some((n) => String(n.className).indexOf("acp-mod-tasks-attempt") !== -1), true,
       "attempt chip for attempt > 1");
+    assertEq(nameA.getAttribute("title"), "ethanol_sp", "truncated name keeps the full title");
+    assert(String(rowA.getAttribute("aria-label")).indexOf("ethanol_sp") !== -1, "row accessible name carries the full task name");
+    assert(walk(rowA).some((n) => n.tagName === "TIME"), "updated_at renders as a real time element");
+    assert(walk(rowB).some((n) => String(n.className).indexOf("acp-mod-tasks-more") !== -1), "actions live in the more menu");
+    const progress = walk(rowB).find((n) => String(n.className).indexOf("acp-mod-tasks-row-progress") !== -1);
+    assert(progress && progress.children[0].style.width === "50%", "running progress uses the real ratio");
+    assertEq(walk(rowA).some((n) => String(n.className).indexOf("acp-mod-tasks-row-progress") !== -1), false, "terminal tasks show no progress rail");
   });
 
   await test("row click setFocus carries taskRef; A→B→A token guard drops the late B write", async () => {
@@ -891,20 +899,23 @@ module.exports.register = async function (h) {
     assert(filters, "visible status filter rendered");
     assertEq(filters.getAttribute("data-acp-filters"), "status");
     assertEq(filters.getAttribute("data-i18n-aria"), "next.tasks.filter_status");
-    assertEq(findByClass(filters, "acp-mod-tasks-filters-label").textContent, "状态筛选",
-      "the filter carries a visible label, not only an aria label");
     const chips = filterChips(root);
-    assertEq(chips.map((c) => c.getAttribute("data-acp-status")), CONTRACT_STATUSES,
-      "chip vocabulary comes from the frozen task-view contract (no local list)");
-
-    const paused = chips.find((c) => c.getAttribute("data-acp-status") === "paused");
-    assertEq(chipLabel(paused).textContent, "已暂停");
-    assertEq(chipLabel(paused).getAttribute("data-i18n"), "next.tasks.status.paused");
-    const running = chips.find((c) => c.getAttribute("data-acp-status") === "running");
-    const runningCount = walk(running)
-      .find((n) => String(n.className).indexOf("acp-mod-tasks-filter-chip-count") !== -1);
-    assertEq(runningCount.textContent, "2", "chip count comes from the whole-scope body.counts");
-    assertEq(running.getAttribute("aria-pressed"), "false");
+    assertEq(chips.map((c) => c.getAttribute("data-acp-filter")),
+      ["all", "running", "intervene", "completed", "error"],
+      "five grouped status capsules");
+    assertEq(chipLabel(chips[0]).textContent, "全部");
+    assertEq(chipLabel(chips[1]).textContent, "进行中");
+    assertEq(chipLabel(chips[2]).textContent, "待干预");
+    assertEq(chipLabel(chips[3]).textContent, "已完成");
+    assertEq(chipLabel(chips[4]).textContent, "异常");
+    const countOf = (chip) => walk(chip)
+      .find((n) => String(n.className).indexOf("acp-mod-tasks-filter-chip-count") !== -1).textContent;
+    assertEq(countOf(chips[0]), "1", "all count is the whole-scope total");
+    assertEq(countOf(chips[1]), "3", "running aggregates queued + starting + running");
+    assertEq(countOf(chips[2]), "1", "intervention aggregates waiting_review + pending + paused");
+    assertEq(countOf(chips[3]), "3", "completed count comes from body.counts");
+    assertEq(countOf(chips[4]), "2", "error aggregates failed + cancelled + cancelling");
+    assertEq(chips[2].getAttribute("aria-pressed"), "false");
 
     // Clicking the already-active "全部" chip must not issue a redundant fetch.
     const beforeClicks = ctx.client.taskView.viewCalls.length;
@@ -913,22 +924,21 @@ module.exports.register = async function (h) {
     assertEq(ctx.client.taskView.viewCalls.length, beforeClicks,
       "activating the all-status chip again is a no-op");
 
-    // Toggle → prefs.filters.status → owned controller refresh (single cache).
-    running.fire("click");
+    // Group toggle → multi-status prefs.filters.status → owned controller refresh.
+    chips[2].fire("click");
     await flush();
     const filtered = ctx.client.taskView.viewCalls[1];
-    assert(filtered, "chip toggle refreshes through the task-view controller");
-    assertEq(filtered.prefs.filters.status, ["running"]);
+    assert(filtered, "group toggle refreshes through the task-view controller");
+    assertEq(filtered.prefs.filters.status, ["waiting_review", "pending", "paused"]);
     assertEq(filtered.offset, 0);
-    assertEq(running.getAttribute("aria-pressed"), "true");
+    assertEq(chips[2].getAttribute("aria-pressed"), "true");
     assertEq(findByAttr(root, "data-acp-filter", "all").getAttribute("aria-pressed"), "false");
     filtered.deferred.resolve(bodyWith([
       { key: "g", jobs: [jobRow({ id: "job-A", status: "running" })] },
     ], { counts: STATUS_COUNTS }));
     await flush();
 
-    // Server vocabulary drift: a counted status the frozen contract does not
-    // know yet stays visible as an extra chip (never silently unfilterable).
+    // Server vocabulary drift is not given a sixth pill; the five groups stay.
     findByClass(root, "acp-mod-tasks-refresh").fire("click");
     await flush();
     const refetch = ctx.client.taskView.viewCalls[ctx.client.taskView.viewCalls.length - 1];
@@ -936,23 +946,8 @@ module.exports.register = async function (h) {
       { key: "g", jobs: [jobRow({ id: "job-A", status: "retrying" })] },
     ], { counts: Object.assign({}, STATUS_COUNTS, { retrying: 2 }) }));
     await flush();
-    const drift = filterChips(root).find((c) => c.getAttribute("data-acp-status") === "retrying");
-    assert(drift, "server-only status still gets a chip");
-    assertEq(chipLabel(drift).textContent, "retrying", "unknown status label falls back verbatim");
-
-    // Selecting that drift chip and losing the server count must not orphan the
-    // filter: the active value keeps its chip so the user can toggle it off.
-    drift.fire("click");
-    await flush();
-    const driftFetch = ctx.client.taskView.viewCalls[ctx.client.taskView.viewCalls.length - 1];
-    assertEq(driftFetch.prefs.filters.status, ["running", "retrying"]);
-    driftFetch.deferred.resolve(bodyWith([
-      { key: "g", jobs: [jobRow({ id: "job-A", status: "running" })] },
-    ], { counts: STATUS_COUNTS }));
-    await flush();
-    const driftAgain = filterChips(root).find((c) => c.getAttribute("data-acp-status") === "retrying");
-    assert(driftAgain, "an active filter value never loses its chip");
-    assertEq(driftAgain.getAttribute("aria-pressed"), "true");
+    assertEq(filterChips(root).length, 5, "status groups remain five even with server drift");
+    assertEq(countOf(filterChips(root)[0]), "1", "unknown statuses remain inside the all count");
   });
 
   await test("A-17 status filter resets pagination through the controller query key", async () => {
@@ -973,12 +968,12 @@ module.exports.register = async function (h) {
     ], { total: 300, limit: 200, offset: 200, counts: STATUS_COUNTS }));
     await flush();
 
-    filterChips(root).find((c) => c.getAttribute("data-acp-status") === "paused").fire("click");
+    filterChips(root).find((c) => c.getAttribute("data-acp-filter") === "intervene").fire("click");
     await flush();
     const filtered = ctx.client.taskView.viewCalls[2];
     assert(filtered, "filter change triggers a refresh");
     assertEq(filtered.offset, 0, "query-key change resets pagination (controller rule)");
-    assertEq(filtered.prefs.filters.status, ["paused"]);
+    assertEq(filtered.prefs.filters.status, ["waiting_review", "pending", "paused"]);
   });
 
   // ---------------------------------------------- A-18/A-19 row commands --
@@ -1216,7 +1211,7 @@ module.exports.register = async function (h) {
     assertEq(stray.calls.length, 0, "module never reaches a separate command client");
     assertEq(ctx.client.taskView.viewCalls.length, 1, "the read path is unchanged (one explicit fetch)");
     // Navigation/refresh controls still render.
-    assert(walk(root).some((n) => n.tagName === "BUTTON" && n.textContent === "刷新"));
+    assert(walk(root).some((n) => n.tagName === "BUTTON" && n.getAttribute("data-i18n-aria") === "next.tasks.refresh"));
   });
 
   await test("a partial client.jobCommands disables only the missing action", async () => {
@@ -2231,7 +2226,10 @@ module.exports.register = async function (h) {
     ] }]));
     await flush();
     assertEq(rowTagChips(findByAttr(root, "data-job-id", "job-A")).map((c) => c.getAttribute("data-acp-tag")),
-      ["alpha", "beta", "gamma"], "row chips follow the re-read task-view row");
+      ["alpha", "beta"], "row shows at most two tag chips");
+    const overflow = walk(findByAttr(root, "data-job-id", "job-A"))
+      .find((n) => String(n.className).indexOf("acp-mod-tasks-tag-more") !== -1);
+    assertEq(overflow.textContent, "+1", "remaining tags collapse into +N");
   });
 
   await test("A-23 remove uses the remove_tags op and updates the row after the refresh", async () => {
@@ -2975,4 +2973,73 @@ module.exports.register = async function (h) {
       "the trash never issues a raw DELETE");
     assertEq(calls.length, 2, "exactly one command per confirmed trash action");
   });
+
+  await test("NEXT D scope uses explicit refs, pin survives central changes and preserves ARIA", async () => {
+    const ctx = setup({ snapshot: { projectId: "p1", structureRef: { kind: "job-file", jobId: "job-A", path: "a.xyz" }, taskRef: null } });
+    await mountReady(ctx, bodyWith([{ key: "g", jobs: [jobRow({ id: "job-A", project_id: "p1" }), jobRow({ id: "job-B", project_id: "p1" })] }]));
+    const root = ctx.host.children[0];
+    const related = findByAttr(root, "data-acp-task-scope", "related");
+    related.fire("click");
+    assertEq(related.getAttribute("aria-pressed"), "true");
+    assert(findByAttr(root, "data-job-id", "job-A")); assertEq(findByAttr(root, "data-job-id", "job-B"), null);
+    findByAttr(root, "data-acp-task-pin", "").fire("click");
+    ctx.context.setFocus({ structureRef: { kind: "job-file", jobId: "job-B", path: "b.xyz" } }, "test-central");
+    assertEq(findByAttr(root, "data-job-id", "job-A") !== null, true, "pin keeps the original explicit source");
+    const note = findByClass(root, "acp-mod-tasks-pin-note"); assertEq(note.hidden, false);
+    findByAttr(root, "data-acp-task-scope", "all").fire("click");
+    assert(findByAttr(root, "data-job-id", "job-B")); assertEq(findByAttr(root, "data-job-id", "job-A").getAttribute("aria-current") !== null, true);
+    assertEq(ctx.client.taskView.viewCalls.length, 1, "scope changes reuse the loaded store; no new polling");
+  });
+
+  await test("two-row task toolbar: grouped status counts, natural sort, order and collapsible groups", async () => {
+    const ctx = setup();
+    const storage = {};
+    ctx.sandbox.ACPShell = { env: { storage: { get: (k) => storage[k], set: (k, v) => { storage[k] = v; } } } };
+    await mountReady(ctx, bodyWith([
+      { key: "g", jobs: [
+        jobRow({ id: "job-10", display_name: "Task 10", status: "running" }),
+        jobRow({ id: "job-2", display_name: "Task 2", status: "completed" }),
+      ] },
+    ], { counts: STATUS_COUNTS, total: 2 }));
+    const root = ctx.host.children[0];
+    const headbar = findByClass(root, "acp-mod-tasks-headbar");
+    const listbar = findByClass(root, "acp-mod-tasks-listbar");
+    assert(headbar && listbar, "exactly the first and second toolbar rows render");
+    assert(findByClass(root, "acp-mod-tasks-title"), "task title is in the first row");
+    assertEq(walk(headbar).filter((n) => n.getAttribute && n.getAttribute("data-acp-task-scope")).length, 2, "related/all segmented control");
+    assertEq(walk(headbar).filter((n) => n.getAttribute && n.getAttribute("data-acp-actions")).length, 0, "no actions row");
+    assertEq(findByClass(root, "acp-mod-tasks-counts"), null, "the old duplicate counts row is gone");
+    assertEq(ctx.client.taskView.viewCalls[0].prefs.sort, "activity_desc", "modified time is the default sort");
+    assert(findByClass(root, "acp-mod-tasks-sort-box"), "compact sort menu is present");
+    assert(findByAttr(root, "data-acp-sort-order", "desc"), "descending order is the default");
+
+    findByAttr(root, "data-acp-sort-mode", "name").fire("click");
+    await flush();
+    const nameCall = ctx.client.taskView.viewCalls[1];
+    assertEq(nameCall.prefs.sort, "name_desc");
+    nameCall.deferred.resolve(bodyWith([{ key: "g", jobs: [
+      jobRow({ id: "job-10", display_name: "Task 10", status: "running" }),
+      jobRow({ id: "job-2", display_name: "Task 2", status: "completed" }),
+    ] }], { counts: STATUS_COUNTS, total: 2 }));
+    await flush();
+    findByAttr(root, "data-acp-sort-order", "desc").fire("click");
+    await flush();
+    const ascCall = ctx.client.taskView.viewCalls[2];
+    assertEq(ascCall.prefs.sort, "name_asc");
+    ascCall.deferred.resolve(bodyWith([{ key: "g", jobs: [
+      jobRow({ id: "job-10", display_name: "Task 10", status: "running" }),
+      jobRow({ id: "job-2", display_name: "Task 2", status: "completed" }),
+    ] }], { counts: STATUS_COUNTS, total: 2 }));
+    await flush();
+    const rowNames = walk(root).filter((n) => n.getAttribute && n.getAttribute("data-job-id")).map((n) => findByClass(n, "acp-mod-tasks-row-name").textContent);
+    assertEq(rowNames, ["Task 2", "Task 10"], "Intl.Collator numeric order places 2 before 10");
+    assertEq(JSON.parse(storage["acp-next-task-view-v3"]).sortOrder, "asc", "sort order persists in v3 preferences");
+
+    const groupHead = findByClass(root, "acp-mod-tasks-group-head");
+    groupHead.fire("click");
+    await flush();
+    assertEq(findByAttr(root, "data-job-id", "job-2"), null, "collapsing a group hides its rows");
+    assertEq(JSON.parse(storage["acp-next-task-view-v3"]).collapsedGroups["molecule:g"], true, "group collapse persists");
+  });
+
 };

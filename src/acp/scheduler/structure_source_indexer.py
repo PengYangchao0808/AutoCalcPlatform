@@ -26,11 +26,13 @@ Design contract (ACP_Task_Structure_Organization_Plan §5.3):
 from __future__ import annotations
 
 import logging
+import sqlite3
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from acp.scheduler.files import resolve_safe
 from acp.scheduler.structure_source_store import StructureSourceStore
 
 if TYPE_CHECKING:
@@ -43,6 +45,11 @@ __all__ = ["StructureSourceIndexer"]
 
 _REMOTE_PLACEHOLDER_REL = "__remote_pending__"
 _SWEEP_PAGE_SIZE = 25
+#: Bounds for one molecule-identity backfill pass (rows re-read per pass).
+_IDENTITY_BACKFILL_LIMIT = 200
+#: Soft cap on the per-process "already attempted" set; clearing it only costs
+#: a re-read of unresolved rows, never correctness.
+_IDENTITY_BACKFILL_MEMORY = 20000
 
 
 class StructureSourceIndexer:
@@ -90,6 +97,9 @@ class StructureSourceIndexer:
         self._started_at: str | None = None
         self._retry_queue: dict[str, int] = {}
         self._max_retries = 3
+        #: source_uids already attempted by the identity backfill in this process;
+        #: unresolved molecules must not be re-read on every sweep.
+        self._identity_backfill_attempted: set[str] = set()
 
     def _write_index_entries(
         self,
@@ -151,6 +161,7 @@ class StructureSourceIndexer:
             self._indexing_state = "running"
             try:
                 self._incremental_sweep()
+                self._run_identity_backfill()
             except Exception:
                 logger.exception("Incremental sweep failed")
             finally:
@@ -232,6 +243,103 @@ class StructureSourceIndexer:
                 (job_id,),
             ).fetchone()
         return row["indexed_at"] if row else None
+
+    # ------------------------------------------------------------------ #
+    # Molecule identity backfill
+    # ------------------------------------------------------------------ #
+
+    def backfill_molecule_identities(self, limit: int = _IDENTITY_BACKFILL_LIMIT) -> int:
+        """Assign chemistry identities to index rows indexed before B1c.
+
+        Selects up to *limit* rows that have no ``molecule_identity_key`` but do
+        have a ``content_checksum`` and local availability, re-reads each
+        structure through the same local read path discovery uses, computes the
+        identity and writes the index column plus the identity registry row in
+        one transaction.
+
+        Returns the number of identities written.  Safe to run repeatedly:
+        identified rows drop out of the selection, an unreadable or unresolved
+        file is logged and skipped (never marked failed), and one bad row never
+        stops the pass.
+        """
+        from acp.scheduler.structure_sources import molecule_identity_for_text
+
+        if limit <= 0:
+            return 0
+        if len(self._identity_backfill_attempted) > _IDENTITY_BACKFILL_MEMORY:
+            self._identity_backfill_attempted.clear()
+        try:
+            candidates = self._source_store.list_rows_missing_molecule_identity(
+                limit=limit * 4
+            )
+        except sqlite3.Error as exc:
+            logger.warning("Identity backfill: candidate selection failed: %s", exc)
+            return 0
+        written = 0
+        records: dict[str, Any] = {}
+        for row in candidates:
+            if written >= limit or self._stop_event.is_set():
+                break
+            source_uid = str(row.get("source_uid") or "")
+            if not source_uid or source_uid in self._identity_backfill_attempted:
+                continue
+            self._identity_backfill_attempted.add(source_uid)
+            job_id = str(row.get("job_id") or "")
+            if job_id not in records:
+                records[job_id] = self._store.get(job_id)
+            text = self._read_indexed_structure_text(
+                records[job_id], str(row.get("relative_path") or "")
+            )
+            if text is None:
+                continue
+            identity = molecule_identity_for_text(
+                text,
+                charge=int(row.get("charge") or 0),
+                multiplicity=int(row.get("multiplicity") or 1),
+            )
+            if identity is None:
+                logger.debug(
+                    "Identity backfill: %s stays without a key (unresolved)", source_uid
+                )
+                continue
+            try:
+                if self._source_store.set_molecule_identity(
+                    source_uid, identity, project_id=row.get("project_id")
+                ):
+                    written += 1
+            except (OSError, RuntimeError, ValueError, sqlite3.Error) as exc:
+                logger.warning("Identity backfill: write failed for %s: %s", source_uid, exc)
+        return written
+
+    def _run_identity_backfill(self) -> None:
+        """Run one bounded identity backfill pass per daemon idle cycle."""
+        try:
+            written = self.backfill_molecule_identities()
+        except (OSError, RuntimeError, ValueError, sqlite3.Error):
+            logger.exception("Molecule identity backfill failed")
+            return
+        if written:
+            logger.info("Molecule identity backfill wrote %d identities", written)
+
+    def _read_indexed_structure_text(self, record: Any, rel_path: str) -> str | None:
+        """Read one indexed structure's text through the discovery read path."""
+        if record is None or not rel_path:
+            return None
+        if self._is_remote(record):
+            # Remote text lives on the node; this pass is local-only and must
+            # never invent an identity from a placeholder row.
+            return None
+        work_dir = getattr(record, "work_dir", "") or ""
+        if not work_dir:
+            return None
+        resolved = resolve_safe(Path(work_dir), rel_path)
+        if resolved is None or not resolved.is_file():
+            return None
+        try:
+            return resolved.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            logger.debug("Identity backfill: %s unreadable (%s)", rel_path, exc)
+            return None
 
     # ------------------------------------------------------------------ #
     # Per-job indexing
@@ -382,6 +490,7 @@ class StructureSourceIndexer:
                     "availability": availability,
                     "produced_at": entry.get("completed_at", ""),
                     "content_checksum": entry.get("content_checksum"),
+                    "molecule_identity": entry.get("molecule_identity"),
                     "structure_facts": entry.get("structure_facts", {}),
                 }
             )

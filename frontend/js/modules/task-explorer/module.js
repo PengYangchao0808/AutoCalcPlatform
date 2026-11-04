@@ -163,6 +163,27 @@
     "next.tasks.detail_failed": "详情加载失败",
     "next.tasks.failure_reason": "失败原因",
     "next.tasks.attempt_title": "第 {n} 次尝试",
+    "next.tasks.more": "更多操作",
+    "next.tasks.more_hint": "打开任务操作菜单",
+    "next.tasks.pin": "固定此对象",
+    "next.tasks.unpin": "取消固定此对象",
+    "next.tasks.group.running": "进行中",
+    "next.tasks.group.intervene": "待干预",
+    "next.tasks.group.completed": "已完成",
+    "next.tasks.group.error": "异常",
+    "next.tasks.scope.related": "关联任务",
+    "next.tasks.scope.all": "项目全部",
+    "next.tasks.sort.label": "排序",
+    "next.tasks.sort.activity": "修改时间",
+    "next.tasks.sort.activity_short": "修改",
+    "next.tasks.sort.name": "名称",
+    "next.tasks.sort.name_short": "名称",
+    "next.tasks.sort.type": "任务类型",
+    "next.tasks.sort.type_short": "类型",
+    "next.tasks.sort.asc": "升序",
+    "next.tasks.sort.desc": "降序",
+    "next.tasks.group.by_type": "分组：任务类型",
+    "next.tasks.group.by_molecule": "分组：分子",
     "next.tasks.open_task": "打开任务",
     "next.tasks.prev": "上一页",
     "next.tasks.next": "下一页",
@@ -412,6 +433,57 @@
     return el;
   }
 
+  function iconSpan(doc, cls, glyph) {
+    var span = doc.createElement("span");
+    span.className = cls;
+    span.setAttribute("aria-hidden", "true");
+    span.textContent = glyph;
+    return span;
+  }
+
+  function uiLang() {
+    try {
+      var shell = typeof window !== "undefined" && window.ACPShell && window.ACPShell.i18n;
+      return shell && shell.getLang ? shell.getLang() : "zh-CN";
+    } catch (e) { return "zh-CN"; }
+  }
+
+  function taskTimestamp(job) {
+    var values = [job && job.updated_at, job && job.created_at, job && job.last_activity_at];
+    for (var i = 0; i < values.length; i += 1) {
+      var value = values[i];
+      if (value == null || value === "") continue;
+      var numeric = Number(value);
+      var millis = isFinite(numeric) ? (numeric > 1e12 ? numeric : numeric * 1000) : Date.parse(String(value));
+      if (isFinite(millis) && millis > 0) return { millis: millis, raw: value };
+    }
+    return null;
+  }
+
+  function relativeTime(millis) {
+    var seconds = Math.max(0, Math.round((Date.now() - millis) / 1000));
+    var english = uiLang() === "en-US";
+    if (seconds < 45) return english ? "just now" : "刚刚";
+    if (seconds < 3600) {
+      var minutes = Math.max(1, Math.round(seconds / 60));
+      return english ? minutes + " min ago" : minutes + " 分钟前";
+    }
+    if (seconds < 86400) {
+      var hours = Math.max(1, Math.round(seconds / 3600));
+      return english ? hours + " h ago" : hours + " 小时前";
+    }
+    if (seconds < 2592000) {
+      var days = Math.max(1, Math.round(seconds / 86400));
+      return english ? days + " d ago" : days + " 天前";
+    }
+    return new Date(millis).toLocaleDateString(english ? "en-US" : "zh-CN");
+  }
+
+  function absoluteTime(millis) {
+    try { return new Date(millis).toLocaleString(uiLang() === "en-US" ? "en-US" : "zh-CN"); }
+    catch (e) { return new Date(millis).toISOString(); }
+  }
+
   function createTaskExplorer(deps) {
     deps = deps || {};
     var context = deps.context || null;
@@ -427,6 +499,8 @@
       host: null,
       doc: null,
       snapshot: null,     // last ContextSnapshot
+      scope: "all",
+      pinnedRef: null,
       projectId: "",      // "" = all projects
       // A-17: filters.status[] rides the existing task-view query key, so a
       // filter change resets pagination inside the owned list controller.
@@ -434,10 +508,15 @@
       // uses ("exclude" = queue, "only" = recoverable trash scope).
       prefs: {
         groupBy: "molecule",
-        sort: "created_desc",
+        sort: "activity_desc",
         filters: { status: [] },
         archived: "exclude",
       },
+      viewSort: "activity",
+      sortOrder: "desc",
+      collapsedGroups: Object.create(null),
+      sortEls: null,
+      columnCollator: null,
       body: null,         // last task-view body rendered
       rows: [],           // flattened rows (module-local; never a page global)
       selectedJobId: null,
@@ -494,32 +573,69 @@
       root.className = "acp-mod-tasks";
       root.setAttribute("data-acp-module-state", "loading");
 
+      var scopebar = doc.createElement("div");
+      scopebar.className = "acp-mod-tasks-scopebar acp-mod-tasks-headbar";
+      scopebar.setAttribute("role", "group");
+      scopebar.setAttribute("aria-label", "任务范围");
+      var title = textEl(doc, "strong", "acp-mod-tasks-title", "next.tasks.title");
+      var scopeWrap = doc.createElement("div");
+      scopeWrap.className = "acp-mod-tasks-scope-wrap";
+      var relatedBtn = textEl(doc, "button", "acp-mod-tasks-scope", "next.tasks.scope.related");
+      relatedBtn.type = "button"; relatedBtn.setAttribute("data-acp-task-scope", "related");
+      var allBtn = textEl(doc, "button", "acp-mod-tasks-scope", "next.tasks.scope.all");
+      allBtn.type = "button"; allBtn.setAttribute("data-acp-task-scope", "all");
+      var pinBtn = doc.createElement("button");
+      pinBtn.className = "acp-mod-tasks-pin"; pinBtn.type = "button";
+      pinBtn.setAttribute("data-acp-task-pin", ""); pinBtn.setAttribute("aria-pressed", "false");
+      var pinNote = doc.createElement("div"); pinNote.className = "acp-mod-tasks-pin-note"; pinNote.setAttribute("data-acp-task-pin-note", ""); pinNote.hidden = true;
+      scopeWrap.appendChild(relatedBtn); scopeWrap.appendChild(allBtn);
+
       var toolbar = doc.createElement("div");
       toolbar.className = "acp-mod-tasks-toolbar";
       var project = doc.createElement("select");
       project.className = "acp-mod-tasks-project";
       project.setAttribute("data-i18n-aria", "next.tasks.title");
-      // A-22: project CRUD entry point. Disabled (with an explicit title)
-      // when the injected client exposes no request transport at all.
-      var manage = textEl(doc, "button", "acp-mod-tasks-projects-btn", "next.tasks.projects.manage");
+      var manage = doc.createElement("button");
+      manage.className = "acp-mod-tasks-projects-btn acp-mod-tasks-iconbtn";
       manage.setAttribute("type", "button");
       manage.setAttribute("data-acp-projects-manage", "");
+      manage.setAttribute("aria-label", t("next.tasks.projects.manage"));
       manage.setAttribute("title", t("next.tasks.projects.title"));
+      manage.setAttribute("data-i18n-aria", "next.tasks.projects.manage");
       manage.setAttribute("data-i18n-title", "next.tasks.projects.title");
-      var refreshBtn = textEl(doc, "button", "acp-mod-tasks-refresh", "next.tasks.refresh");
+      manage.replaceChildren(iconSpan(doc, "acp-mod-tasks-icon-manage", "⚙"));
+      var refreshBtn = doc.createElement("button");
+      refreshBtn.className = "acp-mod-tasks-refresh acp-mod-tasks-iconbtn";
       refreshBtn.setAttribute("type", "button");
-      // A-24: recycle-bin toggle. It switches the owned list controller's
-      // query scope (prefs.archived) — never a second list, never a fetch.
-      var trashBtn = textEl(doc, "button", "acp-mod-tasks-trash-btn", "next.tasks.trash.open");
+      refreshBtn.setAttribute("aria-label", t("next.tasks.refresh"));
+      refreshBtn.setAttribute("title", t("next.tasks.refresh"));
+      refreshBtn.setAttribute("data-i18n-aria", "next.tasks.refresh");
+      refreshBtn.setAttribute("data-i18n-title", "next.tasks.refresh");
+      refreshBtn.replaceChildren(iconSpan(doc, "acp-mod-tasks-icon-refresh", "↻"));
+      var trashBtn = doc.createElement("button");
+      trashBtn.className = "acp-mod-tasks-trash-btn acp-mod-tasks-iconbtn";
       trashBtn.setAttribute("type", "button");
       trashBtn.setAttribute("data-acp-trash-toggle", "");
       trashBtn.setAttribute("aria-pressed", "false");
+      trashBtn.setAttribute("aria-label", t("next.tasks.trash.open"));
       trashBtn.setAttribute("title", t("next.tasks.trash.title"));
+      trashBtn.setAttribute("data-i18n-aria", "next.tasks.trash.open");
       trashBtn.setAttribute("data-i18n-title", "next.tasks.trash.title");
+      trashBtn.replaceChildren(iconSpan(doc, "acp-mod-tasks-icon-trash", "⌫"));
+      pinBtn.className = "acp-mod-tasks-pin acp-mod-tasks-iconbtn";
+      pinBtn.setAttribute("aria-label", t("next.tasks.pin"));
+      pinBtn.setAttribute("title", t("next.tasks.pin"));
+      pinBtn.setAttribute("data-i18n-aria", "next.tasks.pin");
+      pinBtn.setAttribute("data-i18n-title", "next.tasks.pin");
+      pinBtn.replaceChildren(iconSpan(doc, "acp-mod-tasks-icon-pin", "⌖"));
       toolbar.appendChild(project);
-      toolbar.appendChild(manage);
+      toolbar.appendChild(pinBtn);
       toolbar.appendChild(trashBtn);
       toolbar.appendChild(refreshBtn);
+      toolbar.appendChild(manage);
+      scopebar.appendChild(title);
+      scopebar.appendChild(scopeWrap);
+      scopebar.appendChild(toolbar);
 
       var counts = doc.createElement("div");
       counts.className = "acp-mod-tasks-counts";
@@ -583,12 +699,19 @@
       modal.hidden = true;
       modal.setAttribute("data-acp-dialog-state", "closed");
 
-      root.appendChild(toolbar);
-      root.appendChild(filters);
+      var listbar = doc.createElement("div");
+      listbar.className = "acp-mod-tasks-listbar";
+      var sortHost = doc.createElement("div");
+      sortHost.className = "acp-mod-tasks-sort";
+      listbar.appendChild(filters);
+      listbar.appendChild(sortHost);
+
+      root.appendChild(scopebar);
+      root.appendChild(listbar);
+      root.appendChild(pinNote);
       root.appendChild(trashNote);
       root.appendChild(batch);
       root.appendChild(batchMsg);
-      root.appendChild(counts);
       root.appendChild(stale);
       root.appendChild(bodyEl);
       root.appendChild(pagination);
@@ -598,7 +721,8 @@
 
       state.el = {
         root: root, toolbar: toolbar, project: project, manage: manage,
-        refreshBtn: refreshBtn, trashBtn: trashBtn,
+        scopebar: scopebar, relatedBtn: relatedBtn, allBtn: allBtn, pinBtn: pinBtn, pinNote: pinNote,
+        refreshBtn: refreshBtn, trashBtn: trashBtn, sortHost: sortHost,
         filters: filters, trashNote: trashNote, trashScope: trashScope,
         trashReadonly: trashReadonly,
         batch: batch, batchMsg: batchMsg, counts: counts,
@@ -616,11 +740,196 @@
         setTrashMode(!state.trash);
       });
       track(project, "change", function () { onProjectChange(project.value); });
+      track(relatedBtn, "click", function () { setTaskScope("related"); });
+      track(allBtn, "click", function () { setTaskScope("all"); });
+      track(pinBtn, "click", function () { togglePinnedRef(); });
+      renderTaskScope();
       renderFilters();
+      rerenderSort();
       syncTrashChrome();
       renderBatchBar();
       renderBatchMessage();
       syncProjectManagementAvailability();
+    }
+
+    // ------------------------------------------------ task scope / pin --
+    function scopePreference() {
+      try {
+        var env = window.ACPShell && window.ACPShell.env;
+        return { get: function () { return env ? env.storage.get("acp-next-task-scope-v2") : null; }, set: function (v) { if (env) env.storage.set("acp-next-task-scope-v2", v); } };
+      } catch (e) { return { get: function () { return null; }, set: function () {} }; }
+    }
+    function viewPreference() {
+      try {
+        var env = window.ACPShell && window.ACPShell.env;
+        return { get: function () { return env ? env.storage.get("acp-next-task-view-v3") : null; }, set: function (v) { if (env) env.storage.set("acp-next-task-view-v3", v); } };
+      } catch (e) { return { get: function () { return null; }, set: function () {} }; }
+    }
+    function sortValue(viewSort, order) {
+      var ascending = order === "asc";
+      if (viewSort === "name" || viewSort === "type") return ascending ? "name_asc" : "name_desc";
+      return ascending ? "activity_asc" : "activity_desc";
+    }
+    function restoreViewPreferences() {
+      state.viewSort = "activity"; state.sortOrder = "desc";
+      state.prefs.groupBy = "molecule"; state.prefs.sort = "activity_desc";
+      try {
+        var saved = JSON.parse(viewPreference().get() || "null");
+        if (saved && saved.version === 3) {
+          if (saved.viewSort === "activity" || saved.viewSort === "name" || saved.viewSort === "type") state.viewSort = saved.viewSort;
+          if (saved.sortOrder === "asc" || saved.sortOrder === "desc") state.sortOrder = saved.sortOrder;
+          if (saved.groupBy === "molecule" || saved.groupBy === "workflow") state.prefs.groupBy = saved.groupBy;
+          if (saved.collapsedGroups && typeof saved.collapsedGroups === "object") state.collapsedGroups = Object.assign(Object.create(null), saved.collapsedGroups);
+        }
+      } catch (e) { /* defaults */ }
+      if (state.viewSort === "type") state.prefs.groupBy = "workflow";
+      state.prefs.sort = sortValue(state.viewSort, state.sortOrder);
+    }
+    function persistViewPreferences() {
+      try {
+        viewPreference().set(JSON.stringify({ version: 3, viewSort: state.viewSort, sortOrder: state.sortOrder, groupBy: state.prefs.groupBy, collapsedGroups: state.collapsedGroups }));
+      } catch (e) { /* preference only */ }
+    }
+    function collator() {
+      if (state.columnCollator) return state.columnCollator;
+      try { state.columnCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" }); }
+      catch (e) { state.columnCollator = { compare: function (a, b) { return String(a).localeCompare(String(b), undefined, { numeric: true }); } }; }
+      return state.columnCollator;
+    }
+    function sortLabel() {
+      if (state.viewSort === "name") return t("next.tasks.sort.name");
+      if (state.viewSort === "type") return t("next.tasks.sort.type");
+      return t("next.tasks.sort.activity");
+    }
+    function sortShortLabel() {
+      if (state.viewSort === "name") return t("next.tasks.sort.name_short");
+      if (state.viewSort === "type") return t("next.tasks.sort.type_short");
+      return t("next.tasks.sort.activity_short");
+    }
+    function rerenderSort() {
+      var host = state.el.sortHost;
+      if (!host || state.disposed) return;
+      host.replaceChildren();
+      var doc = state.doc;
+      var details = doc.createElement("details");
+      details.className = "acp-mod-tasks-sort-box";
+      var summary = doc.createElement("summary");
+      summary.className = "acp-mod-tasks-sort-btn";
+      summary.setAttribute("aria-label", t("next.tasks.sort.label") + "：" + sortLabel() + "，" + t(state.sortOrder === "asc" ? "next.tasks.sort.asc" : "next.tasks.sort.desc"));
+      summary.setAttribute("title", t("next.tasks.sort.label") + "：" + sortLabel());
+      var prefix = doc.createElement("span");
+      prefix.className = "acp-mod-tasks-sort-prefix";
+      prefix.textContent = t("next.tasks.sort.label");
+      var icon = doc.createElement("span");
+      icon.className = "acp-mod-tasks-sort-icon";
+      icon.setAttribute("aria-hidden", "true");
+      icon.textContent = "⇅";
+      var long = doc.createElement("span");
+      long.className = "acp-mod-tasks-sort-long";
+      long.textContent = sortLabel();
+      var short = doc.createElement("span");
+      short.className = "acp-mod-tasks-sort-short";
+      short.textContent = sortShortLabel();
+      summary.appendChild(prefix); summary.appendChild(icon); summary.appendChild(long); summary.appendChild(short);
+      details.appendChild(summary);
+      var menu = doc.createElement("div");
+      menu.className = "acp-mod-tasks-sort-menu";
+      menu.setAttribute("role", "menu");
+      [["activity", "next.tasks.sort.activity"], ["name", "next.tasks.sort.name"], ["type", "next.tasks.sort.type"]].forEach(function (item) {
+        var btn = textEl(doc, "button", "acp-mod-tasks-sort-item", item[1]);
+        btn.setAttribute("type", "button");
+        btn.setAttribute("role", "menuitemradio");
+        btn.setAttribute("data-acp-sort-mode", item[0]);
+        btn.setAttribute("aria-checked", state.viewSort === item[0] ? "true" : "false");
+        track(btn, "click", function (ev) {
+          if (ev && ev.stopPropagation) ev.stopPropagation();
+          state.viewSort = item[0];
+          if (item[0] === "type") state.prefs.groupBy = "workflow";
+          state.prefs.sort = sortValue(state.viewSort, state.sortOrder);
+          state.filterSignature = "";
+          persistViewPreferences();
+          details.open = false;
+          rerenderSort();
+          refresh();
+        });
+        menu.appendChild(btn);
+      });
+      var groupBtn = textEl(doc, "button", "acp-mod-tasks-sort-group", state.prefs.groupBy === "workflow" ? "next.tasks.group.by_type" : "next.tasks.group.by_molecule");
+      groupBtn.setAttribute("type", "button");
+      groupBtn.setAttribute("role", "menuitem");
+      track(groupBtn, "click", function (ev) {
+        if (ev && ev.stopPropagation) ev.stopPropagation();
+        state.prefs.groupBy = state.prefs.groupBy === "workflow" ? "molecule" : "workflow";
+        if (state.prefs.groupBy === "molecule" && state.viewSort === "type") state.viewSort = "activity";
+        state.prefs.sort = sortValue(state.viewSort, state.sortOrder);
+        state.filterSignature = "";
+        persistViewPreferences();
+        details.open = false;
+        rerenderSort();
+        refresh();
+      });
+      menu.appendChild(groupBtn);
+      details.appendChild(menu);
+      var order = doc.createElement("button");
+      order.className = "acp-mod-tasks-sort-order";
+      order.setAttribute("type", "button");
+      order.setAttribute("data-acp-sort-order", state.sortOrder);
+      order.setAttribute("aria-label", t(state.sortOrder === "asc" ? "next.tasks.sort.asc" : "next.tasks.sort.desc"));
+      order.setAttribute("title", t(state.sortOrder === "asc" ? "next.tasks.sort.asc" : "next.tasks.sort.desc"));
+      order.textContent = state.sortOrder === "asc" ? "↑" : "↓";
+      track(order, "click", function (ev) {
+        if (ev && ev.stopPropagation) ev.stopPropagation();
+        state.sortOrder = state.sortOrder === "asc" ? "desc" : "asc";
+        state.prefs.sort = sortValue(state.viewSort, state.sortOrder);
+        persistViewPreferences();
+        rerenderSort();
+        refresh();
+      });
+      host.appendChild(details);
+      host.appendChild(order);
+      state.sortEls = { details: details, order: order };
+    }
+    function restoreTaskScope() {
+      try { var saved = JSON.parse(scopePreference().get() || "null"); if (saved && saved.version === 2) { state.scope = saved.scope === "all" ? "all" : "related"; state.pinnedRef = saved.pinnedRef && typeof saved.pinnedRef === "object" ? saved.pinnedRef : null; } } catch (e) {}
+    }
+    function persistTaskScope() { try { scopePreference().set(JSON.stringify({ version: 2, scope: state.scope, pinnedRef: state.pinnedRef })); } catch (e) {} }
+    function activeScopeRef() { return state.pinnedRef || state.snapshot || {}; }
+    function relatedJob(job, ref) {
+      if (!job || !ref) return false;
+      if (ref.projectId && job.project_id != null && String(job.project_id) !== String(ref.projectId)) return false;
+      var id = String(job.id || job.job_id || "");
+      return !!id && !!((ref.taskRef && String(ref.taskRef.jobId || "") === id) || (ref.structureRef && String(ref.structureRef.jobId || "") === id));
+    }
+    function filteredBody(body) {
+      if (!body || state.scope !== "related") return body;
+      var ref = activeScopeRef();
+      return Object.assign({}, body, { groups: (body.groups || []).map(function (group) {
+        var jobs = (group.jobs || []).filter(function (job) { return relatedJob(job, ref); });
+        return Object.assign({}, group, { jobs: jobs, count: jobs.length });
+      }).filter(function (group) { return group.jobs.length > 0; }) });
+    }
+    function setTaskScope(scope) { state.scope = scope === "all" ? "all" : "related"; persistTaskScope(); renderTaskScope(); applyBody(state.sourceBody); }
+    function togglePinnedRef() {
+      if (state.pinnedRef) state.pinnedRef = null;
+      else { var s = state.snapshot || {}; state.pinnedRef = { projectId: s.projectId || null, taskRef: s.taskRef || null, structureRef: s.structureRef || null }; }
+      persistTaskScope(); renderTaskScope(); applyBody(state.sourceBody);
+    }
+    function renderTaskScope() {
+      if (!state.el.relatedBtn) return;
+      state.el.relatedBtn.setAttribute("aria-pressed", state.scope === "related" ? "true" : "false");
+      state.el.allBtn.setAttribute("aria-pressed", state.scope === "all" ? "true" : "false");
+      state.el.relatedBtn.className = "acp-mod-tasks-scope" + (state.scope === "related" ? " is-active" : "");
+      state.el.allBtn.className = "acp-mod-tasks-scope" + (state.scope === "all" ? " is-active" : "");
+      state.el.pinBtn.setAttribute("aria-pressed", state.pinnedRef ? "true" : "false");
+      state.el.pinBtn.setAttribute("aria-label", t(state.pinnedRef ? "next.tasks.unpin" : "next.tasks.pin"));
+      state.el.pinBtn.setAttribute("title", t(state.pinnedRef ? "next.tasks.unpin" : "next.tasks.pin"));
+      state.el.pinBtn.setAttribute("data-i18n-aria", state.pinnedRef ? "next.tasks.unpin" : "next.tasks.pin");
+      state.el.pinBtn.setAttribute("data-i18n-title", state.pinnedRef ? "next.tasks.unpin" : "next.tasks.pin");
+      state.el.pinBtn.className = "acp-mod-tasks-pin acp-mod-tasks-iconbtn" + (state.pinnedRef ? " is-active" : "");
+      if (!state.el.pinBtn.children.length) state.el.pinBtn.appendChild(iconSpan(state.doc, "acp-mod-tasks-icon-pin", "⌖"));
+      var different = false;
+      if (state.pinnedRef && state.snapshot) different = JSON.stringify(state.pinnedRef.taskRef || null) !== JSON.stringify(state.snapshot.taskRef || null) || JSON.stringify(state.pinnedRef.structureRef || null) !== JSON.stringify(state.snapshot.structureRef || null) || String(state.pinnedRef.projectId || "") !== String(state.snapshot.projectId || "");
+      state.el.pinNote.hidden = !different; state.el.pinNote.textContent = different ? "任务栏已固定到其他对象；中央选择变化不会改变此范围。" : "";
     }
 
     // ------------------------------------------- recycle bin (A-24) --
@@ -781,68 +1090,91 @@
       return list;
     }
 
+    function filterGroups() {
+      return [
+        { id: "all", labelKey: "next.tasks.filter_all", statuses: [] },
+        { id: "running", labelKey: "next.tasks.group.running", statuses: ["running", "starting", "queued"] },
+        { id: "intervene", labelKey: "next.tasks.group.intervene", statuses: ["waiting_review", "pending", "paused"] },
+        { id: "completed", labelKey: "next.tasks.group.completed", statuses: ["completed"] },
+        { id: "error", labelKey: "next.tasks.group.error", statuses: ["failed", "cancelled", "cancelling"] },
+      ];
+    }
+
+    function filterGroupCount(group) {
+      var counts = (state.body && state.body.counts) || {};
+      if (!group.statuses.length) {
+        var total = Number(state.body && state.body.total);
+        if (isFinite(total) && total >= 0) return total;
+        return Object.keys(counts).reduce(function (sum, k) { return sum + (Number(counts[k]) || 0); }, 0);
+      }
+      return group.statuses.reduce(function (sum, status) { return sum + (Number(counts[status]) || 0); }, 0);
+    }
+
+    function activeStatusGroup() {
+      var active = statusFilter().slice().sort().join(",");
+      var groups = filterGroups();
+      for (var i = 0; i < groups.length; i += 1) {
+        if (groups[i].statuses.slice().sort().join(",") === active) return groups[i].id;
+      }
+      return "";
+    }
+
     function renderFilters() {
       var host = state.el.filters;
       if (!host || state.disposed) return;
-      var vocab = statusVocabulary();
-      var signature = vocab.join(",");
+      var groups = filterGroups();
+      var signature = groups.map(function (g) { return g.id + ":" + filterGroupCount(g); }).join(",");
       if (signature !== state.filterSignature) {
         state.filterSignature = signature;
         var doc = state.doc;
-        var label = textEl(doc, "span", "acp-mod-tasks-filters-label", "next.tasks.filter_status");
-        var all = doc.createElement("button");
-        all.setAttribute("type", "button");
-        all.className = "acp-mod-tasks-filter-chip acp-mod-tasks-filter-chip--all";
-        all.setAttribute("data-acp-filter", "all");
-        var allLabel = textEl(doc, "span", "acp-mod-tasks-filter-chip-label", "next.tasks.filter_all");
-        all.appendChild(allLabel);
-        track(all, "click", function (ev) { onFilterAll(ev); });
-        var nodes = [label, all];
         var chips = Object.create(null);
-        vocab.forEach(function (status) {
+        var nodes = [];
+        groups.forEach(function (group) {
           var chip = doc.createElement("button");
           chip.setAttribute("type", "button");
-          chip.className = "acp-mod-tasks-filter-chip acp-mod-tasks-filter-chip--" + status;
-          chip.setAttribute("data-acp-status", status);
-          var key = statusKey(status);
-          var chipLabelEl = doc.createElement("span");
-          chipLabelEl.className = "acp-mod-tasks-filter-chip-label";
-          chipLabelEl.textContent = statusLabel(status);
-          if (key) chipLabelEl.setAttribute("data-i18n", key);
-          chip.appendChild(chipLabelEl);
+          chip.className = "acp-mod-tasks-filter-chip acp-mod-tasks-filter-chip--" + group.id;
+          chip.setAttribute("data-acp-filter", group.id);
+          chip.setAttribute("aria-label", t(group.labelKey) + "（" + filterGroupCount(group) + "）");
+          chip.setAttribute("data-i18n-aria", group.labelKey);
+          var labelEl = doc.createElement("span");
+          labelEl.className = "acp-mod-tasks-filter-chip-label";
+          labelEl.textContent = t(group.labelKey);
+          labelEl.setAttribute("data-i18n", group.labelKey);
           var count = doc.createElement("span");
           count.className = "acp-mod-tasks-filter-chip-count";
+          count.textContent = String(filterGroupCount(group));
+          chip.appendChild(labelEl);
           chip.appendChild(count);
-          track(chip, "click", (function (s) {
-            return function (ev) { onToggleStatus(s, ev); };
-          })(status));
-          chips[status] = { chip: chip, count: count };
+          track(chip, "click", (function (g) {
+            return function (ev) {
+              if (ev && ev.stopPropagation) ev.stopPropagation();
+              if (state.disposed) return;
+              var next = activeStatusGroup() === g.id ? [] : g.statuses.slice();
+              setStatusFilter(next);
+            };
+          })(group));
+          chips[group.id] = { chip: chip, count: count };
           nodes.push(chip);
         });
         host.replaceChildren.apply(host, nodes);
-        state.filterEls = { all: all, chips: chips };
+        state.filterEls = { groups: chips };
       }
       syncFilterChips();
     }
 
-    /** Chips reflect prefs + whole-scope body.counts (task_views contract:
-     * counts are unaffected by filters/truncation). */
+    /** Five grouped status capsules; counts always come from whole-scope
+     * body.counts (never from the filtered page rows). */
     function syncFilterChips() {
-      if (!state.filterEls) return;
-      var active = statusFilter();
-      var allOn = active.length === 0;
-      state.filterEls.all.className =
-        "acp-mod-tasks-filter-chip acp-mod-tasks-filter-chip--all" + (allOn ? " is-active" : "");
-      state.filterEls.all.setAttribute("aria-pressed", allOn ? "true" : "false");
-      var counts = (state.body && state.body.counts) || {};
-      Object.keys(state.filterEls.chips).forEach(function (status) {
-        var ui = state.filterEls.chips[status];
-        var on = active.indexOf(status) !== -1;
-        ui.chip.className = "acp-mod-tasks-filter-chip acp-mod-tasks-filter-chip--" + status
-          + (on ? " is-active" : "");
+      if (!state.filterEls || !state.filterEls.groups) return;
+      var activeId = activeStatusGroup();
+      var groups = filterGroups();
+      groups.forEach(function (group) {
+        var ui = state.filterEls.groups[group.id];
+        if (!ui) return;
+        var on = activeId === group.id;
+        ui.chip.className = "acp-mod-tasks-filter-chip acp-mod-tasks-filter-chip--" + group.id + (on ? " is-active" : "");
         ui.chip.setAttribute("aria-pressed", on ? "true" : "false");
-        var count = counts[status];
-        ui.count.textContent = (typeof count === "number" && count > 0) ? String(count) : "";
+        ui.count.textContent = String(filterGroupCount(group));
       });
     }
 
@@ -918,7 +1250,7 @@
     function renderEmpty() {
       state.el.counts.textContent = "";
       state.el.pagination.replaceChildren();
-      renderStateMessage(state.trash ? "next.tasks.trash.empty" : "next.tasks.empty",
+      renderStateMessage(state.trash ? "next.tasks.trash.empty" : (state.scope === "related" ? "当前已加载任务中没有可核验关联；可切到“项目全部”浏览其他页。" : "next.tasks.empty"),
         "acp-mod-tasks-state--empty");
     }
 
@@ -957,6 +1289,7 @@
       state.rowEls.forEach(function (row) {
         var on = state.selectedJobId && row.getAttribute("data-job-id") === state.selectedJobId;
         row.className = "acp-mod-tasks-row" + (on ? " is-selected" : "");
+        row.setAttribute("aria-current", on ? "true" : "false");
       });
     }
 
@@ -983,21 +1316,53 @@
       var frag = doc.createElement("div");
       frag.className = "acp-mod-tasks-groups";
       var groups = (state.body && state.body.groups) || [];
+      if (state.viewSort === "type") {
+        groups = groups.slice().sort(function (a, b) {
+          var c = collator().compare(String(a.display_name || a.key || ""), String(b.display_name || b.key || ""));
+          return state.sortOrder === "asc" ? c : -c;
+        });
+      }
       groups.forEach(function (group) {
         var gEl = doc.createElement("div");
         gEl.className = "acp-mod-tasks-group";
-        var head = doc.createElement("div");
+        var collapseKey = state.prefs.groupBy + ":" + String(group.key || "");
+        var collapsed = state.collapsedGroups[collapseKey] === true;
+        var head = doc.createElement("button");
+        head.type = "button";
         head.className = "acp-mod-tasks-group-head";
+        head.setAttribute("data-acp-group-key", String(group.key || ""));
+        head.setAttribute("aria-expanded", collapsed ? "false" : "true");
+        var arrow = doc.createElement("span");
+        arrow.className = "acp-mod-tasks-group-arrow";
+        arrow.setAttribute("aria-hidden", "true");
+        arrow.textContent = collapsed ? "▸" : "▾";
         var name = doc.createElement("span");
         name.className = "acp-mod-tasks-group-name";
         name.textContent = String(group.display_name || group.key || "");
-        head.appendChild(name);
         var cnt = doc.createElement("span");
         cnt.className = "acp-mod-tasks-group-count";
         cnt.textContent = String(group.count != null ? group.count : ((group.jobs || []).length));
+        head.appendChild(arrow);
+        head.appendChild(name);
         head.appendChild(cnt);
+        track(head, "click", function () {
+          state.collapsedGroups[collapseKey] = !state.collapsedGroups[collapseKey];
+          persistViewPreferences();
+          renderRows();
+        });
         gEl.appendChild(head);
-        (group.jobs || []).forEach(function (job) {
+        if (collapsed) { frag.appendChild(gEl); return; }
+        var jobs = (group.jobs || []).slice();
+        if (state.viewSort === "name" || state.viewSort === "type") {
+          jobs.sort(function (a, b) {
+            var c = collator().compare(
+              String(a.display_name || a.resolved_name || a.default_name || a.id || ""),
+              String(b.display_name || b.resolved_name || b.default_name || b.id || "")
+            );
+            return state.sortOrder === "asc" ? c : -c;
+          });
+        }
+        jobs.forEach(function (job) {
           var jobId = String(job.id || job.job_id || "");
           var rawStatus = String(job.status || "").toLowerCase();
           var row = doc.createElement("div");
@@ -1012,38 +1377,72 @@
           row.setAttribute("data-acp-archived", job.archived === true ? "true" : "false");
           row.setAttribute("role", "button");
           row.setAttribute("tabindex", "0");
+          row.setAttribute("aria-current", state.selectedJobId === jobId ? "true" : "false");
 
           appendRowSelect(row, job, jobId);
 
+          var displayName = String(job.display_name || job.resolved_name || job.default_name || jobId);
           var nameEl = doc.createElement("span");
           nameEl.className = "acp-mod-tasks-row-name";
-          nameEl.textContent = String(job.display_name || job.resolved_name || job.default_name || jobId);
+          nameEl.textContent = displayName;
+          nameEl.setAttribute("title", displayName);
           row.appendChild(nameEl);
 
-          row.appendChild(makeStatusBadge(doc, rawStatus));
+          var badge = makeStatusBadge(doc, rawStatus);
+          row.appendChild(badge);
 
-          if (typeof job.attempt === "number" && job.attempt > 1) {
+          var meta = doc.createElement("span");
+          meta.className = "acp-mod-tasks-row-meta";
+          if (job.workflow) {
+            var wf = doc.createElement("span");
+            wf.className = "acp-mod-tasks-row-workflow";
+            wf.textContent = String(job.workflow);
+            wf.setAttribute("title", String(job.workflow));
+            meta.appendChild(wf);
+          }
+          if (typeof job.attempt === "number" && job.attempt > 0) {
             var attempt = doc.createElement("span");
             attempt.className = "acp-mod-tasks-attempt";
             attempt.textContent = "#" + job.attempt;
             attempt.setAttribute("title", t("next.tasks.attempt_title", { n: job.attempt }));
             attempt.setAttribute("data-i18n-title", "next.tasks.attempt_title");
-            row.appendChild(attempt);
+            meta.appendChild(attempt);
           }
-
-          if (job.workflow) {
-            var wf = doc.createElement("span");
-            wf.className = "acp-mod-tasks-row-workflow";
-            wf.textContent = String(job.workflow);
-            row.appendChild(wf);
+          var stamp = taskTimestamp(job);
+          if (stamp) {
+            var timeEl = doc.createElement("time");
+            timeEl.className = "acp-mod-tasks-row-time";
+            timeEl.setAttribute("datetime", new Date(stamp.millis).toISOString());
+            timeEl.setAttribute("title", absoluteTime(stamp.millis));
+            timeEl.textContent = relativeTime(stamp.millis);
+            meta.appendChild(timeEl);
           }
+          row.appendChild(meta);
 
-          // A-23: tags are labels only (never path components) — the row
-          // renders the task-view tags verbatim and the editor manages them.
           var tagWrap = rowTagsEl(job, jobId);
           if (tagWrap) row.appendChild(tagWrap);
 
+          var rawProgress = Number(job.progress);
+          if (rawProgress > 1 && rawProgress <= 100) rawProgress = rawProgress / 100;
+          if (!isTerminal(rawStatus) && isFinite(rawProgress) && rawProgress >= 0 && rawProgress <= 1) {
+            var bar = doc.createElement("span");
+            bar.className = "acp-mod-tasks-row-progress";
+            bar.setAttribute("aria-hidden", "true");
+            var fill = doc.createElement("i");
+            fill.style.width = Math.round(rawProgress * 100) + "%";
+            bar.appendChild(fill);
+            row.appendChild(bar);
+          }
+
           appendRowActions(row, job, jobId, rawStatus);
+
+          var summary = [];
+          summary.push(displayName);
+          summary.push(statusLabel(rawStatus));
+          if (job.workflow) summary.push(String(job.workflow));
+          if (typeof job.attempt === "number" && job.attempt > 0) summary.push("attempt " + job.attempt);
+          if (stamp) summary.push(absoluteTime(stamp.millis));
+          row.setAttribute("aria-label", summary.join(" · "));
 
           track(row, "click", function () { onRowClick(jobId); });
           track(row, "keydown", function (ev) {
@@ -1396,18 +1795,61 @@
 
     // ------------------------------------- row commands (A-18 / A-19) --
 
-    /** Row action cell: one button per state-aware action + the A-20/A-21
-     * lifecycle buttons + a live message slot for busy/error text. Without
-     * client.jobCommands the cell is rendered as an explicit "unavailable"
-     * marker with NO write controls. */
+    function wireMoreMenu(more, summary, actions) {
+      function items() {
+        return Array.prototype.slice.call(actions.querySelectorAll("button:not([disabled])"));
+      }
+      track(summary, "click", function (ev) { if (ev && ev.stopPropagation) ev.stopPropagation(); });
+      track(summary, "keydown", function (ev) {
+        if (ev.key !== "ArrowDown") return;
+        ev.preventDefault();
+        more.open = true;
+        var first = items()[0];
+        if (first) first.focus();
+      });
+      track(more, "click", function (ev) { if (ev && ev.stopPropagation) ev.stopPropagation(); });
+      track(more, "keydown", function (ev) {
+        var list = items(), index = list.indexOf(docActiveElement());
+        if (ev.key === "Escape") { ev.preventDefault(); more.open = false; summary.focus(); return; }
+        if (ev.key === "ArrowDown") { ev.preventDefault(); if (list.length) list[(index + 1 + list.length) % list.length].focus(); }
+        else if (ev.key === "ArrowUp") { ev.preventDefault(); if (list.length) list[(index - 1 + list.length) % list.length].focus(); }
+        else if (ev.key === "Home") { ev.preventDefault(); if (list.length) list[0].focus(); }
+        else if (ev.key === "End") { ev.preventDefault(); if (list.length) list[list.length - 1].focus(); }
+      });
+      track(actions, "click", function (ev) {
+        if (ev && ev.stopPropagation) ev.stopPropagation();
+        var target = ev && ev.target;
+        if (target && target.tagName === "BUTTON") more.open = false;
+      });
+    }
+
+    function docActiveElement() { return state.doc && state.doc.activeElement ? state.doc.activeElement : null; }
+
+    /** Row action menu: the complete command set stays in the DOM but is
+     * revealed from one keyboard-operable "more" disclosure, so long names and
+     * tags no longer force action buttons onto extra lines. Without injected
+     * commands the menu carries only the explicit unavailable marker. */
     function appendRowActions(row, job, jobId, rawStatus) {
       var doc = state.doc;
+      var more = doc.createElement("details");
+      more.className = "acp-mod-tasks-more";
+      var summary = doc.createElement("summary");
+      summary.className = "acp-mod-tasks-more-btn";
+      summary.textContent = "⋯";
+      summary.setAttribute("aria-label", t("next.tasks.more"));
+      summary.setAttribute("data-i18n-aria", "next.tasks.more");
+      summary.setAttribute("title", t("next.tasks.more_hint"));
+      summary.setAttribute("data-i18n-title", "next.tasks.more_hint");
+      more.appendChild(summary);
       var actions = doc.createElement("span");
       actions.className = "acp-mod-tasks-row-actions";
       actions.setAttribute("role", "group");
       actions.setAttribute("aria-label", t("next.tasks.actions_label"));
       actions.setAttribute("data-i18n-aria", "next.tasks.actions_label");
-      var ui = { row: row, buttons: [], msg: null, group: actions };
+      more.appendChild(actions);
+      row.appendChild(more);
+      wireMoreMenu(more, summary, actions);
+      var ui = { row: row, buttons: [], msg: null, group: actions, more: more };
       // A job may appear in more than one group (e.g. tag grouping): keep one
       // ui entry per rendered row so busy/error painting covers every clone.
       if (!state.rowUi[jobId]) state.rowUi[jobId] = [];
@@ -1416,7 +1858,6 @@
       if (!state.jobCommands) {
         row.setAttribute("data-acp-actions", "unavailable");
         actions.setAttribute("data-acp-actions", "unavailable");
-        row.appendChild(actions);
         return;
       }
 
@@ -1510,7 +1951,7 @@
       msg.setAttribute("role", "status");
       msg.setAttribute("data-acp-action-state", "idle");
       ui.msg = msg;
-      row.appendChild(actions);
+      if (!actions.parentNode) row.appendChild(actions);
       row.appendChild(msg);
     }
 
@@ -3123,13 +3564,21 @@
       var wrap = doc.createElement("span");
       wrap.className = "acp-mod-tasks-row-tags";
       wrap.setAttribute("data-acp-row-tags", jobId);
-      tags.forEach(function (tag) {
+      wrap.setAttribute("title", tags.join(" · "));
+      tags.slice(0, 2).forEach(function (tag) {
         var chip = doc.createElement("span");
         chip.className = "acp-mod-tasks-tag-chip";
         chip.setAttribute("data-acp-tag", tag);
         chip.textContent = tag;
         wrap.appendChild(chip);
       });
+      if (tags.length > 2) {
+        var more = doc.createElement("span");
+        more.className = "acp-mod-tasks-tag-chip acp-mod-tasks-tag-more";
+        more.textContent = "+" + (tags.length - 2);
+        more.setAttribute("title", tags.slice(2).join(" · "));
+        wrap.appendChild(more);
+      }
       return wrap;
     }
 
@@ -3418,6 +3867,8 @@
     function applySnapshot(next) {
       if (!next || state.disposed) return;
       state.snapshot = next;
+      renderTaskScope();
+      if (state.sourceBody) applyBody(state.sourceBody);
       var pid = next.projectId ? String(next.projectId) : "";
       if (pid !== state.projectId) applyProjectId(pid);
       // External focus from another module: read-only row highlight, no fetch
@@ -3437,6 +3888,7 @@
       state.selectedJobId = null;
       state.detail = null;
       state.body = null;
+      state.sourceBody = null;
       state.rows = [];
       // Command UI state belongs to the previous project's rows; never paint it
       // onto the new project (late command receipts are generation-guarded).
@@ -3470,6 +3922,8 @@
     // ----------------------------------------------------------- data paths --
 
     function applyBody(body) {
+      state.sourceBody = body;
+      body = filteredBody(body);
       state.body = body;
       pruneActionErrors(body);
       pruneSelection(body);
@@ -3616,7 +4070,7 @@
           if (state.disposed || !state.session.isCurrent(sess)) return;
           var attempt = (state.detail && typeof state.detail.attempt === "number")
             ? state.detail.attempt : 1;
-          setFocus({ taskRef: { jobId: sess.jobId, attempt: attempt } }, MODULE_ID);
+          setFocus({ taskRef: { jobId: sess.jobId, attempt: attempt, workflow: state.detail && state.detail.workflow ? String(state.detail.workflow) : undefined } }, MODULE_ID);
         },
         onSelectionError: function () { /* surfaced through select().catch */ },
       } });
@@ -3724,8 +4178,19 @@
         state.list = resolved.controllers.createTaskListController();
         state.session = resolved.controllers.createTaskSessionController();
         state.snapshot = initial || null;
+        restoreTaskScope();
+        restoreViewPreferences();
         state.projectId = initial && initial.projectId ? String(initial.projectId) : "";
         buildDom();
+        if (state.doc && typeof state.doc.addEventListener === "function") {
+          track(state.doc, "acp:langchange", function () {
+            if (state.disposed) return;
+            state.filterSignature = "";
+            renderFilters();
+            rerenderSort();
+            if (state.body) renderRows();
+          });
+        }
         initControllers();
         renderDetailNone();
         renderLoading();

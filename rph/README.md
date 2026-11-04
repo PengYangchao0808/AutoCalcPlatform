@@ -1,5 +1,8 @@
 # rph — Research Package Hub workspace
 
+> **ACP3 coordination (2026-11-04):** follow [architecture §10](../docs/reference/next-change/ACP_3.0_Architecture_20261031.md) for the shared two-developer plan. A owns chemistry semantics/network/frontend and RPH integration; B owns scientific plugin compilation/validation and minimal execution integration. C5 consumes evidence gaps through the same compile/authorization path; it does not add a task store or scientific validator. The dated status below is historical, not a claim about current default product assembly.
+
+
 > **Status at 2026-10-28 (`b32f22bb`).** The four packages, MCP session, model planner and recoverable Supervisor exist. The published `rph` bin calls `main()` without injected product parts; outside demo mode `defaultParts()` returns the supplied `dependencies.parts` or `{}`, so installing the packages and setting profile variables alone does not compose a working research Agent. Production skills require a model planner; interpreter/synthesizer/reviewer default to deterministic helpers. M4-02 proves real model calls and real QC in separate legs (the model leg still dispatches `fake` science), not one autonomous model/QC chain. M5-03 round 2 passed independent installation; Candidate-Full remains blocked. See the [current status and evidence boundaries](../docs/reference/current/ACP_RPH_Status_20261028.md), [roadmap](<../docs/RPH_Agent_Three_Phase_Roadmap_20261027(1).md>) and [MCP usage guide](../README.md#mcp-使用指南).
 
 Standalone, **private** pnpm workspace for the ACP 2.0 experience client. It is

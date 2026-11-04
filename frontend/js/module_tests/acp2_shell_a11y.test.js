@@ -31,7 +31,7 @@ const INDEX_HTML = path.join(FRONTEND, "next", "index.html");
 const SHELL_CSS = path.join(FRONTEND, "css", "shell", "shell.css");
 const SHELL_DIR = path.join(FRONTEND, "js", "shell");
 
-const WORKSPACES = ["research", "molecular", "execution"];
+const WORKSPACES = ["research", "drawing", "molecular", "config", "execution", "files"];
 
 // ── DOM stub (no jsdom, no network) ─────────────────────────────────────
 
@@ -392,7 +392,7 @@ module.exports.register = async function (h) {
 
   // ── 1. shipped markup / CSS / source contract ────────────────────────
 
-  await test("A-63: index.html ships the skip link, landmark and tab ARIA (no new scripts)", function () {
+  await test("A-63: index.html ships the skip link, workspace landmarks and view-menu ARIA", function () {
     const html = fs.readFileSync(INDEX_HTML, "utf8");
 
     // Skip link: first focusable element, real id, real target, translated.
@@ -404,8 +404,8 @@ module.exports.register = async function (h) {
     assert(skipTag.indexOf('data-i18n="shell.a11y.skip"') !== -1, "skip link reuses the existing i18n key");
     assert(html.indexOf('id="acp-shell-main"') > html.indexOf('id="acp-skip-link"'),
       "skip link precedes the main landmark");
-    assert(html.indexOf('role="tablist"') > html.indexOf('id="acp-skip-link"'),
-      "skip link precedes the workspace tablist");
+    assert(html.indexOf('id="acp-view-menu-btn"') > html.indexOf('id="acp-skip-link"'),
+      "skip link precedes the current-view menu button");
 
     // Main + workspace landmarks are named.
     const mainMatch = /<main[^>]*id="acp-shell-main"[^>]*>/.exec(html);
@@ -416,34 +416,33 @@ module.exports.register = async function (h) {
     assert(mainMatch[0].indexOf('data-acp-landmark="workspace-area"') !== -1,
       "main landmark carries focus-order metadata");
 
-    const tablist = /<nav[^>]*role="tablist"[^>]*>/.exec(html);
-    assert(tablist, "tablist present");
-    assert(tablist[0].indexOf('aria-label="') !== -1, "tablist has an aria-label");
-    assert(tablist[0].indexOf('aria-orientation="horizontal"') !== -1, "tablist orientation declared");
+    const menu = /<div[^>]*id="acp-view-menu"[^>]*>/.exec(html);
+    assert(menu, "current-view menu present");
+    assert(menu[0].indexOf('role="menu"') !== -1, "view menu has menu role");
 
     WORKSPACES.forEach((ws, index) => {
       const tab = new RegExp("<button[^>]*id=\"acp-tab-" + ws + "\"[\\s\\S]*?>", "m").exec(html);
-      assert(tab, "tab exists: " + ws);
+      assert(tab, "view menu item exists: " + ws);
       const tag = tab[0];
-      assert(tag.indexOf('role="tab"') !== -1, ws + " tab role");
-      assert(tag.indexOf('aria-controls="acp-ws-' + ws + '"') !== -1, ws + " tab aria-controls");
-      assert(tag.indexOf('aria-keyshortcuts="Alt+' + (index + 1) + '"') !== -1, ws + " tab shortcut");
-      assert(/aria-selected="(true|false)"/.test(tag), ws + " tab aria-selected");
+      assert(tag.indexOf('role="menuitemradio"') !== -1, ws + " menu item role");
+      assert(tag.indexOf('aria-controls="acp-ws-' + ws + '"') !== -1, ws + " aria-controls");
+      assert(tag.indexOf('aria-keyshortcuts="Alt+' + (index + 1) + '"') !== -1, ws + " shortcut");
+      assert(/aria-checked="(true|false)"/.test(tag), ws + " aria-checked");
 
       const panel = new RegExp("<section[^>]*id=\"acp-ws-" + ws + "\"[\\s\\S]*?>", "m").exec(html);
-      assert(panel, "tabpanel exists: " + ws);
-      assert(panel[0].indexOf('role="tabpanel"') !== -1, ws + " tabpanel role");
-      assert(panel[0].indexOf('aria-labelledby="acp-tab-' + ws + '"') !== -1, ws + " tabpanel label");
-      assert(panel[0].indexOf('tabindex="0"') !== -1, ws + " tabpanel is focusable");
-      assert(panel[0].indexOf('data-acp-landmark="workspace"') !== -1, ws + " tabpanel landmark metadata");
+      assert(panel, "view region exists: " + ws);
+      assert(panel[0].indexOf('role="region"') !== -1, ws + " region role");
+      assert(panel[0].indexOf('aria-labelledby="acp-tab-' + ws + '"') !== -1, ws + " region label");
+      assert(panel[0].indexOf('tabindex="0"') !== -1, ws + " region is focusable");
+      assert(panel[0].indexOf('data-acp-landmark="workspace"') !== -1, ws + " landmark metadata");
     });
 
-    // Exactly one tab is in the roving tab order and it is the active one.
+    // Exactly one current menu item, marked both checked and current.
     const selected = WORKSPACES.filter((ws) => {
       const tag = new RegExp("<button[^>]*id=\"acp-tab-" + ws + "\"[\\s\\S]*?>", "m").exec(html)[0];
-      return tag.indexOf('aria-selected="true"') !== -1;
+      return tag.indexOf('aria-checked="true"') !== -1 && tag.indexOf('aria-current="page"') !== -1;
     });
-    assertEq(selected, ["research"], "single selected tab in the shipped markup");
+    assertEq(selected, ["research"], "single current item in the shipped markup");
 
     // No new scripts / inline handlers: a11y lives in the shell JS files.
     const inlineScripts = html.match(/<script(?![^>]*\bsrc=)[^>]*>[\s\S]*?<\/script>/g) || [];
@@ -529,67 +528,63 @@ module.exports.register = async function (h) {
     assert(live, "polite live region is created by the shell");
     assertEq(live.getAttribute("role"), "status");
     assertEq(live.getAttribute("aria-live"), "polite");
-    assertEq(live.textContent, "分子", "live region announced the new workspace");
+    assertEq(live.textContent, "三维结构", "live region announced the new workspace");
   });
 
   // ── 3. tab ARIA + keyboard activation ────────────────────────────────
 
-  await test("A-63: tabs expose roles/labels and Arrow/Home/End/Enter/Space activation", async function () {
+  await test("A-63: view menu exposes menuitemradio state and Arrow/Home/End/Enter/Space activation", async function () {
     const { doc, dom, A } = setup();
     await flush();
 
     // Static role wiring survives boot.
     WORKSPACES.forEach((ws, index) => {
       const tab = dom.tabs[ws];
-      assertEq(tab.getAttribute("role"), "tab", ws + " role");
+      assertEq(tab.getAttribute("role"), "menuitemradio", ws + " role");
       assertEq(tab.getAttribute("aria-controls"), "acp-ws-" + ws, ws + " aria-controls");
       assertEq(tab.getAttribute("aria-keyshortcuts"), "Alt+" + (index + 1), ws + " shortcut");
       assertEq(tab.getAttribute("data-acp-focus-step"), String(index), ws + " focus step");
       assertEq(doc.getElementById("acp-ws-" + ws).getAttribute("aria-labelledby"), "acp-tab-" + ws);
     });
-    assertEq(dom.nav.getAttribute("aria-label"), "工作区", "tablist aria-label applied");
+    assertEq(dom.nav.getAttribute("aria-label"), "工作区", "menu aria-label applied");
 
     // ArrowRight moves selection + focus + roving tabindex.
     dom.tabs.research.focus();
     dom.tabs.research.dispatch("keydown", evt("ArrowRight"));
     await flush();
-    assertEq(A.layout.getCurrentWorkspace(), "molecular");
-    assertEq(dom.tabs.molecular.getAttribute("aria-selected"), "true");
-    assertEq(dom.tabs.research.getAttribute("aria-selected"), "false");
-    assertEq(dom.tabs.molecular.getAttribute("tabindex"), "0", "active tab is tabbable");
-    assertEq(dom.tabs.research.getAttribute("tabindex"), "-1", "inactive tabs are skipped");
-    assert(doc.activeElement === dom.tabs.molecular, "focus follows the arrow key");
-    assertEq(dom.sections.molecular.hidden, false, "molecular workspace visible");
+    assertEq(A.layout.getCurrentWorkspace(), "drawing");
+    assertEq(dom.tabs.drawing.getAttribute("aria-checked"), "true");
+    assertEq(dom.tabs.drawing.getAttribute("aria-current"), "page");
+    assertEq(dom.tabs.research.getAttribute("aria-checked"), "false");
+    assertEq(dom.tabs.research.getAttribute("aria-current"), null);
+    assertEq(dom.tabs.drawing.getAttribute("tabindex"), "0", "active view is tabbable");
+    assertEq(dom.tabs.research.getAttribute("tabindex"), "-1", "inactive views are skipped");
+    assert(doc.activeElement === dom.tabs.drawing, "focus follows the arrow key");
+    assertEq(dom.sections.drawing.hidden, false, "drawing workspace visible");
     assertEq(dom.sections.research.hidden, true, "research workspace hidden");
 
     // Home/End jump to the first/last workspace.
-    dom.tabs.molecular.dispatch("keydown", evt("End"));
+    dom.tabs.drawing.dispatch("keydown", evt("End"));
     await flush();
-    assertEq(A.layout.getCurrentWorkspace(), "execution");
-    assert(doc.activeElement === dom.tabs.execution, "End focuses the last tab");
-    dom.tabs.execution.dispatch("keydown", evt("Home"));
+    assertEq(A.layout.getCurrentWorkspace(), "files");
+    assert(doc.activeElement === dom.tabs.files, "End focuses the last view");
+    dom.tabs.files.dispatch("keydown", evt("Home"));
     await flush();
     assertEq(A.layout.getCurrentWorkspace(), "research");
-    assert(doc.activeElement === dom.tabs.research, "Home focuses the first tab");
+    assert(doc.activeElement === dom.tabs.research, "Home focuses the first view");
 
-    // Enter and Space activate the focused tab without stealing focus back
-    // into the workspace (tab activation keeps the tab stop).
-    dom.tabs.execution.focus();
-    dom.tabs.execution.dispatch("keydown", evt(" "));
+    // Enter and Space activate the focused view without stealing focus back.
+    dom.tabs.files.focus();
+    dom.tabs.files.dispatch("keydown", evt(" "));
     await flush();
-    assertEq(A.layout.getCurrentWorkspace(), "execution", "Space activates the tab");
-    assert(doc.activeElement === dom.tabs.execution, "focus stays on the tab after Space");
+    assertEq(A.layout.getCurrentWorkspace(), "files", "Space activates the view");
+    assert(doc.activeElement === dom.tabs.files, "focus stays on the menu item after Space");
 
     dom.tabs.research.focus();
     dom.tabs.research.dispatch("keydown", evt("Enter"));
     await flush();
-    assertEq(A.layout.getCurrentWorkspace(), "research", "Enter activates the tab");
-    assert(doc.activeElement === dom.tabs.research, "focus stays on the tab after Enter");
-
-    // Down enters the A-63 walk at the first panel title.
-    dom.tabs.research.dispatch("keydown", evt("ArrowDown"));
-    assert(doc.activeElement === panelIn(doc, "research-agent").querySelector(".acp-panel-title"),
-      "ArrowDown enters the panel-title stop");
+    assertEq(A.layout.getCurrentWorkspace(), "research", "Enter activates the view");
+    assert(doc.activeElement === dom.tabs.research, "focus stays on the menu item after Enter");
   });
 
   // ── 4. layout-editor dialog: ARIA, trap, initial focus, Escape/restore ─
@@ -728,7 +723,7 @@ module.exports.register = async function (h) {
     await flush();
 
     const panels = doc.querySelectorAll(".acp-panel");
-    assert(panels.length >= 3, "the research recipe rendered its panels");
+    assert(panels.length >= 1, "the research recipe rendered its central panel");
     const ids = new Set();
     panels.forEach((panel) => {
       const instanceId = panel.getAttribute("data-instance-id");
@@ -748,48 +743,44 @@ module.exports.register = async function (h) {
       assert(body, instanceId + " has a body");
       assertEq(body.getAttribute("tabindex"), "-1", instanceId + " body is a programmatic content anchor");
       assertEq(body.getAttribute("data-acp-focus-kind"), "panel-content");
-      // The panel must live inside a named tabpanel.
+      // The panel must live inside the named current-view region.
       const section = panel.parentNode.parentNode;
-      assertEq(section.getAttribute("role"), "tabpanel");
+      assertEq(section.getAttribute("role"), "region");
       assertEq(section.getAttribute("aria-labelledby"), "acp-tab-research");
     });
     assertEq(ids.size, panels.length, "panel ids are unique");
 
     // Placeholder panels (unregistered modules) still get an accessible name.
-    const placeholder = panelIn(doc, "research-agent");
+    const placeholder = panelIn(doc, "research-network");
     assertEq(placeholder.getAttribute("role"), "region");
     assert(doc.getElementById(placeholder.getAttribute("aria-labelledby")));
 
     // The workspace landmark itself is named and focusable.
-    assertEq(dom.sections.research.getAttribute("role"), "tabpanel");
+    assertEq(dom.sections.research.getAttribute("role"), "region");
     assertEq(dom.sections.research.getAttribute("tabindex"), "0");
     assertEq(dom.main.getAttribute("aria-label"), "工作区");
   });
 
   // ── 6. focus-order metadata + the navigable walk ─────────────────────
 
-  await test("A-63: focus order metadata walks tabs → panel titles → panel content", async function () {
+  await test("A-63: focus order metadata walks view menu → panel titles → panel content", async function () {
     const { doc, dom, A } = setup();
     await flush();
 
     assertEq(A.layout.focusOrder("research").order, [
-      "tab:research", "tab:molecular", "tab:execution",
-      "panel-title:research-agent", "panel-content:research-agent",
-      "panel-title:shared-viewer", "panel-content:shared-viewer",
-      "panel-title:research-tasks", "panel-content:research-tasks",
+      "view:research", "view:drawing", "view:molecular", "view:config", "view:execution", "view:files",
+      "panel-title:research-network", "panel-content:research-network",
     ], "focusOrder() documents the A-63 walk");
 
     // The same order is readable from the DOM metadata.
     WORKSPACES.forEach((ws, index) => {
       assertEq(dom.tabs[ws].getAttribute("data-acp-focus-step"), String(index));
-      assertEq(dom.tabs[ws].getAttribute("data-acp-focus-kind"), "tab");
+      assertEq(dom.tabs[ws].getAttribute("data-acp-focus-kind"), "view");
     });
-    assertEq(panelIn(doc, "research-agent").querySelector(".acp-panel-title").getAttribute("data-acp-focus-step"), "3");
-    assertEq(panelIn(doc, "research-agent").querySelector(".acp-panel-body").getAttribute("data-acp-focus-step"), "4");
-    assertEq(panelIn(doc, "shared-viewer").querySelector(".acp-panel-title").getAttribute("data-acp-focus-step"), "5");
-    assertEq(panelIn(doc, "research-tasks").querySelector(".acp-panel-title").getAttribute("data-acp-focus-step"), "7");
+    assertEq(panelIn(doc, "research-network").querySelector(".acp-panel-title").getAttribute("data-acp-focus-step"), String(WORKSPACES.length));
+    assertEq(panelIn(doc, "research-network").querySelector(".acp-panel-body").getAttribute("data-acp-focus-step"), String(WORKSPACES.length + 1));
     assertEq(dom.sections.research.getAttribute("data-acp-focus-sequence"),
-      "main:research-agent,side:shared-viewer,bottom:research-tasks",
+      "main:research-network",
       "workspace metadata lists the panel walk in slot order");
 
     // Execution gets its own sequence after the switch.
@@ -797,13 +788,12 @@ module.exports.register = async function (h) {
     dom.tabs.execution.dispatch("keydown", evt("Enter"));
     await flush();
     assertEq(A.layout.focusOrder("execution").order, [
-      "tab:research", "tab:molecular", "tab:execution",
-      "panel-title:exec-tasks", "panel-content:exec-tasks",
-      "panel-title:exec-detail", "panel-content:exec-detail",
-      "panel-title:exec-network", "panel-content:exec-network",
+      "view:research", "view:drawing", "view:molecular", "view:config", "view:execution", "view:files",
+      "panel-title:exec-results", "panel-content:exec-results",
+      "panel-title:shared-viewer", "panel-content:shared-viewer",
     ]);
     assertEq(dom.sections.execution.getAttribute("data-acp-focus-sequence"),
-      "main:exec-tasks,side:exec-detail,bottom:exec-network");
+      "main:exec-results,side:shared-viewer");
   });
 
   await test("A-63: keyboard walk reaches a real module control and Escape climbs back out", async function () {
@@ -812,11 +802,12 @@ module.exports.register = async function (h) {
       register: (shell) => {
         const result = shell.registry.register(
           {
-            id: "agent-workspace",
+            // Research main panel module (network contract §6).
+            id: "reaction-network",
             interfaceVersion: 1,
             version: "0.1.0",
-            provides: ["research.summary"],
-            binds: ["researchRef"],
+            provides: ["network.read"],
+            binds: ["networkNodeId"],
           },
           function () {
             return {
@@ -839,11 +830,17 @@ module.exports.register = async function (h) {
     await flush();
     assert(mounted, "module mounted a real control into the panel body");
 
-    // tabs → panel title → panel content
+    // The current-view menu is the keyboard entry to the workspace.
     dom.tabs.research.focus();
     dom.tabs.research.dispatch("keydown", evt("ArrowDown"));
-    const title = panelIn(doc, "research-agent").querySelector(".acp-panel-title");
-    assert(doc.activeElement === title, "Down from the tab reaches the panel title");
+    assertEq(A.layout.getCurrentWorkspace(), "drawing", "ArrowDown moves to the next view");
+    dom.tabs.drawing.dispatch("keydown", evt("Home"));
+    assertEq(A.layout.getCurrentWorkspace(), "research", "Home returns to the first view");
+
+    // Panel focus remains an explicit command/landmark action, not ArrowDown.
+    A.layout.focusPanel("research-network");
+    const title = panelIn(doc, "research-network").querySelector(".acp-panel-title");
+    assert(doc.activeElement === title, "focusPanel reaches the panel title");
 
     const enter = evt("Enter");
     title.dispatch("keydown", enter);
@@ -851,7 +848,7 @@ module.exports.register = async function (h) {
     assert(doc.activeElement === mounted, "Enter on the title focuses the first module control");
 
     // Escape ladder: body → title → workspace tab.
-    const body = panelIn(doc, "research-agent").querySelector(".acp-panel-body");
+    const body = panelIn(doc, "research-network").querySelector(".acp-panel-body");
     body.focus();
     const bodyEscape = evt("Escape");
     body.dispatch("keydown", bodyEscape);
@@ -875,14 +872,13 @@ module.exports.register = async function (h) {
     dom.sections.research.dispatch("keydown", moduleEscape);
     assertEq(moduleEscape.defaultPrevented, false, "module Escape stays with the module");
 
-    // Up from a title steps back to the previous title (or the tab).
-    const viewerTitle = panelIn(doc, "shared-viewer").querySelector(".acp-panel-title");
-    viewerTitle.focus();
-    viewerTitle.dispatch("keydown", evt("ArrowUp"));
-    assert(doc.activeElement === title, "Up steps back to the previous panel title");
+    // The single central title returns to its view tab on ArrowUp.
+    title.focus();
+    title.dispatch("keydown", evt("ArrowUp"));
+    assert(doc.activeElement === dom.tabs.research, "Up returns to the view tab");
 
     // focusPanelContent is a public, read-only focus helper.
-    assertEq(A.layout.focusPanelContent("research-agent"), true);
+    assertEq(A.layout.focusPanelContent("research-network"), true);
     assert(doc.activeElement === mounted, "focusPanelContent lands on module content");
     assertEq(A.layout.focusPanelContent("does-not-exist"), false);
   });

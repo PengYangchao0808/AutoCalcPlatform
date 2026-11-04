@@ -6,6 +6,15 @@ module.exports.register = async function (h) {
   const { test, assert, assertEq, loadScript, makeSandbox } = h;
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  /* Bounded condition wait. A fixed sleep is a wall-clock race on a loaded
+     machine (the 5 ms playback interval can be starved for 20+ ms), so a
+     "must have ticked" assertion polls until the deadline instead. The
+     assertion itself is unchanged: the tick count still has to be reached. */
+  const waitFor = async (cond, timeoutMs = 500) => {
+    const deadline = Date.now() + timeoutMs;
+    while (!cond() && Date.now() < deadline) await sleep(5);
+    return cond();
+  };
 
   const EXPECTED_KEYS = [
     "addArrow", "addCylinder", "addLabel", "addModel", "addSphere", "addStyle",
@@ -516,7 +525,7 @@ module.exports.register = async function (h) {
     let ticks = 0;
     const id = sc.play(() => { ticks++; }, 5);
     assert(id !== null && id !== undefined, "play returns an id");
-    await sleep(24);
+    await waitFor(() => ticks >= 2);
     assert(ticks >= 2, "onTick fired repeatedly");
     sc.stopPlayback();
     const stoppedAt = ticks;
@@ -528,6 +537,7 @@ module.exports.register = async function (h) {
     await sleep(18);
     const aAtRestart = a;
     sc.play(() => { b++; }, 5);
+    await waitFor(() => b >= 1);
     await sleep(20);
     assertEq(a, aAtRestart, "restart cancels the previous interval (no double firing)");
     assert(b >= 1, "restarted interval ticks");
@@ -621,7 +631,11 @@ module.exports.register = async function (h) {
     const aCallsAtDispose = stubA.viewer.__calls.length;
     b.render();
     b.addModel("B", "xyz");
-    await sleep(20);
+    /* Deterministic bounded wait: a fixed 20 ms sleep can see only one 5 ms
+       interval tick under OS timer granularity / a loaded loop, which made this
+       assertion flap. The assertion below is unchanged — B still has to tick at
+       least twice; only the wait is now condition-driven. */
+    await waitFor(() => bTicks >= 2);
     assert(bTicks >= 2, "B still ticks after A disposed");
     assert(stubB.viewer.__calls.length >= 2, "B still renders after A disposed");
     assertEq(stubA.viewer.__calls.length, aCallsAtDispose, "A stays quiet; B unaffected");

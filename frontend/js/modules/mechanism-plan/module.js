@@ -1313,6 +1313,10 @@
       confirmBtn.setAttribute("data-i18n", "next.mechplan.confirm");
       confirmBtn.disabled = true;
       trackListener(confirmBtn, "click", onConfirmClick);
+      if (deps.historyOnly === true) {
+        confirmBtn.hidden = true;
+        confirmStatus.textContent = "历史研究只读；不支持新建机理研究或确认计划。";
+      }
       planSection.appendChild(confirmBtn);
 
       var receipt = el(doc, "div", "acp-mechplan-receipt");

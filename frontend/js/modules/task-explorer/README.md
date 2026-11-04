@@ -13,6 +13,21 @@ loader（UI-01 车道）消费。契约依据：
 （恢复 / 彻底删除）**（Track A / V5）。A-25/A-26（阶段条 / 实时日志）不做；A-22/A-23
 已落地行为在本阶段保持不动。
 
+### 2026-11 UI 收口（NEXT）
+
+- **两行工具栏**：第一行是任务标题、`关联任务｜项目全部` 分段和 4 个 26px 图标按钮
+  （固定 / 回收站 / 刷新 / 项目）；第二行是 5 个聚合状态胶囊（全部 / 进行中 / 待干预 /
+  已完成 / 异常）和紧凑排序入口。全局项目选择器是唯一权威，模块内的隐藏 `<select>` 只保留
+  行为状态，不再画第二份选择器；旧的 counts 行已删除。
+- **聚合与持久化**：`进行中 = running+starting+queued`、`待干预 =
+  waiting_review+pending+paused`、`异常 = failed+cancelled+cancelling`；计数取
+  `body.counts` 的整域值。排序默认 `activity_desc`，升序经后端 `activity_asc`；名称/任务类型
+  使用本地 `Intl.Collator(undefined,{numeric:true})` 对已加载行排序，任务类型分组使用既有
+  `group_by=workflow`。排序、分组方向、折叠组和工具栏查询都写入
+  `acp-next-task-view-v3`（storage 命名空间与 Shell 一致）。
+- **停靠**：任务模块实例不变；右侧/底部/抽屉只切 CSS 几何，宽度/高度/折叠状态在
+  `acp-next-task-dock-v3`，由 `js/shell/global-regions.js` 管理。文件视图仍隐藏整个任务区。
+
 ## 文件
 
 | 文件 | 内容 |

@@ -46,15 +46,18 @@ module.exports.register = async function (h) {
     });
   });
 
-  await test("V7: tool drawer only lists registered modules", function () {
+  await test("V7: retired drawer no longer enumerates modules; ownership hosts are registered", function () {
     const sandbox = makeSandbox({ document: { createElement: () => ({ style: {}, setAttribute() {}, appendChild() {} }) } });
     sandbox.ACPNextModules = {};
     moduleScripts.forEach(function (src) {
       loadScript("js/modules/" + src.split("/modules/")[1].replace(/^\//, ""), sandbox);
     });
-    const drawer = fs.readFileSync(path.join(root, "js/shell/tool-drawer.js"), "utf8");
-    const listed = Array.from(drawer.matchAll(/\{ id: "([^"]+)", titleKey:/g)).map((m) => m[1]);
-    assert(listed.length >= 12);
-    listed.forEach(function (id) { assert(sandbox.ACPNextModules[id], "drawer module " + id + " registered"); });
+    const shim = fs.readFileSync(path.join(root, "js/shell/tool-drawer.js"), "utf8");
+    const listed = Array.from(shim.matchAll(/\{ id: "([^"]+)", titleKey:/g)).map((m) => m[1]);
+    assertEq(listed, [], "no module is advertised from the retired drawer");
+    ["config-workspace", "results-workspace", "task-wizard", "nmr-report", "path-view", "pes-handoff", "research-record"].forEach(function (id) {
+      assert(sandbox.ACPNextModules[id], "owning module remains registered: " + id);
+    });
+    assertEq(sandbox.ACPNextModules["config-workspace"].descriptor.version, "0.1.0");
   });
 };

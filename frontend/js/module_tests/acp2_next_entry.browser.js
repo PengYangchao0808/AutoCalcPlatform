@@ -277,36 +277,46 @@ async function main() {
       }
     });
 
-    await test("Research workspace mounts real agent-workspace with read-only badge or empty state", async page => {
+    await test("Research workspace mounts the real project-network panel (identity honest, no fixture)", async page => {
       await page.goto(url, { waitUntil: "domcontentloaded" });
       await waitForShell(page);
-      const panel = page.locator("#acp-ws-research .acp-panel[data-module-id='agent-workspace']");
+      // Network contract §6: the research main slot is the project chemistry
+      // network; DSH supplies the chat, so agent-workspace is no longer the
+      // research default instance.
+      const panel = page.locator("#acp-ws-research .acp-panel[data-module-id='reaction-network']");
       await panel.waitFor({ state: "attached", timeout: 15000 });
       await page.waitForFunction(() => {
-        const root = document.querySelector("#acp-ws-research .acp-agent-root");
-        return root && root.innerHTML.length > 0;
+        const root = document.querySelector("#acp-ws-research .acp-net");
+        return root && root.getAttribute("data-acp-module-state") != null;
       }, null, { timeout: 15000 });
       const probe = await page.evaluate(() => {
-        const root = document.querySelector("#acp-ws-research .acp-agent-root");
-        // Resilient: the read-only chip class has churned (acp-tag--model ->
-        // acp-tag--conn); key off the i18n key or the visible copy instead.
-        const chip = root && root.querySelector(
-          ".acp-tag[data-i18n='agent.connect.no_model'], .acp-tag--conn, .acp-tag--model");
-        const empty = root && root.querySelector(".acp-state-empty");
+        const root = document.querySelector("#acp-ws-research .acp-net");
+        const banner = root && root.querySelector(".acp-net-source");
         return {
-          badgeText: chip ? (chip.textContent || "").trim() : null,
-          badgeI18n: chip ? chip.getAttribute("data-i18n") : null,
-          hasEmpty: !!empty,
           state: root ? root.getAttribute("data-acp-module-state") : null,
+          netState: root ? root.getAttribute("data-acp-net-state") : null,
+          bannerKind: banner && !banner.hidden ? banner.getAttribute("data-identity-kind") : null,
+          bannerText: banner && !banner.hidden ? (banner.textContent || "").trim() : "",
+          panelText: root ? (root.textContent || "").trim() : "",
           fixture: root ? root.getAttribute("data-acp-fixture") : null,
         };
       });
-      assert(probe.state != null, "agent-workspace root must carry data-acp-module-state");
-      const readonlyBadge = probe.badgeText != null &&
-        (/只读|Read-only/i.test(probe.badgeText) || probe.badgeI18n === "agent.connect.no_model");
-      assert(readonlyBadge || probe.hasEmpty,
-        "agent-workspace must show the read-only (只读) badge or an explicit empty state; saw badge=" +
-        JSON.stringify(probe.badgeText) + " empty=" + probe.hasEmpty);
+      assert(probe.state != null, "reaction-network root must carry data-acp-module-state");
+      assert(["loading", "empty", "ready", "error"].indexOf(probe.state) >= 0,
+        "reaction-network state must be a known graceful state, saw " + probe.state);
+      assert(probe.panelText.length > 0, "network panel must never render blank (state copy is mandatory)");
+      // Identity honesty: a structure-version network may never be advertised
+      // as a molecule network (contract §6/§7).
+      if (probe.bannerKind === "structure_content_v1") {
+        assert(/结构版本网络/.test(probe.bannerText),
+          "structure-version banner copy expected, saw " + JSON.stringify(probe.bannerText));
+        assert(!/分子网络/.test(probe.panelText),
+          "a structure-version network must not be labelled 分子网络");
+      }
+      if (probe.bannerKind === "molecule_v1") {
+        assert(/分子网络/.test(probe.bannerText),
+          "molecule banner copy expected, saw " + JSON.stringify(probe.bannerText));
+      }
       assert.notEqual(probe.fixture, "true", "fixture/demo mode must not be active on a live service");
     });
 
@@ -364,7 +374,7 @@ async function main() {
       await page.locator("#acp-ws-execution .acp-panel[data-module-id='task-explorer']").waitFor({ state: "attached", timeout: 15000 });
       await page.keyboard.press("Alt+1");
       await page.waitForFunction(() => document.getElementById("acp-shell").getAttribute("data-workspace") === "research");
-      await page.locator("#acp-ws-research .acp-panel[data-module-id='agent-workspace']").waitFor({ state: "attached", timeout: 15000 });
+      await page.locator("#acp-ws-research .acp-panel[data-module-id='reaction-network']").waitFor({ state: "attached", timeout: 15000 });
 
       // The viewer is a SINGLE active instance that physically migrates
       // (DOM move) between recipes — an inactive workspace's viewer slot is
@@ -394,7 +404,7 @@ async function main() {
       };
       await probeIn("Alt+2", "molecular", "#acp-ws-molecular .acp-panel[data-module-id='molecule-viewer']");
       await probeIn("Alt+3", "execution", "#acp-ws-execution .acp-panel[data-module-id='task-explorer']");
-      await probeIn("Alt+1", "research", "#acp-ws-research .acp-panel[data-module-id='agent-workspace']");
+      await probeIn("Alt+1", "research", "#acp-ws-research .acp-panel[data-module-id='reaction-network']");
       for (const probe of probes) {
         assert(!probe.missing, "real module panel missing: " + probe.sel);
         assert(!probe.placeholderClass, "real module panel must not carry is-placeholder: " + probe.sel);

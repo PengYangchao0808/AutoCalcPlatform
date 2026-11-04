@@ -1,0 +1,400 @@
+{
+  "schema": "acp2.dsh.assets.v1",
+  "generated_by": "frontend/dsh-plugin/scripts/build.mjs",
+  "entries": [
+    {
+      "path": "adapters/base-url.js",
+      "sha256": "a19485e3e48cc2c5887550fe02ab5ed0363563343dc7f3216e6e49a7013463be",
+      "size_bytes": 9977,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "adapters/env.js",
+      "sha256": "7fed204dc3b8bcd098a5655b9e00002340fecd88660e1174eb5d400a3e0d55a8",
+      "size_bytes": 3313,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "adapters/focus-bridge.js",
+      "sha256": "7083e408ec3bcffb18c91b7172ca5a2f92a38d89d6154233b8551bd8c4a63f34",
+      "size_bytes": 8886,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "adapters/restricted-client.js",
+      "sha256": "ba9d82372b04eca9689a5b632fcb101736c613bbc78812848b120bdaf80cf2c5",
+      "size_bytes": 4428,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "adapters/theme.js",
+      "sha256": "7cf202a9b9d486067ffb1ac47919ee67a8293680044ee0b4e05f0662fda24e80",
+      "size_bytes": 7651,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "core.bundle.js",
+      "sha256": "cc2d3888dd9e99345286a7c10810675fa804bb2f50da4fdd61a406aa98e1955b",
+      "size_bytes": 2925015,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "modules/agent-workspace.js",
+      "sha256": "c080263fd6ac9bc8ece43c7043576815f653364b992b359f740db32ae541f808",
+      "size_bytes": 44552,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "modules/approval-card.js",
+      "sha256": "ddf6da70d9aa056338b2d843634cbc5894a29d6bc45bdea2e74e9e88a6e45b3f",
+      "size_bytes": 51878,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "modules/capability-form.js",
+      "sha256": "0e7a63fa454c04ed34a0eb9c60691fe3067c589d8f40fb794dfa2b8b0708b9e8",
+      "size_bytes": 90222,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "modules/config-workspace.js",
+      "sha256": "b32da4d6f193431f5f52f753f166db6ea464e51313b34186555b3acdaec7b4d2",
+      "size_bytes": 6209,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "modules/energy-profile.js",
+      "sha256": "64e3e6f3ba1829ed10b62621f7be9e8cc2cbadf328d1ee84ca15e569a0d32c01",
+      "size_bytes": 47916,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "modules/exec-detail.js",
+      "sha256": "33f12f43be6229f000d28f7d32e6fff3c6b79035ee2560960dac88ce791ec05c",
+      "size_bytes": 81566,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "modules/files-workspace.js",
+      "sha256": "41b0fc59af3e50ccc65b0cd76eaccd8ed1ef0b77638deefd6a0c097b9cb99ba8",
+      "size_bytes": 31713,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "modules/job-edit.js",
+      "sha256": "3e003c177c05e54c901d25edf79e38b996bbb8be0662260e80e2a6065aa25b30",
+      "size_bytes": 98851,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "modules/mechanism-plan.js",
+      "sha256": "d5359a45fa57e9b841a8ae097bd7055dfa325869db61302909165d7ad5ae0a13",
+      "size_bytes": 106141,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "modules/molecule-viewer.js",
+      "sha256": "8e4459a466f053527758d2d4c116205933ab78221cd3b0b8f8d91f34960ea22d",
+      "size_bytes": 175855,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "modules/nmr-report.js",
+      "sha256": "d2f5e5a48bd53e6d7a7378109658f44f94105134649eb658e418444c9c34d9fb",
+      "size_bytes": 113254,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "modules/node-status.js",
+      "sha256": "0b6cf25517ea86d00e1322714fc8aeac945a5b1f27d99cf5d96a4fc8fa5f0518",
+      "size_bytes": 55599,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "modules/path-view.js",
+      "sha256": "b08940c7493f1b8f41468bb11149e01ed6980d5dd4bdf46e87c6ae87d6b304c3",
+      "size_bytes": 77011,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "modules/pes-handoff.js",
+      "sha256": "7c008c39549c8fbd1f2db772d98109c7de4e5b5dd0ca335ee3de873ecaa7d170",
+      "size_bytes": 95970,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "modules/reaction-network.js",
+      "sha256": "8473093186f5c7e88dd4ce097d807a0520f94569b753e33b84c96c0c4c98c162",
+      "size_bytes": 60214,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "modules/research-record.js",
+      "sha256": "c4f9949b78de05ae1c26fa69b3b8f67f2c7a156dcee38f54be61a7bcff9addca",
+      "size_bytes": 99775,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "modules/results-workspace.js",
+      "sha256": "57eb21e5a3bb9fe766c6a43240cd666461d5c317138e558d77a9b06ba0a11ee2",
+      "size_bytes": 7008,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "modules/s2-scan.js",
+      "sha256": "c74454579af02fa65b172585a4ca7064151db52c1d523fa27e3c3e6b9c78eec8",
+      "size_bytes": 81552,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "modules/structure-import.js",
+      "sha256": "f12855e19ebb87e2ebf15b18c30668dbd5ef49ebda7b538f90c7c6de5d777ee2",
+      "size_bytes": 5731,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "modules/task-config.js",
+      "sha256": "9033cf5cb3ed209883ab6bb575a6efed5db4a21883fa5f4b06d95b017b04913c",
+      "size_bytes": 132844,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "modules/task-explorer.js",
+      "sha256": "5ec72b01e94215987f46e1371c435b56afe45c3c36d9208c63aa3df6495d3ea3",
+      "size_bytes": 189310,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "modules/task-wizard.js",
+      "sha256": "aeed3f08cff87af1aa9d2b66dd09efda63c9802b606b3a229fa570791433bac0",
+      "size_bytes": 286165,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "modules/tsmode-editor.js",
+      "sha256": "48ef1eb1090f00fe52a378f5e16f2035aad5f54d71137220ba429a00c7865faf",
+      "size_bytes": 82910,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "mount.js",
+      "sha256": "6e8e9f3b2604672e999f90b3e4c3481d96663f1a174f28de4e097d629fca68db",
+      "size_bytes": 47231,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "panels.css",
+      "sha256": "2ea3312351340a1a3d1518b6dd1943a0c3a1ecdfe9c39a8d82aae719b483e329",
+      "size_bytes": 343476,
+      "media_type": "text/css; charset=utf-8"
+    },
+    {
+      "path": "runtime-scope.js",
+      "sha256": "bf6dbda0082661568d46fca02fcd6c15e4933fef5628ed88acc5feed5afbb573",
+      "size_bytes": 7168,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "skel.js",
+      "sha256": "b971aee59bcfe72a2bf746c74ba25814a7f117c37a2db9d869cfdaafbd33d61c",
+      "size_bytes": 23366,
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "vendor/3Dmol-2.5.5.min.js",
+      "sha256": "f7cc78921ae72e7623e89cdd111434f58c2efddd2ffda1cd212644b406fb8016",
+      "size_bytes": 537792,
+      "media_type": "text/javascript; charset=utf-8"
+    }
+  ],
+  "digest": "b9d8d51a5bb50cc9ab62691a5b2af1d65d457dd71c00487ee4d99e175f1bbbd0",
+  "core": [
+    "js/shell/host-env.js",
+    "js/client/transport.js",
+    "js/client/resource-store.js",
+    "js/workbench/contracts/task_view_contract.js",
+    "js/workbench/contracts/experience_contract.js",
+    "js/client/task-view-query.js",
+    "js/client/job-detail-query.js",
+    "js/client/event-stream.js",
+    "js/client/event-invalidation.js",
+    "js/client/polling-strategy.js",
+    "js/client/job-commands.js",
+    "js/client/frame-candidates.js",
+    "js/client/wizard-endpoints.js",
+    "js/client/science-query.js",
+    "js/client/research-query.js",
+    "js/client/research-commands.js",
+    "js/client/system-endpoints.js",
+    "js/client/project-files.js",
+    "js/shell/i18n.js",
+    "js/shell/workspace-context.js",
+    "js/shell/module-registry.js",
+    "js/shell/module-loader.js",
+    "js/shell/commands.js",
+    "js/shell/layout-manager.js",
+    "js/shell/recipes.js",
+    "js/shell/layout-preferences.js",
+    "js/shell/layout-editor.js",
+    "js/shell/project-switcher.js",
+    "js/shell/topbar.js",
+    "js/shell/global-regions.js",
+    "js/shell/connection.js",
+    "js/shell/platform-panels.js",
+    "js/shell/bootstrap.js",
+    "js/geometry_store.js",
+    "js/visualization/mol3d_adapter.js",
+    "js/visualization/framing.js",
+    "js/visualization/scene_instance.js",
+    "js/visualization/energy_chart_renderer.js",
+    "js/visualization/view_model.js",
+    "js/visualization/view_source.js",
+    "js/visualization/fixtures/views/structure.js",
+    "js/visualization/fixtures/views/energy.js",
+    "js/visualization/fixtures/views/catalog.js",
+    "js/workbench/controllers/job_detail_controller.js",
+    "js/workbench/controllers/task_session_controller.js",
+    "js/workbench/controllers/task_list_controller.js",
+    "js/workbench/contracts/ui_subset.js"
+  ],
+  "modules": {
+    "agent-workspace": [
+      "js/modules/agent-workspace/module.js"
+    ],
+    "approval-card": [
+      "js/modules/approval-card/module.js"
+    ],
+    "capability-form": [
+      "js/modules/capability-form/module.js"
+    ],
+    "config-workspace": [
+      "js/modules/config-workspace/module.js"
+    ],
+    "energy-profile": [
+      "js/modules/energy-profile/module.js"
+    ],
+    "exec-detail": [
+      "js/modules/exec-detail/module.js"
+    ],
+    "files-workspace": [
+      "js/modules/files-workspace/module.js"
+    ],
+    "job-edit": [
+      "js/modules/job-edit/module.js"
+    ],
+    "mechanism-plan": [
+      "js/modules/mechanism-plan/module.js"
+    ],
+    "molecule-viewer": [
+      "js/modules/molecule-viewer/module.js"
+    ],
+    "nmr-report": [
+      "js/modules/nmr-report/module.js"
+    ],
+    "node-status": [
+      "js/modules/node-status/module.js"
+    ],
+    "path-view": [
+      "js/modules/path-view/module.js"
+    ],
+    "pes-handoff": [
+      "js/modules/pes-handoff/module.js"
+    ],
+    "reaction-network": [
+      "js/modules/reaction-network/module.js"
+    ],
+    "research-record": [
+      "js/modules/research-record/module.js"
+    ],
+    "results-workspace": [
+      "js/modules/results-workspace/module.js"
+    ],
+    "s2-scan": [
+      "js/modules/s2-scan/module.js"
+    ],
+    "structure-import": [
+      "js/modules/structure-import/module.js"
+    ],
+    "task-config": [
+      "js/modules/task-config/model.js",
+      "js/modules/task-config/module.js"
+    ],
+    "task-explorer": [
+      "js/modules/task-explorer/module.js"
+    ],
+    "task-wizard": [
+      "js/modules/task-wizard/module.js"
+    ],
+    "tsmode-editor": [
+      "js/modules/tsmode-editor/module.js"
+    ]
+  },
+  "css": [
+    "css/workbench/base.css",
+    "css/workbench/energy.css",
+    "css/shell/shell.css",
+    "css/shell/platform-panels.css",
+    "css/shell/agent.css",
+    "css/modules/molecule-viewer.css",
+    "css/modules/energy-profile.css",
+    "css/modules/task-explorer.css",
+    "css/modules/workspace-details.css",
+    "css/modules/task-config.css",
+    "css/modules/exec-detail.css",
+    "css/modules/reaction-network.css",
+    "css/modules/approval-card.css",
+    "css/modules/node-status.css",
+    "css/modules/capability-form.css",
+    "css/modules/s2-scan.css",
+    "css/modules/task-wizard.css",
+    "css/modules/nmr-report.css",
+    "css/modules/tsmode-editor.css",
+    "css/modules/mechanism-plan.css",
+    "css/modules/job-edit.css",
+    "css/modules/research-record.css",
+    "css/modules/path-view.css",
+    "css/modules/pes-handoff.css",
+    "css/modules/files-workspace.css",
+    "css/shell/next-layout.css"
+  ],
+  "mount": "present",
+  "vendor": [
+    {
+      "path": "js/vendor/3Dmol-2.5.5.min.js",
+      "target": "vendor/3Dmol-2.5.5.min.js"
+    }
+  ],
+  "adapters": [
+    "adapters/base-url.js",
+    "adapters/env.js",
+    "adapters/focus-bridge.js",
+    "adapters/restricted-client.js",
+    "adapters/theme.js"
+  ],
+  "skipped": [
+    {
+      "src": "/js/vendor/3Dmol-2.5.5.min.js",
+      "reason": "loaded by its own injection row (see manifest.vendor)"
+    },
+    {
+      "src": "/js/vendor/cytoscape-3.34.4.min.js",
+      "reason": "loaded by its own injection row (see manifest.vendor)"
+    },
+    {
+      "src": "/js/vendor/elk-0.12.1.bundled.js",
+      "reason": "loaded by its own injection row (see manifest.vendor)"
+    },
+    {
+      "src": "/js/vendor/cytoscape-elk-2.3.0.js",
+      "reason": "loaded by its own injection row (see manifest.vendor)"
+    },
+    {
+      "src": "/js/shell/mock/mock-alpha.js",
+      "reason": "demo mock, not shipped"
+    },
+    {
+      "src": "/js/shell/mock/mock-beta.js",
+      "reason": "demo mock, not shipped"
+    }
+  ]
+}

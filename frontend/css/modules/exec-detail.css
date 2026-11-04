@@ -239,8 +239,8 @@
   border-radius: 6px;
   background: rgba(var(--black-rgb), 0.25);
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 11px;
-  line-height: 1.45;
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .acp-ev-log-line {

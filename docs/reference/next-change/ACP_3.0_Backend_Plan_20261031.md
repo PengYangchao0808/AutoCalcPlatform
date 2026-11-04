@@ -1,8 +1,10 @@
 # ACP 3.0 后端实现计划（ACP Control Plane / CCCP / RPH）
 
+> **2026-11-04 双人开发同步**：本文 WP0—WP8 保留为平台设施专项；首条闭环排序改按[架构总纲 §10](ACP_3.0_Architecture_20261031.md)与[CCCP × ACR 插件/原生执行设计](ACP_V3_CCCP_ACR_Backend_Architecture_20261102.md)。B 主写科学插件与最小平台接入，A 主写化学编译/网络服务适配与前端；共享接口双人评审。旧周历不再是当前承诺，不要求先建工作站、第二集群或完整 VFS 才接通化学研究。本文 API 为提案，真实现行 v1/v2 继续有效，不凭本文调用 v3。
+
 日期：2026-10-31
 配套：[ACP 3.0 架构与共享契约](ACP_3.0_Architecture_20261031.md) · [前端兼容计划](ACP_3.0_Frontend_Plan_20261031.md) · [拓扑细节](ACP_MultiUser_VirtualHost_DSH_Topology_20261031.md)
-范围：**后端**（Workspace/Runtime/Data/Agent Host/RPH/CCCP）。前端只依赖本文件的 §4 契约。
+范围：**平台后端设施专项**（Workspace/Runtime/Data/Agent Host/RPH）；CCCP 插件编译交接由 11-02 专项及架构 §10 约束。前端只通过已实现并协商的 API/adapter 消费，§4 不视为已有接口。
 
 ---
 
@@ -29,17 +31,17 @@
 | 恢复 | `RuntimeRecovery` + `step_result`/`resume_source` 已有 | `runtime/recovery.py` |
 | 工件 | `ArtifactRegistry`（SQLite，本地）已有；无跨集群位置目录 | `scheduler/artifacts.py` |
 | RPH | `research`/`bridge`/`dsh-bundle`/`cli` 四包已存在，依赖方向冻结 | `rph/packages/*`、`rph/README.md` |
-| 迁移 | `_MIGRATIONS` 最后为 `"023"` | `acp_services/store/migrations.py` |
+| 迁移 | 当前工作区已到 `029`（含 028 selection_publications、029 structure_identities；026 缺号） | `acp_services/store/migrations.py` |
 
 ---
 
 ## 2. 工作包（按依赖排序）
 
 ### WP0 契约与迁移
-- 迁移 **024**：`workstations`（`workstation_id PK, account_id UNIQUE, tenant_id, provider, endpoint, state, revision, home_root, dsh_home, dsh_port, dsh_version, image_version, plugin_set_version, quotas_json, health_json, created_at, updated_at`）+ `workstation_operations`（幂等/对账）。
-- 迁移 **025**：`projects.tenant_id`、`projects.owner_principal_id`；`identity_accounts.workstation_id`。
-- 迁移 **026**：`research_runs`（`research_run_id, account_id, project_id, dsh_session_id, state, last_consumed_event_id, created_at, updated_at`）+ `research_run_tasks(research_run_id, task_id, relation)`。
-- 迁移 **027**：`artifact_locations(artifact_id, backend, cluster_id, locator, state, digest, size_bytes, updated_at)`；`artifacts` 以现有 registry 为基础扩展，不复制 manifest 字段。
+- 迁移 **待分配 WS**（合并前核对最新 migrations，不占号）：`workstations`（`workstation_id PK, account_id UNIQUE, tenant_id, provider, endpoint, state, revision, home_root, dsh_home, dsh_port, dsh_version, image_version, plugin_set_version, quotas_json, health_json, created_at, updated_at`）+ `workstation_operations`（幂等/对账）。
+- 迁移 **待分配 OWNER**：`projects.tenant_id`、`projects.owner_principal_id`；`identity_accounts.workstation_id`。
+- 迁移 **待分配 RESEARCH**：`research_runs`（`research_run_id, account_id, project_id, dsh_session_id, state, last_consumed_event_id, created_at, updated_at`）+ `research_run_tasks(research_run_id, task_id, relation)`。
+- 迁移 **待分配 LOCATIONS**：`artifact_locations(artifact_id, backend, cluster_id, locator, state, digest, size_bytes, updated_at)`；`artifacts` 以现有 registry 为基础扩展，不复制 manifest 字段。
 - 契约版本：`ACP_API_VERSION=3`；事件 schema `acp.event.v1`。
 
 ### WP1 Workstation Manager
@@ -143,23 +145,23 @@
 ## 3. 数据模型（新增/修改摘要）
 
 ```sql
--- 024
+-- 待分配 WS（旧编号提案已撤销）
 workstations(workstation_id PK, account_id UNIQUE, tenant_id, provider, endpoint,
              state, revision, home_root, dsh_home, dsh_port, dsh_version,
              image_version, plugin_set_version, quotas_json, health_json,
              created_at, updated_at)
 workstation_operations(operation_id PK, workstation_id, kind, state,
                        error_code, payload_json, created_at, updated_at)
--- 025
+-- 待分配 OWNER（旧编号提案已撤销）
 ALTER TABLE projects ADD tenant_id TEXT NOT NULL DEFAULT '';
 ALTER TABLE projects ADD owner_principal_id TEXT NOT NULL DEFAULT '';
 ALTER TABLE identity_accounts ADD workstation_id TEXT NOT NULL DEFAULT '';
--- 026
+-- 待分配 RESEARCH（旧编号提案已撤销）
 research_runs(research_run_id PK, account_id, project_id, dsh_session_id,
               state, last_consumed_event_id, research_state_json,
               created_at, updated_at)
 research_run_tasks(research_run_id, task_id, relation, PRIMARY KEY(research_run_id, task_id))
--- 027
+-- 待分配 LOCATIONS（旧编号提案已撤销）
 artifact_locations(artifact_id, backend, cluster_id, locator, state,
                    digest, size_bytes, updated_at,
                    PRIMARY KEY(artifact_id, backend, cluster_id))
@@ -237,3 +239,13 @@ artifact_locations(artifact_id, backend, cluster_id, locator, state,
 - **D4 模型凭据**：存用户工作站，agent 同 UID 可读；需安全确认。
 - **D5 集群**：共享盘直挂 vs 全量 transfer；按集群能力选择，VFS 统一视图。
 - **D6 备份**：工作站 Home/DSH_HOME 备份；任务数据由 Artifact Catalog 归档，不依赖工作站快照。
+
+## 10. 与双人化学研究主线的交付映射（2026-11-04）
+
+- C0/P0：B 冻结科学目录、Plan/Bundle/Result 与 A 的 ResearchPlan 接入；WP0 只做必要契约，不立即建齐所有表。
+- C1—C4-L：复用既有 Runtime/Data 完成本机研究闭环；B 提供科学能力与验证，A 负责化学对象/网络/交互。
+- C4-R/P3—P4：B 在既有 LSF/SSH/回执链上接入原生执行；复用 WP3 的工件位置/传输语义。A 联调 availability、错误、等待与恢复。
+- C5：WP5 的持久研究状态/事件用于真实 Agent 恢复，模型预算与计算预算分别记录；约定内连续执行无需逐点人工审批。
+- P5/P6 扩展：WP1/2/4/6/8 完整工作站、多租户与更多集群另设退出门。WP7 不以重命名包为验收条件，现有四包方向不变。
+
+当前无新增实施 PASS；迁移只分配实际需要的表，现有 Task/Attempt/Artifact 不另建主库。

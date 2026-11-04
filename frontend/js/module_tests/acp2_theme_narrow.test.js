@@ -68,6 +68,7 @@ module.exports.register = async function (h) {
     { file: "tsmode-editor.css", drawer: false, table: false },
     { file: "reaction-network.css", drawer: false, table: false },
     { file: "workspace-details.css", drawer: false, table: false },
+    { file: "files-workspace.css", drawer: true, table: false },
   ];
 
   function read(file) { return fs.readFileSync(file, "utf8"); }

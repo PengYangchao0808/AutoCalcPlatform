@@ -1,5 +1,7 @@
 # ACP 3.0 V7 Parity Status (2026-10-31)
 
+> **2026-11-04 双人开发同步**：本表仍是原 revision 的 parity 证据快照。本次[架构 §10](ACP_3.0_Architecture_20261031.md)新增的 Chemical IR/两级编译/严格物种归集/证据闭环不在旧 PASS 范围，须独立按 C0—C5 验收；本次不重计旧测试或提升 parity/live 状态。
+
 > Read-only status for the §2.4 / §7 parity gate. **Not a claim that the classic page may be retired.**
 > Authority: `docs/reference/next-change/ACP_3.0_Frontend_Plan_20261031.md` §2.4 / §7.
 > Evidence: module registration + four-state code + Node vm tests in `frontend/js/module_tests/`; full suite **1103 passed / 0 failed** at the time of this snapshot.
@@ -38,12 +40,12 @@
 ## 2. V7 gaps that still block the parity gate
 
 1. **A-49 backend (ADR-009)**: `POST /api/v1/mechanism-studies/{id}/mechanism/plan` returns 410 and has no implementation. ADR-009 retires the **plan-confirm action** only; P17 remains read-only. Restoring the endpoint requires revoking ADR-009 and a real plan_confirmed acceptance run.
-2. **Default assembly**: three core recipes still mount the original core panels. A new **V7 tool drawer** (topbar “工具”) now gives default access to 12 optional modules: `task-wizard / job-edit / nmr-report / tsmode-editor / s2-scan / node-status / approval-card / capability-form / path-view / pes-handoff / mechanism-plan / research-record`. It mounts one at a time, disposes on switch/close, and creates no second viewer/network cache. `acp2_boot_registration.test.js` loads every `/next` module script in a browser-like vm, asserts each registers a descriptor with `id/interfaceVersion/factory`, and asserts the drawer list is a subset of registered modules. `acp2_tool_drawer_dom.test.js` drives the real drawer script against a tiny DOM. A real CDP sweep clicked all 12 tabs: every module wrapper mounted, 0 uncaught exceptions (404 body content expected). Still not a recipe slot.
+2. **Default assembly (superseded 2026-11)**: the former V7 generic tool drawer and its 12-module catalog were removed from the UI. Current ownership: E hosts `config-workspace` (task wizard plus dedicated `tsmode` / `scan` editors and selected-task `job-edit`); F hosts applicable `energy-profile` / `path-view` / `pes-handoff` / `nmr-report` / `research-record` tabs and a history-only mechanism tab; A owns `capability-form`; the topbar owns `approval-card` and `node-status`. Module ids, files, `ACPNextModules` registrations and focused module tests are retained. `acp2_tool_drawer*.test.js` now guard removal of the drawer rather than its presence. This repository evidence does not claim a live-browser verification of the new ownership routing.
 3. **Browser suite**: `acp2_next_entry.browser.js` / `acp2_layout_editor.browser.js` were **not executed** (Playwright is not installed on this host). A **real headless Edge + CDP** run on 2026-10-31 covers:
    - 1280×900 static boot of `/next/` (shell/tabs/panels render);
    - skip-link focus (`#acp-ws-research`), live region (`研究`), shell-tab ArrowRight selection/workspace switch;
    - layout dialog `role=dialog`/`aria-modal=true`, focus inside, Escape closes (`open=false`, `display=none`);
-   - real click on `#acp-tools-btn` → drawer opens, 12 tabs, `task-wizard` mounts; switch to `job-edit` mounts it (404 expected without API);
+   - historical 2026-10-31 run: old `#acp-tools-btn` opened a 12-tab drawer; this describes a retired build, not current UI;
    - **390×844 mobile emulation**: `innerWidth=390`, `scrollWidth=390`, `data-acp-ready=true`, single-column panels, full-width drawer, no horizontal overflow;
    - 0 uncaught exceptions; console errors are only expected 404s.
    Evidence: `reports/acp2_implementation/next_boot_20261031/`. The full Playwright interaction suite (forms, real drawers with backend data, authz) remains NOT_VERIFIED.

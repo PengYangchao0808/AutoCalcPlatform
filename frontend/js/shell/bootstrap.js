@@ -17,17 +17,40 @@ window.ACPShell = window.ACPShell || {};
 ACPShell.bootstrap = (function () {
   "use strict";
 
-  var API_BASE = "/api/v1";
   var API_TIMEOUT_MS = 8000;
   var API_REMOTE_TIMEOUT_MS = 60000;
 
   var started = false;
 
+  // Host seam (js/shell/host-env.js). Without it the shell keeps the literals
+  // it always used, so the standalone Workbench is byte-for-byte unchanged.
+  function env() {
+    return window.ACPShell && window.ACPShell.env ? window.ACPShell.env : null;
+  }
+  function doc() {
+    return env() ? env().doc() : window.document;
+  }
+  function apiBase() {
+    return env() ? env().apiBase() : "/api/v1";
+  }
+  function apiV2Base() {
+    return env() ? env().apiV2Base() : "/api/v2";
+  }
+
   function api(path, opts) {
-    return window.ACPClient.transport.request(API_BASE + path, opts);
+    return observed(window.ACPClient.transport.request(apiBase() + path, opts));
   }
   function apiV2(path, opts) {
-    return window.ACPClient.transport.request("/api/v2" + path, opts);
+    return observed(window.ACPClient.transport.request(apiV2Base() + path, opts));
+  }
+  function observed(promise) {
+    return Promise.resolve(promise).then(function (value) {
+      if (ACPShell.connection) ACPShell.connection.noteSuccess();
+      return value;
+    }, function (error) {
+      if (ACPShell.connection) ACPShell.connection.noteFailure(error);
+      throw error;
+    });
   }
   function apiRemote(path, opts) {
     opts = opts || {};
@@ -43,8 +66,9 @@ ACPShell.bootstrap = (function () {
       remoteTimeoutMs: API_REMOTE_TIMEOUT_MS,
       translate: ACPShell.i18n.t
     });
-    if (C.events) C.events.init({ baseUrl: API_BASE });
+    if (C.events) C.events.init({ baseUrl: apiBase() });
     if (C.taskView) C.taskView.init({ v1: api, v2: apiV2 });
+    if (C.projectFiles) C.projectFiles.init({ v2: apiV2 });
     if (C.research) C.research.init({ v2: apiV2 });
     if (C.researchCommands) C.researchCommands.init({ v1: api, v2: apiV2 });
     if (C.eventInvalidation) C.eventInvalidation.init({ v1: api, v2: apiV2 });
@@ -58,22 +82,22 @@ ACPShell.bootstrap = (function () {
       C.wizardEndpoints.init({
         v1: api,
         direct: function (url, opts) { return window.ACPClient.transport.request(url, opts); },
-        baseUrl: API_BASE
+        baseUrl: apiBase()
       });
     }
     if (C.systemEndpoints) {
       C.systemEndpoints.init({
         v1: api,
         direct: function (url, opts) { return window.ACPClient.transport.request(url, opts); },
-        baseUrl: API_BASE
+        baseUrl: apiBase()
       });
     }
     // NOTE: polling-strategy / event-stream are initialized but NOT started.
   }
 
   function showFatal(message) {
-    var main = document.getElementById("acp-shell-main");
-    var fatal = document.getElementById("acp-shell-fatal");
+    var main = doc().getElementById("acp-shell-main");
+    var fatal = doc().getElementById("acp-shell-fatal");
     if (!fatal) return;
     if (main) main.hidden = true;
     fatal.hidden = false;
@@ -85,19 +109,19 @@ ACPShell.bootstrap = (function () {
     fatal.setAttribute("data-acp-dialog", "fatal");
     var existing = fatal.querySelector(".acp-shell-fatal-card");
     if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
-    var card = document.createElement("div");
+    var card = doc().createElement("div");
     card.setAttribute("class", "acp-shell-fatal-card");
-    var title = document.createElement("p");
+    var title = doc().createElement("p");
     title.setAttribute("class", "acp-state-title");
     title.setAttribute("id", "acp-shell-fatal-title");
     title.textContent = ACPShell.i18n.t("shell.fatal.title");
-    var msg = document.createElement("p");
+    var msg = doc().createElement("p");
     msg.setAttribute("class", "acp-state-msg mono");
     msg.setAttribute("id", "acp-shell-fatal-msg");
     msg.textContent = String(message || "unknown error");
-    var actions = document.createElement("div");
+    var actions = doc().createElement("div");
     actions.setAttribute("class", "acp-state-actions");
-    var retry = document.createElement("button");
+    var retry = doc().createElement("button");
     retry.setAttribute("class", "acp-btn acp-btn--primary");
     retry.setAttribute("data-action", "fatal-retry");
     retry.textContent = ACPShell.i18n.t("shell.fatal.retry");
@@ -106,9 +130,9 @@ ACPShell.bootstrap = (function () {
       if (main) main.hidden = false;
       try { start(); } catch (error) { showFatal(error && error.message ? error.message : error); }
     });
-    var back = document.createElement("a");
+    var back = doc().createElement("a");
     back.setAttribute("class", "acp-btn acp-btn--ghost");
-    back.setAttribute("href", "/");
+    back.setAttribute("href", env() ? env().homeHref() : "/");
     back.textContent = ACPShell.i18n.t("shell.fatal.back_classic");
     actions.appendChild(retry);
     actions.appendChild(back);
@@ -122,7 +146,7 @@ ACPShell.bootstrap = (function () {
   }
 
   function bindLangToggle() {
-    var btn = document.getElementById("acp-lang-toggle");
+    var btn = doc().getElementById("acp-lang-toggle");
     if (!btn || !btn.addEventListener) return;
     btn.addEventListener("click", function () {
       ACPShell.i18n.toggle();
@@ -131,7 +155,8 @@ ACPShell.bootstrap = (function () {
 
   function isDemo() {
     try {
-      return /(\?|&)demo=1(&|$)/.test(window.location && window.location.search || "");
+      var loc = env() ? env().location() : window.location;
+      return /(\?|&)demo=1(&|$)/.test(loc && loc.search || "");
     } catch (e) {
       return false;
     }
@@ -144,6 +169,7 @@ ACPShell.bootstrap = (function () {
   function start() {
     ACPShell.i18n.applyI18n(document);
     initClient();
+    if (ACPShell.connection) ACPShell.connection.init({ request: api });
     // Bulk-collect mock / late-registered modules from the static table.
     ACPShell.registry.collectFrom(window.ACPNextModules);
     ACPShell.commands.init({ context: ACPShell.context, layout: ACPShell.layout });
@@ -151,9 +177,13 @@ ACPShell.bootstrap = (function () {
       context: ACPShell.context,
       loader: ACPShell.loader,
       registry: ACPShell.registry,
-      i18n: ACPShell.i18n
+      i18n: ACPShell.i18n,
+      request: api
     });
-    if (ACPShell.toolDrawer) ACPShell.toolDrawer.init();
+    if (ACPShell.globalRegions) ACPShell.globalRegions.init({ context: ACPShell.context, loader: ACPShell.loader, request: api });
+    if (ACPShell.platformPanels) ACPShell.platformPanels.init();
+    if (ACPShell.projectSwitcher) ACPShell.projectSwitcher.init({ context: ACPShell.context, request: api, i18n: ACPShell.i18n });
+    if (ACPShell.topbar) ACPShell.topbar.init({ layout: ACPShell.layout, i18n: ACPShell.i18n });
     bindLangToggle();
     if (ACPShell.layoutEditor) ACPShell.layoutEditor.init();
     var recipeId = isDemo() ? "demo" : ACPShell.preferences ? ACPShell.preferences.active() : "research";
@@ -161,7 +191,7 @@ ACPShell.bootstrap = (function () {
     if (!applied || applied.ok === false) {
       throw new Error("default recipe '" + recipeId + "' failed: " + (applied && applied.error || "no recipe"));
     }
-    var shellRoot = document.getElementById("acp-shell");
+    var shellRoot = doc().getElementById("acp-shell");
     if (shellRoot) shellRoot.setAttribute("data-acp-ready", "true");
     started = true;
     return applied;

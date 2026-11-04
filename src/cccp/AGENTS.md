@@ -1,5 +1,12 @@
 # cccp/ — Package Root
 
+## ACP3 双人协作（2026-11-04）
+
+读[架构总纲 §10](../../docs/reference/next-change/ACP_3.0_Architecture_20261031.md)。A 主写拟 chemistry/ 与 compiler/chemical/ 的纯语义/ResearchPlan 接入；B 主写科学 recipe compiler、Capability/Provider、插件/Renderer/Parser/Validator。新路径是目标，先复用现有 calculation/recipes/analysis。仍禁止依赖 acp/acp_services；Standalone CLI 与当前无 CLI 规则的变更必须同批配套发行/隔离门。
+
+本节是开发目标，不声明新增能力已交付；现行依赖/执行/安全护栏继续约束实现。
+
+
 ## OVERVIEW
 Top-level package files: config loading, version management, package init. Hub connecting **9 subpackages** (core, io, pipeline, qc, utils, backends, calculation, **analysis**, **plugin**). Library-only — no CLI (deleted in the cccp rename; use the unified `acp` CLI). Version `0.3.0` (synced 4-way: here `__init__.py`/`version.py` + `acp/__init__.py` + `pyproject.toml`, see root AGENTS.md ANTI #2). Since ACP 2.0 (2026-10) cccp is no longer just the "QC 底座": it is also the **science-analysis home** (`analysis/`, 88 .py — NMR/DP4/DP5/FCHL, evidence/provenance contracts) and the **science plugin ecosystem** (`plugin/`). 203 .py total.
 

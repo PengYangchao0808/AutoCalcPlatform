@@ -1,5 +1,8 @@
 # ACP — 自动化化学计算平台
 
+> **ACP3 开发协作（2026-11-04）**：双人职责、两级化学/科学编译、阶段交接与验收以[架构总纲 §10](docs/reference/next-change/ACP_3.0_Architecture_20261031.md)为准；插件和 agentless 目标见[CCCP × ACR 设计](docs/reference/next-change/ACP_V3_CCCP_ACR_Backend_Architecture_20261102.md)。这是开发方案更新，不改变下文当前安装/运行入口，也不声明 V3 已交付。
+
+
 架构命名与双人协作见[主方案 v1.7 第 37 节](docs/ACP_Architecture_Adjustment_Plan_20261016.md#37-统一命名与双人并行开发计划)：ACR → ACP Services，ACV → ACP Visualization；前端与服务/科学代码分工开发，现有运行入口与导入尚未更名。
 
 **Auto-Calc Platform (ACP)** 是一个模块化的 Python 计算化学平台，旨在降低量子化学计算的入门门槛，通过 CLI 和 Web 界面让不熟悉计算化学流程的研究人员也能轻松提交任务、查看进度、可视化结果。

@@ -1,5 +1,12 @@
 # acp/ — ACP Unified Module
 
+## ACP3 双人协作（2026-11-04）
+
+读[架构总纲 §10](../../docs/reference/next-change/ACP_3.0_Architecture_20261031.md)。A 主写化学意图接入、网络 API/服务适配和前端；B 主写科学插件编译与最小 Scheduler/ACR/Data 接入。两级编译只保留一个 ResearchPlan→WorkflowRecipe 适配，不在 acp 再建科学 compiler。
+
+本节是开发目标，不声明新增能力已交付；现行依赖/执行/安全护栏继续约束实现。
+
+
 > **Historical audit (`fd2087c7`):** [functional audit](../../reports/acp2_function_audit_20261028/REPORT.md). Its runtime/tool/assembly scope is a historical snapshot; use the 2026-10-30 notes below and current code for changed capabilities. Existing scientific workflows and compatibility paths remain in scope.
 
 ## MCP / Agent 集成开发（2026-10-30）
@@ -102,7 +109,7 @@ acp/
 | IRC projection | `results/irc_projection.py` | Two-direction energy series in strict file order |
 | Remote structure cache | `results/remote_structure_cache.py` | Flat cache + pending_fetch + sweep_expired; singleton owned by JobManager |
 | API v1 | `api/v1_routes.py` | Jobs, files, detail, recovery matrix, edit-recalculate, PES review; new read-only `GET /jobs/{id}/availability` + `GET /jobs/{id}/prepared/{resource}`; legacy GET retained for F0 (closure L2-02/L2-03); control endpoints go through `acp_services.runtime.commands.RuntimeCommands` |
-| API v2 | `api/v2_routes.py` | Task views, batch ops, molecule groups, lineage |
+| API v2 | `api/v2_routes.py` | Task views, batch ops, molecule groups, lineage; project-level read-only file tree/read (`acp_services.data.project_files`) |
 | API schemas | `api/schemas.py` / `v1_schemas.py` | Pydantic models: QueueCounts, V1JobDetailResponse, V1JobPurgeRequest |
 | API server | `api/server.py` | FastAPI app factory + static frontend hosting at `/` |
 | Structure sources v2 | `api/v2_structure_sources.py` | GET/PATCH structure-source entries + facets + batch metadata |

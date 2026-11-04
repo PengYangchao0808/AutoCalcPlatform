@@ -14,6 +14,8 @@
   --shell-side-w: clamp(280px, 24vw, 400px);
   --shell-side-rail-w: 32px;
   --shell-bottom-h: clamp(160px, 30vh, 340px);
+  --files-tree-w: 300px;
+  --files-term-h: 200px;
   --shell-timeline-rail: 22px;
   --shell-violet: #d7b8ff;
   --shell-violet-rgb: 186, 122, 255;

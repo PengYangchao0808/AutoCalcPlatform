@@ -882,7 +882,10 @@
           kind: "job-file",
           jobId: String(jobId),
           path: frame.geometryRef,
-          frameIndex: index
+          frameIndex: index,
+          preview: true,
+          attempt: lastView.provenance.attempt != null ? Number(lastView.provenance.attempt) : null,
+          view: "energy"
         });
       } catch (e) { /* locating the structure is auxiliary; chart selection stands */ }
     }

@@ -17,26 +17,38 @@ import os
 import posixpath
 import re
 import sqlite3
+import threading
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse
 
-from acp.api.v1_routes import _apply_auto_tag_rules_on_submit
+from acp.api.chemistry_projection import build_network
+from acp.api.v1_routes import (
+    _apply_auto_tag_rules_on_submit,
+    _EntryClass,
+    _require_entry_access,
+    _require_project_scope,
+    _require_verified_project,
+)
 from acp.api.v2_schemas import (
     V2BatchOpItemResult,
     V2BatchOpsRequest,
     V2BatchOpsResult,
+    V2ChemistryNetworkResponse,
     V2FileEntry,
     V2LineageNode,
     V2LineageResponse,
     V2MoleculeGroupInfo,
     V2MoleculeGroupSuggestion,
     V2MoleculeMergeRequest,
+    V2ProjectFileEntry,
+    V2ProjectFileResponse,
     V2ProjectSummary,
+    V2ProjectTreeResponse,
     V2TagDeleteRequest,
     V2TagInfo,
     V2TagMergeRequest,
@@ -81,6 +93,7 @@ from acp.storage.backend import (
 from acp.storage.layout import TaskLayout
 from acp.storage.manifest import ResultManifest
 from acp_services.contracts.access import AccessAction
+from acp_services.data import project_files as project_file_service
 from acp_services.runtime.freshness import AVAILABILITY_READY
 from acp_services.runtime.lineage import TaskEvidenceBuilder
 from acp_services.runtime.projections import TaskProjectionStore, TaskRowProjection
@@ -577,6 +590,179 @@ def list_project_tasks(
     return [_task_summary(record) for record in records]
 
 
+def _project_file_error(exc: project_file_service.ProjectFileError) -> HTTPException:
+    """Map a service error to the stable ``{code,message}`` HTTP error shape."""
+    return HTTPException(status_code=exc.http_status, detail=exc.to_detail())
+
+
+def _authorized_project_file_root(
+    request: Request,
+    project_id: str,
+    *,
+    resource_path: str,
+) -> str:
+    """Resolve the project and authorize a file/download entry.
+
+    Gate order: verified project scope -> server-side project row -> re-used
+    v2 entry access (READ, resource id = relative path) -> project root.
+    """
+    manager = _manager(request)
+    try:
+        _require_project_scope(request, project_id)
+        _require_verified_project(request, project_id)
+    except HTTPException as exc:
+        if exc.status_code == 404:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "not_found", "message": f"Project not found: {project_id}"},
+            ) from exc
+        raise
+    project = manager.projects.get_project(project_id)
+    if project is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "not_found", "message": f"Project not found: {project_id}"},
+        )
+    try:
+        _require_entry_access(
+            request,
+            _EntryClass.DOWNLOAD,
+            project_id=project_id,
+            action=AccessAction.READ,
+            resource_id=resource_path,
+        )
+    except HTTPException as exc:
+        if exc.status_code == 403:
+            raise HTTPException(
+                status_code=403,
+                detail={"code": "read_not_allowed", "message": "project file read is not allowed"},
+            ) from exc
+        raise
+    return str(project.get("run_root", "") or "")
+
+
+def _project_file_response_headers(response: Response) -> None:
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+
+
+@router.get("/projects/{project_id}/tree", response_model=V2ProjectTreeResponse)
+def get_project_tree(
+    project_id: str,
+    request: Request,
+    response: Response,
+    path: str = Query(default=""),
+    limit: int = Query(default=project_file_service.DEFAULT_TREE_LIMIT),
+) -> V2ProjectTreeResponse:
+    """List one level below a project root (strict relative POSIX path).
+
+    Read-only: no task store write, no prepare operation and no network.  The
+    project root comes from the project registry; a request path can never
+    select another root.  Hidden/sensitive/link entries are omitted and the
+    listing is bounded by both ``limit`` and a fixed scan budget.
+    """
+    _project_file_response_headers(response)
+    if not 1 <= limit <= project_file_service.MAX_TREE_LIMIT:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "invalid_parameter",
+                "message": (f"limit must be between 1 and {project_file_service.MAX_TREE_LIMIT}"),
+            },
+        )
+    root = _authorized_project_file_root(request, project_id, resource_path=path)
+    try:
+        tree = project_file_service.list_project_directory(
+            project_id,
+            root,
+            _manager(request).run_root,
+            path=path,
+            limit=limit,
+        )
+    except project_file_service.ProjectFileError as exc:
+        raise _project_file_error(exc) from exc
+    return V2ProjectTreeResponse(
+        project_id=tree.project_id,
+        path=tree.path,
+        entries=[
+            V2ProjectFileEntry(
+                path=entry.path,
+                name=entry.name,
+                type=entry.type,
+                size=entry.size,
+                mtime=entry.mtime,
+            )
+            for entry in tree.entries
+        ],
+        limit=tree.limit,
+        truncated=tree.truncated,
+        truncation_reason=tree.truncation_reason,
+    )
+
+
+@router.get("/projects/{project_id}/file", response_model=V2ProjectFileResponse)
+def get_project_file(
+    project_id: str,
+    request: Request,
+    response: Response,
+    path: str = Query(...),
+    max_bytes: int = Query(default=project_file_service.DEFAULT_MAX_BYTES),
+    max_lines: int = Query(default=project_file_service.DEFAULT_MAX_LINES),
+) -> V2ProjectFileResponse:
+    """Read a bounded UTF-8 prefix of one project file (no symlink follow).
+
+    The response is always bounded by ``max_bytes`` and ``max_lines``; a file
+    larger than the requested budget is returned as a prefix with
+    ``truncated=True``.  ``sha256`` covers exactly the returned bytes.
+    """
+    _project_file_response_headers(response)
+    if not 1 <= max_bytes <= project_file_service.MAX_MAX_BYTES:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "invalid_parameter",
+                "message": (
+                    f"max_bytes must be between 1 and {project_file_service.MAX_MAX_BYTES}"
+                ),
+            },
+        )
+    if not 1 <= max_lines <= project_file_service.MAX_MAX_LINES:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "invalid_parameter",
+                "message": (
+                    f"max_lines must be between 1 and {project_file_service.MAX_MAX_LINES}"
+                ),
+            },
+        )
+    root = _authorized_project_file_root(request, project_id, resource_path=path)
+    try:
+        result = project_file_service.read_project_file(
+            project_id,
+            root,
+            _manager(request).run_root,
+            path=path,
+            max_bytes=max_bytes,
+            max_lines=max_lines,
+        )
+    except project_file_service.ProjectFileError as exc:
+        raise _project_file_error(exc) from exc
+    return V2ProjectFileResponse(
+        project_id=result.project_id,
+        path=result.path,
+        content=result.content,
+        encoding=result.encoding,
+        size=result.size,
+        mtime=result.mtime,
+        returned_bytes=result.returned_bytes,
+        returned_lines=result.returned_lines,
+        truncated=result.truncated,
+        truncation_reason=result.truncation_reason,
+        sha256=result.sha256,
+    )
+
+
 @router.get("/task-view", response_model=V2TaskViewResponse)
 def get_task_view(
     request: Request,
@@ -587,7 +773,7 @@ def get_task_view(
     ),
     sort: str = Query(
         default="created_desc",
-        pattern=r"^(created_desc|created_asc|completed_desc|activity_desc|name_asc|name_desc)$",
+        pattern=r"^(created_desc|created_asc|completed_desc|activity_desc|activity_asc|name_asc|name_desc)$",
     ),
     status: str | None = Query(default=None),
     workflow: str | None = Query(default=None),
@@ -1868,3 +2054,204 @@ def purge_orphan_tasks(request: Request) -> dict[str, Any]:
         "purged": sum(1 for r in results if r.get("ok")),
         "failed": sum(1 for r in results if not r.get("ok")),
     }
+
+
+# ── Project chemistry network endpoint (B0) ────────────────────────────
+# Contract: docs/reference/next-change/ACP_Chemistry_Network_Contract_20261103.md
+# Cache-only reads; no read root, no catalog fetch, no prepare enqueue, no writes.
+
+#: ``StructureSourceStore.query_sources`` hard-caps ``limit`` at 100 (§verified facts).
+_SOURCE_PAGE_LIMIT = 100
+#: Per-request source-page budget: one request never scans the whole DB.
+_MAX_SOURCE_PAGES = 5
+#: Global cap on lineage lookups per request (each lookup is a store row read).
+MAX_EDGE_LOOKUPS = 500
+
+_chemistry_source_stores: dict[str, Any] = {}
+_chemistry_source_store_lock = threading.Lock()
+
+
+def _chemistry_source_store(manager: JobManager) -> Any:
+    """Return the process-wide read-only ``StructureSourceStore`` for the jobs DB.
+
+    Deliberately not ``v2_structure_sources._get_stores``: that accessor starts
+    the indexer daemon, and a read GET must never trigger an indexer sweep
+    (contract §5).  This store is only ever queried, never written.
+    """
+    db_path = str(manager.store.db_path)
+    with _chemistry_source_store_lock:
+        store = _chemistry_source_stores.get(db_path)
+        if store is None:
+            from acp.scheduler.structure_source_store import StructureSourceStore
+
+            store = StructureSourceStore(db_path)
+            _chemistry_source_stores[db_path] = store
+        return store
+
+
+def _chemistry_cursor_offset(cursor: str | None) -> int:
+    """Decode the opaque decimal-offset cursor; anything else is a 400."""
+    if cursor is None or not str(cursor).strip():
+        return 0
+    text = str(cursor).strip()
+    if not text.isdigit():
+        raise HTTPException(status_code=400, detail="invalid_cursor")
+    return int(text)
+
+
+def _fetch_network_sources(
+    store: Any, project_id: str, *, offset: int, target: int
+) -> tuple[list[dict[str, Any]], bool]:
+    """Collect up to *target* source rows starting at *offset*, page by page.
+
+    ``offset`` is walked from the first page (the store's cursor only encodes an
+    offset), so the query budget is bounded: at most ``2 * _MAX_SOURCE_PAGES``
+    single-page SELECTs per request.  Returns ``(items, more)`` where ``more``
+    says whether unconsumed sources remain after the returned window.
+    """
+    collected: list[dict[str, Any]] = []
+    skip = max(int(offset), 0)
+    page_cursor: str | None = None
+    more = False
+    for _ in range(_MAX_SOURCE_PAGES * 2):
+        page = store.query_sources(
+            project_id=project_id, limit=_SOURCE_PAGE_LIMIT, cursor=page_cursor
+        )
+        batch = list(page.get("items") or [])
+        next_cursor = page.get("next_cursor")
+        if skip:
+            dropped = min(skip, len(batch))
+            skip -= dropped
+            batch = batch[dropped:]
+        room = target - len(collected)
+        if room > 0 and batch:
+            collected.extend(batch[:room])
+            batch = batch[room:]
+        if len(collected) >= target:
+            more = bool(batch) or next_cursor is not None
+            break
+        if next_cursor is None:
+            break
+        page_cursor = next_cursor
+    return collected, more
+
+
+def _resolve_network_edges(
+    manager: JobManager, sources: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], bool]:
+    """Resolve direct (depth 1) lineage edges for the tasks behind *sources*.
+
+    Reuses the existing lineage upstream builder (``_resolve_upstream``) and only
+    keeps its depth-1 nodes, so relation extraction is never re-implemented and
+    no result file is read.  Bounded by :data:`MAX_EDGE_LOOKUPS`; hitting the cap
+    reports truncation instead of silently dropping edges.
+    """
+    task_ids = sorted({str(source.get("job_id") or "") for source in sources} - {""})
+    edges: list[dict[str, Any]] = []
+    lookups = 0
+    truncated = False
+    for task_id in task_ids:
+        if lookups >= MAX_EDGE_LOOKUPS:
+            truncated = True
+            break
+        lookups += 1
+        for node in _resolve_upstream(manager, task_id):
+            if node.depth != 1:
+                continue
+            edges.append(
+                {"from_task": node.task_id, "to_task": task_id, "relation": "lineage", "depth": 1}
+            )
+    return edges, truncated
+
+
+#: Upper bound on identity-registry rows read per request (§4 node budget * 2).
+_MAX_IDENTITY_ROWS = 500
+
+
+def _resolve_network_identities(
+    manager: JobManager, project_id: str, *, limit: int
+) -> list[dict[str, Any]] | None:
+    """Read the project's molecule identity registry, or ``None`` on any failure.
+
+    Opens a **read-only** SQLite URI connection to the jobs DB (never writes, and
+    the connection is used for nothing else) and lazily imports the registry API
+    so a missing ``acp_services`` module degrades instead of breaking the route.
+    A failed read is not an error: ``build_network`` receives ``identities=None``,
+    so an un-keyed project answers exactly as in B0 (``structure_content_v1``) and
+    an already-keyed one keeps its nodes with empty metadata instead of inventing
+    it (§4).
+    """
+    try:
+        from acp_services.store.molecule_identity import list_project_identities
+    except ImportError as exc:  # pragma: no cover - depends on installed surface
+        logger.warning("chemistry network: identity registry unavailable: %s", exc)
+        return None
+
+    conn: sqlite3.Connection | None = None
+    try:
+        uri = Path(str(manager.store.db_path)).as_uri() + "?mode=ro"
+        conn = sqlite3.connect(uri, uri=True)
+        conn.row_factory = sqlite3.Row
+        return list_project_identities(
+            conn, project_id=project_id, limit=min(_MAX_IDENTITY_ROWS, max(int(limit), 1) * 2)
+        )
+    except Exception as exc:  # noqa: BLE001 - degrade, never fail the read GET
+        logger.warning(
+            "chemistry network: identity registry read failed for %s: %s", project_id, exc
+        )
+        return None
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+@router.get("/projects/{project_id}/chemistry-network", response_model=V2ChemistryNetworkResponse)
+def project_chemistry_network(
+    project_id: str,
+    request: Request,
+    limit: int = Query(default=200, ge=1, le=500),
+    cursor: str | None = Query(default=None),
+) -> V2ChemistryNetworkResponse:
+    """Return the project chemistry network for a project (read-only).
+
+    Node identity is ``structure_source_index.molecule_identity_key`` when the
+    indexer persisted one (node = molecule, metadata from
+    ``structure_identities``), otherwise ``content_checksum`` — a structure
+    *version*, not a molecule (§2 / §4).  The two identity spaces are never
+    merged, and the response carries ``identity_kind`` plus both node counts so a
+    partly identified graph is declared ``mixed`` instead of looking molecular.
+    Rows without either key are skipped and accounted for; edges are the
+    already-persisted ``lineage`` relation only (§3).  All reads are cache-only
+    SELECTs: no ``_job_read_root``, no catalog fetch, no prepare enqueue and no
+    write (§5).
+    """
+    manager = _manager(request)
+    project_id = _scoped_project_or_404(request, project_id)
+    if manager.projects.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+    offset = _chemistry_cursor_offset(cursor)
+    tasks = manager.tasks.list_by_project(project_id, limit=limit)
+    try:
+        sources, more_sources = _fetch_network_sources(
+            _chemistry_source_store(manager), project_id, offset=offset, target=limit
+        )
+    except ValueError as exc:
+        logger.warning("chemistry network: source query failed for %s: %s", project_id, exc)
+        raise HTTPException(status_code=400, detail="invalid_cursor") from exc
+
+    identities = _resolve_network_identities(manager, project_id, limit=limit)
+    edges_raw, edges_truncated = _resolve_network_edges(manager, sources)
+    next_cursor = str(offset + len(sources)) if more_sources else None
+
+    payload = build_network(
+        project_id,
+        tasks=tasks,
+        sources=sources,
+        edges_raw=edges_raw,
+        limit=limit,
+        truncated=edges_truncated,
+        next_cursor=next_cursor,
+        identities=identities,
+    )
+    return V2ChemistryNetworkResponse.model_validate(payload)

@@ -17,7 +17,93 @@
   /* Positioning context for the A-20/A-21 modal overlay. */
   position: relative;
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 19px;
+}
+
+/* ── two-row task toolbar ───────────────────────────────────────────── */
+.acp-mod-tasks-headbar {
+  display: flex; align-items: center; gap: 4px; min-width: 0; flex: none;
+  padding: 4px 8px; border-bottom: 1px solid var(--border-subtle);
+}
+.acp-mod-tasks-title { flex: none; font-size: 13px; line-height: 18px; color: var(--text-primary); }
+.acp-mod-tasks-scope-wrap {
+  display: inline-flex; align-items: center; gap: 2px; padding: 2px;
+  border: 1px solid var(--border-subtle); border-radius: 6px; background: rgba(var(--white-rgb), .03);
+}
+.acp-mod-tasks-scope {
+  height: 24px; padding: 0 5px; border: 0; border-radius: 4px;
+  background: transparent; color: var(--text-secondary); font: inherit; font-size: 11px; white-space: nowrap;
+}
+.acp-mod-tasks-scope.is-active { background: var(--accent-soft); color: var(--accent); }
+.acp-mod-tasks-toolbar { margin-left: auto; display: flex; align-items: center; gap: 2px; flex: none; min-width: 0; }
+.acp-mod-tasks-headbar .acp-mod-tasks-toolbar { gap: 2px; }
+.acp-next-task-rail .acp-mod-tasks-project { display: none; }
+.acp-mod-tasks-iconbtn {
+  width: 26px; height: 26px; min-width: 26px; padding: 0; display: inline-grid; place-items: center;
+  border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--text-secondary);
+}
+.acp-mod-tasks-toolbar .acp-mod-tasks-iconbtn { width: 26px; height: 26px; min-width: 26px; padding: 0; font-size: 16px; }
+.acp-mod-tasks-toolbar .acp-mod-tasks-iconbtn > span { font-size: 16px; line-height: 1; }
+.acp-mod-tasks-iconbtn:hover:not(:disabled) { border-color: var(--border-default); background: var(--bg-elevated); color: var(--text-primary); }
+.acp-mod-tasks-iconbtn:disabled { opacity: .35; cursor: default; }
+.acp-mod-tasks-iconbtn.is-active, .acp-mod-tasks-pin[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
+.acp-mod-tasks-iconbtn > span { font-size: 16px; line-height: 1; }
+.acp-mod-tasks-pin-note { flex: none; margin: 0 8px; padding: 5px 7px; border-left: 2px solid var(--amber); background: rgba(var(--amber-rgb), .08); color: var(--amber); font-size: 11px; line-height: 15px; }
+
+.acp-mod-tasks-listbar {
+  display: flex; align-items: center; gap: 4px; min-width: 0; flex: none;
+  padding: 9px 8px 4px; border-bottom: 1px solid var(--border-subtle);
+}
+.acp-mod-tasks-listbar .acp-mod-tasks-filters { flex: 1 1 auto; min-width: 0; flex-wrap: nowrap; gap: 2px; overflow: visible; }
+.acp-mod-tasks-listbar .acp-mod-tasks-filter-chip { position: relative; flex: 0 0 auto; height: 24px; padding: 0 2px; gap: 1px; font-size: 11px; line-height: 15px; }
+.acp-mod-tasks-listbar .acp-mod-tasks-filter-chip-count {
+  position: absolute; top: -8px; right: 0; min-width: 14px; height: 13px; padding: 0 2px;
+  border: 1px solid var(--border-default); border-radius: 999px; background: var(--bg-panel);
+  color: var(--text-secondary); font-size: 10px; line-height: 11px; text-align: center;
+}
+.acp-mod-tasks-listbar .acp-mod-tasks-filter-chip.is-active .acp-mod-tasks-filter-chip-count { color: var(--accent); border-color: rgba(var(--accent-rgb), .5); }
+.acp-mod-tasks-listbar .acp-mod-tasks-filter-chip--running { color: var(--accent); border-color: rgba(var(--accent-rgb), .38); }
+.acp-mod-tasks-listbar .acp-mod-tasks-filter-chip--intervene { color: var(--amber); border-color: rgba(var(--amber-rgb), .38); }
+.acp-mod-tasks-listbar .acp-mod-tasks-filter-chip--completed { color: var(--green); border-color: rgba(var(--green-rgb), .34); }
+.acp-mod-tasks-listbar .acp-mod-tasks-filter-chip--error { color: var(--red); border-color: rgba(var(--red-rgb), .36); }
+.acp-mod-tasks-sort { flex: none; display: flex; align-items: center; gap: 2px; }
+.acp-mod-tasks-sort-box { position: relative; }
+.acp-mod-tasks-sort-btn {
+  height: 24px; display: inline-flex; align-items: center; gap: 2px; padding: 0 4px;
+  list-style: none; border: 1px solid var(--border-subtle); border-radius: 4px;
+  background: transparent; color: var(--text-secondary); font: inherit; font-size: 11px; cursor: pointer; white-space: nowrap;
+}
+.acp-mod-tasks-sort-btn::-webkit-details-marker { display: none; }
+.acp-mod-tasks-sort-btn::after { content: "▾"; color: var(--text-tertiary); }
+.acp-mod-tasks-sort-btn:hover { background: var(--bg-elevated); color: var(--text-primary); }
+.acp-mod-tasks-sort-prefix { color: var(--text-tertiary); }
+.acp-mod-tasks-sort-icon { color: var(--text-tertiary); font-size: 12px; }
+.acp-mod-tasks-sort-short { display: none; }
+.acp-mod-tasks-sort-menu {
+  position: absolute; z-index: 30; right: 0; top: 29px; min-width: 148px; padding: 4px;
+  display: flex; flex-direction: column; gap: 2px;
+  border: 1px solid var(--border-default); border-radius: 6px; background: var(--bg-panel); box-shadow: var(--shadow-panel);
+}
+.acp-mod-tasks-sort-item, .acp-mod-tasks-sort-group {
+  min-height: 30px; padding: 4px 8px; border: 1px solid transparent; border-radius: 4px;
+  background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; text-align: left;
+}
+.acp-mod-tasks-sort-item[aria-checked="true"] { color: var(--accent); background: var(--accent-soft); }
+.acp-mod-tasks-sort-group { margin-top: 3px; border-top: 1px solid var(--border-subtle); color: var(--text-tertiary); }
+.acp-mod-tasks-sort-order { width: 22px; height: 24px; padding: 0; border: 1px solid var(--border-subtle); border-radius: 4px; background: transparent; color: var(--text-secondary); font-size: 14px; line-height: 22px; }
+.acp-mod-tasks-sort-order:hover { color: var(--text-primary); background: var(--bg-elevated); }
+@container (max-width: 330px) {
+  .acp-mod-tasks-sort-prefix { display: none; }
+  html[lang^="en"] .acp-mod-tasks-sort-long,
+  html[lang^="en"] .acp-mod-tasks-sort-short { display: none; }
+}
+@container (max-width: 310px) {
+  html[lang^="en"] .acp-mod-tasks-title { display: none; }
+  .acp-mod-tasks-listbar { padding-left: 6px; padding-right: 6px; }
+  .acp-mod-tasks-listbar .acp-mod-tasks-filter-chip { padding: 0 1px; }
+  .acp-mod-tasks-sort-prefix, .acp-mod-tasks-sort-long, .acp-mod-tasks-sort-short { display: none; }
+  .acp-mod-tasks-sort-btn { padding: 0 4px; }
 }
 
 /* ── toolbar ─────────────────────────────────────────────────────────── */
@@ -53,7 +139,8 @@
 
 .acp-mod-tasks-filters-label {
   color: var(--text-tertiary);
-  font-size: 10px;
+  font-size: 11px;
+  line-height: 15px;
   margin-right: 2px;
 }
 
@@ -61,14 +148,14 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: var(--status-chip-height);
+  height: 24px;
   padding: 0 8px;
   border: 1px solid var(--border-default);
   border-radius: 999px;
   background: rgba(var(--white-rgb), 0.03);
   color: var(--text-secondary);
-  font-size: 10px;
-  line-height: 1;
+  font-size: 11px;
+  line-height: 15px;
   white-space: nowrap;
   cursor: pointer;
   transition: color var(--transition), border-color var(--transition), background var(--transition);
@@ -274,11 +361,21 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  width: 100%;
   padding: 4px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 16px;
   font-weight: 600;
+  text-align: left;
+  cursor: pointer;
 }
+.acp-mod-tasks-group-head:hover { background: rgba(var(--white-rgb), .03); }
+.acp-mod-tasks-group-head:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.acp-mod-tasks-group-arrow { flex: none; width: 12px; color: var(--text-tertiary); }
 
 .acp-mod-tasks-group-name {
   overflow: hidden;
@@ -294,17 +391,25 @@
 }
 
 .acp-mod-tasks-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 7px 8px;
-  margin-bottom: 2px;
+  position: relative;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto 28px;
+  grid-template-areas:
+    "select name status more"
+    ". meta meta more"
+    ". tags tags more";
+  align-items: start;
+  gap: 2px 8px;
+  min-height: 56px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background var(--transition), border-color var(--transition);
 }
+
+.acp-mod-tasks-row:has(.acp-mod-tasks-row-tags) { min-height: 68px; }
 
 .acp-mod-tasks-row:hover {
   background: var(--bg-elevated);
@@ -322,62 +427,111 @@
 }
 
 .acp-mod-tasks-row-name {
-  flex: 1 1 auto;
+  grid-area: name;
+  min-width: 0;
+  align-self: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+}
+
+.acp-mod-tasks-row .acp-mod-tasks-select { grid-area: select; align-self: center; }
+.acp-mod-tasks-row .acp-mod-tasks-badge { grid-area: status; align-self: start; }
+.acp-mod-tasks-row-meta {
+  grid-area: meta;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 15px;
+}
+.acp-mod-tasks-row-workflow {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 15px;
 }
-
-.acp-mod-tasks-row-workflow {
-  flex-shrink: 0;
+.acp-mod-tasks-row-time {
+  flex: none;
   color: var(--text-tertiary);
-  font-size: 10px;
+  font-size: 11px;
+  line-height: 15px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* A-23: tags are labels (never path components) — quiet chips on the row. */
-
 .acp-mod-tasks-row-tags {
-  display: inline-flex;
+  grid-area: tags;
+  min-width: 0;
+  display: flex;
   align-items: center;
-  gap: 3px;
-  flex-wrap: wrap;
-  flex-shrink: 0;
-  max-width: 40%;
+  gap: 4px;
+  overflow: hidden;
+  flex-wrap: nowrap;
 }
 
 .acp-mod-tasks-tag-chip {
   display: inline-flex;
   align-items: center;
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   border: 1px solid var(--border-subtle);
   border-radius: 999px;
   padding: 0 6px;
-  font-size: 10px;
-  line-height: 1.5;
+  font-size: 11px;
+  line-height: 15px;
   color: var(--text-tertiary);
   background: rgba(var(--text-secondary-rgb), 0.06);
   white-space: nowrap;
 }
+.acp-mod-tasks-tag-more { flex: none; color: var(--text-secondary); }
 
 /* ── row commands (A-18 / A-19) ─────────────────────────────────────── */
 
-.acp-mod-tasks-row-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-  margin-left: auto;
+.acp-mod-tasks-more { grid-area: more; position: relative; justify-self: end; align-self: start; }
+.acp-mod-tasks-more-btn {
+  width: 28px; height: 28px; display: grid; place-items: center;
+  list-style: none; border: 1px solid transparent; border-radius: 4px;
+  color: var(--text-secondary); cursor: pointer; font-size: 18px; line-height: 1;
 }
+.acp-mod-tasks-more-btn::-webkit-details-marker { display: none; }
+.acp-mod-tasks-more-btn:hover, .acp-mod-tasks-more[open] .acp-mod-tasks-more-btn { border-color: var(--border-default); background: var(--bg-elevated); color: var(--text-primary); }
+.acp-mod-tasks-row-actions {
+  position: absolute; right: 0; top: 32px; z-index: 20;
+  display: none; flex-direction: column; align-items: stretch; gap: 2px;
+  min-width: 148px; padding: 4px;
+  border: 1px solid var(--border-default); border-radius: 6px;
+  background: #111821; box-shadow: var(--shadow-panel);
+}
+.acp-mod-tasks-more[open] > .acp-mod-tasks-row-actions { display: flex; }
+
+.acp-mod-tasks-row-progress {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+  background: rgba(var(--white-rgb), 0.06); overflow: hidden;
+}
+.acp-mod-tasks-row-progress > i { display: block; height: 100%; background: var(--accent); }
 
 .acp-mod-tasks-row-action {
-  height: 20px;
-  padding: 0 7px;
+  height: 30px;
+  padding: 0 10px;
   border: 1px solid var(--border-default);
-  border-radius: 999px;
+  border-radius: 4px;
   background: rgba(var(--white-rgb), 0.03);
   color: var(--text-secondary);
-  font-size: 10px;
-  line-height: 1;
+  font-size: 12px;
+  line-height: 16px;
+  text-align: left;
   white-space: nowrap;
   cursor: pointer;
   transition: color var(--transition), border-color var(--transition), background var(--transition);
@@ -446,10 +600,11 @@
 }
 
 .acp-mod-tasks-row-msg {
-  flex-basis: 100%;
+  grid-column: 2 / -1;
   margin-top: 2px;
   text-align: right;
-  font-size: 10px;
+  font-size: 11px;
+  line-height: 15px;
   word-break: break-word;
   color: var(--text-tertiary);
 }
@@ -473,10 +628,10 @@
   gap: 5px;
   border-radius: 999px;
   border: 1px solid var(--border-default);
-  padding: 1px 8px;
-  font-size: 10px;
+  padding: 2px 8px;
+  font-size: 11px;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 15px;
   white-space: nowrap;
   flex-shrink: 0;
   color: var(--text-secondary);
@@ -533,9 +688,10 @@
   flex-shrink: 0;
   color: var(--text-tertiary);
   border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-  padding: 0 6px;
-  font-size: 10px;
+  border-radius: 4px;
+  padding: 0 5px;
+  font-size: 11px;
+  line-height: 15px;
 }
 
 /* ── pagination ──────────────────────────────────────────────────────── */
@@ -1014,6 +1170,5 @@
   .acp-mod-tasks-toolbar > button { min-width: 0; width: 100%; }
   .acp-mod-tasks-filters { width: 100%; max-width: 100%; }
   .acp-mod-tasks-modal-card { width: 100%; max-width: none; }
-  .acp-mod-tasks-row-actions { flex-wrap: wrap; margin-left: 0; }
-  .acp-mod-tasks-modal-actions { flex-wrap: wrap; }
+  .acp-mod-tasks-row-actions { flex-wrap: wrap; margin-left: 0; }  .acp-mod-tasks-modal-actions { flex-wrap: wrap; }
 }

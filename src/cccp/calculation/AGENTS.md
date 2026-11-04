@@ -1,5 +1,12 @@
 # calculation/ — Task Layer: the SINGLE Execution Station (ACP 2.0)
 
+## ACP3 双人协作（2026-11-04）
+
+读[架构总纲 §10](../../../docs/reference/next-change/ACP_3.0_Architecture_20261031.md)。B 主写科学 Workflow 编译与原生步骤交接，A 仅在化学层输出需求和 WorkflowRecipe。复用 recipes 的身份/验证/有界 DAG，不复制 plan compiler；未来 NativeBundle 在上游工件就绪后物化。当前唯一执行驻点继续有效，原生执行迁移先经端口/兼容/架构门，不直接绕过 tasks。
+
+本节是开发目标，不声明新增能力已交付；现行依赖/执行/安全护栏继续约束实现。
+
+
 ## OVERVIEW
 **50 .py.** The only layer that executes QC work: 15 task cores in `tasks/` (each exactly one `run_*`), the `TaskRequest`/`TaskResult` contracts, batch execution, and — new in ACP 2.0 — the capability registry / task binding (`capabilities/`), versioned science products (`products/`), and the science recipe compiler (`recipes/`). All 15 workflows reach QC exclusively through here (root AGENTS.md ANTI #17); `acp.calculations.primitives` is a pure forwarder + ACP publish contracts; `acp_services.runtime.step_dag` injects science from here.
 

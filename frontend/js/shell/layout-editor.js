@@ -149,7 +149,7 @@ ACPShell.layoutEditor = (function () {
     ["main", "side", "bottom"].forEach(function (slot) {
       var label = node("label", t(slot)), select = node("select");
       select.setAttribute("data-layout-slot", slot);
-      var ids = Object.keys(ACPShell.preferences.modules());
+      var ids = Object.keys(ACPShell.preferences.pickerModules ? ACPShell.preferences.pickerModules() : ACPShell.preferences.modules());
       if (slot !== "main") ids.unshift("");
       ids.forEach(function (id) {
         var option = node("option", labelFor(id)); option.value = id; select.appendChild(option);

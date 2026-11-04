@@ -3899,6 +3899,17 @@ module.exports.register = async function (h) {
     assertEq(ctx3.host.children.length, 0, "a late draft lookup cannot paint");
   });
 
+  await test("NEXT: explicit B → E structure handoff loads real inline XYZ without submitting", async () => {
+    const ctx = setup(); await mount(ctx);
+    const before = ctx.client.calls.length;
+    const xyz = "2\nwater\nO 0 0 0\nH 0 0 1\n";
+    assertEq(ctx.instance.loadStructure({ kind: "inline-xyz", text: xyz }).ok, true);
+    assert(subtreeText(ctx.host).includes("2"), "wizard renders the imported structure");
+    assertEq(ctx.instance.loadStructure({ kind: "job-file", text: xyz }).ok, false);
+    assertEq(ctx.client.calls.length, before, "handoff is local and never submits");
+    ctx.instance.dispose();
+  });
+
   await test("A-09: draft chrome reuses shared zh/en keys only", async () => {
     const backend = draftBackend({ snapshot: a09Snapshot(), revision: 1 });
     const ctx = a09Setup({ responder: backend.responder });

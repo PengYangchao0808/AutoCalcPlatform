@@ -4,7 +4,8 @@ Relocated from ``acp.intake.{models,parsers}`` and ``acp.chem.embedding`` by
 plan todo 16 (C03-s1).  These modules are the single implementation of the
 six-format structure intake (xyz/sdf/mol/gjf/orca-inp/smiles), QC-output
 geometry extraction, and RDKit embedding helpers; the historical ``acp``
-paths re-export the same objects.
+paths re-export the same objects.  ``identity`` adds the deterministic
+chemistry-based molecule identity key (chemistry-network B1a).
 
 ``__init__`` carries re-exports only (no implementation) per repo ANTI #5.
 """
@@ -20,6 +21,14 @@ from cccp.analysis.structure.embedding import (
     split_xyz_frames,
     xyz_formula,
     xyz_to_multiframe_demo,
+)
+from cccp.analysis.structure.identity import (
+    KEY_PREFIX,
+    SCHEME,
+    UNRESOLVED_REASONS,
+    MoleculeIdentity,
+    compute_molecule_identity,
+    identity_key_payload,
 )
 from cccp.analysis.structure.models import StructureAsset, StructureParseResult
 from cccp.analysis.structure.parsers import (
@@ -52,11 +61,15 @@ from cccp.analysis.structure.topology import (
 )
 
 __all__ = [
+    "KEY_PREFIX",
     "NMR_TOPOLOGY_SDF",
     "NMR_TOPOLOGY_SMILES",
     "NMR_TOPOLOGY_SOURCES",
     "NMR_TOPOLOGY_XYZ_INFERRED",
     "NMR_TOPOLOGY_XYZ_UNAVAILABLE",
+    "SCHEME",
+    "UNRESOLVED_REASONS",
+    "MoleculeIdentity",
     "NmrTopologyCapture",
     "Structure",
     "StructureAsset",
@@ -65,10 +78,12 @@ __all__ = [
     "StructureRecord",
     "TopologyUnavailableError",
     "capture_nmr_topology",
+    "compute_molecule_identity",
     "count_elements_from_xyz",
     "detect_and_parse",
     "detect_format",
     "enumerate_embeddings",
+    "identity_key_payload",
     "molfile_to_xyz",
     "normalize_molblock",
     "parse_gjf_text",

@@ -1,10 +1,21 @@
 # Auto-Calc Platform (ACP) — Project Knowledge Base
 
+## ACP3 双人开发增量（2026-11-04，目标与现状分开）
+
+先读[架构总纲 §10](docs/reference/next-change/ACP_3.0_Architecture_20261031.md)及[CCCP × ACR 专项](docs/reference/next-change/ACP_V3_CCCP_ACR_Backend_Architecture_20261102.md)。§10 是双人责任、C0—C5/P0—P6 顺序和交接语义唯一总纲，旧工作站优先周历不再约束近期开发；未实现目标不覆盖本文件当前架构硬门。
+
+- A（用户）负责前端、Chemical IR/语义检查/Chemical Compiler、ResearchPlan→WorkflowRecipe 唯一接入适配、网络服务/API 与证据投影；B（队友）负责科学 Workflow Compiler、Capability/Provider、插件共享 Renderer/Parser/Validator 与最小 ACR/Data 平台接入。跨线接口双人评审，平台接入不搬进 CCCP。
+- 化学图、执行 DAG、证据图分别建模；Species/Structure/Conformer/TS 与 Task/Attempt 不混同。COMPLETED 不等于科学 supported；B1 分子 key 不等于严格物种/构象/驻点等价。当前 HTTP 唯一权威为[网络契约](docs/reference/next-change/ACP_Chemistry_Network_Contract_20261103.md)。
+- 新目录/Schema/Standalone CLI/动态 compute/agentless 均是待实现目标。实现新入口或执行路径前，同批处理现行唯一执行驻点、仅 acp CLI、发行/隔离/恢复测试，不能凭方案绕过 ANTI。旧 Worker/人工记录保持可读可恢复。
+- 当前工作区 migration 已有 028/029；合并前读取实际最新列表再分配，旧草案 024—027/028+ 均不可直接采用。快照模块数不在本次重计。
+- 先 C0 契约 fixture，再本机手动/两级编译/科学验证闭环，再远程恢复和授权内 Agent；工作站、Rust、更多集群后置。文档更新不授权生产服务重启或真实模型/QC/LSF 提交。
+
+
 **Updated:** 2026-10-30（MCP 易用性与 Agent 指南开发约定；目录/文件数保留 10-29 审查快照，非本次重计）
 **Historical audit baseline:** `fd2087c7`（与 `b32f22bb` 源码树相同）。本次相关源码核查 `b94604cd`；不是在新 HEAD 上重做全量验收，新增计划不代表已实现。
 
 ## OVERVIEW
-Automated computational chemistry platform. Python 侧三包：`cccp`（科学底座，**203 .py**：QC 子进程层 + 共享科学适配 + backends 能力层 + calculation 任务层 + **analysis 科学分析层** + **plugin 插件生态**）、`acp`（工作流/规划/发布层，**298 .py**：统一 CLI + API/scheduler + init 向导）与 `acp_services`（平台服务层，**128 .py**：workspace/data/runtime/store/contracts/entrypoints；`acp → acp_services` 单向依赖）。Python 3.10+，setuptools，YAML config。
+Automated computational chemistry platform. Python 侧三包：`cccp`（科学底座，**203 .py**：QC 子进程层 + 共享科学适配 + backends 能力层 + calculation 任务层 + **analysis 科学分析层** + **plugin 插件生态**）、`acp`（工作流/规划/发布层，**298 .py**：统一 CLI + API/scheduler + init 向导）与 `acp_services`（平台服务层，**129 .py**：workspace/data/runtime/store/contracts/entrypoints；`acp → acp_services` 单向依赖）。Python 3.10+，setuptools，YAML config。
 
 **ACP 2.0（2026-10 并行三线 A/B/C，已合并）**: A 线给 cccp 增加科学契约与插件生态（`analysis/research/` 证据/溯源/问题/反应类型 + 打包契约语料、`analysis/nmr/` NMR 全量迁入、`plugin/` 第三方科学插件、`calculation/{capabilities,products,recipes}/`）；B 线给 acp_services 增加研究运行时（持久预算/审批/跨会话事件游标恢复/attempt 冻结-完成链/基础设施适配器注册表/cgroup 恢复）与 MCP 入口（`acp mcp serve`，协议 `2025-06-18`，9 个基础工具（2026-10-30 增补 acp_get_guidance）+ 协商后 10 个研究工具；装配 consumption 后另有消费工具，见下文）；C 线交付 Workbench 体验（前端 `js/{client,workbench,visualization}`）与 **`rph/`**（Research Package Hub — git 跟踪的 pnpm TypeScript workspace，DSH/agent 驱动客户端）。四发行 0.3.0：`cccp` / `acp-worker` / `acp-web`（`packaging/roles/`）+ 根 `acp` 二选一安装。
 
@@ -68,11 +79,11 @@ src/acp/                  # 工作流/规划/发布层（298 .py）
 ├── core/ backends/ chem/ intake/ io/ compat/legacy/   # 通用机制 / 纯 re-export shim / 化学 / 摄入 / 结构 I/O / 历史只读
 └── workflows/            # pes_search/batch_optimize/irc/simple/tsmode/xtb_path/xtb_constrained_opt/orca_gradient/nmr + registry
 
-src/acp_services/         # 平台服务层（128 .py；acp → acp_services 单向；禁反向）
+src/acp_services/         # 平台服务层（129 .py；acp → acp_services 单向；禁反向）
 ├── bootstrap.py          # ServicesPorts：过渡端口包（收窄至 10 字段；JobStore/Migrations/StepRequirement 端口已就地移除）
 ├── worker_bootstrap.py   # 独立 worker 组合根（零 acp import / 零 jobs DB；= acp-worker console script）
 ├── workspace/            # projects/admin/entry_authz/identity_lifecycle/identity_mapping/keys/boundary + NEW http_identity（多用户 HTTP 凭据→principal）/server_identity/command_identity（M0-04 唯一 CommandIdentity：HTTP/CLI/admission/幂等 scope）
-├── data/                 # contracts/operations/transfer/resource_read/read_root/storage_binding/namespaces/archive/import_/budget(存储配额)/helpers + NEW artifacts（ArtifactRef 生命周期）/research_resources（Proposal/ResearchRecord CAS）
+├── data/                 # contracts/operations/transfer/resource_read/read_root/storage_binding/namespaces/archive/import_/budget(存储配额)/helpers + NEW artifacts（ArtifactRef 生命周期）/research_resources（Proposal/ResearchRecord CAS）/project_files（项目级只读 tree/file 安全边界）
 ├── runtime/              # 71 .py（含 __init__；70 实现模块）：research_session/research_writer/research_saga/research_service/evidence_projection/model_gateway/planning_reservation/step_definition/step_dispatch/step_dag_worker/fenced_commit/execution_limits/deadline_enforcement/deadline_wiring/approval_policy/submit_policy/science_plugins + research_budget/usage_units/approvals/canonical_digest/research_events(游标)/attempt_recovery/cgroup/adapter_registry/adapter_bootstrap/execution_right/receipt_identity/errors/attempt_completion/attempt_freeze/step_dag/science_binding/capability_registry/analysis_capabilities/idempotency/local_admission/metering_decoupling
 ├── store/                # store(JobStore CAS)/migrations(26 条，最新 id 027；025 后无 jobs migration 026，勿假定编号连续)/record(s)/layout/naming/legacy_method/molecule_groups
 ├── contracts/            # access/envelope/events/config_plan/config_validation/action_gating/injection + NEW adapters（AdapterDescriptor）

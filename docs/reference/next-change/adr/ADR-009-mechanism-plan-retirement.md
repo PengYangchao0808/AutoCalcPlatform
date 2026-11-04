@@ -34,11 +34,11 @@ def confirm_mechanism_plan(...):
 ## 3. 影响
 
 - Track A：62 个实现 + 1 个 ADR 退役 = 63/63 收口；A-49 不计“已实现”。
-- A-49 的 UI 仍可通过工具抽屉/布局编辑器访问，但确认按钮只在真实后端恢复后可用。
+- A-49 no longer has a creation/plan-assembly entry in the UI. An existing `mechanism` task exposes a history-only F tab; its confirm action is hidden. The module, file, registration and tests remain for compatibility/history reading.
 - 前端测试 `acp2_parity.test.js` 用本 ADR 作为 P17 的显式豁免证据。
 
 ## 4. 证据
 
 - 后端 410 事实：`src/acp/api/v1_routes.py:3072-3077`。
 - 前端只读/错误路径：`acp2_mechanism_plan.test.js` 的 410/409/422/500 用例。
-- 真实浏览器：`reports/acp2_implementation/next_boot_20261031/`（工具抽屉 12 模块挂载，0 uncaught；机理模块显示真实 404/410 四态，不伪造）。
+- 2026-10-31 browser evidence is historical: it covered the now-removed 12-tab tool drawer and real 404/410 states; current history-only entry is covered by Node module tests, not a live-browser run.

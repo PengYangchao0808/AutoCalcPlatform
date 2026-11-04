@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-04",
+  "scope": "actual DSH 0.2.1-rc.5, native tab, live read-only navigation",
+  "screenshot": {
+    "width": 2560,
+    "height": 1392
+  },
+  "verified": [
+    "Existing ACP keyed tab renders actual workbench",
+    "Native fullscreen and restore",
+    "Native divider dragged from 1420 to 1080; conversation reflows",
+    "Central results to chemistry-network navigation",
+    "Project changed to existing BCB_Allene",
+    "D task list and G bottom dock visible within workbench"
+  ],
+  "notVerified": [
+    "Cold restart: exit dialog warned of running tasks; exit cancelled",
+    "Full lifecycle on a clean application restart",
+    "New QC/model submissions and full scientific chain"
+  ],
+  "notes": [
+    "No model messages, QC submissions, cancellations or terminal commands were sent",
+    "App access initially timed out; recovered by restoring minimized window"
+  ]
+}

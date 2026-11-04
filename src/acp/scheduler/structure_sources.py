@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["StructureSourceService"]
+__all__ = ["StructureSourceService", "molecule_identity_for_text"]
 
 _RESULT_SUMMARY_FILENAME = "result_summary.json"
 _RESULT_MANIFEST_FILENAME = "result_manifest.json"
@@ -97,6 +97,51 @@ def _coerce_int(value: Any, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def molecule_identity_for_text(
+    text: str | None,
+    *,
+    charge: int,
+    multiplicity: int,
+) -> dict[str, Any] | None:
+    """Chemistry identity of one XYZ block, in registry shape (None = no identity).
+
+    The identity is derived from the structure *content* only
+    (``cccp.analysis.structure.identity``): never from the molecule name, the
+    file path or ``content_checksum``.  An unresolved molecule is a first-class
+    "no identity" result — the reason is logged and ``None`` is returned, so no
+    key is fabricated.
+
+    Never raises: bond perception runs RDKit, and a surprise there must not
+    break structure discovery.
+    """
+    if not text:
+        return None  # remote placeholders have no local text and no identity
+    try:
+        from cccp.analysis.structure.identity import compute_molecule_identity
+
+        identity = compute_molecule_identity(
+            xyz_text=text,
+            charge=int(charge),
+            multiplicity=int(multiplicity),
+        )
+    except (ValueError, TypeError, RuntimeError, ImportError) as exc:
+        logger.warning("Molecule identity computation failed: %s", exc)
+        return None
+    if not identity.resolved:
+        reason = identity.warnings[0] if identity.warnings else "unresolved"
+        logger.debug("Molecule identity unresolved (%s); indexing without a key", reason)
+        return None
+    return {
+        "identity_key": identity.key,
+        "scheme": identity.scheme,
+        "canonical_smiles": identity.canonical_smiles,
+        "charge": int(identity.charge),
+        "multiplicity": int(identity.multiplicity),
+        "formula": identity.formula,
+        "inchikey": identity.inchikey,
+    }
 
 
 def _available_at(record: JobRecord) -> str:
@@ -1284,6 +1329,9 @@ class StructureSourceService:
             "multiplicity": mult,
             "has_3d": first.has_3d,
             "content_checksum": single_geometry(text)["content_checksum"],
+            "molecule_identity": molecule_identity_for_text(
+                text, charge=charge, multiplicity=mult
+            ),
             "tag": "TS" if role == "TS" else "",
             "role": role,
             "role_evidence": role_evidence,
@@ -1420,6 +1468,7 @@ class StructureSourceService:
             "source_kind": source_kind,
             "structure_facts": dict(metadata or {}),
             "content_checksum": meta.get("content_checksum"),
+            "molecule_identity": meta.get("molecule_identity"),
             "available_at": _available_at(record),
             "label": str(item.get("label") or item.get("path") or ""),
             "path": rel_posix,

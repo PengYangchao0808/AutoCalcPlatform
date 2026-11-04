@@ -5412,6 +5412,9 @@
     function selectWorkflow(entry, options) {
       options = options || {};
       state.entry = entry || null;
+      if (typeof deps.onWorkflowChange === "function") {
+        try { deps.onWorkflowChange(state.entry ? state.entry.id : "", { silent: !!options.silent }); } catch (e) { /* host callback is advisory */ }
+      }
       state.method = projectMethod(state.entry, state.methodCatalog);
       resetContract();
       resetExtras();
@@ -6891,8 +6894,16 @@
       state.commands = null;
     }
 
+    function loadStructure(ref) {
+      if (!ref || ref.kind !== "inline-xyz" || typeof ref.text !== "string" || !ref.text.trim()) return { ok: false, error: "inline-xyz required" };
+      beginInput("paste", "");
+      applyStructure(structureFromAsset({ xyz: ref.text }, "structure-import"));
+      return { ok: true };
+    }
+
     return {
       mount: mount,
+      loadStructure: loadStructure,
       updateContext: updateContext,
       suspend: suspend,
       resume: resume,
