@@ -1,5 +1,5 @@
 # Repo standard: LF in index/worktree for text files (see cleanup 2026-10-17).
-* text=auto
+* text=auto eol=lf
 
 # Byte-fidelity exceptions — intentionally CRLF, never normalize:
 frontend/js/vendor/README.md -text

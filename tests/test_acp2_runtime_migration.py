@@ -26,10 +26,13 @@ def _fixture(tmp_path: Path, *, workspace: Path | None = None) -> Path:
         "fixture_id": "fx-migration-test",
         "source_fixtures": str(SOURCE_FIXTURES),
         "workspace_root": str(workspace or tmp_path / "workspace"),
-        # The helper reports COUNT(*) of applied migrations (26 rows before the
-        # round-5 PR-05 intent table; 027/028 are the two newest ids in that set).
-        "target_schema_version": 27,
-        "legacy_schema_version": 22,
+        # The helper reports COUNT(*) of applied migrations (28 rows with the
+        # B1b molecule-identity table; 028/029 are the two newest ids in that
+        # set and 026 does not exist, so the count is not the highest id).
+        # The legacy baseline is that count minus the five ids ``seed-legacy``
+        # removes for the interrupted drill (022/023/024/025/027).
+        "target_schema_version": 28,
+        "legacy_schema_version": 23,
         "corrupt_artifact": "historical_manifest/RESULT_v2/corrupt_manifest.json",
     }
     path = tmp_path / "migration.json"

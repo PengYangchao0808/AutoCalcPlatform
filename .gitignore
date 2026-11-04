@@ -53,6 +53,7 @@ conformer_search.yaml
 *.html
 !frontend/*.html
 !frontend/next/*.html
+!docs/reference/next-change/assets/ACP_NEXT_Layout_20261103/index.html
 
 # --- SQLite databases ---
 *.db
