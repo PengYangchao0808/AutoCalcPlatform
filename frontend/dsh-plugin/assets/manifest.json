@@ -178,8 +178,8 @@
     },
     {
       "path": "mount.js",
-      "sha256": "6e8e9f3b2604672e999f90b3e4c3481d96663f1a174f28de4e097d629fca68db",
-      "size_bytes": 47231,
+      "sha256": "0947f6c8c01782a54a907807ca5ed8a0c94570a529b8d0cb01f92bdb728a1475",
+      "size_bytes": 45965,
       "media_type": "text/javascript; charset=utf-8"
     },
     {
@@ -207,7 +207,7 @@
       "media_type": "text/javascript; charset=utf-8"
     }
   ],
-  "digest": "b9d8d51a5bb50cc9ab62691a5b2af1d65d457dd71c00487ee4d99e175f1bbbd0",
+  "digest": "5d2693ee7ff2edc1d3dabab568ef29741c2fd8c322384e7d03e47244aeb490ed",
   "core": [
     "js/shell/host-env.js",
     "js/client/transport.js",

@@ -1,12 +1,12 @@
 {
   "counts": {
-    "bytes": 15252366,
+    "bytes": 15239258,
     "css": 37,
     "files": 243,
     "html": 4,
     "js": 162
   },
-  "digest": "de738224be0b246b9ca88c7c4166403d2fd7e87adfe1b6779df785188aacaa24",
+  "digest": "56b7dfc26f663788e2dff7af48aac85ef6a363ed8ae49809f804c889666d3c40",
   "digest_rule": "sha256 over sorted lines \"<path> <sha256>\\n\"",
   "entry_points": {
     "index": "ACP_Workbench_v2.html",
@@ -245,8 +245,8 @@
     {
       "media_type": "text/markdown",
       "path": "dsh-plugin/README.md",
-      "sha256": "76608ae80864e32e8377f719731323f36d957fd089cd1b3a0d9cb4fd2c0c329f",
-      "size_bytes": 14265
+      "sha256": "fb85c4b7543f9a76d6b529807c4cf287f54fb79ddc0ced2079955a75d5815100",
+      "size_bytes": 14085
     },
     {
       "media_type": "text/javascript",
@@ -287,7 +287,7 @@
     {
       "media_type": "application/json",
       "path": "dsh-plugin/assets/manifest.json",
-      "sha256": "fefa575e807696c3e8e1b24b83d72f8a54e1428bb99d132b0ff042b039c44745",
+      "sha256": "40986af5a36a87af9241dc02689731c8b0cc5bdb238a2486fb59fd99f7a84380",
       "size_bytes": 13074
     },
     {
@@ -431,8 +431,8 @@
     {
       "media_type": "text/javascript",
       "path": "dsh-plugin/assets/mount.js",
-      "sha256": "6e8e9f3b2604672e999f90b3e4c3481d96663f1a174f28de4e097d629fca68db",
-      "size_bytes": 47231
+      "sha256": "0947f6c8c01782a54a907807ca5ed8a0c94570a529b8d0cb01f92bdb728a1475",
+      "size_bytes": 45965
     },
     {
       "media_type": "text/css",
@@ -473,8 +473,8 @@
     {
       "media_type": "text/javascript",
       "path": "dsh-plugin/client/mount.js",
-      "sha256": "6e8e9f3b2604672e999f90b3e4c3481d96663f1a174f28de4e097d629fca68db",
-      "size_bytes": 47231
+      "sha256": "0947f6c8c01782a54a907807ca5ed8a0c94570a529b8d0cb01f92bdb728a1475",
+      "size_bytes": 45965
     },
     {
       "media_type": "text/javascript",
@@ -515,8 +515,8 @@
     {
       "media_type": "text/javascript",
       "path": "dsh-plugin/src/index.js",
-      "sha256": "6655053b84458435bfb22329762caefc09e5e0b0c860f5eab679660598719d1e",
-      "size_bytes": 10414
+      "sha256": "3d9f8512da650de407e73617d9973d2988737f101637ce55005aa3d62be314af",
+      "size_bytes": 10124
     },
     {
       "media_type": "text/javascript",
@@ -545,20 +545,20 @@
     {
       "media_type": "text/javascript",
       "path": "dsh-plugin/test/browser-smoke.mjs",
-      "sha256": "33acead5f3f65cc5a35eb56b48b38ee5b238cf95b232e67d5929b2c1c5f338f5",
-      "size_bytes": 15383
+      "sha256": "f97a6f0b7f0157b31f7861112f20339677db68b0e69bb85c5832f3e40aa18a72",
+      "size_bytes": 15152
     },
     {
       "media_type": "text/javascript",
       "path": "dsh-plugin/test/build.test.mjs",
-      "sha256": "efe545e1f81712f4c25bb66cd18ab862ab679829ee0c4aa91556131b19e94eea",
-      "size_bytes": 10659
+      "sha256": "93b0e2d98f24616ab4cd9f335b6a12467178bd49f369fbd6cf018bc67389c0a5",
+      "size_bytes": 10410
     },
     {
       "media_type": "text/javascript",
       "path": "dsh-plugin/test/client.test.mjs",
-      "sha256": "655af99c9448b1ea76cf85617c1b405bd2d09151562db14df7633cfc6b662e85",
-      "size_bytes": 57958
+      "sha256": "034df35d33819280310a59a12eb136c43261d6a0f76d8a3e599bc81672763ad7",
+      "size_bytes": 56470
     },
     {
       "media_type": "text/javascript",
@@ -1361,8 +1361,8 @@
     {
       "media_type": "text/javascript",
       "path": "js/workbench/features/energy.js",
-      "sha256": "22a3bac0f8430424aa3b724289461bc55590ce27f643e2206dbfcf175791955e",
-      "size_bytes": 259038
+      "sha256": "c94584661fabcfe853a0275fc4b2c54c55c0fe76c22f661ea6da856529ce0d99",
+      "size_bytes": 254377
     },
     {
       "media_type": "text/javascript",
@@ -1463,8 +1463,8 @@
     {
       "media_type": "text/javascript",
       "path": "js/workbench/i18n.js",
-      "sha256": "6028081a2dab3c8134a221d85f7e98be12836cdd9e0f736b9179948f4d02c8f1",
-      "size_bytes": 196370
+      "sha256": "042b9c43d625c43dbddc3f4a427372c1a6fbd09ee96e89ee7484fb0e804c87e2",
+      "size_bytes": 192893
     },
     {
       "media_type": "text/html",
