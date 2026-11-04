@@ -1,5 +1,12 @@
 # acp/api/ — FastAPI Web API, research commands and science projections
 
+## ACP3 双人协作（2026-11-04）
+
+读[架构总纲 §10](../../../docs/reference/next-change/ACP_3.0_Architecture_20261031.md)。A 主写化学/网络 API，B 提供科学目录/编译结果与验证端口；版本化 schema、fixture、错误/权限/恢复由对端评审。现行 chemistry-network 是 cache-only B0/B1，不把拟议 Chemical IR/claim API 当已存在。
+
+本节是开发目标，不声明新增能力已交付；现行依赖/执行/安全护栏继续约束实现。
+
+
 > **Current audit:** [full functional review](../../../reports/acp2_function_audit_20261028/REPORT.md). Read the separate results for fast/API tests, real-SDK transport, browser behavior and historical model/QC/LSF receipts. A working HTTP evidence route does not itself wire the RPH MCP reader. Preserve the source gates and record failed UI tests; do not widen origins or bypass CAS to make a test green.
 
 ## MCP 易用性与指南接口（2026-10-30 开发约定）
@@ -29,8 +36,8 @@ api/
 ├── batch_preview.py               # 217 L / 1 route — POST /batch-optimize/config-preview (pure read-only projection)
 ├── job_status_view.py             # 279 L — pure live-status/display-method projections consumed by v1_routes
 ├── mechanism_readonly.py          # 120 L / 3 routes + mechanism_readonly_schemas.py 59 L — historical mechanism-project display only
-├── v2_routes.py                   # 1861 L / 25 routes — task views, batch ops, molecule groups, lineage
-├── v2_schemas.py                  # 410 L — V2 Pydantic models
+├── v2_routes.py                   # 28 routes — task views, batch ops, molecule groups, lineage, project chemistry network, project file tree/read
+├── v2_schemas.py                  # 450 L — V2 Pydantic models
 ├── v2_structure_sources.py        # 591 L / 12 routes — structure-source facets/organization/tags/trash
 ├── v2_science.py                  # 5 routes — science capabilities/forms, zero-side-effect preflight, attempt view, artifact read
 ├── v2_research.py                 # 12 routes — proposal/record create + CAS, rounds, wait/snapshot/resume, saga read/reconcile, record evidence and historical GETs
@@ -41,6 +48,7 @@ api/
 ├── capability_forms.py           # ui-subset whitelist, field bindings, safe metadata-only form projection
 ├── static_assets.py              # packaged frontend manifest/digest verification
 ├── science_projection.py          # 1204 L — pure projection primitives (attempt_status, preflight reshape, artifact-id safety, prepare-state vocabulary); imports the MCP TOOL_ALLOWLIST
+├── chemistry_projection.py        # 217 L — pure B0 chemistry-network projection (nodes = `content_checksum` structure versions, edges = persisted `lineage` only; contract ACP_Chemistry_Network_Contract_20261103.md); no DB/file/name-identity logic
 └── schemas.py                     # 187 L — shared status/backends/jobs Pydantic models
 ```
 
@@ -55,7 +63,7 @@ api/
 | `batch_preview.py` | `POST /api/v1/batch-optimize/config-preview` — normalized per-role effective options + source provenance + ORCA keyword summaries; **no job creation, no disk writes**; accepts legacy flat payloads and `batch_roles` |
 | `job_status_view.py` | `build_live_status()` / `resolve_display_method()` — pure functions over `state.json` mappings; stage labels, metrics sanitation, PES/batch/IRC/simple method display. No I/O |
 | `mechanism_readonly.py` | Historical mechanism-project list/create/detail (s1–s4 artifacts) for display only; extracted from v1 to isolate MechanismProject/Lowconfirm/Highconfirm terms (gate `final_stage_terms`) |
-| `v2_routes.py` | 25 routes: project task trees/views/facets, orphans, batch ops, tags, molecule groups/merge, lineage |
+| `v2_routes.py` | 28 routes: project task trees/views/facets, orphans, batch ops, tags, molecule groups/merge, lineage, `GET /projects/{id}/chemistry-network` (B0 structure-version network, cache-only; projection in `chemistry_projection.py`), and read-only `GET /projects/{id}/tree` / `GET /projects/{id}/file` (project root from `ProjectManager`, strict relative POSIX path, reused v2 project/entry access, bounded listing/read; implementation `acp_services.data.project_files`) |
 | `v2_structure_sources.py` | 12 routes: `structure-sources` facets/list/detail, candidate status/assessments, metadata patch, project structure tags, trash purge |
 | `v2_science.py` | 4 routes under `/api/v2`: `GET /science/capabilities`, `POST /science/preflight` (zero-side-effect, same `_preflight_projection` + plan digest), `GET /science/tasks/{id}/attempts/{a}/view`, `GET .../artifacts/{artifact_id}/read`. Read-only; one read root via `build_read_root_resolver`. ⚠ Its module docstring still says "not mounted by `server.py`" — **stale**: `server.py` L438 mounts it |
 | `v2_research.py` | Twelve routes: proposal/record writes and CAS via ResearchWriter; round append; bounded wait/snapshot/resume via ResearchOperations; saga read/reconcile; record evidence projection; historical proposal/record GETs. GETs stay read-only; command routes require verified project, access and CAS/plan binding. Never implement a second research store here |

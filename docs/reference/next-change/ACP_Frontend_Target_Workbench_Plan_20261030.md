@@ -1,5 +1,11 @@
 # ACP 前端目标形态方案（对齐样板图 v1）
 
+> **2026-11-04 双人开发同步**：开发排序与双人责任由[架构总纲 §10](ACP_3.0_Architecture_20261031.md)统一。Ketcher/CDXML/三维生成按实际支持能力分项验收，早期选型不代表依赖已部署；化学网络/导入/编译属于 A，科学插件与验证属于 B。界面不维护第二套物种身份或执行计划。
+
+> **2026-11-03 最新布局**：新手绘图 A—G 方案见[插件计划 §13.13](ACP_Frontend_DSH_Pluginization_Plan_20261102.md#next-layout-20261103)。冲突的默认分区以该节为准：DSH 协作、五个中央视图、D 常驻任务、G 统一停靠；[可点击原型](assets/ACP_NEXT_Layout_20261103/index.html)仅供布局评审。本文早期分子身份/网络端点等设想以[现有网络契约](ACP_Chemistry_Network_Contract_20261103.md)及实际源码为准，不因旧方案列名推定已经实现。
+
+> **2026-11-02 产品定义修订**：用户明确 **ACP-NEXT 即与 DSH 结合的化学工作台插件**。已读取《回顾ACP2更新》原对话及手绘附件，原图与 A—F 逐区对照见 [插件化计划 §13.10](ACP_Frontend_DSH_Pluginization_Plan_20261102.md#1310-原草图对齐acp-next-的产品与界面验收依据)。本文三工作区形态继续有效；DSH 为宿主、ACP-NEXT 为工作台插件，现有 `/next/` 仅作独立测试/迁移入口。旧文中“ACP 托管或嵌入整页 DSH”“DSH 后接入”和独立 APP 路线不再作为主线。下文技术实测属于原批次记录，本轮未复跑。
+
 日期：2026-10-30（v2 修订：2026-10-31——D2 定为 Ketcher、D3 确认、D5 直接替换；细化 DSH 宿主拓扑与 DSH 终端/文件复用）
 后续：本文的前端形态已并入 [ACP 3.0 前端兼容计划](ACP_3.0_Frontend_Plan_20261031.md)；顶层架构见 [ACP 3.0 架构](ACP_3.0_Architecture_20261031.md)。
 性质：**方案与分期计划，不是实现记录**。本文按用户样板图（设计板 + 手绘稿）重定 Next 入口的目标形态；已实现部分标注事实，未实现部分标注依赖与门禁。
@@ -13,11 +19,12 @@
 样板图要的不是「三个页签 + 若干面板」，而是**一个化学工作台内核**：
 
 ```
-统一 Shell（项目上下文 / 模块注册 / 布局 / 权限事件）
-   ├─ 研究：Agent（原生 DSH 网页版） + 项目级化学网络
-   ├─ 分子：2D 绘制（预留）+ 3D + 属性（能量曲线先行，轨道后续）
-   └─ 任务：配置 + 任务/进度 + 文件 + 主机（+ 权限受控终端）
-全局：左侧「化学回路」项目分子导轨，三个工作区共享
+DSH 宿主（导航 / 对话 / 会话 / 模型与工具 / 文件 / 终端）
+   └─ ACP-NEXT 化学工作台插件（共享项目上下文 / 模块 / 布局 / RPH 关联）
+        ├─ 研究：对话历史 + Agent 对话 + 项目化学网络（原图 A / B）
+        ├─ 分子：网络导航 + 2D 绘制 + 3D + 可切换分析区（C / D）
+        └─ 任务：网络导航 + 配置 + 终端/任务 + 文件/操作（E / F）
+全局：模块按需加载、工作区为默认配方；终端/任务可交换，布局可保存
 ```
 
 与当前实现的根本差距有四类，必须分别处理，不能靠加面板糊过去：
@@ -26,18 +33,18 @@
 |---|---|---|
 | 布局只有 `main/side/bottom` 三槽，没有左导轨与多列 | Shell 能力 | **Shell v2：具名槽位 + 每工作区模板**（P1） |
 | 化学网络按「任务/结构来源」平铺，没有「按键连接关系归并的项目分子图」 | 数据契约 + 新服务 | **连通性归并服务 + `/api/v2/projects/{id}/chemical-network`**（P2，先 spike） |
-| Agent 是只读投影，不是真实 DSH | 宿主集成 | **DSH 嵌入：A1 iframe 验证 → A2 托管启动/反代**（P0 决策，P2 落地） |
+| Agent 是只读投影，未接 DSH 会话与 RPH 研究入口 | 宿主集成 | **ACP-NEXT 插件挂载到 DSH**，复用宿主原生对话；按插件计划 P0—P3 核验和装配 |
 | 第三视图是「任务 + 证据」，没有终端/文件/主机 | 组件 + 安全边界 | 文件/任务/主机复用+抽取（P4），终端**分两级**（P4/P5） |
 
 ### 0.1 五个诉求对照
 
 | 诉求 | 方案落点 | 关键事实/依赖 |
 |---|---|---|
-| ① Agent 原生支持 DSH 网页版 | §2.1 A1/A2 | DSH 无 XFO/CSP，可 iframe；鉴权是 per-process token + Strict cookie；无 postMessage，上下文走 MCP；推荐 ACP 托管 `dsh web` + `/dsh` 反代 |
+| ① Agent 原生支持 DSH | 插件计划 §13 / §13.10 | ACP-NEXT 就是 DSH 插件；复用会话与对话，通过公开扩展挂载化学工作台；原 §2.1 A1/A2 留作历史备选 |
 | ② 化学网络按「相同键连接关系」归并 | §2.2 | InChIKey 骨架为主键；新增迁移 024 + 索引器挂载；现名称分组不可用（`CCO`/`OCC` 会分家） |
 | ③ 2D 绘制/识别（ChemDraw 级） | §2.3 | **Ketcher**（Apache-2.0）：standalone iframe、CDXML/CDX 读写、Indigo WASM 离线、`recognize()` OCR |
 | ④ 结构调整同步经典 + 能量曲线先行 | §2.4 | 复用 `structure_editor` 纯函数 + `geometry_store`；能量用已抽取的 `energy_chart_renderer` |
-| ⑤ 第三视图重做 | §2.5 | 六槽；终端/文件优先嵌 DSH 面板（`acp-embed` 插件），失败回退 ACP L0/L1；进度双数据源 |
+| ⑤ 第三视图重做 | §2.5 与插件计划 §13.10.4 | 配置、当前状态、终端/任务、文件/操作按原图组合；复用 DSH 文件/终端，终端与任务可交换；平台产物仍走 ACP 读取契约 |
 
 ---
 
@@ -73,7 +80,7 @@ execution: {
 }
 ```
 
-- 研究区的「对话历史 / Agent 对话」两列由嵌入的 DSH 自带（§2.1），ACP 不重造聊天；走 C 回退时才用 `agent-workspace` 的只读卡片占位。
+- 原图中的「对话历史 / Agent 对话」位于同一对话列的上下两区；复用 DSH 原生会话与对话组件，ACP-NEXT 提供化学工作台组合，不嵌入另一整页 DSH。
 - 槽位由模板生成（`acp-slot-<ws>-<slot>`），不再写死在 `index.html`；旧三槽模板作为默认，现有三条 recipe 行为不变。
 - `singleton` 面板跨工作区迁移（viewer 已有机制）推广到 `project-molecules` 导轨。
 - 布局偏好升级为 v2（按槽位存 panelId + 尺寸），带 v1→v2 迁移；布局编辑器按模板动态列槽位。
@@ -85,11 +92,11 @@ execution: {
 
 | 工作区 | 槽位 | 模块（新/旧） | 对应样板 |
 |---|---|---|---|
-| 研究 | rail / agent / network | `project-molecules`(新) · `agent-dsh`(新) · `chemical-network`(重写) | 一 |
-| 分子 | rail / draw2d / view3d / properties | `project-molecules` · `structure-2d`（Ketcher iframe） · `molecule-viewer`(现有) · `molecule-properties`(新) | 二 |
-| 任务 | rail / config / terminal / tasks / files / actions | `project-molecules` · `task-config`(现有) · `task-console`(新, 先命令面板) · `task-explorer`(扩进度) · `file-browser`(新) · `remote-actions`(新) | 三 |
+| 研究 | navigation / history+agent / network | DSH 导航/会话/对话 + ACP 网络与研究证据；网络内保留当前分子工具 | 一：A / B |
+| 分子 | network-navigation / draw2d / view3d / analysis | 项目网络导航 + 独立 2D/3D + 能量/系综/振动/轨道等分析切换；按依赖分期 | 二：C / D |
+| 任务 | network-navigation / config / terminal+tasks / files / actions | ACP 配置/任务/工件 + DSH 终端/普通文件适配；终端与任务左右可交换 | 三：E / F |
 
-> 手绘稿里的「标题/选项/工作区/配置」竖排是应用级导航；ACP 已有顶栏工作区切换，**不新增第二套导航**，只把「化学回路」做成全局导轨。
+> 手绘稿里的「标题/选项/工作区/配置」竖排是应用级导航，在 DSH 导航扩展中提供 ACP-NEXT 入口与工作区切换，不叠加独立 APP 顶栏。分子/任务区左侧保留化学网络导航，可折叠为分子导轨。上文模板代码只是旧版布局草案，最终槽位与归属按插件计划 P0 核验。
 
 ---
 

@@ -1,5 +1,12 @@
 # acp_services/ — Platform Services Layer
 
+## ACP3 双人协作（2026-11-04）
+
+读[架构总纲 §10](../../docs/reference/next-change/ACP_3.0_Architecture_20261031.md)。A 主写网络领域的持久化/证据关联适配；B 主写最小 ACR/Data 原生执行接入，二者共享现有授权/CAS/outbox/Artifact 权威。cccp 不持有 DB 或租户身份；Services 继续禁止 import acp。迁移从实际最新值分配，不占旧草案号。
+
+本节是开发目标，不声明新增能力已交付；现行依赖/执行/安全护栏继续约束实现。
+
+
 > **2026-10-29 historical audit; 2026-10-30 scoped update:** [functional audit](../../reports/acp2_function_audit_20261028/REPORT.md) and [status reconciliation](../../docs/reference/current/ACP_RPH_Status_20261028.md). Research writer/service/Saga, step-definition/dispatch/worker, fenced checkpoints, model gateway and deadline enforcement are present. Deadline/queue termination is enforced in current code; historical NOT_VERIFIED notes are not its current declaration. DA science closure, installed RPH real-chain acceptance and current BOM retrievability must be checked separately; default product assembly now exists in code. Never infer an executed feature from a module name or reset a frozen evidence status.
 
 ## MCP 消费与自动执行兼容约定（2026-10-30）
@@ -14,22 +21,23 @@
 - 产物读取保留完整正文内容检查、编码与摘要作用域；只读状态/发现不得隐式远端 fetch。Prompt 不替代身份、预算、科学证据或缺失的 MCP 消费接口。
 
 ## OVERVIEW
-Platform service layer for ACP: workspace/access boundary, Data prepare/read, Runtime use cases, persistent store/schema, contracts, and thin entrypoints. Dependency direction is **one-way**: `acp → acp_services`; `src/acp_services/**` must never import `acp` (including lazy imports, `TYPE_CHECKING`, `importlib`, `__import__`, string `getattr`). **128 `.py`** (121 implementation modules + 7 `__init__.py`); Python 3.10+; PEP 604 annotations. The ACP 2.0 capability families (research budget/approval/events, adapters, attempt chain, science binding/step DAG, MCP entrypoints) are implemented natively here.
+Platform service layer for ACP: workspace/access boundary, Data prepare/read, Runtime use cases, persistent store/schema, contracts, and thin entrypoints. Dependency direction is **one-way**: `acp → acp_services`; `src/acp_services/**` must never import `acp` (including lazy imports, `TYPE_CHECKING`, `importlib`, `__import__`, string `getattr`). **129 `.py`** (122 implementation modules + 7 `__init__.py`); Python 3.10+; PEP 604 annotations. The ACP 2.0 capability families (research budget/approval/events, adapters, attempt chain, science binding/step DAG, MCP entrypoints) are implemented natively here.
 
 **Historical slice status (2026-10-26):** legacy module/contract slices plus the ACP 2.0 capability slices are delivered and covered by guard families — `test_acp_services_isolation.py`, `test_services_worker_contract.py` and `test_services_{attempt_recovery,cgroup_attempt_recovery,standalone_recipe,packaging_roles,release_prep,worker_bootstrap,doc_sync,closure_record}.py`. The cited closure record predates the M4 real model/QC/LSF/browser receipts and M5-03 independent install. Read the current audit for their separate scope; production and full-release sign-off remain unverified. `acp` old import paths are retained as identity forwarders — never re-add an implementation on the `acp` side.
 
 ## STRUCTURE
 ```
-acp_services/                             # 128 .py
+acp_services/                             # 129 .py
 ├── bootstrap.py          # ServicesPorts frozen port bundle (10 fields; "port convergence" phase; each port has a migration/removal task)
 ├── worker_bootstrap.py   # self-sufficient worker composition root (`python -m acp_services.worker_bootstrap`; also the `acp-worker` console script; zero acp import / zero jobs DB)
 ├── events.py             # pure re-export shim → contracts.events (frozen EventEnvelope/EventCursor/EventScope allowlist)
 ├── workspace/            # 10 modules: projects, admin, entry_authz, identity_lifecycle, identity_mapping, keys, boundary,
 │                         #   http_identity (B15 HTTP credential→principal), server_identity (B09 authoritative principal/project),
 │                         #   command_identity (M0-04 one frozen CommandIdentity for HTTP/CLI/admission + idempotency scope)
-├── data/                 # 13 modules: contracts, operations (prepare), artifacts (B12 artifact lifecycle + ArtifactRef), transfer,
+├── data/                 # 14 modules: contracts, operations (prepare), artifacts (B12 artifact lifecycle + ArtifactRef), transfer,
 │                         #   resource_read, read_root, storage_binding, namespaces, archive, import_, budget (storage reservation),
-│                         #   research_resources (B18 Proposal/ResearchRecord CAS), helpers
+│                         #   research_resources (B18 Proposal/ResearchRecord CAS), project_files (project-level bounded read-only
+│                         #   tree/file), helpers
 ├── runtime/              # 70 implementation modules + __init__.py: commands, execution_chain, worker, receipts, recovery, plan_contracts, step_result,
 │                         #   step_requirements, admission, quota, usage, usage_units, metering_policy, metering_decoupling,
 │                         #   freshness, projections, events, outbox, provisioning, workflow_enablement, isolation,
@@ -62,6 +70,7 @@ acp_services/                             # 128 .py
 | Runtime use cases | `runtime/commands.py` | submit/pause/unpause/cancel/continue/rerun/edit/purge + CLI completion registration via injected ports |
 | Execution entry selection | `runtime/execution_chain.py` | Eight catalog workflows have integrated scientific closure, seven retain legacy closure; this is not default entry activation. Default envelope = singlepoint + internal BoundedRecipe only; all other ordinary submissions still use their registered legacy path |
 | Data prepare/read | `data/operations.py`, `data/artifacts.py`, `data/transfer.py`, `data/resource_read.py`, `data/read_root.py` | Persistent prepare operations, verified transfer, cache-only reads; `artifacts.py` (B12) = explicit artifact prepare/read lifecycle + frozen `ArtifactRef(job_id, attempt, resource_id, generation, digest)` reusing `PrepareOperationService` rows (no second state machine); old GET remains compat |
+| Project file read | `data/project_files.py` | Project-root containment (direct child of platform `run_root`), strict relative POSIX path validation, hidden/sensitive/Windows-reserved refusals, no symlink/reparse traversal (POSIX `dir_fd`+`O_NOFOLLOW`), bounded one-level listing and bounded UTF-8 reads. Consumed by `api/v2_routes.py` project tree/file GETs; no `acp` import |
 | Research resources (Data) | `data/research_resources.py` | B18 versioned JSON `Proposal`/`ResearchRecord` CAS store in the Data boundary; opaque JSON — no decision semantics, no task table |
 | Storage binding / namespace | `data/storage_binding.py`, `data/namespaces.py` | Single allocation authority; atomic idempotent namespace |
 | Storage budget | `data/budget.py` | B02-7 reservation for bytes/inodes/scratch/upload amplification — **distinct** from `runtime/research_budget.py` |

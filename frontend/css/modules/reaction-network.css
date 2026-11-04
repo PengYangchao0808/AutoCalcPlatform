@@ -1,34 +1,40 @@
 /*
- * ACP Next — reaction-network panel styles (UI-04, read-only SVG).
- * Scope: `.acp-net*` only; the SVG palette is local (role colors).
+ * ACP Next — reaction-network panel (UI-04, read-only).
+ * Cytoscape owns the primary canvas; scoped SVG rules remain for the fallback.
  */
 
 .acp-net {
-  --net-reactant: #4ea1ff;
-  --net-product: #7fe0ad;
-  --net-ts: #f0c674;
-  --net-intermediate: #d7b8ff;
-  --net-unknown: #9fb0c3;
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
-  min-height: 100%;
+  --net-reactant: var(--accent);
+  --net-product: var(--green);
+  --net-ts: var(--amber);
+  --net-intermediate: var(--shell-violet);
+  --net-unknown: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   height: 100%;
   box-sizing: border-box;
-  background: var(--bg-base, #0b0f14);
-  color: var(--text-primary, #e5edf5);
+  background: var(--bg-base);
+  color: var(--text-primary);
   font-size: 12px;
 }
 
-.acp-net-head[hidden] {
+.acp-net-head[hidden],
+.acp-net-source[hidden],
+.acp-net-viewport[hidden],
+.acp-net-tools[hidden],
+.acp-net-detail[hidden],
+.acp-net-hint[hidden] {
   display: none;
 }
 
 .acp-net-head {
   display: flex;
+  flex: 0 0 auto;
   align-items: baseline;
   gap: 10px;
   padding: 10px 14px 6px;
-  border-bottom: 1px solid var(--border-default, #24303b);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .acp-net-title {
@@ -37,102 +43,181 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--text-secondary, #9fb0c3);
+  color: var(--text-secondary);
 }
 
 .acp-net-sub {
   margin: 0;
-  color: var(--text-muted, #74859a);
+  color: var(--text-tertiary);
   font-size: 10px;
   font-family: "SFMono-Regular", Consolas, monospace;
   overflow-wrap: anywhere;
 }
 
+.acp-net-source {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 8px 14px 0;
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.acp-net-viewport {
+  position: relative;
+  flex: 1 1 420px;
+  min-height: 360px;
+  margin: 10px 12px 6px;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background-color: var(--bg-canvas);
+  background-image:
+    linear-gradient(rgba(var(--text-secondary-rgb), .035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(var(--text-secondary-rgb), .035) 1px, transparent 1px);
+  background-size: 24px 24px;
+  box-shadow: inset 0 1px 0 rgba(var(--white-rgb), .018);
+}
+
+.acp-net-tools {
+  position: absolute;
+  z-index: 3;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid rgba(var(--text-secondary-rgb), .25);
+  border-radius: 6px;
+  background: rgba(var(--bg-base-rgb), .92);
+  box-shadow: 0 4px 16px rgba(var(--black-rgb), .2);
+}
+
+.acp-net-tool {
+  min-height: 26px;
+  box-sizing: border-box;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: 500 10px/1.2 "SFMono-Regular", Consolas, monospace;
+  cursor: pointer;
+}
+
+.acp-net-tool--icon {
+  width: 26px;
+  padding: 0;
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.acp-net-tool:hover {
+  background: rgba(var(--text-secondary-rgb), .12);
+  color: var(--text-primary);
+}
+
+.acp-net-tool:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.acp-net-tool:active {
+  background: rgba(var(--accent-rgb), .18);
+}
+
 .acp-net-canvas {
+  position: absolute;
+  inset: 0;
   min-height: 0;
+  overflow: hidden;
+  padding: 0;
+  touch-action: none;
+}
+
+.acp-net[data-net-renderer="svg"] .acp-net-canvas {
   overflow: auto;
-  padding: 8px 10px;
+  padding: 48px 12px 12px;
+  touch-action: auto;
 }
 
 .acp-net-svg {
   display: block;
   min-width: 320px;
-  max-height: 100%;
-  color: var(--text-muted, #74859a);
+  color: var(--text-tertiary);
 }
 
 .acp-net-state {
+  flex: 0 0 auto;
   margin: 0;
-  padding: 6px 14px;
-  color: var(--text-muted, #74859a);
+  padding: 10px 14px;
+  color: var(--text-tertiary);
   font-size: 11px;
   line-height: 1.55;
 }
 
-.acp-net-state-hint {
-  color: var(--text-muted, #74859a);
+.acp-net-state .acp-btn {
+  margin-left: 10px;
 }
 
+.acp-net-state-hint {
+  color: var(--text-tertiary);
+}
+
+/* Deterministic SVG fallback (used only when Cytoscape is unavailable). */
 .acp-net-node .acp-net-shape {
-  fill: rgba(255, 255, 255, 0.035);
+  fill: rgba(var(--white-rgb), .035);
   stroke: var(--net-unknown);
   stroke-width: 1.2;
 }
 
 .acp-net-node.is-reactant .acp-net-shape { stroke: var(--net-reactant); }
 .acp-net-node.is-product .acp-net-shape { stroke: var(--net-product); }
-.acp-net-node.is-ts .acp-net-shape { stroke: var(--net-ts); fill: rgba(240, 198, 116, 0.1); }
+.acp-net-node.is-ts .acp-net-shape { stroke: var(--net-ts); fill: rgba(var(--amber-rgb), .1); }
 .acp-net-node.is-intermediate .acp-net-shape { stroke: var(--net-intermediate); }
 
 .acp-net-node.is-selected .acp-net-shape {
   stroke-width: 2.2;
-  fill: rgba(78, 161, 255, 0.18);
+  fill: rgba(var(--accent-rgb), .18);
 }
 
-.acp-net-node {
+.acp-net-node,
+.acp-net-edge {
   cursor: pointer;
 }
 
 .acp-net-node-label {
-  fill: var(--text-primary, #e5edf5);
+  fill: var(--text-primary);
   font-size: 10px;
   font-family: "SFMono-Regular", Consolas, monospace;
   pointer-events: none;
 }
 
-.acp-net-node-meta {
-  fill: var(--text-muted, #74859a);
+.acp-net-node-meta,
+.acp-net-edge-label {
+  fill: var(--text-tertiary);
   font-size: 8.5px;
   pointer-events: none;
 }
 
 .acp-net-edge {
-  cursor: pointer;
-  color: var(--text-muted, #74859a);
+  color: var(--text-tertiary);
 }
 
 .acp-net-edge.is-selected {
-  color: var(--accent, #4ea1ff);
-}
-
-.acp-net-edge-label {
-  fill: var(--text-secondary, #9fb0c3);
-  font-size: 8.5px;
-  pointer-events: none;
+  color: var(--accent);
 }
 
 .acp-net-detail {
   display: grid;
+  flex: 0 0 auto;
   gap: 4px;
   max-height: 132px;
   overflow: auto;
   padding: 8px 14px;
-  border-top: 1px solid var(--border-default, #24303b);
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.acp-net-detail[hidden] {
-  display: none;
+  border-top: 1px solid var(--border-default);
+  background: rgba(var(--white-rgb), .02);
 }
 
 .acp-net-detail-title {
@@ -149,7 +234,7 @@
 }
 
 .acp-net-detail-label {
-  color: var(--text-muted, #74859a);
+  color: var(--text-tertiary);
 }
 
 .acp-net-detail-value {
@@ -158,12 +243,45 @@
 }
 
 .acp-net-hint {
+  flex: 0 0 auto;
   margin: 0;
-  padding: 4px 14px 8px;
-  color: var(--text-muted, #74859a);
+  padding: 3px 14px 9px;
+  color: var(--text-tertiary);
   font-size: 10px;
+  line-height: 1.45;
 }
 
-.acp-net-hint[hidden] {
-  display: none;
+@media (max-width: 720px) {
+  .acp-net-head {
+    flex-wrap: wrap;
+  }
+
+  .acp-net-viewport {
+    min-height: 320px;
+    margin-right: 8px;
+    margin-left: 8px;
+  }
+
+  .acp-net-tools {
+    top: 8px;
+    right: 8px;
+  }
+
+  .acp-net-tool {
+    padding-right: 6px;
+    padding-left: 6px;
+  }
+
+  .acp-net-svg {
+    min-width: 0;
+  }
+
+  .acp-net-detail-row {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .acp-net-detail-value {
+    text-align: left;
+  }
 }

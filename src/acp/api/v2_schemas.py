@@ -25,7 +25,10 @@ __all__ = [
     "V2MoleculeGroupSuggestion",
     "V2MoleculeGroupUpsert",
     "V2MoleculeMergeRequest",
+    "V2ProjectFileEntry",
+    "V2ProjectFileResponse",
     "V2ProjectSummary",
+    "V2ProjectTreeResponse",
     "V2TaskBatchItem",
     "V2TaskBatchRequest",
     "V2TaskBatchResponse",
@@ -44,6 +47,9 @@ __all__ = [
     "V2TreeResponse",
     "V2LineageNode",
     "V2LineageResponse",
+    "V2ChemistryNetworkNode",
+    "V2ChemistryNetworkEdge",
+    "V2ChemistryNetworkResponse",
 ]
 
 
@@ -57,6 +63,46 @@ class V2ProjectSummary(BaseModel):
     n_tasks: int = 0
     created_at: str = ""
     updated_at: str = ""
+
+
+class V2ProjectFileEntry(BaseModel):
+    """One visible ordinary entry of a project-level one-level listing."""
+
+    path: str
+    name: str
+    type: Literal["file", "directory"]
+    size: int = 0
+    mtime: float = 0.0
+
+
+class V2ProjectTreeResponse(BaseModel):
+    """Bounded one-level project directory listing (no absolute root)."""
+
+    schema_version: Literal["acp.project-files.v1"] = "acp.project-files.v1"
+    project_id: str
+    path: str = ""
+    entries: list[V2ProjectFileEntry] = Field(default_factory=list)
+    limit: int = 200
+    truncated: bool = False
+    truncation_reason: str = ""
+
+
+class V2ProjectFileResponse(BaseModel):
+    """Bounded read-only UTF-8 project file body and integrity facts."""
+
+    schema_version: Literal["acp.project-files.v1"] = "acp.project-files.v1"
+    project_id: str
+    path: str
+    content: str
+    encoding: str
+    size: int
+    mtime: float
+    returned_bytes: int
+    returned_lines: int
+    truncated: bool = False
+    truncation_reason: str = ""
+    sha256: str
+    sha256_scope: Literal["returned_bytes"] = "returned_bytes"
 
 
 class V2TaskSummary(BaseModel):
@@ -408,3 +454,46 @@ class V2LineageResponse(BaseModel):
     task_id: str
     upstream: list[V2LineageNode] = Field(default_factory=list)
     downstream: list[V2LineageNode] = Field(default_factory=list)
+
+
+# ── Chemistry network models (B1 molecule identity) ───────────────────
+# Contract: docs/reference/next-change/ACP_Chemistry_Network_Contract_20261103.md §4
+
+
+class V2ChemistryNetworkNode(BaseModel):
+    """One network node: a molecule identity, else a structure version."""
+
+    node_id: str
+    identity_kind: str
+    scheme: str = ""
+    task_ids: list[str] = Field(default_factory=list)
+    molecule_names: list[str] = Field(default_factory=list)
+    canonical_smiles: str = ""
+    inchikey: str = ""
+    formula: str = ""
+    charge: int | None = None
+    multiplicity: int | None = None
+    atom_count: int | None = None
+
+
+class V2ChemistryNetworkEdge(BaseModel):
+    """One persisted relation between two task nodes (§3 closed enum)."""
+
+    relation: str
+    from_task: str
+    to_task: str
+    depth: int = 1
+
+
+class V2ChemistryNetworkResponse(BaseModel):
+    """Bounded, read-only project chemistry network (§4)."""
+
+    project_id: str
+    nodes: list[V2ChemistryNetworkNode] = Field(default_factory=list)
+    edges: list[V2ChemistryNetworkEdge] = Field(default_factory=list)
+    skipped: list[dict[str, str]] = Field(default_factory=list)
+    truncated: bool = False
+    next_cursor: str | None = None
+    identity_kind: str = "structure_content_v1"
+    identified_nodes: int = 0
+    unidentified_nodes: int = 0

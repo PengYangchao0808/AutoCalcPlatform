@@ -1,0 +1,24 @@
+# DSH bundle patch for @acp/dsh-panels.
+#
+# Shape: a top-level YAML array. Each top-level item is either an `insert` row
+# group (appends plugin rows to the resolved bundle) or an id-targeted override
+# row. Children of `insert` are plugin rows: `id` is the bundle-local instance
+# id, `name` must equal the package name in package.json, `config` is handed to
+# the host half's `apply(ctx, config)` unchanged.
+#
+# `controller` is the ACP controller base URL. The host half forwards
+# `<apiPrefix>/*` to `<controller>/api/*`. It is deliberately a literal here so
+# an operator can edit one obvious line; normalizeConfig() validates it at load
+# time and, when invalid, renders a diagnostic row instead of serving routes.
+#
+# Never put an API key in this file. Only the NAME of the environment variable
+# (`apiKeyEnv`) is configured; the value is read from the host process env.
+- insert:
+    - id: acp-panels
+      name: '@acp/dsh-panels'
+      config:
+        controller: http://127.0.0.1:8765
+        uiBase: /acp
+        apiPrefix: /acp-api
+        apiKeyEnv: ACP_API_KEY
+        readOnly: true

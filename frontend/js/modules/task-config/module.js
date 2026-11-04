@@ -30,11 +30,17 @@
   var API = "/api/v1";
   var VALIDATE_DEBOUNCE_MS = 400;
   var DRAFT_DEBOUNCE_MS = 1500;
+  /* A-13/A-14/A-15: structure-source picker groups and the frozen
+   * `structureRef` vocabulary owned by molecule-viewer (README §2). The panel
+   * never invents a fifth kind and never writes the viewer's DOM. */
+  var SOURCE_GROUPS = ["history", "local", "remote"];
+  var SOURCE_LIMIT = 20;
+  var SOURCE_CONTRACT_KINDS = ["job-file", "job-remote-file", "inline-xyz", "structure-entry"];
 
   var DESCRIPTOR = {
     id: MODULE_ID,
     interfaceVersion: 1,
-    version: "0.1.0",
+    version: "0.2.0",
     provides: ["task.config"],
     binds: ["projectId"],
     capabilities: { requires: [], provides: ["task.config"] },
@@ -125,6 +131,46 @@
     "next.config.plan_stale": "预检之后配置发生变化，请重新预检。",
     "next.config.forbidden": "当前身份无权提交任务。",
     "next.config.unsupported_selected": "已选择需要经典向导的计算类型：{workflow}",
+    /* A-13 structure source list + A-14 frames + A-15 bridge. Read-only:
+     * picking a source only emits a structureRef; it never submits a task. */
+    "next.config.sources_title": "从结构来源载入",
+    "next.config.sources_hint": "本地任务产物、远程结构与历史已完成任务的结构；选择后只注入结构引用，不提交任务。",
+    "next.config.sources_tab_history": "历史任务结构",
+    "next.config.sources_tab_local": "任务产物",
+    "next.config.sources_tab_remote": "远程文件",
+    "next.config.sources_idle": "展开后加载结构来源。",
+    "next.config.sources_loading": "正在加载结构来源…",
+    "next.config.sources_empty_history": "没有可引用的历史结构（已完成任务的结构会自动出现在这里）。",
+    "next.config.sources_empty_local": "该任务没有可用的结构条目。",
+    "next.config.sources_empty_remote": "远程目录没有 XYZ 结构文件。",
+    "next.config.sources_empty_no_task": "未绑定任务：在任务面板打开一个任务后可列出任务产物与远程文件。",
+    "next.config.sources_error": "结构来源加载失败：{message}",
+    "next.config.sources_retry": "重试",
+    "next.config.sources_pending": "需取回",
+    "next.config.sources_remote_chip": "远程",
+    "next.config.sources_unavailable": "不可用",
+    "next.config.sources_source_loading": "正在载入结构来源…",
+    "next.config.sources_source_error": "结构来源不可用：{message}",
+    "next.config.sources_row_error": "载入失败：{message}",
+    "next.config.sources_no_text": "结构来源没有返回结构文本。",
+    "next.config.sources_parser_missing": "多帧解析不可用：view_model.js 未加载。",
+    "next.config.sources_parse_error": "结构解析失败（无有效 XYZ 帧）。",
+    "next.config.sources_no_geometry": "该条目没有几何引用。",
+    "next.config.sources_pending_catalog": "远程结构目录尚未取回（pending_fetch），请稍后重试。",
+    "next.config.sources_remote_not_remote": "该任务不是远程任务，请使用“任务产物”。",
+    "next.config.sources_remote_disabled": "服务器未启用远程执行。",
+    "next.config.sources_source_frame": "源帧 {index}",
+    "next.config.sources_atoms": "{count} 个原子",
+    "next.config.frames_title": "帧",
+    "next.config.frames_count": "共 {count} 帧",
+    "next.config.frames_option": "帧 {index}",
+    "next.config.frames_prev": "上一帧",
+    "next.config.frames_next": "下一帧",
+    "next.config.frame_identity": "帧 {index}/{count} · {kind} · {jobId} · {path}",
+    "next.config.frame_identity_entry": "帧 {index}/{count} · {kind} · {jobId} · {entryId}",
+    "next.config.sources_clamped": "请求帧 {requested} 越界，已钳制到末帧 {count}。",
+    "next.config.sources_emitted": "已注入结构引用",
+    "next.config.sources_not_emitted": "无可用的上下文/命令通道，结构引用未注入。",
   };
 
   function t(key, vars) {
@@ -246,6 +292,21 @@
       preflight: { status: "idle", fingerprint: null, planKey: null, reasons: [], token: 0, revision: -1 },
       submit: { status: "idle", receipt: null, error: null, idempotencyKey: null, keyPlan: null, token: 0 },
       draft: { id: null, revision: 0, status: "idle", savedAt: null, error: null, conflict: false, timer: null, banner: null, name: "" },
+      /* A-13/A-14/A-15: per-group source lists + the one selected source's
+       * frame table. `token` invalidates every in-flight load/selection on a
+       * task switch, group switch, dispose or newer request (late results are
+       * dropped, never painted). */
+      sources: {
+        ready: false,
+        group: "history",
+        taskKey: "",
+        groups: {
+          history: { name: "history", status: "idle", rows: [], error: null, loaded: false, reason: "", token: 0 },
+          local: { name: "local", status: "idle", rows: [], error: null, loaded: false, reason: "", token: 0 },
+          remote: { name: "remote", status: "idle", rows: [], error: null, loaded: false, reason: "", token: 0 },
+        },
+        selection: { status: "idle", row: null, text: "", frames: [], frameIndex: 0, frameCount: 0, token: 0, error: null, formula: "", atomCount: 0, clamped: null, emitted: false },
+      },
       ui: {},
     };
 
@@ -311,6 +372,7 @@
       var section = el(doc, "section", "acp-cfg-section");
       section.setAttribute("data-section", "structure");
       section.appendChild(i18nEl(doc, "h3", "acp-cfg-heading", "next.config.structure"));
+      section.appendChild(buildSourcePicker());
 
       var textarea = el(doc, "textarea", "acp-cfg-text");
       textarea.setAttribute("rows", "4");
@@ -700,14 +762,839 @@
       publishStructure();
     }
 
+    /* ── structure sources (A-13) + frames (A-14) + ref bridge (A-15) ────
+     *
+     * Three read-only origins, each backed by an existing endpoint:
+     *   history → GET /api/v1/structure-sources/recent
+     *             GET /api/v1/structure-sources/{source_id}           (text)
+     *   local   → GET /api/v1/jobs/{jobId}/structure-viewer          (catalog)
+     *             GET …/structure-viewer/entries/{entryId}/geometry  (text)
+     *   remote  → GET /api/v1/jobs/{jobId}/remote-files               (listing)
+     *             GET …/remote-files/{path}/preview?mode=structure   (text)
+     *
+     * The frame table is always derived from the ONE text response of the
+     * chosen source: selecting a frame never issues a second geometry request
+     * and never builds a second cache. Picking a source/frame only emits a
+     * canonical structureRef through the shell context/commands seam — this
+     * module never writes viewer DOM, never creates a viewer and never submits
+     * a task from this surface.
+     */
+
+    function taskJobId() {
+      var ref = state.snapshot && state.snapshot.taskRef;
+      if (ref && typeof ref.jobId === "string" && ref.jobId) return ref.jobId;
+      return "";
+    }
+
+    function encodePath(path) {
+      return String(path || "").split("/").map(encodeURIComponent).join("/");
+    }
+
+    function formatBytes(value) {
+      var n = Number(value);
+      if (!isFinite(n) || n < 0) return "";
+      if (n < 1024) return n + " B";
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+      return (n / (1024 * 1024)).toFixed(1) + " MB";
+    }
+
+    function formatEpoch(value) {
+      var n = Number(value);
+      if (!isFinite(n) || n <= 0) return "";
+      try {
+        return new Date(n > 1e12 ? n : n * 1000).toLocaleString();
+      } catch (e) {
+        return "";
+      }
+    }
+
+    function errorDetail(error) {
+      var body = error && error.body;
+      if (body && typeof body === "object" && typeof body.detail === "string") return body.detail;
+      return "";
+    }
+
+    /** Shared XYZ frame parser (view_model.js). No local second parser. */
+    function frameParser() {
+      var api = typeof window !== "undefined" && window.ACPView ? window.ACPView.model : null;
+      if (api && typeof api.parseXyzFrames === "function") return api;
+      return null;
+    }
+
+    /** Accept api-style pre-parsed bodies and raw text (transport returns
+     *  text for the non-JSON geometry endpoints). */
+    function sourceText(body) {
+      if (typeof body === "string") return body;
+      if (!body || typeof body !== "object") return "";
+      if (typeof body.content === "string") return body.content;
+      if (typeof body.xyz === "string") return body.xyz;
+      if (typeof body.text === "string") return body.text;
+      return "";
+    }
+
+    /** Validate + normalize to the frozen molecule-viewer structureRef shapes. */
+    function canonicalRef(ref) {
+      if (!ref || typeof ref !== "object") return null;
+      var kind = String(ref.kind || "");
+      if (SOURCE_CONTRACT_KINDS.indexOf(kind) < 0) return null;
+      var frameIndex = typeof ref.frameIndex === "number" && isFinite(ref.frameIndex) && ref.frameIndex >= 0
+        ? Math.floor(ref.frameIndex)
+        : 0;
+      if (kind === "inline-xyz") {
+        if (typeof ref.text !== "string" || !ref.text.trim()) return null;
+        return { kind: kind, text: ref.text, frameIndex: frameIndex };
+      }
+      if (typeof ref.jobId !== "string" || !ref.jobId) return null;
+      if (kind === "structure-entry") {
+        if (typeof ref.entryId !== "string" || !ref.entryId) return null;
+        return { kind: kind, jobId: ref.jobId, entryId: ref.entryId, frameIndex: frameIndex };
+      }
+      if (typeof ref.path !== "string" || !ref.path) return null;
+      return { kind: kind, jobId: ref.jobId, path: ref.path, frameIndex: frameIndex };
+    }
+
+    /**
+     * A-15 bridge: publish one canonical structureRef. Shell command first
+     * (it writes the workspace context AND delivers to the mounted viewer),
+     * plain context focus as the fallback host seam. Returns whether the ref
+     * left the module; never touches viewer DOM.
+     */
+    function emitStructureRef(ref) {
+      var canonical = canonicalRef(ref);
+      if (!canonical) return false;
+      var payload = { source: MODULE_ID };
+      Object.keys(canonical).forEach(function (key) { payload[key] = canonical[key]; });
+      if (commands && typeof commands.openStructure === "function") {
+        try {
+          commands.openStructure(payload);
+          return true;
+        } catch (e) { /* fall through to the plain context seam */ }
+      }
+      if (context && typeof context.setFocus === "function") {
+        try {
+          context.setFocus({ structureRef: canonical }, MODULE_ID);
+          return true;
+        } catch (e) {
+          return false;
+        }
+      }
+      return false;
+    }
+
     /** Hand the parsed geometry to the shared viewer (UI-05 assembly). */
     function publishStructure() {
-      if (!context || typeof context.setFocus !== "function") return;
       var xyz = state.asset && state.asset.xyz ? String(state.asset.xyz) : "";
       if (!xyz) return;
-      try {
-        context.setFocus({ structureRef: { kind: "inline-xyz", text: xyz } }, MODULE_ID);
-      } catch (e) { /* read-only host: the viewer simply keeps its own focus */ }
+      emitStructureRef({ kind: "inline-xyz", text: xyz });
+    }
+
+    function rowKind(row) {
+      if (!row) return "";
+      if (row.group === "local") return "structure-entry";
+      if (row.group === "remote") return "job-remote-file";
+      return row.remote ? "job-remote-file" : "job-file";
+    }
+
+    function baseRowState(row) {
+      if (!row) return "error";
+      if (row.group === "history") {
+        if (row.needsFetch) return "pending";
+        return row.remote ? "remote" : "ready";
+      }
+      return row.state === "error" && row.disabled ? "error" : "ready";
+    }
+
+    function rowRef(row, frameIndex) {
+      if (!row) return null;
+      if (row.group === "local") {
+        return canonicalRef({ kind: "structure-entry", jobId: row.jobId, entryId: row.entryId, frameIndex: frameIndex });
+      }
+      if (row.group === "remote") {
+        return canonicalRef({ kind: "job-remote-file", jobId: row.jobId, path: row.path, frameIndex: frameIndex });
+      }
+      return canonicalRef({
+        kind: row.remote ? "job-remote-file" : "job-file",
+        jobId: row.jobId,
+        path: row.path,
+        frameIndex: frameIndex,
+      });
+    }
+
+    function sourceRefLabel(row, frameIndex) {
+      if (!row) return "";
+      if (row.group === "local") return "structure-entry:" + row.jobId + ":entry:" + row.entryId + "#" + frameIndex;
+      return rowKind(row) + ":" + row.jobId + ":" + row.path + "#" + frameIndex;
+    }
+
+    /* ── source picker DOM ───────────────────────────────────────────── */
+
+    function buildSourcePicker() {
+      var details = el(doc, "details", "acp-cfg-sources");
+      details.setAttribute("data-role", "source-picker");
+      state.ui.sourcePicker = details;
+
+      var summary = el(doc, "summary", "acp-cfg-sources-summary", t("next.config.sources_title"));
+      summary.setAttribute("data-role", "source-summary");
+      summary.setAttribute("data-i18n", "next.config.sources_title");
+      details.appendChild(summary);
+      state.ui.sourceSummary = summary;
+      on(summary, "click", function () {
+        state.sources.ready = true;
+        ensureSourceGroup(state.sources.group);
+      });
+
+      var body = el(doc, "div", "acp-cfg-sources-body");
+      body.setAttribute("data-role", "source-panel");
+      body.setAttribute("data-acp-source-state", "idle");
+      details.appendChild(body);
+      state.ui.sourcePanel = body;
+
+      var tabs = el(doc, "div", "acp-cfg-source-tabs");
+      tabs.setAttribute("role", "tablist");
+      SOURCE_GROUPS.forEach(function (name) {
+        var button = el(doc, "button", "acp-cfg-source-tab" + (name === state.sources.group ? " is-active" : ""), t("next.config.sources_tab_" + name));
+        button.type = "button";
+        button.setAttribute("role", "tab");
+        button.setAttribute("data-source-tab", name);
+        button.setAttribute("data-i18n", "next.config.sources_tab_" + name);
+        button.setAttribute("aria-selected", name === state.sources.group ? "true" : "false");
+        on(button, "click", function () { selectSourceGroup(name); });
+        tabs.appendChild(button);
+      });
+      body.appendChild(tabs);
+      state.ui.sourceTabs = tabs;
+
+      var hint = el(doc, "p", "acp-cfg-note", t("next.config.sources_hint"));
+      hint.setAttribute("data-i18n", "next.config.sources_hint");
+      body.appendChild(hint);
+
+      var status = el(doc, "p", "acp-cfg-status");
+      status.setAttribute("data-role", "source-status");
+      status.setAttribute("aria-live", "polite");
+      body.appendChild(status);
+      state.ui.sourceStatus = status;
+
+      var list = el(doc, "ul", "acp-cfg-source-list");
+      list.setAttribute("data-role", "source-list");
+      body.appendChild(list);
+      state.ui.sourceList = list;
+
+      var frames = el(doc, "div", "acp-cfg-frames");
+      frames.setAttribute("data-role", "source-frames");
+      frames.hidden = true;
+      body.appendChild(frames);
+      state.ui.sourceFrames = frames;
+
+      var preview = el(doc, "p", "acp-cfg-source-preview");
+      preview.setAttribute("data-role", "source-preview");
+      preview.setAttribute("aria-live", "polite");
+      frames.appendChild(preview);
+      state.ui.sourcePreview = preview;
+
+      var frameRow = el(doc, "div", "acp-cfg-row");
+      var frameField = el(doc, "label", "acp-cfg-field");
+      frameField.appendChild(i18nEl(doc, "span", "acp-cfg-label", "next.config.frames_title"));
+      var select = el(doc, "select", "acp-cfg-select");
+      select.setAttribute("data-role", "frame-select");
+      frameField.appendChild(select);
+      on(select, "change", function () { selectFrame(Number(select.value)); });
+      frameRow.appendChild(frameField);
+      state.ui.frameSelect = select;
+
+      var count = el(doc, "span", "acp-cfg-frame-count");
+      count.setAttribute("data-role", "frame-count");
+      frameRow.appendChild(count);
+      state.ui.frameCount = count;
+
+      var prev = el(doc, "button", "acp-btn acp-btn--ghost", t("next.config.frames_prev"));
+      prev.type = "button";
+      prev.setAttribute("data-action", "frame-prev");
+      prev.setAttribute("data-i18n", "next.config.frames_prev");
+      on(prev, "click", function () {
+        var current = state.sources.selection ? state.sources.selection.frameIndex : 0;
+        selectFrame((Number(current) || 0) - 1);
+      });
+      frameRow.appendChild(prev);
+      state.ui.framePrev = prev;
+
+      var next = el(doc, "button", "acp-btn acp-btn--ghost", t("next.config.frames_next"));
+      next.type = "button";
+      next.setAttribute("data-action", "frame-next");
+      next.setAttribute("data-i18n", "next.config.frames_next");
+      on(next, "click", function () {
+        var current = state.sources.selection ? state.sources.selection.frameIndex : 0;
+        selectFrame((Number(current) || 0) + 1);
+      });
+      frameRow.appendChild(next);
+      state.ui.frameNext = next;
+
+      frames.appendChild(frameRow);
+      return details;
+    }
+
+    /* ── source loading (server-backed, no fixture rows) ─────────────── */
+
+    function sourceGuard(group, token, gen) {
+      return !state.disposed && state.mounted && state.generation === gen &&
+        state.sources.groups[group.name] === group && group.token === token;
+    }
+
+    function selectionGuard(token, gen) {
+      return !state.disposed && state.mounted && state.generation === gen &&
+        state.sources.selection.token === token;
+    }
+
+    function emptySelection() {
+      return {
+        status: "idle", row: null, text: "", frames: [], frameIndex: 0, frameCount: 0,
+        token: state.sources.selection.token + 1, error: null, formula: "", atomCount: 0,
+        clamped: null, emitted: false,
+      };
+    }
+
+    /** Reset a group in place: bump its token so an in-flight result is dropped. */
+    function resetSourceGroup(group) {
+      group.token += 1;
+      group.status = "idle";
+      group.rows = [];
+      group.error = null;
+      group.loaded = false;
+      group.reason = "";
+    }
+
+    function resetHistorySource() {
+      resetSourceGroup(state.sources.groups.history);
+      if (!state.sources.ready) return;
+      if (state.sources.group === "history") ensureSourceGroup("history");
+      else renderSourcePanel();
+    }
+
+    function resetTaskBoundSources() {
+      resetSourceGroup(state.sources.groups.local);
+      resetSourceGroup(state.sources.groups.remote);
+      var selection = state.sources.selection;
+      if (selection && selection.row && (selection.row.group === "local" || selection.row.group === "remote")) {
+        state.sources.selection = emptySelection();
+      }
+      if (!state.sources.ready) return;
+      renderSourcePanel();
+      if (state.sources.group === "local" || state.sources.group === "remote") {
+        ensureSourceGroup(state.sources.group);
+      }
+    }
+
+    function selectSourceGroup(name) {
+      if (SOURCE_GROUPS.indexOf(name) < 0) return;
+      state.sources.group = name;
+      renderSourcePanel();
+      ensureSourceGroup(name);
+    }
+
+    function ensureSourceGroup(name, force) {
+      var group = state.sources.groups[name];
+      if (!group) return;
+      state.sources.group = name;
+      if (!force && group.loaded) {
+        renderSourcePanel();
+        return;
+      }
+      if (group.status === "loading") {
+        renderSourcePanel();
+        return;
+      }
+      group.status = "loading";
+      group.rows = [];
+      group.error = null;
+      group.reason = "";
+      group.loaded = false;
+      group.token += 1;
+      var token = group.token;
+      var gen = state.generation;
+      renderSourcePanel();
+      if (!requestFn) {
+        group.status = "error";
+        group.loaded = true;
+        group.error = new Error("task-config: ACPClient.transport missing");
+        renderSourcePanel();
+        return;
+      }
+      var jobId = taskJobId();
+      if (name !== "history" && !jobId) {
+        group.status = "empty";
+        group.loaded = true;
+        group.reason = "next.config.sources_empty_no_task";
+        renderSourcePanel();
+        return;
+      }
+      var pending;
+      if (name === "history") pending = requestHistorySources();
+      else if (name === "local") pending = requestLocalSources(jobId);
+      else pending = requestRemoteSources(jobId);
+      pending.then(function (result) {
+        if (!sourceGuard(group, token, gen)) return;
+        group.rows = (result && result.rows) || [];
+        group.reason = (result && result.reason) || "";
+        group.status = result && result.status
+          ? result.status
+          : (group.rows.length ? "ready" : "empty");
+        group.error = null;
+        group.loaded = true;
+        renderSourcePanel();
+      }).catch(function (error) {
+        if (!sourceGuard(group, token, gen)) return;
+        group.status = "error";
+        group.error = error;
+        group.reason = "";
+        group.rows = [];
+        group.loaded = true;
+        renderSourcePanel();
+      });
+    }
+
+    function requestHistorySources() {
+      var query = "limit=" + SOURCE_LIMIT;
+      if (state.projectId) query += "&project_id=" + encodeURIComponent(state.projectId);
+      else query += "&all_projects=true";
+      return requestFn(API + "/structure-sources/recent?" + query, { method: "GET" }).then(function (body) {
+        var raw = body && Array.isArray(body.sources) ? body.sources : [];
+        var rows = [];
+        raw.forEach(function (item) {
+          var row = historyRow(item);
+          if (row) rows.push(row);
+        });
+        return { rows: rows, status: rows.length ? "ready" : "empty" };
+      });
+    }
+
+    function historyRow(raw) {
+      if (!raw || typeof raw !== "object" || !raw.source_id || !raw.job_id) return null;
+      var path = String(raw.path || "");
+      var remote = !!raw.remote;
+      var needsFetch = !!raw.needs_fetch;
+      var label = String(
+        raw.custom_name || raw.resolved_name || raw.label || raw.molecule_name ||
+        raw.job_name || raw.path || raw.source_id
+      );
+      var meta = [];
+      if (raw.workflow) meta.push(String(raw.workflow));
+      if (raw.formula) meta.push(String(raw.formula));
+      if (raw.job_status) meta.push(String(raw.job_status));
+      if (raw.completed_at) meta.push(String(raw.completed_at).slice(0, 10));
+      if (!path) meta.push(String(raw.source_id));
+      return {
+        id: "history:" + String(raw.source_id),
+        group: "history",
+        sourceId: String(raw.source_id),
+        jobId: String(raw.job_id),
+        path: path,
+        remote: remote,
+        needsFetch: needsFetch,
+        state: needsFetch ? "pending" : (remote ? "remote" : "ready"),
+        label: label,
+        meta: meta,
+        chip: needsFetch ? t("next.config.sources_pending") : (remote ? t("next.config.sources_remote_chip") : ""),
+        error: null,
+        formula: String(raw.formula || ""),
+        atomCount: Number(raw.atom_count || 0),
+      };
+    }
+
+    function requestLocalSources(jobId) {
+      return requestFn(API + "/jobs/" + encodeURIComponent(jobId) + "/structure-viewer", { method: "GET" }).then(function (body) {
+        if (!body || typeof body !== "object") return { rows: [], status: "empty" };
+        var warnings = Array.isArray(body.warnings) ? body.warnings.map(String) : [];
+        if (body.availability === "pending_fetch" || warnings.indexOf("pending_fetch") !== -1) {
+          return { rows: [], status: "empty", reason: "next.config.sources_pending_catalog" };
+        }
+        var groupLabels = {};
+        (Array.isArray(body.groups) ? body.groups : []).forEach(function (group) {
+          if (group && group.id) groupLabels[String(group.id)] = String(group.label || group.id);
+        });
+        var entries = Array.isArray(body.entries) ? body.entries : [];
+        var rows = [];
+        entries.forEach(function (entry) {
+          var row = localRow(entry, groupLabels, jobId);
+          if (row) rows.push(row);
+        });
+        return { rows: rows, status: rows.length ? "ready" : "empty" };
+      });
+    }
+
+    function localRow(entry, groupLabels, jobId) {
+      if (!entry || typeof entry !== "object" || !entry.id) return null;
+      var geometry = entry.geometry && typeof entry.geometry === "object" ? entry.geometry : {};
+      var hasGeometry = typeof geometry.endpoint === "string" && geometry.endpoint.length > 0;
+      var source = entry.source && typeof entry.source === "object" ? entry.source : {};
+      var meta = [];
+      if (entry.group_id && groupLabels[String(entry.group_id)]) meta.push(groupLabels[String(entry.group_id)]);
+      if (entry.role) meta.push(String(entry.role));
+      if (entry.status) meta.push(String(entry.status));
+      if (typeof source.frame_index === "number" && source.frame_index >= 0) {
+        meta.push(t("next.config.sources_source_frame", { index: Math.floor(source.frame_index) + 1 }));
+      }
+      if (entry.energy && typeof entry.energy.value === "number" && isFinite(entry.energy.value)) {
+        meta.push(entry.energy.value.toFixed(6) + " " + String(entry.energy.unit || "hartree"));
+      }
+      return {
+        id: "local:" + String(entry.id),
+        group: "local",
+        jobId: jobId,
+        entryId: String(entry.id),
+        label: String(entry.label || entry.id),
+        meta: meta,
+        state: hasGeometry ? "ready" : "error",
+        disabled: !hasGeometry,
+        chip: hasGeometry ? "" : t("next.config.sources_unavailable"),
+        error: hasGeometry ? null : t("next.config.sources_no_geometry"),
+        remote: false,
+        needsFetch: false,
+        formula: "",
+        atomCount: 0,
+      };
+    }
+
+    function requestRemoteSources(jobId) {
+      return requestFn(API + "/jobs/" + encodeURIComponent(jobId) + "/remote-files", { method: "GET" })
+        .then(function (body) {
+          var files = body && Array.isArray(body.files) ? body.files : [];
+          var rows = [];
+          files.forEach(function (item) {
+            var row = remoteRow(item, jobId);
+            if (row) rows.push(row);
+          });
+          return { rows: rows, status: rows.length ? "ready" : "empty" };
+        })
+        .catch(function (error) {
+          var status = error && error.status;
+          if (status === 400) {
+            return { rows: [], status: "empty", reason: "next.config.sources_remote_not_remote" };
+          }
+          if (status === 503) {
+            return { rows: [], status: "empty", reason: "next.config.sources_remote_disabled" };
+          }
+          throw error;
+        });
+    }
+
+    function remoteRow(item, jobId) {
+      if (!item || typeof item !== "object" || !item.name || item.is_dir) return null;
+      var name = String(item.name);
+      if (name.toLowerCase().slice(-4) !== ".xyz") return null;
+      var meta = [];
+      var size = formatBytes(item.size);
+      if (size) meta.push(size);
+      var modified = formatEpoch(item.mtime);
+      if (modified) meta.push(modified);
+      return {
+        id: "remote:" + name,
+        group: "remote",
+        jobId: jobId,
+        path: name,
+        label: name,
+        meta: meta,
+        state: "ready",
+        chip: "",
+        error: null,
+        remote: true,
+        needsFetch: false,
+        formula: "",
+        atomCount: 0,
+      };
+    }
+
+    /* ── selecting one source + its frames ───────────────────────────── */
+
+    function loadSourceText(row) {
+      if (row.group === "history") {
+        return requestFn(API + "/structure-sources/" + encodeURIComponent(row.sourceId), { method: "GET" })
+          .then(function (body) {
+            var structure = body && body.structure ? body.structure : null;
+            if (!structure || typeof structure.xyz !== "string") {
+              throw new Error(t("next.config.sources_no_text"));
+            }
+            return {
+              text: structure.xyz,
+              formula: String(structure.formula || row.formula || ""),
+              atomCount: Number(structure.atom_count || 0),
+            };
+          });
+      }
+      if (row.group === "local") {
+        return requestFn(
+          API + "/jobs/" + encodeURIComponent(row.jobId) + "/structure-viewer/entries/" +
+            encodeURIComponent(row.entryId) + "/geometry",
+          { method: "GET" }
+        ).then(function (body) {
+          return { text: sourceText(body), formula: "", atomCount: 0 };
+        });
+      }
+      return requestFn(
+        API + "/jobs/" + encodeURIComponent(row.jobId) + "/remote-files/" +
+          encodePath(row.path) + "/preview?mode=structure",
+        { method: "GET" }
+      ).then(function (body) {
+        return { text: sourceText(body), formula: "", atomCount: 0 };
+      });
+    }
+
+    function selectSource(row) {
+      if (!row || state.disposed) return;
+      if (row.disabled) return;
+      var gen = state.generation;
+      var previous = state.sources.selection;
+      var token = (previous ? previous.token : 0) + 1;
+      state.sources.selection = {
+        status: "loading", row: row, text: "", frames: [], frameIndex: 0, frameCount: 0,
+        token: token, error: null, formula: row.formula || "", atomCount: 0, clamped: null, emitted: false,
+      };
+      row.state = baseRowState(row);
+      row.error = null;
+      renderSourcePanel();
+      loadSourceText(row).then(function (result) {
+        if (!selectionGuard(token, gen)) return;
+        var text = String((result && result.text) || "");
+        if (!text.trim()) throw new Error(t("next.config.sources_no_text"));
+        var parser = frameParser();
+        if (!parser) throw new Error(t("next.config.sources_parser_missing"));
+        var frames = parser.parseXyzFrames(text);
+        if (!frames.length) throw new Error(t("next.config.sources_parse_error"));
+        state.sources.selection = {
+          status: "ready",
+          row: row,
+          text: text,
+          frames: frames,
+          frameIndex: 0,
+          frameCount: frames.length,
+          token: token,
+          error: null,
+          formula: String((result && result.formula) || row.formula || ""),
+          atomCount: Number((result && result.atomCount) || (frames[0].atoms ? frames[0].atoms.length : 0)),
+          clamped: null,
+          emitted: false,
+        };
+        row.state = baseRowState(row);
+        row.error = null;
+        renderSourcePanel();
+        publishFrameSelection(0);
+      }).catch(function (error) {
+        if (!selectionGuard(token, gen)) return;
+        row.state = "error";
+        row.error = describeError(error);
+        state.sources.selection = {
+          status: "error", row: row, text: "", frames: [], frameIndex: 0, frameCount: 0,
+          token: token, error: error, formula: "", atomCount: 0, clamped: null, emitted: false,
+        };
+        renderSourcePanel();
+      });
+    }
+
+    function selectFrame(index) {
+      var selection = state.sources.selection;
+      if (!selection || selection.status !== "ready" || !selection.frames.length) return;
+      var count = selection.frames.length;
+      var requested = Math.floor(Number(index));
+      if (!isFinite(requested)) requested = 0;
+      var clamped = requested < 0 ? 0 : (requested >= count ? count - 1 : requested);
+      selection.frameIndex = clamped;
+      selection.clamped = requested !== clamped ? { requested: requested, count: count } : null;
+      renderSourceSelection();
+      publishFrameSelection(clamped);
+    }
+
+    function publishFrameSelection(frameIndex) {
+      var selection = state.sources.selection;
+      if (!selection || selection.status !== "ready") return;
+      var ref = rowRef(selection.row, frameIndex);
+      var emitted = ref ? emitStructureRef(ref) : false;
+      selection.emitted = emitted;
+      if (state.ui.sourcePreview && state.ui.sourcePreview.setAttribute) {
+        state.ui.sourcePreview.setAttribute("data-acp-source-emitted", emitted ? "true" : "false");
+      }
+    }
+
+    /* ── source rendering ────────────────────────────────────────────── */
+
+    function renderSourcePanel() {
+      var panel = state.ui.sourcePanel;
+      if (!panel) return;
+      var name = state.sources.group;
+      var group = state.sources.groups[name] || state.sources.groups.history;
+      var stateName = group.status === "loading" ? "loading" : (group.status === "error" ? "error" : (group.rows.length ? "ready" : "empty"));
+      panel.setAttribute("data-acp-source-state", stateName);
+      renderSourceTabs();
+
+      var status = state.ui.sourceStatus;
+      if (status) {
+        empty(status);
+        status.hidden = false;
+        if (group.status === "loading") {
+          status.textContent = t("next.config.sources_loading");
+        } else if (group.status === "error") {
+          status.textContent = t("next.config.sources_error", { message: describeError(group.error) });
+          var retry = el(doc, "button", "acp-btn acp-btn--ghost", t("next.config.sources_retry"));
+          retry.type = "button";
+          retry.setAttribute("data-action", "source-retry");
+          retry.setAttribute("data-i18n", "next.config.sources_retry");
+          on(retry, "click", function () { ensureSourceGroup(name, true); });
+          status.appendChild(el(doc, "span", "", " "));
+          status.appendChild(retry);
+        } else {
+          status.hidden = true;
+        }
+      }
+
+      var list = state.ui.sourceList;
+      if (list) {
+        empty(list);
+        list.setAttribute("data-acp-source-state", stateName);
+        group.rows.forEach(function (row) {
+          list.appendChild(buildSourceRow(row));
+        });
+        if (!group.rows.length && group.status !== "loading" && group.status !== "error") {
+          list.appendChild(el(doc, "li", "acp-cfg-source-empty", sourceEmptyHint(name, group)));
+        }
+      }
+      renderSourceSelection();
+    }
+
+    function renderSourceTabs() {
+      var tabs = state.ui.sourceTabs;
+      if (!tabs) return;
+      (tabs.children || []).forEach(function (button) {
+        if (!button.getAttribute) return;
+        var name = button.getAttribute("data-source-tab");
+        var active = name === state.sources.group;
+        if (active) button.className = "acp-cfg-source-tab is-active";
+        else button.className = "acp-cfg-source-tab";
+        button.setAttribute("aria-selected", active ? "true" : "false");
+      });
+    }
+
+    function sourceEmptyHint(name, group) {
+      if (group.reason) return t(group.reason);
+      if (name === "history") return t("next.config.sources_empty_history");
+      if (name === "local") return t("next.config.sources_empty_local");
+      if (name === "remote") return t("next.config.sources_empty_remote");
+      return t("next.config.sources_idle");
+    }
+
+    function buildSourceRow(row) {
+      var li = el(doc, "li", "acp-cfg-source");
+      li.setAttribute("data-source-row", row.id);
+      li.setAttribute("data-acp-source-state", row.state === "error" ? "error" : (row.state === "pending" ? "pending" : "ready"));
+      var button = el(doc, "button", "acp-cfg-source-row");
+      button.type = "button";
+      button.setAttribute("data-source-id", row.id);
+      button.setAttribute("data-source-group", row.group);
+      if (row.disabled) button.disabled = true;
+      button.appendChild(el(doc, "span", "acp-cfg-source-label", row.label));
+      if (row.meta && row.meta.length) {
+        button.appendChild(el(doc, "span", "acp-cfg-source-meta", row.meta.join(" · ")));
+      }
+      var chipText = row.chip || "";
+      if (chipText) {
+        var chip = el(doc, "span", "acp-cfg-source-chip", chipText);
+        chip.setAttribute("data-acp-source-chip", row.state === "pending" ? "pending" : (row.state === "error" ? "error" : "ready"));
+        button.appendChild(chip);
+      }
+      on(button, "click", function () { selectSource(row); });
+      li.appendChild(button);
+      if (row.error) li.appendChild(el(doc, "p", "acp-cfg-source-error", t("next.config.sources_row_error", { message: row.error })));
+      return li;
+    }
+
+    function renderSourceSelection() {
+      var box = state.ui.sourceFrames;
+      var preview = state.ui.sourcePreview;
+      var select = state.ui.frameSelect;
+      var countEl = state.ui.frameCount;
+      if (!box || !preview || !select || !countEl) return;
+      var selection = state.sources.selection || { status: "idle" };
+      if (state.ui.framePrev) state.ui.framePrev.disabled = true;
+      if (state.ui.frameNext) state.ui.frameNext.disabled = true;
+      if (!selection.status || selection.status === "idle") {
+        box.hidden = true;
+        preview.textContent = "";
+        preview.setAttribute("data-acp-source-state", "idle");
+        if (preview.removeAttribute) {
+          preview.removeAttribute("data-acp-frame-index");
+          preview.removeAttribute("data-acp-frame-count");
+          preview.removeAttribute("data-acp-source-ref");
+          preview.removeAttribute("data-acp-source-kind");
+          preview.removeAttribute("data-acp-source-emitted");
+        }
+        empty(select);
+        select.disabled = true;
+        countEl.textContent = "";
+        return;
+      }
+      box.hidden = false;
+      if (selection.status === "loading") {
+        preview.textContent = t("next.config.sources_source_loading");
+        preview.setAttribute("data-acp-source-state", "loading");
+        empty(select);
+        select.disabled = true;
+        countEl.textContent = "";
+        return;
+      }
+      if (selection.status === "error") {
+        preview.textContent = t("next.config.sources_source_error", { message: describeError(selection.error) });
+        preview.setAttribute("data-acp-source-state", "error");
+        empty(select);
+        select.disabled = true;
+        countEl.textContent = "";
+        return;
+      }
+      var frames = selection.frames || [];
+      if (select.children.length !== frames.length) {
+        empty(select);
+        frames.forEach(function (frame, i) {
+          var label = t("next.config.frames_option", { index: i + 1 });
+          if (frame && typeof frame.energy === "number" && isFinite(frame.energy)) {
+            label += " · " + frame.energy.toFixed(6) + " Eh";
+          }
+          var option = el(doc, "option", "", label);
+          option.value = String(i);
+          select.appendChild(option);
+        });
+      }
+      select.disabled = frames.length <= 1;
+      select.value = String(selection.frameIndex);
+      if (state.ui.framePrev) state.ui.framePrev.disabled = selection.frameIndex <= 0;
+      if (state.ui.frameNext) state.ui.frameNext.disabled = selection.frameIndex >= frames.length - 1;
+      countEl.textContent = t("next.config.frames_count", { count: frames.length });
+      preview.setAttribute("data-acp-source-state", "ready");
+      preview.setAttribute("data-acp-frame-index", String(selection.frameIndex));
+      preview.setAttribute("data-acp-frame-count", String(frames.length));
+      preview.setAttribute("data-acp-source-kind", rowKind(selection.row));
+      preview.setAttribute("data-acp-source-ref", sourceRefLabel(selection.row, selection.frameIndex));
+      preview.setAttribute("data-acp-source-emitted", selection.emitted ? "true" : "false");
+      preview.textContent = frameIdentity(selection);
+    }
+
+    function frameIdentity(selection) {
+      var row = selection.row || {};
+      var count = selection.frames.length;
+      var index = selection.frameIndex + 1;
+      var text;
+      if (row.group === "local") {
+        text = t("next.config.frame_identity_entry", {
+          index: index, count: count, kind: rowKind(row), jobId: row.jobId, entryId: row.entryId,
+        });
+      } else {
+        text = t("next.config.frame_identity", {
+          index: index, count: count, kind: rowKind(row), jobId: row.jobId, path: row.path,
+        });
+      }
+      if (selection.formula) text += " · " + selection.formula;
+      if (selection.atomCount) text += " · " + t("next.config.sources_atoms", { count: selection.atomCount });
+      if (selection.clamped) {
+        text += " · " + t("next.config.sources_clamped", {
+          requested: selection.clamped.requested + 1,
+          count: selection.clamped.count,
+        });
+      }
+      return text;
     }
 
     /* ── validation + preflight ──────────────────────────────────────── */
@@ -1158,6 +2045,7 @@
       renderProfileOptions();
       renderMethodValues();
       renderStructure();
+      renderSourcePanel();
       renderStateInputs();
       renderReview();
       renderValidation();
@@ -1572,10 +2460,16 @@
     function applySnapshot(snapshot) {
       state.snapshot = snapshot || null;
       var projectId = snapshot && snapshot.projectId ? String(snapshot.projectId) : "";
-      var changed = projectId !== state.projectId;
+      var projectChanged = projectId !== state.projectId;
       state.projectId = projectId;
-      if (changed && !state.catalogLoading && state.methodCatalog) {
+      if (projectChanged && !state.catalogLoading && state.methodCatalog) {
         loadDraftPointer().then(renderBanner);
+      }
+      if (projectChanged) resetHistorySource();
+      var jobId = taskJobId();
+      if (jobId !== state.sources.taskKey) {
+        state.sources.taskKey = jobId;
+        resetTaskBoundSources();
       }
       var ref = snapshot && snapshot.structureRef;
       if (ref && ref.kind === "inline-xyz" && ref.text && state.parseStatus !== "ok") {
@@ -1635,6 +2529,19 @@
       listenerCleanup.splice(0).forEach(function (fn) {
         try { fn(); } catch (e) { /* listener already gone */ }
       });
+      SOURCE_GROUPS.forEach(function (name) {
+        var group = state.sources.groups[name];
+        group.token += 1;
+        group.status = "idle";
+        group.rows = [];
+        group.error = null;
+        group.loaded = false;
+        group.reason = "";
+      });
+      state.sources.selection.token += 1;
+      state.sources.selection = emptySelection();
+      state.sources.ready = false;
+      state.sources.taskKey = "";
       if (state.host && typeof state.host.replaceChildren === "function") {
         try { state.host.replaceChildren(); } catch (e) { /* host gone */ }
       }

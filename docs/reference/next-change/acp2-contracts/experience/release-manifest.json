@@ -83,10 +83,10 @@
   "schema": "acp2.experience.release-manifest.v1",
   "schema_version": "1.0.0",
   "static_assets": {
-    "bytes": 4019596,
-    "digest": "fb4a4a780b7ddb24176800c9a0b2c2997425494a84190ce4d743f37797884d06",
-    "files": 107,
-    "note": "regenerated after the W-05 locality-neutral frontend copy update; module_tests are Node-only doubles and are excluded from shipped assets",
+    "bytes": 15239258,
+    "digest": "56b7dfc26f663788e2dff7af48aac85ef6a363ed8ae49809f804c889666d3c40",
+    "files": 243,
+    "note": "Regenerated from the merged LF frontend worktree after the W-05 copy update and the 2026-11-04 native DSH docking repair; module_tests remain excluded from shipped assets, and no installed-wheel or scientific-chain acceptance is implied.",
     "release_id": "acp2-experience-0.3.0"
   },
   "task_id": "M5-01",

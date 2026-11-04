@@ -1,0 +1,42 @@
+{
+  "name": "@acp/dsh-panels",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DSH host half for the ACP workbench panels: same-origin API proxy, committed asset bundle, focus bridge store.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "exports": {
+    ".": "./src/index.js",
+    "./client": "./client/client.js",
+    "./client/mount": "./client/mount.js",
+    "./assets/*": "./assets/*"
+  },
+  "files": [
+    "src",
+    "client",
+    "assets",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": []
+    }
+  },
+  "engines": {
+    "node": ">=24",
+    "dsh": ">=0.2.1-rc.5 <0.3.0-0"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "node scripts/build.mjs --check",
+    "test": "node --test \"test/*.test.mjs\"",
+    "test:browser": "node test/browser-smoke.mjs"
+  }
+}

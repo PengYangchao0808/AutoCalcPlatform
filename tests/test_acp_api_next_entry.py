@@ -38,9 +38,17 @@ def test_next_index_served(client: TestClient) -> None:
         r = client.get(path)
         assert r.status_code == 200, f"{path} -> {r.status_code}"
         assert "text/html" in r.headers["content-type"]
+        # The entry HTML must never be heuristically cached: otherwise a
+        # rebuilt shell keeps booting the previous DOM after a normal reload.
+        cache = r.headers["cache-control"].lower()
+        assert "no-cache" in cache and "no-store" in cache
+        assert r.headers["pragma"] == "no-cache"
+        assert r.headers["expires"] == "0"
     body = client.get("/next/").text
     assert "ACP Next" in body
     assert 'id="acp-next-root"' in body
+    # The classic entry stays revalidated too (same shell, same stale risk).
+    assert "no-store" in client.get("/").headers["cache-control"].lower()
 
 
 def test_next_identity_exempt_parity_with_root(client: TestClient) -> None:

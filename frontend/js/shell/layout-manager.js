@@ -15,6 +15,11 @@
  *     retry that invalidates the loader cache);
  *   - workspace switching (tabs, Alt+1/2/3, roving tabindex, focus restore),
  *     focus chip rendering, follow-focus dot pulses, document.title suffix;
+ *   - A-63 keyboard accessibility: skip link retargeted to the active
+ *     workspace, tablist ARIA + arrow/Enter/Space activation, a documented
+ *     focus-order walk (workspace tabs → panel titles → panel content) with
+ *     `data-acp-focus-*` metadata and a polite live region, and the Escape
+ *     ladder (panel body → panel title → workspace tab);
  *   - viewer SINGLE active instance: recipes share instanceId `shared-viewer`
  *     and the live panel element is MOVED between slots — no remount, no
  *     flash (design §3.1).
@@ -26,11 +31,16 @@ window.ACPShell = window.ACPShell || {};
 ACPShell.layout = (function () {
   "use strict";
 
-  var WORKSPACE_IDS = ["research", "molecular", "execution"];
+  var WORKSPACE_IDS = ["research", "drawing", "molecular", "config", "execution", "files"];
   var SLOT_IDS = ["main", "side", "bottom"];
   var COLLAPSE_KEY = "acp-next-collapse";
 
-  var deps = { context: null, loader: null, registry: null, i18n: null };
+  // A-63 focus-order walk: panels are stepped in slot order, so the keyboard
+  // route always reads main → side → bottom, matching the visual grid.
+  var SLOT_RANK = { main: 0, side: 1, bottom: 2 };
+  var FOCUSABLE_TAGS = { A: true, BUTTON: true, SELECT: true, INPUT: true, TEXTAREA: true };
+
+  var deps = { context: null, loader: null, registry: null, i18n: null, request: null };
   var panels = Object.create(null);        // instanceId -> record
   var workspaceEls = Object.create(null);  // wsId -> section el
   var slotEls = Object.create(null);       // wsId -> { main, side, bottom }
@@ -42,12 +52,28 @@ ACPShell.layout = (function () {
   var mainEl = null;
   var fatalEl = null;
   var focusChipEl = null;
+  var skipLinkEl = null;
+  var liveEl = null;
   var contextUnsub = null;
   var started = false;
 
   // ── small DOM helpers (stub-friendly: no innerHTML, no closest) ──
 
-  function doc() { return window.document; }
+  function doc() { return ACPShell.env ? ACPShell.env.doc() : window.document; }
+
+  // Host seam (js/shell/host-env.js): an embedding host may namespace storage
+  // and own documentElement/title. Without it these are today's exact calls.
+  function storageGet(key) {
+    if (ACPShell.env) return ACPShell.env.storage.get(key);
+    try { return window.localStorage && window.localStorage.getItem(key); } catch (e) { return null; }
+  }
+  function storageSet(key, value) {
+    if (ACPShell.env) { ACPShell.env.storage.set(key, value); return; }
+    try {
+      window.localStorage && window.localStorage.setItem(key, value);
+    } catch (e) { /* storage unavailable — session-only state */ }
+  }
+  function titleControlled() { return !ACPShell.env || ACPShell.env.isDomControlled(); }
 
   function el(tag, attrs) {
     var node = doc().createElement(tag);
@@ -93,11 +119,201 @@ ACPShell.layout = (function () {
     return !!(wsEl && !wsEl.hidden);
   }
 
+  // ── A-63 focus utilities (stub-friendly: no closest, no complex selectors) ──
+
+  function focusNode(node) {
+    if (!node || typeof node.focus !== "function") return false;
+    try { node.focus(); return true; } catch (e) { return false; }
+  }
+
+  function isTabbable(node) {
+    if (!node || typeof node.tagName !== "string") return false;
+    // Skip anything inside a closed drawer / hidden workspace ancestor.
+    var cur = node;
+    var guard = 0;
+    while (cur && guard < 400) {
+      if (cur.hidden) return false;
+      cur = cur.parentNode;
+      guard += 1;
+    }
+    var tag = node.tagName.toUpperCase();
+    if (typeof node.getAttribute === "function" && node.getAttribute("disabled") != null) return false;
+    var explicit = typeof node.getAttribute === "function" ? node.getAttribute("tabindex") : null;
+    if (explicit != null) {
+      var index = Number(explicit);
+      return Number.isFinite(index) && index >= 0;
+    }
+    if (!FOCUSABLE_TAGS[tag]) return false;
+    if (tag === "A" && (!node.getAttribute || node.getAttribute("href") == null)) return false;
+    return true;
+  }
+
+  /** Depth-first walk collecting tabbable descendants (body/content stepping). */
+  function collectTabbable(root) {
+    var out = [];
+    if (!root) return out;
+    (function walk(node) {
+      var children = node.children || [];
+      for (var i = 0; i < children.length; i++) {
+        var child = children[i];
+        if (isTabbable(child)) out.push(child);
+        walk(child);
+      }
+    })(root);
+    return out;
+  }
+
+  function tabFor(wsId) {
+    return tabEls[wsId] || null;
+  }
+
+  function focusWorkspaceTab(wsId) {
+    return focusNode(tabFor(wsId || currentWorkspace));
+  }
+
+  /** Visible panels of a workspace in the A-63 walk order (main → side → bottom). */
+  function panelRecordsForWorkspace(wsId) {
+    var records = [];
+    Object.keys(panels).forEach(function (id) {
+      var record = panels[id];
+      if (!record || record.disposed) return;
+      if (record.workspaceId !== wsId || record.layoutHidden) return;
+      records.push(record);
+    });
+    records.sort(function (a, b) {
+      var delta = (SLOT_RANK[a.slot] || 0) - (SLOT_RANK[b.slot] || 0);
+      if (delta !== 0) return delta;
+      return a.instanceId < b.instanceId ? -1 : a.instanceId > b.instanceId ? 1 : 0;
+    });
+    return records;
+  }
+
+  /**
+   * A-63 focus-order contract. The walk is: the current-view menu items (menu
+   * order) followed by, for each visible panel in slot order, the panel title
+   * and then the panel content anchor. `step` is the global index used by the
+   * `data-acp-focus-step` DOM metadata.
+   */
+  function focusOrder(wsId) {
+    wsId = wsId || currentWorkspace;
+    var steps = [];
+    WORKSPACE_IDS.forEach(function (id, index) {
+      steps.push({ kind: "view", step: index, workspaceId: id, id: "acp-tab-" + id });
+    });
+    var step = WORKSPACE_IDS.length;
+    panelRecordsForWorkspace(wsId).forEach(function (record) {
+      steps.push({ kind: "panel-title", step: step, instanceId: record.instanceId, slot: record.slot });
+      step += 1;
+      steps.push({ kind: "panel-content", step: step, instanceId: record.instanceId, slot: record.slot });
+      step += 1;
+    });
+    return {
+      workspaceId: wsId,
+      steps: steps,
+      order: steps.map(function (item) {
+        return item.kind + ":" + (item.instanceId || item.workspaceId);
+      })
+    };
+  }
+
+  /**
+   * Write the focus-order metadata onto the DOM so assistive tech / tests can
+   * read the walk without calling the JS API. Steps are workspace-scoped (only
+   * the active workspace is walkable; hidden workspaces keep their last values)
+   * and stale steps of panels that left the recipe are cleared.
+   */
+  function syncFocusOrder(wsId) {
+    wsId = wsId || currentWorkspace;
+    WORKSPACE_IDS.forEach(function (id, index) {
+      var tab = tabEls[id];
+      if (!tab || typeof tab.setAttribute !== "function") return;
+      tab.setAttribute("data-acp-focus-step", String(index));
+      tab.setAttribute("data-acp-focus-kind", "view");
+      tab.setAttribute("aria-keyshortcuts", "Alt+" + (index + 1));
+    });
+    var records = panelRecordsForWorkspace(wsId);
+    var step = WORKSPACE_IDS.length;
+    var sequence = [];
+    records.forEach(function (record) {
+      if (record.titleEl && typeof record.titleEl.setAttribute === "function") {
+        record.titleEl.setAttribute("data-acp-focus-step", String(step));
+        record.titleEl.setAttribute("data-acp-focus-kind", "panel-title");
+      }
+      step += 1;
+      if (record.bodyEl && typeof record.bodyEl.setAttribute === "function") {
+        record.bodyEl.setAttribute("data-acp-focus-step", String(step));
+        record.bodyEl.setAttribute("data-acp-focus-kind", "panel-content");
+      }
+      step += 1;
+      sequence.push(record.slot + ":" + record.instanceId);
+    });
+    Object.keys(panels).forEach(function (id) {
+      var record = panels[id];
+      if (!record || record.disposed || record.workspaceId !== wsId) return;
+      if (records.indexOf(record) >= 0) return;
+      [record.titleEl, record.bodyEl].forEach(function (node) {
+        if (node && typeof node.removeAttribute === "function") node.removeAttribute("data-acp-focus-step");
+      });
+    });
+    var wsEl = workspaceEls[wsId];
+    if (wsEl && typeof wsEl.setAttribute === "function") {
+      wsEl.setAttribute("data-acp-focus-sequence", sequence.join(","));
+    }
+    return focusOrder(wsId);
+  }
+
+  /** Move focus into the panel content: first tabbable descendant, else the body. */
+  function focusPanelContent(instanceId) {
+    var record = panels[instanceId];
+    if (!record || record.disposed) return false;
+    var tabbables = collectTabbable(record.bodyEl);
+    return focusNode(tabbables[0] || record.bodyEl);
+  }
+
+  function focusFirstPanelTitle(wsId) {
+    var records = panelRecordsForWorkspace(wsId || currentWorkspace);
+    for (var i = 0; i < records.length; i++) {
+      if (focusNode(records[i].titleEl)) return true;
+    }
+    return focusNode(workspaceEls[wsId || currentWorkspace]);
+  }
+
+  function focusPreviousStep(record) {
+    var records = panelRecordsForWorkspace(record.workspaceId);
+    var index = records.indexOf(record);
+    if (index > 0) return focusNode(records[index - 1].titleEl);
+    return focusWorkspaceTab(record.workspaceId);
+  }
+
+  function syncSkipLink() {
+    if (!skipLinkEl || typeof skipLinkEl.setAttribute !== "function") return;
+    skipLinkEl.setAttribute("href", "#acp-ws-" + currentWorkspace);
+    skipLinkEl.setAttribute("data-acp-skip-target", "acp-ws-" + currentWorkspace);
+  }
+
+  function ensureLiveRegion() {
+    if (!shellRoot || liveEl) return;
+    liveEl = el("div", {
+      "class": "acp-visually-hidden",
+      "id": "acp-shell-live",
+      "role": "status",
+      "aria-live": "polite",
+      "aria-atomic": "true",
+      "data-acp-live": "workspace"
+    });
+    shellRoot.appendChild(liveEl);
+  }
+
+  function announceWorkspace(wsId) {
+    if (!liveEl) return;
+    liveEl.textContent = t("shell.workspace." + wsId);
+  }
+
   // ── collapse persistence ──
 
   function readCollapse() {
     try {
-      var raw = window.localStorage && window.localStorage.getItem(COLLAPSE_KEY);
+      var raw = storageGet(COLLAPSE_KEY);
       var parsed = raw ? JSON.parse(raw) : null;
       return parsed && typeof parsed === "object" ? parsed : {};
     } catch (e) {
@@ -107,7 +323,7 @@ ACPShell.layout = (function () {
 
   function writeCollapse(state) {
     try {
-      window.localStorage && window.localStorage.setItem(COLLAPSE_KEY, JSON.stringify(state));
+      storageSet(COLLAPSE_KEY, JSON.stringify(state));
     } catch (e) { /* storage unavailable — session-only collapse */ }
   }
 
@@ -148,6 +364,7 @@ ACPShell.layout = (function () {
       "data-instance-id": record.instanceId,
       "data-module-id": record.moduleId,
       "data-slot": record.slot,
+      "data-acp-landmark": "panel",
       "data-acp-state": "loading",
       "data-acp-generation": "0"
     });
@@ -159,10 +376,13 @@ ACPShell.layout = (function () {
       "data-i18n-title": "shell.panel.follow_focus",
       "title": t("shell.panel.follow_focus")
     });
+    // A-63: the title is the panel's accessible name AND a focusable heading —
+    // it is the "panel title" stop of the tabs → titles → content walk.
     var title = el("h2", {
       "class": "acp-panel-title",
       "id": "acp-panel-" + record.instanceId + "-title",
-      "tabindex": "-1",
+      "tabindex": "0",
+      "data-acp-focus-kind": "panel-title",
       "data-i18n": record.spec.titleKey || ""
     });
     title.textContent = t(record.spec.titleKey || record.moduleId);
@@ -226,10 +446,16 @@ ACPShell.layout = (function () {
     head.appendChild(group);
     head.appendChild(right);
 
-    var body = el("div", { "class": "acp-panel-body" + (record.spec.flush ? " is-flush" : "") });
+    var body = el("div", {
+      "class": "acp-panel-body" + (record.spec.flush ? " is-flush" : ""),
+      "tabindex": "-1",
+      "data-acp-focus-kind": "panel-content"
+    });
 
     section.appendChild(head);
     section.appendChild(body);
+
+    bindPanelKeys(record, title, body);
 
     record.el = section;
     record.headEl = head;
@@ -238,6 +464,47 @@ ACPShell.layout = (function () {
     record.statusEl = status;
     record.bodyEl = body;
     return section;
+  }
+
+  /**
+   * A-63 Escape ladder + content stepping, scoped to the panel itself so the
+   * shell never steals Escape from module controls inside the body:
+   *   title: ↓/→/Enter/Space → panel content, ↑/← → previous panel, Esc → tab
+   *   body:  Esc (only when the body itself is focused) → panel title
+   */
+  function bindPanelKeys(record, title, body) {
+    function stop(event) {
+      if (!event) return;
+      if (typeof event.preventDefault === "function") event.preventDefault();
+      if (typeof event.stopPropagation === "function") event.stopPropagation();
+    }
+    if (title && title.addEventListener) {
+      title.addEventListener("keydown", function (event) {
+        var key = event && event.key;
+        if (key === "Escape") {
+          stop(event);
+          focusWorkspaceTab(record.workspaceId);
+          return;
+        }
+        if (key === "ArrowDown" || key === "ArrowRight" || key === "Enter" || key === " " || key === "Spacebar") {
+          stop(event);
+          focusPanelContent(record.instanceId);
+          return;
+        }
+        if (key === "ArrowUp" || key === "ArrowLeft") {
+          stop(event);
+          focusPreviousStep(record);
+        }
+      });
+    }
+    if (body && body.addEventListener) {
+      body.addEventListener("keydown", function (event) {
+        if (!event || event.key !== "Escape") return;
+        if (doc().activeElement !== body) return;
+        stop(event);
+        focusNode(record.titleEl);
+      });
+    }
   }
 
   function removeRail(slot) {
@@ -430,6 +697,7 @@ ACPShell.layout = (function () {
       workspaceId: record.workspaceId,
       context: deps.context,
       i18n: deps.i18n,
+      request: deps.request,
       commands: window.ACPShell.commands || null,
       panel: {
         setState: function (state, detail) { setPanelState(record, state, detail); },
@@ -630,8 +898,9 @@ ACPShell.layout = (function () {
   /**
    * applyRecipe(recipeId): render/migrate panels of the recipe then show its
    * workspace. Idempotent — re-applying never duplicates instances.
+   * opts.focus = "tab" | "none" is forwarded to showWorkspace (A-63).
    */
-  function applyRecipe(recipeId) {
+  function applyRecipe(recipeId, opts) {
     var recipe = window.ACPShell.recipes.get(recipeId);
     if (!recipe) return { ok: false, error: "unknown recipe: " + recipeId };
     var wanted = recipe.panels.map(function (p) { return p.instanceId; });
@@ -664,13 +933,22 @@ ACPShell.layout = (function () {
     recipe.panels.forEach(function (spec) { ensurePanel(recipe, spec); });
     recipe.panels.forEach(function (spec) { if (spec.slot !== "main") buildRail(panels[spec.instanceId]); });
     recipeByWorkspace[recipe.workspaceId] = recipe.id;
-    showWorkspace(recipe.workspaceId);
+    syncFocusOrder(recipe.workspaceId);
+    showWorkspace(recipe.workspaceId, opts);
     return { ok: true, recipeId: recipe.id, workspaceId: recipe.workspaceId };
   }
 
   // ── workspace switching ──
 
-  function showWorkspace(wsId) {
+  /**
+   * showWorkspace(wsId, opts).
+   * opts.focus: "tab" keeps focus on the activated tab (mouse/Enter/Space tab
+   * activation must not be stolen by focus restoration), "none" leaves focus
+   * alone (command navigation focuses its own target), otherwise the remembered
+   * element / main panel title is restored (design §5.1 focus restore).
+   */
+  function showWorkspace(wsId, opts) {
+    opts = opts || {};
     if (WORKSPACE_IDS.indexOf(wsId) < 0) return;
     var prev = currentWorkspace;
     if (prev !== wsId) {
@@ -704,14 +982,21 @@ ACPShell.layout = (function () {
       var activeTab = id === wsId;
       if (activeTab) tab.classList.add("is-active");
       else tab.classList.remove("is-active");
-      tab.setAttribute("aria-selected", activeTab ? "true" : "false");
+      tab.setAttribute("aria-checked", activeTab ? "true" : "false");
+      if (activeTab) tab.setAttribute("aria-current", "page"); else tab.removeAttribute("aria-current");
       tab.setAttribute("tabindex", activeTab ? "0" : "-1");
     });
     currentWorkspace = wsId;
+    syncSkipLink();
+    syncFocusOrder(wsId);
+    announceWorkspace(wsId);
     if (window.ACPShell.preferences) ACPShell.preferences.setActive(wsId);
+    if (window.ACPShell.topbar && ACPShell.topbar.syncView) ACPShell.topbar.syncView(wsId);
+    if (window.ACPShell.globalRegions && ACPShell.globalRegions.setFilesView) ACPShell.globalRegions.setFilesView(wsId === "files");
     if (shellRoot) shellRoot.setAttribute("data-workspace", wsId);
-    document.title = t("shell.app.title") + " · " + t("shell.workspace." + wsId);
-    restoreFocus(wsId);
+    if (titleControlled()) document.title = t("shell.app.title") + " · " + t("shell.workspace." + wsId);
+    if (opts.focus === "tab") focusWorkspaceTab(wsId);
+    else if (opts.focus !== "none") restoreFocus(wsId);
   }
 
   function isDescendant(node, ancestor) {
@@ -748,16 +1033,18 @@ ACPShell.layout = (function () {
   function switchWorkspace(wsId, opts) {
     opts = opts || {};
     var recipeId = opts.recipeId || recipeByWorkspace[wsId] || wsId;
-    if (window.ACPShell.recipes.get(recipeId)) applyRecipe(recipeId);
-    else showWorkspace(wsId);
+    // A-63: tab activation keeps focus on the tab; command navigation lands on
+    // its explicit focusTarget; shortcut/back-navigation restores focus.
+    var focusPolicy = opts.focusTarget ? "none" : (opts.source === "tab" ? "tab" : null);
+    var recipeOpts = focusPolicy ? { focus: focusPolicy } : undefined;
+    if (window.ACPShell.recipes.get(recipeId)) applyRecipe(recipeId, recipeOpts);
+    else showWorkspace(wsId, recipeOpts);
     if (opts.focusTarget) focusPanel(opts.focusTarget);
   }
 
   function focusPanel(instanceId) {
     var record = panels[instanceId];
-    if (record && record.titleEl && typeof record.titleEl.focus === "function") {
-      try { record.titleEl.focus(); } catch (e) { /* ignore */ }
-    }
+    if (record && record.titleEl) focusNode(record.titleEl);
   }
 
   /** Panel lookup for commands: prefer current workspace, match binds OR provides. */
@@ -890,7 +1177,7 @@ ACPShell.layout = (function () {
   function onKeydown(event) {
     if (!event) return;
     if (event.altKey && !event.ctrlKey && !event.metaKey) {
-      var idx = { "1": 0, "2": 1, "3": 2 }[String(event.key)];
+      var idx = { "1": 0, "2": 1, "3": 2, "4": 3, "5": 4, "6": 5 }[String(event.key)];
       if (idx != null && WORKSPACE_IDS[idx]) {
         if (typeof event.preventDefault === "function") event.preventDefault();
         switchWorkspace(WORKSPACE_IDS[idx]);
@@ -899,25 +1186,36 @@ ACPShell.layout = (function () {
     }
   }
 
+  /** A-63: Enter/Space activate a tab even when the host is not a <button>. */
+  function isActivationKey(key) {
+    return key === "Enter" || key === " " || key === "Spacebar";
+  }
+
   function bindTabKeys() {
     WORKSPACE_IDS.forEach(function (wsId, index) {
       var tab = tabEls[wsId];
       if (!tab || !tab.addEventListener) return;
       tab.addEventListener("keydown", function (event) {
         var key = event && event.key;
+        var stop = function () {
+          if (typeof event.preventDefault === "function") event.preventDefault();
+          if (typeof event.stopPropagation === "function") event.stopPropagation();
+        };
+        if (isActivationKey(key)) {
+          stop();
+          switchWorkspace(wsId, { source: "tab" });
+          return;
+        }
         var next = null;
         if (key === "ArrowRight" || key === "ArrowDown") next = (index + 1) % WORKSPACE_IDS.length;
         else if (key === "ArrowLeft" || key === "ArrowUp") next = (index - 1 + WORKSPACE_IDS.length) % WORKSPACE_IDS.length;
         else if (key === "Home") next = 0;
         else if (key === "End") next = WORKSPACE_IDS.length - 1;
         if (next == null) return;
-        if (typeof event.preventDefault === "function") event.preventDefault();
+        stop();
         var targetWs = WORKSPACE_IDS[next];
-        switchWorkspace(targetWs);
-        var targetTab = tabEls[targetWs];
-        if (targetTab && typeof targetTab.focus === "function") {
-          try { targetTab.focus(); } catch (e) { /* ignore */ }
-        }
+        switchWorkspace(targetWs, { source: "tab" });
+        focusWorkspaceTab(targetWs);
       });
     });
   }
@@ -926,15 +1224,78 @@ ACPShell.layout = (function () {
     WORKSPACE_IDS.forEach(function (wsId) {
       var tab = tabEls[wsId];
       if (!tab || !tab.addEventListener) return;
-      tab.addEventListener("click", function () { switchWorkspace(wsId); });
+      tab.addEventListener("click", function () { switchWorkspace(wsId, { source: "tab" }); });
     });
+  }
+
+  /** A-63: Escape/ArrowDown on the workspace landmark (skip-link landing). Only
+   *  the landmark itself is handled — module controls keep their own keys. */
+  function bindWorkspaceKeys() {
+    WORKSPACE_IDS.forEach(function (wsId) {
+      var section = workspaceEls[wsId];
+      if (!section || !section.addEventListener) return;
+      section.addEventListener("keydown", function (event) {
+        if (!event || event.defaultPrevented) return;
+        var target = event.target || null;
+        if (target && target !== section) return;
+        if (event.key === "ArrowDown") {
+          if (typeof event.preventDefault === "function") event.preventDefault();
+          if (typeof event.stopPropagation === "function") event.stopPropagation();
+          focusFirstPanelTitle(wsId);
+          return;
+        }
+        if (event.key === "Escape") {
+          if (typeof event.preventDefault === "function") event.preventDefault();
+          focusWorkspaceTab(wsId);
+        }
+      });
+    });
+  }
+
+  /** A-63: the skip link always lands on the ACTIVE workspace landmark. */
+  function bindSkipLink() {
+    skipLinkEl = doc().getElementById("acp-skip-link");
+    if (!skipLinkEl || !skipLinkEl.addEventListener) return;
+    skipLinkEl.addEventListener("click", function (event) {
+      var target = workspaceEls[currentWorkspace];
+      if (!target) return;
+      if (event && typeof event.preventDefault === "function") event.preventDefault();
+      if (typeof target.getAttribute === "function" && target.getAttribute("tabindex") == null) {
+        target.setAttribute("tabindex", "0");
+      }
+      focusNode(target);
+    });
+  }
+
+  /** A-63: the tablist/tabpanel wiring is asserted from the DOM, not left implicit. */
+  function bindAria() {
+    WORKSPACE_IDS.forEach(function (wsId, index) {
+      var tab = tabEls[wsId];
+      var section = workspaceEls[wsId];
+      if (tab && typeof tab.setAttribute === "function") {
+        tab.setAttribute("role", "menuitemradio");
+        tab.setAttribute("aria-controls", "acp-ws-" + wsId);
+        tab.setAttribute("aria-keyshortcuts", "Alt+" + (index + 1));
+        tab.setAttribute("aria-checked", tab.getAttribute("aria-checked") == null ? "false" : tab.getAttribute("aria-checked"));
+        tab.setAttribute("data-acp-focus-kind", "view");
+      }
+      if (section && typeof section.setAttribute === "function") {
+        section.setAttribute("role", "region");
+        section.setAttribute("aria-labelledby", "acp-tab-" + wsId);
+        section.setAttribute("data-acp-landmark", "workspace");
+      }
+    });
+    var tablist = doc().querySelector ? doc().querySelector(".acp-shell-switch") : null;
+    if (tablist && typeof tablist.getAttribute === "function" && tablist.getAttribute("role") == null) {
+      tablist.setAttribute("role", "menu");
+    }
   }
 
   function onLangChange() {
     WORKSPACE_IDS.forEach(function (wsId) {
       var tab = tabEls[wsId];
       if (tab) {
-        var label = tab.querySelector ? tab.querySelector("span[data-i18n]") : null;
+        var label = tab.querySelector ? tab.querySelector("span[data-i18n], strong[data-i18n]") : null;
         if (label) label.textContent = t("shell.workspace." + wsId);
       }
     });
@@ -944,7 +1305,8 @@ ACPShell.layout = (function () {
       if (record.state !== "ready") setPanelState(record, record.state, record.lastError || undefined);
     });
     renderFocusChip(deps.context.getSnapshot());
-    document.title = t("shell.app.title") + " · " + t("shell.workspace." + currentWorkspace);
+    if (titleControlled()) document.title = t("shell.app.title") + " · " + t("shell.workspace." + currentWorkspace);
+    announceWorkspace(currentWorkspace);
   }
 
   // ── init ──
@@ -955,6 +1317,7 @@ ACPShell.layout = (function () {
     deps.loader = options.loader || null;
     deps.registry = options.registry || null;
     deps.i18n = options.i18n || null;
+    deps.request = typeof options.request === "function" ? options.request : null;
 
     shellRoot = doc().getElementById("acp-shell");
     mainEl = doc().getElementById("acp-shell-main");
@@ -971,8 +1334,14 @@ ACPShell.layout = (function () {
       slotEls[wsId] = slots;
     });
 
+    bindAria();
     bindTabs();
     bindTabKeys();
+    bindWorkspaceKeys();
+    bindSkipLink();
+    ensureLiveRegion();
+    syncSkipLink();
+    syncFocusOrder(currentWorkspace);
     if (doc().addEventListener) doc().addEventListener("keydown", onKeydown);
     applyStoredCollapse();
 
@@ -991,12 +1360,20 @@ ACPShell.layout = (function () {
     return true;
   }
 
+  function reloadCurrentWorkspace() {
+    var recipe = window.ACPShell.recipes ? ACPShell.recipes.get(currentWorkspace) : null;
+    if (!recipe) return false;
+    recipe.panels.forEach(function (spec) { if (panels[spec.instanceId]) reloadPanel(spec.instanceId); });
+    return true;
+  }
+
   return {
     init: init,
     applyRecipe: applyRecipe,
     switchWorkspace: switchWorkspace,
     showWorkspace: showWorkspace,
     reloadPanel: reloadPanel,
+    reloadCurrentWorkspace: reloadCurrentWorkspace,
     disposePanel: function (instanceId) {
       var record = panels[instanceId];
       disposePanel(record);
@@ -1006,6 +1383,11 @@ ACPShell.layout = (function () {
     getPanel: getPanel,
     listPanels: listPanels,
     focusPanel: focusPanel,
+    // A-63 keyboard/ARIA surface (also mirrored as data-acp-focus-* metadata).
+    focusOrder: focusOrder,
+    focusPanelContent: focusPanelContent,
+    focusWorkspaceTab: focusWorkspaceTab,
+    syncFocusOrder: function () { return syncFocusOrder(currentWorkspace); },
     setPanelState: function (instanceId, state, detail) {
       var record = panels[instanceId];
       if (record) setPanelState(record, state, detail);

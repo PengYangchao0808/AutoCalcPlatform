@@ -58,6 +58,16 @@ if not _FRONTEND_DIR.is_dir():
         _FRONTEND_DIR = Path(_assets_spec.origin).parent
 logger = logging.getLogger(__name__)
 
+# The frontend entry HTML is served from the checkout on every request; a
+# browser that heuristically caches it will keep booting the previous shell
+# long after the JS/CSS (which do send no-cache) were rebuilt.  Revalidation is
+# therefore mandatory for every HTML entry, not only for the static mounts.
+_HTML_NO_STORE = {
+    "Cache-Control": "no-cache, no-store, must-revalidate",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
+
 
 def unknown_field_envelope(exc: RequestValidationError) -> dict[str, Any] | None:
     """Return the frozen ``input_invalid`` envelope for an undeclared field.
@@ -580,18 +590,24 @@ def create_app(
     def index() -> HTMLResponse:
         html_path = _FRONTEND_DIR / "ACP_Workbench_v2.html"
         if html_path.exists():
-            return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+            return HTMLResponse(
+                content=html_path.read_text(encoding="utf-8"), headers=_HTML_NO_STORE
+            )
         return HTMLResponse(
-            content="<h1>ACP Server Running</h1><p>frontend/ACP_Workbench_v2.html not found</p>"
+            content="<h1>ACP Server Running</h1><p>frontend/ACP_Workbench_v2.html not found</p>",
+            headers=_HTML_NO_STORE,
         )
 
     @app.get("/legacy/", response_class=HTMLResponse, include_in_schema=False)
     def legacy_index() -> HTMLResponse:
         html_path = _FRONTEND_DIR / "ACP_Workbench.html"
         if html_path.exists():
-            return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+            return HTMLResponse(
+                content=html_path.read_text(encoding="utf-8"), headers=_HTML_NO_STORE
+            )
         return HTMLResponse(
-            content="<h1>ACP Server Running</h1><p>frontend/ACP_Workbench.html not found</p>"
+            content="<h1>ACP Server Running</h1><p>frontend/ACP_Workbench.html not found</p>",
+            headers=_HTML_NO_STORE,
         )
 
     # /next/ = the frontend experimental entry (B-req-19). The explicit HTML
@@ -601,8 +617,10 @@ def create_app(
     def next_index() -> HTMLResponse:
         html_path = _FRONTEND_DIR / "next" / "index.html"
         if html_path.exists():
-            return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
-        return HTMLResponse(content="<h1>Not Found</h1>", status_code=404)
+            return HTMLResponse(
+                content=html_path.read_text(encoding="utf-8"), headers=_HTML_NO_STORE
+            )
+        return HTMLResponse(content="<h1>Not Found</h1>", status_code=404, headers=_HTML_NO_STORE)
 
     @app.get("/next/index.html", response_class=HTMLResponse, include_in_schema=False)
     def next_index_html() -> HTMLResponse:

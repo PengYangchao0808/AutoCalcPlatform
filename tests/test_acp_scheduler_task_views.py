@@ -797,6 +797,23 @@ class TestSorting:
                 f"Group {g['key']} not sorted by COALESCE(last_activity_at, created_at) DESC"
             )
 
+    def test_activity_asc_within_group(self, tmp_path: Path) -> None:
+        from acp.scheduler.task_views import TaskSort, TaskViewQuery, query_project_tasks
+
+        idx, proj = _setup_project_and_tasks(tmp_path)
+        result = query_project_tasks(
+            idx,
+            TaskViewQuery(
+                project_id=proj,
+                sort=TaskSort.activity_asc,
+            ),
+        )
+        for g in result["groups"]:
+            coalesced = [r["last_activity_at"] or r["created_at"] for r in g["jobs"]]
+            assert coalesced == sorted(coalesced), (
+                f"Group {g['key']} not sorted by COALESCE(last_activity_at, created_at) ASC"
+            )
+
     def test_running_first_stable_partition(self, tmp_path: Path) -> None:
         from acp.scheduler.task_views import (
             GroupBy,

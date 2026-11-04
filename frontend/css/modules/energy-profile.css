@@ -1,0 +1,479 @@
+/*
+ * ACP 3.0 module CSS — energy-profile (A-38).
+ * Consumes base.css tokens; the SVG itself is styled by workbench/energy.css
+ * (the canonical renderer's stylesheet).
+ */
+.acp-mod-energy {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 180px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  overflow: hidden;
+}
+
+.acp-mod-energy-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.acp-mod-energy-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.acp-mod-energy-meta {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acp-mod-energy-chart {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.acp-mod-energy-chart .energy-empty {
+  height: 100%;
+  min-height: 0;
+}
+
+.acp-mod-energy-chart .energy-chart-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.acp-mod-energy-overlay {
+  position: absolute;
+  inset: 34px 0 0 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  background: var(--bg-canvas);
+}
+
+.acp-mod-energy-overlay[hidden] {
+  display: none;
+}
+
+.acp-mod-energy-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 90%;
+  text-align: center;
+}
+
+.acp-mod-energy-message {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.acp-mod-energy-detail {
+  margin: 0;
+  max-width: 420px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.acp-mod-energy-detail[hidden] {
+  display: none;
+}
+
+.acp-mod-energy[data-acp-module-state="error"] .acp-mod-energy-detail {
+  color: var(--red);
+}
+
+.acp-mod-energy-retry {
+  margin-top: 6px;
+  height: var(--small-button-height);
+  padding: 0 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.acp-mod-energy-retry:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.acp-mod-energy-retry[hidden] {
+  display: none;
+}
+
+.acp-mod-energy-candidate-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--border-subtle);
+  background: rgba(var(--bg-panel-rgb), 0.9);
+  font-size: 11px;
+}
+
+.acp-mod-energy-candidate-bar[hidden] {
+  display: none;
+}
+
+.acp-mod-energy-candidates-toggle {
+  margin-left: auto;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.acp-mod-energy-candidates-toggle:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.acp-mod-energy-candidate-drawer {
+  position: absolute;
+  top: 38px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 4;
+  width: min(340px, calc(100% - 16px));
+  padding: 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius);
+  background: rgba(var(--bg-panel-rgb), 0.97);
+  box-shadow: var(--shadow-panel);
+  overflow: auto;
+}
+
+.acp-mod-energy-candidate-drawer[hidden] {
+  display: none;
+}
+
+.acp-mod-energy-candidate-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.acp-mod-energy-candidate-drawer-title {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.acp-mod-energy-candidate-drawer-close {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.acp-mod-energy-candidate-drawer-close:hover {
+  color: var(--text-primary);
+}
+
+.acp-mod-energy-candidate-drawer-status {
+  margin: 0 0 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.acp-mod-energy-candidate-drawer-status.is-error {
+  color: var(--red);
+}
+
+.acp-mod-energy-candidate-drawer-status[hidden] {
+  display: none;
+}
+
+.acp-mod-energy-candidate-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: "role label" "role meta";
+  gap: 1px 7px;
+  width: 100%;
+  margin: 2px 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.acp-mod-energy-candidate-row:hover,
+.acp-mod-energy-candidate-row.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+.acp-mod-energy-candidate-row-role {
+  grid-area: role;
+  align-self: center;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(var(--shell-violet-rgb), 0.18);
+  color: var(--shell-violet);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.acp-mod-energy-candidate-row-label {
+  grid-area: label;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acp-mod-energy-candidate-row-meta {
+  grid-area: meta;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.acp-mod-energy-candidate-drawer-detail {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.acp-mod-energy-candidate-drawer-detail[hidden] {
+  display: none;
+}
+
+.acp-mod-energy-candidate-detail-title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.acp-mod-energy-candidate-detail-fields {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 3px 8px;
+  margin: 0 0 8px;
+  font-size: 11px;
+}
+
+.acp-mod-energy-candidate-detail-fields dt {
+  color: var(--text-tertiary);
+}
+
+.acp-mod-energy-candidate-detail-fields dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.acp-mod-energy-candidate-remove {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--red);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--red);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.acp-mod-energy-candidate-remove:hover {
+  background: rgba(var(--red-rgb), 0.12);
+}
+
+.acp-mod-energy-candidate-name {
+  width: 100%;
+  height: 24px;
+  margin: 0 0 6px;
+  padding: 0 6px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  font-size: 11px;
+}
+
+.acp-mod-energy-candidate-rename {
+  height: 24px;
+  margin-right: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.acp-mod-energy-candidate-rename:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.acp-mod-energy-candidate-frame {
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acp-mod-energy-candidate-role {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.acp-mod-energy-candidate-role.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+.acp-mod-energy-candidate-role:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.acp-mod-energy-candidate-save {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.acp-mod-energy-candidate-save:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.acp-mod-energy-candidate-save:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.acp-mod-energy-candidate-status {
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acp-mod-energy-candidate-status.is-error {
+  color: var(--red);
+}
+
+.acp-mod-energy-fixture {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  padding: 2px 8px;
+  border: 1px solid var(--amber);
+  border-radius: var(--radius-sm);
+  background: rgba(var(--amber-rgb), 0.14);
+  color: var(--amber);
+  font-size: 11px;
+  line-height: 1.5;
+  pointer-events: none;
+}
+
+.acp-mod-energy-fixture[hidden] {
+  display: none;
+}
+
+.acp-mod-energy-warning {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 2;
+  margin: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: rgba(var(--bg-panel-rgb), 0.92);
+  color: var(--amber);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
+.acp-mod-energy-warning[hidden] {
+  display: none;
+}
+
+/* ── narrow panel (≤720px): candidate drawer becomes a bottom sheet ─── */
+
+@media (max-width: 720px) {
+  .acp-mod-energy-head {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .acp-mod-energy-candidate-bar {
+    flex-wrap: wrap;
+  }
+
+  .acp-mod-energy-candidate-drawer {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
+    max-height: 62%;
+  }
+
+  .acp-mod-energy-candidate-row {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "role" "label" "meta";
+  }
+
+  .acp-mod-energy-candidate-row-label {
+    white-space: normal;
+  }
+
+  .acp-mod-energy-candidate-detail-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

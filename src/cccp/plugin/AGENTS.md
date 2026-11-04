@@ -1,5 +1,12 @@
 # plugin/ — Science Plugin Ecosystem (ACP 2.0, 2026-10)
 
+## ACP3 双人协作（2026-11-04）
+
+读[架构总纲 §10](../../../docs/reference/next-change/ACP_3.0_Architecture_20261031.md)。B 主写统一科学插件生命周期、Provider 锁、共享 Renderer/Parser/Validator；A 消费目录与诊断，不另建化学插件注册总线。现行 v1 compute 约束与 metadata-only discovery 不因 V3 文档而解除；动态 compute/Standalone/原生执行按 P0—P4 切片和兼容测试交付。
+
+本节是开发目标，不声明新增能力已交付；现行依赖/执行/安全护栏继续约束实现。
+
+
 ## OVERVIEW
 Third-party science plugin contract (**8 .py, 3.7k lines**). Discovery is metadata-only (the plugin module is **never imported** during discovery), enablement is **disabled-by-default** (`PLUGIN_ENABLEMENT_POLICY`), execution stays at the single execution station `cccp.calculation` (`BUILTIN_EXECUTION_STATION`) — plugins extend capabilities, never the subprocess layer. Entry-point group: **`cccp.science_plugins`** (v1); manifest file `cccp_science_plugin.json` read from the installed **distribution** (`ep.dist`), JSON only.
 

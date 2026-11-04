@@ -88,3 +88,1136 @@
 .acp-mod-viewer-retry[hidden] {
   display: none;
 }
+
+/* A-00: fixture provenance is always visible; warnings are explicit, never
+   silently swallowed. Both sit above the canvas but below the state overlay. */
+.acp-mod-viewer-fixture {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  padding: 2px 8px;
+  border: 1px solid var(--amber);
+  border-radius: var(--radius-sm);
+  background: rgba(var(--amber-rgb), 0.14);
+  color: var(--amber);
+  font-size: 11px;
+  line-height: 1.5;
+  pointer-events: none;
+}
+
+.acp-mod-viewer-fixture[hidden] {
+  display: none;
+}
+
+.acp-mod-viewer-warning {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 2;
+  margin: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: rgba(var(--bg-panel-rgb), 0.92);
+  color: var(--amber);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
+.acp-mod-viewer-warning[hidden] {
+  display: none;
+}
+
+/* A-32: lazy structure catalog. The toggle is visible only when a task is
+   bound; the panel is a read-only list (selection writes a structureRef, never
+   a task/command). */
+.acp-mod-viewer-catalog-toggle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  height: var(--toolbar-control-height);
+  padding: 0 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.acp-mod-viewer-catalog-toggle:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.acp-mod-viewer-catalog-toggle[hidden] {
+  display: none;
+}
+
+.acp-mod-viewer-catalog {
+  position: absolute;
+  top: 42px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 3;
+  width: min(300px, calc(100% - 16px));
+  padding: 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius);
+  background: rgba(var(--bg-panel-rgb), 0.96);
+  box-shadow: var(--shadow-panel);
+  overflow: auto;
+}
+
+.acp-mod-viewer-catalog[hidden] {
+  display: none;
+}
+
+.acp-mod-viewer-catalog-head {
+  margin-bottom: 8px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.acp-mod-viewer-catalog-status {
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.acp-mod-viewer-catalog-status.is-error {
+  color: var(--red);
+}
+
+.acp-mod-viewer-catalog-status[hidden] {
+  display: none;
+}
+
+.acp-mod-viewer-catalog-section + .acp-mod-viewer-catalog-section {
+  margin-top: 12px;
+}
+
+.acp-mod-viewer-catalog-group {
+  margin: 0 0 4px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.acp-mod-viewer-catalog-entry {
+  display: block;
+  width: 100%;
+  margin: 2px 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+}
+
+.acp-mod-viewer-catalog-entry:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.acp-mod-viewer-catalog-entry.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+/* A-34: style preset + camera reset. Presentation only; no task writes. */
+.acp-mod-viewer-stylebar {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 200px);
+  padding: 3px 6px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: rgba(var(--bg-panel-rgb), 0.9);
+}
+
+.acp-mod-viewer-style-label {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.acp-mod-viewer-style {
+  height: 24px;
+  max-width: 110px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  font-size: 11px;
+}
+
+.acp-mod-viewer-reset-view {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.acp-mod-viewer-reset-view:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+/* A-35: server-mapped overlay + RMSD. Blocked mapping is visible and locks
+   measurement affordances via data-acp-overlay-measurements="blocked". */
+.acp-mod-viewer-overlay-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 36px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+  padding: 4px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: rgba(var(--bg-panel-rgb), 0.94);
+  color: var(--text-secondary);
+  font-size: 11px;
+  transform: translateX(-50%);
+}
+
+.acp-mod-viewer-overlay-bar[hidden] {
+  display: none;
+}
+
+.acp-mod-viewer-overlay-bar.is-blocked {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+.acp-mod-viewer-overlay-bar.is-error {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.acp-mod-viewer-overlay-status {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acp-mod-viewer-overlay-clear {
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.acp-mod-viewer-overlay-clear:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.acp-mod-viewer-catalog-overlay {
+  display: inline-block;
+  margin: 2px 4px 4px 0;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.acp-mod-viewer-catalog-overlay:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.acp-mod-viewer-catalog-overlay.is-active {
+  border-color: var(--viewer-overlay);
+  color: var(--viewer-overlay);
+}
+
+.acp-mod-viewer-catalog-overlay:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* A-36: IRC frame playback toolbar. Playback owns the main model while active;
+   frame order comes from the catalog groups, never from DOM position. */
+.acp-mod-viewer-irc-bar {
+  position: absolute;
+  top: 42px;
+  left: 8px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: rgba(var(--bg-panel-rgb), 0.9);
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.acp-mod-viewer-irc-status {
+  min-width: 30px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.acp-mod-viewer-irc-btn {
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-size: 10px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.acp-mod-viewer-irc-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.acp-mod-viewer-irc-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.acp-mod-viewer-irc-btn[hidden] {
+  display: none;
+}
+
+/* A-42: vibration frequency drawer. Read-only mode list; arrows/animation are
+   separate (A-43) and must never mutate the stored vectors. */
+.acp-mod-viewer-vibration-toggle {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.acp-mod-viewer-vibration-toggle:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.acp-mod-viewer-vibration-drawer {
+  position: absolute;
+  top: 42px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 4;
+  width: min(300px, calc(100% - 16px));
+  padding: 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius);
+  background: rgba(var(--bg-panel-rgb), 0.97);
+  box-shadow: var(--shadow-panel);
+  overflow: auto;
+}
+
+.acp-mod-viewer-vibration-drawer[hidden] {
+  display: none;
+}
+
+.acp-mod-viewer-vibration-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.acp-mod-viewer-vibration-close {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.acp-mod-viewer-vibration-close:hover {
+  color: var(--text-primary);
+}
+
+.acp-mod-viewer-vibration-status {
+  margin: 0 0 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.acp-mod-viewer-vibration-status.is-error {
+  color: var(--red);
+}
+
+.acp-mod-viewer-vibration-status[hidden] {
+  display: none;
+}
+
+.acp-mod-viewer-vibration-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin: 2px 0;
+  padding: 5px 7px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.acp-mod-viewer-vibration-row:hover,
+.acp-mod-viewer-vibration-row.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+.acp-mod-viewer-vibration-index {
+  color: var(--text-tertiary);
+  min-width: 34px;
+}
+
+.acp-mod-viewer-vibration-frequency {
+  font-variant-numeric: tabular-nums;
+}
+
+.acp-mod-viewer-vibration-imaginary {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(var(--red-rgb), 0.16);
+  color: var(--red);
+  font-size: 10px;
+}
+
+.acp-mod-viewer-vibration-ir {
+  margin-left: auto;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.acp-mod-viewer-vibration-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.acp-mod-viewer-vibration-action {
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.acp-mod-viewer-vibration-action:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.acp-mod-viewer-vibration-action.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+.acp-mod-viewer-vibration-action[hidden] {
+  display: none;
+}
+
+.acp-mod-viewer-vibration-anim-status {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acp-mod-viewer-vibration-thermo {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.acp-mod-viewer-vibration-thermo-title {
+  margin: 0 0 5px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.acp-mod-viewer-vibration-thermo-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 1px 0;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.acp-mod-viewer-vibration-thermo-row span:last-child {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.acp-mod-viewer-vibration-thermo-empty {
+  margin: 0;
+  color: var(--amber);
+  font-size: 10px;
+}
+
+/* A-45: read-only measurement drawer (distance / angle / dihedral). Selection
+   progress and results are text + the bounded scene click callback; nothing
+   here writes geometry, submits a task, or mutates the geometry store. */
+.acp-mod-viewer-measure-toggle {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.acp-mod-viewer-measure-toggle:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.acp-mod-viewer-measure-drawer {
+  position: absolute;
+  top: 42px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 5;
+  width: min(320px, calc(100% - 16px));
+  padding: 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius);
+  background: rgba(var(--bg-panel-rgb), 0.97);
+  box-shadow: var(--shadow-panel);
+  overflow: auto;
+}
+
+.acp-mod-viewer-measure-drawer[hidden] {
+  display: none;
+}
+
+.acp-mod-viewer-measure-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.acp-mod-viewer-measure-close {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.acp-mod-viewer-measure-close:hover {
+  color: var(--text-primary);
+}
+
+.acp-mod-viewer-measure-types {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.acp-mod-viewer-measure-type {
+  flex: 1 1 0;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.acp-mod-viewer-measure-type:hover,
+.acp-mod-viewer-measure-type.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+.acp-mod-viewer-measure-status {
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.acp-mod-viewer-measure-status.is-error {
+  color: var(--red);
+}
+
+.acp-mod-viewer-measure-status[hidden] {
+  display: none;
+}
+
+.acp-mod-viewer-measure-actions {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.acp-mod-viewer-measure-action {
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.acp-mod-viewer-measure-action:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.acp-mod-viewer-measure-action.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+.acp-mod-viewer-measure-action:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.acp-mod-viewer-measure-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0;
+  padding: 5px 7px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.acp-mod-viewer-measure-value {
+  flex: 1 1 auto;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.acp-mod-viewer-measure-delete {
+  flex: 0 0 auto;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.acp-mod-viewer-measure-delete:hover {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.acp-mod-viewer-measure-empty {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+/* A-46: local internal-coordinate edit transaction (preview → apply →
+   undo/redo → abandon). Everything is module-local: the geometry store and
+   backend assets are never written, so these controls only express the
+   transaction state and rebuild the one bounded model. */
+.acp-mod-viewer-measure-row {
+  flex-wrap: wrap;
+}
+
+.acp-mod-viewer-edit {
+  margin: 0 0 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.acp-mod-viewer-edit-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.acp-mod-viewer-edit-title {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.acp-mod-viewer-edit-badge {
+  padding: 0 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.acp-mod-viewer-edit-status {
+  margin: 0 0 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.acp-mod-viewer-edit-status.is-error {
+  color: var(--red);
+}
+
+.acp-mod-viewer-edit-status.is-preview {
+  color: var(--amber);
+}
+
+.acp-mod-viewer-edit-status.is-applied {
+  color: var(--green);
+}
+
+.acp-mod-viewer-edit-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.acp-mod-viewer-edit-summary {
+  flex: 1 1 100%;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.acp-mod-viewer-edit-action {
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.acp-mod-viewer-edit-action:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.acp-mod-viewer-edit-action.is-primary {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+.acp-mod-viewer-edit-action:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.acp-mod-viewer-edit-action[hidden] {
+  display: none;
+}
+
+.acp-mod-viewer-edit-row {
+  flex: 1 0 100%;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--border-subtle);
+}
+
+.acp-mod-viewer-edit-label {
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.acp-mod-viewer-edit-input {
+  width: 72px;
+  height: 22px;
+  padding: 0 4px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.acp-mod-viewer-edit-input:disabled {
+  opacity: 0.5;
+}
+
+.acp-mod-viewer-edit-unit {
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.acp-mod-viewer-edit-apply {
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.acp-mod-viewer-edit-apply:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.acp-mod-viewer-edit-apply:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.acp-mod-viewer-edit-hint {
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.acp-mod-viewer-edit-hint.is-error {
+  color: var(--red);
+}
+
+/* A-47: explicit structure-asset save. Only a committed A-46 edit is
+   savable; the receipt stores the returned asset id/path (no geometry). */
+.acp-mod-viewer-asset {
+  margin: 0 0 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.acp-mod-viewer-asset-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.acp-mod-viewer-asset-title {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.acp-mod-viewer-asset-badge {
+  padding: 0 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.acp-mod-viewer-asset-status {
+  margin: 0 0 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.acp-mod-viewer-asset-status.is-error {
+  color: var(--red);
+}
+
+.acp-mod-viewer-asset-status.is-blocked {
+  color: var(--amber);
+}
+
+.acp-mod-viewer-asset-fields {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.acp-mod-viewer-asset-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.acp-mod-viewer-asset-label {
+  flex: 0 0 30px;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.acp-mod-viewer-asset-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 22px;
+  padding: 0 5px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  font-size: 11px;
+}
+
+.acp-mod-viewer-asset-input:disabled {
+  opacity: 0.5;
+}
+
+.acp-mod-viewer-asset-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.acp-mod-viewer-asset-action {
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.acp-mod-viewer-asset-action:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.acp-mod-viewer-asset-action.is-primary {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+.acp-mod-viewer-asset-action:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.acp-mod-viewer-asset-action[hidden] {
+  display: none;
+}
+
+.acp-mod-viewer-asset-receipt {
+  margin: 6px 0 0;
+  color: var(--green);
+  font-size: 10px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.acp-mod-viewer-asset-receipt[hidden] {
+  display: none;
+}
+
+/* A-37: single-column layout while the module is narrow. The catalog becomes
+   a bottom sheet; the style/IRC/overlay bars become full-width rows. */
+.acp-mod-viewer[data-acp-viewer-narrow="true"] .acp-mod-viewer-stylebar {
+  top: 38px;
+  left: 8px;
+  right: 8px;
+  max-width: none;
+  transform: none;
+  flex-wrap: wrap;
+}
+
+.acp-mod-viewer[data-acp-viewer-narrow="true"] .acp-mod-viewer-style-label {
+  display: none;
+}
+
+.acp-mod-viewer[data-acp-viewer-narrow="true"] .acp-mod-viewer-style {
+  flex: 1 1 90px;
+  max-width: none;
+}
+
+.acp-mod-viewer[data-acp-viewer-narrow="true"] .acp-mod-viewer-irc-bar {
+  top: 76px;
+  left: 8px;
+  right: 8px;
+  flex-wrap: wrap;
+}
+
+.acp-mod-viewer[data-acp-viewer-narrow="true"] .acp-mod-viewer-catalog {
+  top: auto;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  width: auto;
+  max-height: 62%;
+}
+
+.acp-mod-viewer[data-acp-viewer-narrow="true"] .acp-mod-viewer-vibration-drawer,
+.acp-mod-viewer[data-acp-viewer-narrow="true"] .acp-mod-viewer-measure-drawer {
+  top: auto;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  width: auto;
+  max-height: 62%;
+}
+
+.acp-mod-viewer[data-acp-viewer-narrow="true"] .acp-mod-viewer-overlay-bar {
+  left: 8px;
+  right: 8px;
+  max-width: none;
+  transform: none;
+}
+
+.acp-mod-viewer[data-acp-viewer-narrow="true"] .acp-mod-viewer-warning {
+  bottom: 38px;
+}
+
+@media (max-width: 720px) {
+  .acp-mod-viewer-stylebar {
+    top: 38px;
+    left: 8px;
+    right: 8px;
+    max-width: none;
+    transform: none;
+    flex-wrap: wrap;
+  }
+
+  .acp-mod-viewer-style-label {
+    display: none;
+  }
+
+  .acp-mod-viewer-style {
+    flex: 1 1 90px;
+    max-width: none;
+  }
+
+  .acp-mod-viewer-irc-bar {
+    top: 76px;
+    left: 8px;
+    right: 8px;
+    flex-wrap: wrap;
+  }
+
+  .acp-mod-viewer-catalog {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
+    max-height: 62%;
+  }
+
+  .acp-mod-viewer-vibration-drawer,
+  .acp-mod-viewer-measure-drawer {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
+    max-height: 62%;
+  }
+
+  .acp-mod-viewer-overlay-bar {
+    left: 8px;
+    right: 8px;
+    max-width: none;
+    transform: none;
+  }
+
+  .acp-mod-viewer-warning {
+    bottom: 38px;
+  }
+}

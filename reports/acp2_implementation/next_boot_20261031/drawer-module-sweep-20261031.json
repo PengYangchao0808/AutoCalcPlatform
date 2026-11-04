@@ -1,0 +1,103 @@
+{
+  "ids": [
+    "task-wizard",
+    "job-edit",
+    "nmr-report",
+    "tsmode-editor",
+    "s2-scan",
+    "node-status",
+    "approval-card",
+    "capability-form",
+    "path-view",
+    "pes-handoff",
+    "mechanism-plan",
+    "research-record"
+  ],
+  "rows": [
+    {
+      "child": "task-wizard",
+      "state": "loading",
+      "error": null,
+      "text": "新建计算向导A-01 / A-02：选择计算类型，载入分子结构草稿加载失败：HTTP 404恢复丢弃载入最新另存为新草稿1计算类型与方法2分子输入3确认目录加载失败：HTTP 404重试计算类型工作流（来自服务端目录）从服务端工作流目录选择计算类型。方法与基组方法预设选项来自服务端方法目录；本步骤只做目录投影，不在此校",
+      "id": "task-wizard"
+    },
+    {
+      "child": "job-edit",
+      "state": "loading",
+      "error": null,
+      "text": "编辑重算载入任务真实冻结参数 · 预览变更清单 · 原地 attempt+1任务与草稿未选择任务：请在任务面板选中一个任务后再打开编辑重算。载入编辑草稿尚未载入编辑草稿编辑覆盖草稿提示原始提交参数（只读）工作流未设置工作流状态未设置任务状态未设置当前 attempt未设置源版本未设置分子名未设置项目未设置执行模式未设置",
+      "id": "job-edit"
+    },
+    {
+      "child": "nmr-report",
+      "state": "loading",
+      "error": null,
+      "text": "NMR 报告（DP4/DP5）DP4/DP5只读刷新未选择任务。在任务列表或任务详情中选中一个 NMR 任务后，本面板会读取该任务的 nmr_report.json。重试报告摘要（服务端值）归属观测峰指标结构（只读）清除高亮来自诊断冲突矩阵 claims；没有 diagnostics 时按归属行的 observatio",
+      "id": "nmr-report"
+    },
+    {
+      "child": "tsmode-editor",
+      "state": "loading",
+      "error": null,
+      "text": "TS 模式优化编辑器从频率源选择原生模式序号 · 定向 OptTS未绑定任务（在任务面板选中一个已完成频率/批量任务）1 · 频率来源只列出该任务内可发现的 ORCA 频率输出；缺少 Hessian 的来源不能作为优化目标。2 · 目标模式（原生模式序号）模式序号是 ORCA 输出的原始编号（例如 #6、#9），不是列",
+      "id": "tsmode-editor"
+    },
+    {
+      "child": "s2-scan",
+      "state": "loading",
+      "error": null,
+      "text": "S2 键长扫描两原子距离扫描 · 默认关闭 ScanTS1 · 结构来源内联 XYZ任务结构上传文本粘贴标准 XYZ 文本；首行原子数可选，第二行注释可选。解析结构使用当前任务焦点里的结构引用，只读取几何，不提交也不修改任务。未绑定任务结构（先在内联 XYZ 或上传文本中提供结构，或在任务面板选中一个任务）。从当前任务",
+      "id": "s2-scan"
+    },
+    {
+      "child": "node-status",
+      "state": "loading",
+      "error": null,
+      "text": "节点与软件刷新远程节点状态、软件发现与后端可用性系统信息加载失败：HTTP 404重试远程节点远程节点加载失败：HTTP 404计算后端计算后端加载失败：HTTP 404软件发现软件发现加载失败：HTTP 404",
+      "id": "node-status"
+    },
+    {
+      "child": "approval-card",
+      "state": "loading",
+      "error": null,
+      "text": "研究审批审批记录加载失败：HTTP 404重试预算（服务端值）执行计划摘要科学计划摘要科学计划预算（服务端值）审批意见（可选）批准拒绝撤销刷新",
+      "id": "approval-card"
+    },
+    {
+      "child": "capability-form",
+      "state": "loading",
+      "error": null,
+      "text": "选择项目后显示可用的能力表单。",
+      "id": "capability-form"
+    },
+    {
+      "child": "path-view",
+      "state": "loading",
+      "error": null,
+      "text": "路径结构视图机理 / PES 路径的驻点结构、帧与溯源 · 选中结构交给现有查看器（测量与编辑由 A-45/A-46 提供）1 · 路径来源自动跟随当前任务；也可手动输入任务 ID 载入。只读。任务 ID载入路径重新载入尚未载入路径输入任务 ID 载入，或在有任务上下文时跟随当前任务。2 · 路径概览路径类型—任务—工",
+      "id": "path-view"
+    },
+    {
+      "child": "pes-handoff",
+      "state": "loading",
+      "error": null,
+      "text": "路径 → Batch 衔接PES / 扫描候选 → 既有 BatchOptimize 预览与提交 · 显式确认 + 逐项回执1 · 候选来源自动跟随当前任务；也可输入任务 ID。候选只来自服务端已确认记录。任务 ID载入候选重新载入尚未载入候选输入任务 ID 载入，或在有任务上下文时跟随当前任务。2 · 候选与排序任务",
+      "id": "pes-handoff"
+    },
+    {
+      "child": "mechanism-plan",
+      "state": "loading",
+      "error": null,
+      "text": "机理计划装配步骤 / 角色 / 反应坐标计划 · 只读研究 + 既有计划确认端点1 · 机理研究按研究 ID 载入，或从列表选择；上下文任务会自动列出其关联研究。研究 ID载入研究浏览全部研究研究列表选择研究…2 · 研究概览研究 ID—任务—研究状态—统一状态—计划状态—更新时间—决策点—反应物0产物0中间体0过渡态",
+      "id": "mechanism-plan"
+    },
+    {
+      "child": "research-record",
+      "state": "loading",
+      "error": null,
+      "text": "研究记录（手工提问与证据）只读证据目标：提案人工提问 → 研究记录/提案；平台证据投影只读，不提交任务尚未读取研究记录证据。输入研究记录 ID 与会话种子后读取平台证据投影；没有记录时保持空态，绝不伪造证据。重试平台证据投影（只读）GET /api/v2/research/records/{research_id}/e",
+      "id": "research-record"
+    }
+  ],
+  "exceptions": 0
+}

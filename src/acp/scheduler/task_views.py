@@ -91,6 +91,7 @@ class TaskSort(str, Enum):
     created_asc = "created_asc"
     completed_desc = "completed_desc"
     activity_desc = "activity_desc"
+    activity_asc = "activity_asc"
     name_asc = "name_asc"
     name_desc = "name_desc"
 
@@ -187,6 +188,7 @@ _SORT_SQL: dict[TaskSort, str] = {
     TaskSort.created_asc: "t.created_at ASC",
     TaskSort.completed_desc: "COALESCE(t.completed_at, t.created_at) DESC",
     TaskSort.activity_desc: "COALESCE(t.last_activity_at, t.created_at) DESC",
+    TaskSort.activity_asc: "COALESCE(t.last_activity_at, t.created_at) ASC",
     TaskSort.name_asc: "t.created_at DESC",  # pinyin sort is frontend's job
     TaskSort.name_desc: "t.created_at DESC",
 }
@@ -509,12 +511,14 @@ def _build_groups(
                 if r.get("completed_at") or r.get("created_at")
             ]
             return max(times) if times else ""
-        if q.sort == TaskSort.activity_desc:
+        if q.sort in (TaskSort.activity_desc, TaskSort.activity_asc):
             times = [
                 r["last_activity_at"] or r["created_at"]
                 for r in group_rows
                 if r.get("last_activity_at") or r.get("created_at")
             ]
+            if q.sort == TaskSort.activity_asc:
+                return min(times) if times else ""
             return max(times) if times else ""
         return key
 

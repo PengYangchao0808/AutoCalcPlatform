@@ -1,0 +1,17 @@
+elkjs 0.12.1
+==============
+
+Upstream: https://github.com/kieler/elkjs
+Package: https://registry.npmjs.org/elkjs/-/elkjs-0.12.1.tgz
+Browser asset: lib/elk.bundled.js (vendored unmodified as elk-0.12.1.bundled.js)
+
+License expression: EPL-2.0 OR GPL-3.0-or-later.
+ACP distributes this unmodified asset under the EPL-2.0 alternative; the full
+EPL-2.0 text is preserved in elkjs-LICENSE.
+
+Source Code availability (EPL-2.0 section 3.1): the corresponding preferred
+source form is publicly available from the upstream repository at revision
+624ae90aa37110033a8af59c5ccbb292708b4317:
+https://github.com/kieler/elkjs/tree/624ae90aa37110033a8af59c5ccbb292708b4317
+
+The upstream npm package contains no separate NOTICE or NOTICE.md file.

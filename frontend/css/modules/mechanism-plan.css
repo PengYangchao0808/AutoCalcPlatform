@@ -1,0 +1,560 @@
+/*
+ * ACP Next — mechanism-plan panel styles (A-49 · P17 mechanism plan assembly).
+ * Scope: `.acp-mechplan*` only; tokens come from workbench/base.css (:root) and
+ * shell/shell.css (`.acp-shell`). This file defines no global selector and no
+ * new token.
+ */
+
+.acp-mechplan {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: auto;
+  background: var(--bg-base, #0b0f14);
+  color: var(--text-primary, #e5edf5);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ── header ─────────────────────────────────────────────────────────── */
+
+.acp-mechplan-head {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid var(--border-default, #24303b);
+}
+
+.acp-mechplan-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.acp-mechplan-sub {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+}
+
+/* ── body / sections ────────────────────────────────────────────────── */
+
+.acp-mechplan-body {
+  display: grid;
+  gap: 16px;
+  padding: 12px 14px 20px;
+}
+
+.acp-mechplan-section {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-default, #24303b);
+}
+
+.acp-mechplan-section:last-of-type {
+  border-bottom: 0;
+}
+
+.acp-mechplan-heading {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary, #9fb0c3);
+  text-transform: uppercase;
+}
+
+.acp-mechplan-subheading,
+.acp-mechplan-role-heading {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary, #9fb0c3);
+}
+
+/* ── picker / controls ─────────────────────────────────────────────── */
+
+.acp-mechplan-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.acp-mechplan-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.acp-mechplan-label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--text-tertiary, #6b7b8a);
+}
+
+.acp-mechplan-input,
+.acp-mechplan-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #131a23);
+  color: var(--text-primary, #e5edf5);
+  font: inherit;
+  font-size: 12px;
+}
+
+.acp-mechplan-input:focus,
+.acp-mechplan-select:focus {
+  outline: 1px solid var(--accent, #4ea1ff);
+  outline-offset: 0;
+}
+
+.acp-mechplan-input:disabled,
+.acp-mechplan-select:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.acp-mechplan-input--num {
+  min-width: 64px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+}
+
+.acp-mechplan-select {
+  min-width: 0;
+}
+
+/* ── status / hints ────────────────────────────────────────────────── */
+
+.acp-mechplan-status {
+  margin: 0;
+  min-height: 18px;
+  color: var(--text-secondary, #9fb0c3);
+  font-size: 11px;
+  word-break: break-word;
+}
+
+.acp-mechplan-hint {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+}
+
+.acp-mechplan-mono {
+  margin: 0;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  color: var(--text-secondary, #9fb0c3);
+  word-break: break-all;
+}
+
+.acp-mechplan-empty {
+  margin: 0;
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+}
+
+/* ── summary ───────────────────────────────────────────────────────── */
+
+.acp-mechplan-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 16px;
+}
+
+.acp-mechplan-summary-row {
+  display: grid;
+  grid-template-columns: minmax(88px, auto) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.acp-mechplan-summary-label {
+  color: var(--text-tertiary, #6b7b8a);
+  font-size: 11px;
+}
+
+.acp-mechplan-summary-value {
+  color: var(--text-primary, #e5edf5);
+  font-size: 11px;
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.acp-mechplan-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.acp-mechplan-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: 999px;
+  font-size: 10px;
+  color: var(--text-tertiary, #6b7b8a);
+}
+
+.acp-mechplan-chip-value {
+  color: var(--text-primary, #e5edf5);
+  font-weight: 600;
+}
+
+.acp-mechplan-notices {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 2px;
+  color: var(--amber, #d9a441);
+  font-size: 11px;
+}
+
+.acp-mechplan-notice {
+  margin: 0;
+}
+
+/* ── tables ────────────────────────────────────────────────────────── */
+
+.acp-mechplan-table-wrap {
+  overflow-x: auto;
+}
+
+.acp-mechplan-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.acp-mechplan-th {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border-default, #24303b);
+  color: var(--text-tertiary, #6b7b8a);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.acp-mechplan-td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--bg-elevated, #131a23);
+  color: var(--text-secondary, #9fb0c3);
+  vertical-align: middle;
+}
+
+.acp-mechplan-step-row:hover .acp-mechplan-td,
+.acp-mechplan-coord-row:hover .acp-mechplan-td {
+  background: var(--bg-elevated, #131a23);
+}
+
+.acp-mechplan-coord-row .acp-mechplan-input,
+.acp-mechplan-coord-row .acp-mechplan-select {
+  padding: 3px 6px;
+}
+
+/* ── roles ─────────────────────────────────────────────────────────── */
+
+.acp-mechplan-roles {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.acp-mechplan-role-group {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #131a23);
+}
+
+.acp-mechplan-role-list {
+  margin: 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-size: 10px;
+  color: var(--text-secondary, #9fb0c3);
+}
+
+.acp-mechplan-role-item {
+  word-break: break-word;
+}
+
+.acp-mechplan-role-empty {
+  list-style: none;
+  margin-left: -16px;
+  color: var(--text-tertiary, #6b7b8a);
+}
+
+/* ── reaction definition ───────────────────────────────────────────── */
+
+.acp-mechplan-reaction {
+  display: grid;
+  gap: 8px;
+}
+
+.acp-mechplan-reaction-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.acp-mechplan-reaction-group {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.acp-mechplan-species {
+  margin: 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--text-secondary, #9fb0c3);
+}
+
+.acp-mechplan-species-item {
+  word-break: break-all;
+}
+
+.acp-mechplan-meta {
+  display: grid;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px dashed var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+}
+
+/* ── provenance / preview ──────────────────────────────────────────── */
+
+.acp-mechplan-pre {
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #131a23);
+  color: var(--text-secondary, #9fb0c3);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: pre;
+}
+
+/* ── plan candidates / errors / actions ────────────────────────────── */
+
+.acp-mechplan-candidates {
+  display: grid;
+  gap: 6px;
+}
+
+.acp-mechplan-candidate {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #131a23);
+  color: var(--text-secondary, #9fb0c3);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.acp-mechplan-candidate input {
+  margin: 2px 0 0;
+}
+
+.acp-mechplan-candidate-text {
+  min-width: 0;
+  word-break: break-word;
+}
+
+.acp-mechplan-errors {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 2px;
+  color: var(--red, #e55353);
+  font-size: 11px;
+}
+
+.acp-mechplan-error {
+  margin: 0;
+}
+
+/* ── buttons ───────────────────────────────────────────────────────── */
+
+.acp-mechplan-btn {
+  appearance: none;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: 5px;
+  background: var(--bg-elevated, #1a2332);
+  color: var(--text-secondary, #b0bec8);
+  font: inherit;
+  font-size: 11px;
+  padding: 5px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.acp-mechplan-btn:hover:not(:disabled) {
+  border-color: var(--accent, #4ea1ff);
+  color: var(--text-primary, #e5edf5);
+}
+
+.acp-mechplan-btn:focus-visible {
+  outline: 2px solid var(--accent, #4ea1ff);
+  outline-offset: 1px;
+}
+
+.acp-mechplan-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.acp-mechplan-btn--primary {
+  border-color: var(--accent, #4ea1ff);
+  background: var(--accent, #4ea1ff);
+  color: var(--bg-base);
+}
+
+.acp-mechplan-btn--primary:hover:not(:disabled) {
+  color: var(--bg-base);
+  filter: brightness(1.06);
+}
+
+/* ── confirmation receipt ──────────────────────────────────────────── */
+
+.acp-mechplan-receipt {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #131a23);
+}
+
+.acp-mechplan-receipt[data-acp-receipt-state="confirmed"] {
+  border-color: var(--accent, #4ea1ff);
+}
+
+.acp-mechplan-receipt[data-acp-receipt-state="error"] {
+  border-color: var(--red, #e55353);
+  color: var(--red, #e55353);
+}
+
+.acp-mechplan-receipt-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.acp-mechplan-receipt-body {
+  margin: 0;
+  font-size: 12px;
+}
+
+/* ── empty state / async overlay ───────────────────────────────────── */
+
+.acp-mechplan-empty-state {
+  display: grid;
+  gap: 4px;
+  padding: 0 14px 14px;
+}
+
+.acp-mechplan-empty-title {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary, #9fb0c3);
+}
+
+.acp-mechplan-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 16px 16px;
+  box-sizing: border-box;
+  background: rgba(var(--bg-base-rgb), 0.82);
+}
+
+.acp-mechplan-box {
+  display: grid;
+  gap: 8px;
+  max-width: 380px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #131a23);
+  text-align: center;
+}
+
+.acp-mechplan-message {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-primary, #e5edf5);
+}
+
+.acp-mechplan-detail {
+  margin: 0;
+  color: var(--red, #e55353);
+  font-size: 11px;
+  word-break: break-word;
+}
+
+.acp-mechplan-box .acp-mechplan-btn {
+  justify-self: center;
+}
+
+/* ── state cues ────────────────────────────────────────────────────── */
+
+.acp-mechplan[data-acp-module-state="error"] .acp-mechplan-title {
+  color: var(--red, #e55353);
+}
+
+.acp-mechplan[data-acp-plan-state="confirmed"] .acp-mechplan-receipt {
+  border-color: var(--accent, #4ea1ff);
+}
+
+/* ── narrow panel fallback (module receives a narrow host) ──────────── */
+
+@media (max-width: 960px) {
+  .acp-mechplan-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .acp-mechplan-roles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .acp-mechplan-grid,
+  .acp-mechplan-summary,
+  .acp-mechplan-reaction-grid,
+  .acp-mechplan-roles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

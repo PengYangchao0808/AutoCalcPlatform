@@ -1,5 +1,5 @@
 /*
- * ACP 2.0 next-entry module styles — task-explorer (UI-02b).
+ * ACP 2.0 next-entry module styles — task-explorer (UI-02b + A-17…A-24).
  *
  * Scope: ONLY the task-explorer module host DOM (.acp-mod-tasks-*). All
  * colors/sizes come from css/workbench/base.css tokens — no hardcoded hex.
@@ -14,8 +14,96 @@
   gap: 8px;
   height: 100%;
   min-height: 0;
+  /* Positioning context for the A-20/A-21 modal overlay. */
+  position: relative;
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 19px;
+}
+
+/* ── two-row task toolbar ───────────────────────────────────────────── */
+.acp-mod-tasks-headbar {
+  display: flex; align-items: center; gap: 4px; min-width: 0; flex: none;
+  padding: 4px 8px; border-bottom: 1px solid var(--border-subtle);
+}
+.acp-mod-tasks-title { flex: none; font-size: 13px; line-height: 18px; color: var(--text-primary); }
+.acp-mod-tasks-scope-wrap {
+  display: inline-flex; align-items: center; gap: 2px; padding: 2px;
+  border: 1px solid var(--border-subtle); border-radius: 6px; background: rgba(var(--white-rgb), .03);
+}
+.acp-mod-tasks-scope {
+  height: 24px; padding: 0 5px; border: 0; border-radius: 4px;
+  background: transparent; color: var(--text-secondary); font: inherit; font-size: 11px; white-space: nowrap;
+}
+.acp-mod-tasks-scope.is-active { background: var(--accent-soft); color: var(--accent); }
+.acp-mod-tasks-toolbar { margin-left: auto; display: flex; align-items: center; gap: 2px; flex: none; min-width: 0; }
+.acp-mod-tasks-headbar .acp-mod-tasks-toolbar { gap: 2px; }
+.acp-next-task-rail .acp-mod-tasks-project { display: none; }
+.acp-mod-tasks-iconbtn {
+  width: 26px; height: 26px; min-width: 26px; padding: 0; display: inline-grid; place-items: center;
+  border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--text-secondary);
+}
+.acp-mod-tasks-toolbar .acp-mod-tasks-iconbtn { width: 26px; height: 26px; min-width: 26px; padding: 0; font-size: 16px; }
+.acp-mod-tasks-toolbar .acp-mod-tasks-iconbtn > span { font-size: 16px; line-height: 1; }
+.acp-mod-tasks-iconbtn:hover:not(:disabled) { border-color: var(--border-default); background: var(--bg-elevated); color: var(--text-primary); }
+.acp-mod-tasks-iconbtn:disabled { opacity: .35; cursor: default; }
+.acp-mod-tasks-iconbtn.is-active, .acp-mod-tasks-pin[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
+.acp-mod-tasks-iconbtn > span { font-size: 16px; line-height: 1; }
+.acp-mod-tasks-pin-note { flex: none; margin: 0 8px; padding: 5px 7px; border-left: 2px solid var(--amber); background: rgba(var(--amber-rgb), .08); color: var(--amber); font-size: 11px; line-height: 15px; }
+
+.acp-mod-tasks-listbar {
+  display: flex; align-items: center; gap: 4px; min-width: 0; flex: none;
+  padding: 9px 8px 4px; border-bottom: 1px solid var(--border-subtle);
+}
+.acp-mod-tasks-listbar .acp-mod-tasks-filters { flex: 1 1 auto; min-width: 0; flex-wrap: nowrap; gap: 2px; overflow: visible; }
+.acp-mod-tasks-listbar .acp-mod-tasks-filter-chip { position: relative; flex: 0 0 auto; height: 24px; padding: 0 2px; gap: 1px; font-size: 11px; line-height: 15px; }
+.acp-mod-tasks-listbar .acp-mod-tasks-filter-chip-count {
+  position: absolute; top: -8px; right: 0; min-width: 14px; height: 13px; padding: 0 2px;
+  border: 1px solid var(--border-default); border-radius: 999px; background: var(--bg-panel);
+  color: var(--text-secondary); font-size: 10px; line-height: 11px; text-align: center;
+}
+.acp-mod-tasks-listbar .acp-mod-tasks-filter-chip.is-active .acp-mod-tasks-filter-chip-count { color: var(--accent); border-color: rgba(var(--accent-rgb), .5); }
+.acp-mod-tasks-listbar .acp-mod-tasks-filter-chip--running { color: var(--accent); border-color: rgba(var(--accent-rgb), .38); }
+.acp-mod-tasks-listbar .acp-mod-tasks-filter-chip--intervene { color: var(--amber); border-color: rgba(var(--amber-rgb), .38); }
+.acp-mod-tasks-listbar .acp-mod-tasks-filter-chip--completed { color: var(--green); border-color: rgba(var(--green-rgb), .34); }
+.acp-mod-tasks-listbar .acp-mod-tasks-filter-chip--error { color: var(--red); border-color: rgba(var(--red-rgb), .36); }
+.acp-mod-tasks-sort { flex: none; display: flex; align-items: center; gap: 2px; }
+.acp-mod-tasks-sort-box { position: relative; }
+.acp-mod-tasks-sort-btn {
+  height: 24px; display: inline-flex; align-items: center; gap: 2px; padding: 0 4px;
+  list-style: none; border: 1px solid var(--border-subtle); border-radius: 4px;
+  background: transparent; color: var(--text-secondary); font: inherit; font-size: 11px; cursor: pointer; white-space: nowrap;
+}
+.acp-mod-tasks-sort-btn::-webkit-details-marker { display: none; }
+.acp-mod-tasks-sort-btn::after { content: "▾"; color: var(--text-tertiary); }
+.acp-mod-tasks-sort-btn:hover { background: var(--bg-elevated); color: var(--text-primary); }
+.acp-mod-tasks-sort-prefix { color: var(--text-tertiary); }
+.acp-mod-tasks-sort-icon { color: var(--text-tertiary); font-size: 12px; }
+.acp-mod-tasks-sort-short { display: none; }
+.acp-mod-tasks-sort-menu {
+  position: absolute; z-index: 30; right: 0; top: 29px; min-width: 148px; padding: 4px;
+  display: flex; flex-direction: column; gap: 2px;
+  border: 1px solid var(--border-default); border-radius: 6px; background: var(--bg-panel); box-shadow: var(--shadow-panel);
+}
+.acp-mod-tasks-sort-item, .acp-mod-tasks-sort-group {
+  min-height: 30px; padding: 4px 8px; border: 1px solid transparent; border-radius: 4px;
+  background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; text-align: left;
+}
+.acp-mod-tasks-sort-item[aria-checked="true"] { color: var(--accent); background: var(--accent-soft); }
+.acp-mod-tasks-sort-group { margin-top: 3px; border-top: 1px solid var(--border-subtle); color: var(--text-tertiary); }
+.acp-mod-tasks-sort-order { width: 22px; height: 24px; padding: 0; border: 1px solid var(--border-subtle); border-radius: 4px; background: transparent; color: var(--text-secondary); font-size: 14px; line-height: 22px; }
+.acp-mod-tasks-sort-order:hover { color: var(--text-primary); background: var(--bg-elevated); }
+@container (max-width: 330px) {
+  .acp-mod-tasks-sort-prefix { display: none; }
+  html[lang^="en"] .acp-mod-tasks-sort-long,
+  html[lang^="en"] .acp-mod-tasks-sort-short { display: none; }
+}
+@container (max-width: 310px) {
+  html[lang^="en"] .acp-mod-tasks-title { display: none; }
+  .acp-mod-tasks-listbar { padding-left: 6px; padding-right: 6px; }
+  .acp-mod-tasks-listbar .acp-mod-tasks-filter-chip { padding: 0 1px; }
+  .acp-mod-tasks-sort-prefix, .acp-mod-tasks-sort-long, .acp-mod-tasks-sort-short { display: none; }
+  .acp-mod-tasks-sort-btn { padding: 0 4px; }
 }
 
 /* ── toolbar ─────────────────────────────────────────────────────────── */
@@ -39,7 +127,98 @@
   font-size: 12px;
 }
 
+/* ── status filter chips (A-17) ──────────────────────────────────────── */
+
+.acp-mod-tasks-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.acp-mod-tasks-filters-label {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 15px;
+  margin-right: 2px;
+}
+
+.acp-mod-tasks-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: rgba(var(--white-rgb), 0.03);
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 15px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--transition), border-color var(--transition), background var(--transition);
+}
+
+.acp-mod-tasks-filter-chip:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+.acp-mod-tasks-filter-chip.is-active {
+  color: var(--accent);
+  border-color: rgba(var(--accent-rgb), 0.45);
+  background: var(--accent-soft);
+}
+
+.acp-mod-tasks-filter-chip-count {
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.acp-mod-tasks-filter-chip-count:empty { display: none; }
+
+.acp-mod-tasks-filter-chip.is-active .acp-mod-tasks-filter-chip-count {
+  color: inherit;
+}
+
+/* ── recycle bin note (A-24) ─────────────────────────────────────────── */
+/* The note states the scope OUT LOUD: archived rows are recoverable, purged
+ * rows are not (the server cascade deletes them). */
+.acp-mod-tasks-trash-note {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+  padding: 5px 8px;
+  border: 1px dashed rgba(var(--amber-rgb), 0.42);
+  border-radius: var(--radius-sm);
+  background: rgba(var(--amber-rgb), 0.06);
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.acp-mod-tasks-trash-note[hidden] { display: none; }
+
+.acp-mod-tasks-trash-scope { color: var(--text-tertiary); }
+
+.acp-mod-tasks-trash-readonly {
+  color: var(--amber);
+}
+
+.acp-mod-tasks-trash-readonly[hidden] { display: none; }
+
+/* The trash scope is visually distinct from the live queue without changing
+ * the row anatomy: the left border marks archived rows only. */
+.acp-mod-tasks-row[data-acp-trash-row="true"] {
+  border-left: 2px solid rgba(var(--amber-rgb), 0.55);
+}
+
 .acp-mod-tasks-refresh,
+.acp-mod-tasks-projects-btn,
+.acp-mod-tasks-trash-btn,
 .acp-mod-tasks-retry,
 .acp-mod-tasks-page-btn,
 .acp-mod-tasks-open {
@@ -55,11 +234,26 @@
 }
 
 .acp-mod-tasks-refresh:hover,
+.acp-mod-tasks-projects-btn:hover:not(:disabled),
+.acp-mod-tasks-trash-btn:hover,
 .acp-mod-tasks-retry:hover,
 .acp-mod-tasks-page-btn:hover:not(:disabled),
 .acp-mod-tasks-open:hover {
   background: var(--accent-soft);
   border-color: var(--accent);
+}
+
+/* A-24: the recycle-bin toggle is a MODE switch (aria-pressed), so the active
+ * state is persistent rather than hover-only. */
+.acp-mod-tasks-trash-btn.is-active {
+  color: var(--accent);
+  border-color: rgba(var(--accent-rgb), 0.45);
+  background: var(--accent-soft);
+}
+
+.acp-mod-tasks-projects-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .acp-mod-tasks-page-btn:disabled {
@@ -77,7 +271,7 @@
 .acp-mod-tasks-stale {
   color: var(--amber);
   font-size: 11px;
-  border: 1px dashed rgba(242, 184, 75, 0.45);
+  border: 1px dashed rgba(var(--amber-rgb), 0.45);
   border-radius: var(--radius-sm);
   padding: 3px 8px;
   flex-shrink: 0;
@@ -114,8 +308,8 @@
 .acp-mod-tasks-state--error .acp-mod-tasks-state-label {
   color: var(--red);
   font-weight: 600;
-  border: 1px solid rgba(229, 83, 83, 0.45);
-  background: rgba(229, 83, 83, 0.10);
+  border: 1px solid rgba(var(--red-rgb), 0.45);
+  background: rgba(var(--red-rgb), 0.10);
   border-radius: 999px;
   padding: 2px 9px;
 }
@@ -167,11 +361,21 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  width: 100%;
   padding: 4px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 16px;
   font-weight: 600;
+  text-align: left;
+  cursor: pointer;
 }
+.acp-mod-tasks-group-head:hover { background: rgba(var(--white-rgb), .03); }
+.acp-mod-tasks-group-head:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.acp-mod-tasks-group-arrow { flex: none; width: 12px; color: var(--text-tertiary); }
 
 .acp-mod-tasks-group-name {
   overflow: hidden;
@@ -187,16 +391,25 @@
 }
 
 .acp-mod-tasks-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 8px;
-  margin-bottom: 2px;
+  position: relative;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto 28px;
+  grid-template-areas:
+    "select name status more"
+    ". meta meta more"
+    ". tags tags more";
+  align-items: start;
+  gap: 2px 8px;
+  min-height: 56px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: background var(--transition), border-color var(--transition);
 }
+
+.acp-mod-tasks-row:has(.acp-mod-tasks-row-tags) { min-height: 68px; }
 
 .acp-mod-tasks-row:hover {
   background: var(--bg-elevated);
@@ -209,22 +422,202 @@
 }
 
 .acp-mod-tasks-row.is-selected {
-  border-color: rgba(78, 161, 255, 0.42);
+  border-color: rgba(var(--accent-rgb), 0.42);
   background: var(--accent-soft);
 }
 
 .acp-mod-tasks-row-name {
-  flex: 1 1 auto;
+  grid-area: name;
+  min-width: 0;
+  align-self: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+}
+
+.acp-mod-tasks-row .acp-mod-tasks-select { grid-area: select; align-self: center; }
+.acp-mod-tasks-row .acp-mod-tasks-badge { grid-area: status; align-self: start; }
+.acp-mod-tasks-row-meta {
+  grid-area: meta;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 15px;
+}
+.acp-mod-tasks-row-workflow {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 15px;
+}
+.acp-mod-tasks-row-time {
+  flex: none;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 15px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.acp-mod-tasks-row-workflow {
-  flex-shrink: 0;
+/* A-23: tags are labels (never path components) — quiet chips on the row. */
+.acp-mod-tasks-row-tags {
+  grid-area: tags;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  flex-wrap: nowrap;
+}
+
+.acp-mod-tasks-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 11px;
+  line-height: 15px;
   color: var(--text-tertiary);
-  font-size: 10px;
+  background: rgba(var(--text-secondary-rgb), 0.06);
+  white-space: nowrap;
+}
+.acp-mod-tasks-tag-more { flex: none; color: var(--text-secondary); }
+
+/* ── row commands (A-18 / A-19) ─────────────────────────────────────── */
+
+.acp-mod-tasks-more { grid-area: more; position: relative; justify-self: end; align-self: start; }
+.acp-mod-tasks-more-btn {
+  width: 28px; height: 28px; display: grid; place-items: center;
+  list-style: none; border: 1px solid transparent; border-radius: 4px;
+  color: var(--text-secondary); cursor: pointer; font-size: 18px; line-height: 1;
+}
+.acp-mod-tasks-more-btn::-webkit-details-marker { display: none; }
+.acp-mod-tasks-more-btn:hover, .acp-mod-tasks-more[open] .acp-mod-tasks-more-btn { border-color: var(--border-default); background: var(--bg-elevated); color: var(--text-primary); }
+.acp-mod-tasks-row-actions {
+  position: absolute; right: 0; top: 32px; z-index: 20;
+  display: none; flex-direction: column; align-items: stretch; gap: 2px;
+  min-width: 148px; padding: 4px;
+  border: 1px solid var(--border-default); border-radius: 6px;
+  background: #111821; box-shadow: var(--shadow-panel);
+}
+.acp-mod-tasks-more[open] > .acp-mod-tasks-row-actions { display: flex; }
+
+.acp-mod-tasks-row-progress {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+  background: rgba(var(--white-rgb), 0.06); overflow: hidden;
+}
+.acp-mod-tasks-row-progress > i { display: block; height: 100%; background: var(--accent); }
+
+.acp-mod-tasks-row-action {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  background: rgba(var(--white-rgb), 0.03);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--transition), border-color var(--transition), background var(--transition);
+}
+
+.acp-mod-tasks-row-action:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.acp-mod-tasks-row-action--cancel:hover:not(:disabled) {
+  color: var(--red);
+  border-color: var(--red);
+  background: rgba(var(--red-rgb), 0.08);
+}
+
+.acp-mod-tasks-row-action--purge:hover:not(:disabled) {
+  color: var(--red);
+  border-color: var(--red);
+  background: rgba(var(--red-rgb), 0.08);
+}
+
+/* Lifecycle commands (A-20/A-21) are visually quieter than the state
+ * commands: they open a dialog, they never act on the first click. */
+.acp-mod-tasks-row-action--lifecycle {
+  border-style: dashed;
+  color: var(--text-tertiary);
+}
+
+/* A-23: the tag editor entry is a label-surface command too — quiet and
+ * dashed, distinct from both data-acp-action and data-acp-lifecycle. */
+.acp-mod-tasks-row-action--tags {
+  border-style: dashed;
+  color: var(--text-tertiary);
+}
+
+/* A-24: trash row commands. Restore is the recoverable (non-destructive)
+ * action; permanent delete is the irreversible one and reads as danger even
+ * before it is hovered. */
+.acp-mod-tasks-row-action--restore {
+  color: var(--green);
+  border-color: rgba(var(--green-rgb), 0.42);
+}
+
+.acp-mod-tasks-row-action--restore:hover:not(:disabled) {
+  color: var(--green);
+  border-color: var(--green);
+  background: rgba(var(--green-rgb), 0.10);
+}
+
+.acp-mod-tasks-row-action--trash-delete {
+  color: var(--red);
+  border-color: rgba(var(--red-rgb), 0.42);
+}
+
+.acp-mod-tasks-row-action--trash-delete:hover:not(:disabled) {
+  color: var(--red);
+  border-color: var(--red);
+  background: rgba(var(--red-rgb), 0.10);
+}
+
+.acp-mod-tasks-row-action:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.acp-mod-tasks-row-msg {
+  grid-column: 2 / -1;
+  margin-top: 2px;
+  text-align: right;
+  font-size: 11px;
+  line-height: 15px;
+  word-break: break-word;
+  color: var(--text-tertiary);
+}
+
+.acp-mod-tasks-row-msg[data-acp-action-state="busy"] { color: var(--amber); }
+.acp-mod-tasks-row-msg[data-acp-action-state="error"] { color: var(--red); }
+
+.acp-mod-tasks-row[data-acp-action-state="busy"] {
+  border-color: rgba(var(--amber-rgb), 0.35);
+}
+
+.acp-mod-tasks-row[data-acp-action-state="error"] {
+  border-color: rgba(var(--red-rgb), 0.4);
 }
 
 /* Status badge — mirrors the legacy .badge palette via base.css tokens. */
@@ -235,14 +628,14 @@
   gap: 5px;
   border-radius: 999px;
   border: 1px solid var(--border-default);
-  padding: 1px 8px;
-  font-size: 10px;
+  padding: 2px 8px;
+  font-size: 11px;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 15px;
   white-space: nowrap;
   flex-shrink: 0;
   color: var(--text-secondary);
-  background: rgba(176, 190, 200, 0.08);
+  background: rgba(var(--text-secondary-rgb), 0.08);
 }
 
 .acp-mod-tasks-badge::before {
@@ -260,8 +653,8 @@
 .acp-mod-tasks-badge--cancelling,
 .acp-mod-tasks-badge--paused {
   color: var(--amber);
-  border-color: rgba(242, 184, 75, 0.28);
-  background: rgba(242, 184, 75, 0.10);
+  border-color: rgba(var(--amber-rgb), 0.28);
+  background: rgba(var(--amber-rgb), 0.10);
 }
 
 .acp-mod-tasks-badge--paused { border-style: dashed; }
@@ -269,35 +662,36 @@
 .acp-mod-tasks-badge--running,
 .acp-mod-tasks-badge--pending {
   color: var(--accent);
-  border-color: rgba(78, 161, 255, 0.35);
-  background: rgba(78, 161, 255, 0.12);
+  border-color: rgba(var(--accent-rgb), 0.35);
+  background: rgba(var(--accent-rgb), 0.12);
 }
 
 .acp-mod-tasks-badge--waiting_review {
-  color: #d7b8ff;
-  border-color: rgba(186, 122, 255, 0.34);
-  background: rgba(186, 122, 255, 0.14);
+  color: var(--shell-violet);
+  border-color: rgba(var(--shell-violet-rgb), 0.34);
+  background: rgba(var(--shell-violet-rgb), 0.14);
 }
 
 .acp-mod-tasks-badge--completed {
   color: var(--green);
-  border-color: rgba(56, 193, 114, 0.32);
-  background: rgba(56, 193, 114, 0.10);
+  border-color: rgba(var(--green-rgb), 0.32);
+  background: rgba(var(--green-rgb), 0.10);
 }
 
 .acp-mod-tasks-badge--failed {
   color: var(--red);
-  border-color: rgba(229, 83, 83, 0.28);
-  background: rgba(229, 83, 83, 0.10);
+  border-color: rgba(var(--red-rgb), 0.28);
+  background: rgba(var(--red-rgb), 0.10);
 }
 
 .acp-mod-tasks-attempt {
   flex-shrink: 0;
   color: var(--text-tertiary);
   border: 1px solid var(--border-subtle);
-  border-radius: 999px;
-  padding: 0 6px;
-  font-size: 10px;
+  border-radius: 4px;
+  padding: 0 5px;
+  font-size: 11px;
+  line-height: 15px;
 }
 
 /* ── pagination ──────────────────────────────────────────────────────── */
@@ -375,4 +769,406 @@
 
 .acp-mod-tasks-open {
   align-self: flex-start;
+}
+
+/* ── batch selection + purge bar (A-20) ──────────────────────────────── */
+
+.acp-mod-tasks-select {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.acp-mod-tasks-select input[type="checkbox"] {
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.acp-mod-tasks-row[data-acp-selected="true"] {
+  border-color: rgba(var(--accent-rgb), 0.32);
+  background: rgba(var(--accent-rgb), 0.06);
+}
+
+.acp-mod-tasks-batch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border: 1px solid rgba(var(--accent-rgb), 0.32);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+}
+
+.acp-mod-tasks-batch[hidden] { display: none; }
+
+/* A-24: the trash batch bar carries restore / permanent-delete instead of the
+ * queue's purge entry — tint it with the recycle-bin accent. */
+.acp-mod-tasks-batch[data-acp-batch-bar="trash"] {
+  border-color: rgba(var(--amber-rgb), 0.38);
+  background: rgba(var(--amber-rgb), 0.06);
+}
+
+.acp-mod-tasks-batch-count {
+  color: var(--text-secondary);
+  font-size: 11px;
+  margin-right: auto;
+  white-space: nowrap;
+}
+
+.acp-mod-tasks-batch-btn {
+  height: 22px;
+  padding: 0 10px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--transition), border-color var(--transition), background var(--transition);
+}
+
+.acp-mod-tasks-batch-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.acp-mod-tasks-batch-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.acp-mod-tasks-batch-btn--danger {
+  color: var(--red);
+  border-color: rgba(var(--red-rgb), 0.42);
+}
+
+.acp-mod-tasks-batch-btn--danger:hover:not(:disabled) {
+  border-color: var(--red);
+  background: rgba(var(--red-rgb), 0.10);
+}
+
+.acp-mod-tasks-batch-msg {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.acp-mod-tasks-batch-msg[hidden] { display: none; }
+.acp-mod-tasks-batch-msg[data-acp-batch-tone="ok"] { color: var(--green); }
+.acp-mod-tasks-batch-msg[data-acp-batch-tone="error"] { color: var(--red); }
+
+/* ── confirmation / rename / move dialog (A-20 / A-21) ───────────────── */
+
+.acp-mod-tasks-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  background: rgba(var(--black-rgb), 0.62);
+}
+
+.acp-mod-tasks-modal[hidden] { display: none; }
+
+.acp-mod-tasks-modal-card {
+  width: 100%;
+  max-width: 420px;
+  max-height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  box-shadow: 0 12px 32px rgba(var(--black-rgb), 0.45);
+}
+
+.acp-mod-tasks-modal-card:focus { outline: none; }
+.acp-mod-tasks-modal-card:focus-visible { outline: 1px solid var(--accent); }
+
+.acp-mod-tasks-modal-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.acp-mod-tasks-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.acp-mod-tasks-modal-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  word-break: break-word;
+}
+
+.acp-mod-tasks-modal-warning {
+  font-size: 11px;
+  color: var(--amber);
+  border: 1px dashed rgba(var(--amber-rgb), 0.45);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+}
+
+.acp-mod-tasks-modal-label {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.acp-mod-tasks-modal-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.acp-mod-tasks-modal-check input[type="checkbox"] {
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  accent-color: var(--red);
+  cursor: pointer;
+}
+
+.acp-mod-tasks-modal-input,
+.acp-mod-tasks-modal-select {
+  height: var(--toolbar-control-height);
+  padding: 0 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.acp-mod-tasks-modal-input:focus,
+.acp-mod-tasks-modal-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.acp-mod-tasks-modal-hint {
+  font-size: 10px;
+  color: var(--amber);
+}
+
+.acp-mod-tasks-modal-hint[hidden] { display: none; }
+
+.acp-mod-tasks-modal-error {
+  font-size: 11px;
+  color: var(--red);
+  border: 1px solid rgba(var(--red-rgb), 0.42);
+  border-radius: var(--radius-sm);
+  background: rgba(var(--red-rgb), 0.10);
+  padding: 4px 8px;
+  word-break: break-word;
+}
+
+.acp-mod-tasks-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.acp-mod-tasks-modal-cancel,
+.acp-mod-tasks-modal-confirm {
+  height: var(--small-button-height);
+  padding: 0 12px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.acp-mod-tasks-modal-cancel:hover { background: var(--accent-soft); border-color: var(--accent); }
+
+.acp-mod-tasks-modal-confirm {
+  border-color: rgba(var(--accent-rgb), 0.45);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.acp-mod-tasks-modal-confirm.is-danger {
+  border-color: rgba(var(--red-rgb), 0.45);
+  background: rgba(var(--red-rgb), 0.10);
+  color: var(--red);
+}
+
+.acp-mod-tasks-modal-confirm:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.acp-mod-tasks-modal-confirm.is-danger:hover:not(:disabled) {
+  border-color: var(--red);
+}
+
+.acp-mod-tasks-modal-confirm:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ── project CRUD (A-22) + tag editor (A-23) dialog pieces ───────────── */
+
+.acp-mod-tasks-modal-createrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.acp-mod-tasks-modal-createrow .acp-mod-tasks-modal-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.acp-mod-tasks-modal-notice {
+  font-size: 11px;
+  color: var(--green);
+  border: 1px solid rgba(var(--green-rgb), 0.32);
+  border-radius: var(--radius-sm);
+  background: rgba(var(--green-rgb), 0.10);
+  padding: 4px 8px;
+  word-break: break-word;
+}
+
+.acp-mod-tasks-modal-deps {
+  font-size: 11px;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  padding: 4px 8px;
+  word-break: break-word;
+}
+
+.acp-mod-tasks-modal-deps[data-acp-project-deps="error"] {
+  color: var(--amber);
+  border-color: rgba(var(--amber-rgb), 0.45);
+}
+
+.acp-mod-tasks-project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.acp-mod-tasks-project-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+}
+
+.acp-mod-tasks-project-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.acp-mod-tasks-project-btn {
+  height: 22px;
+  padding: 0 10px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  font-size: 10px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color var(--transition), border-color var(--transition), background var(--transition);
+}
+
+.acp-mod-tasks-project-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.acp-mod-tasks-project-btn--danger {
+  color: var(--red);
+  border-color: rgba(var(--red-rgb), 0.42);
+}
+
+.acp-mod-tasks-project-btn--danger:hover:not(:disabled) {
+  border-color: var(--red);
+  background: rgba(var(--red-rgb), 0.10);
+}
+
+.acp-mod-tasks-project-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.acp-mod-tasks-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 18px;
+}
+
+.acp-mod-tasks-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  padding: 0 4px 0 8px;
+  font-size: 10px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  background: rgba(var(--text-secondary-rgb), 0.06);
+}
+
+.acp-mod-tasks-tag-remove {
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.acp-mod-tasks-tag-remove:hover:not(:disabled) { color: var(--red); }
+.acp-mod-tasks-tag-remove:disabled { opacity: 0.4; cursor: default; }
+
+@media (max-width: 720px) {
+  .acp-mod-tasks-toolbar {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    width: 100%;
+  }
+  .acp-mod-tasks-project { grid-column: 1 / -1; width: 100%; }
+  .acp-mod-tasks-toolbar > button { min-width: 0; width: 100%; }
+  .acp-mod-tasks-filters { width: 100%; max-width: 100%; }
+  .acp-mod-tasks-modal-card { width: 100%; max-width: none; }
+  .acp-mod-tasks-row-actions { flex-wrap: wrap; margin-left: 0; }  .acp-mod-tasks-modal-actions { flex-wrap: wrap; }
 }

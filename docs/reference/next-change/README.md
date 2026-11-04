@@ -14,13 +14,20 @@
 > 一份方案一个文件：进展、切片验收与修订追加到同一文件的新小节，**不另建并行总方案**。
 > 被取代的稿子移入 [`archive/`](../../archive/)；本批（2026-10-31）已归档 2026-10-16/18/20 三代被取代的稿子与评审轮次。
 
-## ACP 3.0（现行，2026-10-31）
+## ACP 3.0（现行，协作修订 2026-11-04）
+
+双人先读架构 §10。其 C0—C5/P0—P6 总纲取代旧“先完整工作站”的周历；A 负责化学语义/网络/前端，B 负责科学插件编译和最小 ACR/Data 接入，跨线契约双人评审。只更新方案，不将新增交接类型视作现有 wire；任务状态与三态证据分别记录。
+
 
 | 文档 | 内容 | 状态 |
 |---|---|---|
-| [ACP_3.0_Architecture_20261031.md](ACP_3.0_Architecture_20261031.md) | 以用户虚拟工作站为中心的 RPH/DSH 一体化体系；后端/前端两计划的共同上位 | 现行 |
-| [ACP_3.0_Backend_Plan_20261031.md](ACP_3.0_Backend_Plan_20261031.md) | 后端实现计划（Control Plane / CCCP / RPH） | 现行 |
-| [ACP_3.0_Frontend_Plan_20261031.md](ACP_3.0_Frontend_Plan_20261031.md) | **v2 可视化先行 + 全功能对等**：`acp.view.v1` + 三模式适配层；24 个功能面 parity 矩阵；**两条任务线（Track A 移植 63 项 / Track B 新模块 13 项）**；V0–V7 分期，后端缺口 BE-GAP-01…12，DSH 宿主推迟到 V8 | **现行**（前端实施唯一入口） |
+| [ACP_3.0_Architecture_20261031.md](ACP_3.0_Architecture_20261031.md) | §10：化学研究编译/插件/执行双人职责、交接、阶段门与进度唯一总纲；工作站为部署目标 | 现行 |
+| [ACP_V3_CCCP_ACR_Backend_Architecture_20261102.md](ACP_V3_CCCP_ACR_Backend_Architecture_20261102.md) | B 线 P0—P6 插件/科学编译/原生执行；本批从 GitHub 补齐并映射双人责任 | 现行方案，未实现目标需逐门验收 |
+| [ACP_Chemistry_Network_Contract_20261103.md](ACP_Chemistry_Network_Contract_20261103.md) | 当前 B0/B1 HTTP 唯一契约；§11 明确未来物种/TS/claim 扩展与兼容 | 工作区有实现；live/反应边未验收 |
+| [ACP_3.0_Backend_Plan_20261031.md](ACP_3.0_Backend_Plan_20261031.md) | 平台设施专项 WP0—WP8；首条科学闭环排序依架构 §10 | 现行 |
+| [ACP_3.0_Frontend_Plan_20261031.md](ACP_3.0_Frontend_Plan_20261031.md) | **功能对等清单唯一入口**：`acp.view.v1`、24 个功能面 parity 矩阵、既有实现记录；2026-11-02 DSH 宿主接入提前，排序修订见下行 §13 | **现行**（功能范围） |
+| [ACP_Frontend_DSH_Pluginization_Plan_20261102.md](ACP_Frontend_DSH_Pluginization_Plan_20261102.md) | **ACP-NEXT 就是 DSH 插件**；§13.15 为窗口级固定工作台优化提案；§13.14 为原生停靠修复与限定桌面回执；§13.13 为 A—G 内部布局 | **现行**（固定工作台尚未实施；原生停靠已实现；验收按各自范围） |
+| [ACP_Web_Agent_DSH_Bridge_Plan_20261102.md](ACP_Web_Agent_DSH_Bridge_Plan_20261102.md) | ACP 主界面内托管 DSH Agent 网关的备选路线；不与插件主线同时实施 | 备选记录 |
 | [ACP_MultiUser_VirtualHost_DSH_Topology_20261031.md](ACP_MultiUser_VirtualHost_DSH_Topology_20261031.md) | 一人一 Linux 虚机 + 一人一 DSH + 虚拟文件系统的代码级差距与文件清单 | 现行（附件） |
 | [ACP_V3_CCCP_ACR_Backend_Architecture_20261102.md](ACP_V3_CCCP_ACR_Backend_Architecture_20261102.md) | V3 后端关键架构方案（CCCP × ACR）：科学编译 / 中央调度 / Agentless 远端原生执行；问题来源与边界参考，**非 V2 线实施依赖** | 参考（未实施） |
 

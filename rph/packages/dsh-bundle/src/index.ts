@@ -280,3 +280,10 @@ export * from "./compose.js";
 export * from "./doctor.js";
 
 export * from "./product-parts.js";
+
+// ---------------------------------------------------------------------------
+// Portable DSH host launch profile (parameterised replacement for the frozen
+// `profiles/web.cordis.yml` acceptance record)
+// ---------------------------------------------------------------------------
+
+export * from "./host-profile.js";

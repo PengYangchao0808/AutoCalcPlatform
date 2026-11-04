@@ -1,5 +1,12 @@
 # tests/ — Test Suite
 
+## ACP3 双人协作（2026-11-04）
+
+读[架构总纲 §10](../docs/reference/next-change/ACP_3.0_Architecture_20261031.md)。新增验收按 C0—C5/P0—P6：A 主写化学/网络/UI 负例，B 主写插件/golden/科学验证/执行恢复，对方验收共享 fixture。必须覆盖弱身份/TS 不误并、不可表达约束、错虚频/错端点/能量不可比、旧 attempt/revision、重复提交及发布失败不重复 QC。现有 B0/B1/单元 PASS 不替代同次真模型+QC、安装或 Local/LSF 证据。
+
+本节是开发目标，不声明新增能力已交付；现行依赖/执行/安全护栏继续约束实现。
+
+
 > **2026-10-29 audit:** current commands/results and exclusions are archived in [reports/acp2_function_audit_20261028](../reports/acp2_function_audit_20261028/REPORT.md). Ordinary non-slow regression, real-SDK contract tests and browser tests are separate evidence layers. A browser failure must stay FAIL even if CI skips the case; do not set CI or change markers to conceal it. Test fixtures with a temporary origin must isolate deployment configuration such as ACP_PUBLIC_ORIGIN. Real model/QC/LSF slow scenarios require their own evidence and are not implied by fast tests.
 
 ## MCP / Guide / 自动 Batch 测试约定（2026-10-30）

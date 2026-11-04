@@ -1,0 +1,7 @@
+{
+  "mainProcessCount": 1,
+  "windowPresent": true,
+  "remoteDebugging": false,
+  "newCrashLogs": 0,
+  "windowEvidence": "sky.list_windows: DSH workspace window returned after normal startup"
+}

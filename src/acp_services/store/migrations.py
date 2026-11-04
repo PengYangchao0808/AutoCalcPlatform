@@ -413,6 +413,16 @@ CREATE TABLE IF NOT EXISTS selection_publications (
 );
 """,
     },
+    {
+        "id": "029",
+        "description": (
+            "chemistry-network B1b: persist the B1a molecule identity key "
+            "(mol_identity_v1, one row per (project_id, identity_key)) with its "
+            "scheme and chemical metadata, so the same molecule converges "
+            "independently of file path, bytes or display name"
+        ),
+        "sql": "-- handled in Python for SQLite ALTER TABLE compatibility",
+    },
 ]
 
 
@@ -1119,6 +1129,41 @@ def _apply_approval_science_projection_column(conn: sqlite3.Connection) -> bool:
     return True
 
 
+def _apply_structure_identities(conn: sqlite3.Connection) -> bool:
+    """Create ``structure_identities`` (B1b molecule-identity persistence).
+
+    Readiness is probed on ``projects`` rather than ``jobs``: ``jobs`` is created
+    by ``JobStore`` (``store/store.py``), not by any migration, so probing it
+    would make this id an unrecordable "not applicable" on a fresh ``migrate()``
+    run and the table would never appear until someone opened the job store.
+    ``projects`` is created by migration ``001`` in the same run and is exactly
+    the scope ``structure_identities`` is keyed by, so "projects-era DB" is the
+    honest predicate here.  The DDL is ``IF NOT EXISTS`` end to end, so running
+    it against an already-upgraded DB is a no-op.
+    """
+    if not _table_exists(conn, "projects"):
+        return False
+    conn.executescript(
+        """
+CREATE TABLE IF NOT EXISTS structure_identities (
+    project_id TEXT NOT NULL,
+    identity_key TEXT NOT NULL,
+    scheme TEXT NOT NULL,
+    canonical_smiles TEXT NOT NULL DEFAULT '',
+    charge INTEGER,
+    multiplicity INTEGER,
+    formula TEXT NOT NULL DEFAULT '',
+    inchikey TEXT,
+    first_seen_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (project_id, identity_key)
+);
+CREATE INDEX IF NOT EXISTS idx_structure_identities_project ON structure_identities(project_id);
+"""
+    )
+    return True
+
+
 def _apply_migration(conn: sqlite3.Connection, migration: dict[str, str]) -> bool:
     migration_id = migration["id"]
     if migration_id == "002":
@@ -1149,6 +1194,8 @@ def _apply_migration(conn: sqlite3.Connection, migration: dict[str, str]) -> boo
         return _apply_approval_science_digest_column(conn)
     if migration_id == "027":
         return _apply_approval_science_projection_column(conn)
+    if migration_id == "029":
+        return _apply_structure_identities(conn)
     sql = migration["sql"].strip()
     if sql:
         conn.executescript(sql)

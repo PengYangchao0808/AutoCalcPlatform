@@ -14,10 +14,13 @@
   --shell-side-w: clamp(280px, 24vw, 400px);
   --shell-side-rail-w: 32px;
   --shell-bottom-h: clamp(160px, 30vh, 340px);
+  --files-tree-w: 300px;
+  --files-term-h: 200px;
   --shell-timeline-rail: 22px;
   --shell-violet: #d7b8ff;
-  --shell-violet-border: rgba(186, 122, 255, 0.34);
-  --shell-violet-bg: rgba(186, 122, 255, 0.14);
+  --shell-violet-rgb: 186, 122, 255;
+  --shell-violet-border: rgba(var(--shell-violet-rgb), 0.34);
+  --shell-violet-bg: rgba(var(--shell-violet-rgb), 0.14);
   --shell-skel-base: rgba(255, 255, 255, 0.045);
   --shell-skel-hl: rgba(255, 255, 255, 0.1);
   --shell-danger-border: rgba(229, 83, 83, 0.45);
@@ -37,23 +40,23 @@
 .acp-layout-dialog {
   width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow: auto;
   box-sizing: border-box; border: 1px solid var(--border-default); border-radius: 12px;
-  background: var(--bg-base, #141922); color: var(--text-primary, #e8edf5); padding: 24px;
+  background: var(--bg-base); color: var(--text-primary); padding: 24px;
 }
-.acp-layout-dialog::backdrop { background: rgba(0, 0, 0, .65); }
+.acp-layout-dialog::backdrop { background: rgba(var(--black-rgb), .65); }
 .acp-layout-dialog h2 { margin: 0 0 10px; font-size: 20px; }
 .acp-layout-dialog p { color: var(--text-secondary); line-height: 1.6; }
 .acp-layout-dialog label { display: grid; grid-template-columns: 100px minmax(0, 1fr) 44px; align-items: center; gap: 10px; margin: 16px 0; }
 .acp-layout-dialog select { grid-column: 2 / -1; }
 .acp-layout-dialog select, .acp-layout-dialog button {
   padding: 9px 12px; border-radius: 6px; border: 1px solid var(--border-default);
-  background: var(--bg-base, #141922); color: inherit; font: inherit;
+  background: var(--bg-base); color: inherit; font: inherit;
 }
-.acp-layout-dialog input { width: 100%; accent-color: var(--accent, #4ea1ff); }
+.acp-layout-dialog input { width: 100%; accent-color: var(--accent); }
 .acp-layout-dialog button { cursor: pointer; }
-.acp-layout-dialog .acp-layout-primary { background: #245a96; border-color: #4ea1ff; color: white; }
+.acp-layout-dialog .acp-layout-primary { background: var(--accent-soft); border-color: var(--accent); color: var(--text-primary); }
 .acp-layout-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
 .acp-layout-preview { height: 150px; display: grid; gap: 6px; margin: 18px 0; }
-.acp-layout-preview-panel { min-width: 0; overflow: hidden; display: grid; place-items: center; padding: 6px; border: 1px solid #4ea1ff66; border-radius: 6px; background: #4ea1ff15; font-size: 12px; }
+.acp-layout-preview-panel { min-width: 0; overflow: hidden; display: grid; place-items: center; padding: 6px; border: 1px solid rgba(var(--accent-rgb), 0.4); border-radius: 6px; background: rgba(var(--accent-rgb), 0.08); font-size: 12px; }
 .mono { font-family: "SFMono-Regular", Consolas, monospace; }
 .acp-visually-hidden {
   position: absolute;
@@ -83,6 +86,25 @@
   transition: top var(--transition);
 }
 .acp-skip-link:focus { top: 8px; }
+
+/* ── A-63 focus visibility ─────────────────────────────────────────────
+ * One visible ring for every shell-owned focus stop: skip link, workspace
+ * tabs, workspace landmark (skip-link target), panel titles, panel bodies,
+ * panel chrome buttons and the layout-editor dialog. Module stylesheets load
+ * after this file and may still restyle their own controls; this rule is the
+ * floor, not a replacement. */
+.acp-skip-link:focus,
+.acp-shell :focus-visible,
+.acp-layout-dialog :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* The panel body scrolls inside an `overflow: hidden` panel, so an outside
+ * ring would be clipped — use an inset ring for the content anchor. */
+.acp-shell .acp-panel-body:focus-visible { outline-offset: -2px; }
+/* Focusable panel headings are part of the A-63 walk; keep the reading order
+ * obvious without changing the chrome look. */
+.acp-panel-title:focus { color: var(--text-primary); }
 
 /* ── §1.2 topbar ───────────────────────────────────────────────────── */
 .acp-shell-topbar {
@@ -626,4 +648,51 @@
   }
   .acp-slot[data-slot="side"].is-collapsed,
   .acp-slot[data-slot="bottom"].is-collapsed { min-height: 0; }
+}
+
+/* ── §5.5 narrow screens (390px audit target) ──────────────────────── */
+@media (max-width: 720px) {
+  /* Topbar: the brand copy is the only content that can ellipsize; the lab
+     badge and classic link are secondary, the action cluster wraps instead of
+     forcing a horizontal scrollbar. */
+  .acp-shell-topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 8px 10px;
+    gap: 8px;
+    overflow-x: hidden;
+  }
+  .acp-shell-brand { width: 100%; min-width: 0; }
+  .acp-shell-brand-copy { min-width: 0; width: 100%; }
+  .acp-shell-brand-copy h1 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .acp-shell-badge-lab { display: none; }
+  .acp-shell-switch { max-width: 100%; width: 100%; }
+  .acp-shell-actions {
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .acp-shell-actions > * { max-width: 100%; }
+  .acp-shell-focus { max-width: 100%; width: 100%; }
+  .acp-shell-focus-name { max-width: none; }
+  .acp-shell-link-classic { display: none; }
+
+  /* Panels: every host stays inside the viewport gutter; the panel body
+     scrolls, never the page. */
+  .acp-panel-head { min-height: 38px; padding: 8px 10px; }
+  .acp-panel-instance { display: none; }
+  .acp-panel-body { padding: 10px; }
+  .acp-state { padding: 12px; }
+  .acp-state-actions { justify-self: stretch; flex-wrap: wrap; }
+  .acp-slot { min-height: 260px; }
+  .acp-slot[data-slot="side"],
+  .acp-slot[data-slot="bottom"] { min-height: 220px; }
+
+  /* Layout editor dialog: single column, no 3-track label grid. */
+  .acp-layout-dialog { padding: 16px; }
+  .acp-layout-dialog label { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .acp-layout-dialog select { grid-column: 1 / -1; width: 100%; }
+  .acp-layout-actions > * { flex: 1 1 140px; }
 }

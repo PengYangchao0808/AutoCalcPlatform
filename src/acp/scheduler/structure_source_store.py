@@ -136,6 +136,7 @@ CREATE TABLE IF NOT EXISTS structure_source_index (
     produced_at TEXT,
     organized_at TEXT,
     content_checksum TEXT,
+    molecule_identity_key TEXT,
     discovered_at TEXT NOT NULL,
     discovery_version INTEGER NOT NULL DEFAULT 1,
     UNIQUE(job_id, relative_path)
@@ -233,6 +234,7 @@ _DISCOVERY_COLUMNS: tuple[str, ...] = (
     "availability",
     "produced_at",
     "content_checksum",
+    "molecule_identity_key",
     "policy_json",
     "discovered_at",
     "discovery_version",
@@ -328,6 +330,66 @@ def _tag_key(tag: str) -> str:
     return tag.strip().casefold()
 
 
+def _identity_payload(identity: Any) -> dict[str, Any] | None:
+    """Registry-shaped identity dict, or ``None`` when there is no key.
+
+    Accepts the dict form produced by
+    ``acp.scheduler.structure_sources.molecule_identity_for_text`` (and passes
+    through unchanged) or a ``MoleculeIdentity`` dataclass.  An entry without a
+    resolved ``identity_key`` is "no identity": never invent one from a name,
+    a path or a checksum.
+    """
+    if identity is None:
+        return None
+    if isinstance(identity, dict):
+        key = str(identity.get("identity_key") or "")
+        return identity if key else None
+    key = str(getattr(identity, "key", None) or "")
+    if not key:
+        return None
+    return {
+        "identity_key": key,
+        "scheme": str(getattr(identity, "scheme", "")),
+        "canonical_smiles": str(getattr(identity, "canonical_smiles", "")),
+        "charge": int(getattr(identity, "charge", 0)),
+        "multiplicity": int(getattr(identity, "multiplicity", 1)),
+        "formula": str(getattr(identity, "formula", "")),
+        "inchikey": getattr(identity, "inchikey", None),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Molecule identity registry (implementation owned by acp_services)
+# ---------------------------------------------------------------------------
+
+_IDENTITY_REGISTRY: Any = None
+_IDENTITY_REGISTRY_UNAVAILABLE = False
+
+
+def _identity_registry() -> Any:
+    """Return ``acp_services.store.molecule_identity`` (``None`` when unavailable).
+
+    The registry module takes the caller's ``conn`` and never commits, so the
+    identity write joins the index transaction.  Imported lazily because the
+    module is a separate deliverable; a missing module degrades to "no
+    registry rows" with one warning instead of breaking structure discovery.
+    """
+    global _IDENTITY_REGISTRY, _IDENTITY_REGISTRY_UNAVAILABLE
+    if _IDENTITY_REGISTRY is not None or _IDENTITY_REGISTRY_UNAVAILABLE:
+        return _IDENTITY_REGISTRY
+    try:
+        from acp_services.store import molecule_identity as registry
+    except ImportError:
+        _IDENTITY_REGISTRY_UNAVAILABLE = True
+        logger.warning(
+            "acp_services.store.molecule_identity is unavailable: structure index rows keep "
+            "their molecule_identity_key but no identity registry row is written"
+        )
+        return None
+    _IDENTITY_REGISTRY = registry
+    return registry
+
+
 # ---------------------------------------------------------------------------
 # Errors
 # ---------------------------------------------------------------------------
@@ -388,6 +450,12 @@ class StructureSourceStore:
             columns = {r["name"] for r in conn.execute("PRAGMA table_info(structure_source_index)")}
             if "policy_json" not in columns:
                 conn.execute("ALTER TABLE structure_source_index ADD COLUMN policy_json TEXT NOT NULL DEFAULT '{}'")
+            if "molecule_identity_key" not in columns:
+                # B1c: chemistry identity is nullable — rows indexed before the
+                # identity layer existed are backfilled by the indexer.
+                conn.execute(
+                    "ALTER TABLE structure_source_index ADD COLUMN molecule_identity_key TEXT"
+                )
             for idx_sql in _INDEXES:
                 conn.execute(idx_sql)
             # The old UI exposed disabled and archived as separate states.  They
@@ -422,6 +490,7 @@ class StructureSourceStore:
             return 0
         now = _utc_now_iso()
         count = 0
+        identity_batches: dict[str, list[dict[str, Any]]] = {}
         with self._lock, self._connect() as conn:
             try:
                 if replace_job_id is not None:
@@ -433,6 +502,7 @@ class StructureSourceStore:
                     uid = source_uid_for(job_id, rel_path)
                     legacy_id = str(entry.get("source_id") or "")
                     project_id = entry.get("project_id")
+                    identity = _identity_payload(entry.get("molecule_identity"))
                     params: dict[str, Any] = {
                         "source_uid": uid,
                         "job_id": job_id,
@@ -457,6 +527,7 @@ class StructureSourceStore:
                         "availability": str(entry.get("availability") or "available"),
                         "produced_at": entry.get("produced_at"),
                         "content_checksum": entry.get("content_checksum"),
+                        "molecule_identity_key": (identity or {}).get("identity_key"),
                         "policy_json": json.dumps(entry.get("structure_facts") or {}, ensure_ascii=False),
                         "discovered_at": now,
                         "discovery_version": discovery_version,
@@ -486,12 +557,94 @@ class StructureSourceStore:
                         tuple(params.values()),
                     )
                     self._ensure_candidate_version_tx(conn, uid, params)
+                    if identity and project_id:
+                        identity_batches.setdefault(str(project_id), []).append(identity)
                     count += 1
+                # Identity rows join the index transaction: same connection, one
+                # commit, so a rollback leaves neither the key nor the registry
+                # row behind.
+                for batch_project_id, identities in identity_batches.items():
+                    self._upsert_identities_tx(
+                        conn, project_id=batch_project_id, identities=identities
+                    )
                 conn.commit()
             except Exception:
                 conn.rollback()
                 raise
         return count
+
+    @staticmethod
+    def _upsert_identities_tx(
+        conn: sqlite3.Connection,
+        *,
+        project_id: str,
+        identities: list[dict[str, Any]],
+    ) -> int:
+        """Upsert identity registry rows on the caller's connection (no commit)."""
+        registry = _identity_registry()
+        if registry is None or not identities:
+            return 0
+        return int(
+            registry.upsert_identities(conn, project_id=project_id, identities=identities)
+        )
+
+    def list_rows_missing_molecule_identity(self, *, limit: int = 200) -> list[dict[str, Any]]:
+        """Index rows that still lack a chemistry identity (backfill candidates).
+
+        Rows without ``content_checksum`` (remote placeholders) are excluded:
+        they have no local structure text and must never acquire a fabricated
+        identity.
+        """
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                "SELECT source_uid, job_id, relative_path, project_id, charge, multiplicity "
+                "FROM structure_source_index "
+                "WHERE molecule_identity_key IS NULL "
+                "  AND content_checksum IS NOT NULL "
+                "  AND availability = 'available' "
+                "ORDER BY discovered_at, source_uid LIMIT ?",
+                (int(limit),),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def set_molecule_identity(
+        self,
+        source_uid: str,
+        identity: dict[str, Any],
+        *,
+        project_id: str | None = None,
+    ) -> bool:
+        """Write one backfilled identity (index column + registry) atomically.
+
+        Returns ``True`` when a key was written; ``False`` when *identity* has no
+        resolved key or the row is gone.  Never commits a partial result.
+        """
+        payload = _identity_payload(identity)
+        if payload is None:
+            return False
+        with self._lock, self._connect() as conn:
+            try:
+                row = conn.execute(
+                    "SELECT project_id FROM structure_source_index WHERE source_uid = ?",
+                    (source_uid,),
+                ).fetchone()
+                if row is None:
+                    return False
+                effective_project = project_id or row["project_id"]
+                conn.execute(
+                    "UPDATE structure_source_index SET molecule_identity_key = ? "
+                    "WHERE source_uid = ?",
+                    (payload["identity_key"], source_uid),
+                )
+                if effective_project:
+                    self._upsert_identities_tx(
+                        conn, project_id=str(effective_project), identities=[payload]
+                    )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+        return True
 
     # ------------------------------------------------------------------ #
     # Read (joined projection)

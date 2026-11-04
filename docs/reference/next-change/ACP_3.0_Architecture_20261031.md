@@ -1,4 +1,6 @@
-# ACP 3.0 架构：以用户虚拟工作站为中心的 RPH/DSH 一体化体系
+# ACP 3.0 架构：化学研究编译、科学插件与可靠执行
+
+**修订：2026-11-04 · 性质：方案（待实现部分不构成交付）**。双人实施顺序、职责与交接以本文 §10 为唯一总纲；§0—9 的工作站拓扑仍是部署目标，原周数与“工作站优先”排序由 §10 替代。CCCP/ACR 细节见[11-02 后端设计](ACP_V3_CCCP_ACR_Backend_Architecture_20261102.md)，界面范围与布局仍分别由前端 parity 清单和 DSH 插件计划持有。
 
 **设计定位**：Per-User Workspace + DSH Agent + Distributed Scientific Computing。
 过去的 ACP 围绕「科学计算任务」组织系统；ACP 3.0 围绕「研究者自己的计算工作环境」组织系统——每个用户拥有独立的 Linux 科研环境（文件、项目、终端、DSH Agent、模型配置、研究历史），从网页/APP/CLI 进入同一环境，并调用分布式集群资源。
@@ -301,3 +303,161 @@ account_id
 - [拓扑细节与代码差距](ACP_MultiUser_VirtualHost_DSH_Topology_20261031.md)
 - [前端目标形态（Ketcher/DSH 面板）](ACP_Frontend_Target_Workbench_Plan_20261030.md)
 - [身份支持范围](../next-change/ACP_Services_Identity_Support_Scope.md)
+
+## 10. 双人阶段开发总纲（2026-11-04，唯一实施排序）
+
+### 10.1 产品目标、来源与状态
+
+目标是从化学结构、反应假设与研究意图出发，编译成可验证的科学计划，执行后用证据更新化学网络。先交付可信的手动计算入口与编译闭环，再交付授权内的自主机理研究。工作站、多租户、更多调度器、Rust、插件商店均不阻塞首条闭环。
+
+本次吸收两段讨论：[完善分子反应网络](https://chatgpt.com/c/6aead494-b35c-83e9-b424-edcda9c5a754)、[GitHub 竞品分析](https://chatgpt.com/c/6aead232-2e84-83e9-ba55-ae7a83d68396)。其建议是设计输入，不是代码或竞品当前能力证明。未取得原始附件图像，本次不重新解释草图，界面继续遵循插件计划 §13.13—15。竞品启发转化为验收任务，不宣称 ACP 已领先。
+
+| 核查面 | 当前工作区事实（HEAD d4f4ede6 + 未提交修改） | 不能据此宣称 |
+|---|---|---|
+| 化学网络 | B0/B1 投影、身份计算/持久化及前端已有代码；见[网络契约](ACP_Chemistry_Network_Contract_20261103.md) | 完整反应网络、TS/IRC 化学边、live 已验收 |
+| 科学插件 | v1 metadata-only discovery；compute 引用已有任务；pure_analysis 已有接入 | V3 动态 compute、统一新 Manifest、Standalone CLI 已交付 |
+| 科学编译 | 已有 calculation/recipes 与科学产品契约 | Chemical IR / ResearchPlan / NativeExecutionBundle 已实现 |
+| 执行 | 现有 Services、Scheduler、冻结/回执和远程链 | Agentless、新工作站设施或第二调度器已验收 |
+| 迁移 | 当前工作区 jobs migration 已含 028 selection_publications、029 structure_identities | 可以使用旧提案 024—027 或预占 030 |
+
+本节只更新计划。所有新增里程碑初始证据为 NOT_VERIFIED；旧分项 PASS 按原 revision/环境保留，不升级发布门。
+
+### 10.2 双人责任与改动所有权
+
+角色 A = 用户（前端 + 化学编译）；角色 B = 队友（CCCP 科学执行层插件化）。这里的“负责”是拟定开发责任，不代表代码已存在。跨责任接口双人评审；一项改动只有一个主写者。
+
+| 工作面 | 主写 / 评审 | 拟落点和交付 | 边界 |
+|---|---|---|---|
+| Workbench、DSH 面板、导入交互、网络展示 | A / B 核对科学文案 | frontend/js/{modules,client,adapters,shell}；复用现有网络/查看器 | UI 不判定化学身份、不运行 QC |
+| Molecular/Reaction/Research IR、语义检查、Chemical Compiler | A / B | 拟新增 cccp/chemistry/ 与 cccp/compiler/chemical/；纯科学代码可独立于 ACP 使用 | 输出 ResearchPlan，不写原生软件关键词或执行脚本 |
+| ResearchPlan → WorkflowRecipe 接入适配 | A / B | 拟 cccp/compiler/chemical/ 的唯一 lowering 适配器 | 消费 B 的工作流/能力目录，不复制第二套 recipe compiler |
+| Workflow 编译、Capability/Provider、插件生命周期、共享 Renderer/Parser | B / A 核对交接 | 现有 cccp/plugin、calculation/recipes、capabilities；按切片迁移 qc/backends | B 是 Provider 选择与锁定的唯一实现者 |
+| 几何/构象/TS 初猜能力、科学验证器 | B / A | 复用 calculation/tasks 与 analysis；必要时贡献统一插件能力 | A 只声明需求；不在导入器里实现 TS 搜索 |
+| 网络领域对象、身份关联、证据投影 | A / B 评审身份与验证 | 科学规则复用 cccp/analysis；持久化复用 Services；API 在 acp/api | 不给 cccp 引入 DB、租户或 HTTP，不新建 Artifact 库 |
+| ACR/Data 交接、原生远程执行、工件发布恢复 | B 主写 / A 联调 | 既有 Services + Scheduler remote 的端口与组合根 | 属于执行平台，不搬入 CCCP 插件；优先最小适配，新增平台大项单列排期 |
+| API/MCP/Schema/fixture/安装文档 | 按生产者主写 / 对端评审 | A 写化学/网络接口；B 写科学目录/计划/结果与执行接口 | 同一 Services 表或路由文件先约定编辑区，不整文件覆盖 |
+| RPH 与 benchmark | A 集成 / B 科学与执行审查 | 现有 rph 四包；共同留真实证据 | C5 前不扩大为另一个自主规划系统 |
+
+目标目录仅表达职责。C0 冻结时先确认实际路径；此前不批量移动旧实现、不改包名或 CLI。cccp → acp/acp_services、acp_services → acp 的禁依赖继续有效。B 的平台适配通过已有端口在 acp 组合根装配。
+
+### 10.3 两级编译与唯一权威
+
+```mermaid
+flowchart LR
+  UI["绘图 / 文件 / 手动 / RPH"] --> IR["Chemical IR · A"]
+  IR --> CC["语义检查与 Chemical Compiler · A"]
+  CC --> RP["ResearchPlan"]
+  RP --> WR["WorkflowRecipe 接入适配 · A"]
+  WR --> WC["Workflow Compiler / Provider Resolver · B"]
+  WC --> SP["CompiledSciencePlan"]
+  SP --> NB["就绪 Step 的 NativeExecutionBundle · B"]
+  NB --> RT["ACR / Local Executor"]
+  RT --> EV["Parser + Validator · B"]
+  EV --> NW["Services 证据记录 + 网络投影 · A"]
+  NW --> IR
+```
+
+- A 决定研究问题、所需证据、竞争假设和能力要求；B 决定可忠实满足要求的 Provider、有效科学参数与可执行 DAG。具体软件或理论水平若由用户约束指定，必须保留；B 不能静默替换。
+- Chemical IR 表达研究对象，ScientificInputIR 表达单项科学调用，ResearchPlan 表达所需研究步骤，CompiledSciencePlan 表达已冻结执行定义。四者不能用同一个无类型 JSON 互传。
+- 反应图可循环、可逆、多反应物/产物；执行图必须有界且无依赖环；证据图记录结论与来源。统一引用身份但不把三图合成任务日志。
+- 目标模式：CCCP 插件负责科学编译/渲染/解析；ACR 负责平台执行，Data 负责 Artifact 身份/位置；Standalone Local Runner 仅在独立模式拥有本地记录。当前唯一执行驻点规则继续约束迁移，新增原生执行须先有兼容适配和架构门，不能直接绕过任务层。
+- 统一科学插件 Registry/Lifecycle；保留运行时基础设施 adapter registry 的独立职责。DSH UI 插件与 CCCP 科学插件是不同扩展域，不能混用启用授权。
+- 远端默认仅需原生软件和受控提交脚本是 V3 目标；当前 Worker/release 路径保留恢复兼容。Standalone CLI 与现行“仅 acp CLI”有冲突，必须随发行/隔离/安装门和 AGENTS 同批批准实施；本文不提前开放新入口。
+
+### 10.4 C0 交接契约清单（草案，非可调用 API）
+
+生产者给出 versioned Schema、正反 fixture、兼容矩阵、canonical projection 和错误样例；消费者验收后状态才从 DRAFT 变为 FROZEN。拟名不构成现有工具、URL、字段或 wire 承诺。不得手改 acp2-contracts；新契约冻结时确定唯一源码与生成链。
+
+| 对象 / 生产→消费 | 必须覆盖的语义 | C0 验收 |
+|---|---|---|
+| Chemical IR / A→A、B 只读 | schema_version、source_artifact_ref、revision；Molecular：稳定 atom_uid、同位素、键级、立体、电荷/多重度及未知态；Reaction：参与者计量/角色、原子映射、bond_changes、开放体系外部参与者；Research：问题、竞争假设、证据要求、停止规则 | 未知值不以 0/单重态填充；可回溯原导入位置 |
+| ResearchPlan / A→B 接入 | IR 引用/摘要/revision、compiler/rulepack 版本、计划局部 step_id、能力约束、科学参数约束、输入/输出角色、依赖和质量门、诊断 | 相同输入/规则/目录快照生成等价计划；编译无提交副作用 |
+| WorkflowRecipe 接口 / B 定义、A 适配 | 对 ResearchPlan 的唯一映射、支持的 recipe/capability、参数 schema、条件/分支上界与缺失能力行为 | A 不绑定 Python 软件类、不新增静态 TaskKind；未支持分支显式拒绝 |
+| CapabilityCatalogSnapshot / B→A | Capability ID/contract、输入/输出 schema、方法适用域、可表达约束、Provider availability、snapshot digest | installed / enabled / runtime available / scientifically supported 分开；空目录可处理 |
+| CompiledSciencePlan + ProviderLock / B→Runtime | 初始 Artifact 引用、科学参数、步骤 DAG、插件精确版本/摘要、规则/Parser/Validator 版本及 plan identity | 锁不兼容拒绝；后继输入依赖通过引用表达，不假装未来 inp 已存在 |
+| NativeExecutionBundle / B→Local/ACR | 就绪步骤实际输入摘要、受控文件、结构化 argv、符号软件引用、预期输出和资源约束 | 无 SSH 凭据/集群绝对路径；跨目录/未校验 shell 拒绝；Data staging 校验后执行 |
+| ScienceResult + ValidationRecord / B→Services→A | plan/step、实际输入/输出 refs、方法/环境/软件版本、验证器版本、判据、证据结论、诊断 | 平台补 task/attempt/project，CCCP 不造平台身份；exit=0 与科学有效分开 |
+| NetworkEvidenceLink / A 服务适配→网络 | claim_id/revision、species/structure/TS/step 关联、plan/step/task/attempt/artifact、validation_ref、来源/授权、expected_revision | 幂等写入、CAS、跨项目拒绝、旧 attempt 只留历史不覆盖当前结论 |
+
+所有诊断建议统一语义：code、severity（error/warning/info）、对象/字段定位、原因、可采取操作、是否可重试；最终 wire 字段由 C0 schema 冻结。最小错误族：语义缺失/映射冲突、能力不支持、Provider 锁冲突、环境不可用、数据未就绪、版本过期、权限/预算拒绝、解析失败、验证不确定。基础设施重试不能替换科学方法；重新编译产生新科学版本。
+
+身份规则：atom_uid 不等于软件 atom index；索引转换必须保存映射与摘要。Species、Conformer、StationaryPoint/TS、ReactionStep、PlanStep、Task/Attempt 分别有身份；显示名、文件名与二维布局不是键。复用 canonical_digest 和既有科学身份实现，不让 A/B 各自实现 hash。
+
+### 10.5 化学网络、导入与科学判定
+
+网络按 Calculation/Evidence → Structure/Conformer → Species → ElementaryStep/Pathway → Network 分层。B1 的 molecule key 仅是身份关联起点；不自动把任务合并、不同构象抹平或过渡态视作稳定分子。TS 保留独立对象和几何/虚频模式/反应坐标，不能以普通键感知后的 SMILES 自动合并。
+
+Species 判定保留立体、同位素、电荷、自旋、质子化和互变异构差别；配位/自由基、connectivity_only、stereo_ignored 等弱身份结果显式标注适用域，不能升级成严格物种等价。现有 mol_identity_v1 不原地重算；更严格规则另起版本并保留旧键映射、人工决定和可撤销关联。conformer 聚类另列能力与阈值评审。
+
+导入分三层：分子拓扑 → 反应参与者/映射 → 机理假设/研究问题。保留源 Artifact、解析版本、对象定位与未解析元素；不把反应箭头当电子流弯箭头。先支持已验证的 SMILES/MOL/SDF/显式反应描述，CDXML/CDX/Ketcher 按实际依赖探测逐项交付。不能把“ChemDraw 任意机理全自动识别”写作 C1 完成条件。2D→3D 与 TS 初猜各有 B 提供的能力，普通嵌入不产出已确认 TS；缺映射/电子态时只阻塞依赖该信息的计算，未知产物探索可保留未知端点。
+
+状态拆分：输入来源/确定性（known/hypothesized/unspecified）、执行状态（沿现有 Job 枚举）、证据结论（unassessed/supported/refuted/inconclusive）分别表达；现有 wire 枚举通过版本化适配保留。validated 只能作为某条已满足判据的 claim 投影，不能作为整个分子或 Job 的万能状态。
+
+最低科学门：OPT 收敛；INT/极小值频率符合适用容差；TS 的相关虚频模式与反应坐标一致；双向 IRC 及适用的端点再优化确认实际连通性。容差与规则由 B 的版本化验证器定义。PES/scan 候选继续 BatchOptimize 和适用验证，纯扫描请求只交曲线。IRC 连到 D 而非预期 B 时，保留 B 假设并追加反驳/不确定证据，不删历史或强改端点。
+
+能垒/选择性只能在方法、基组、溶剂、电子态、温度、标准态、计量和能量种类可比较时形成数值结论；E/H/G 不混排。不能比较时返回原因，不自动选最低数值。守恒检查支持显式质子/电子/溶剂等外部参与者，不用封闭体系规则误拒开放体系。
+
+### 10.6 阶段、依赖与交接门
+
+本表取代旧周历，按退出门而非日期推进。C 为化学/前端线，P 为 11-02 后端插件线；B0/B1 是网络历史批次，V0—V8 是 parity 批次，旧 Stage 0—4 是部署扩展，均不改名为新完成状态。
+
+| 阶段 | A 的交付 | B 的交付 / 依赖 | 退出门（新增目标当前均 NOT_VERIFIED） |
+|---|---|---|---|
+| C0 × P0 | Chemical IR/ResearchPlan、网络身份/证据语义、UI mock、映射 adapter 合同 | Capability/ScientificInputIR/SciencePlan/NativeBundle/Result schema、golden、兼容方案 | 双方读写同一正反 fixture；版本/摘要/错误/未知态明确；无提交副作用 |
+| C1 × P1 | 分子与反应导入预览、诊断、源追溯、必要补全、手动参数路径 | 统一 Registry 最小切片、xTB SP/OPT、共享 Renderer、Local Runner；2D→3D 能力边界 | 无 LLM 手动完成输入→计划预览→真实本机计算→结果导出；UI fixture 不代替真 QC |
+| C2 × P2 | 物种/结构/任务层级、混合身份提示、独立 TS、claim 草稿、网络编辑 CAS | ORCA SP/OPT/FREQ、动态绑定/版本锁、身份适用域与验证器输出 | 同物种多任务聚合且结构不丢；异构体/自旋/弱身份不误并；无伪化学边 |
+| C3 × P2 | Research IR→ResearchPlan→WorkflowRecipe；竞争分支、质量门、预算估计展示 | 编译/解析契约稳定、缺能力明确拒绝、有界 DAG、锁定 Provider | 同一 fixture 经两级编译可追踪到具体科学步骤；约束保真、不静默换方法 |
+| C4-L × P2 | 第一条本机反应研究纵向切片、结果导航与证据回写 | 支持该案例必需的路径/TS/FREQ/IRC 能力和验证器（不能只交 SP） | 小体系从研究问题到真实 QC、驻点/端点证据回同网络；支持 refuted/inconclusive |
+| C4-R × P3/P4 | 环境/工件可用性、等待/失败/恢复 UI；共享网络证据 | LSF agentless、中央解析、Env/Artifact staging、未知提交对账；B 主写平台接入 | 远端无 ACP/CCCP 依赖的实际计算；断线/重启/传输失败不重复 QC |
+| C5 × P4 | RPH 根据证据缺口提出下一轮计划，停止/预算/矛盾展示，benchmark | 授权/预算/恢复端口与科学门；无“Agent 冒充 manual” | 同一次真实模型+QC 链完成至少一次有依据的重规划；手动路径仍可用 |
+| 扩展 × P5/P6 | 第二 Harness、Personal 包装、更完整 parity 与多用户 UX | Slurm/跨集群、完整发行、隔离/工作站与按需归档 | 各部署组合独立安装/运行/恢复证据，不拼接不同环境 PASS |
+
+并行规则：C0 后 A 可用标为 fixture 的目录/结果继续 C1/C2 UI；B 可独立推进 P1/P2，不等待完整前端。C3 真编译依赖目录/recipe schema 冻结；C4-L 依赖案例的全部科学能力，不被工作站或 P3 阻塞；C4-R 才依赖平台远程链。协议未冻结时仅实现内部可替换原型，禁止私下固化 wire。
+
+下一批可直接拆工：
+
+| 任务 | 主写 | 交付给对端 | 完成条件 |
+|---|---|---|---|
+| A-01 C0 化学契约 | A | 一个含两端点/一条假设/未知映射与错误电子态的 ResearchPlan fixture 包 | B 可验证并返回稳定诊断 |
+| B-01 P0 科学契约 | B | 目录快照、Recipe/Plan/Bundle/Result 正反 fixture 与旧接口适配说明 | A adapter 能消费；不改现行提交行为 |
+| A-02 C1/C2 UI | A | 导入→问题→编译预览→网络/证据导航，四态与真实来源标签 | 同项目上下文；缺能力无空按钮；不依赖 LLM |
+| B-02 P1/P2 插件切片 | B | xTB 本机 + ORCA 共享 Renderer/Parser 与锁 | golden + 真计算分报；旧任务可恢复 |
+| AB-01 C3/C4-L | A 集成，B 科学执行 | 首个小体系；先冻结输入、方法、预期判据与失败分支 | 双方分别复核 UI/追溯与科学结论 |
+
+### 10.7 变更、合并与证据登记
+
+主写者修改共享接口时，同 PR 更新唯一权威文档、Schema/fixture、消费者适配、错误/恢复、目录/安装和相关测试；对端确认消费兼容后合并。破坏性改动新版本显式协商，旧人工来源不可重写为 Agent。回包丢失先按原幂等意图对账；source revision/attempt/digest 变化时旧预览不能提交。
+
+网络写入复用 Services 的授权、事务/CAS、outbox/游标和 Data Artifact；查询 cache-only，不触发远端抓取或 QC。证据写入按 claim revision 与实际 attempt 关联并去重；任务完成但证据发布失败只重试发布。重复完成/旧 generation/撤权/跨项目均要负例；二次投递不多建网络边。
+
+每个 PR 描述至少列：任务 ID、主写/评审、基线 SHA+工作区改动、契约版本/摘要、上游/下游、兼容方式、验证命令/环境、证据位置、剩余阻塞。迁移编号合并前从实际 migrations 分配；不占旧编号、不假设连续、不让 UI 建表。
+
+进度只记在本节下表，详细回执写 reports 并回链；不得另建并行总计划。状态列用 TODO/IN_PROGRESS/BLOCKED/DONE，证据列只用 PASS/FAIL/NOT_VERIFIED；DONE 必须满足退出门。
+
+| 任务组 | 主写 | 状态 | 证据 | 阻塞 / 下次交接 |
+|---|---|---|---|---|
+| C0 / P0 | A / B 各自合同 | TODO | NOT_VERIFIED | 本次仅方案修订；双方提交 Schema+fixture 后评审冻结 |
+| C1—C3 / P1—P2 | 见 §10.6 | TODO | NOT_VERIFIED | 依赖 C0；已有 B0/B1 不覆盖本组验收 |
+| C4-L / C4-R | A 集成、B 科学/平台 | TODO | NOT_VERIFIED | 案例、能力矩阵与运行授权按实际环境补齐 |
+| C5 / 扩展 | A / B | TODO | NOT_VERIFIED | 真实科学闭环先过门 |
+
+### 10.8 验收与文档单源
+
+层次分开留证：纯契约/golden → fixture 集成 → 真实 SDK → 真实 QC → 同次真模型+QC → 独立安装 → Local/LSF/其他后端。skip/平台垫片或浏览器原型不能关闭真实门。本次文档工作不启动生产服务、不提交真实模型/QC/LSF。
+
+最小验收集包括：①无模型 OPT/FREQ/能量展示导出；②化学研究两级编译、不可表达约束明确拒绝；③多任务同物种与保留构象/独立 TS；④错误虚频、IRC 错端点、能量不可比，结论诚实；⑤重复提交/完成/过期版本、执行成功发布失败；⑥插件升级锁定与旧 attempt 恢复；⑦Agent 依据矛盾证据再规划并在预算/停止条件内终止。
+
+benchmark 固定输入、方法、模型/工具版本和预算，对照人工脚本、固定 workflow、通用 Harness 与 RPH；报告科学有效率、端点正确率、人工干预、重复 QC、core-hours/token、成本和恢复能力。竞品仅作为可复跑基线候选，不抄未验证的星数/成功率；[autodE](https://github.com/duartegroup/autodE)、[Chemoton](https://github.com/qcscine/chemoton)、[DELFIN](https://github.com/ComPlat/DELFIN)、[quacc](https://github.com/Quantum-Accelerators/quacc) 的实际版本/许可/任务适用性在运行前单独核查。
+
+| 内容唯一权威 | 文件 | 其他文档如何同步 |
+|---|---|---|
+| 双人责任、阶段排序、交接对象语义、进度 | 本文 §10 | 只加引用和各自任务映射，不复制另养全篇 |
+| 插件/科学计划/原生执行/Data 边界细节 | [CCCP × ACR 方案](ACP_V3_CCCP_ACR_Backend_Architecture_20261102.md) | P0—P6 与 C0—C5 按 §10.6 关联 |
+| 平台设施 WP0—WP8 | [后端计划](ACP_3.0_Backend_Plan_20261031.md) | 作为支撑/扩展，不抢占首条科学闭环 |
+| 前端功能范围 | [3.0 前端计划](ACP_3.0_Frontend_Plan_20261031.md) | parity 清单保留；新增化学能力另标，不冒充迁移完成 |
+| 布局与宿主 | [DSH 插件计划](ACP_Frontend_DSH_Pluginization_Plan_20261102.md) | §13.13—15 按各自实现/提案状态 |
+| 当前网络 HTTP/B0/B1 | [网络契约](ACP_Chemistry_Network_Contract_20261103.md) | 后续 IR/claim 不直接塞进旧响应；版本化发布 |
+
+优先规则：代码与现行 AGENTS 约束当前行为；本文 §10 约束新目标/分工/排序；专题持有详细接口；冻结机器契约约束 wire。发现冲突先更新对应权威与消费方再实现，不能用“新总纲”绕过架构测试。
+
+本次文档范围及检查限制见[11-04 文档同步回执](../../../reports/acp3_docs_coordination_20261104.md)；本次不为任何 C/P 功能阶段签署 PASS。

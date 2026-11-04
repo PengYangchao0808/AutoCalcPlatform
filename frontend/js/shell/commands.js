@@ -83,7 +83,7 @@ ACPShell.commands = (function () {
       structureRef: ref
     };
     var target = resolvePanel("structureRef", "structure.render");
-    navigate(target, target ? target.workspaceId : null);
+    if (!ref.preview) navigate(target, target ? target.workspaceId : null);
     return deliver(target, "loadStructure", ref, { structureRef: ref }, payload.source);
   }
 
@@ -94,9 +94,10 @@ ACPShell.commands = (function () {
     }
     var taskRef = { jobId: ref.jobId, attempt: typeof ref.attempt === "number" ? ref.attempt : null };
     if (ref.taskId) taskRef.taskId = ref.taskId;
+    if (ref.workflow) taskRef.workflow = String(ref.workflow);
     var source = typeof ref.source === "string" && ref.source ? ref.source : "shell.commands.openTask";
-    var target = resolvePanel("taskRef", "tasks.list");
-    navigate(target, target ? target.workspaceId : null);
+    var target = resolvePanel("taskRef", "energy.profile");
+    navigate(target, "execution");
     return deliver(target, "openTask", taskRef, { taskRef: taskRef }, source);
   }
 
@@ -136,9 +137,29 @@ ACPShell.commands = (function () {
     return deliver(target, "openProposal", ref, patch, source);
   }
 
+  /** Explicit structure → configuration navigation; never submits or replaces a draft implicitly. */
+  function openConfiguration(ref) {
+    if (!ref || typeof ref !== "object" || ref.kind !== "inline-xyz" || typeof ref.text !== "string" || !ref.text.trim()) return result(false, { error: "configuration requires inline-xyz text" });
+    var source = typeof ref.source === "string" && ref.source ? ref.source : "shell.commands.openConfiguration";
+    var target = resolvePanel(null, "task.wizard");
+    navigate(target, "config");
+    return deliver(target, "loadStructure", ref, { structureRef: ref }, source);
+  }
+
+  /** Existing-task edit → E; never creates a new task and never replaces the current draft. */
+  function openJobEdit(ref) {
+    if (!ref || typeof ref !== "object" || typeof ref.jobId !== "string" || !ref.jobId) return result(false, { error: "edit requires jobId" });
+    var taskRef = { jobId: ref.jobId, attempt: typeof ref.attempt === "number" ? ref.attempt : null };
+    if (ref.workflow) taskRef.workflow = String(ref.workflow);
+    var target = resolvePanel(null, "task.wizard");
+    navigate(target, "config");
+    return deliver(target, "openJobEdit", taskRef, { taskRef: taskRef, editRef: taskRef }, "shell.commands.openJobEdit");  }
+
   return {
     init: init,
     openStructure: openStructure,
+    openConfiguration: openConfiguration,
+    openJobEdit: openJobEdit,
     openTask: openTask,
     openNetwork: openNetwork,
     openEvidence: openEvidence,

@@ -1,5 +1,7 @@
 # ACP 项目—任务存储与结果目录设计 v2
 
+> **2026-11-04 双人开发同步**：本文现行目录/兼容约定保留。ACP3 化学对象新增按[架构总纲 §10](../next-change/ACP_3.0_Architecture_20261031.md)：Species/Structure/TS/Claim 是科学引用层，不改变 task/attempt 磁盘布局，不以 job_id 或化学显示名新拼目录；持久化复用 Services/Data，源文件和证据通过 Artifact 引用，不新增第二存储权威。
+
 **状态**：已实施（2026-08-23 完成 P1–P8 主体；3D 查看器 UI 与节点 Agent 存储为后续增强）  
 **版本**：v2  
 **日期**：2026-08-22  
@@ -683,6 +685,8 @@ RESULT/
 ```text
 GET  /api/v2/projects
 GET  /api/v2/projects/{project_id}/tasks
+GET  /api/v2/projects/{project_id}/tree?path=&limit=200
+GET  /api/v2/projects/{project_id}/file?path=&max_bytes=65536&max_lines=1000
 GET  /api/v2/tasks/{task_id}
 GET  /api/v2/tasks/{task_id}/tree?area=result
 GET  /api/v2/tasks/{task_id}/tree?area=work
@@ -691,6 +695,15 @@ GET  /api/v2/tasks/{task_id}/results
 GET  /api/v2/tasks/{task_id}/structures/{id}
 GET  /api/v2/tasks/{task_id}/frequencies/{id}
 ```
+
+项目级文件 API 是只读、有界的：项目根由 `ProjectManager` 的项目记录决定
+（必须是平台 `run_root` 的直接子目录且不等于 `run_root`），请求 `path` 必须是严格
+相对 POSIX 路径；绝对路径、`..`、反斜杠、盘符/UNC、控制字符、隐藏/敏感名称、
+Windows 保留设备名和符号链接/reparse point 一律 fail-closed。目录单层枚举同时受
+`limit`（1..500）与固定扫描预算约束；文件读取受 `max_bytes`（1..262144）和
+`max_lines`（1..5000）约束，超限返回有界前缀与 `truncated`，不跟随链接。响应
+`schema_version` 为 `acp.project-files.v1`，不返回绝对 root；GET 无副作用，错误
+使用稳定 `{code,message}`，授权复用 v2 项目作用域与 entry access。
 
 批量提交仍然允许，但每个数组元素必须创建一个独立任务：
 

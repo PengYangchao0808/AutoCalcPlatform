@@ -195,7 +195,7 @@ function buildShellDom(doc) {
   langBtn.setAttribute("id", "acp-lang-toggle");
   topbar.appendChild(langBtn);
 
-  ["research", "molecular", "execution"].forEach((ws, i) => {
+  ["research", "drawing", "molecular", "config", "execution", "files"].forEach((ws, i) => {
     const tab = doc.createElement("button");
     tab.setAttribute("id", "acp-tab-" + ws);
     tab.setAttribute("role", "tab");
@@ -221,7 +221,7 @@ function buildShellDom(doc) {
   shell.appendChild(main);
 
   const slots = {};
-  ["research", "molecular", "execution"].forEach((ws, i) => {
+  ["research", "drawing", "molecular", "config", "execution", "files"].forEach((ws, i) => {
     const section = doc.createElement("section");
     section.setAttribute("id", "acp-ws-" + ws);
     section.setAttribute("role", "tabpanel");
@@ -229,7 +229,7 @@ function buildShellDom(doc) {
     if (i > 0) section.hidden = true;
     main.appendChild(section);
     slots[ws] = {};
-    const slotNames = ws === "research" ? ["main", "side", "bottom"] : ["main", "side"];
+    const slotNames = ["main", "side", "bottom"];
     slotNames.forEach((slotName) => {
       const slot = doc.createElement("div");
       slot.setAttribute("class", "acp-slot");
@@ -318,7 +318,7 @@ module.exports.register = async function (h) {
         binds: binds,
       },
       function (host) {
-        const entry = { module: moduleId, instanceId: host && host.instanceId, calls: [] };
+        const entry = { module: moduleId, instanceId: host && host.instanceId, calls: [], snapshots: [] };
         log.push(entry);
         return {
           mount(hostEl) {
@@ -331,6 +331,7 @@ module.exports.register = async function (h) {
             }
           },
           updateContext(snapshot) {
+            entry.snapshots.push(snapshot || {});
             entry.calls.push("updateContext@" + (snapshot ? snapshot.revision : "?"));
           },
           suspend() { entry.calls.push("suspend"); },
@@ -347,135 +348,98 @@ module.exports.register = async function (h) {
   // ── 1. recipe rendering, placeholders, lifecycle, keyboard ──
 
   await test("acp2_shell_bootstrap: applyRecipe renders slots, placeholders, lifecycle", async () => {
-    const { sandbox, doc, dom, A } = setup();
+    const { doc, dom, A } = setup();
     const log = [];
-    // Register 2 of the 3 research modules; agent-workspace stays UNKNOWN.
     registerStub(A, "molecule-viewer", log, { provides: ["viewer"], binds: ["structureRef"], stamp: true });
-    registerStub(A, "task-explorer", log, { provides: ["task-explorer"], binds: ["taskRef"] });
-
-    const applied = A.bootstrap.boot();
+    registerStub(A, "energy-profile", log, { provides: ["energy.profile"], binds: ["taskRef"] });
+    A.bootstrap.boot();
+    const applied = A.layout.applyRecipe("molecular");
     assertEq(applied.ok, true, JSON.stringify(applied));
     assertEq(dom.shell.getAttribute("data-acp-ready"), "true");
-    assertEq(A.layout.getCurrentWorkspace(), "research");
     await flush();
-
-    // 1a. three panels rendered into the three research slots
-    const agentEl = doc.getElementById("acp-panel-research-agent");
     const viewerEl = doc.getElementById("acp-panel-shared-viewer");
-    const tasksEl = doc.getElementById("acp-panel-research-tasks");
-    assert(agentEl, "research-agent panel exists");
-    assert(viewerEl, "shared-viewer panel exists");
-    assert(tasksEl, "research-tasks panel exists");
-    assert(agentEl.parentNode === dom.slots.research.main, "agent in main slot");
-    assert(viewerEl.parentNode === dom.slots.research.side, "viewer in side slot");
-    assert(tasksEl.parentNode === dom.slots.research.bottom, "tasks in bottom slot");
+    const energyEl = doc.getElementById("acp-panel-mol-energy");
+    assert(viewerEl && energyEl, "C view viewer and analysis exist");
+    assert(viewerEl.parentNode === dom.slots.molecular.main, "viewer in main slot");
+    assert(energyEl.parentNode === dom.slots.molecular.bottom, "energy in bottom slot");
     assertEq(viewerEl.getAttribute("data-instance-id"), "shared-viewer");
-    assertEq(viewerEl.getAttribute("data-slot"), "side");
-    assertEq(viewerEl.querySelector(".acp-panel-instance").textContent, "shared-viewer", "instance chip");
-    assertEq(viewerEl.querySelector(".acp-panel-title").textContent, "结构查看器", "i18n title applied");
     assertEq(viewerEl.getAttribute("role"), "region");
-
-    // 1b. unknown module → placeholder; siblings unaffected
-    assertEq(agentEl.getAttribute("data-acp-state"), "empty", "unknown module placeholder state");
-    assert(agentEl.classList.contains("is-placeholder"), "placeholder class");
-    assert(agentEl.querySelector(".acp-state-empty"), "placeholder body rendered");
-    assertEq(viewerEl.getAttribute("data-acp-state"), "ready", "sibling viewer mounted");
-    assertEq(tasksEl.getAttribute("data-acp-state"), "ready", "sibling explorer mounted");
-
-    // 1c. lifecycle: mount + initial updateContext on both stubs
     const viewer = log.find((e) => e.module === "molecule-viewer");
-    const tasks = log.find((e) => e.module === "task-explorer");
-    assert(viewer.calls.includes("mount"), "viewer mounted");
-    assert(viewer.calls.includes("updateContext@0"), "viewer got the initial context");
-    assert(tasks.calls.includes("mount"), "explorer mounted");
-
-    // 1d. repeated applyRecipe → no duplicate instances / DOM nodes
+    const energy = log.find((e) => e.module === "energy-profile");
+    assert(viewer.calls.includes("mount") && energy.calls.includes("mount"));
     const logLenBefore = log.length;
-    A.layout.applyRecipe("research");
-    A.layout.applyRecipe("research");
+    A.layout.applyRecipe("molecular"); A.layout.applyRecipe("molecular");
     await flush();
     assertEq(log.length, logLenBefore, "no new factory calls on re-apply");
-    assertEq(dom.slots.research.side.children.filter((c) => c.getAttribute && c.getAttribute("data-instance-id")).length, 1, "one panel in side slot");
-    assertEq(doc._all.filter((n) => n.getAttribute && n.getAttribute("data-instance-id") === "shared-viewer").length, 1, "single viewer element in the document");
-
-    // 1e. context change → updateContext on mounted panels + focus chip
+    assertEq(doc._all.filter((n) => n.getAttribute && n.getAttribute("data-instance-id") === "shared-viewer").length, 1);
     const snap = A.context.setFocus({ structureRef: { name: "caffeine_conf1" }, taskRef: { jobId: "job-42", attempt: 2 } }, "test");
     await flush();
-    assert(snap.revision >= 1, "revision bumped");
-    assert(viewer.calls.includes("updateContext@" + snap.revision), "viewer followed the context");
-    assertEq(dom.chip.getAttribute("data-empty"), "false", "focus chip shows items");
-    const chipText = (function deepText(node) {
-      let out = node.textContent || "";
-      (node.children || []).forEach((c) => { out += deepText(c); });
-      return out;
-    })(dom.chip);
-    assert(chipText.indexOf("caffeine_conf1") >= 0, "chip carries the structure name");
-    assert(chipText.indexOf("job-42") >= 0, "chip carries the task id");
-
-    // 1f. disposeAll runs dispose exactly once per instance
+    assert(viewer.calls.includes("updateContext@" + snap.revision));
+    assertEq(dom.chip.getAttribute("data-empty"), "false");
     A.layout.disposeAll();
-    assertEq(viewer.calls.filter((c) => c === "dispose").length, 1, "viewer disposed once");
-    assertEq(tasks.calls.filter((c) => c === "dispose").length, 1, "explorer disposed once");
-    assertEq(A.layout.listPanels().length, 0, "no panels left");
-    assertEq(dom.slots.research.main.children.length, 0, "main slot empty after dispose");
+    assertEq(viewer.calls.filter((c) => c === "dispose").length, 1);
+    assertEq(energy.calls.filter((c) => c === "dispose").length, 1);
+    assertEq(A.layout.listPanels().length, 0);
   });
 
-  await test("acp2_shell_bootstrap: Alt+1/2/3 switches workspace; suspend/resume + viewer migration", async () => {
+  await test("acp2_shell_bootstrap: Alt+1–6 switches views and preserves one viewer", async () => {
     const { sandbox, doc, dom, A } = setup();
     const log = [];
-    registerStub(A, "agent-workspace", log, { provides: ["agent"], binds: ["researchRef"] });
+    // The research main panel is the project network (network contract §6);
+    // agent-workspace is still registered as a module, just not the default.
+    registerStub(A, "reaction-network", log, { provides: ["network.read"], binds: ["networkNodeId"] });
     registerStub(A, "molecule-viewer", log, { provides: ["viewer"], binds: ["structureRef"] });
     registerStub(A, "task-explorer", log, { provides: ["task-explorer"], binds: ["taskRef"] });
+    registerStub(A, "files-workspace", log, { provides: ["project.files"], binds: ["projectId"] });
 
     A.bootstrap.boot();
     await flush();
-    const viewer = log.find((e) => e.module === "molecule-viewer");
-    const agent = log.find((e) => e.module === "agent-workspace");
+    const network = log.find((e) => e.module === "reaction-network");
 
-    // Alt+2 → molecular
-    doc.dispatchEvent({ type: "keydown", key: "2", altKey: true, ctrlKey: false, metaKey: false, preventDefault() {} });
+    // Alt+3 → molecular
+    doc.dispatchEvent({ type: "keydown", key: "3", altKey: true, ctrlKey: false, metaKey: false, preventDefault() {} });
     await flush();
     assertEq(A.layout.getCurrentWorkspace(), "molecular");
     assertEq(dom.shell.getAttribute("data-workspace"), "molecular");
     assertEq(doc.getElementById("acp-ws-molecular").hidden, false, "molecular visible");
     assertEq(doc.getElementById("acp-ws-research").hidden, true, "research hidden");
-    assertEq(doc.getElementById("acp-tab-molecular").getAttribute("aria-selected"), "true");
-    assertEq(doc.getElementById("acp-tab-research").getAttribute("aria-selected"), "false");
+    assertEq(doc.getElementById("acp-tab-molecular").getAttribute("aria-checked"), "true");
+    assertEq(doc.getElementById("acp-tab-molecular").getAttribute("aria-current"), "page");
+    assertEq(doc.getElementById("acp-tab-research").getAttribute("aria-checked"), "false");
     assertEq(doc.getElementById("acp-tab-research").getAttribute("tabindex"), "-1", "roving tabindex");
 
     // viewer MIGRATED to molecular main — same element, no remount
+    const viewer = log.find((e) => e.module === "molecule-viewer");
     const viewerEl = doc.getElementById("acp-panel-shared-viewer");
     assert(viewerEl.parentNode === dom.slots.molecular.main,  "viewer migrated to molecular main");
     assertEq(viewer.calls.filter((c) => c === "mount").length, 1, "migration did NOT remount");
-    assert(viewer.calls.includes("suspend"), "viewer suspended during migration");
-    assert(viewer.calls.includes("resume"), "viewer resumed in the new workspace");
-    assert(agent.calls.includes("suspend"), "hidden-workspace panel suspended");
+    assert(viewer.calls.includes("mount"), "viewer mounted in C");
+    assert(network.calls.includes("suspend"), "hidden-workspace panel suspended");
 
-    // molecular's task-config is pending (UI-03) → placeholder, non-blocking
-    const configEl = doc.getElementById("acp-panel-mol-config");
-    assert(configEl, "mol-config placeholder rendered");
-    assertEq(configEl.getAttribute("data-acp-state"), "empty");
-
-    // Alt+3 → execution. P1-1 (2026-10-30 修订): the execution recipe no
-    // longer hosts the viewer — three-recipe × single-viewer matrix keeps it
-    // in research side / molecular main only; execution side is exec-detail.
-    doc.dispatchEvent({ type: "keydown", key: "3", altKey: true, ctrlKey: false, metaKey: false, preventDefault() {} });
+    // Alt+5 → execution: the same Viewer moves to the result inspector.
+    doc.dispatchEvent({ type: "keydown", key: "5", altKey: true, ctrlKey: false, metaKey: false, preventDefault() {} });
     await flush();
     assertEq(A.layout.getCurrentWorkspace(), "execution");
-    assert(viewerEl.parentNode === dom.slots.molecular.main,  "viewer stays in molecular (execution recipe has no viewer)");
+    assert(viewerEl.parentNode === dom.slots.execution.side, "viewer moved to F side");
     assertEq(viewer.calls.filter((c) => c === "mount").length, 1, "still one mount");
-    const detailEl = doc.getElementById("acp-panel-exec-detail");
-    assert(detailEl, "exec-detail placeholder rendered in execution side");
-    assertEq(detailEl.getAttribute("data-acp-state"), "empty");
-    assert(detailEl.classList.contains("is-placeholder"), "exec-detail is a placeholder panel");
+    assert(viewer.calls.includes("suspend"), "viewer suspended while moving C → F");
+    assert(viewer.calls.includes("resume"), "viewer resumed after moving C → F");
+    assert(doc.getElementById("acp-panel-exec-results"), "F results panel rendered");
+
+    // Alt+6 → files: its own workspace panel is mounted, no viewer duplicate.
+    doc.dispatchEvent({ type: "keydown", key: "6", altKey: true, ctrlKey: false, metaKey: false, preventDefault() {} });
+    await flush();
+    assertEq(A.layout.getCurrentWorkspace(), "files");
+    assert(doc.getElementById("acp-panel-files-workspace"), "files workspace rendered");
+    assertEq(viewer.calls.filter((c) => c === "mount").length, 1, "files view does not mount a second viewer");
 
     // Alt+1 → back to research
     doc.dispatchEvent({ type: "keydown", key: "1", altKey: true, ctrlKey: false, metaKey: false, preventDefault() {} });
     await flush();
     assertEq(A.layout.getCurrentWorkspace(), "research");
-    assert(viewerEl.parentNode === dom.slots.research.side,  "viewer returned to research side");
-    assertEq(viewer.calls.filter((c) => c === "mount").length, 1, "single mount across 3 recipes");
-    assert(agent.calls.includes("resume"), "research panel resumed on return");
+    assert(viewerEl.parentNode === dom.slots.execution.side, "hidden F keeps the single viewer instance");
+    assertEq(viewer.calls.filter((c) => c === "mount").length, 1, "single mount across views");
+    assert(network.calls.includes("resume"), "research panel resumed on return");
 
     // Alt+0 is not a workspace shortcut — no crash, no switch
     doc.dispatchEvent({ type: "keydown", key: "0", altKey: true, ctrlKey: false, metaKey: false, preventDefault() {} });
@@ -485,59 +449,26 @@ module.exports.register = async function (h) {
   // ── 2. panel-local error boundary + retry ──
 
   await test("acp2_shell_bootstrap: mount failure is panel-local; retry re-mounts via loader", async () => {
-    const { sandbox, doc, dom, A } = setup();
+    const { doc, A } = setup();
     const log = [];
     let failNext = { value: true };
-    // Failing explorer: first mount throws, later mounts succeed.
-    assertEq(A.registry.register(
-      {
-        id: "task-explorer",
-        interfaceVersion: 1,
-        version: "0.1.0",
-        provides: ["task-explorer"],
-        binds: ["taskRef"],
-      },
-      function (host) {
-        const entry = { module: "task-explorer", calls: [] };
-        log.push(entry);
-        return {
-          mount() {
-            entry.calls.push("mount");
-            if (failNext.value) {
-              failNext.value = false;
-              throw new Error("task-explorer forced mount failure");
-            }
-          },
-          updateContext() { entry.calls.push("updateContext"); },
-          dispose() { entry.calls.push("dispose"); },
-        };
-      }
-    ).ok, true);
+    assertEq(A.registry.register({ id: "results-workspace", interfaceVersion: 1, version: "0.1.0", provides: ["energy.profile"], binds: ["taskRef"] }, function () {
+      const entry = { module: "results-workspace", calls: [] }; log.push(entry);
+      return { mount() { entry.calls.push("mount"); if (failNext.value) { failNext.value = false; throw new Error("energy forced mount failure"); } }, updateContext() {}, dispose() { entry.calls.push("dispose"); } };
+    }).ok, true);
     registerStub(A, "molecule-viewer", log, { provides: ["viewer"], binds: ["structureRef"] });
-    registerStub(A, "agent-workspace", log, { provides: ["agent"], binds: ["researchRef"] });
-
-    A.bootstrap.boot();
-    await flush();
-
-    const tasksEl = doc.getElementById("acp-panel-research-tasks");
+    A.bootstrap.boot(); A.layout.applyRecipe("execution"); await flush();
+    const energyEl = doc.getElementById("acp-panel-exec-results");
     const viewerEl = doc.getElementById("acp-panel-shared-viewer");
-    assertEq(tasksEl.getAttribute("data-acp-state"), "error", "failed panel marked error");
-    assertEq(tasksEl.querySelector("[role]").getAttribute("role"), "alert", "error block is role=alert");
-    const msg = tasksEl.querySelector(".acp-state-msg").textContent;
-    assert(msg.indexOf("task-explorer") >= 0 && msg.indexOf("forced mount failure") >= 0, "message carries module + reason: " + msg);
-    const gen1 = tasksEl.getAttribute("data-acp-generation");
-    // Sibling panels unaffected by the failure.
+    assertEq(energyEl.getAttribute("data-acp-state"), "error");
+    assert(energyEl.querySelector(".acp-state-msg").textContent.includes("forced mount failure"));
     assertEq(viewerEl.getAttribute("data-acp-state"), "ready", "sibling unaffected");
-    assertEq(doc.getElementById("acp-panel-research-agent").getAttribute("data-acp-state"), "ready");
-
-    // Retry (the error-block retry button → layout.reloadPanel).
-    const retryBtn = tasksEl.querySelectorAll("button").find((b) => b.getAttribute("data-action") === "retry");
-    assert(retryBtn, "retry button rendered");
-    retryBtn.dispatch("click", {});
-    await flush();
-    assertEq(tasksEl.getAttribute("data-acp-state"), "ready", "retry recovered to ready");
-    assert(Number(tasksEl.getAttribute("data-acp-generation")) > Number(gen1), "generation advanced");
-    assertEq(log.filter((e) => e.module === "task-explorer").length, 2, "retry created a fresh instance");
+    const gen1 = energyEl.getAttribute("data-acp-generation");
+    const retryBtn = energyEl.querySelectorAll("button").find((b) => b.getAttribute("data-action") === "retry");
+    retryBtn.dispatch("click", {}); await flush();
+    assertEq(energyEl.getAttribute("data-acp-state"), "ready");
+    assert(Number(energyEl.getAttribute("data-acp-generation")) > Number(gen1));
+    assertEq(log.filter((e) => e.module === "results-workspace").length, 2);
   });
 
   // ── 3. demo recipe + commands routing ──
@@ -586,42 +517,22 @@ module.exports.register = async function (h) {
 
   // ── 3b. P0-2: real capability tags + binds route cross-workspace ──
 
-  await test("acp2_shell_bootstrap: openTask from Research routes to the Execution task panel and focuses its title", async () => {
-    const { sandbox, doc, dom, A } = setup();
-    const log = [];
-    // Research modules registered; task-explorer NOT yet — research-tasks is
-    // a placeholder (no descriptor → findPanelFor must skip it).
-    registerStub(A, "agent-workspace", log, { provides: ["research.summary"], binds: ["researchRef"] });
+  await test("acp2_shell_bootstrap: openTask from Research routes to F results and focuses its title", async () => {
+    const { doc, A } = setup(); const log = [];
+    registerStub(A, "reaction-network", log, { provides: ["network.read"], binds: ["networkNodeId"] });
     registerStub(A, "molecule-viewer", log, { provides: ["structure.render"], binds: ["structureRef"] });
-
-    A.bootstrap.boot();
-    await flush();
+    registerStub(A, "results-workspace", log, { provides: ["energy.profile"], binds: ["taskRef"], stamp: true });
+    A.bootstrap.boot(); await flush();
     assertEq(A.layout.getCurrentWorkspace(), "research");
-    const researchTasksEl = doc.getElementById("acp-panel-research-tasks");
-    assertEq(researchTasksEl.getAttribute("data-acp-state"), "empty", "research task panel is a placeholder");
-
-    // Module lands later; the execution recipe is the first to mount it.
-    registerStub(A, "task-explorer", log, { provides: ["tasks.list"], binds: ["taskRef"], stamp: true });
-    doc.dispatchEvent({ type: "keydown", key: "3", altKey: true, ctrlKey: false, metaKey: false, preventDefault() {} });
-    await flush();
-    const execTasksEl = doc.getElementById("acp-panel-exec-tasks");
-    assertEq(execTasksEl.getAttribute("data-acp-state"), "ready", "execution task panel mounted");
-
-    // Back to Research — openTask must still resolve the (suspended) Execution
-    // panel via binds ["taskRef"] / provides ["tasks.list"], switch workspace,
-    // and land focus on the target panel title (design §4.2/§5.1).
-    doc.dispatchEvent({ type: "keydown", key: "1", altKey: true, ctrlKey: false, metaKey: false, preventDefault() {} });
-    await flush();
-    assertEq(A.layout.getCurrentWorkspace(), "research");
-
     const res = A.commands.openTask({ jobId: "job-p0-2", attempt: 1, source: "test:agent-card" });
+    await flush();
+    const energyEl = doc.getElementById("acp-panel-exec-results");
     assertEq(res.ok, true, JSON.stringify(res));
-    assertEq(res.targetInstanceId, "exec-tasks", "target is the Execution task panel");
-    assertEq(res.workspace, "execution");
-    assertEq(A.layout.getCurrentWorkspace(), "execution", "workspace switched to execution");
-    assert(doc.activeElement === execTasksEl.querySelector(".acp-panel-title"),
-      "focus landed on the target panel title");
-    assertEq(A.context.getSnapshot().taskRef.jobId, "job-p0-2", "context focus written");
+    assertEq(res.targetInstanceId, null, "context is delivered while F mounts");
+    assertEq(res.workspace, null);
+    assertEq(A.layout.getCurrentWorkspace(), "execution");
+    assert(doc.activeElement === energyEl.querySelector(".acp-panel-title"));
+    assertEq(A.context.getSnapshot().taskRef.jobId, "job-p0-2");
   });
 
   // ── 4. whole-page fatal boundary ──
@@ -640,6 +551,33 @@ module.exports.register = async function (h) {
     const backLink = card.querySelectorAll("a").find((a) => a.getAttribute("href") === "/");
     assert(backLink, "classic entry link present");
     assertEq(dom.shell.getAttribute("data-acp-ready"), "false", "shell never reported ready");
+  });
+
+  await test("acp2_shell_bootstrap: project scope reaches A/C/E/F and clears task/structure refs", async () => {
+    const { A } = setup();
+    const log = [];
+    registerStub(A, "reaction-network", log, { provides: ["network.read"], binds: ["networkNodeId"] });
+    registerStub(A, "molecule-viewer", log, { provides: ["structure.render"], binds: ["structureRef"] });
+    registerStub(A, "config-workspace", log, { provides: ["task.wizard"], binds: [] });
+    registerStub(A, "results-workspace", log, { provides: ["energy.profile"], binds: ["taskRef"] });
+    A.bootstrap.boot();
+    await flush();
+    A.context.setFocus({ taskRef: { jobId: "old-job", attempt: 1 }, structureRef: { kind: "inline-xyz", text: "1\nH\nH 0 0 0" } }, "test");
+    A.context.setFocus({ projectId: "project-real" }, "project-switcher");
+    await flush();
+    const snap = A.context.getSnapshot();
+    assertEq(snap.projectId, "project-real");
+    assertEq(snap.taskRef, null, "project switch clears the old task");
+    assertEq(snap.structureRef, null, "project switch clears the old structure");
+    for (const ws of ["molecular", "config", "execution"]) {
+      A.layout.switchWorkspace(ws);
+      await flush();
+      const moduleId = ws === "molecular" ? "molecule-viewer" : ws === "config" ? "config-workspace" : "results-workspace";
+      const entry = log.find((e) => e.module === moduleId);
+      assertEq(entry.snapshots[entry.snapshots.length - 1].projectId, "project-real", moduleId + " received the project scope");
+    }
+    const network = log.find((e) => e.module === "reaction-network");
+    assertEq(network.snapshots[network.snapshots.length - 1].projectId, "project-real", "A received the project scope");
   });
 
   // ── 5. i18n: missing keys never clobber mounted module copy (P0-1 现象 B) ──

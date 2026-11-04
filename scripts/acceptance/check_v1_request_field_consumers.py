@@ -19,7 +19,14 @@ extracts the request keys each consumer actually puts on the wire:
     ``X.key = …`` mutations in the same function and the one-hop helpers that
     mutate a passed body (``applyNodeSelectionToBody``).  Body builders named
     ``build*Body`` are also reported, because a builder can be injected into a
-    submit path without appearing next to a ``JSON.stringify``.
+    submit path without appearing next to a ``JSON.stringify`` — but only when
+    evidence ties the builder to that path: the builder is invoked inside a
+    function that performs ``POST /api/v1/jobs``.  A ``build*Body`` whose result
+    is assembled for another endpoint (a ``/research``, ``/mechanism`` or
+    ``/jobs/<id>/edit`` route) or handed to a host-injected transport is a body
+    for *that* contract; the v1 submit field policy does not judge it, so it is
+    recorded under ``out_of_scope_builders`` instead of being mislabelled as a
+    submit body.
 ``rph/packages/**/src/**/*.ts``
     every ``put("key", …)`` inside ``buildToolArguments``, grouped by the
     ``case "<operation>":`` run it belongs to.
@@ -425,12 +432,12 @@ def _declarations(text: str, path: str) -> list[JsFunction]:
     return declarations
 
 
-def _js_function_index(repo_root: Path, files: Sequence[Path]) -> dict[str, JsFunction]:
-    """Index every named ``function`` in the shipped frontend sources."""
+def _js_function_index_from(
+    sources: Sequence[tuple[str, str]],
+) -> dict[str, JsFunction]:
+    """Index every named ``function`` from already-read ``(path, text)`` sources."""
     index: dict[str, JsFunction] = {}
-    for path in files:
-        text = path.read_text(encoding="utf-8", errors="replace")
-        relative = path.relative_to(repo_root).as_posix()
+    for relative, text in sources:
         for declaration in _declarations(text, relative):
             name = _decl_name(declaration)
             if name:
@@ -504,16 +511,52 @@ def _helper_mutation_keys(helper: JsFunction | None, argument: str) -> set[str]:
     return _mutated_keys(helper.text, helper.start, helper.end, helper.params[0])
 
 
-def scan_frontend(repo_root: Path) -> list[FieldUse]:
-    """Scan every POST ``/jobs`` body site and ``build*Body`` builder."""
+def _builder_submits_v1_jobs(name: str, sources: Sequence[tuple[str, str]]) -> bool:
+    """Whether one ``build*Body`` result reaches a ``POST /api/v1/jobs`` call.
+
+    The builder sweep exists because a body builder can be handed to the submit
+    loop without standing next to a ``JSON.stringify``.  That is only evidence
+    when the builder is *invoked from a function that performs* the v1
+    job-create POST; a builder whose result is assembled for another route
+    (``/research/…``, ``/mechanism/plan``, ``/jobs/<id>/edit/…``) or handed to a
+    host-injected transport is a body of that contract, and calling it a submit
+    body would be a false positive.
+    """
+    pattern = re.compile(rf"\b{re.escape(name)}\s*\(")
+    for relative, text in sources:
+        declarations = _declarations(text, relative)
+        for match in pattern.finditer(text):
+            frame = _enclosing_declaration(declarations, match.start())
+            if frame is None or _decl_name(frame) == name:
+                continue
+            if _POST_JOBS.search(text[frame.start : frame.end]) is not None:
+                return True
+    return False
+
+
+def _frontend_scan(
+    repo_root: Path,
+) -> tuple[list[FieldUse], list[dict[str, Any]]]:
+    """Return ``(v1 request-field uses, out-of-scope body builders)``.
+
+    A ``build*Body`` builder that cannot be tied to ``POST /api/v1/jobs`` is
+    reported in the second list (path/line/reason) rather than silently dropped,
+    so the report still says what it looked at and why it judged nothing.
+    """
     files = _frontend_files(repo_root)
     if not files:
-        return []
-    index = _js_function_index(repo_root, files)
+        return [], []
+    sources: list[tuple[str, str]] = [
+        (
+            path.relative_to(repo_root).as_posix(),
+            path.read_text(encoding="utf-8", errors="replace"),
+        )
+        for path in files
+    ]
+    index = _js_function_index_from(sources)
     uses: list[FieldUse] = []
-    for path in files:
-        text = path.read_text(encoding="utf-8", errors="replace")
-        relative = path.relative_to(repo_root).as_posix()
+    out_of_scope: list[dict[str, Any]] = []
+    for relative, text in sources:
         declarations = _declarations(text, relative)
         for match in _POST_JOBS.finditer(text):
             options_start = match.end() - 1
@@ -561,6 +604,20 @@ def scan_frontend(repo_root: Path) -> list[FieldUse]:
             keys = builder.keys()
             if not keys:
                 continue
+            if not _builder_submits_v1_jobs(name, sources):
+                out_of_scope.append(
+                    {
+                        "consumer": f"frontend:{name}",
+                        "path": relative,
+                        "line": _line_of(text, builder.start),
+                        "reason": (
+                            "body builder not invoked from a POST /api/v1/jobs submit "
+                            "path (its body belongs to another endpoint or transport); "
+                            "the v1 submit field policy does not govern it"
+                        ),
+                    }
+                )
+                continue
             uses.append(
                 FieldUse(
                     consumer=f"frontend:{name}",
@@ -573,7 +630,12 @@ def scan_frontend(repo_root: Path) -> list[FieldUse]:
                     note="body builder (returned literal; injected into a submit path)",
                 )
             )
-    return uses
+    return uses, out_of_scope
+
+
+def scan_frontend(repo_root: Path) -> list[FieldUse]:
+    """Scan every POST ``/jobs`` body site and v1 ``build*Body`` builder."""
+    return _frontend_scan(repo_root)[0]
 
 
 # ---------------------------------------------------------------------------
@@ -1156,7 +1218,8 @@ def build_report(repo_root: Path = REPO_ROOT) -> dict[str, Any]:
     """Scan every registered consumer surface and return the frozen report."""
     authorities = load_authorities(repo_root)
     raw: list[FieldUse] = []
-    raw.extend(scan_frontend(repo_root))
+    frontend_uses, out_of_scope_builders = _frontend_scan(repo_root)
+    raw.extend(frontend_uses)
     raw.extend(scan_rph(repo_root))
     raw.extend(scan_python(repo_root, CLI_PATH, KIND_CLI, "cli"))
     raw.extend(scan_python(repo_root, ACCEPTANCE_ROOT, KIND_ACCEPTANCE, "acceptance"))
@@ -1186,6 +1249,9 @@ def build_report(repo_root: Path = REPO_ROOT) -> dict[str, Any]:
             for name in EXCLUDED_FRONTEND_DIRS
         ]
         + [f"{RPH_ROOT}/**/{name}/** (build output)" for name in EXCLUDED_RPH_DIRS],
+        "out_of_scope_builders": sorted(
+            out_of_scope_builders, key=lambda item: (item["path"], int(item["line"]))
+        ),
         "authority_snapshot": {
             "declared_fields": {
                 kind: sorted(policy) for kind, policy in authorities.policies.items()

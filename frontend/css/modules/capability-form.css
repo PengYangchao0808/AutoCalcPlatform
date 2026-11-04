@@ -1,0 +1,369 @@
+/*
+ * ACP Next — capability-form panel (A-59 / P23).
+ * Scope: `.acp-capf*` only. Tokens come from base.css (:root) / shell.css
+ * (`.acp-shell`); this file defines no new global tokens and carries no theme
+ * of its own (light/dark follow the shell variables).
+ */
+
+.acp-capf {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: auto;
+  background: var(--bg-base, #0b0f14);
+  color: var(--text-primary, #e5edf5);
+}
+
+.acp-capf-body {
+  display: grid;
+  gap: 14px;
+  padding: 12px 14px 28px;
+  align-content: start;
+}
+
+.acp-capf-state {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  padding: 18px 14px;
+}
+
+.acp-capf-state-title,
+.acp-capf-state-msg {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.acp-capf-state-title {
+  font-weight: 600;
+  color: var(--text-primary, #e5edf5);
+}
+
+.acp-capf-state-msg {
+  color: var(--text-secondary, #9fb0c3);
+}
+
+.acp-capf-state-msg.mono {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.acp-capf-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border-default, #24303b);
+  border-top-color: var(--accent, #4ea1ff);
+  border-radius: 50%;
+  animation: acp-capf-spin 0.8s linear infinite;
+}
+
+@keyframes acp-capf-spin {
+  to { transform: rotate(360deg); }
+}
+
+.acp-capf-picker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.acp-capf-label {
+  font-size: 12px;
+  color: var(--text-secondary, #9fb0c3);
+}
+
+.acp-capf-select,
+.acp-capf-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 9px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #131a23);
+  color: var(--text-primary, #e5edf5);
+  font: inherit;
+  font-size: 12px;
+}
+
+.acp-capf-picker .acp-capf-select {
+  width: auto;
+  min-width: 220px;
+  max-width: 100%;
+}
+
+.acp-capf-textarea {
+  min-height: 92px;
+  resize: vertical;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  line-height: 1.45;
+}
+
+.acp-capf-select:focus,
+.acp-capf-input:focus {
+  outline: 1px solid var(--accent, #4ea1ff);
+  outline-offset: 0;
+  border-color: var(--accent, #4ea1ff);
+}
+
+.acp-capf-input:disabled,
+.acp-capf-select:disabled,
+.acp-capf-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.acp-capf-check {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent, #4ea1ff);
+}
+
+.acp-capf-form-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #e5edf5);
+}
+
+.acp-capf-form-desc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-secondary, #9fb0c3);
+}
+
+.acp-capf-form {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-panel, #0f151d);
+}
+
+.acp-capf-field {
+  display: grid;
+  gap: 4px;
+}
+
+.acp-capf-field .acp-capf-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-primary, #e5edf5);
+}
+
+.acp-capf-required {
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--bg-elevated, #131a23);
+  color: var(--amber, #e0a94a);
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.acp-capf-unit {
+  font-size: 11px;
+  color: var(--text-secondary, #9fb0c3);
+}
+
+.acp-capf-field-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary, #9fb0c3);
+}
+
+.acp-capf-field-error {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--red, #e66a6a);
+}
+
+.acp-capf-field-error:empty {
+  display: none;
+}
+
+.acp-capf-notice {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-default, #24303b);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #131a23);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.acp-capf-notice.is-info {
+  border-left-color: var(--accent, #4ea1ff);
+}
+
+.acp-capf-notice.is-warn {
+  border-left-color: var(--amber, #e0a94a);
+}
+
+.acp-capf-notice.is-error {
+  border-left-color: var(--red, #e66a6a);
+}
+
+.acp-capf-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.acp-capf-btn {
+  padding: 7px 14px;
+  border: 1px solid var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-elevated, #131a23);
+  color: var(--text-primary, #e5edf5);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.acp-capf-btn:hover:not(:disabled) {
+  border-color: var(--accent, #4ea1ff);
+}
+
+.acp-capf-btn-primary {
+  border-color: var(--accent, #4ea1ff);
+  background: var(--accent-soft, rgba(78, 161, 255, 0.16));
+}
+
+.acp-capf-feedback {
+  display: grid;
+  gap: 8px;
+}
+
+.acp-capf-feedback-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--amber, #e0a94a);
+}
+
+.acp-capf-problems,
+.acp-capf-params {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 3px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary, #9fb0c3);
+}
+
+.acp-capf-result {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px dashed var(--border-default, #24303b);
+  border-radius: var(--radius-sm, 6px);
+}
+
+.acp-capf-result[data-acp-preflight="ok"],
+.acp-capf-result[data-acp-submit="submitted"] {
+  border-style: solid;
+  border-color: var(--green, #4ac08a);
+}
+
+.acp-capf-result[data-acp-preflight="error"],
+.acp-capf-result[data-acp-submit="error"],
+.acp-capf-result[data-acp-submit="unconfirmed"] {
+  border-style: solid;
+  border-color: var(--red, #e66a6a);
+}
+
+/* A-60: 409 conflict is a "re-review required" state, not a plain failure. */
+.acp-capf-result[data-acp-submit-state="conflict"] {
+  border-style: solid;
+  border-color: var(--amber, #e0a94a);
+}
+
+.acp-capf-result[data-acp-submit-state="conflict"] .acp-capf-result-title {
+  color: var(--amber, #e0a94a);
+}
+
+.acp-capf-result[data-acp-submit-state="conflict"] .acp-capf-result-note {
+  color: var(--amber, #e0a94a);
+}
+
+.acp-capf-result-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #e5edf5);
+}
+
+.acp-capf-result-error,
+.acp-capf-result-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-secondary, #9fb0c3);
+}
+
+.acp-capf-result-error {
+  color: var(--red, #e66a6a);
+}
+
+.acp-capf-digests {
+  display: grid;
+  grid-template-columns: minmax(88px, max-content) 1fr;
+  gap: 2px 10px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.acp-capf-digests dt {
+  color: var(--text-secondary, #9fb0c3);
+}
+
+.acp-capf-digests dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.acp-capf-receipt {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--green, #4ac08a);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .acp-capf-body {
+    padding: 10px 10px 24px;
+  }
+
+  .acp-capf-picker {
+    align-items: stretch;
+  }
+
+  .acp-capf-picker .acp-capf-select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .acp-capf-digests {
+    grid-template-columns: 1fr;
+  }
+
+  .acp-capf-actions .acp-capf-btn {
+    flex: 1 1 auto;
+  }
+}

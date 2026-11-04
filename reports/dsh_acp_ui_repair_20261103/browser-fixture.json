@@ -1,0 +1,59 @@
+{
+  "status": "PASS",
+  "scope": "shipped assets in real Chromium, fixture API",
+  "mounted": {
+    "ok": true,
+    "degraded": true,
+    "readOnly": true,
+    "sessionId": "fixture-session",
+    "namespaces": [
+      "eventInvalidation",
+      "events",
+      "frameCandidates",
+      "jobDetail",
+      "polling",
+      "research",
+      "science",
+      "store",
+      "systemEndpoints",
+      "taskView",
+      "transport"
+    ],
+    "booted": true,
+    "bridgeError": null,
+    "generation": 1
+  },
+  "state": {
+    "shell": true,
+    "panels": 3,
+    "errors": [],
+    "placeholders": 0,
+    "globals": false,
+    "fetchIntact": true,
+    "esIntact": true,
+    "hostBackground": "rgb(255, 255, 255)",
+    "contained": true
+  },
+  "reopened": {
+    "ok": true,
+    "degraded": true,
+    "readOnly": true,
+    "sessionId": "fixture-session",
+    "namespaces": [
+      "eventInvalidation",
+      "events",
+      "frameCandidates",
+      "jobDetail",
+      "polling",
+      "research",
+      "science",
+      "store",
+      "systemEndpoints",
+      "taskView",
+      "transport"
+    ],
+    "booted": true,
+    "bridgeError": null,
+    "generation": 2
+  }
+}

@@ -24,7 +24,7 @@ window.ACPShell = window.ACPShell || {};
 ACPShell.context = (function () {
   "use strict";
 
-  var FOCUS_KEYS = ["researchRef", "taskRef", "structureRef", "networkNodeId"];
+  var FOCUS_KEYS = ["researchRef", "taskRef", "structureRef", "networkNodeId", "editRef"];
 
   var state = {
     projectId: null,
@@ -32,6 +32,7 @@ ACPShell.context = (function () {
     taskRef: null,
     structureRef: null,
     networkNodeId: null,
+    editRef: null,
     revision: 0,
     source: "init"
   };
@@ -49,6 +50,7 @@ ACPShell.context = (function () {
       taskRef: cloneTaskRef(s.taskRef),
       structureRef: s.structureRef,
       networkNodeId: s.networkNodeId,
+      editRef: cloneTaskRef(s.editRef),
       revision: s.revision,
       source: s.source
     });
@@ -104,6 +106,7 @@ ACPShell.context = (function () {
       taskRef: state.taskRef,
       structureRef: state.structureRef,
       networkNodeId: state.networkNodeId,
+      editRef: state.editRef,
       revision: state.revision,
       source: state.source
     };
@@ -116,6 +119,7 @@ ACPShell.context = (function () {
       next.taskRef = null;
       next.structureRef = null;
       next.networkNodeId = null;
+      next.editRef = null;
       changed = true;
     }
 

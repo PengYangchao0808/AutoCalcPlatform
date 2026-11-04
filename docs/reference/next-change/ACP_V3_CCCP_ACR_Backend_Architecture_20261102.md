@@ -1,8 +1,10 @@
 # ACP V3.0 后端关键架构方案：CCCP × ACR
 
+> **2026-11-04 双人开发同步**：本地补齐自 GitHub main 的文件 blob `56b570a72d58e699ec7caac0d845f1dc79ce8a1d`，并追加本次协作约定；原稿不是本地实现证明。两级编译、A/B 分工与 C/P 阶段对应以[架构总纲 §10](ACP_3.0_Architecture_20261031.md#10-双人阶段开发总纲2026-11-04唯一实施排序)为准。A=用户，负责化学语义/ResearchPlan/前端；B=队友，负责 Workflow 编译、插件化科学能力和最小 ACR/Data 接入。本文 §10 的四角色按总纲双人映射，不假定另有 ACR/Data 开发者。Standalone CLI 与第三方 compute 仍是待实施目标，现行唯一执行驻点与依赖护栏须在切片迁移中保持。
+
 **日期**：2026-11-02
 **性质**：方案（未实施；团队讨论稿，不代表功能已交付）
-**上位/取代**：V3 后端架构讨论稿；V2 线的读根/传输/投影收敛见 [`ACP_V2_Experience_Parity_Plan_20261102.md`](ACP_V2_Experience_Parity_Plan_20261102.md)
+**上位/取代**：V3 后端架构讨论稿；V2 线的读根/传输/投影收敛见 [`ACP_V2_Experience_Parity_Plan_20261102.md`](ACP_V2_Experience_Parity_Plan_20261102.md)（本次合并后已在本目录，按相对链接引用）
 
 > **状态**：团队讨论稿 / Proposed Architecture（尚未实施，不代表功能已交付）  
 > **版本**：v3.0-design-2026-11-02  
